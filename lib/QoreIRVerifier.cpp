@@ -1946,8 +1946,10 @@ void QoreIRFunction::computeIROnlyLocals() {
         // calls Mutex::unlock), but the ir-only path skips qore_rt_clear_local
         // because the runtime stack is never written. Keep these AST-visible so
         // StoreLocal syncs to the runtime stack and UninstantiateLocal properly
-        // clears it.
-        if (QoreTypeInfo::getUniqueReturnClass(lv->getTypeInfo())) {
+        // clears it. Optional class values have the same ownership requirement;
+        // optional parameters also need reloads after reflective replacement.
+        if (QoreTypeInfo::getUniqueReturnClass(lv->getTypeInfo())
+                || QoreTypeInfo::getUniqueReturnClassOrNothing(lv->getTypeInfo())) {
             printd(5, "  local '%s' (%p): block-scoped object type (non-IR-only)\n", lv->getName(), key);
             continue;
         }

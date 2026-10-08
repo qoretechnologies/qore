@@ -127,9 +127,12 @@ some misses). The flag is sampled once and the helper ABI is unchanged. See
 do not attribute all cross-library variation to this branch.
 
 `QORE_DISABLE_AOT_CLASS_PARAM_CACHE=1` at compilation disables guarded reuse of
-read-only required-class parameter caches. The default admits only unwritten,
+read-only class parameter caches. The default admits only unwritten,
 unescaped, noncaptured, nonweak, nongeneric parameters with an existing entry
-owner and an identical ordinary strong runtime slot. A per-thread/per-Program
+owner and an identical ordinary strong runtime slot. Required and optional
+plain-class contracts are supported; an initial `NOTHING`, reference or weak
+slot does not qualify. Generic exclusion checks the declared type before
+optional-type folding can erase its arguments. A per-thread/per-Program
 reflective-write epoch invalidates reuse before assignment can reenter Qore;
 after the first write, the invocation keeps ordinary reload/reference semantics.
 Runtime slots, owners, deferred cleanup, receiver validity and access checks remain.
@@ -138,7 +141,8 @@ against a corrected fallback, not against the older unchecked first-receiver pat
 Compile both artifacts separately; newly compiled callers need the additive
 `qore_rt_get_class_param_epoch_aot_v1` runtime helper. Older artifacts still run
 but must be recompiled to receive the fix. See the measured regressions as well
-as gains in [RESULTS.md](RESULTS.md#guarded-class-parameter-caches-2026-10-08).
+as gains in [RESULTS.md](RESULTS.md#guarded-class-parameter-caches-2026-10-08)
+and the [optional-class follow-up](RESULTS.md#optional-class-freshness-2026-10-08).
 
 The prepared scalar callback v3 entrypoints currently request 64-byte alignment.
 Earlier class-check experiments used 16 bytes and also measured unaligned and
@@ -227,6 +231,7 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |indirect_branch_float|Float comparison selecting between two affine expressions through a retained callback
 |polymorphic_call|Three receiver types selected cyclically, with different recurrence increments
 |monomorphic_call|Non-final method with one unchanged exact-base receiver parameter; Qore may inline its arithmetic, while Java's target retains `DONT_INLINE`
+|optional_method_call|Same stable receiver with Qore's nullable `*DynamicStep` contract; Java references already permit null and use the same non-final target
 |dispatch_control|Same receiver-selection arithmetic and increments without method calls
 |list_read|Indexed traversal of a list prepared outside timing; XOR each element with the invocation seed
 |list_build|Build a growing list, then read every element into the checksum
@@ -242,6 +247,12 @@ per-call class checks for comparison. Compile separate baseline/current artifact
 for changes to this guard. Java retains the target call while Qore may inline
 the exact-base arithmetic, so this kernel is not an equal-inlining-policy or
 isolated call-latency comparison.
+
+`optional_method_call` times strong, non-null inputs only. It does not benchmark
+null errors or reflective mutation; `AOTOptionalClassLocals.qtest` covers those
+semantics separately. Older AOT artifacts can appear fast by missing reflective
+updates, so compare the enabled cache with a separately compiled disabled cache
+on the corrected runtime as well as with the old baseline.
 
 Qore integers are compared to Java `long`; the original recurrence keeps values in
 0..65535, while the wide callback retains bit 50. All intermediates and checksums

@@ -12082,6 +12082,33 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
         }
     }
+    if (aot_mode) {
+        // A read lowered before the first invalidating call can execute after
+        // that call through a backedge or an out-of-order block. Its freshness
+        // check must exist independently of parameter-cache eligibility: written,
+        // optional and AST-visible locals need the same correctness guarantee.
+        // A single returning block retains lazy setup; its first read cannot
+        // follow a later instruction. Do not exempt a self-loop/unknown terminator.
+        const auto& entry_instructions = func.blocks.front()->instructions;
+        bool straight_line_return = func.blocks.size() == 1 && !entry_instructions.empty()
+            && entry_instructions.back()
+            && entry_instructions.back()->opcode == QoreIROpcode::Return;
+        if (!straight_line_return) {
+            size_t reload_candidate_count = 0;
+            for (const auto& [key, alloca] : local_allocas) {
+                (void)alloca;
+                if (reload_candidate_count++ && !(reload_candidate_count % 100)
+                        && qore_check_cancel(nullptr, "LLVM local freshness setup")) {
+                    error = "cancelled during LLVM local freshness setup";
+                    return false;
+                }
+                if (canReloadLocalFromRuntime(key)) {
+                    getOrCreateLocalReloadEpoch(llvm_func);
+                    break;
+                }
+            }
+        }
+    }
     if (aot_mode && !func.has_opaque_ast_local_access) {
         size_t stable_receiver_count = 0;
         for (const auto& [local, loads] : local_load_instructions) {
@@ -12106,10 +12133,15 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     || QoreTypeInfo::isType(value_type, NT_FLOAT));
             bool cache_class_param = parameter_locals.count(local) && !local->isTopLevel() && !local->isSelf()
                 && !owner_has_parse_reference && !closure_capture_counts.count(local)
-                && !weak_assigned_locals.count(key) && !QoreTypeInfo::isComplex(value_type)
+                && !weak_assigned_locals.count(key) && !QoreTypeInfo::isComplex(local->getTypeInfo())
                 && QoreTypeInfo::getUniqueReturnClass(value_type)
                 && preinstantiated_entry_cleanup_by_local.count(key)
                 && canReloadLocalFromRuntime(key);
+            // value_type removes an optional contract's NOTHING alternative.
+            // Check complexity on the declared type: folding *Generic<T> can
+            // discard its parameters and must not admit it as a plain class.
+            // That permits admission only when the runtime helper verifies the
+            // identical strong-object slot; absent/reference/weak values fall back.
             size_t stable_load_count = 0;
             for (const QoreIRLocalInstruction* load : loads) {
                 if (stable_load_count++ && !(stable_load_count % 100)
@@ -12128,19 +12160,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 }
             }
             if (cache_class_param) {
-                // A read lowered before the first mutating call can execute
-                // again after it through a backedge (or an out-of-order block).
-                // Ensure its reload check exists even with caching disabled.
-                // A single returning block retains lazy setup: its first
-                // read cannot follow a later instruction. Do not exempt a
-                // one-block self-loop or an incomplete/unknown terminator.
-                const auto& entry_instructions = func.blocks.front()->instructions;
-                bool straight_line_return = func.blocks.size() == 1 && !entry_instructions.empty()
-                    && entry_instructions.back()
-                    && entry_instructions.back()->opcode == QoreIROpcode::Return;
-                if (!straight_line_return) {
-                    getOrCreateLocalReloadEpoch(llvm_func);
-                }
                 if (!std::getenv("QORE_DISABLE_AOT_CLASS_PARAM_CACHE")) {
                     aot_class_param_cache_candidates.insert(key);
                 }

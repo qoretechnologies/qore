@@ -121,10 +121,8 @@ int sub cacheWeak(CacheBase receiver, CacheBase owner) {
 }
 int sub cacheOptional(*CacheBase receiver) {
     int first = receiver.next(0);
-    # Optional parameters are deliberately excluded from this optimization.
-    # Their separate baseline reflective-write cache gap is recorded by the
-    # optional-reflection probe, not silently treated as passing here.
-    cacheStable(new CacheBase());
+    # Optional parameters keep ordinary reloads after reflective writes.
+    cacheReplace(new CacheDerived());
     return first * 100 + receiver.next(0);
 }
 int sub cacheGeneric(CacheBox<int> receiver) {

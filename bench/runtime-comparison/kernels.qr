@@ -104,6 +104,17 @@ int sub monomorphicCall(int count, int seed, DynamicStep receiver) {
     return sum;
 }
 
+# Same retained receiver as monomorphicCall, but with a nullable Qore contract.
+# Timed inputs are strong objects; NOTHING transitions are covered by regressions.
+int sub optionalMethodCall(int count, int seed, *DynamicStep receiver) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = receiver.next(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
 int sub polymorphicCall(int count, int seed, DynamicStep a, DynamicStep b, DynamicStep c) {
     int sum = 0;
     for (int i = 0; i < count; ++i) {
@@ -237,6 +248,7 @@ int sub dispatch(string name, int count, int seed, list<int> data, Stepper recei
         case "indirect_tagged_float": return taggedFloatIndirectCall(count, seed, taggedCallback);
         case "polymorphic_call": return polymorphicCall(count, seed, a, b, c);
         case "monomorphic_call": return monomorphicCall(count, seed, a);
+        case "optional_method_call": return optionalMethodCall(count, seed, a);
         case "dispatch_control": return dispatchControl(count, seed);
         case "list_read": return listRead(data, seed);
         case "list_build": return listBuild(count, seed);
@@ -283,7 +295,7 @@ sub main() {
                 foreach string name in (("arithmetic", "direct_call", "method_call", "indirect_call",
                         "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
                         "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
-                        "polymorphic_call", "monomorphic_call", "dispatch_control", "list_read",
+                        "polymorphic_call", "monomorphic_call", "optional_method_call", "dispatch_control", "list_read",
                         "list_build", "list_mutate", "temporary_list", "temporary_hash",
                         "closure_call", "closure_capture")) {
                     printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed,

@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class OptionalClassLocalsTest
+
+class OptionalClassLocalsTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("optional object locals and cache freshness", "1.0", \ARGV) {
+        addTestCase("reflection, loop backedges and optional object lifetimes", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_JIT_SYNC_COMPILE=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTOptionalClassLocals.qr";
+        string expected = "replace:110\nloop:51:51\nnothing:nothing:10:nothing\ninvalid:1:42\n"
+            "reference:12\ndestructor:110\ngeneric:102\ndeleted:1:OBJECT-ALREADY-DELETED\n"
+            "captured:10\nweak:60:10\nnormal:first+ second+ body second- first- after \n"
+            "unwind:first+ second+ body second- first- OPTIONAL-LIFETIME\n";
+        assertEq(expected, run((qore, "--exec-mode=ast", source)), "AST reference");
+        string lifetime = "normal:first+ second+ body second- first- after \n"
+            "unwind:first+ second+ body second- first- OPTIONAL-LIFETIME\n";
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(lifetime, run((qore, "--exec-mode=" + mode,
+                "--jit-ir-threshold=1", "--jit-jit-threshold=1", source, "lifetime")),
+                mode + " optional object lifetime");
+        }
+        # IR/JIT caller-frame reflection has a separately recorded baseline
+        # visibility failure; this matrix tests the supported AOT path.
+        TmpDir dir("qore-optional-class-locals-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_CLASS_PARAM_CACHE=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string name in (("optionalReplace", "optionalLoop", "optionalWrittenLoop",
+                        "optionalNothing", "optionalInvalid", "optionalReference", "optionalDestructor")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " LLVM definition");
+                    assertTrue(regex(body[0] ?? "", "@qore_rt_reload_local_if_stale_aot"),
+                        name + " reloads remain authoritative " + prefix + level);
+                    assertEq(name != "optionalWrittenLoop" && !prefix.startsWith("QORE_DISABLE_"),
+                        regex(body[0] ?? "", "@qore_rt_get_class_param_epoch_aot_v1"),
+                        name + " strong-slot runtime admission " + prefix + level);
+                }
+                foreach string name in (("optionalGeneric", "optionalCaptured", "optionalWeak")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " LLVM definition");
+                    assertFalse(regex(body[0] ?? "", "@qore_rt_get_class_param_epoch_aot_v1"),
+                        name + " unsafe cache excluded " + prefix + level);
+                }
+                assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_IR_CONTEXT_ELISION=1 "),
+                    "full context " + prefix + level);
+            }
+        }
+    }
+}

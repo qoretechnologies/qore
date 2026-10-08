@@ -4979,3 +4979,107 @@ Next: fix the optional-parameter visibility gap, then profile the remaining
 polymorphic dispatch/context/ownership cost. Explore eliminating freshness work
 only under a complete non-reentrant loop proof; source-level lack of assignment
 alone is insufficient. Keep new baselines and report both gains and regressions.
+
+## Optional class freshness (2026-10-08)
+
+Copyright (c) 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT.
+
+Optional class locals previously remained IR-only/reload-exempt because the
+classifier recognized only required classes. AOT therefore retained a stale
+receiver after reflection: the new regression produces 101 instead of AST's
+110, loop results 6 instead of 51, and a pseudo-method error after a reflective
+transition from `NOTHING` to an object. The candidate matches the AST reference.
+
+The classifier now retains runtime storage/synchronization for optional classes.
+Separately, every AOT function with nontrivial control flow and a runtime-
+reloadable local creates the reload epoch before lowering the first read.
+Freshness is no longer tied to the narrow parameter-cache eligibility test.
+This covers written and AST-visible locals as well as read-only parameters;
+native fast-entry arguments, nonreloadable locals and straight-line returning
+functions keep their existing treatment.
+
+Optional plain-class parameters can use the existing guarded cache only when
+the raw slot is an identical strong object retained by the entry owner. Initial
+`NOTHING`, references and weak slots retain fallback. The generic exclusion now
+uses the declared type: removing `NOTHING` can erase a generic class's type
+arguments. No new runtime helper, ABI or ownership transfer is introduced.
+Artifacts must be recompiled to receive the compiler fix.
+
+Baseline: `fedaa763d`, release library
+`b09f71d35c1bf5f0f1275e4dbbd939b50264a93370ba825f4b8594adecf10330`.
+Candidate: that revision plus the recorded compiler diff, release library
+`8f29bc28d968a31e3de2c4a1593129a659e701cf3de041febba2f473cf91bc1a`.
+[Full evidence](results-optional-class-freshness-macos-arm64.json) retains all
+850 timing windows, hashes, reproduction, profile and all 62 audit checks.
+Five forks, three warmups, five 500-ms samples, three startup samples per mode;
+separate AOT compilation and randomized old/new job order. No measurement
+overlapped builds, tests, profiling, disassembly or evidence validation.
+
+The new `optional_method_call` workload uses the monomorphic receiver with a
+nullable Qore contract; timed inputs are strong, non-null objects. Java references
+already permit null and use the same non-final target. Mutation/null semantics
+are tested separately, not mixed into the timed loop.
+
+Median of fork means, ns/element; negative changes are improvements:
+
+|!Mode|!Count|!Kernel|!Before|!After|!Change|!Fork ranges overlap
+|qore-aot|1024|optional_method_call|39.46012|39.61111|0.38%|Yes
+|qore-aot|1024|polymorphic_call|65.03656|64.94214|-0.15%|Yes
+|qore-aot|1024|monomorphic_call|12.15556|12.31160|1.28%|Yes
+|qore-aot|1024|method_call|2.62595|2.64252|0.63%|Yes
+|qore-aot|1024|indirect_wide|8.34996|8.36038|0.12%|Yes
+|qore-aot|1024|arithmetic|2.36215|2.36099|-0.05%|Yes
+|qore-aot|4096|optional_method_call|38.37744|38.91940|1.41%|Yes
+|qore-aot|4096|polymorphic_call|64.09131|63.54330|-0.86%|Yes
+|qore-aot|4096|monomorphic_call|10.88830|10.82504|-0.58%|Yes
+|qore-aot|4096|arithmetic|1.31194|1.31640|0.34%|Yes
+|qore-ir|1024|optional_method_call|419.94324|418.27107|-0.40%|Yes
+|qore-ir|1024|arithmetic|95.38259|97.49463|2.21%|Yes
+
+Every old/new comparison has overlapping fork ranges, including the adverse
+optional-call and IR arithmetic changes. This is not evidence of a new speedup
+or proof of neutrality. Ranges are not confidence intervals and overlap is not
+a significance test.
+
+A same-library, separately compiled control retains the correctness fix in
+both artifacts and changes only `QORE_DISABLE_AOT_CLASS_PARAM_CACHE=1`.
+Here `qore-aot-before` means disabled caching, not the previous library:
+
+|!Mode|!Count|!Kernel|!Disabled cache|!Enabled cache|!Change|!Fork ranges overlap
+|qore-aot|1024|optional_method_call|58.22539|39.05660|-32.92%|No
+|qore-aot|1024|arithmetic|2.30912|2.34767|1.67%|Yes
+
+Guarded reuse saves 32.92% against corrected ordinary reloads; the arithmetic
+control moves +1.67% with overlapping ranges. This is not a 33% gain over the
+previous compiler: its optional reads could miss runtime writes entirely.
+
+At count 1024, candidate AOT/Java ratios are 23.79x for optional calls
+(39.61111/1.66483), 25.83x for polymorphic (64.94214/2.51382), 7.41x for
+monomorphic (12.31160/1.66231), 3.01x for final methods and 5.01x for wide
+callbacks. These include loop work, not isolated call latency. The existing
+Java DONT_INLINE versus Qore exact-base inlining caveat remains; parity is not
+reached. IR optional calls measure 418.27107 ns/element, separately from AOT.
+
+Release/debug each pass 27 selected files: 49 QUnit cases/3298 assertions plus six
+standalone scripts. The new 264-assertion matrix covers AST, O0/O3, stripped
+source, EH, parallel codegen, full-context/cache-disabled execution, reflective
+replacement, written/unwritten loop receivers, invalid/reference/NOTHING
+transitions, deletion, weak/captured/generic exclusions and destructor order.
+Optional lifetimes also match AST in IR/JIT/tiered. The expanded parameter-cache
+test passes 338 assertions and now explicitly selects normal LLVM entry definitions
+rather than accidentally checking a separately emitted fast variant.
+
+All four benchmark modes and both saved baseline Qore modes pass 330 independent
+reference records; an older AOT artifact passes its original 315 records on the
+new runtime, and 11 harness tests pass. Full caller-frame reflection still raises
+`UNKNOWN-VARIABLE` in baseline and candidate IR/JIT/tiered; those failures remain
+recorded and are not counted as passes. The zero-argument fast-frame limitation
+from the preceding checkpoint is outside this change.
+
+A separate five-second sample of the optional workload (3788 main-thread samples)
+still shows method-by-name dispatch, PIC lookup, native frame setup/teardown,
+boxed-value cleanup and TLS/context acquisition. Its sampled costs are
+attribution clues, not isolated latency measurements. The next optimization is
+to investigate guarded native dispatch for nullable receivers, preserving
+`NOTHING`/pseudo-method behavior and arbitrary subclass fallback, then tackle
+the remaining receiver-local ownership and frame overhead.
