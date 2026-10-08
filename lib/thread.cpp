@@ -2123,6 +2123,8 @@ ThreadLocalProgramData* get_thread_local_program_data() {
    return td->tlpd;
 }
 
+static void sync_runtime_config_program(const ThreadData* td);
+
 void thread_ensure_local_program_data() {
     ThreadData* td = thread_data.get();
     assert(td);
@@ -2134,6 +2136,9 @@ void thread_ensure_local_program_data() {
     // operations (e.g. object construction in AOT init functions) can
     // instantiate local variables on the thread's lvstack.
     qore_program_private::setThreadVarData(td->current_pgm, td->tpd, td->tlpd, false);
+    // the thread's RuntimeConfig carries the thread-local data with the Program (see
+    // sync_runtime_config_program())
+    sync_runtime_config_program(td);
     printd(5, "thread_ensure_local_program_data() set tlpd=%p for pgm=%p\n",
         td->tlpd, td->current_pgm);
 }
