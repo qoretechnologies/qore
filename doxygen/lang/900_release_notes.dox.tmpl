@@ -2879,6 +2879,8 @@ while (*binary chunk = input.read(65536)) {
       - dense columnar interop with @ref buffer "buffer<T>" columns and @ref Qore::SQL::ColumnarResult "ColumnarResult",
         Eigen3-backed float64 columns, and zero-overhead ML matrix/vector feeding
       - streaming CSV, Parquet/Arrow, and DBI columnar I/O aimed at production ETL and analytics workloads
+      - Parquet reads use the supported Result API with Arrow 24 and later, retaining older SDK
+        compatibility and preserving projection, row-group selection, and read-error reporting
 
     - @ref i18nintro "i18n" module
       - new builtin module providing ICU-backed internationalization and localization primitives

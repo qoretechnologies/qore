@@ -360,6 +360,7 @@ QORE_BINARY=$PWD/build/qore QORE_TEST_QMOD_DIR=$PWD/build/qlib-qmod \
     PATH=$PWD/build:$PATH QORE_TEST_OPTS='-penable-debug' ./run_tests.sh -E -v -d qore
 build/qore -b --enable-debug -l ml -e 'if (!ML::ml_get_capabilities().has_onnx) { throw "PACKAGE-TEST-ERROR", "ONNX is required"; }'
 build/qore -b --enable-debug modules/ml/test/ml.qtest -v
+build/qore -b --enable-debug modules/dataframe/test/parquet-read-api.qtest -v
 %endif
 
 %files
