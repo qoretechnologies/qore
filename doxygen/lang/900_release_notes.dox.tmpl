@@ -4174,6 +4174,9 @@ while (*binary chunk = input.read(65536)) {
     - Fixed @ref Qore::system() "system()" returning -1 without an error when the process to execute the command
       could not be started; it now raises a \c SYSTEM-ERROR exception with the reason
 
+    - Fixed a memory leak in the C++ API: each \c QoreQueueHelper leaked a reference to the
+      @ref Qore::Thread::Queue "Queue" it was created for, so the queue was never freed
+
     - Fixed reference cycles through a copy of a @ref Qore::Thread::Queue "Queue" never being collected: the copy
       made by @ref Qore::Thread::Queue::copy() "Queue::copy()" did not register the objects it copied for garbage
       collection scanning

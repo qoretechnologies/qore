@@ -313,4 +313,27 @@ nothing cpp_api_queue_clear(object queue) {
     qh.clear(xsink);
     return QoreValue();
 }
+//! returns the number of references to the Queue private data of an object, other than the one this call holds
+/** Lets tests check that the C++ API releases the references it takes to a Queue
+
+    @param queue an object of a class that inherits Queue
+
+    @return the number of references to the object's Queue private data before this call
+
+    @throw QUEUE-ERROR the object is not a Queue
+*/
+int cpp_api_queue_private_refs(object queue) {
+    AbstractPrivateData* pd = queue->getReferencedPrivateData(CID_QUEUE, xsink);
+    if (!pd) {
+        if (!*xsink) {
+            xsink->raiseException("QUEUE-ERROR", "expecting an object derived from Queue; got class '%s' instead",
+                queue->getClassName());
+        }
+        return QoreValue();
+    }
+    int refs = pd->reference_count() - 1;
+    pd->deref(xsink);
+    return refs;
+}
+
 ///@}

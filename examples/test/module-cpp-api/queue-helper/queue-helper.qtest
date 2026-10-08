@@ -40,6 +40,7 @@ class QueueHelperTest inherits QUnit::Test {
         addTestCase("clear", \clearTest());
         addTestCase("shift keeps the cycle", \shiftCycleTest());
         addTestCase("pop keeps the cycle", \popCycleTest());
+        addTestCase("the helper releases the queue", \helperRefTest());
         set_return_value(main());
     }
 
@@ -96,6 +97,20 @@ class QueueHelperTest inherits QUnit::Test {
         QueueValue v2 = take(q);
         remove q;
         assertEq(0, v2.q.size(), "the queue is still usable");
+    }
+
+    #! QoreQueueHelper releases the reference it takes to the queue's private data
+    helperRefTest() {
+        Queue q();
+        assertEq(1, cpp_api_queue_private_refs(q), "the object's own reference");
+        q.push(1);
+        q.push(2);
+        cpp_api_queue_shift(q);
+        assertEq(1, cpp_api_queue_private_refs(q), "after shift");
+        cpp_api_queue_pop(q);
+        assertEq(1, cpp_api_queue_private_refs(q), "after pop");
+        cpp_api_queue_clear(q);
+        assertEq(1, cpp_api_queue_private_refs(q), "after clear");
     }
 
     private takeTest(code take) {
