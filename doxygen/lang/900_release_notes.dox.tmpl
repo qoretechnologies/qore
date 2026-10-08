@@ -4,6 +4,11 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Optimized execution now preserves large integer and floating-point values across
+    statement and loop boundaries. Repeated arithmetic involving those values could
+    previously use zero after an earlier temporary value had been released.
+    Recompile existing AOT artifacts to apply the compiler fix.
+
     Data provider factories report that a data provider does not support a constructor from an option hash only
     when its class has no such constructor. Other errors raised while looking up the constructor, such as
     <tt>PROGRAM-ERROR</tt> for a class whose @ref Qore::Program "Program" has been deleted, are raised unchanged

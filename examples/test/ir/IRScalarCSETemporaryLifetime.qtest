@@ -1,0 +1,32 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+
+# The optimized interpreter boxes large integers and tag-colliding doubles.
+# Dominating scalar definitions must not be reused after statement cleanup.
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) { qcc_bin = "qcc"; }
+string program = "%modern\nint sub positiveBound(list<int> values) {\n    int total = 0;\n    foreach int value in (values) {\n        if (value > MAXINT - total) { throw \"BOUND\", \"overflow\"; }\n        total += value;\n    }\n    return MAXINT - total;\n}\nint sub negativeBound(list<int> values) {\n    int total = 0;\n    foreach int value in (values) {\n        if (MININT + value > 0) { throw \"BOUND\", \"negative\"; }\n        total += value;\n    }\n    return MININT + total;\n}\nfloat sub boxedFloat(list<int> values) {\n    float total = 0.0;\n    foreach int value in (values) {\n        if (-4e307 + value > 0.0) { throw \"BOUND\", \"float\"; }\n        total += value;\n    }\n    return -4e307 + total;\n}\nint sub product(int n) {\n    if (n * n < 0) { throw \"BOUND\", \"product\"; }\n    return n * n;\n}\nint sub small(list<int> values) {\n    int total = 0;\n    foreach int value in (values) {\n        if (10000 - value < 0) { throw \"BOUND\", \"small\"; }\n        total += value;\n    }\n    return 10000 - total;\n}\nforeach list<int> values in (((1, 2), (), (3, 4, 5))) {\n    printf(\"%d:%d:%y:%d\\n\", positiveBound(values), negativeBound(values),\n        boxedFloat(values) == -4e307, small(values));\n}\nprintf(\"%d:%d\\n\", product(100000000), product(100));\n";
+string expected = "9223372036854775804:-9223372036854775805:True:9997\n9223372036854775807:-9223372036854775808:True:10000\n9223372036854775795:-9223372036854775796:True:9988\n10000000000000000:10000\n";
+string root = "/tmp/qore-scalar-cse-lifetime-" + getpid();
+mkdir(root);
+on_exit { backquote(sprintf("rm -rf %s", root)); }
+string path = root + "/regression.qr";
+File output(); output.open2(path, O_WRONLY | O_CREAT | O_EXCL); output.write(program); output.close();
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=%s %s 2>&1", libqore_dir, qore_bin, mode, path));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual); exit(2);
+    }
+}
+foreach int level in ((0, 3)) {
+    string exe = root + "/aot-" + level;
+    string compiled = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, level, exe, path));
+    if (!is_file(exe)) { printf("AOT compilation failed:\n%s", compiled); exit(2); }
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+    if (actual != expected) { printf("mismatch in AOT O%d\n%s", level, actual); exit(2); }
+}

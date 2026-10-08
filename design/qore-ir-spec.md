@@ -177,3 +177,19 @@ instrumentation on Qore tests and services where enabled.
 - Do not add runtime fallbacks that hide missing lowering in `%modern` code.
 - Every owned value path needs a normal-exit and exception-exit cleanup.
 - Any lvalue mutation must preserve the COW invariant.
+
+
+### Scalar common expressions and temporary ownership
+
+Scalar common-expression elimination distinguishes execution dominance from the
+lifetime of the interpreter's `QoreValue` slots. A native IR integer outside the
+inline range and a double whose bits collide with a value tag own boxed nodes.
+`DiscardTemps` and `DiscardTempsKeep` can release those nodes even when all
+explicit consumers are non-consuming. Such expressions and forwarded loads
+remain available only within their current basic block, up to the next cleanup
+boundary. Separate scoped maps make clearing them linear in the removed entries.
+Only proven inline integers, booleans and non-colliding float constants are
+published for cross-block reuse. Non-consuming-use checks remain necessary.
+`IRScalarCSETemporaryLifetime.qtest` compares signed integer boundaries, computed
+large products, boxed finite doubles, empty loops and ordinary small values in
+AST, IR, tiered, JIT and AOT at optimization levels zero and three.
