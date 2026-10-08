@@ -909,12 +909,17 @@ protected:
     mutable std::atomic<uint32_t> deopt_count{0};
     //! JIT recompilation state: 0=not started, 1=submitted, 2=done
     mutable std::atomic<int> jit_recompile_state{0};
+    // The following flags describe the published body (the cached IR or the registered AOT function); they are
+    // read without a lock by threads running the variant, so they are written only when a body is published
+    // (publishIRContextFlags(), AOT registration) and never while lowering a body that may not be published, such
+    // as a specialized body or one lowered again for native compilation.  The defaults are conservative: a reader
+    // that sees them instead of the values of a body published at the same time only instantiates more.
     //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
-    mutable bool all_body_locals_ir_only = false;
-    //! True if argv is actually referenced in the function body (set during IR lowering)
-    mutable bool uses_argv = true;  // Conservative: assume used unless proven otherwise
-    //! True if self is actually referenced in the function body (set during IR lowering)
-    mutable bool uses_self = true;  // Conservative: assume used unless proven otherwise
+    mutable std::atomic<bool> all_body_locals_ir_only{false};
+    //! True if argv is actually referenced in the function body
+    mutable std::atomic<bool> uses_argv{true};
+    //! True if self is actually referenced in the function body
+    mutable std::atomic<bool> uses_self{true};
     //! Specialized IR functions keyed by concrete receiver and method type arguments
     mutable std::mutex specialized_ir_mutex;
     mutable std::unordered_map<std::string, std::unique_ptr<QoreIRFunction>> specialized_ir_cache;
@@ -1185,12 +1190,12 @@ public:
 
     //! Returns true if argv is actually used in the function body
     DLLLOCAL bool usesArgv() const {
-        return uses_argv;
+        return uses_argv.load(std::memory_order_acquire);
     }
 
     //! Returns true if self is actually used in the function body
     DLLLOCAL bool usesSelf() const {
-        return uses_self;
+        return uses_self.load(std::memory_order_acquire);
     }
 
     //! Returns the cached IR function (if at IR tier or higher), or nullptr
@@ -1207,6 +1212,22 @@ public:
     //! Set cached IR for a variant reconstructed from AOT binary.
     //! Promotes directly to TIER_IR by default for variants without an AOT function.
     DLLLOCAL void setCachedIR(QoreIRFunction* ir, bool promote_to_ir = true) const;
+
+    //! The context flags of an IR body: whether all its body locals are IR-only and whether it uses argv and self
+    struct IRContextFlags {
+        bool all_body_locals_ir_only = false;
+        bool uses_argv = true;
+        bool uses_self = true;
+    };
+
+    //! Returns the context flags of the given IR body, which must be fully prepared but need not be published
+    DLLLOCAL IRContextFlags getIRContextFlags(const QoreIRFunction* ir) const;
+
+    //! Stores the context flags of the body just published by this thread
+    /** Must be called only by the thread whose publication of the body succeeded, and before the tier that runs the
+        body is promoted, so that the release store of the tier also publishes the flags.
+    */
+    DLLLOCAL void publishIRContextFlags(const IRContextFlags& flags) const;
 
     //! Returns a pointer to the deopt counter for JIT guard failure tracking
     DLLLOCAL void* getDeoptCounterPtr() const {
