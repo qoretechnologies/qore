@@ -815,5 +815,23 @@ try {
         assertEq("DOWNLOAD-IO-ERROR", get_download_error_code(<ExceptionInfo>{"err": "DOWNLOAD-IO-ERROR",
             "desc": ""}));
         assertEq("DOWNLOAD-ERROR", get_download_error_code(<ExceptionInfo>{"err": "OTHER-ERROR", "desc": ""}));
+        # file system and location errors are classified by their code, even when the path in the description
+        # matches a TLS or timeout pattern
+        assertEq("DOWNLOAD-IO-ERROR", get_download_error_code(<ExceptionInfo>{"err": "FILE-OPEN2-ERROR",
+            "desc": "cannot open '/tmp/urldl-loc-uIrY4kusSlqdZPj/no-such-file': No such file or directory"}));
+        assertEq("DOWNLOAD-IO-ERROR", get_download_error_code(<ExceptionInfo>{"err": "FILE-OPEN2-ERROR",
+            "desc": "cannot open '/tmp/timed-out/certificate': No such file or directory"}));
+        assertEq("DOWNLOAD-IO-ERROR", get_download_error_code(<ExceptionInfo>{"err": "DIR-READ-ERROR",
+            "desc": "cannot read '/tmp/TLS handshake'"}));
+        assertEq("DOWNLOAD-URL-ERROR", get_download_error_code(<ExceptionInfo>{"err": "LOCATION-ERROR",
+            "desc": "SFTP location \"sftp://host/ssl-timeout\" missing file path"}));
+        # a file system timeout is still a timeout
+        assertEq("DOWNLOAD-TIMEOUT", get_download_error_code(<ExceptionInfo>{"err": "FILE-READ-TIMEOUT",
+            "desc": "timeout reading '/tmp/x'"}));
+
+        # a file download error is classified by its code when the path matches a TLS or timeout pattern
+        assertEq(0, mkdir(dir.path + DirSep + "sSl-timeout"));
+        dl = new UrlDownloader(<UrlDownloadOptions>{"output_dir": dir.path});
+        assertThrows("DOWNLOAD-IO-ERROR", \dl.download(), "file://" + dir.path + "/sSl-timeout/no-such-file");
     }
 }
