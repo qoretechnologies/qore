@@ -41,6 +41,7 @@ class ProcessSpawnTest inherits QUnit::Test {
         addTestCase("positive control: fork() children are recorded", \testForkRecorded());
         addTestCase("negative: another record file", \testRecordFileError());
         addTestCase("negative: a command that cannot be started", \testStartFailure());
+        addTestCase("negative: functional domains", \testDomains());
         set_return_value(main());
     }
 
@@ -91,6 +92,25 @@ class ProcessSpawnTest inherits QUnit::Test {
         assertThrows("BACKQUOTE-ERROR", \backquote(), "echo not started");
         assertThrows("BACKQUOTE-ERROR", string sub () { return `echo not started`; });
         assertEq(before, getRecorded(), "no child was created with fork()");
+    }
+
+    #! the test functions that create processes or files cannot be used where their functional domain is restricted
+    testDomains() {
+        list<hash<auto>> cases = (
+            {"po": PO_NO_PROCESS_CONTROL, "call": "cpp_api_fork_and_wait()"},
+            {"po": PO_NO_PROCESS_CONTROL, "call": "cpp_api_record_fork_children(\"x\")"},
+            {"po": PO_NO_FILESYSTEM, "call": "cpp_api_record_fork_children(\"x\")"},
+            {"po": PO_NO_PROCESS_CONTROL, "call": "cpp_api_set_process_limit(-1)"},
+        );
+        foreach hash<auto> c in (cases) {
+            Program p(PO_NEW_STYLE | c.po);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("%requires cppapiuser\nsub f() { " + c.call + "; }",
+                "domain-test"), c.call);
+        }
+        # positive control: without the restriction, the code parses
+        Program p(PO_NEW_STYLE);
+        p.parse("%requires cppapiuser\nsub f() { cpp_api_fork_and_wait(); }", "domain-test");
+        assertTrue(p.existsFunction("f"));
     }
 
     #! returns the number of children created with fork() so far
