@@ -4,6 +4,11 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Data provider factories report that a data provider does not support a constructor from an option hash only
+    when its class has no such constructor. Other errors raised while looking up the constructor, such as
+    <tt>PROGRAM-ERROR</tt> for a class whose @ref Qore::Program "Program" has been deleted, are raised unchanged
+    instead of being replaced by that message.
+
     CMake source-archive builds now retain the commit exported by <tt>git archive</tt>,
     including when extracted inside another repository. Revision updates reject corrupt
     metadata, and standalone compiler-fingerprint generation sets its list policy explicitly.

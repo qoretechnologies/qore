@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file AbstractDataProviderFactory.qc provides the abstract definition for a data provider factory
 
-/** AbstractDataProviderFactory.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** AbstractDataProviderFactory.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -69,31 +69,49 @@ public class AbstractDataProviderFactory {
     public {}
 
     #! Creates an object from the given constructor options
+    /** @param options the constructor options for the data provider
+
+        @return the data provider created from the given options
+
+        @throw DATA-PROVIDER-ERROR the data provider class has no constructor that accepts an option hash
+
+        @note Any other exception raised while looking up the constructor (for example \c PROGRAM-ERROR if the
+        @ref Qore::Program "Program" holding the class has been deleted) is rethrown unchanged
+    */
     AbstractDataProvider create(*hash<auto> options) {
-        ConstructorMethodVariant con;
-        try {
-            con = getClass().getConstructorVariant(AutoHashOrNothingType);
-        } catch (hash<ExceptionInfo> ex) {
+        *ConstructorMethodVariant con = findConstructorVariant(AutoHashOrNothingType);
+        if (!con) {
             error("DATA-PROVIDER-ERROR", "data provider does not support a constructor from an option hash");
         }
         return con.call(options);
     }
 
-    #! Creates an object from the given constructor options
+    #! Creates an object from the given template options and constructor options
+    /** If the data provider class has no constructor accepting a template option hash and an option hash, then the
+        data provider is created with its option hash constructor and \a template_options are ignored
+
+        @param template_options the template options for the data provider
+        @param options the constructor options for the data provider
+
+        @return the data provider created from the given options
+
+        @throw DATA-PROVIDER-ERROR the data provider class has no constructor that accepts a template option hash and
+        an option hash, nor one that accepts an option hash
+
+        @note Any other exception raised while looking up the constructor (for example \c PROGRAM-ERROR if the
+        @ref Qore::Program "Program" holding the class has been deleted) is rethrown unchanged
+    */
     AbstractDataProvider createWithTemplate(*hash<auto> template_options, *hash<auto> options) {
-        ConstructorMethodVariant con;
-        try {
-            con = getClass().getConstructorVariant(AutoHashType, AutoHashOrNothingType);
-        } catch (hash<ExceptionInfo> ex) {
-            try {
-                con = getClass().getConstructorVariant(AutoHashOrNothingType);
-            } catch (hash<ExceptionInfo> ex) {
-                error("DATA-PROVIDER-ERROR", "data provider does not support a constructor from a template option "
-                    "hash and an option hash nor a constructor from an option hash");
-            }
-            return con.call(options);
+        *ConstructorMethodVariant con = findConstructorVariant(AutoHashType, AutoHashOrNothingType);
+        if (con) {
+            return con.call(template_options, options);
         }
-        return con.call(template_options, options);
+        con = findConstructorVariant(AutoHashOrNothingType);
+        if (!con) {
+            error("DATA-PROVIDER-ERROR", "data provider does not support a constructor from a template option "
+                "hash and an option hash nor a constructor from an option hash");
+        }
+        return con.call(options);
     }
 
     #! Returns the name of the data provider factory
@@ -203,6 +221,29 @@ public class AbstractDataProviderFactory {
     */
     list<hash<auto>> getExampleProviderRecordOutput(InputStream example, *hash<auto> constructor_options) {
         return getExampleProviderRecordOutputImpl(example, constructor_options);
+    }
+
+    #! Returns the constructor variant of the data provider class matching the given argument types
+    /** @param ... the @ref Qore::Reflection::Type "Type" objects giving the argument types of the constructor
+
+        @return the matching constructor variant, or @ref nothing if the class defines no constructor or no
+        constructor variant matching the given argument types
+
+        Only the two "no such constructor" exceptions raised by
+        @ref Qore::Reflection::Class::getConstructorVariantArgs() "Class::getConstructorVariantArgs()"
+        (\c METHOD-ERROR: no constructor is defined; \c VARIANT-MATCH-ERROR: no constructor variant matches) mean
+        that the constructor is not supported; any other exception is rethrown unchanged
+    */
+    private:internal *ConstructorMethodVariant findConstructorVariant(...) {
+        Class cls = getClass();
+        try {
+            return cls.getConstructorVariantArgs(argv);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "METHOD-ERROR" || ex.err == "VARIANT-MATCH-ERROR") {
+                return;
+            }
+            rethrow;
+        }
     }
 
     #! thrown an exception
