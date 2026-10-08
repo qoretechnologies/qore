@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class QueueHelperTest
+
+#! a value that can be part of a reference cycle, so a queue holding it is scanned by the garbage collector
+class ScanValue {
+}
+
+#! Tests values taken from a Queue object through the public C++ API (QoreQueueHelper), which has no Queue object
+/** A Queue object is scanned for reference cycles while it holds values pushed through its methods that can be
+    part of one; the values can also be taken, or the queue cleared, by C++ code that only has the queue.  The
+    scan count is reported by dbg_node_info(), which is only available with library debugging; the values are taken
+    in all builds.
+*/
+class QueueHelperTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Queue C++ API takes", "1.0") {
+        addTestCase("shift", \shiftTest());
+        addTestCase("pop", \popTest());
+        addTestCase("clear", \clearTest());
+        set_return_value(main());
+    }
+
+    #! values taken with QoreQueueHelper::shift() are no longer counted
+    shiftTest() {
+        takeTest(\cpp_api_queue_shift());
+    }
+
+    #! values taken with QoreQueueHelper::pop() are no longer counted
+    popTest() {
+        takeTest(\cpp_api_queue_pop());
+    }
+
+    #! QoreQueueHelper::clear() removes the queue from the scan count
+    /** The clear was made with no object to uncount, which crashed the process when the queue held values counted
+        for scanning; it is made in all builds, and the counts are checked with library debugging
+    */
+    clearTest() {
+        Queue q();
+        q.push(new ScanValue());
+        q.push(new ScanValue());
+        assertScanPrivateData(1, q);
+        cpp_api_queue_clear(q);
+        assertTrue(q.empty());
+        assertScanPrivateData(0, q);
+
+        # the queue is counted again by the next value, and uncounted when it is taken
+        q.push(new ScanValue());
+        assertScanPrivateData(1, q);
+        q.get();
+        assertScanPrivateData(0, q);
+    }
+
+    private takeTest(code take) {
+        Queue q();
+        q.push(new ScanValue());
+        q.push(new ScanValue());
+        assertScanPrivateData(1, q);
+        assertEq("ScanValue", take(q).className());
+        assertScanPrivateData(1, q, "one value remains");
+        assertEq("ScanValue", take(q).className());
+        assertScanPrivateData(0, q, "no value remains");
+
+        # values pushed with the C++ API are not counted
+        q.push(1);
+        take(q);
+        assertScanPrivateData(0, q);
+    }
+
+    #! checks the private data scan count of the given object as reported by dbg_node_info()
+    /** dbg_node_info() is only available with library debugging; the count is not checked without it
+    */
+    private assertScanPrivateData(int expected, object obj, *string label) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        *list<*string> m = (call_function("dbg_node_info", obj, True) =~ x/scan_private_data: ([0-9-]+)/);
+        assertEq(expected, m[0].toInt(), label);
+    }
+}

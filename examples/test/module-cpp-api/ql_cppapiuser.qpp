@@ -258,4 +258,59 @@ auto cpp_api_return_with_exception(auto value, string err) {
     xsink->raiseException(err->c_str(), "the function returned a value with this exception");
     return value.refSelf();
 }
+
+//! takes the first value of a Queue through the public C++ API, which has no access to the Queue object
+/** @param queue an object of a class that inherits Queue; must not be empty
+
+    @return the value taken
+
+    @throw QUEUE-ERROR the object is not a Queue, or the queue is empty
+*/
+auto cpp_api_queue_shift(object queue) {
+    QoreQueueHelper qh(queue, xsink);
+    // the helper raises an exception if the object has no Queue
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!qh.size()) {
+        xsink->raiseException("QUEUE-ERROR", "the queue is empty");
+        return QoreValue();
+    }
+    return qh.shift(xsink);
+}
+
+//! takes the last value of a Queue through the public C++ API, which has no access to the Queue object
+/** @param queue an object of a class that inherits Queue; must not be empty
+
+    @return the value taken
+
+    @throw QUEUE-ERROR the object is not a Queue, or the queue is empty
+*/
+auto cpp_api_queue_pop(object queue) {
+    QoreQueueHelper qh(queue, xsink);
+    // the helper raises an exception if the object has no Queue
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!qh.size()) {
+        xsink->raiseException("QUEUE-ERROR", "the queue is empty");
+        return QoreValue();
+    }
+    return qh.pop(xsink);
+}
+
+//! clears a Queue through the public C++ API, which has no access to the Queue object
+/** @param queue an object of a class that inherits Queue
+
+    @throw QUEUE-ERROR the object is not a Queue
+*/
+nothing cpp_api_queue_clear(object queue) {
+    QoreQueueHelper qh(queue, xsink);
+    // the helper raises an exception if the object has no Queue
+    if (*xsink) {
+        return QoreValue();
+    }
+    qh.clear(xsink);
+    return QoreValue();
+}
 ///@}

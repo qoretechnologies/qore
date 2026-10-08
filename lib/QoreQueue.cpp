@@ -44,6 +44,8 @@ void Queue::deref(ExceptionSink* xsink) {
 }
 
 void qore_queue_private::destructor(ExceptionSink* xsink) {
+    // declared before the lock, so that the weak reference is released after it
+    ScanHolderRelease release;
     AutoLocker al(&l);
     if (unsigned rw = getReadWaitingIntern()) {
         xsink->raiseException("QUEUE-ERROR", "Queue deleted while there %s %d waiting thread%s for reading", rw == 1 ? "is" : "are", rw, rw == 1 ? "" : "s");
@@ -54,6 +56,7 @@ void qore_queue_private::destructor(ExceptionSink* xsink) {
         write_cond.broadcast();
     }
 
+    uncountAllIntern(release);
     clearIntern(xsink);
     setLenIntern(Queue_Deleted);
     if (desc) {
@@ -71,15 +74,51 @@ void qore_queue_private::clearIntern(ExceptionSink* xsink) {
     }
     head = nullptr;
     tail = nullptr;
-    scan_count = 0;
 }
 
-void qore_queue_private::uncountIntern(QoreObject& self) {
-    assert(scan_count > 0);
-    if (!--scan_count) {
-        // the object's count follows the queue's under the lock (see scan_count)
-        qore_object_private::get(self)->decScanPrivateData();
+qore_queue_private::ScanHolderRelease::~ScanHolderRelease() {
+    if (obj) {
+        obj->tDeref();
     }
+}
+
+void qore_queue_private::countIntern(QoreObject& self) {
+    qore_object_private* obj = qore_object_private::get(self);
+    if (!scan_count++) {
+        assert(!scan_holder);
+        // the object's count follows the queue's under the lock (see scan_count)
+        obj->incScanPrivateData();
+        obj->tRef();
+        scan_holder = obj;
+    } else {
+        // a queue is the private data of one object
+        assert(scan_holder == obj);
+    }
+}
+
+void qore_queue_private::uncountIntern(ScanHolderRelease& release) {
+    assert(scan_count > 0);
+    assert(scan_holder);
+    if (!--scan_count) {
+        releaseScanHolderIntern(release);
+    }
+}
+
+void qore_queue_private::uncountAllIntern(ScanHolderRelease& release) {
+    if (scan_count) {
+        scan_count = 0;
+        releaseScanHolderIntern(release);
+    }
+}
+
+void qore_queue_private::releaseScanHolderIntern(ScanHolderRelease& release) {
+    assert(!scan_count);
+    assert(scan_holder);
+    // the object's count follows the queue's under the lock (see scan_count)
+    scan_holder->decScanPrivateData();
+    assert(!release.obj);
+    release.obj = scan_holder;
+    scan_holder = nullptr;
 }
 
 int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
@@ -279,10 +318,7 @@ void qore_queue_private::push(ExceptionSink* xsink, QoreObject* self, QoreValue 
         pushIntern(holder.release());
         if (self && needs_scan(n)) {
             tail->scan_counted = true;
-            // the object's count follows the queue's under the lock (see scan_count)
-            if (!scan_count++) {
-                qore_object_private::get(*self)->incScanPrivateData();
-            }
+            countIntern(*self);
             // no scan follows the new edge (Pattern B in design/dgc.md); marked under the lock, as another thread
             // can take the value and release it as soon as the lock is released
             qore_dgc_value_stored(*qore_object_private::get(*self), n);
@@ -313,10 +349,7 @@ void qore_queue_private::insert(ExceptionSink* xsink, QoreObject* self, QoreValu
         insertIntern(holder.release());
         if (self && needs_scan(n)) {
             head->scan_counted = true;
-            // the object's count follows the queue's under the lock (see scan_count)
-            if (!scan_count++) {
-                qore_object_private::get(*self)->incScanPrivateData();
-            }
+            countIntern(*self);
             // no scan follows the new edge (Pattern B in design/dgc.md); marked under the lock, as another thread
             // can take the value and release it as soon as the lock is released
             qore_dgc_value_stored(*qore_object_private::get(*self), n);
@@ -328,6 +361,8 @@ QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int 
     to = false;
     QoreValue rv{};
     {
+        // declared before the lock, so that the weak reference is released after it
+        ScanHolderRelease release;
         SafeLocker sl(&l);
 
         if (checkWriteIntern(xsink, true)) {
@@ -363,11 +398,11 @@ QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int 
             write_cond.signal();
         }
 
-        // the scan count is maintained under the lock, as in push() and insert(); a value taken through the C++
-        // API without the Queue object cannot uncount the object's private data, so the count is then kept, which
-        // only makes the collector scan the queue's values when it would not have to
-        if (n->scan_counted && self) {
-            uncountIntern(*self);
+        // the scan count is maintained under the lock, as in push() and insert(); the queue holds the object
+        // whose count includes it, so a value taken through the C++ API without the Queue object is uncounted too
+        if (n->scan_counted) {
+            assert(!self || qore_object_private::get(*self) == scan_holder);
+            uncountIntern(release);
         }
 
         sl.unlock();
@@ -381,6 +416,8 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
     to = false;
     QoreValue rv{};
     {
+        // declared before the lock, so that the weak reference is released after it
+        ScanHolderRelease release;
         SafeLocker sl(&l);
 
         if (checkWriteIntern(xsink, true)) {
@@ -410,11 +447,11 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
             write_cond.signal();
         }
 
-        // the scan count is maintained under the lock, as in push() and insert(); a value taken through the C++
-        // API without the Queue object cannot uncount the object's private data, so the count is then kept, which
-        // only makes the collector scan the queue's values when it would not have to
-        if (n->scan_counted && self) {
-            uncountIntern(*self);
+        // the scan count is maintained under the lock, as in push() and insert(); the queue holds the object
+        // whose count includes it, so a value taken through the C++ API without the Queue object is uncounted too
+        if (n->scan_counted) {
+            assert(!self || qore_object_private::get(*self) == scan_holder);
+            uncountIntern(release);
         }
 
         sl.unlock();
@@ -426,6 +463,8 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
 
 void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
     {
+        // declared before the lock, so that the weak reference is released after it
+        ScanHolderRelease release;
         AutoLocker al(&l);
 
         if (checkWriteIntern(xsink)) {
@@ -438,11 +477,10 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
             return;
         }
 
-        if (scan_count) {
-            assert(self);
-            // the object's count follows the queue's under the lock (see scan_count)
-            qore_object_private::get(*self)->decScanPrivateData();
-        }
+        // the queue holds the object whose count includes it, so a queue cleared through the C++ API without the
+        // Queue object is uncounted too
+        assert(!self || !scan_holder || qore_object_private::get(*self) == scan_holder);
+        uncountAllIntern(release);
 
         clearIntern(xsink);
         setLenIntern(0);
@@ -455,6 +493,8 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
 
 void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_desc, QoreObject* self, ExceptionSink* xsink) {
     {
+        // declared before the lock, so that the weak reference is released after it
+        ScanHolderRelease release;
         AutoLocker al(&l);
         if (getLenIntern() == Queue_Deleted) {
             return;
@@ -466,11 +506,10 @@ void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_des
         }
         desc = n_desc->stringRefSelf();
 
-        if (scan_count) {
-            assert(self);
-            // the object's count follows the queue's under the lock (see scan_count)
-            qore_object_private::get(*self)->decScanPrivateData();
-        }
+        // the queue holds the object whose count includes it, so a queue cleared through the C++ API without the
+        // Queue object is uncounted too
+        assert(!self || !scan_holder || qore_object_private::get(*self) == scan_holder);
+        uncountAllIntern(release);
 
         // clear the queue
         clearIntern(xsink);

@@ -115,6 +115,14 @@ private:
     */
     int scan_count = 0;
 
+    //! The object whose private data scan count includes the queue; set while scan_count is not 0
+    /** Values are counted only when they are added through the Queue object, but they can be taken, and the queue
+        cleared, through the public C++ API, which has the queue and not its object; the queue keeps the object so
+        that these uncount it too.  Held with a weak reference, which keeps the object allocated but not alive; the
+        reference is released after the queue's lock (see ScanHolderRelease).
+    */
+    qore_object_private* scan_holder = nullptr;
+
     DLLLOCAL int waitReadIntern(ExceptionSink *xsink, int timeout_ms);
     DLLLOCAL int waitWriteIntern(ExceptionSink *xsink, int timeout_ms);
 
@@ -124,8 +132,32 @@ private:
 
     DLLLOCAL void clearIntern(ExceptionSink* xsink);
 
+    //! Releases the weak reference to a scan holder when it goes out of scope
+    /** Declared before the queue's lock is taken, so that the reference is released after the lock: the last weak
+        reference frees the object.
+    */
+    class ScanHolderRelease {
+    public:
+        DLLLOCAL ScanHolderRelease() = default;
+        DLLLOCAL ScanHolderRelease(const ScanHolderRelease&) = delete;
+        DLLLOCAL ScanHolderRelease& operator=(const ScanHolderRelease&) = delete;
+
+        DLLLOCAL ~ScanHolderRelease();
+
+        qore_object_private* obj = nullptr;
+    };
+
+    // adds a value to the scan count; called with the lock held
+    DLLLOCAL void countIntern(QoreObject& self);
+
     // removes a counted value from the scan count; called with the lock held
-    DLLLOCAL void uncountIntern(QoreObject& self);
+    DLLLOCAL void uncountIntern(ScanHolderRelease& release);
+
+    // removes all values from the scan count; called with the lock held
+    DLLLOCAL void uncountAllIntern(ScanHolderRelease& release);
+
+    // releases the scan holder once the scan count is 0; called with the lock held
+    DLLLOCAL void releaseScanHolderIntern(ScanHolderRelease& release);
 
     // the following helpers must be called with the lock held
     DLLLOCAL int getLenIntern() const {
@@ -192,6 +224,7 @@ public:
         assert(!tail);
         assert(getLenIntern() == Queue_Deleted || !getLenIntern());
         assert(!desc);
+        assert(!scan_holder);
     }
 
     // push at the end of the queue and take the reference - can only be used when len == -1; the reference is
