@@ -4139,6 +4139,11 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::HTTPClient "HTTPClient" requests through a proxy to an HTTPS server that selects HTTP/2
+      sometimes failing with \c HTTP1-UNEXPECTED-DATA or \c SOCKET-NOT-OPEN: when the server's first HTTP/2 frame
+      arrived before the connection was switched to HTTP/2, it was taken for unexpected data and the connection was
+      closed
+
     - Fixed the @ref backquote_operator "backquote operator", @ref Qore::backquote() "backquote()" and
       @ref Qore::system() "system()" starting their commands with \c fork() on platforms other than Linux, such as
       macOS: in the multithreaded %Qore process, the child could be blocked or killed before it ran the command

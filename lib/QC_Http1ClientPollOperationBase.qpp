@@ -565,6 +565,12 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsin
                 alpn_id = QoreStringDataHelper(proto_val).c_str();
             }
         }
+        // HTTP/2 negotiated over a tunnel through a proxy: the connection manager takes the socket from this
+        // HTTP/1.1 operation for an HTTP/2 connection once the connection is ready.  The server starts HTTP/2
+        // with its SETTINGS frame right after the handshake, so this operation must not read or check the socket
+        // any more: going on in READING state would take that frame for unexpected data on an idle HTTP/1.1
+        // connection and close the connection whenever it arrived before the manager took the socket
+        bool h2 = alpn_id == "h2";
         {
             AutoLocker al(stream_lock);
             negotiated_protocol = std::move(alpn_id);
@@ -575,6 +581,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsin
         startReady(xsink);
         if (*xsink) {
             return nullptr;
+        }
+        if (h2) {
+            ASYNC_IO_TRACE("H1 handleSslUpgrade: h2 negotiated, socket ready for extraction\n");
+            // no HTTP/1.1 request can be submitted in this state (see submitRequest())
+            req_state = ReqState::PROTOCOL_SWITCHED;
+            h1_state.store(H1State::PROTOCOL_SWITCHED, std::memory_order_release);
+            return handleProtocolSwitched(xsink);
         }
         return continuePoll(xsink);
     }
