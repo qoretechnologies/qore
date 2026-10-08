@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class DynamicClosureEntryTest
+
+class DynamicClosureEntryTest inherits QUnit::Test {
+    private { string libdir; }
+    constructor() : Test("dynamic native closure entry", "1.0", \ARGV) {
+        libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        addTestCase("native entry and capture fallback", \check());
+        addTestCase("concurrent capture mutation and stack readers", \checkReaders());
+        addTestCase("debugger attachment to cold and warm captured entries", \checkDebugger());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote("LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " " + prefix
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTDynamicClosureEntry.qr";
+        string expected = "dynamic-closure-entry: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((libdir + "/qore", "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-dynamic-closure-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((ENV.QCC ?? libdir + "/qcc", level, "--strip-source",
+                    "-o", executable, source), prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool enabled = !prefix.startsWith("QORE_DISABLE_");
+                foreach string factory in (("dynamicClosureFactory", "dynamicClosurePlain")) {
+                    assertEq(enabled, regex(ir,
+                        "call void @qore_rt_bind_closure_int_unary_v1[^\\n]*" + factory),
+                        factory + " binding " + prefix + level);
+                }
+                # The repeated capture must remain two separately synchronized
+                # reads even when native LLVM optimization is enabled.
+                assertEq(enabled, regex(ir,
+                    "define[^\\n]*_dynamic_int_v1[^\\n]*\\{[^}]*"
+                    "call i32 @qore_rt_try_load_closure_int_v1[^}]*"
+                    "call i32 @qore_rt_try_load_closure_int_v1"),
+                    "repeated capture reads retained " + prefix + level);
+                assertFalse(regex(ir,
+                    "call void @qore_rt_bind_closure_int_unary_v1[^\\n]*dynamicClosureReference"),
+                    "reference-backed capture not admitted");
+                assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 "),
+                    "runtime fallback " + prefix + level);
+            }
+        }
+    }
+    private checkReaders() {
+        string source = get_script_dir() + "/AOTDynamicClosureReaders.qr";
+        string expected = "dynamic-closure-readers: ok\n";
+        assertEq(expected, run((libdir + "/qore", "--exec-mode=ast", source)), "AST reference");
+        TmpDir dir("qore-dynamic-closure-readers-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            string ir = run((ENV.QCC ?? libdir + "/qcc", level, "--strip-source",
+                "-o", executable, source), "QORE_DUMP_LLVM_IR=1 ");
+            assertTrue(ir.contains("call void @qore_rt_bind_closure_int_unary_v1"), "native binding");
+            assertEq(expected, run((executable,)), level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 "),
+                "ordinary dispatch " + level);
+        }
+    }
+    private checkDebugger() {
+        string source = get_script_dir() + "/AOTDynamicClosureDebugger.qr";
+        string expected = "dynamic-closure-debugger: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((libdir + "/qore", "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-dynamic-closure-debugger-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            string ir = run((ENV.QCC ?? libdir + "/qcc", level, "--strip-source",
+                "-o", executable, source), "QORE_DUMP_LLVM_IR=1 ");
+            assertTrue(ir.contains("call void @qore_rt_bind_closure_int_unary_v1"), "native binding");
+            assertEq(expected, run((executable,)), level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 "),
+                "ordinary dispatch " + level);
+        }
+    }
+}

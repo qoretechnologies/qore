@@ -1958,6 +1958,10 @@ RuntimeConfig* RuntimeConfigNativeAccess::tryGetCurrent() {
     return &rc;
 }
 
+bool RuntimeConfigNativeAccess::hasProgramData(const RuntimeConfig& rc) {
+    return getThreadData(rc)->tlpd != nullptr;
+}
+
 QoreProgram* RuntimeConfigNativeAccess::getProgram(const RuntimeConfig& rc) {
     return getThreadData(rc)->current_pgm;
 }
@@ -2016,12 +2020,18 @@ __attribute__((always_inline)) RuntimeConfigNativeCallHelper::RuntimeConfigNativ
           old_stmt(td->runtime_statement), old_loc(td->runtime_loc), old_po(td->runtime_po),
           old_sp(td->runtime_loc_sp), swapped(parse_loc != nullptr) {
     assert(td->current_pgm == pgm);
-    td->call_program_context = pgm;
-    td->closure_rt_env = nullptr;
     // Typed callback admission proves a scalar leaf with no TLS locals or
     // generic reentry. Keep observable markers, but no variable cleanup record.
     tlpd->lvstack.pushNativeLeafFrameBoundary();
-    tlpd->cvstack.pushNativeLeafFrameBoundary();
+    try {
+        tlpd->cvstack.pushNativeLeafFrameBoundary();
+    } catch (...) {
+        tlpd->lvstack.popNativeLeafFrameBoundary();
+        throw;
+    }
+    // Both marker allocations must succeed before changing compatibility state.
+    td->call_program_context = pgm;
+    td->closure_rt_env = nullptr;
     call_loc = old_loc ? old_loc : parse_loc;
     old_stack = publish_pushed_stack_location(td, stack_loc);
     if (swapped) {

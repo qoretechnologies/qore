@@ -65,6 +65,7 @@ class ExceptionSink;
 class FunctionEntry;
 class LocalVar;
 class QoreClass;
+class QoreClosureBase;
 class QoreFunction;
 class QoreIRFunction;
 class QoreIRLValuePathInstruction;
@@ -78,6 +79,7 @@ class QoreRecursiveThreadLock;
 class QoreStringNode;
 class QoreTypeInfo;
 class QoreValue;
+class RuntimeConfig;
 struct QoreModuleInitContext;
 struct QoreAOTDebugMetadata;
 struct QoreAOTLazyClosureIR;
@@ -374,6 +376,12 @@ struct QoreAOTContext {
     //! pc_loc_fn identifies the same body; Program/context lifetime bounds the borrowed pointer.
     using NativeIntUnaryMethodEntry = int64_t (*)(int64_t, QoreAOTContext*, ExceptionSink*);
     std::atomic<NativeIntUnaryMethodEntry> native_int_unary_method_entry{nullptr};
+
+    //! Pure dynamic closure companion; captures belong to the borrowed invocation, never this shared context.
+    //! A zero accepted output requests effect-free fallback; context/sink remain the final ABI arguments.
+    using NativeIntUnaryClosureEntry = int64_t (*)(int64_t, const QoreClosureBase*, RuntimeConfig*,
+        int*, QoreAOTContext*, ExceptionSink*);
+    std::atomic<NativeIntUnaryClosureEntry> native_int_unary_closure_entry{nullptr};
 
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.

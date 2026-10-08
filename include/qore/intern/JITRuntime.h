@@ -45,6 +45,7 @@ class QoreVarInfo;
 class UserVariantBase;
 class RuntimeConfig;
 class FunctionCallReferenceNode;
+class QoreClosureBase;
 class QoreProgram;
 class StatementBlock;
 class QoreProgramLocation;
@@ -897,6 +898,23 @@ void qore_rt_bind_method_int_unary_v1(QoreAOTContext* ctx,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
     int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*));
 
+//! Publish a pure dynamic int(int) closure companion, idempotently for this exact normal body.
+//! @param ctx runtime-owned context, without per-instance captured values
+//! @param normal body identity checked again at dispatch
+//! @param entry borrowed closure and live RuntimeConfig, accepted output, context and sink
+void qore_rt_bind_closure_int_unary_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(int64_t, const QoreClosureBase*, RuntimeConfig*, int*, QoreAOTContext*, ExceptionSink*));
+
+//! Read a single capture under its normal lock, without TLS lookup or reference evaluation.
+//! @param closure borrowed live closure instance
+//! @param ctx context mapping the compiled slot to its lexical local
+//! @param slot local slot in ctx
+//! @param result full-width integer output on success
+//! @return one on success, zero for ordinary-evaluation fallback without visible effects
+int qore_rt_try_load_closure_int_v1(const QoreClosureBase* closure, QoreAOTContext* ctx,
+    int32_t slot, int64_t* result);
+
 //! Acquire an optional borrowed live context for generated loop cancellation checks.
 //! @return nullptr after thread-data teardown; only valid within this thread's invocation
 RuntimeConfig* qore_rt_get_loop_runtime_config();
@@ -914,6 +932,7 @@ int64_t qore_rt_check_cancel_v2(ExceptionSink* xsink, const char* operation, Run
 
 //! Return 1 after an attempted native call (also on exception), 0 for generic fallback.
 //! Scalar arguments/results are native, borrowed, and bool uses a 0/1 int64_t carrier.
+//! The int(int) v3 miss path also borrows eligible dynamic closures, without storing them in cache.
 #define QORE_DECLARE_TYPED_FUNCREF_RESULT(NAME, TYPE) \
     int qore_rt_try_funcref_##NAME##_0_v1(uint64_t ref, TYPE* result, ExceptionSink* xsink); \
     int qore_rt_try_funcref_##NAME##_int_v1(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink); \

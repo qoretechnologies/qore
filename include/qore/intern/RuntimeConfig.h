@@ -115,6 +115,8 @@ public:
     DLLLOCAL static RuntimeConfig* tryGetCurrent();
     //! Read the live Program, not a snapshot that a nested call could refresh.
     DLLLOCAL static QoreProgram* getProgram(const RuntimeConfig& rc);
+    //! Whether this invocation has the variable stacks required by a native observable frame.
+    DLLLOCAL static bool hasProgramData(const RuntimeConfig& rc);
     //! Preserve the normal stack guard without looking up TLS again.
     DLLLOCAL static int checkStack(const RuntimeConfig& rc, ExceptionSink* xsink);
     //! Perform the normal cancellation check using the live thread view, not TLS snapshots.

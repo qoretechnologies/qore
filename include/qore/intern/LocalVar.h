@@ -445,6 +445,20 @@ public:
         return val.get<ReferenceNode>()->refRefSelf();
     }
 
+    //! Read one assigned integer without resolving references or entering user code.
+    /** @param result receives the full-width integer only on success
+        @return false for unassigned or reference-backed storage; the caller must use ordinary evaluation
+        @note Each call takes the normal capture read lock; this does not cache a captured value.
+    */
+    DLLLOCAL bool tryReadNativeInt(int64_t& result) const {
+        QoreSafeVarRWReadLocker sl(rml, !frameExclusive());
+        if (!val.assigned || val.getType() != NT_INT) {
+            return false;
+        }
+        result = val.getAsBigInt();
+        return true;
+    }
+
     DLLLOCAL const void* getLValueId() const;
 
     // returns true if the value could contain an object or a closure

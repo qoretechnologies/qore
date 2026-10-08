@@ -108,9 +108,12 @@ single unmapped class constraint with the ordinary raw/parameterized-object and
 inheritance/access validators; misses retain the original diagnostics. No
 compatibility/access result is cached. The compiler and helper ABI are unchanged,
 so runtime-only before/after comparisons can reuse the identical AOT executable.
-The prepared scalar callback v3 entrypoints also request 16-byte alignment.
-The layout comparison includes the unaligned and 128-byte-aligned alternatives;
-alignment changes no callback guard, helper ABI or frame lifetime.
+The prepared scalar callback v3 entrypoints currently request 64-byte alignment.
+Earlier class-check experiments used 16 bytes and also measured unaligned and
+128-byte alternatives. The dynamic-closure follow-up compares saved executables
+across runtimes before selecting 64 bytes; a new executable/runtime combination
+otherwise regressed floating callbacks. Alignment changes no callback guard,
+helper ABI or frame lifetime; it is not a portable performance guarantee.
 
 `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` disables the pure scalar method binding
 at compilation and its polymorphic-cache native path at runtime. Eligible
@@ -134,6 +137,19 @@ comparisons can reuse the same AOT executable. For a negative control, disable
 the native entry with `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1`, not just its
 admission cache: both prepared and ordinary native admission use the explicit
 context helper.
+
+`QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1` disables the dynamic native `int(int)`
+closure companion at compilation and execution. Use it in both phases for an
+attribution control: enabling compilation retains a normal native body to publish
+the companion even when a noncapturing closure previously used the IR leaf path.
+Paired compilation is required against runtimes predating the additive binding
+and capture-read helpers. Older artifacts still execute on the new runtime.
+The integer v3 callback continuation borrows each live closure without caching
+or extending its lifetime. Each capture read remains separately synchronized;
+references, unassigned captures, unsupported bodies, foreign Programs and attached
+debuggers retain ordinary fallback. Disabled or absent native bindings are
+rejected before unnecessary metadata/TLS acquisition. Presence flags are sampled
+once at runtime, not toggled during measurement.
 
 ## Workloads and units
 

@@ -440,6 +440,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_bind_function_call_ref_typed_v3) },
     { "qore_rt_bind_method_int_unary_v1",
         reinterpret_cast<void*>(&qore_rt_bind_method_int_unary_v1) },
+    { "qore_rt_bind_closure_int_unary_v1",
+        reinterpret_cast<void*>(&qore_rt_bind_closure_int_unary_v1) },
+    { "qore_rt_try_load_closure_int_v1",
+        reinterpret_cast<void*>(&qore_rt_try_load_closure_int_v1) },
     { "qore_rt_get_stack_limit_v1", reinterpret_cast<void*>(&qore_rt_get_stack_limit_v1) },
     { "qore_rt_get_fast_runtime_config", reinterpret_cast<void*>(&qore_rt_get_fast_runtime_config) },
     { "qore_rt_get_loop_runtime_config", reinterpret_cast<void*>(&qore_rt_get_loop_runtime_config) },
@@ -6731,6 +6735,14 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
 static uint64_t execFunctionRefNative(const FunctionCallReferenceNode* ref,
     const UserVariantBase* uvb, const uint64_t* args, ExceptionSink* xsink);
 
+static bool tryExecNativeIntClosure(const QoreClosureBase* closure, const UserVariantBase* uvb,
+    const uint64_t* args, int nargs, uint64_t** arg_cleanups, ExceptionSink* xsink, uint64_t& result);
+
+static bool isDynamicClosureEntryEnabled() {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY");
+    return enabled;
+}
+
 static bool closureDirectArgsNeedNoBinding(const UserVariantBase* uvb,
         const uint64_t* args, int nargs, ExceptionSink* xsink) {
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
@@ -6959,6 +6971,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
         assert(uf);
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
+        uint64_t native_result;
+        if (tryExecNativeIntClosure(cb, uvb, &arg0_bits, 1, nullptr, xsink, native_result)) {
+            return native_result;
+        }
         if (uvb && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
                 && closureDirectArgsNeedNoBinding(uvb, &arg0_bits, 1, xsink)) {
@@ -7024,6 +7040,10 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         assert(uf);
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
+        uint64_t native_result;
+        if (tryExecNativeIntClosure(cb, uvb, args, nargs, arg_cleanups, xsink, native_result)) {
+            return native_result;
+        }
         if (uvb && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
                 && closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {
@@ -10226,6 +10246,155 @@ extern "C" DLLEXPORT void qore_rt_bind_method_int_unary_v1(QoreAOTContext* ctx,
         std::memory_order_release, std::memory_order_relaxed);
 }
 
+extern "C" DLLEXPORT void qore_rt_bind_closure_int_unary_v1(QoreAOTContext* ctx,
+        uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+        QoreAOTContext::NativeIntUnaryClosureEntry entry) {
+    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal
+            || ctx->native_int_unary_closure_entry.load(std::memory_order_relaxed)) {
+        return;
+    }
+    QoreAOTContext::NativeIntUnaryClosureEntry expected = nullptr;
+    ctx->native_int_unary_closure_entry.compare_exchange_strong(expected, entry,
+        std::memory_order_release, std::memory_order_relaxed);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_load_closure_int_v1(const QoreClosureBase* closure,
+        QoreAOTContext* ctx, int32_t slot, int64_t* result) {
+    if (!closure || !ctx || slot < 0 || slot >= ctx->num_locals || !result) {
+        return 0;
+    }
+    const ClosureVarValue* capture = closure->find(ctx->locals[slot]);
+    return capture && capture->tryReadNativeInt(*result);
+}
+
+// Only immutable metadata is visible to another thread's stack walker. The
+// final member unpublishes and waits before any earlier member is destroyed.
+class QoreNativeClosureStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
+public:
+    QoreNativeClosureStackLocation(RuntimeConfig& rc, const UserVariantBase* uvb, ExceptionSink* xsink)
+        : name(closureName()), statements(uvb->getStatementBlock()), pgm(uvb->pgm),
+          helper(rc, this, loc, uvb->getUserSignature()->getParseLocation(),
+              uvb->getParseOptions(pgm->getParseOptions()), pgm, xsink) {
+    }
+    const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+    bool isAOTFrame() const override { return true; }
+    const std::string& getCallName() const override { return name; }
+    qore_call_t getCallType() const override { return CT_USER; }
+    QoreProgram* getProgram() const override { return pgm; }
+    const AbstractStatement* getStatement() const override { return statements; }
+
+private:
+    static const std::string& closureName() {
+        static const std::string name("<anonymous closure>");
+        return name;
+    }
+    const std::string& name;
+    const StatementBlock* statements;
+    QoreProgram* pgm;
+    const QoreProgramLocation* loc = nullptr;
+    RuntimeConfigNativeCallHelper helper;
+};
+
+static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBase* closure,
+        const UserVariantBase* uvb, int64_t argument, int64_t& result, ExceptionSink* xsink) {
+    QoreAOTContext* ctx = uvb ? uvb->getCachedAOTContext() : nullptr;
+    if (!ctx || !uvb->hasCachedAOT()
+            || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
+            || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)
+            || ctx->uses_self || ctx->uses_argv) {
+        return false;
+    }
+    auto entry = ctx->native_int_unary_closure_entry.load(std::memory_order_acquire);
+    if (!entry) {
+        return false;
+    }
+    QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(rc);
+    if (pgm != uvb->pgm || pgm != ctx->pgm || pgm != closure->getProgram()
+            || !RuntimeConfigNativeAccess::hasProgramData(rc)
+            || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+        return false;
+    }
+    const UserSignature* sig = uvb->getUserSignature();
+    if (sig->numParams() != 1 || sig->getParamTypeInfo(0) != bigIntTypeInfo
+            || sig->getReturnTypeInfo() != bigIntTypeInfo || sig->needsTypeParameterSubstitution()) {
+        return false;
+    }
+    result = 0;
+    if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
+        return true;
+    }
+    QoreObject* self = closure->getObject();
+    std::optional<QoreClosureSelfContextHelper> self_context;
+    if (self) {
+        self_context.emplace(self);
+    }
+    RuntimeConfigNativeObjectHelper context(rc, self, closure->getClassCtx());
+    int accepted = 1;
+    int64_t value = 0;
+    {
+        QoreNativeClosureStackLocation frame(rc, uvb, xsink);
+        if (!*xsink) {
+            try {
+                value = entry(argument, closure, &rc, &accepted, ctx, xsink);
+            } catch (const QoreJITException&) {
+                // Native stack exceptions already belong to the sink.
+            }
+        }
+    }
+    if (!accepted && !*xsink) {
+        // Only bounded pure scalar operations and locked, non-evaluating capture
+        // reads may precede a miss. No argument was consumed or effect committed.
+        return false;
+    }
+    if (!*xsink) {
+        result = value;
+    }
+    return true;
+}
+
+static bool tryExecNativeIntClosure(const QoreClosureBase* closure, const UserVariantBase* uvb,
+        const uint64_t* args, int nargs, uint64_t** arg_cleanups, ExceptionSink* xsink, uint64_t& result) {
+    // Reject before acquiring a native thread view, including old native bodies
+    // and compiler-ineligible closures that can never publish a companion.
+    if (!isDynamicClosureEntryEnabled() || !uvb || !uvb->hasCachedAOT()
+            || nargs != 1 || fromBits(args[0]).getType() != NT_INT) {
+        return false;
+    }
+    QoreAOTContext* ctx = uvb->getCachedAOTContext();
+    if (!ctx || !ctx->native_int_unary_closure_entry.load(std::memory_order_acquire)) {
+        return false;
+    }
+    int64_t value;
+    if (!tryExecNativeIntClosureScalar(RuntimeConfigNativeAccess::getCurrent(), closure, uvb,
+            fromBits(args[0]).getAsBigInt(), value, xsink)) {
+        return false;
+    }
+    result = toBits(QoreValue());
+    if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) >= 0 && !*xsink) {
+        result = toBits(QoreValue(value));
+    }
+    return true;
+}
+
+// The prepared function-reference cache deliberately does not own closures:
+// retaining one would change capture/object destruction timing. Borrow the live
+// argument instead, and use the caller's explicit state and scalar continuation.
+static int tryNativeClosureContinuation(RuntimeConfig& rc, uint64_t ref_bits, int64_t* result,
+        ExceptionSink* xsink, int64_t argument) {
+    // The disabled control must not decode closure metadata before falling back.
+    if (!isDynamicClosureEntryEnabled()) {
+        return 0;
+    }
+    QoreValue ref = fromBits(ref_bits);
+    if (ref.getType() != NT_RUNTIME_CLOSURE) {
+        return 0;
+    }
+    const auto* closure = static_cast<const QoreClosureBase*>(ref.getInternalNode());
+    const auto* function = static_cast<const UserClosureFunction*>(closure->getFunction());
+    const auto* uvb = function->first()->getUserVariantBase();
+    return tryExecNativeIntClosureScalar(rc, closure, uvb, argument, *result, xsink);
+}
+
 // A miss is uncommon for a retained native callback. Keep reference decoding,
 // ownership replacement and metadata extraction out of the positive-hit frame.
 static __attribute__((noinline)) bool prepareTypedFunctionRefMiss(RuntimeConfig& rc,
@@ -10317,6 +10486,9 @@ template <typename Result, uint32_t Signature, typename... Args>
 static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& cache,
         uint64_t ref_bits, Result* result, ExceptionSink* xsink, Args... args) {
     if (!prepareTypedFunctionRef(rc, ref_bits, Signature, cache, xsink)) {
+        if constexpr (Signature == (1 | (1 << 2))) {
+            return tryNativeClosureContinuation(rc, ref_bits, result, xsink, args...);
+        }
         return 0;
     }
     *result = Result{};
@@ -10371,8 +10543,8 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
     return 1;
 }
 
-// Keep the hot prepared-entry alignment stable as unrelated runtime code grows.
-// A modest boundary avoids imposing cache-line padding on the runtime text.
+// Keep hot prepared entries on a stable boundary as unrelated runtime code grows.
+// This only pads entry addresses; call guards, frame lifetime and ABI are unchanged.
 #define QORE_TYPED_FUNCREF_UNARY(NAME, TYPE, RET_KIND, ARG_NAME, ARG_TYPE, ARG_KIND) \
     extern "C" DLLEXPORT int qore_rt_try_funcref_##NAME##_##ARG_NAME##_v1( \
             uint64_t ref, ARG_TYPE arg, TYPE* result, ExceptionSink* xsink) { \
@@ -10382,7 +10554,7 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
             uint64_t ref, ARG_TYPE arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc) { \
         return tryTypedFunctionRefExplicit<TYPE, RET_KIND | (ARG_KIND << 2)>(*rc, ref, result, xsink, arg); \
     } \
-    extern "C" DLLEXPORT __attribute__((aligned(16))) int qore_rt_try_funcref_##NAME##_##ARG_NAME##_v3( \
+    extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_##NAME##_##ARG_NAME##_v3( \
             uint64_t ref, ARG_TYPE arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, \
             QorePreparedFunctionRefV3* cache) { \
         return tryPreparedFunctionRef<TYPE, RET_KIND | (ARG_KIND << 2)>(*rc, *cache, ref, result, xsink, arg); \
@@ -10396,7 +10568,7 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
             uint64_t ref, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc) { \
         return tryTypedFunctionRefExplicit<TYPE, KIND>(*rc, ref, result, xsink); \
     } \
-    extern "C" DLLEXPORT __attribute__((aligned(16))) int qore_rt_try_funcref_##NAME##_0_v3( \
+    extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_##NAME##_0_v3( \
             uint64_t ref, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, \
             QorePreparedFunctionRefV3* cache) { \
         return tryPreparedFunctionRef<TYPE, KIND>(*rc, *cache, ref, result, xsink); \

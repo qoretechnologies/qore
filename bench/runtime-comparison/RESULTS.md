@@ -4316,3 +4316,175 @@ Existing compiler typed dispatch requires a recoverable closure-create target;
 this callback-parameter loop does not provide one. After that, return to unboxed
 polymorphic continuations and immutable caller-owned diagnostic frames. Neither
 larger optimization is implemented by this iteration.
+
+## Dynamic typed closure entry and scalar continuation (2026-10-08)
+
+The retained same-Program closure candidate reduces AOT noncapturing execution
+from **45.68454 to 25.83931 ns/element (-43.44%)** and captured-integer execution
+from **127.77740 to 30.65052 (-76.01%)**. A larger-batch repeat confirms reductions
+of **44.66% / 76.36%**. Fresh Java is **1.66986 / 1.75305**, leaving **15.47× /
+17.48×** whole-workload gaps. Java parity is not reached.
+
+Baseline is `b97968a5bc002add8850995bff58e78b044448e7`, library SHA-256
+`bdfcfdee3608a8122e56ebdb5aed99099ada531dc03b5995eeff507efe81516e`.
+Final release/debug hashes are
+`05392bbff192656b92dec7f51470986e0f4943101c92d9866a99561e4e58b968` /
+`cbad03bc88f3735f0f3c018b68e3ba03c9a788c6fbd3302bc1e05431e691c5e9`;
+production diff SHA-256 is
+`62828806aa4b8f38508a34dbf06ea98fc0915b104f28ca2058ab48c99a60b948`.
+
+### Implementation and retained semantics
+
+A compiler-proven exact `int(int)` closure can publish an optional native
+companion even when the caller sees only an opaque typed callback. The entry
+takes its borrowed live closure, explicit `RuntimeConfig`, unboxed argument,
+fallback flag, runtime context and exception sink. The existing integer v3
+function-reference continuation borrows this closure on a cache miss; it never
+stores or retains a closure instance. Boxed closure entrypoints can use the
+same companion while preserving numeric argument cleanup.
+
+Admission requires a bounded straight-line pure scalar body (at most 64 IR
+instructions), no body locals or generic type substitution, and only ordinary
+nonreference integer captures. Each source capture read takes the existing
+capture read lock separately. A failed capture read requests ordinary fallback
+before argument consumption or visible effects; capture values are not
+snapshotted, hoisted, retained in shared metadata or assumed immutable.
+The whole-body proof excludes loops, calls, side effects and throwing arithmetic.
+
+Runtime admission retains normal-body/context identity and readiness, live
+same-Program ownership, exact signature, no attached debugger, stack guard and
+self/argv exclusions. Lexical object/class/self context and reader-safe immutable
+frame publication remain in place. The frame helper is the last data member;
+reader grace periods are not shortened. A marker-allocation exception rolls
+back the first marker before changing compatibility state. Existing serialized
+formats/helper signatures do not change; the additive binding/read helpers
+require paired compilation against each runtime. Old artifacts still run.
+
+Disabled continuations reject before closure metadata decoding. Boxed helpers
+check for a published companion before acquiring a TLS-backed runtime view.
+This matters to the fallback-cost correction measured below.
+
+### Final paired primary
+
+`run-07c2ov0w`: 1024 elements, five forks, three warmups, five 500 ms windows;
+150 jobs/750 samples. Baseline/current IR and independently compiled AOT, plus
+fresh Temurin 25.0.2 / JMH 1.37 Java. Each mode passes 300 independent reference
+checks. All jobs are shuffled and sequential; timing never overlaps builds,
+tests, profiles, disassembly or evidence validation. Units include loop,
+computation, dispatch and checksum, not isolated call latency.
+
+|!Kernel|!IR before|!IR after|!AOT before|!AOT after|!Java JIT
+|closure_call|368.43610|366.14021|45.68454|25.83931|1.66986
+|closure_capture|404.64729|396.18628|127.77740|30.65052|1.75305
+|indirect_wide|347.32007|341.43867|8.49899|8.32778|1.67983
+|indirect_float|297.57268|293.92904|10.15903|10.18729|1.64747
+|polymorphic_call|407.36165|410.77492|88.63748|89.93963|2.53918
+|arithmetic|93.79568|94.96662|2.36051|2.37303|0.89069
+
+Noncapturing fork ranges are 45.02995–46.21573 before and 25.72865–26.29285
+after; capture ranges 126.98654–129.66690 and 30.40610–30.89761. Both separate.
+All other AOT ranges overlap. Wide-ref improvement is not attributed to closure
+execution. Polymorphic median is **1.47% slower**; its repeat below is also
+slightly slower, so a modest cost is not excluded by overlap. IR ranges overlap
+except wide-ref (a different path); no IR improvement is attributed here.
+The float candidate retains a12.09579 ns slow fork; the baseline has11.38562.
+Alignment does not establish universal layout neutrality or remove all outliers.
+
+### Larger-batch repeat and disabled control
+
+`run-r2m6hv2a`: 4096 elements, five forks, otherwise the same windows;60 jobs/
+300 samples, separately compiled before/after AOT. Only the two closure target
+ranges separate. No fresh Java run at this count.
+
+|!Kernel|!AOT before|!AOT after|!Change|!Before / after fork ranges
+|closure_call|44.26276|24.49506|-44.66%|43.84181–44.76462 / 24.40618–24.90831
+|closure_capture|126.38745|29.87691|-76.36%|124.57022–127.59013 / 29.03234–30.55668
+|indirect_wide|7.45827|7.29160|-2.23%|7.30726–7.59477 / 7.23227–7.36194
+|indirect_float|9.03153|9.03792|0.07%|8.99489–9.91343 / 9.00266–9.09730
+|polymorphic_call|87.53309|88.08406|0.63%|86.66393–87.84932 / 87.65816–89.62758
+|arithmetic|1.33570|1.32761|-0.61%|1.32988–1.34151 / 1.32193–1.33863
+
+`run-5q6czbue`: 1024 elements, five forks, 60 jobs/300 samples, with
+`QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1` during both compilation and execution.
+Every before/after range overlaps. This does not prove zero overhead, but the
+earlier roughly 7% fallback penalty is not reproduced.
+
+|!Kernel|!AOT before|!AOT after|!Change
+|closure_call|46.06231|45.94365|-0.26%
+|closure_capture|130.05928|128.17620|-1.45%
+|indirect_wide|8.49032|8.40939|-0.95%
+|indirect_float|10.38193|10.26345|-1.14%
+|polymorphic_call|89.14230|89.16924|0.03%
+|arithmetic|2.35456|2.34261|-0.51%
+
+### Earlier candidates and adverse evidence
+
+All intermediate results remain in
+[complete evidence](results-dynamic-closure-entry-macos-arm64.json):
+
+|!Run|!Variant|!Outcome
+|run-iua6ygd7|Boxed pilot;90 jobs/450 samples|Closure45.37406 → 31.60697;capture127.79727 → 36.73255. Float+4.25% overlaps;polymorphic+2.22% separates unfavorably.
+|run-eawj0dg_|Unboxed continuation;150 jobs/750 samples|Closure45.73082 → 26.64901;capture130.38695 → 31.91748. Target ranges separate.
+|run-mhhmykfc|Unboxed disabled;60 jobs/300 samples|Fallback closure+7.48%,capture+7.23%,both ranges separate. Rejected pending early disabled/absent-entry rejection.
+|run-9nv6nbm0|Early rejection disabled;60 jobs/300 samples|All six ranges overlap;closure-0.81%,capture-0.14%.
+|run-yuelz1l4|Early rejection16-byte primary;150 jobs/750 samples|Closure-43.52%,capture-75.54%;float+0.79% separates unfavorably.
+|run-cdqdnrkv|Early rejection16-byte4096 repeat;80 jobs/400 samples|Closure-44.01%,capture-76.21%,but float+18.65% separates unfavorably. Commit held.
+
+The saved-artifact cross `closure-float-cross-l5riyk7_` runs50 jobs/250 samples
+on compatible old/new executables and runtimes at 1024 / 4096 elements. At4096,
+the old executable measures9.07115 ns on HEAD and 9.07726 on early rejection;
+the new executable measures10.74754 on early rejection but9.01609 on the
+preceding unboxed runtime. A second new executable measures10.81618.
+Normalized float-v3 bodies contain747 instructions in both libraries; only
+two cold string offsets differ. This supports a layout interaction, not a
+proven microarchitectural cause.
+
+The 64-byte-alignment cross `closure-float-align64-_3os1713` runs60 jobs/
+300 samples over six compatible pairs. On final alignment the two saved new
+executables measure9.02340 / 9.00308 ns at 4096, versus10.56638 / 10.49899 on the
+16-byte runtime. Their 1024 medians are 10.13241 / 10.16787 versus11.67622/
+11.75910. The 16-byte forks mix fast/slow results; ranges overlap and all forks
+are retained. Old-executable control ranges overlap. Final primary/repeat
+above use newly compiled artifacts, not just these saved executables.
+
+All twelve prepared v3 entrypoints now request64-byte alignment. Runtime
+`__text` grows13,898,064 → 13,949,424 bytes (+51,360), of which38,816 is over
+the 16-byte early-rejection candidate. This is measured target-specific tuning,
+not proof of a benefit on other architectures.
+
+### Validation and follow-up
+
+Final release/debug each pass 16 focused files:14 QUnit wrappers,43 cases,
+4087 assertions and 2 standalones. A subsequently expanded closure wrapper passes
+3 cases / 114 assertions per build, adding generated-code checks that two capture
+reads remain distinct at -O3. Coverage includes AST/IR/JIT/tiered,
+AOT -O0/-O3, native EH, disabled compile/runtime, forced split codegen,
+full-width wrapping, distinct environments, mutation, unassigned/reference
+fallback, concurrent first calls, concurrent capture writers/stack readers,
+and cold/warm debugger attachment and detachment.
+
+The earlier unboxed compiler/runtime candidate passed73 selected files per
+build (50 QUnit wrappers/249 cases/17680 assertions plus23 standalones), including
+cancellation, Program/module lifetime, access and cleanup coverage. Its first
+whole-module stack-helper assertion failed because dynamic companions also use
+that helper; the assertion was narrowed to the intended function-reference
+adapter and the matrix resumed successfully. Do not relabel that matrix as the
+later alignment run. Four standalone translation units pass for the unboxed
+candidate; final JITRuntime standalone syntax passes. Eleven harness tests pass.
+Old AOT artifacts still produce byte-identical 225 / 270 reference records.
+
+LLDB confirms the captured native route through integer v3 continuation,
+`tryExecNativeIntClosureScalar`, dynamic companion and synchronized capture
+reader; process completes successfully. No full suite, sanitizer/race detector,
+Linux, allocation-fault injection or complete split-runtime build is claimed.
+Forced split codegen is not a full split-runtime build.
+
+The evidence retains all 970 jobs/4850 samples, source/library/artifact hashes,
+production diffs, cross scripts and all 62 audit checks (20 Pass/42 N/A).
+Shared-host thermal/frequency/scheduling state is uncontrolled; fork ranges
+are not confidence intervals. Java retains callback targets with DONT_INLINE.
+Its captured field access has different ownership/synchronization semantics,
+and Qore's polymorphic base case can inline while Java retains all three.
+The goal remains active. Next: commit the audited closure improvement, fetch/
+merge origin/develop as requested, revalidate, then implement explicit-context
+unboxed polymorphic caller continuations and broaden call-category coverage.

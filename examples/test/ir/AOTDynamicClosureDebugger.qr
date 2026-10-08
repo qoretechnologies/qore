@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+int offset = 17;
+code<int(int)> callback = int sub (int value) {
+    return (value * 33 + offset) & 65535; # WARM_ENTRY: line 8
+};
+code<int(int)> cold = int sub (int value) {
+    return value + offset; # COLD_ENTRY: line 11
+};
+class DynamicClosureRecorder inherits DebugProgram {
+    public {
+        int warm_enter = 0;
+        int warm_exit = 0;
+        int cold_enter = 0;
+        int cold_exit = 0;
+    }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow,
+            reference rs, reference rts) { rs = DebugStep; }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        *hash<auto> loc = pgm.getStatementIdInfo(sid);
+        if (loc.start_line == 8) { ++warm_enter; }
+        if (loc.start_line == 11) { ++cold_enter; }
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+        *hash<auto> loc = pgm.getStatementIdInfo(sid);
+        if (loc.start_line == 8) { ++warm_exit; }
+        if (loc.start_line == 11) { ++cold_exit; }
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss,
+            reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+int sub dynamicDebugInvoke(code<int(int)> function, int value) { return function(value); }
+for (int i = 0; i < 32; ++i) {
+    if (dynamicDebugInvoke(callback, i) != ((i * 33 + offset) & 65535)) {
+        throw "DYNAMIC-CLOSURE-DEBUGGER", "warmup result";
+    }
+}
+DynamicClosureRecorder recorder();
+ProgramControl pc = ProgramControl::getProgram();
+recorder.addProgram(pc);
+for (int i = 0; i < 16; ++i) {
+    ++offset;
+    if (dynamicDebugInvoke(callback, i) != ((i * 33 + offset) & 65535)
+            || dynamicDebugInvoke(cold, i) != i + offset) {
+        throw "DYNAMIC-CLOSURE-DEBUGGER", "attached result";
+    }
+}
+recorder.removeProgram(pc);
+if (recorder.warm_enter != 16 || recorder.warm_exit != 16
+        || recorder.cold_enter != 16 || recorder.cold_exit != 16) {
+    throw "DYNAMIC-CLOSURE-DEBUGGER", sprintf("warm %d/%d, cold %d/%d",
+        recorder.warm_enter, recorder.warm_exit, recorder.cold_enter, recorder.cold_exit);
+}
+for (int i = 0; i < 16; ++i) {
+    ++offset;
+    if (dynamicDebugInvoke(callback, i) != ((i * 33 + offset) & 65535)
+            || dynamicDebugInvoke(cold, i) != i + offset) {
+        throw "DYNAMIC-CLOSURE-DEBUGGER", "detached result";
+    }
+}
+printf("dynamic-closure-debugger: ok\n");

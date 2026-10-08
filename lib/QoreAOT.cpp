@@ -17551,6 +17551,75 @@ static bool defineAOTClosureNativeThrowingDispatch(llvm::LLVMContext& ctx,
     return true;
 }
 
+// A dynamic companion may abandon a speculative read and retry the ordinary
+// body. Admit only a bounded, straight-line, effect-free integer computation:
+// capture reads stay at their source positions, and no reference is evaluated.
+static bool isAOTDynamicIntClosureEligible(const QoreIRFunction& ir,
+        const UserVariantBase* variant, const LVarSet* captures) {
+    const UserSignature* sig = variant ? variant->getUserSignature() : nullptr;
+    if (std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY") || !sig
+            || sig->numParams() != 1 || sig->getParamTypeInfo(0) != bigIntTypeInfo
+            || sig->getReturnTypeInfo() != bigIntTypeInfo || sig->needsTypeParameterSubstitution()
+            || !isAOTFastEntryEligible(&ir, variant) || !ir.all_body_locals.empty()
+            || ir.blocks.size() != 1 || ir.blocks.front()->instructions.size() > 64) {
+        return false;
+    }
+    bool returns_value = false;
+    for (const auto& inst : ir.blocks.front()->instructions) {
+        switch (inst->opcode) {
+            case QoreIROpcode::LoadLocal: {
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst.get());
+                if (load->local != sig->lv[0] || load->is_ref || load->is_closure
+                        || load->mode != AssignmentMode::Normal) {
+                    return false;
+                }
+                break;
+            }
+            case QoreIROpcode::LoadClosure: {
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst.get());
+                if (!load->local || !captures || !captures->count(load->local)
+                        || load->is_ref || load->mode != AssignmentMode::Normal
+                        || load->local->getTypeInfo() != bigIntTypeInfo) {
+                    return false;
+                }
+                break;
+            }
+            case QoreIROpcode::ConstInt:
+            case QoreIROpcode::ConstBool:
+            case QoreIROpcode::AddInt:
+            case QoreIROpcode::SubInt:
+            case QoreIROpcode::MulInt:
+            case QoreIROpcode::AndInt:
+            case QoreIROpcode::OrInt:
+            case QoreIROpcode::XorInt:
+            case QoreIROpcode::UnaryMinusInt:
+            case QoreIROpcode::EqInt:
+            case QoreIROpcode::NeInt:
+            case QoreIROpcode::LtInt:
+            case QoreIROpcode::LeInt:
+            case QoreIROpcode::GtInt:
+            case QoreIROpcode::GeInt:
+            case QoreIROpcode::CmpInt:
+            case QoreIROpcode::ToInt:
+            case QoreIROpcode::ToBool:
+            case QoreIROpcode::Not:
+            case QoreIROpcode::GuardInt:
+            case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::CheckException:
+            case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::DiscardTemps:
+            case QoreIROpcode::RefSelf:
+                break;
+            case QoreIROpcode::Return:
+                returns_value = true;
+                break;
+            default:
+                return false;
+        }
+    }
+    return returns_value;
+}
+
 //! Compile closure bodies referenced by one compiled body's expression slots.
 /** Closure entries are appended immediately after their owner.  This ordering lets
     runtime slot-map reconstruction create the closure variant from the owner's
@@ -18012,7 +18081,37 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             return false;
         }
 
-        if (sig && qore_ir_is_native_leaf(ir_func, variant,
+        bool dynamic_int_closure = isAOTDynamicIntClosureEligible(*ir_func, variant, closure_captures);
+        llvm::Function* dynamic_fn = nullptr;
+        if (dynamic_int_closure && !metadata_only) {
+            auto* i64_ty = llvm::Type::getInt64Ty(ctx);
+            auto* ptr_ty = llvm::PointerType::get(ctx, 0);
+            std::string dynamic_name = llvm_symbol + "_dynamic_int_v1";
+            dynamic_fn = llvm::Function::Create(llvm::FunctionType::get(i64_ty,
+                {i64_ty, ptr_ty, ptr_ty, ptr_ty, ptr_ty, ptr_ty}, false),
+                llvm::Function::InternalLinkage, dynamic_name, module);
+            std::unordered_map<const void*, llvm::Value*> params{{sig->lv[0], dynamic_fn->getArg(0)}};
+            std::unordered_map<const void*, BatchCalleeParamKind> kinds{
+                {sig->lv[0], BatchCalleeParamKind::NativeInt}};
+            QoreIRToLLVM dynamic_lowerer(ctx);
+            dynamic_lowerer.setAOTMode(&slots);
+            dynamic_lowerer.setSharedDebugInfo(&di_builder, di_cu);
+            dynamic_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+            dynamic_lowerer.setDeferredExceptionChecking(false);
+            dynamic_lowerer.setFastEntryMode(dynamic_name, &params, &kinds, nullptr,
+                BatchCalleeReturnKind::NativeInt, bigIntTypeInfo);
+            dynamic_lowerer.setDynamicClosureEntry(dynamic_fn->getArg(1), dynamic_fn->getArg(2),
+                dynamic_fn->getArg(3));
+            std::string dynamic_error;
+            if (!dynamic_lowerer.lowerFunction(*ir_func, module, dynamic_error)) {
+                delete ir_func;
+                setAOTCompileFatal(fatal_error, "closure", native_key,
+                    "dynamic integer entry lowering", dynamic_error);
+                return false;
+            }
+        }
+
+        if (!dynamic_int_closure && sig && qore_ir_is_native_leaf(ir_func, variant,
                 static_cast<int>(sig->numParams()))) {
             // The direct native leaf executor remains the generic fallback for
             // call sites that cannot use the internal typed dispatch.
@@ -18042,6 +18141,18 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             }
             lowered = lowerer.lowerFunction(*ir_func, module, llvm_error);
             if (lowered) {
+                if (dynamic_fn) {
+                    // The normal entry owns body identity and publishes its companion
+                    // on first execution. No serialized stride or per-closure state changes.
+                    llvm::Function* normal = module.getFunction(llvm_symbol);
+                    llvm::IRBuilder<> bind_builder(&normal->getEntryBlock(),
+                        normal->getEntryBlock().getFirstInsertionPt());
+                    auto* ptr_ty = llvm::PointerType::get(ctx, 0);
+                    auto bind = module.getOrInsertFunction("qore_rt_bind_closure_int_unary_v1",
+                        llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
+                            {ptr_ty, ptr_ty, ptr_ty}, false));
+                    bind_builder.CreateCall(bind, {normal->getArg(0), normal, dynamic_fn});
+                }
                 const auto& loc_table = lowerer.getAOTLocTable();
                 for (size_t loc_index = 0; loc_index < loc_table.size(); ++loc_index) {
                     if (loc_index && !(loc_index % 100)

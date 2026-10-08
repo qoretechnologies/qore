@@ -11139,9 +11139,16 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 "stack_overflow", llvm_func, first_ir_bb);
 
         builder->SetInsertPoint(stack_check_bb);
-        auto check_fn = module.getOrInsertFunction("qore_rt_check_stack",
+        llvm::Value* err;
+        if (dynamic_closure_runtime_config) {
+            auto check_fn = module.getOrInsertFunction("qore_rt_check_stack_v2",
+                llvm::FunctionType::get(i32_type, {ptr_type, ptr_type}, false));
+            err = builder->CreateCall(check_fn, {xsink_arg, dynamic_closure_runtime_config});
+        } else {
+            auto check_fn = module.getOrInsertFunction("qore_rt_check_stack",
                 llvm::FunctionType::get(i32_type, {ptr_type}, false));
-        llvm::Value* err = builder->CreateCall(check_fn, {xsink_arg});
+            err = builder->CreateCall(check_fn, {xsink_arg});
+        }
         llvm::Value* ok = builder->CreateICmpEQ(err,
                 llvm::ConstantInt::get(i32_type, 0));
         builder->CreateCondBr(ok, first_ir_bb, stack_overflow_bb);
@@ -26151,6 +26158,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::LoadClosure: {
             const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
             const void* key = reinterpret_cast<const void*>(linst->local);
+            if (dynamic_closure_arg) {
+                // Do not snapshot captures in the parameter map: every source read
+                // must observe the closure's current value under its read lock.
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+                auto* output = ab.CreateAlloca(i64_type, nullptr, "capture_value");
+                auto read = module.getOrInsertFunction("qore_rt_try_load_closure_int_v1",
+                    llvm::FunctionType::get(i32_type, {ptr_type, ptr_type, i32_type, ptr_type}, false));
+                auto* accepted = builder->CreateCall(read, {dynamic_closure_arg, aot_ctx_arg,
+                    llvm::ConstantInt::get(i32_type, slot), output});
+                auto* success = llvm::BasicBlock::Create(ctx, "capture_read", llvm_func);
+                auto* miss = llvm::BasicBlock::Create(ctx, "capture_fallback", llvm_func);
+                builder->CreateCondBr(builder->CreateICmpNE(accepted,
+                    llvm::ConstantInt::get(i32_type, 0)), success, miss);
+                builder->SetInsertPoint(miss);
+                builder->CreateStore(llvm::ConstantInt::get(i32_type, 0), dynamic_closure_accepted);
+                if (!error_return_block) {
+                    error_return_block = llvm::BasicBlock::Create(ctx, "error_return", llvm_func);
+                }
+                builder->CreateBr(error_return_block);
+                builder->SetInsertPoint(success);
+                values[inst->result.id] = builder->CreateLoad(i64_type, output);
+                known_not_nothing_values.insert(inst->result.id);
+                return true;
+            }
             if (fast_entry_args && fast_entry_args->count(key)) {
                 auto local = local_allocas.find(key);
                 if (local == local_allocas.end()) {

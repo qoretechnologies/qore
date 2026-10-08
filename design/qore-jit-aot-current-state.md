@@ -62,6 +62,54 @@ executable against the older runtime. `IRComposedIntLeaf.qtest` covers full-widt
 compositions, effects and exception fallback, concurrent first calls, Program
 churn/crossings, and warmed/cold debugger attachment through source-stripped AOT.
 
+### Dynamic native integer closures
+
+AOT emits an optional dynamic `int(int)` closure companion independently of
+whether the caller can recover the closure-create expression. Its ABI passes
+the unboxed integer, borrowed closure instance, live same-thread `RuntimeConfig`,
+an acceptance flag, the callee's AOT context and the exception sink. The normal
+body publishes this companion atomically through
+`qore_rt_bind_closure_int_unary_v1`; the context owns no per-instance environment
+pointer. A normal first call establishes the binding and metadata readiness.
+
+Admission currently requires one block of at most 64 whitelisted scalar
+instructions, exact integer parameter/return types, no body locals or effects,
+and only exact integer capture loads. Each capture load calls
+`qore_rt_try_load_closure_int_v1` at its original instruction position. This
+resolves the lexical local in the explicit closure's immutable environment and
+reads the full-width integer under the ordinary capture read lock. Repeated
+reads are not merged into an entry snapshot. An unassigned or reference-backed
+capture clears the acceptance flag and unwinds native cleanup before ordinary
+execution; no reference evaluation or visible effect can precede that retry.
+
+Dispatch rechecks same-Program identity, normal-body identity, metadata
+readiness, exact signature, debugger attachment and the current thread's
+variable-stack availability. It preserves lexical object/class context, native
+stack guards, empty variable-frame markers and reader-safe diagnostic frame
+publication. Marker allocation finishes before compatibility context is changed;
+a failed closure-marker allocation rolls back the local marker. Cross-Program,
+debugger and unsupported bodies keep their existing paths.
+
+The integer v3 callback helper's miss path can invoke this companion through its
+existing unboxed continuation. Its positive function-reference cache still
+retains only exact function references: dynamic closures are borrowed, never
+cached or retained past the call. Ordinary boxed closure entrypoints can use the
+same companion while keeping scalar argument cleanup. No serialized ABI or
+existing helper signature changes. `QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY`
+disables companion compilation and runtime dispatch; compiler comparisons need
+paired AOT compilation against each runtime.
+Disabled continuations reject before decoding closure metadata. Boxed entry
+checks for a published companion before acquiring the live TLS-backed context,
+so old native artifacts and unsupported bodies do not acquire an unused view.
+
+`AOTDynamicClosureEntry.qtest` checks full-width values, distinct environments,
+mutation, references/unassigned captures, concurrent first calls, ordinary
+fallback and concurrent stack readers while a writer changes a repeated capture.
+Its debugger fixture checks warmed and cold capturing entries across attachment
+and detachment. Generated-code assertions require two distinct synchronized
+capture reads for the repeated-read fixture even at `-O3`;
+`IRComposedIntLeaf.qtest` also covers noncapturing entries.
+
 ## JIT Runtime
 
 JIT-compiled functions call C ABI helpers in `JITRuntime.cpp` for operations
@@ -160,15 +208,29 @@ This changes neither slot ownership nor weak normalization or cleanup ordering.
 (presence sampled once). The compiler and versioned helper ABI are unchanged;
 existing AOT artifacts using the fresh-store helper can use the specialization.
 
-The associated runtime comparison requests 16-byte alignment on the twelve
+The class-check runtime comparison requested 16-byte alignment on the twelve
 prepared scalar callback v3 entrypoints. The unaligned class-check candidate
 repeatedly regressed wide callbacks; a 128-byte alternative recovered that AOT
 control but increased runtime text by 95,700 bytes and showed an unfavorable IR
-wide-callback signal. The retained 16-byte build adds 9,284 bytes over the
+wide-callback signal. That iteration's 16-byte build adds 9,284 bytes over the
 unaligned candidate (9,640 over its baseline) and the final before/after run
 does not reproduce the IR-wide slowdown. Alignment changes no entry ABI, guard,
 frame lifetime or publication protocol; no equivalent benefit is established
 on other targets.
+
+The dynamic-closure follow-up requests 64-byte alignment. Its earlier 16-byte
+runtime showed a floating-callback slowdown only with the newly compiled AOT
+executables: the same executable ran faster on the preceding runtime, while the
+old executable remained fast on both. Normalized float-v3 instructions were
+unchanged apart from cold string offsets. Crossed saved-artifact measurements
+support a layout interaction, not a proven microarchitectural explanation.
+The 64-byte candidate restores the lower timings for both saved new executables
+at 1024 and 4096 elements, with broader validation recorded in the benchmark
+results. It increases runtime text by 38,816 bytes over the 16-byte candidate;
+neither unchanged semantics nor fixed alignment proves universal neutrality.
+The final newly compiled primary still contains slow floating-callback forks
+in both baseline and candidate. Its median and the larger-batch repeat are
+near flat; polymorphic controls retain a small unfavorable median movement.
 
 An experimental native-only class-local lowering was rejected before timing:
 separate native/runtime cleanup phases changed destructor order on exception

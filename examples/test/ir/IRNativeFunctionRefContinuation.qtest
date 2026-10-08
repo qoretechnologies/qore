@@ -69,7 +69,10 @@ class NativeFunctionRefContinuationTest inherits QUnit::Test {
                     && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG");
                 assertEq(explicit_callee, generated.find("qore_rt_bind_function_call_ref_typed_v2") >= 0,
                     "additive explicit-context entry selection");
-                assertEq(explicit_callee, generated.find("qore_rt_check_stack_v2") >= 0,
+                # Dynamic closure companions independently use this helper;
+                # check the function-reference adapter body, not the whole module.
+                assertEq(explicit_callee,
+                    generated =~ /define[^\n]*funcref_typed_v2[^\n]*\{[^}]*@qore_rt_check_stack_v2/,
                     "explicit-context callee retains stack guard");
                 assertEq(explicit_callee && !prefix.startsWith("QORE_DISABLE_AOT_CROSS_OBJECT_LEAF_INLINE"),
                     generated =~ /floatAdd[^\n]*funcref_typed_v2/, "explicit float leaf entry selection");

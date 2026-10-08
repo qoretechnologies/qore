@@ -155,6 +155,16 @@ public:
             && !QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING);
     }
 
+    //! Explicit instance/context for a compiler-proven pure dynamic closure companion.
+    //! @param closure borrowed closure instance used for each synchronized capture read
+    //! @param runtime_config live same-thread RuntimeConfig used by the native stack guard
+    //! @param accepted caller-owned flag cleared before effect-free fallback
+    void setDynamicClosureEntry(llvm::Value* closure, llvm::Value* runtime_config, llvm::Value* accepted) {
+        dynamic_closure_arg = closure;
+        dynamic_closure_runtime_config = runtime_config;
+        dynamic_closure_accepted = accepted;
+    }
+
     //! Set the name of an AOT self-recursive fast entry function.
     //! When set, self-recursive CallDirect instructions in AOT mode emit direct
     //! LLVM calls to this function instead of going through qore_rt_call_direct_aot.
@@ -301,6 +311,9 @@ private:
     // When fast_entry_name is non-empty, lowerFunction uses it instead of func.name
     // and initializes params from fast_entry_args instead of qore_rt_load_local().
     std::string fast_entry_name;
+    llvm::Value* dynamic_closure_arg = nullptr;
+    llvm::Value* dynamic_closure_runtime_config = nullptr;
+    llvm::Value* dynamic_closure_accepted = nullptr;
     const std::unordered_map<const void*, llvm::Value*>* fast_entry_args = nullptr;
     const std::unordered_map<const void*, BatchCalleeParamKind>* fast_entry_arg_kinds = nullptr;
     //! Proven noescape boxed parameters that borrow the caller's reference.
