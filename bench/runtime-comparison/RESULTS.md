@@ -5458,3 +5458,140 @@ change its layout to share machinery. Method v2 already has a pure-body proof
 and explicit stack guard, but compatibility and error materialization must be
 audited before reusing that contract. Keep object/class context and mutable
 dispatch/Program/debugger guards unless separately proven unnecessary.
+
+
+## Deferred private context for native methods (2026-10-08)
+
+This runtime-only change defers private context and empty variable markers for
+the already-proven pure scalar method-v2 continuation. Dispatch-entry and live
+callee stack guards, full PIC-key admission, mutable body/Program/debugger
+checks, eager object/class context and published diagnostic frames remain.
+On overflow, the existing materialization machinery installs both markers with
+allocation rollback and applies current context/parse policy before exception
+construction. Method-v1 stays eager. A private typed-union discriminator shares
+the machinery without changing callback descriptor v3, method binding ABI or
+serialized layouts; floating callback marker policy is unchanged.
+
+Baseline is clean merged `1f599ed31c0898d5dabd7ac791ad7488389d3046`;
+candidate is that revision plus the recorded C++ diff. Full samples, exact
+library/artifact hashes, reproduction scripts and audit are in
+[results-method-leaf-context-macos-arm64.json](results-method-leaf-context-macos-arm64.json).
+Measured binaries must not be relabelled as later postcommit rebuilds.
+
+Apple M4 Pro, macOS arm64, release SCU build, Temurin 25.0.2, JMH 1.37.
+All runs use five randomized forks, three warmups, five 500 ms windows and three
+startup observations. These are median fork means in ns/element for whole kernels,
+not isolated call latency. All 1,575 windows ran without competing builds, tests,
+profiling or disassembly. Before/after pairs use identical AOT executables on
+compatible old/new libraries (`--reuse-aot-for-baseline`).
+
+Count 1024, seed 810491, `run-m1y_foj8` (675 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|optional_method_call|20.524|15.121|-26.33%|no|1.659|9.11x
+|polymorphic_call|55.242|52.346|-5.24%|no|2.522|20.76x
+|monomorphic_call|7.323|7.398|+1.03%|yes|1.658|4.46x
+|method_call|2.684|2.677|-0.27%|yes|0.877|3.05x
+|indirect_wide|8.364|8.287|-0.93%|yes|1.669|4.96x
+|indirect_float|10.209|10.216|+0.07%|yes|1.633|6.26x
+|arithmetic|2.413|2.404|-0.39%|yes|0.877|2.74x
+|direct_call|2.407|2.398|-0.37%|yes|0.876|2.74x
+|dispatch_control|2.583|2.574|-0.35%|yes|0.945|2.73x
+
+Count 4096, seed 810492, `run-m1ef817f` (300 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|optional_method_call|19.111|13.897|-27.28%|no
+|polymorphic_call|53.298|50.276|-5.67%|no
+|monomorphic_call|5.957|5.976|+0.33%|yes
+|indirect_wide|7.303|7.304|+0.02%|yes
+|indirect_float|9.011|9.053|+0.46%|yes
+|arithmetic|1.329|1.335|+0.43%|yes
+
+Nullable calls improve **26.33% and 27.28%**, polymorphic calls **5.24% and 5.67%**,
+with non-overlapping fork ranges in both runs. Other primary before/after movements
+overlap; no improvement, regression or exact neutrality is established for them.
+Nullable calls remain **9.11x Java**, polymorphic **20.76x** at count 1024.
+These numbers are not general IR speedups or Java parity.
+
+### Same-runtime eager-context attribution
+
+`QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1` selects eager private setup
+at runtime only. The native continuation/body, diagnostic frame and guards stay
+enabled. Both modes use the identical check-run executable and candidate library;
+“before” here means the eager control, not the old library. The two attribution
+runs use new randomized orders, each with 300 windows.
+
+Seed 810493, `method-leaf-toggle-9xcxmi12`:
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|optional_method_call|20.195|15.172|-24.87%|no
+|polymorphic_call|55.194|52.452|-4.97%|no
+|monomorphic_call|7.408|7.373|-0.46%|yes
+|indirect_wide|8.355|8.311|-0.52%|yes
+|indirect_float|10.333|10.196|-1.33%|no
+|arithmetic|2.409|2.398|-0.42%|yes
+
+Seed 810494, `method-leaf-toggle-repeat-924m55ji`:
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|optional_method_call|20.164|15.249|-24.37%|no
+|polymorphic_call|55.854|52.397|-6.19%|no
+|monomorphic_call|7.407|7.269|-1.86%|yes
+|indirect_wide|8.318|8.338|+0.24%|yes
+|indirect_float|10.285|10.198|-0.85%|yes
+|arithmetic|2.447|2.411|-1.46%|yes
+
+Nullable gains repeat at **24.87%/24.37%**, polymorphic at **4.97%/6.19%**, all
+non-overlapping. The first float control unexpectedly improves 1.33% with
+non-overlapping ranges even though this method-only flag should not directly
+affect that workload. Its repeat improves 0.85% with overlapping ranges, and
+both primary old/new float comparisons also overlap. Retain this anomaly as
+evidence of control variability; do not claim a callback speedup or attribute
+every small movement to the optimization.
+
+Startup before/after medians: 30.395/30.108 ms (1024), 31.800/29.479 ms (4096),
+29.256/29.684 ms (first toggle) and 29.316/29.434 ms (repeat). Every paired range
+overlaps. Java startup is 23.400 ms. Candidate compilation observations are
+357.945/357.998 ms in the two primary runs, with no baseline compilation because
+artifacts were reused. Toggle artifacts come from the check run; its 369.178 ms
+compile observation is inherited metadata, not a new compile measurement.
+No startup/compilation benefit is claimed; filesystem caches were uncontrolled.
+
+### Correctness, size and remaining work
+
+Release/debug each pass 29 files: 52 cases/3,904 assertions in 23 QUnit files plus
+six standalones. The extended NativeLeafContext driver has 60 assertions and also
+passes the unchanged baseline. It asserts actual required/nullable continuation
+calls and method-v2 bindings in LLVM, sweeps early/published method overflow
+boundaries, verifies recovery, and repeats with caller-owned locals and closure
+stacks around marker-block boundaries. Compiled callers retain AOT execution
+when newly parsed padded callers use AST mode (`evalIntern` selects cached AOT
+before mode-based AST dispatch). The driver exercises O0/O3 and the runtime eager
+control; the broader suite covers stripped-source normal/invoke/EH/parallel,
+weak/generic/cross-Program/access/ownership cases, readers and debugger attachment.
+Six benchmark modes each pass 330 reference checks; saved pre-change AOT also
+passes 330 on the candidate. All 11 harness tests pass.
+
+The private leaf helper remains **104 bytes**. The method dispatch helper's
+native stack reservation grows **320 to 336 bytes**, with both eager and deferred
+branches retained; static instruction/directive rows grow 613 to 715.
+Runtime `__text` grows **1,388 bytes**, 13,968,504 to 13,969,892 (+0.0099%).
+These static counts are not dynamic work. There is no executable text difference
+within a pair. Other architectures/non-SCU configurations are not measured.
+
+A separate five-second/1 ms nullable-kernel profile has 3,784 main-thread samples;
+the idle signal thread is excluded. Leading self counts: method helper 1,784,
+caller 675, value type access 425, frame unpublish 159, callee guard helper 143,
+dispatch stack check 123, native method body 73 and callee-guard stub 61.
+Empty-marker pushes and parse-policy writes are no longer leading hot entries.
+The large method helper includes inlined admission, object/class and frame work;
+it must not all be labelled TLS or dispatch lookup. Sampling is attribution,
+not isolated latency or a measured percentage gain.
+
+Next target localized type/admission overhead and the remaining stack-guard
+helper boundary. Investigate an additive method companion using the existing
+callback inline live-stack check contract; retain full fallback on unsupported
+targets and overflow materialization. No stale stack limit, missing observer
+frame, removed debugger guard or changed old-artifact ABI is justified by these
+measurements.

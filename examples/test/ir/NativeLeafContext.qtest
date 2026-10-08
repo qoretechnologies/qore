@@ -37,7 +37,9 @@ class NativeLeafContextTest inherits QUnit::Test {
             "    int next(int value) { return value + 17; }\n}\n"
             "NativeLeafMethodBase sub makeMethodProbe() { return new NativeLeafMethodDerived(); }\n"
             "int sub methodProbe(NativeLeafMethodBase input, int value) {\n"
-            "    NativeLeafMethodBase receiver = input; return receiver.next(value);\n}\n");
+            "    NativeLeafMethodBase receiver = input; value = receiver.next(value); return value;\n}\n"
+            "int sub optionalMethodProbe(*NativeLeafMethodBase receiver, int value) {\n"
+            "    value = receiver.next(value); return value;\n}\n");
         file.close();
         string control = dir.path + "/control.qr";
         file.open2(control, O_WRONLY | O_CREAT | O_TRUNC);
@@ -67,6 +69,15 @@ class NativeLeafContextTest inherits QUnit::Test {
                 assertRegex("qore_rt_bind_function_call_ref_typed_v2", output, "typed provider binding");
                 assertRegex("qore_rt_bind_method_int_unary_v1[^\n]*NativeLeafMethodDerived", output,
                     "pure method companion binding");
+                assertRegex("qore_rt_bind_method_int_unary_v2[^\n]*NativeLeafMethodDerived", output,
+                    "guarded pure method-v2 binding");
+                foreach string name in (("methodProbe", "optionalMethodProbe")) {
+                    *list<*string> body = regex_extract(output,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " normal LLVM entry");
+                    assertRegex("call i32 @qore_rt_try_method_int_unary_v1", body[0] ?? "",
+                        name + " must exercise the native continuation");
+                }
                 assertEq(prefix.empty(), output.find("qore_rt_bind_function_call_ref_typed_v3") >= 0,
                     "deferred eligible entry or eager control");
                 list<string> objects = glob(dir.path + "/*.qo");
@@ -74,10 +85,12 @@ class NativeLeafContextTest inherits QUnit::Test {
                 output = backquote((map quote($1), args).join(" ") + " "
                     + (map quote($1), objects).join(" ") + " 2>&1", \status);
                 assertEq(0, status, output);
-                output = backquote(env + quote(executable) + (prefix.empty() ? " inline" : " eager")
-                    + " 2>&1", \status);
-                assertEq(0, status, output);
-                assertEq("native-leaf-context: ok\n", output);
+                foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ")) {
+                    output = backquote(env + runtime + quote(executable) + (prefix.empty() ? " inline" : " eager")
+                        + " 2>&1", \status);
+                    assertEq(0, status, output);
+                    assertEq("native-leaf-context: ok\n", output);
+                }
             }
         }
     }

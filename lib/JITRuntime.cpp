@@ -17081,13 +17081,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_consume_args(
 
 // The name is owned by the immutable PIC entry. All observable members precede
 // the publishing helper, whose destructor waits for stack readers before return.
+template <bool Deferred = false>
 class QoreNativeMethodStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
 public:
-    __attribute__((always_inline)) QoreNativeMethodStackLocation(RuntimeConfig& rc, const std::string& name,
+    __attribute__((always_inline)) QoreNativeMethodStackLocation(RuntimeConfig& rc,
+            const QoreAOTMethodDispatchCacheEntry& cache,
             const UserVariantBase* uvb, QoreProgram* pgm, ExceptionSink* xsink)
-        : name(name), statements(uvb->getStatementBlock()), pgm(pgm),
-          helper(rc, this, loc, uvb->getUserSignature()->getParseLocation(),
-              uvb->getParseOptions(pgm->getParseOptions()), pgm, xsink) {
+        : name(cache.call_name), statements(uvb->getStatementBlock()), pgm(pgm),
+          helper([&]() __attribute__((always_inline)) {
+              if constexpr (Deferred) {
+                  return RuntimeConfigNativeLeafCallHelperFor<true>(rc, this, loc, cache, xsink);
+              } else {
+                  return RuntimeConfigNativeCallHelper(rc, this, loc, uvb->getUserSignature()->getParseLocation(),
+                      uvb->getParseOptions(pgm->getParseOptions()), pgm, xsink);
+              }
+          }()) {
     }
     // Expose the publishing helper's save/restore to the native dispatch
     // caller's register allocator, as for explicit callback frames. Frame
@@ -17105,7 +17113,7 @@ private:
     const StatementBlock* statements;
     QoreProgram* pgm;
     const QoreProgramLocation* loc = nullptr;
-    RuntimeConfigNativeCallHelper helper;
+    std::conditional_t<Deferred, RuntimeConfigNativeLeafCallHelperFor<true>, RuntimeConfigNativeCallHelper> helper;
 };
 
 template <bool CachedAdmission>
@@ -17161,7 +17169,7 @@ static bool try_dispatch_native_int_method(QoreObject* object,
         : METHV_const(cache.variant)->getClassPriv());
     QoreValue value;
     {
-        QoreNativeMethodStackLocation frame(rc, cache.call_name, uvb, pgm, xsink);
+        QoreNativeMethodStackLocation<> frame(rc, cache, uvb, pgm, xsink);
         if (!*xsink) {
             try {
                 value = QoreValue(entry(fromBits(args[0]).getAsBigInt(), ctx, xsink));
@@ -18002,13 +18010,22 @@ extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v1(QoreAOTContext* caller_
         return 1;
     }
     RuntimeConfigNativeObjectHelper context(*rc, object, cached->native_int_class_ctx);
-    QoreNativeMethodStackLocation frame(*rc, cached->call_name, uvb, pgm, xsink);
-    if (!*xsink) {
-        try {
-            *result = entry(arg, ctx, xsink, rc);
-        } catch (const QoreJITException&) {
-            // The sink owns the exception; frame/context restoration remains RAII.
+    auto invoke = [&]() __attribute__((always_inline)) {
+        if (!*xsink) {
+            try {
+                *result = entry(arg, ctx, xsink, rc);
+            } catch (const QoreJITException&) {
+                // The sink owns the exception; frame/context restoration remains RAII.
+            }
         }
+    };
+    static const bool defer_context = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
+    if (defer_context) {
+        QoreNativeMethodStackLocation<true> frame(*rc, *cached, uvb, pgm, xsink);
+        invoke();
+    } else {
+        QoreNativeMethodStackLocation<> frame(*rc, *cached, uvb, pgm, xsink);
+        invoke();
     }
     return 1;
 }

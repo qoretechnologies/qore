@@ -414,6 +414,25 @@ code generation and benefits on other builds are not guaranteed. See
 `results-method-frame-inline-macos-arm64.json` for repeated nullable-call gains,
 overlapping controls, runtime code growth and native-entry-disabled comparisons.
 
+The unary-int method-v2 continuation can also defer thread-private Program-call,
+closure, statement/location, parse-policy and empty local/closure marker setup.
+Since its introduction, this entry has re-emitted a complete non-throwing native
+scalar body with an explicit live-stack check before any body operation. That
+compile-time proof excludes allocation, TLS context access and Qore reentry.
+The runtime retains full-key admission, live body/map/Program/debugger checks,
+object/class context substitution, the dispatch-entry stack check and the
+published diagnostic frame with its reader handshake. The callee's full guard
+materializes both variable markers and the current context before constructing
+an overflow exception, including allocation rollback and live parse-policy
+override; successful calls have no deferred state to restore. Method-v1 keeps
+its eager path. `QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1` is a
+runtime-only eager control; it does not disable the native continuation or body.
+Only the private runtime leaf helper gains a typed metadata discriminator for
+callback versus method caches. No generated callback descriptor, method binding
+ABI or serialized metadata layout changes; floating callback marker policy
+remains eager. The boundary test checks required and nullable native method
+continuations with caller-owned local and closure stacks still live.
+
 Unresolved name-dispatched calls can also use this continuation after ordinary
 dispatch has populated the full-key PIC. This includes nullable-class and dynamic
 receivers; it does not resolve an AST/IR target or narrow its unknown return type.

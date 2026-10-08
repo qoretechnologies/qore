@@ -30,6 +30,7 @@ extern "C" void init_NATIVE_LEAF_CONTEXT_qo(QoreProgram*);
 struct LeafInvocation {
     uint64_t bits = 0;
     QorePreparedFunctionRefV3* cache = nullptr;
+    QoreProgram* program = nullptr;
 };
 
 // Rejected signatures and NOTHING must neither populate an empty slot nor
@@ -114,7 +115,7 @@ static QoreValue paddedSweep(const void* ptr, const QoreListNode*, RuntimeConfig
 
 // Exercise a warmed native method PIC through its real compiled caller, including
 // early rejection, published method overflow, and successful reuse afterward.
-static void checkMethod(QoreProgram* program) {
+static void checkMethod(QoreProgram* program, const char* caller_name) {
     ExceptionSink xsink;
     ValueHolder object(program->callFunction("makeMethodProbe", nullptr, &xsink), &xsink);
     assert(!xsink && object->getType() == NT_OBJECT);
@@ -124,7 +125,7 @@ static void checkMethod(QoreProgram* program) {
     args->push(QoreValue(int64_t{7}), &xsink);
     assert(!xsink);
     for (unsigned i = 0; i < 16; ++i) {
-        ValueHolder result(program->callFunction("methodProbe", *args, &xsink), &xsink);
+        ValueHolder result(program->callFunction(caller_name, *args, &xsink), &xsink);
         assert(!xsink && result->getAsBigInt() == 24);
     }
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
@@ -139,7 +140,7 @@ static void checkMethod(QoreProgram* program) {
         // Restore the real limit before inspecting diagnostics or cleanup.
         for (unsigned gap = 0; gap < 32768; gap += 16) {
             *limit = get_stack_pos() - gap;
-            QoreValue value = program->callFunction("methodProbe", *args, &xsink);
+            QoreValue value = program->callFunction(caller_name, *args, &xsink);
             *limit = saved_limit;
             ValueHolder result(value, &xsink);
             assert(qore_get_call_program_context() == caller);
@@ -172,8 +173,18 @@ static void checkMethod(QoreProgram* program) {
 #else
     assert(!limit);
 #endif
-    ValueHolder result(program->callFunction("methodProbe", *args, &xsink), &xsink);
+    ValueHolder result(program->callFunction(caller_name, *args, &xsink), &xsink);
     assert(!xsink && result->getAsBigInt() == 24 && qore_get_call_program_context() == caller);
+}
+
+// Called with the parsed caller's owned locals and captures still live. The
+// compiled required/nullable callers must not consume either variable stack
+// when a native method overflow materializes its otherwise-empty markers.
+static QoreValue paddedMethodSweep(const void* ptr, const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
+    const auto& invocation = *static_cast<const LeafInvocation*>(ptr);
+    checkMethod(invocation.program, "methodProbe");
+    checkMethod(invocation.program, "optionalMethodProbe");
+    return QoreValue(int64_t{24});
 }
 
 // Check the FP helper's independently compiled frame/return path as well as
@@ -252,10 +263,13 @@ static void check(bool inline_entry) {
     ExceptionSink xsink;
     QoreProgramHelper program(PO_MODERN, xsink);
     LeafInvocation invocation;
+    invocation.program = *program;
     {
         ProgramRuntimeExternalParseContextHelper parse_context(*program);
         assert(parse_context);
         program->getRootNS()->addBuiltinVariant(&invocation, "runLeafSweep", paddedSweep,
+            QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 0);
+        program->getRootNS()->addBuiltinVariant(&invocation, "runMethodSweep", paddedMethodSweep,
             QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 0);
     }
     qore_aot_script_begin_batch(*program);
@@ -339,7 +353,8 @@ static void check(bool inline_entry) {
         assert(qore_rt_try_funcref_int_int_v3(bits, i, &result, &xsink, rc, &cache) == 1);
         assert(!xsink && result == i + 17);
     }
-    checkMethod(*program);
+    checkMethod(*program, "methodProbe");
+    checkMethod(*program, "optionalMethodProbe");
     checkFloat(*program, inline_entry);
     invocation.bits = bits;
     invocation.cache = &cache;
@@ -360,7 +375,12 @@ static void check(bool inline_entry) {
         for (unsigned capture = 1; capture <= padding; ++capture) {
             source += " + captured" + std::to_string(capture);
         }
-        source += "; };\nint total = runLeafSweep();\nif (closure() != seed * "
+        source += "; };\nint total = runLeafSweep();\n";
+        if (!padding || padding == 31 || padding == 32 || padding == 33
+                || padding == 63 || padding == 64 || padding == 65 || padding == 70) {
+            source += "if (runMethodSweep() != 24) { throw \"LEAF-CONTEXT\", \"method changed\"; }\n";
+        }
+        source += "if (closure() != seed * "
             + std::to_string(padding + 1) + ") { throw \"LEAF-CONTEXT\", \"closure changed\"; }\n";
         for (unsigned local = 0; local < padding; ++local) {
             source += "if (pad" + std::to_string(local)

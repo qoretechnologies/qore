@@ -50,6 +50,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/JITRuntime.h"
+#include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Variable.h"
@@ -2087,9 +2088,10 @@ __attribute__((always_inline)) RuntimeConfigNativeCallHelper::~RuntimeConfigNati
 __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
         QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
         const QorePreparedFunctionRefV3& cache, ExceptionSink*, bool defer_markers)
-        : td(RuntimeConfigNativeAccess::getThreadData(rc)), cache(cache),
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), callback_cache(&cache),
           previous(td->native_leaf_context),
-          state(defer_markers ? ContextState::DeferredMarkers : ContextState::EagerMarkers) {
+          state(defer_markers ? ContextState::DeferredMarkers : ContextState::EagerMarkers),
+          target_kind(TargetKind::Callback) {
     assert(td->current_pgm == cache.pgm);
     if (!defer_markers) {
         tlpd = td->tlpd;
@@ -2112,10 +2114,36 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
     // repeating the caller-side check in this middle frame is unnecessary.
 }
 
+__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
+        QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        const QoreAOTMethodDispatchCacheEntry& cache, ExceptionSink*)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), method_cache(&cache),
+          previous(td->native_leaf_context), state(ContextState::DeferredMarkers), target_kind(TargetKind::Method) {
+    assert(cache.native_int_uvb && td->current_pgm == cache.native_int_program);
+    call_loc = td->runtime_loc ? td->runtime_loc : cache.native_int_uvb->getUserSignature()->getParseLocation();
+    td->native_leaf_context = this;
+    old_stack = publish_pushed_stack_location(td, stack_loc);
+    // Method-v2 has always re-emitted the complete non-throwing scalar proof,
+    // with qore_rt_check_stack_v2 before any body work. As for callback-v3,
+    // publish before that guard; it materializes this context on overflow.
+}
+
 // Never pull exception-only context traffic back into the successful call path.
 __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() {
     if (state == ContextState::Materialized) {
         return;
+    }
+    const UserVariantBase* uvb;
+    QoreProgram* pgm;
+    const QoreProgramLocation* parse_loc;
+    if (target_kind == TargetKind::Method) {
+        uvb = method_cache->native_int_uvb;
+        pgm = method_cache->native_int_program;
+        parse_loc = uvb->getUserSignature()->getParseLocation();
+    } else {
+        uvb = callback_cache->uvb;
+        pgm = callback_cache->pgm;
+        parse_loc = callback_cache->parse_loc;
     }
     // Cross-thread observers inspect the published diagnostic chain, not these
     // thread-private variable stacks. The pure body cannot observe them or
@@ -2136,20 +2164,21 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
     old_loc = td->runtime_loc;
     old_po = td->runtime_po;
     old_sp = td->runtime_loc_sp;
+    swapped = parse_loc != nullptr;
     state = ContextState::Materialized;
-    td->call_program_context = cache.pgm;
+    td->call_program_context = pgm;
     td->closure_rt_env = nullptr;
-    if (cache.parse_loc) {
+    if (swapped) {
         td->runtime_statement = nullptr;
-        td->runtime_loc = cache.parse_loc;
-        td->runtime_po = apply_runtime_po_override(td, cache.uvb->getParseOptions(cache.pgm->getParseOptions()));
+        td->runtime_loc = parse_loc;
+        td->runtime_po = apply_runtime_po_override(td, uvb->getParseOptions(pgm->getParseOptions()));
     }
 }
 
 __attribute__((always_inline)) void RuntimeConfigNativeLeafCallHelper::restoreEager() {
     assert(state != ContextState::DeferredMarkers);
     if (state == ContextState::Materialized) {
-        if (cache.parse_loc) {
+        if (swapped) {
             td->runtime_statement = old_stmt;
             td->runtime_loc = old_loc;
             td->runtime_po = apply_runtime_po_override(td, old_po);
@@ -2178,7 +2207,7 @@ __attribute__((always_inline)) void RuntimeConfigNativeLeafCallHelper::restoreDe
 
 __attribute__((noinline, cold)) void RuntimeConfigNativeLeafCallHelper::restoreMaterialized() {
     assert(state == ContextState::Materialized);
-    if (cache.parse_loc) {
+    if (swapped) {
         td->runtime_statement = old_stmt;
         td->runtime_loc = old_loc;
         td->runtime_po = apply_runtime_po_override(td, old_po);

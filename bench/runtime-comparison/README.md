@@ -205,6 +205,18 @@ sets `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` at both compilation and execution,
 so it uses a different executable from the enabled runs, but one identical
 executable within each before/after pair.
 
+`QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1` selects eager private-context
+and empty variable-marker setup for the method-v2 scalar continuation at runtime.
+The native body, dispatch checks, object/class context, published diagnostic frame
+and stack guards remain enabled. This isolates deferral from native dispatch;
+it can compare the same AOT artifact on the same runtime. The default defers
+private state until an overflow needs it, using the compiler's whole pure-body
+proof. Method-v1 and floating callback marker policy are unchanged. This is a
+runtime-only change, so compatible baseline comparisons may reuse AOT artifacts.
+The [measured follow-up](RESULTS.md#deferred-private-context-for-native-methods-2026-10-08)
+records repeated nullable/polymorphic gains, same-runtime eager controls,
+callback variability, stack/code growth and the remaining Java gap.
+
 `QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1` disables the dynamic native `int(int)`
 closure companion at compilation and execution. Use it in both phases for an
 attribution control: enabling compilation retains a normal native body to publish
