@@ -45,17 +45,17 @@ void Queue::deref(ExceptionSink* xsink) {
 
 void qore_queue_private::destructor(ExceptionSink* xsink) {
     AutoLocker al(&l);
-    if (read_waiting) {
-        xsink->raiseException("QUEUE-ERROR", "Queue deleted while there %s %d waiting thread%s for reading", read_waiting == 1 ? "is" : "are", read_waiting, read_waiting == 1 ? "" : "s");
+    if (unsigned rw = getReadWaitingIntern()) {
+        xsink->raiseException("QUEUE-ERROR", "Queue deleted while there %s %d waiting thread%s for reading", rw == 1 ? "is" : "are", rw, rw == 1 ? "" : "s");
         read_cond.broadcast();
     }
-    if (write_waiting) {
-        xsink->raiseException("QUEUE-ERROR", "Queue deleted while there %s %d waiting thread%s for writing", write_waiting == 1 ? "is" : "are", write_waiting, write_waiting == 1 ? "" : "s");
+    if (unsigned ww = getWriteWaitingIntern()) {
+        xsink->raiseException("QUEUE-ERROR", "Queue deleted while there %s %d waiting thread%s for writing", ww == 1 ? "is" : "are", ww, ww == 1 ? "" : "s");
         write_cond.broadcast();
     }
 
     clearIntern(xsink);
-    len = Queue_Deleted;
+    setLenIntern(Queue_Deleted);
     if (desc) {
         desc->deref();
         desc = nullptr;
@@ -85,12 +85,12 @@ int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
         int rc;
         // issue #4077: do not call QoreCondition::wait() with a negative timeout value
         if (timeout_ms >= 0) {
-            ++read_waiting;
+            incWaitingIntern(read_waiting);
             // Use interruptible wait for sandbox support
             // Queue semantics: 0 = infinite wait, but waitWithInterrupt uses -1 for infinite
             int64 cond_timeout = (timeout_ms == 0) ? -1 : timeout_ms;
             rc = read_cond.waitWithInterrupt(l, cond_timeout, xsink);
-            --read_waiting;
+            decWaitingIntern(read_waiting);
             // Check for interrupt
             if (rc == QORE_COND_RESULT_INTERRUPTED) {
                 return QW_ERROR;  // Exception already raised
@@ -109,7 +109,7 @@ int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
             return QW_TIMEOUT;
         }
 
-        if (len == Queue_Deleted) {
+        if (getLenIntern() == Queue_Deleted) {
             xsink->raiseException("QUEUE-ERROR", "Queue has been deleted in another thread");
             return QW_DEL;
         }
@@ -125,7 +125,7 @@ int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
 
 int qore_queue_private::waitWriteIntern(ExceptionSink *xsink, int timeout_ms) {
     // if the queue is full, then wait for condition variable
-    while (max > 0 && len >= max) {
+    while (max > 0 && getLenIntern() >= max) {
         if (!err.empty()) {
             xsink->raiseException(err.c_str(), desc->stringRefSelf());
             return QW_ERROR;
@@ -134,12 +134,12 @@ int qore_queue_private::waitWriteIntern(ExceptionSink *xsink, int timeout_ms) {
         int rc;
         // issue #4077: do not call QoreCondition::wait() with a negative timeout value
         if (timeout_ms >= 0) {
-            ++write_waiting;
+            incWaitingIntern(write_waiting);
             // Use interruptible wait for sandbox support
             // Queue semantics: 0 = infinite wait, but waitWithInterrupt uses -1 for infinite
             int64 cond_timeout = (timeout_ms == 0) ? -1 : timeout_ms;
             rc = write_cond.waitWithInterrupt(l, cond_timeout, xsink);
-            --write_waiting;
+            decWaitingIntern(write_waiting);
             // Check for interrupt
             if (rc == QORE_COND_RESULT_INTERRUPTED) {
                 return QW_ERROR;  // Exception already raised
@@ -158,7 +158,7 @@ int qore_queue_private::waitWriteIntern(ExceptionSink *xsink, int timeout_ms) {
             return QW_TIMEOUT;
         }
 
-        if (len == Queue_Deleted) {
+        if (getLenIntern() == Queue_Deleted) {
             xsink->raiseException("QUEUE-ERROR", "Queue has been deleted in another thread");
             return QW_DEL;
         }
@@ -181,7 +181,7 @@ void qore_queue_private::pushNode(QoreValue v) {
         tail->next = qn;
         tail = qn;
     }
-    ++len;
+    addLenIntern(1);
 
     //printd(5, "qore_queue_private::pushNode(%p '%s') this: %p head: %p (%p) tail: %p (%p) read_waiting: %d len: %d\n", v, get_type_name(v), this, head, head->node, tail, tail->node, read_waiting, len);
 }
@@ -191,7 +191,7 @@ void qore_queue_private::pushIntern(QoreValue v) {
     //printd(5, "qore_queue_private::push_internal(%p) this: %p head: %p (%p) tail: %p (%p) waiting: %d len: %d\n", v, this, head, head->node, tail, tail->node, waiting, len);
 
     // signal waiting thread to wakeup and process event
-    if (read_waiting) {
+    if (getReadWaitingIntern()) {
         read_cond.signal();
     }
 }
@@ -205,18 +205,18 @@ void qore_queue_private::insertIntern(QoreValue v) {
         head->prev = qn;
         head = qn;
     }
-    len++;
+    addLenIntern(1);
 
     //printd(5, "qore_queue_private::insertIntern(%p) this: %p head: %p (%p) tail: %p (%p) waiting: %d len: %d\n", v, this, head, head->node, tail, tail->node, waiting, len);
 
     // signal waiting thread to wakeup and process event
-    if (read_waiting) {
+    if (getReadWaitingIntern()) {
         read_cond.signal();
     }
 }
 
 int qore_queue_private::checkWriteIntern(ExceptionSink* xsink, bool always_error) {
-    if (len == Queue_Deleted) {
+    if (getLenIntern() == Queue_Deleted) {
         if (always_error) {
             xsink->raiseException("QUEUE-ERROR", "Queue has been deleted in another thread");
         }
@@ -232,7 +232,7 @@ int qore_queue_private::checkWriteIntern(ExceptionSink* xsink, bool always_error
 void qore_queue_private::pushAndTakeRef(QoreValue n) {
     {
         AutoLocker al(&l);
-        if (len != Queue_Deleted && err.empty()) {
+        if (getLenIntern() != Queue_Deleted && err.empty()) {
             assert(max == -1);
 
             printd(5, "qore_queue_private::pushAndTakeRef('%s') this: %p\n", n.getTypeName(), this);
@@ -361,8 +361,8 @@ QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int 
             head->prev = nullptr;
         }
 
-        --len;
-        if (write_waiting) {
+        addLenIntern(-1);
+        if (getWriteWaitingIntern()) {
             write_cond.signal();
         }
 
@@ -414,8 +414,8 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
             tail->next = nullptr;
         }
 
-        --len;
-        if (write_waiting) {
+        addLenIntern(-1);
+        if (getWriteWaitingIntern()) {
             write_cond.signal();
         }
 
@@ -458,9 +458,9 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
         }
 
         clearIntern(xsink);
-        len = 0;
+        setLenIntern(0);
 
-        if (write_waiting) {
+        if (getWriteWaitingIntern()) {
             write_cond.signal();
         }
     }
@@ -474,7 +474,7 @@ void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_des
     bool dec_obj = false;
     {
         AutoLocker al(&l);
-        if (len == Queue_Deleted) {
+        if (getLenIntern() == Queue_Deleted) {
             return;
         }
 
@@ -490,12 +490,12 @@ void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_des
 
         // clear the queue
         clearIntern(xsink);
-        len = 0;
+        setLenIntern(0);
 
-        if (read_waiting) {
+        if (getReadWaitingIntern()) {
             read_cond.broadcast();
         }
-        if (write_waiting) {
+        if (getWriteWaitingIntern()) {
             write_cond.broadcast();
         }
     }
@@ -507,7 +507,7 @@ void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_des
 
 void qore_queue_private::clearError() {
     AutoLocker al(&l);
-    if (len == Queue_Deleted) {
+    if (getLenIntern() == Queue_Deleted) {
         return;
     }
 

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,6 +36,7 @@
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreCondition.h>
 
+#include <atomic>
 #include <string>
 
 class qore_object_private;
@@ -91,9 +92,13 @@ private:
                     * tail;
     std::string err;
     QoreStringNode* desc;
-    int len,   // the number of elements currently in the queue (or -1 for deleted)
-        max;   // the maximum size of the queue (or -1 for unlimited)
-    unsigned read_waiting,   // number of threads waiting on reads
+    // len, read_waiting and write_waiting are only written with the lock held, but size(), empty(),
+    // getReadWaiting() and getWriteWaiting() read them without the lock, so they are atomic; these readers only
+    // report a snapshot of the counter and no other data is published through it, so relaxed ordering is
+    // sufficient everywhere: the lock orders the writers and every reader that takes the lock
+    std::atomic<int> len;   // the number of elements currently in the queue (or -1 for deleted)
+    int max;   // the maximum size of the queue (or -1 for unlimited); set only when the queue is created
+    std::atomic<unsigned> read_waiting,   // number of threads waiting on reads
                 write_waiting;  // number of threads waiting on writes
 
     // issue #3101: maintain a count of all scanable objects in the queue
@@ -108,6 +113,38 @@ private:
 
     DLLLOCAL void clearIntern(ExceptionSink* xsink);
 
+    // the following helpers must be called with the lock held
+    DLLLOCAL int getLenIntern() const {
+        return len.load(std::memory_order_relaxed);
+    }
+
+    DLLLOCAL void setLenIntern(int new_len) {
+        len.store(new_len, std::memory_order_relaxed);
+    }
+
+    // a plain load and store, as the lock excludes other writers
+    DLLLOCAL void addLenIntern(int delta) {
+        setLenIntern(getLenIntern() + delta);
+    }
+
+    DLLLOCAL static void incWaitingIntern(std::atomic<unsigned>& waiting) {
+        waiting.store(waiting.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
+    }
+
+    DLLLOCAL static void decWaitingIntern(std::atomic<unsigned>& waiting) {
+        unsigned current = waiting.load(std::memory_order_relaxed);
+        assert(current);
+        waiting.store(current - 1, std::memory_order_relaxed);
+    }
+
+    DLLLOCAL unsigned getReadWaitingIntern() const {
+        return read_waiting.load(std::memory_order_relaxed);
+    }
+
+    DLLLOCAL unsigned getWriteWaitingIntern() const {
+        return write_waiting.load(std::memory_order_relaxed);
+    }
+
     // called in the lock; returns -1 if not possible (cannot write to the queue) or 0 of OK
     DLLLOCAL int checkWriteIntern(ExceptionSink* xsink, bool always_error = false);
 
@@ -119,8 +156,9 @@ public:
 
     DLLLOCAL qore_queue_private(const qore_queue_private &orig) : head(0), tail(0), err(orig.err), desc(orig.desc ? orig.desc->stringRefSelf() : 0), len(0), max(orig.max), read_waiting(0), write_waiting(0) {
         AutoLocker al(orig.l);
-        if (orig.len == Queue_Deleted)
+        if (orig.getLenIntern() == Queue_Deleted) {
             return;
+        }
 
         QoreQueueNode* w = orig.head;
         while (w) {
@@ -138,7 +176,7 @@ public:
         //printd(5, "qore_queue_private::~qore_queue_private() this=%p head=%p tail=%p len=%d\n", this, head, tail, len);
         assert(!head);
         assert(!tail);
-        assert(len == Queue_Deleted || !len);
+        assert(getLenIntern() == Queue_Deleted || !getLenIntern());
         assert(!desc);
     }
 
@@ -155,24 +193,28 @@ public:
     DLLLOCAL QoreValue shift(ExceptionSink* xsink, QoreObject* self, int timeout_ms, bool& to);
     DLLLOCAL QoreValue pop(ExceptionSink* xsink, QoreObject* self, int timeout_ms, bool& to);
 
+    // returns a snapshot of the queue's state; does not take the lock
     DLLLOCAL bool empty() const {
-        return !len;
+        return !len.load(std::memory_order_relaxed);
     }
 
+    // returns a snapshot of the queue's size; does not take the lock
     DLLLOCAL int size() const {
-        return len;
+        return len.load(std::memory_order_relaxed);
     }
 
     DLLLOCAL int getMax() const {
         return max;
     }
 
+    // returns a snapshot of the number of threads waiting to read; does not take the lock
     DLLLOCAL unsigned getReadWaiting() const {
-        return read_waiting;
+        return read_waiting.load(std::memory_order_relaxed);
     }
 
+    // returns a snapshot of the number of threads waiting to write; does not take the lock
     DLLLOCAL unsigned getWriteWaiting() const {
-        return write_waiting;
+        return write_waiting.load(std::memory_order_relaxed);
     }
 
     DLLLOCAL void clear(ExceptionSink* xsink, QoreObject* self = nullptr);

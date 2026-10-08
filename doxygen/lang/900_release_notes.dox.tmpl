@@ -4128,6 +4128,14 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a data race in @ref Qore::Thread::Queue::size() "Queue::size()",
+      @ref Qore::Thread::Queue::empty() "Queue::empty()",
+      @ref Qore::Thread::Queue::getReadWaiting() "Queue::getReadWaiting()",
+      @ref Qore::Thread::Queue::getWaiting() "Queue::getWaiting()" and
+      @ref Qore::Thread::Queue::getWriteWaiting() "Queue::getWriteWaiting()", which read the queue's state without
+      its lock while other threads changed it; they still do not block, and now always return a value the queue
+      actually had
+
     - Fixed code executed with @ref exec_mode_ast "AST execution" (<tt>--exec-mode=ast</tt>) resolving names in
       the wrong @ref Qore::Program "Program" after calling code in another Program, such as a method that its class
       inherits from a module: later statements in the same block that resolve a name at runtime, for example

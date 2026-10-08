@@ -26,7 +26,54 @@ class Test inherits QUnit::Test {
         addTestCase("tryGet and tryPop tests", \tryGetTryPopTests());
         addTestCase("leak test", \leakTest());
         addTestCase("events for a deleted queue are released", \deletedEventQueueTest());
+        addTestCase("state accessors run concurrently with queue operations", \concurrentAccessorTest());
         set_return_value(main());
+    }
+
+    #! reads the queue's state without its lock while other threads push, get and wait on a bounded queue
+    /** the state accessors do not take the queue's lock, so a race detector (TSan) reports their reads if the
+        counters they read are not atomic; the assertions check the invariants that every snapshot must satisfy
+    */
+    concurrentAccessorTest() {
+        const int Max = 2;
+        const int Count = 2000;
+        Queue q(Max);
+        Counter done(2);
+        background sub () {
+            on_exit done.dec();
+            for (int i = 0; i < Count; ++i) {
+                q.push(i);
+            }
+        }();
+        background sub () {
+            on_exit done.dec();
+            for (int i = 0; i < Count; ++i) {
+                q.get();
+            }
+        }();
+
+        # a fixed number of snapshots, so the test does not depend on how the threads are scheduled
+        int bad_size = 0;
+        int bad_waiting = 0;
+        for (int i = 0; i < Count; ++i) {
+            # the queue can change between the two reads, so the size read after empty() returns False can be 0
+            int size = q.empty() ? 0 : q.size();
+            if (size < 0 || size > Max) {
+                ++bad_size;
+            }
+            # there is only one reader and one writer
+            if (q.getReadWaiting() > 1 || q.getWriteWaiting() > 1) {
+                ++bad_waiting;
+            }
+        }
+        done.waitForZero();
+
+        assertEq(0, bad_size);
+        assertEq(0, bad_waiting);
+        assertEq(0, q.size());
+        assertTrue(q.empty());
+        assertEq(0, q.getReadWaiting());
+        assertEq(0, q.getWriteWaiting());
     }
 
     leakTest() {
