@@ -40,6 +40,7 @@ class ProcessSpawnTest inherits QUnit::Test {
         addTestCase("backquote and system() do not fork", \testNoFork());
         addTestCase("positive control: fork() children are recorded", \testForkRecorded());
         addTestCase("negative: another record file", \testRecordFileError());
+        addTestCase("negative: a command that cannot be started", \testStartFailure());
         set_return_value(main());
     }
 
@@ -62,6 +63,34 @@ class ProcessSpawnTest inherits QUnit::Test {
 
     testRecordFileError() {
         assertThrows("FORK-RECORD-ERROR", \cpp_api_record_fork_children(), record + ".other");
+    }
+
+    #! a command that cannot be started is reported with an exception, and no fork() child is attempted
+    /** With the soft limit on the user's processes below the number of processes that the user has, no process can
+        be created: posix_spawn() fails.  system() went on with the fork() path in this case and returned -1 without
+        an error.
+    */
+    testStartFailure() {
+        int old_limit = cpp_api_set_process_limit(1);
+        on_exit cpp_api_set_process_limit(old_limit);
+
+        # the precondition: a privileged user is not limited
+        bool forked;
+        try {
+            cpp_api_fork_and_wait();
+            forked = True;
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FORK-RECORD-ERROR", ex.err);
+        }
+        if (forked) {
+            testSkip("the process limit does not apply to this user");
+        }
+
+        int before = getRecorded();
+        assertThrows("SYSTEM-ERROR", \system(), "exit 0");
+        assertThrows("BACKQUOTE-ERROR", \backquote(), "echo not started");
+        assertThrows("BACKQUOTE-ERROR", string sub () { return `echo not started`; });
+        assertEq(before, getRecorded(), "no child was created with fork()");
     }
 
     #! returns the number of children created with fork() so far

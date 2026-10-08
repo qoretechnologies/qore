@@ -29,6 +29,7 @@
 #include <fcntl.h>
 #include <mutex>
 #include <pthread.h>
+#include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -210,6 +211,35 @@ int cpp_api_fork_and_wait() {
         }
     }
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+//! sets the soft limit on the number of processes of this process's real user (RLIMIT_NPROC)
+/** With a soft limit below the number of processes that the user already has, this process cannot create any process
+    (unless the user is privileged), so a failure to start a process can be tested.
+
+    @param limit the new soft limit; -1 means no limit
+
+    @return the previous soft limit; -1 means no limit
+
+    @throw PROCESS-LIMIT-ERROR the argument is invalid, or getrlimit() or setrlimit() failed
+*/
+int cpp_api_set_process_limit(int limit) [dom=PROCESS] {
+    if (limit < -1) {
+        xsink->raiseException("PROCESS-LIMIT-ERROR", "invalid process limit " QLLD, limit);
+        return QoreValue();
+    }
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_NPROC, &rl)) {
+        xsink->raiseErrnoException("PROCESS-LIMIT-ERROR", errno, "getrlimit() failed");
+        return QoreValue();
+    }
+    int64 old_limit = rl.rlim_cur == RLIM_INFINITY ? -1 : static_cast<int64>(rl.rlim_cur);
+    rl.rlim_cur = limit == -1 ? RLIM_INFINITY : static_cast<rlim_t>(limit);
+    if (setrlimit(RLIMIT_NPROC, &rl)) {
+        xsink->raiseErrnoException("PROCESS-LIMIT-ERROR", errno, "setrlimit() failed");
+        return QoreValue();
+    }
+    return old_limit;
 }
 
 //! raises an exception and returns a new reference to the argument
