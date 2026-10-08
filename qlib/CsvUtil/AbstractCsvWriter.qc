@@ -259,6 +259,7 @@ public namespace CsvUtil {
                     case "number_format": {
                         if (i.value.typeCode() != NT_STRING)
                             throw errname, sprintf("expecting a string value to option %y; got %y (type %s) instead", i.key, i.value, i.value.type());
+                        checkNumberFormat(i.value, "option \"number_format\"");
                         number_format = i.value;
                         break;
                     }

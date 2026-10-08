@@ -42,6 +42,8 @@ public class CsvFieldNumberFormatTest inherits QUnit::Test {
         addTestCase("a field format overrides number_format", \overrideTest());
         addTestCase("invalid values", \invalidTest());
         addTestCase("types that do not take a format", \invalidTypeTest());
+        addTestCase("decimals in integers", \intDecimalsTest());
+        addTestCase("invalid formats", \invalidFormatTest());
         addTestCase("writing with a field format", \writeTest());
         addTestCase("round trips", \roundTripTest());
         addTestCase("data providers", \dataProviderTest());
@@ -97,6 +99,56 @@ public class CsvFieldNumberFormatTest inherits QUnit::Test {
         assertThrows("ABSTRACTCSVITERATOR-ERROR", sub () {
             new CsvDataIterator("v\n1\n", {"header_names": True, "fields": {"v": {"type": "int", "format": 1}}});
         });
+    }
+
+    intDecimalsTest() {
+        # a value with the decimal separator is not an integer, also when the format has one
+        foreach hash<auto> opts in ({"fields": {"v": {"type": "int", "format": ".,"}}},
+                {"fields": {"v": "int"}, "number_format": ".,"},
+                {"fields": {"v": {"type": "*int", "format": ".,"}}},
+                {"fields": {"v": {"type": "int", "format": ",."}}, "separator": ";"}) {
+            hash<auto> o = {"header_names": True, "separator": ";"} + opts;
+            string dec = o.fields.v.typeCode() == NT_HASH ? o.fields.v.format[1] : o.number_format[1];
+            string ths = o.fields.v.typeCode() == NT_HASH ? o.fields.v.format[0] : o.number_format[0];
+            string label = sprintf("%y", opts);
+            assertThrows("FIELD-VALUE-ERROR", \read(), (new CsvDataIterator("v\n1" + ths + "234" + dec + "5\n", o),),
+                label);
+            assertThrows("FIELD-VALUE-ERROR", \read(), (new CsvDataIterator("v\n7" + dec + "0\n", o),), label + " 0");
+            assertEq(({"v": 1234},), read(new CsvDataIterator("v\n1" + ths + "234\n", o)), label + " thousands");
+            assertEq(({"v": -7},), read(new CsvDataIterator("v\n-7\n", o)), label + " negative");
+        }
+    }
+
+    invalidFormatTest() {
+        foreach string fmt in (".,x", ".,2x", "..", ",,2", ".,-1") {
+            assertThrows("ABSTRACTCSVITERATOR-ERROR", "format", sub () {
+                new CsvDataIterator("v\n1\n", {"header_names": True, "fields": {"v": {"type": "number",
+                    "format": fmt}}});
+            }, NOTHING, fmt);
+            assertThrows("ABSTRACTCSVITERATOR-ERROR", "number_format", sub () {
+                new CsvDataIterator("v\n1\n", {"header_names": True, "fields": {"v": "number"},
+                    "number_format": fmt});
+            }, NOTHING, fmt + " number_format");
+            assertThrows("CSVSTRINGWRITER-ERROR", "format", sub () {
+                new CsvStringWriter({"fields": {"v": {"type": "float", "format": fmt}}});
+            }, NOTHING, fmt + " writer");
+            assertThrows("CSVSTRINGWRITER-ERROR", "number_format", sub () {
+                new CsvStringWriter({"number_format": fmt});
+            }, NOTHING, fmt + " writer number_format");
+        }
+        # valid formats: a thousands separator, optionally a decimal separator, and optionally digits for the number
+        # of decimals; "?" for no thousands separator
+        foreach string fmt in (".", ".,", ".,2", ".,10", "?,", " ,", "'.3") {
+            CsvDataIterator i("v\n1\n", {"header_names": True, "fields": {"v": {"type": "number", "format": fmt}}});
+            assertEq(({"v": 1n},), read(i), fmt);
+            CsvStringWriter w({"number_format": fmt, "fields": {"v": {"type": "number", "format": fmt}}});
+            w.write(({"v": 1n},));
+            assertRegex("^v\n\"?1", w.getContent(), fmt + " writer");
+        }
+        # a date format is not a number format
+        CsvDataIterator i("v\n02.01.2024\n", {"header_names": True, "fields": {"v": {"type": "date",
+            "format": "DD.MM.YYYY"}}});
+        assertEq(({"v": 2024-01-02},), read(i), "date format");
     }
 
     invalidTypeTest() {

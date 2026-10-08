@@ -45,7 +45,7 @@ public namespace CsvUtil {
         |\c "header_reorder"|\c bool|if @ref True "True" (default value) then if \"headers\" are provided by options or read from file then data fields are reordered to follow headers. It has a major effect on the return value of @ref AbstractCsvIterator::getRecordList() and also a minor effect on the hash result of AbstractCsvIterator::getRecord() when a program  depends on the order of keys. If this value is @ref False "False" then fields not yet specified are pushed at the end of the field definition.
         |\c "ignore_empty"|\c bool|if @ref True "True" (the default) then empty lines will be ignored; this option is processed with @ref Qore::parse_boolean() "parse_boolean()"
         |\c "ignore_whitespace"|\c bool|if @ref True "True" (the default) then leading and trailing whitespace will be stripped from non-quoted fields; this option is processed with @ref Qore::parse_boolean() "parse_boolean()"
-        |\c "number_format"|@ref string_type "string"|the default format for \c "int", \c "float", and \c "number" fields as a string giving the thousands separator character followed by the decimal separator character (ex: \c ".," for continental-European-style numbers)
+        |\c "number_format"|@ref string_type "string"|the default format for \c "int", \c "float", and \c "number" fields as a string giving the thousands separator character (\c "?" for none) optionally followed by a different decimal separator character and, for output, the number of decimals (ex: \c ".," for continental-European-style numbers); an \c "int" value with the decimal separator is invalid
         |\c "quote"|@ref string_type "string"|the field quote character (default: \c '\"')
         |\c "separator"|@ref string_type "string"|the string separating the fields in the file (default: \c ",")
         |\c "timezone"|@ref string_type "string"|the timezone to use when parsing dates (will be passed to @ref Qore::TimeZone::constructor())
@@ -279,6 +279,9 @@ public namespace CsvUtil {
                     case "number_format": {
                         if (i.value.typeCode() != NT_STRING)
                             throw errname, sprintf("expecting a string value to option %y; got %y (type %s) instead", i.key, i.value, i.value.type());
+                        if (key == "number_format") {
+                            checkNumberFormat(i.value, "option \"number_format\"");
+                        }
                         self{key} = i.value;
                         break;
                     }
@@ -702,9 +705,11 @@ while (i.next()) {
                 case "int": {
                     *string fmt = fh.format ?? number_format;
                     if (fmt) {
-                        # check for invalid chars
-                        string tmp = removeNumberSeparators(val, fmt);
-                        if (!is_int(tmp)) {
+                        # check for invalid chars; only the thousands separator is removed, and only digits may
+                        # remain, as a value with the decimal separator is not an integer (parse_int() would ignore
+                        # the decimals)
+                        string tmp = replace(val, fmt[0], "");
+                        if (!is_int(tmp, True)) {
                             throw "FIELD-VALUE-ERROR", sprintf("invalid %s value: %y", type, val);
                         }
                         rv = parse_int(val, fmt);
