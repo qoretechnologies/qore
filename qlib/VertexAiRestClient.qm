@@ -534,9 +534,12 @@ hash<ChatResponse> r = provider.chat(
             return getRestClient().restDoRequestWithTimeout(method, path, body, hdr, getRequestTimeoutMs(opts));
         };
         try {
-            hash<auto> resp = retry ? withRetry(call, opts) : call();
+            hash<auto> resp = retry ? withRetry(call, opts) : callCancellable(call, opts);
             return resp.body.typeCode() == NT_HASH ? resp.body : {};
         } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "LLM-CANCELLED") {
+                rethrow;
+            }
             throw "LLM-ERROR", sprintf("%s %s request to %y failed: %s", getProviderLabel(), method, path,
                 GeminiBodyShape::requestErrorDetail(ex)), ex;
         }

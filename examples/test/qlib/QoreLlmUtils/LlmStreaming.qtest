@@ -49,6 +49,11 @@ hashdecl FakeReply {
     *string body;
     #! When set, the response stops after its chunks until the test releases it
     bool stall = False;
+    #! When set, nothing is sent until the client closes the connection, which is reported in client_closed
+    bool hold_headers = False;
+    #! When set, the response stops after its chunks until the client closes the connection, which is reported
+    #! in client_closed
+    bool await_close = False;
     int header_delay_ms = 0;
     int chunk_delay_ms = 0;
 }
@@ -59,6 +64,10 @@ class FakeLlmServer {
     public {
         list<hash<auto>> requests = ();
         int port;
+        #! Receives the path of each request as soon as it has been read
+        Queue request_queue();
+        #! Receives True when a client closes a held connection, False if it is not closed in time
+        Queue client_closed();
     }
 
     private {
@@ -103,6 +112,8 @@ class FakeLlmServer {
         requests = ();
         # a release left by a test that failed before its response stalled must not end a later stall
         release_queue.clear();
+        request_queue.clear();
+        client_closed.clear();
     }
 
     #! Releases a stalled response
@@ -147,6 +158,10 @@ class FakeLlmServer {
                 body = conn.recv(hdr."content-length".toInt(), 10s);
             }
             hash<FakeReply> reply = takeReply(hdr, body);
+            if (reply.hold_headers) {
+                waitForClientClose(conn);
+                return;
+            }
             if (reply.header_delay_ms) { usleep(reply.header_delay_ms * 1000); }
             string head = sprintf("HTTP/1.1 %d %s\r\nContent-Type: %s\r\nConnection: close\r\n", reply.code,
                 HttpCodes{reply.code} ?? "Status", reply.content_type);
@@ -159,7 +174,9 @@ class FakeLlmServer {
                 if (reply.chunk_delay_ms) { usleep(reply.chunk_delay_ms * 1000); }
                 conn.send(chunk);
             }
-            if (reply.stall) {
+            if (reply.await_close) {
+                waitForClientClose(conn);
+            } else if (reply.stall) {
                 try {
                     release_queue.get(30s);
                 } catch (hash<ExceptionInfo> ex) {
@@ -169,6 +186,17 @@ class FakeLlmServer {
         } catch (hash<ExceptionInfo> ex) {
             # a client that has given up closes the connection
         }
+    }
+
+    #! Reports whether the client closes the connection; it sends nothing more, so a read ends only then
+    private waitForClientClose(Socket conn) {
+        bool closed = False;
+        try {
+            conn.recv(1, 30s);
+        } catch (hash<ExceptionInfo> ex) {
+            closed = ex.err == "SOCKET-CLOSED";
+        }
+        client_closed.push(closed);
     }
 
     private hash<FakeReply> takeReply(hash<auto> hdr, *data body) {
@@ -187,6 +215,7 @@ class FakeLlmServer {
             "hdr": hdr,
             "body": parsed,
         };
+        request_queue.push(hdr.path);
         if (!replies) {
             return <FakeReply>{
                 "code": 500,
@@ -239,6 +268,12 @@ public class LlmStreamingTest inherits QUnit::Test {
         addTestCase("Mistral: strict JSON projection retains reasoning", \mistralReasoningStrictTest());
         addTestCase("DeepSeek: reasoning-only frames and native history", \deepseekReasoningTest());
         addTestCase("DeepSeek: rejected strict output retains billable usage", \deepseekRejectedUsageTest());
+        addTestCase("Cancel: a stream in flight is closed at once", \cancelInFlightStreamTest());
+        addTestCase("Cancel: a stream awaiting its response is closed at once", \cancelStreamSetupTest());
+        addTestCase("Cancel: a cancelled request is never sent", \cancelBeforeDispatchTest());
+        addTestCase("Cancel: a retry backoff wait ends at once", \cancelRetryBackoffTest());
+        addTestCase("Cancel: a callback stream ends at the next chunk", \cancelCallbackStreamTest());
+        addTestCase("Cancel: completed calls leave no handler on the token", \cancelHandlerCleanupTest());
         set_return_value(main());
     }
 
@@ -1246,6 +1281,203 @@ public class LlmStreamingTest inherits QUnit::Test {
             "api_key": "test-key", "model": "mistral-medium-3-5", "max_retries": 0});
     }
 
+    cancelInFlightStreamTest() {
+        foreach string mode in (("http", "gemini", "anthropic")) {
+            hash<FakeReply> reply = firstEventReply(mode);
+            reply.await_close = True;
+            server.script(reply);
+            LlmBackend llm = backendFor(mode);
+            LlmCancellation cancellation();
+            Queue delivered();
+            Counter canceller(1);
+            # the canceller runs in another thread, as a user's stop request does
+            background cancelOnSignal(cancellation, delivered, canceller);
+            on_exit {
+                delivered.push(False);
+                canceller.waitForZero();
+            }
+            list<string> deltas = ();
+            date started = now_us();
+            assertThrows("LLM-CANCELLED", "cancelled: stopped by the user", \llm.chatStream(),
+                (userMessage("hi"), sub (hash<ChatStreamEvent> e) {
+                    deltas += e.delta ?? "";
+                    delivered.push(True);
+                }, NOTHING, <LlmRequestOptions>{"cancellation": cancellation, "timeout_ms": 60000}), mode);
+            assertEq(("first",), deltas, mode);
+            # the stream does not wait for its next event until the request timeout
+            assertLt(30000, (now_us() - started).durationMilliseconds(), mode);
+            assertTrue(server.client_closed.get(30s), mode + ": the connection is closed, so the provider stops");
+        }
+    }
+
+    cancelStreamSetupTest() {
+        foreach string mode in (("http", "gemini", "anthropic")) {
+            server.script(<FakeReply>{"hold_headers": True});
+            LlmBackend llm = backendFor(mode);
+            LlmCancellation cancellation();
+            Counter canceller(1);
+            # cancels once the server has the request, while the client awaits the response headers
+            background cancelOnSignal(cancellation, server.request_queue, canceller);
+            on_exit {
+                server.request_queue.push(False);
+                canceller.waitForZero();
+            }
+            int events = 0;
+            assertThrows("LLM-CANCELLED", "cancelled: stopped by the user", \llm.chatStream(),
+                (userMessage("hi"), sub (hash<ChatStreamEvent> e) { ++events; }, NOTHING,
+                <LlmRequestOptions>{"cancellation": cancellation, "timeout_ms": 60000}), mode);
+            assertEq(0, events, mode);
+            assertTrue(server.client_closed.get(30s), mode + ": the pending request is closed");
+        }
+    }
+
+    cancelBeforeDispatchTest() {
+        LlmCancellation cancellation();
+        cancellation.cancel();
+        hash<LlmRequestOptions> opts = <LlmRequestOptions>{"cancellation": cancellation};
+        foreach string mode in (("http", "gemini", "anthropic")) {
+            server.script(firstEventReply(mode));
+            LlmBackend llm = backendFor(mode);
+            assertThrows("LLM-CANCELLED", "^the LLM request was cancelled$", \llm.chatStream(),
+                (userMessage("hi"), sub (hash<ChatStreamEvent> e) {}, NOTHING, opts), mode);
+            assertThrows("LLM-CANCELLED", NOTHING, \llm.chat(), (userMessage("hi"), NOTHING, opts), mode);
+            assertThrows("LLM-CANCELLED", NOTHING, \llm.complete(), ("", "hi", NOTHING, opts), mode);
+            assertEq(0, server.requests.size(), mode + ": nothing is sent");
+        }
+    }
+
+    cancelRetryBackoffTest() {
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "http",
+            "url": "http://localhost:" + port,
+            "model": "gpt-test",
+            "api_key": "openai-key",
+            "max_retries": 3,
+            # a backoff that would outlast the test
+            "retry_delay_ms": 600000,
+            "protocol": "h1",
+        });
+        foreach bool stream in ((False, True)) {
+            string ctx = stream ? "chatStream" : "chat";
+            list<hash<FakeReply>> replies = ();
+            for (int i = 0; i < 4; ++i) {
+                replies += errorReply(503, "{\"error\":{\"message\":\"overloaded\"}}");
+            }
+            server.script(replies);
+            LlmCancellation cancellation();
+            Counter canceller(1);
+            background cancelOnSignal(cancellation, server.request_queue, canceller);
+            on_exit {
+                server.request_queue.push(False);
+                canceller.waitForZero();
+            }
+            hash<LlmRequestOptions> opts = <LlmRequestOptions>{"cancellation": cancellation};
+            date started = now_us();
+            if (stream) {
+                assertThrows("LLM-CANCELLED", NOTHING, \llm.chatStream(),
+                    (userMessage("hi"), sub (hash<ChatStreamEvent> e) {}, NOTHING, opts), ctx);
+            } else {
+                assertThrows("LLM-CANCELLED", NOTHING, \llm.chat(), (userMessage("hi"), NOTHING, opts), ctx);
+            }
+            assertLt(30000, (now_us() - started).durationMilliseconds(), ctx);
+            assertEq(1, server.requests.size(), ctx + ": the request is not retried");
+        }
+    }
+
+    cancelCallbackStreamTest() {
+        LlmCancellation cancellation();
+        int sent = 0;
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "callback",
+            "api_callback": hash<auto> sub (string method, string path, hash<auto> body) {
+                return {"choices": ({"message": {"content": "unused"}, "finish_reason": "stop"},)};
+            },
+            "api_stream_callback": sub (string method, string path, hash<auto> body, code<nothing(hash<auto>)> dcb) {
+                dcb({"choices": ({"index": 0, "delta": {"content": "first"}},)});
+                ++sent;
+                cancellation.cancel("stopped by the user");
+                dcb({"choices": ({"index": 0, "delta": {"content": "second"}},)});
+                ++sent;
+            },
+        });
+        list<string> deltas = ();
+        assertThrows("LLM-CANCELLED", "stopped by the user", \llm.chatStream(),
+            (userMessage("hi"), sub (hash<ChatStreamEvent> e) { deltas += e.delta ?? ""; }, NOTHING,
+            <LlmRequestOptions>{"cancellation": cancellation}));
+        assertEq(("first",), deltas, "no chunk is delivered after the cancellation");
+        assertEq(1, sent, "the cancellation ends the stream callback at its next chunk");
+    }
+
+    cancelHandlerCleanupTest() {
+        CountingCancellation cancellation();
+        foreach string mode in (("http", "gemini", "anthropic")) {
+            server.script(completeReply(mode));
+            LlmBackend llm = backendFor(mode);
+            string text;
+            llm.chatStream(userMessage("hi"), sub (hash<ChatStreamEvent> e) { text += e.delta ?? ""; }, NOTHING,
+                <LlmRequestOptions>{"cancellation": cancellation});
+            assertEq("first", text, mode);
+            assertTrue(cancellation.added > 0, mode + ": the stream registered a cancel handler");
+            assertEq(0, cancellation.getActiveCount(), mode + ": the handler is removed when the call ends");
+        }
+    }
+
+    #! Cancels the token when the queue delivers True
+    private static cancelOnSignal(LlmCancellation cancellation, Queue signal, Counter done) {
+        on_exit done.dec();
+        try {
+            if (signal.get(30s)) {
+                cancellation.cancel("stopped by the user");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # nothing arrived: the test fails on its own assertions
+        }
+    }
+
+    private LlmBackend backendFor(string mode) {
+        switch (mode) {
+            case "http": return openAiBackend();
+            case "gemini": return geminiBackend();
+            case "anthropic": return anthropicBackend();
+        }
+        throw "TEST-ERROR", sprintf("unknown mode %y", mode);
+    }
+
+    #! Returns a reply with one text event that does not end the stream
+    private static hash<FakeReply> firstEventReply(string mode) {
+        switch (mode) {
+            case "http":
+                return <FakeReply>{"chunks": ("data: " + make_json({"id": "c1",
+                    "choices": ({"index": 0, "delta": {"content": "first"}},)}) + "\n\n",)};
+            case "gemini":
+                return sseReply((geminiChunk("first", NOTHING),));
+            case "anthropic":
+                return anthropicReply(({"type": "content_block_delta", "index": 0,
+                    "delta": {"type": "text_delta", "text": "first"}},));
+        }
+        throw "TEST-ERROR", sprintf("unknown mode %y", mode);
+    }
+
+    #! Returns a complete reply whose text is "first"
+    private static hash<FakeReply> completeReply(string mode) {
+        switch (mode) {
+            case "http":
+                return openAiReply(({"id": "c1", "choices": ({"index": 0, "delta": {"content": "first"}},)},
+                    {"id": "c1", "choices": ({"index": 0, "delta": {}, "finish_reason": "stop"},)}));
+            case "gemini":
+                return sseReply((geminiChunk("first", "STOP"),));
+            case "anthropic":
+                return anthropicReply((
+                    {"type": "message_start", "message": {"id": "msg_1", "model": "claude-test",
+                        "usage": {"input_tokens": 1, "output_tokens": 1}}},
+                    {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "first"}},
+                    {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 1}},
+                    {"type": "message_stop"},
+                ));
+        }
+        throw "TEST-ERROR", sprintf("unknown mode %y", mode);
+    }
+
     private LlmBackend openAiBackend(*int timeout_ms) {
         hash<LlmBackendConfig> config = <LlmBackendConfig>{
             "mode": "http",
@@ -1346,6 +1578,40 @@ public class LlmStreamingTest inherits QUnit::Test {
             "content_type": MimeTypeJson,
             "body": body,
         };
+    }
+}
+
+#! Counts the cancel handlers that providers register and remove
+class CountingCancellation inherits LlmCancellation {
+    public {
+        int added = 0;
+    }
+
+    private {
+        hash<string, bool> active;
+        Mutex lck();
+    }
+
+    int addHandler(code<nothing()> handler) {
+        int id = LlmCancellation::addHandler(handler);
+        AutoLock al(lck);
+        ++added;
+        if (id) {
+            active{id} = True;
+        }
+        return id;
+    }
+
+    bool removeHandler(int id) {
+        bool rv = LlmCancellation::removeHandler(id);
+        AutoLock al(lck);
+        remove active{id};
+        return rv;
+    }
+
+    int getActiveCount() {
+        AutoLock al(lck);
+        return active.size();
     }
 }
 

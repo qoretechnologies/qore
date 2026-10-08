@@ -75,6 +75,11 @@ module QoreLlmTypes {
     - @ref QoreLlmUtils::AbstractLlmProviderFactory — registration handle
       and capability description
 
+    Classes:
+
+    - @ref QoreLlmUtils::LlmCancellation — cancellation token for a request,
+      set in @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation"
+
     @section qorellmtypesrelnotes Release Notes
 
     @subsection qorellmtypes_1_0 QoreLlmTypes 1.0
@@ -208,6 +213,175 @@ public hashdecl LlmBackendConfig {
     *hash<auto> telemetry_context;
 }
 
+#! Caller-owned cancellation token for LLM requests
+/** Pass the token in @ref LlmRequestOptions::cancellation and call @ref cancel() from any thread to stop the
+    request.  A request that has not been sent yet is not sent; a retry backoff wait ends at once; and a streaming
+    request in flight has its connection closed immediately, so the provider stops generating (and billing) the
+    response.  The interrupted call raises \c LLM-CANCELLED.
+
+    Cancellation is event-driven: the handlers that providers register with @ref addHandler() run in the thread
+    calling @ref cancel(), so a stream blocked waiting for its next event wakes at once instead of waiting for its
+    request timeout.
+
+    A token stays cancelled; use a new token for each request that can be cancelled independently.
+
+    @par Example
+    @code{.py}
+LlmCancellation cancellation();
+# e.g. called from a UI or control thread when the user presses "stop"
+code stop = sub () { cancellation.cancel("stopped by the user"); };
+try {
+    llm.chatStream(messages, sub (hash<ChatStreamEvent> event) {
+        print(event.delta ?? "");
+    }, NOTHING, <LlmRequestOptions>{"cancellation": cancellation});
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err != "LLM-CANCELLED") {
+        rethrow;
+    }
+}
+    @endcode
+
+    @note All methods are thread-safe.
+*/
+public class LlmCancellation {
+    private:internal {
+        #! Guards the token state
+        Mutex m();
+
+        #! Signaled when the token is cancelled
+        Condition cond();
+
+        #! True once the token is cancelled
+        bool cancelled = False;
+
+        #! The reason given when the token was cancelled
+        *string reason;
+
+        #! Handlers to run on cancellation, keyed by handler ID
+        hash<string, code> handlers = {};
+
+        #! The last handler ID issued
+        int handler_seq = 0;
+    }
+
+    #! Cancels the token
+    /** Runs every registered handler once in the calling thread and wakes every thread waiting in
+        @ref waitCancelled().  Calls after the first have no effect.
+
+        @param reason an optional reason reported in the \c LLM-CANCELLED exception
+
+        @throw any exception raised by a handler is rethrown after all handlers have run; when several handlers
+        raise exceptions, the first one is rethrown
+    */
+    cancel(*string reason) {
+        hash<string, code> to_run;
+        {
+            AutoLock al(m);
+            if (cancelled) {
+                return;
+            }
+            cancelled = True;
+            self.reason = reason;
+            to_run = handlers;
+            handlers = {};
+            cond.broadcast();
+        }
+        *hash<ExceptionInfo> first_error;
+        foreach code handler in (to_run.iterator()) {
+            try {
+                handler();
+            } catch (hash<ExceptionInfo> ex) {
+                first_error = first_error ?? ex;
+            }
+        }
+        if (first_error) {
+            throw first_error.err, first_error.desc, first_error.arg;
+        }
+    }
+
+    #! Returns @ref True if the token has been cancelled
+    bool isCancelled() {
+        AutoLock al(m);
+        return cancelled;
+    }
+
+    #! Returns the reason given to @ref cancel(), if any
+    *string getReason() {
+        AutoLock al(m);
+        return reason;
+    }
+
+    #! Raises \c LLM-CANCELLED if the token has been cancelled
+    /** @throw LLM-CANCELLED the token has been cancelled; the exception argument is a hash with a \c reason key
+    */
+    check() {
+        AutoLock al(m);
+        if (cancelled) {
+            throwCancelled();
+        }
+    }
+
+    #! Registers a handler that runs when the token is cancelled
+    /** @param handler the code to run; it is called with no arguments in the thread that calls @ref cancel()
+
+        @return an ID for @ref removeHandler(); if the token is already cancelled, the handler runs immediately in
+        the calling thread and 0 is returned
+
+        @throw any exception raised by the handler when it runs immediately
+    */
+    int addHandler(code<nothing()> handler) {
+        {
+            AutoLock al(m);
+            if (!cancelled) {
+                int id = ++handler_seq;
+                handlers{id} = handler;
+                return id;
+            }
+        }
+        handler();
+        return 0;
+    }
+
+    #! Removes a handler registered with @ref addHandler()
+    /** @param id the ID returned by @ref addHandler()
+
+        @return @ref True if the handler was registered and has been removed, @ref False if it was not registered
+        (for example because it has already run)
+    */
+    bool removeHandler(int id) {
+        AutoLock al(m);
+        if (!handlers{id}) {
+            return False;
+        }
+        remove handlers{id};
+        return True;
+    }
+
+    #! Waits until the token is cancelled or the timeout expires
+    /** @param timeout_ms the maximum time to wait; a value <= 0 does not wait
+
+        @return @ref True if the token is cancelled, @ref False if the timeout expired first
+    */
+    bool waitCancelled(timeout timeout_ms) {
+        date deadline = now_us() + milliseconds(timeout_ms);
+        AutoLock al(m);
+        while (!cancelled) {
+            int remaining = (deadline - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                break;
+            }
+            cond.wait(m, remaining);
+        }
+        return cancelled;
+    }
+
+    #! Raises \c LLM-CANCELLED; the lock must be held
+    private:internal throwCancelled() {
+        throw "LLM-CANCELLED", sprintf("the LLM request was cancelled%s", reason.val() ? ": " + reason : ""),
+            {"reason": reason};
+    }
+}
+
 #! Per-call request overrides for LLM calls
 /** Lets callers keep a long-lived backend for one provider/connection while
     selecting a different model for individual tasks.  This is important for
@@ -269,6 +443,12 @@ public hashdecl LlmRequestOptions {
         baking those concepts into QoreLlmUtils.
     */
     *hash<auto> telemetry_context;
+    #! Optional cancellation token for this call
+    /** When the token is cancelled, a request not yet sent is not sent, a retry backoff wait ends, and a
+        streaming request in flight has its connection closed at once so the provider stops generating the
+        response; the call then raises \c LLM-CANCELLED.  See @ref LlmCancellation.
+    */
+    *LlmCancellation cancellation;
 }
 
 #! Result from an LLM completion call
@@ -863,12 +1043,18 @@ public class AbstractLlmProvider {
         error, or no event arrives within the request timeout; a failure is
         never reported as a completed response.
 
+        When @ref LlmRequestOptions::cancellation is cancelled, implementations
+        close the connection of the stream at once, including while its
+        response is awaited, and raise \c LLM-CANCELLED; see
+        @ref addRequestCancelHandler() and @ref callCancellable().
+
         @param messages conversation history
         @param callback receives each @ref ChatStreamEvent as it arrives
         @param tools optional tool definitions
         @param opts per-call overrides
 
         @throw LLM-ERROR streaming is not supported by this provider
+        @throw LLM-CANCELLED the request was cancelled
     */
     chatStream(list<hash<ChatMessage>> messages,
             code<nothing(hash<ChatStreamEvent>)> callback,
@@ -956,6 +1142,71 @@ public class AbstractLlmProvider {
         return opts.max_retries ?? config_h.max_retries;
     }
 
+    #! Raises \c LLM-CANCELLED if the cancellation token of a call has been cancelled
+    /** @param opts optional per-call request overrides
+
+        @throw LLM-CANCELLED @ref LlmRequestOptions::cancellation has been cancelled
+    */
+    checkRequestCancelled(*hash<LlmRequestOptions> opts) {
+        if (opts.cancellation) {
+            opts.cancellation.check();
+        }
+    }
+
+    #! Registers a handler that runs when a call is cancelled
+    /** Providers register a handler that closes the connection of a request in flight, so a cancellation stops
+        the request at once.
+
+        @param opts optional per-call request overrides
+        @param handler the code to run when @ref LlmRequestOptions::cancellation is cancelled; it runs
+        immediately if the token is already cancelled
+
+        @return an ID for @ref removeRequestCancelHandler(), or 0 if there is no token or the handler has already
+        run
+    */
+    int addRequestCancelHandler(*hash<LlmRequestOptions> opts, code<nothing()> handler) {
+        return opts.cancellation ? opts.cancellation.addHandler(handler) : 0;
+    }
+
+    #! Removes a handler registered with @ref addRequestCancelHandler()
+    /** @param opts the per-call request overrides given to @ref addRequestCancelHandler()
+        @param id the ID returned by @ref addRequestCancelHandler()
+    */
+    removeRequestCancelHandler(*hash<LlmRequestOptions> opts, int id) {
+        if (id && opts.cancellation) {
+            opts.cancellation.removeHandler(id);
+        }
+    }
+
+    #! Runs a step of a call that its cancellation token can interrupt
+    /** The step is not started if the call has already been cancelled.  A cancellation interrupts a running step
+        by closing its connection, so the step then fails with a transport error or ends early; both are reported
+        as \c LLM-CANCELLED instead.
+
+        @param call the step to run
+        @param opts optional per-call request overrides
+
+        @return the value returned by \a call
+
+        @throw LLM-CANCELLED @ref LlmRequestOptions::cancellation was cancelled before the step ended
+    */
+    auto callCancellable(code call, *hash<LlmRequestOptions> opts) {
+        if (!opts.cancellation) {
+            return call();
+        }
+        # a cancelled call does not start the step
+        opts.cancellation.check();
+        auto rv;
+        try {
+            rv = call();
+        } catch (hash<ExceptionInfo> ex) {
+            opts.cancellation.check();
+            rethrow;
+        }
+        opts.cancellation.check();
+        return rv;
+    }
+
     #! Merges provider-specific body options after generic fields
     /** Default semantics: keys in \a opts.body_options overwrite top-level
         keys in \a body verbatim.  Providers that need recursive / nested
@@ -981,11 +1232,17 @@ public class AbstractLlmProvider {
         @ref LlmBackendConfig::retry_delay_ms and doubles on each attempt;
         respects \c Retry-After when present on 429 responses.
 
+        When @ref LlmRequestOptions::cancellation is set, the call is not made
+        once the token is cancelled, a backoff wait ends as soon as it is
+        cancelled, and an error or result of a call interrupted by the
+        cancellation is reported as \c LLM-CANCELLED.
+
         @param call a callable that performs the request and returns the response
         @param opts optional per-call request overrides
 
         @return the response from the successful call
 
+        @throw LLM-CANCELLED @ref LlmRequestOptions::cancellation was cancelled
         @throw any non-retryable exception is rethrown; a retryable exception
         is rethrown after retries are exhausted
     */
@@ -994,7 +1251,7 @@ public class AbstractLlmProvider {
         int max_retries = getRequestMaxRetries(opts);
         while (True) {
             try {
-                return call();
+                return callCancellable(call, opts);
             } catch (hash<ExceptionInfo> ex) {
                 bool retryable = False;
                 if (ex.arg.typeCode() == NT_HASH) {
@@ -1019,7 +1276,14 @@ public class AbstractLlmProvider {
                     }
                 }
 
-                usleep(delay * 1000);
+                if (opts.cancellation) {
+                    # a cancellation ends the wait at once
+                    if (opts.cancellation.waitCancelled(delay)) {
+                        opts.cancellation.check();
+                    }
+                } else {
+                    usleep(delay * 1000);
+                }
             }
         }
     }

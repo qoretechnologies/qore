@@ -85,6 +85,8 @@ class BedrockStreamingTest inherits QUnit::Test {
         addTestCase("CRC, truncation, and malformed event failures", \malformedTest());
         addTestCase("idle timeout never emits successful completion", \timeoutTest());
         addTestCase("close wakes a blocked event reader", \cancelTest());
+        addTestCase("a request cancellation closes a stream in flight", \requestCancellationTest());
+        addTestCase("a cancelled request is never sent", \requestPreCancelledTest());
         addTestCase("Converse requires messageStop before EOF", \missingStopTest());
         addTestCase("callback failures retain their original exception", \callbackFailureTest());
         addTestCase("service failure after messageStop is not successful completion", \lateFailureTest());
@@ -243,6 +245,46 @@ class BedrockStreamingTest inherits QUnit::Test {
         stream.close();
         assertTrue(outcome.get(2s), "closing the stream wakes its reader");
         stream.close();
+    }
+
+    private requestCancellationTest() {
+        # the fixture holds the response open after the first event
+        BedrockStreamWireFixture server((event("contentBlockDelta", {"contentBlockIndex": 0,
+            "delta": {"text": "first"}}),), 0);
+        on_exit server.stop();
+        LlmCancellation cancellation();
+        Queue delivered();
+        Counter canceller(1);
+        background sub () {
+            on_exit canceller.dec();
+            if (delivered.get(30s)) {
+                cancellation.cancel("stopped by the user");
+            }
+        }();
+        on_exit {
+            delivered.push(False);
+            canceller.waitForZero();
+        }
+        list<string> deltas = ();
+        assertThrows("LLM-CANCELLED", "stopped by the user", sub () {
+            provider(server.port).chatStream(messages(), sub (hash<ChatStreamEvent> event) {
+                deltas += event.delta ?? "";
+                delivered.push(True);
+            }, NOTHING, <LlmRequestOptions>{"timeout_ms": 60000, "cancellation": cancellation});
+        });
+        assertEq(("first",), deltas, "no completion is reported after the cancellation");
+    }
+
+    private requestPreCancelledTest() {
+        BedrockStreamWireFixture server((event("messageStop", {"stopReason": "end_turn"}),));
+        on_exit server.stop();
+        LlmCancellation cancellation();
+        cancellation.cancel();
+        assertThrows("LLM-CANCELLED", sub () {
+            provider(server.port).chatStream(messages(), sub (hash<ChatStreamEvent> event) {}, NOTHING,
+                <LlmRequestOptions>{"cancellation": cancellation});
+        });
+        assertEq(0, server.requests.size(), "nothing is sent");
     }
 
     private readCancelled(BedrockEventStream stream, Queue outcome) {

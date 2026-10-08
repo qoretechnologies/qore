@@ -638,6 +638,8 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         @param opts per-call overrides
 
         @throw LLM-ERROR the request failed
+        @throw LLM-CANCELLED the request was cancelled with
+        @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation"
     */
     chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
             code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
@@ -647,17 +649,26 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> body = buildConverseBody(messages, tools, opts);
         *BedrockEventStream stream;
         bool stopped = False;
+        checkRequestCancelled(opts);
         try {
             stream = rest_client.openConverseStream(getBedrockModelId(opts), body);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", "Bedrock ConverseStream failed: " + ex.desc, ex;
         }
         on_exit stream.close();
+        # a cancellation closes the connection of the request at once, also while its response is awaited
+        int cancel_id = addRequestCancelHandler(opts, sub () { stream.close(); });
+        on_exit removeRequestCancelHandler(opts, cancel_id);
         while (True) {
             *hash<auto> raw;
             try {
-                raw = stream.readEvent(getRequestTimeoutMs(opts));
+                raw = callCancellable(*hash<auto> sub () {
+                    return stream.readEvent(getRequestTimeoutMs(opts));
+                }, opts);
             } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "LLM-CANCELLED") {
+                    rethrow;
+                }
                 throw "LLM-ERROR", "Bedrock ConverseStream failed: " + ex.desc, ex;
             }
             if (!raw) {
@@ -930,6 +941,9 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                     {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "LLM-CANCELLED") {
+                rethrow;
+            }
             throw "LLM-ERROR",
                 sprintf("Bedrock Converse request to %y failed: %s",
                     path, ex.desc), ex;

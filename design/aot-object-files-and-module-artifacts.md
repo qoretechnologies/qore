@@ -357,9 +357,12 @@ modules) must be rebuilt after installing a libqore with a different identity.
 Tests compile a module for a different runtime with
 `QORE_AOT_TEST_RUNTIME_IDENTITY` (`examples/test/ir/AOTModuleContextPath.qtest`).
 
-An old libqore that predates the identity cannot resolve
-`qore_aot_fill_module_runtime_identity` and refuses a new qmod at `dlopen()`
-(qmods with a dependency trailer are mapped with `RTLD_NOW`).
+The descriptor references `qore_aot_fill_module_runtime_identity` weakly
+and only calls it when it resolves. A libqore that predates the identity
+therefore still maps a new module and runs its descriptor, and refuses it
+with its own descriptor-revision error (`native ABI version 2 is incompatible
+with runtime version 1; rebuild the module`) instead of failing in `dlopen()`
+on an unresolved symbol.
 
 Inputs of an aggregated `.qmod` (`qcc -m --from-objects`) are not checked
 individually: the glue object records the identity of the aggregating qcc, and

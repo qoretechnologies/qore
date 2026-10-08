@@ -98,6 +98,7 @@ public class CallbackLlmProvider inherits AbstractLlmProvider {
         }
         body = mergeRequestBodyOptions(body, opts);
 
+        checkRequestCancelled(opts);
         hash<auto> resp;
         try {
             resp = api_callback(callback_method, callback_path, body);
@@ -116,6 +117,7 @@ public class CallbackLlmProvider inherits AbstractLlmProvider {
             *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
         hash<auto> body = buildOpenAiChatBody(messages, tools, opts);
 
+        checkRequestCancelled(opts);
         hash<auto> resp;
         try {
             resp = api_callback(callback_method, callback_path, body);
@@ -145,9 +147,13 @@ public class CallbackLlmProvider inherits AbstractLlmProvider {
         @param callback receives each @ref ChatStreamEvent as it arrives,
             with \c done=True on the final event
         @param tools optional tool definitions
-        @param opts per-call request overrides
+        @param opts per-call request overrides; when
+            @ref LlmRequestOptions::cancellation is cancelled, the request is
+            not dispatched, or the stream ends at the next chunk the stream
+            callback delivers
 
         @throw LLM-ERROR the upstream call failed
+        @throw LLM-CANCELLED the request was cancelled
 
         @par Example: route an agent's streaming chat through an
         application-level gateway that adds tenant headers and forwards
@@ -181,6 +187,7 @@ backend.chatStream(history,
     chatStream(list<hash<ChatMessage>> messages,
             code<nothing(hash<ChatStreamEvent>)> callback,
             *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
+        checkRequestCancelled(opts);
         if (!config_h.api_stream_callback) {
             # Fallback: single non-streamed call surfaced as one delta +
             # terminal done.  Mirrors the contract a real streaming
@@ -244,6 +251,9 @@ backend.chatStream(history,
         try {
             config_h.api_stream_callback(callback_method, callback_path,
                 body, sub (hash<auto> chunk) {
+                    # the transport belongs to the callback, so a cancellation
+                    # ends the stream at the next chunk
+                    checkRequestCancelled(opts);
                     *hash<ChatStreamEvent> event =
                         openAiChunkToChatStreamEvent(chunk);
                     if (event) {
@@ -254,9 +264,13 @@ backend.chatStream(history,
                     }
                 });
         } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "LLM-CANCELLED") {
+                rethrow;
+            }
             throw "LLM-ERROR", sprintf("callback chat stream failed: %s",
                 ex.desc), ex;
         }
+        checkRequestCancelled(opts);
 
         # Safety net for malformed providers that close the stream
         # without an OpenAI-style finish_reason chunk: ensure the

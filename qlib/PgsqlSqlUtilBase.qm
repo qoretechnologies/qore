@@ -3059,7 +3059,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         bool calendar = normalized == "timestamp" || normalized == "timestamp without time zone"
             || normalized == "date" || normalized == "time" || normalized == "time without time zone";
         *TimeZone tz;
-        list<auto> result;
+        list<auto> result = ();
         foreach auto value in (values) {
             if (value.typeCode() == NT_HASH && value.hasKey("^value^")) {
                 value = value."^value^";

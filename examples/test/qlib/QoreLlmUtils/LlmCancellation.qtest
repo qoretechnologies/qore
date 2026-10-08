@@ -1,0 +1,246 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  LlmCancellation.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QoreLlmTypes
+%requires QUnit
+
+%exec-class LlmCancellationTest
+
+#! Minimal provider exposing the shared request helpers
+class TestProvider inherits AbstractLlmProvider {
+    constructor(int retry_delay_ms = 1000, int max_retries = 0) : AbstractLlmProvider(<LlmBackendConfig>{
+            "mode": "test",
+            "retry_delay_ms": retry_delay_ms,
+            "max_retries": max_retries,
+        }) {
+    }
+
+    string getMode() {
+        return "test";
+    }
+
+    hash<LlmCompletionResult> complete(string system_prompt, string user_prompt, *hash<auto> output_schema,
+            *hash<LlmRequestOptions> opts) {
+        return <LlmCompletionResult>{"content": "", "usage": {}};
+    }
+
+    hash<ChatResponse> chat(list<hash<ChatMessage>> messages, *list<hash<ToolDefinition>> tools,
+            *hash<LlmRequestOptions> opts) {
+        return <ChatResponse>{};
+    }
+}
+
+#! The LLM request cancellation token and the provider helpers that use it
+public class LlmCancellationTest inherits QUnit::Test {
+    constructor() : Test("LlmCancellationTest", "1.0") {
+        addTestCase("a new token is not cancelled", \newTokenTest());
+        addTestCase("cancel runs each handler once and keeps the first reason", \cancelHandlersTest());
+        addTestCase("a handler added after the cancellation runs at once", \lateHandlerTest());
+        addTestCase("a removed handler does not run", \removeHandlerTest());
+        addTestCase("a failing handler does not stop the others", \failingHandlerTest());
+        addTestCase("waitCancelled times out and wakes on cancel", \waitCancelledTest());
+        addTestCase("check raises LLM-CANCELLED", \checkTest());
+        addTestCase("provider helpers without a token", \noTokenHelpersTest());
+        addTestCase("callCancellable reports an interrupted step as cancelled", \callCancellableTest());
+        addTestCase("withRetry does not call a cancelled request", \withRetryPreCancelTest());
+        addTestCase("withRetry ends its backoff wait on cancel", \withRetryBackoffTest());
+        addTestCase("withRetry still retries without a cancellation", \withRetryRetriesTest());
+        set_return_value(main());
+    }
+
+    newTokenTest() {
+        LlmCancellation cancellation();
+        assertFalse(cancellation.isCancelled());
+        assertNothing(cancellation.getReason());
+        # check() does not raise for a token that is not cancelled
+        cancellation.check();
+        assertFalse(cancellation.waitCancelled(0), "a zero wait returns at once");
+    }
+
+    cancelHandlersTest() {
+        LlmCancellation cancellation();
+        list<string> ran = ();
+        cancellation.addHandler(sub () { ran += "a"; });
+        cancellation.addHandler(sub () { ran += "b"; });
+        cancellation.cancel("first");
+        assertTrue(cancellation.isCancelled());
+        assertEq("first", cancellation.getReason());
+        assertEq(("a", "b"), sort(ran));
+        cancellation.cancel("second");
+        assertEq("first", cancellation.getReason(), "a later cancel does not change the reason");
+        assertEq(2, ran.size(), "handlers run only once");
+    }
+
+    lateHandlerTest() {
+        LlmCancellation cancellation();
+        cancellation.cancel();
+        int calls = 0;
+        assertEq(0, cancellation.addHandler(sub () { ++calls; }), "no ID is issued for a handler that has run");
+        assertEq(1, calls);
+        assertFalse(cancellation.removeHandler(0));
+    }
+
+    removeHandlerTest() {
+        LlmCancellation cancellation();
+        int calls = 0;
+        int id = cancellation.addHandler(sub () { ++calls; });
+        assertTrue(id > 0);
+        assertTrue(cancellation.removeHandler(id));
+        assertFalse(cancellation.removeHandler(id), "a handler is removed only once");
+        cancellation.cancel();
+        assertEq(0, calls);
+    }
+
+    failingHandlerTest() {
+        LlmCancellation cancellation();
+        int calls = 0;
+        cancellation.addHandler(sub () { ++calls; throw "HANDLER-ERROR", "first failure"; });
+        cancellation.addHandler(sub () { ++calls; throw "OTHER-ERROR", "second failure"; });
+        cancellation.addHandler(sub () { ++calls; });
+        *hash<ExceptionInfo> error;
+        try {
+            cancellation.cancel();
+        } catch (hash<ExceptionInfo> ex) {
+            error = ex;
+        }
+        assertEq(3, calls, "every handler runs");
+        assertTrue(error.err == "HANDLER-ERROR" || error.err == "OTHER-ERROR", "a handler error is reported");
+        assertTrue(cancellation.isCancelled(), "the token is cancelled despite the failure");
+    }
+
+    waitCancelledTest() {
+        LlmCancellation cancellation();
+        assertFalse(cancellation.waitCancelled(10ms));
+
+        Queue started();
+        Queue result();
+        background sub () {
+            started.push(True);
+            date begin = now_us();
+            bool cancelled = cancellation.waitCancelled(600s);
+            result.push({"cancelled": cancelled, "ms": (now_us() - begin).durationMilliseconds()});
+        }();
+        started.get(30s);
+        cancellation.cancel();
+        hash<auto> rv = result.get(30s);
+        assertTrue(rv.cancelled);
+        assertLt(30000, rv.ms, "the wait ends on the cancellation, not on its timeout");
+        assertTrue(cancellation.waitCancelled(600s), "a cancelled token does not wait");
+    }
+
+    checkTest() {
+        LlmCancellation cancellation();
+        cancellation.cancel("stopped by the user");
+        assertThrows("LLM-CANCELLED", "^the LLM request was cancelled: stopped by the user$",
+            \cancellation.check());
+        try {
+            cancellation.check();
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq({"reason": "stopped by the user"}, ex.arg);
+        }
+
+        LlmCancellation unnamed();
+        unnamed.cancel();
+        assertThrows("LLM-CANCELLED", "^the LLM request was cancelled$", \unnamed.check());
+    }
+
+    noTokenHelpersTest() {
+        TestProvider provider();
+        provider.checkRequestCancelled(NOTHING);
+        provider.checkRequestCancelled(<LlmRequestOptions>{});
+        int calls = 0;
+        assertEq(0, provider.addRequestCancelHandler(<LlmRequestOptions>{}, sub () { ++calls; }));
+        provider.removeRequestCancelHandler(<LlmRequestOptions>{}, 0);
+        assertEq(0, calls);
+        assertEq(5, provider.callCancellable(int sub () { return 5; }, NOTHING));
+        assertThrows("STEP-ERROR", \provider.callCancellable(), (sub () { throw "STEP-ERROR"; }, NOTHING));
+    }
+
+    callCancellableTest() {
+        TestProvider provider();
+        LlmCancellation cancellation();
+        hash<LlmRequestOptions> opts = <LlmRequestOptions>{"cancellation": cancellation};
+        assertEq(5, provider.callCancellable(int sub () { return 5; }, opts));
+        assertThrows("STEP-ERROR", \provider.callCancellable(), (sub () { throw "STEP-ERROR"; }, opts),
+            "an error that is not caused by a cancellation is kept");
+
+        # a cancellation that closes the connection makes the step fail with a transport error
+        int id = provider.addRequestCancelHandler(opts, sub () {});
+        assertTrue(id > 0);
+        assertThrows("LLM-CANCELLED", "closed by the user", \provider.callCancellable(), (sub () {
+            cancellation.cancel("closed by the user");
+            throw "SOCKET-CLOSED", "the connection was closed";
+        }, opts));
+        assertThrows("LLM-CANCELLED", \provider.checkRequestCancelled(), opts);
+        provider.removeRequestCancelHandler(opts, id);
+
+        # a cancelled call does not start a step
+        int started = 0;
+        assertThrows("LLM-CANCELLED", \provider.callCancellable(), (sub () { ++started; }, opts));
+        assertEq(0, started);
+
+        # a step that ends early with a result after a cancellation is cancelled as well
+        LlmCancellation other();
+        assertThrows("LLM-CANCELLED", \provider.callCancellable(), (int sub () {
+            other.cancel();
+            return 1;
+        }, <LlmRequestOptions>{"cancellation": other}));
+    }
+
+    withRetryPreCancelTest() {
+        TestProvider provider();
+        LlmCancellation cancellation();
+        cancellation.cancel();
+        int calls = 0;
+        assertThrows("LLM-CANCELLED", \provider.withRetry(), (sub () { ++calls; },
+            <LlmRequestOptions>{"cancellation": cancellation}));
+        assertEq(0, calls, "a cancelled request is not made");
+    }
+
+    withRetryBackoffTest() {
+        # a backoff that would outlast the test
+        TestProvider provider(600000, 3);
+        LlmCancellation cancellation();
+        Queue attempted();
+        Counter canceller(1);
+        background sub () {
+            on_exit canceller.dec();
+            if (attempted.get(30s)) {
+                cancellation.cancel("stopped");
+            }
+        }();
+        on_exit {
+            attempted.push(False);
+            canceller.waitForZero();
+        }
+        int calls = 0;
+        date started = now_us();
+        assertThrows("LLM-CANCELLED", "stopped", \provider.withRetry(), (sub () {
+            ++calls;
+            attempted.push(True);
+            throw "HTTP-ERROR", "overloaded", {"status_code": 503};
+        }, <LlmRequestOptions>{"cancellation": cancellation}));
+        assertEq(1, calls, "the request is not retried after the cancellation");
+        assertLt(30000, (now_us() - started).durationMilliseconds());
+    }
+
+    withRetryRetriesTest() {
+        TestProvider provider(1, 2);
+        LlmCancellation cancellation();
+        int calls = 0;
+        assertEq("ok", provider.withRetry(string sub () {
+            if (++calls < 3) {
+                throw "HTTP-ERROR", "overloaded", {"status_code": 503};
+            }
+            return "ok";
+        }, <LlmRequestOptions>{"cancellation": cancellation}));
+        assertEq(3, calls);
+        assertFalse(cancellation.isCancelled());
+    }
+}
