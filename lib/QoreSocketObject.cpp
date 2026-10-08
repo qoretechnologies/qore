@@ -3239,6 +3239,16 @@ void my_socket_priv::setAccept(QoreSocketObject& sock, QoreObject* o) {
     }
 }
 
+void qore_socket_raise_accept_without_connection(const QoreHashNode* result, const char* method,
+        ExceptionSink* xsink) {
+    if (result && result->getKeyValue("canceled").getAsBool()) {
+        xsink->raiseException("SOCKET-CLOSED", "the listening socket was closed while Socket::%s() was waiting for "
+            "a connection", method);
+        return;
+    }
+    xsink->raiseException("SOCKET-ACCEPT-ERROR", "Socket::%s() ended without a connection", method);
+}
+
 static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int timeout_ms, bool ssl,
         ExceptionSink* xsink, SocketSource* source = nullptr) {
     s->ref();
@@ -3279,7 +3289,12 @@ static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int
     }
 
     ValueHolder output(accept_poller->getOutput(), xsink);
-    if (*xsink || output->isNothing()) {
+    if (*xsink) {
+        return nullptr;
+    }
+    if (output->isNothing()) {
+        // no connection and no timeout: the operation was canceled
+        qore_socket_raise_accept_without_connection(*result, ssl ? "acceptSSL" : "accept", xsink);
         return nullptr;
     }
     if (output->getType() != NT_OBJECT) {

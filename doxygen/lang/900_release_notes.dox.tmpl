@@ -4165,6 +4165,12 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::Socket::accept() "Socket::accept()" and
+      @ref Qore::Socket::acceptSSL() "Socket::acceptSSL()" sometimes returning @ref nothing without an exception
+      when another thread closed the listening socket while the call was waiting for a connection; a
+      \c SOCKET-CLOSED exception is now raised, and the variants with a timeout return @ref nothing only when the
+      timeout expires
+
     - Fixed the @ref backquote_operator "backquote operator" and @ref Qore::backquote() "backquote()" waiting for a
       command that closed its output without reacting to thread cancellation or a
       @ref Qore::SandboxManager "SandboxManager" interrupt; @ref Qore::system() "system()" and the backquote
