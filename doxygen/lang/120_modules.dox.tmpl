@@ -1331,6 +1331,37 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     See @ref exec_mode_aot "AOT Compilation" and @ref qcc_tool "qcc" for
     details on compiled module artifacts.
 
+    @subsection aot_module_runtime_identity AOT Module Runtime Compatibility
+
+    The native code of an AOT-compiled module (\c "*.qmod" built by @ref qcc_tool "qcc") calls into the %Qore
+    library that compiled it and can only run with a %Qore library that has the same generated-code contract.
+    Each %Qore library therefore has an <em>AOT runtime identity</em>, a digest derived automatically from the
+    library sources that define that contract, and \c qcc records it in every module it compiles.  \c qcc
+    <tt>--version</tt> shows the identity of the installed library:
+
+    @verbatim
+qcc (Qore Code Compiler) v3.0.0
+Using Qore library v3.0.0
+AOT runtime identity: 3f4c...e19a
+    @endverbatim
+
+    A module whose identity differs from that of the library loading it is refused before any of its code runs,
+    with an error naming the module and both identities, for example:
+
+    @verbatim
+LOAD-MODULE-ERROR: AOT module '/usr/share/qore-modules/OpcUa/OpcUa.qmod': feature 'OpcUa': the module was compiled
+for AOT runtime identity '...', but this Qore runtime (libqore 3.0.0) has AOT runtime identity '...'; the module's
+native code was generated for a different Qore library and cannot be run with this one; rebuild the module with the
+qcc of this Qore installation
+    @endverbatim
+
+    If the module's source is installed beside the compiled module, the source module is loaded instead and a
+    warning reports the refused compiled module.  After installing a %Qore library with a different AOT runtime
+    identity, rebuild all AOT-compiled modules that were built outside of the %Qore source tree (for example the
+    modules of binary module packages and applications).  Rebuilding the library for changes that do not affect
+    generated code keeps the identity, so existing compiled modules keep loading.  Ordinary binary modules written
+    in C/C++ are not affected.
+
     User modules will have their own dedicated @ref Qore::Program "Program" object; the @ref Qore::Program "Program"
     object is created automatically when the module is loaded and initialized.  The module's
     @ref Qore::Program "Program" object is created with locked parse options as follows:

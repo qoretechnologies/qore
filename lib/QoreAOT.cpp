@@ -1951,6 +1951,11 @@ static bool appendModulePathListSections(QoreAOTBinaryWriter& writer,
     return true;
 }
 
+const char* qore_aot_get_compile_runtime_identity() {
+    const char* test_identity = getenv("QORE_AOT_TEST_RUNTIME_IDENTITY");
+    return test_identity && *test_identity ? test_identity : qore_aot_runtime_identity;
+}
+
 //! Append producer/build diagnostics and an optional source stat fingerprint to the AOT metadata blob.
 /** BUILD_INFO is informational. The fixed-width fingerprint lets supporting runtimes avoid reading an unchanged
     source file; older runtimes safely ignore its unknown optional section. */
@@ -1966,6 +1971,7 @@ static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* bina
     add("qore-version", std::to_string(QORE_VERSION_MAJOR) + "."
         + std::to_string(QORE_VERSION_MINOR) + "." + std::to_string(QORE_VERSION_PATCH));
     add("qore-git-hash", qore_git_hash ? qore_git_hash : "");
+    add("aot-runtime-identity", qore_aot_get_compile_runtime_identity());
     add("aot-format-version", std::to_string(QORE_AOT_BINARY_VERSION));
     add("supported-features", std::to_string(QORE_AOT_SUPPORTED_FEATURES));
     add("max-opcode", std::to_string(QORE_IR_MAX_OPCODE));
@@ -24779,6 +24785,20 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
         deps_ptr,
         builder.getInt32(num_deps)
     });
+
+    // Record the AOT runtime identity of this libqore; the loader refuses the module when it is loaded by a libqore
+    // with a different identity, before any generated code runs
+    {
+        auto* identity_fn_type = llvm::FunctionType::get(void_type, {
+            ptr_type,   // QoreModuleInfo*
+            ptr_type    // identity
+        }, false);
+        auto identity_fn = module.getOrInsertFunction("qore_aot_fill_module_runtime_identity",
+            identity_fn_type);
+        auto* identity_gv = createPrivateString("qore_aot_desc_runtime_identity",
+            qore_aot_get_compile_runtime_identity());
+        builder.CreateCall(identity_fn, {mod_info_arg, identity_gv});
+    }
 
     // Deliver any child module declarations with a separate call, so that .qmod artifacts compiled before
     // child modules were supported (which never make this call) continue to load unchanged

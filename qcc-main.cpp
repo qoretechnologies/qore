@@ -1318,6 +1318,7 @@ static void print_usage(const char* prog) {
 static void print_version() {
     printf("qcc (Qore Code Compiler) v%s\n", QCC_VERSION);
     printf("Using Qore library v%s\n", qore_version_string);
+    printf("AOT runtime identity: %s\n", qore_aot_runtime_identity);
     printf("Built with LLVM for JIT/AOT compilation\n");
 }
 

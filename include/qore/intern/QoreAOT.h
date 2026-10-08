@@ -701,9 +701,35 @@ extern "C" void qore_aot_fill_module_desc(QoreModuleInfo* mod_info,
         void* init_fn, void* ns_init_fn, void* del_fn,
         const char** deps, int num_deps);
 
+//! The AOT runtime identity of this libqore build
+/** A digest of the libqore sources that define the contract between AOT-generated code and the runtime (the source
+    entries of the qcc format fingerprint); generated at build time by cmake/QoreWriteAOTRuntimeIdentity.cmake and
+    defined in lib/qore_aot_runtime_identity.cpp.  qcc records it in every AOT module it compiles, and the module
+    loader refuses an AOT module that records a different identity.
+
+    @see design/aot-object-files-and-module-artifacts.md "AOT Module Runtime Identity"
+*/
+extern "C" DLLEXPORT const char* qore_aot_runtime_identity;
+
+//! Returns the AOT runtime identity that qcc records in the modules it compiles
+/** This is \c qore_aot_runtime_identity unless the \c QORE_AOT_TEST_RUNTIME_IDENTITY environment variable is set,
+    which only tests use to compile a module for a different runtime.
+*/
+DLLLOCAL const char* qore_aot_get_compile_runtime_identity();
+
+//! C ABI helper recording the AOT runtime identity that an AOT module was compiled for
+/** Called by the generated module descriptor function after qore_aot_fill_module_desc() in every AOT module with
+    descriptor revision 2 or later (see QORE_AOT_MODULE_ABI_VERSION).
+
+    @param mod_info pointer to the QoreModuleInfo to populate
+    @param identity the AOT runtime identity of the libqore that compiled the module
+*/
+extern "C" void qore_aot_fill_module_runtime_identity(QoreModuleInfo* mod_info, const char* identity);
+
 //! Marker and masks encoding the AOT ABI in the existing descriptor API-minor argument.
-/** Older runtimes see the tagged value as an unsupported module API and reject
-    the module without needing to resolve any new runtime helper symbol. */
+/** Runtimes that predate the AOT ABI revision see the tagged value as an unsupported module API.  Runtimes that
+    predate descriptor revision 2 cannot resolve qore_aot_fill_module_runtime_identity(), so they refuse a revision 2
+    module when mapping it with RTLD_NOW (modules with a dependency trailer). */
 constexpr unsigned QORE_AOT_MODULE_ABI_API_MINOR_MARKER = 0x51410000U;
 constexpr unsigned QORE_AOT_MODULE_ABI_API_MINOR_MARKER_MASK = 0xffff0000U;
 constexpr unsigned QORE_AOT_MODULE_ABI_VERSION_MASK = 0x0000ff00U;

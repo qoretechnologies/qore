@@ -298,12 +298,72 @@ format and the C/C++ binary-module API. Generated module descriptors encode the
 exact `QORE_AOT_MODULE_ABI_VERSION` in a tagged form of the existing module
 API-minor argument; this preserves the descriptor helper's C ABI and makes an
 older runtime reject a newer AOT module as an unsupported module API. A current
-loader decodes and validates the AOT revision before loading dependencies or
-running generated initialization code. A descriptor produced before this
-contract reports version zero and is rejected with a rebuild diagnostic.
-Increment the native ABI revision whenever generated code can no longer execute
-safely against the previous runtime-helper or ownership contract. Metadata-only
-backward readers remain governed by their format and feature versions.
+loader decodes and validates the AOT revision before running generated
+initialization code. A descriptor produced before this contract reports version
+zero and is rejected with a rebuild diagnostic. The revision versions the
+descriptor protocol only; whether the generated code itself can run against the
+loading libqore is decided by the runtime identity below. Metadata-only backward
+readers remain governed by their format and feature versions.
+
+## AOT Module Runtime Identity
+
+Generated code depends on the exact runtime it was compiled against: the
+signatures and ownership rules of the `qore_rt_*`/`qore_aot_*` helpers it calls,
+the layout of the slot maps and metadata the runtime reads back, and the IR
+semantics the lowering assumed. A manually bumped revision does not track that
+contract reliably, and a stale module that loads fails later, far from the
+cause (for example in a data provider factory of a module whose qmods were
+compiled by a libqore installed earlier). So the contract is identified
+automatically:
+
+- **Identity.** `cmake/QoreWriteAOTRuntimeIdentity.cmake` hashes (SHA-256) the
+  source entries of the `qcc-format` fingerprint (path, size and content hash of
+  every file in `_qcc_format_sources`; see Build-System Contract) into
+  `include/qore/intern/qore_aot_runtime_identity.h` at build time;
+  `lib/qore_aot_runtime_identity.cpp`, a separate translation unit like
+  `qore_git_revision.cpp`, defines it as `qore_aot_runtime_identity`. The
+  fingerprint's `@build-config` entry (build type, compiler, flags) is left out:
+  it decides whether in-tree qmods are rebuilt, but code generation does not
+  depend on it, so a debug libqore loads qmods compiled by a release libqore
+  built from the same sources. A change to a file that is not fingerprinted
+  never changes the identity, so rebuilding libqore for unrelated fixes keeps
+  every installed AOT module loadable.
+- **Recording.** The generated module descriptor calls
+  `qore_aot_fill_module_runtime_identity()` after `qore_aot_fill_module_desc()`
+  with the identity of the compiling libqore (descriptor revision 2). Every
+  AOT module goes through that descriptor: loadable `.qmod`s, `.qmod`s
+  aggregated from objects (the glue object carries the descriptor), `.qoa`
+  archives and executables registering embedded modules with
+  `qore_aot_register_into_program()`. The identity is also written to each
+  metadata blob's `BUILD_INFO` (`aot-runtime-identity`) for inspection, and
+  `qcc --version` prints it.
+- **Checking.** `QoreModuleManager::loadBinaryModuleFromDesc()` refuses an AOT
+  module whose descriptor revision or identity differs from the runtime's,
+  before the module's initialization runs, with a `LOAD-MODULE-ERROR` naming the
+  module, both identities and the libqore version and asking for a rebuild with
+  the qcc of the installation. The check does not apply to ordinary binary
+  modules (`is_aot` is false), so C/C++ modules are unaffected. As with any
+  binary-module failure, the loader falls back to the source module when one is
+  installed beside the artifact, with a `BINARY-MODULE-SOURCE-FALLBACK` warning.
+
+The identity is exactly as complete as the fingerprint, whose membership is
+audited at configure time, so keeping the generated-code contract in
+fingerprinted files is what keeps the check correct: a change to a runtime
+helper called by generated code normally changes its declaration in
+`QoreIRToLLVM.cpp`/`QoreAOT.cpp` as well. Because every fingerprinted change
+also rebuilds in-tree qmods, the identity changes exactly when in-tree artifacts
+are regenerated; artifacts built outside the tree (module-jni, Qorus, packaged
+modules) must be rebuilt after installing a libqore with a different identity.
+Tests compile a module for a different runtime with
+`QORE_AOT_TEST_RUNTIME_IDENTITY` (`examples/test/ir/AOTModuleContextPath.qtest`).
+
+An old libqore that predates the identity cannot resolve
+`qore_aot_fill_module_runtime_identity` and refuses a new qmod at `dlopen()`
+(qmods with a dependency trailer are mapped with `RTLD_NOW`).
+
+Inputs of an aggregated `.qmod` (`qcc -m --from-objects`) are not checked
+individually: the glue object records the identity of the aggregating qcc, and
+the build-system contract below keeps the `.qo` inputs current.
 
 ## Load-Time Dependency Preflight
 
