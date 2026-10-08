@@ -1411,34 +1411,6 @@ const multibyte_family* get_multibyte_family(F& convert) {
 }
 }
 
-/*  An encoding that Qore does not know is created from its name, and its properties are determined here by
-    converting sample text to it with iconv, so that each function that depends on them (hash keys, the conversion of
-    strings to numbers, string lengths and offsets, line splitting, ...) handles text in the encoding correctly.
-
-    - ASCII compatibility: each ASCII character (TAB, LF, CR, and every printable character) is converted on its
-      own; the encoding is ASCII-compatible if every one that the encoding can represent is the same single byte, and
-      every letter, digit, and whitespace character can be represented.  A punctuation character that has no
-      representation is accepted, so that encodings such as Shift_JIS, where iconv may map 0x5c to the yen sign,
-      keep being handled as ASCII-compatible.  An ASCII-compatible encoding is handled as single-byte text, as before,
-      also when it has multi-byte characters (ex: EUC-JP or GB18030): Qore has no character functions for them.
-    - Character width: each character of a sample is converted alone and twice; the difference is the size of the
-      character, and the rest of the single conversion is a constant prefix, which iconv writes for an encoding with
-      a byte order mark (ex: "UTF-32").  If every character is the same as in one of the Unicode encoding forms
-      UTF-32BE, UTF-32LE, UTF-16BE, or UTF-16LE, the encoding gets the character functions of that form: four bytes
-      per character for UTF-32, two to four for UTF-16, and two for a UTF-16 form that cannot represent characters
-      outside the Basic Multilingual Plane (UCS-2).  If iconv writes a byte order mark, text is converted to the
-      encoding in the byte order of the form explicitly (ex: "UTF-32BE"), as for QCS_UTF16, so that strings in the
-      encoding have no byte order mark; conversions from it are made with its own name, which takes the byte order
-      from a byte order mark in the input.
-    - Any other encoding that is not ASCII-compatible (ex: EBCDIC code pages, UTF-7, ISO-2022 encodings) is handled
-      as single-byte text that is not ASCII-compatible: every function that parses or splits text converts it to
-      UTF-8 first, and character offsets are byte offsets, as before.  Variable-width and stateful encodings cannot
-      be decoded one character at a time without functions specific to them.
-
-    If iconv does not know the encoding, the properties are not changed: no text can be converted to or from the
-    encoding, so its strings are handled as single-byte, ASCII-compatible text, as before, rather than raising an
-    error when the encoding is named (ex: in a string tagged with an encoding only for information).
-*/
 const QoreEncoding* qore_encoding_private::getBomEncoding(const QoreEncoding* enc, const char* p, size_t len,
         size_t& bom_len) const {
     assert(get(*enc) == this);
@@ -1463,6 +1435,43 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
     maxwidth = f.maxwidth;
 }
 
+/*  An encoding that Qore does not know is created from its name, and its properties are determined here by
+    converting sample text to it with iconv, so that each function that depends on them (hash keys, the conversion of
+    strings to numbers, string lengths and offsets, searches, line splitting, ...) handles text in the encoding
+    correctly.
+
+    - UTF-7: if iconv decodes the "-" that ends a base64 run as a character when it is the last byte of its input
+      (Apple's libiconv), conversions from the encoding give such a "-" to iconv on its own; see
+      IconvHelper::iconvUtf7().
+    - ASCII compatibility: each ASCII character (TAB, LF, CR, and every printable character) is converted on its
+      own; the encoding is ASCII-compatible if every one that the encoding can represent is the same single byte, and
+      every letter, digit, and whitespace character can be represented.  A punctuation character that has no
+      representation is accepted here, as in Shift_JIS, where iconv may map 0x5c to the yen sign; whether Shift_JIS
+      is ASCII-compatible is decided by its multi-byte family below, the same way on every platform.
+    - Multi-byte encodings: an ASCII-compatible encoding, or one that is not ASCII-compatible and has no Unicode
+      encoding form, is checked with Japanese, Chinese, and Korean sample characters; if it has multi-byte characters
+      and one of the families in multibyte_families gives the length of every sample character (EUC, double-byte
+      encodings such as GBK, Big5, or CP949, GB18030, Shift_JIS), it gets the character functions of the family, and
+      searches only match at character boundaries, as the second byte of a character can be an ASCII character.
+      Such an encoding stays ASCII-compatible, except for the Shift_JIS family (see multibyte_families).  Code points
+      are decoded with iconv (QoreEncoding::getUnicode()).
+    - Character width of encodings that are not ASCII-compatible: each character of a sample is converted alone and
+      twice; the difference is the size of the character, and the rest of the single conversion is a constant
+      prefix, which iconv writes for an encoding with a byte order mark (ex: "UTF-32").  If every character is the
+      same as in one of the Unicode encoding forms UTF-32BE, UTF-32LE, UTF-16BE, or UTF-16LE, the encoding gets the
+      character functions of that form: four bytes per character for UTF-32, two to four for UTF-16, and two for a
+      UTF-16 form that cannot represent characters outside the Basic Multilingual Plane (UCS-2).  If iconv writes a
+      byte order mark, text is converted to the encoding in the byte order of the form explicitly (ex: "UTF-32BE"),
+      as for QCS_UTF16, so that strings in the encoding have no byte order mark; conversions from it are made with
+      its own name, which takes the byte order from a byte order mark in the input.
+    - Any other encoding (ex: EBCDIC code pages, UTF-7) is handled as single-byte text, ASCII-compatible or not as
+      found above; text in an encoding that is not ASCII-compatible is converted to UTF-8 by every function that
+      parses or splits it.  Stateful encodings (ex: UTF-7, ISO-2022-JP) cannot be decoded one character at a time.
+
+    If iconv does not know the encoding, the properties are not changed: no text can be converted to or from the
+    encoding, so its strings are handled as single-byte, ASCII-compatible text, as before, rather than raising an
+    error when the encoding is named (ex: in a string tagged with an encoding only for information).
+*/
 void qore_encoding_private::probe() {
     ProbeConverter to(code.c_str(), "UTF-8");
     ProbeConverter from("UTF-8", code.c_str());
