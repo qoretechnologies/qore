@@ -4128,6 +4128,12 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a @ref Qore::Thread::Queue "Queue" that once held an object, list or hash that could be part of a
+      reference cycle being scanned for cycles by the garbage collector for the rest of its life, even when it no
+      longer held any such value; values taken from the queue, for example with
+      @ref Qore::Thread::Queue::get() "Queue::get()" or @ref Qore::Thread::Queue::pop() "Queue::pop()", were never
+      removed from the count of values to scan
+
     - Fixed a data race in @ref Qore::Thread::Queue::size() "Queue::size()",
       @ref Qore::Thread::Queue::empty() "Queue::empty()",
       @ref Qore::Thread::Queue::getReadWaiting() "Queue::getReadWaiting()",

@@ -47,6 +47,9 @@ public:
     QoreValue node{};
     QoreQueueNode* prev,
                     * next;
+    // true if the value is counted in the queue's scan count (see qore_queue_private::scan_count); only values
+    // added through the Queue class are counted, so only those can be uncounted when they are taken
+    bool scan_counted = false;
     DLLLOCAL QoreQueueNode(QoreValue n, QoreQueueNode* p, QoreQueueNode* nx) : node(n), prev(p), next(nx) {
     }
 

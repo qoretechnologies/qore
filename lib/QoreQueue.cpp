@@ -271,6 +271,7 @@ void qore_queue_private::push(ExceptionSink* xsink, QoreObject* self, QoreValue 
 
         pushIntern(holder.release());
         if (self && needs_scan(n)) {
+            tail->scan_counted = true;
             ++scan_count;
             if (scan_count == 1) {
                 inc_obj = true;
@@ -310,6 +311,7 @@ void qore_queue_private::insert(ExceptionSink* xsink, QoreObject* self, QoreValu
 
         insertIntern(holder.release());
         if (self && needs_scan(n)) {
+            head->scan_counted = true;
             ++scan_count;
             if (scan_count == 1) {
                 inc_obj = true;
@@ -366,15 +368,19 @@ QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int 
             write_cond.signal();
         }
 
-        sl.unlock();
-        rv = n->takeAndDel();
-
-        if (self && needs_scan(n)) {
+        // the scan count is maintained under the lock, as in push() and insert(); a value taken through the C++
+        // API without the Queue object cannot uncount the object's private data, so the count is then kept, which
+        // only makes the collector scan the queue's values when it would not have to
+        if (n->scan_counted && self) {
+            assert(scan_count > 0);
             --scan_count;
             if (!scan_count) {
                 dec_obj = true;
             }
         }
+
+        sl.unlock();
+        rv = n->takeAndDel();
     }
 
     //printd(5, "qore_queue_private::shift('%s') scan_count: %d inc: %d\n", rv.getFullTypeName(), scan_count, dec_obj);
@@ -419,15 +425,19 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
             write_cond.signal();
         }
 
-        sl.unlock();
-        rv = n->takeAndDel();
-
-        if (self && needs_scan(n)) {
+        // the scan count is maintained under the lock, as in push() and insert(); a value taken through the C++
+        // API without the Queue object cannot uncount the object's private data, so the count is then kept, which
+        // only makes the collector scan the queue's values when it would not have to
+        if (n->scan_counted && self) {
+            assert(scan_count > 0);
             --scan_count;
             if (!scan_count) {
                 dec_obj = true;
             }
         }
+
+        sl.unlock();
+        rv = n->takeAndDel();
     }
 
     //printd(5, "qore_queue_private::pop('%s') scan_count: %d inc: %d\n", rv.getFullTypeName(), scan_count, dec_obj);
