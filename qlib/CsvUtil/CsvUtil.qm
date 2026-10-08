@@ -371,6 +371,11 @@ while (i.next()) {
     @section csvutil_relnotes Release Notes
 
     @subsection csvutil_v1_12 Version 1.12
+    - the \c "format" attribute of a field description is accepted for \c "int", \c "float" and \c "number" fields
+      (also with the \c "*" prefix) by the iterators, the writers and the data providers, as documented: it is a
+      number format as for the \c "number_format" option and overrides that option for the field; it was rejected
+      with an error saying that it is only valid for \c "date" fields; a number format with only a thousands
+      separator (ex: \c ".") no longer raises an error when parsing
     - the CSV readers skip a byte order mark at the start of UTF-8 file, stream, binary, and string input, so the first
       header of a file saved as "CSV UTF-8" by a spreadsheet program matches its field name, as the CSV profiler
       already read it (see @ref csvutil_bom)

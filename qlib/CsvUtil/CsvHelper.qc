@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore CsvHelper class definition
 
-/*  CsvHelper.qm Copyright 2012 - 2024 Qore Technologies, s.r.o.
+/*  CsvHelper.qm Copyright 2012 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -43,6 +43,13 @@ class CsvHelper {
             "*string": True,
             "date": True,
             "*date": True,
+        };
+
+        #! field types (without the optional \c "*" prefix) that take a number format in the \c "format" attribute
+        const NumberFormatTypes = {
+            "int": True,
+            "float": True,
+            "number": True,
         };
 
         #! supported field description attribute codes
@@ -175,11 +182,17 @@ class CsvHelper {
                         }
                         if (!h.type)
                             h.type = "*string";
-                        if (h.type != "date" && h.type != "*date") {
-                            foreach string f in ("timezone", "format") {
-                                if (h{f})
-                                    throw errname, sprintf("%s: field %y is type %y, but the %y attribute was also given, which is only valid for \"date\" fields", fld_errs, hi.key, h.type, f);
-                            }
+                        # the type without the optional "*" prefix
+                        string base_type = h.type[0] == "*" ? h.type.substr(1) : h.type;
+                        if (h.timezone && base_type != "date") {
+                            throw errname, sprintf("%s: field %y is type %y, but the \"timezone\" attribute was also "
+                                "given, which is only valid for \"date\" fields", fld_errs, hi.key, h.type);
+                        }
+                        # "format" is a date mask for dates and a number format for numbers
+                        if (h.format && !NumberFormatTypes{base_type} && base_type != "date") {
+                            throw errname, sprintf("%s: field %y is type %y, but the \"format\" attribute was also "
+                                "given, which is only valid for \"date\", \"int\", \"float\", and \"number\" "
+                                "fields", fld_errs, hi.key, h.type);
                         }
                         break;
                     }

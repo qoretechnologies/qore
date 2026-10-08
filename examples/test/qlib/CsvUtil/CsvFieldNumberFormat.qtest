@@ -1,0 +1,173 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The "format" attribute of a field description gives a number format for an "int", "float" or "number" field, as the
+# "number_format" option does for every such field: the thousands separator followed by the decimal separator, and
+# for output, the number of decimals.  It is accepted for these types (also with the "*" prefix) by the iterators,
+# the writers and the data providers, overrides the "number_format" option, and is rejected for other types.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires CsvUtil
+
+%exec-class CsvFieldNumberFormatTest
+
+public class CsvFieldNumberFormatTest inherits QUnit::Test {
+    public {
+        #! CSV data with numbers with a decimal comma and a thousands point
+        const Data = "n;f;i;s\n1.234,5;-7,25;1.234;x\n-0,5;3,0;-7;y\n";
+
+        #! the fields with a per-field format
+        const Fields = {
+            "n": {"type": "number", "format": ".,"},
+            "f": {"type": "float", "format": ".,"},
+            "i": {"type": "int", "format": ".,"},
+            "s": "string",
+        };
+
+        #! the records of the data
+        const Records = (
+            {"n": 1234.5n, "f": -7.25, "i": 1234, "s": "x"},
+            {"n": -0.5n, "f": 3.0, "i": -7, "s": "y"},
+        );
+    }
+
+    constructor() : Test("CsvFieldNumberFormatTest", "1.0") {
+        addTestCase("reading with a field format", \readTest());
+        addTestCase("a field format overrides number_format", \overrideTest());
+        addTestCase("invalid values", \invalidTest());
+        addTestCase("types that do not take a format", \invalidTypeTest());
+        addTestCase("writing with a field format", \writeTest());
+        addTestCase("round trips", \roundTripTest());
+        addTestCase("data providers", \dataProviderTest());
+        set_return_value(main());
+    }
+
+    readTest() {
+        hash<auto> opts = {"separator": ";", "header_names": True, "fields": Fields};
+        assertEq(Records, read(new CsvDataIterator(Data, opts)), "CsvDataIterator");
+        assertEq(Records, read(new CsvIterator(new StringInputStream(Data), NOTHING, opts)), "CsvIterator");
+        # optional types
+        hash<auto> fields = map {$1.key: $1.value.typeCode() == NT_HASH
+            ? $1.value + {"type": "*" + $1.value.type} : $1.value}, Fields.pairIterator();
+        string data = Data + ";;;z\n";
+        assertEq(Records + ({"n": NOTHING, "f": NOTHING, "i": NOTHING, "s": "z"},),
+            read(new CsvDataIterator(data, opts + {"fields": fields})), "optional types");
+        # the multi-type constructor with a spec
+        hash<auto> spec = {CSV_TYPE_SINGLE: Fields};
+        assertEq(Records, read(new CsvDataIterator(Data, spec, {"separator": ";", "header_lines": 1})), "spec");
+    }
+
+    overrideTest() {
+        # the field format overrides number_format, which applies to the other numeric fields
+        string data = "a;b\n1,234.5;1.234,5\n";
+        hash<auto> opts = {
+            "separator": ";",
+            "header_names": True,
+            "number_format": ",.",
+            "fields": {"a": "number", "b": {"type": "number", "format": ".,"}},
+        };
+        assertEq(({"a": 1234.5n, "b": 1234.5n},), read(new CsvDataIterator(data, opts)));
+        # without number_format, numbers have no thousands separator and a decimal point
+        opts = {"separator": ";", "header_names": True, "fields": {"a": "float", "b": {"type": "float", "format": ".,"}}};
+        assertEq(({"a": 1234.5, "b": 1234.5},), read(new CsvDataIterator("a;b\n1234.5;1.234,5\n", opts)));
+    }
+
+    invalidTest() {
+        foreach string type in ("int", "float", "number") {
+            hash<auto> opts = {"separator": ";", "header_names": True, "fields": {"v": {"type": type, "format": ".,"}}};
+            assertThrows("FIELD-VALUE-ERROR", \read(), (new CsvDataIterator("v\n1x2\n", opts),), type);
+            # with a decimal comma, a decimal point is not a separator
+            if (type != "int") {
+                assertThrows("FIELD-VALUE-ERROR", \read(), (new CsvDataIterator("v\n1;5\n", opts + {"separator": ","}),),
+                    type + " separator");
+            }
+        }
+        # a format with only a thousands separator
+        hash<auto> opts = {"separator": ";", "header_names": True, "fields": {"v": {"type": "int", "format": "."}}};
+        assertEq(({"v": 1234567},), read(new CsvDataIterator("v\n1.234.567\n", opts)), "thousands separator only");
+        assertThrows("FIELD-VALUE-ERROR", \read(), (new CsvDataIterator("v\n1.234x\n", opts),),
+            "thousands separator only");
+        # the format must be a string
+        assertThrows("ABSTRACTCSVITERATOR-ERROR", sub () {
+            new CsvDataIterator("v\n1\n", {"header_names": True, "fields": {"v": {"type": "int", "format": 1}}});
+        });
+    }
+
+    invalidTypeTest() {
+        foreach string type in ("string", "*string", "bool", "*bool") {
+            assertThrows("ABSTRACTCSVITERATOR-ERROR", "only valid for", sub () {
+                new CsvDataIterator("v\n1\n", {"header_names": True, "fields": {"v": {"type": type, "format": ".,"}}});
+            }, NOTHING, type);
+            assertThrows("CSVSTRINGWRITER-ERROR", "only valid for", sub () {
+                new CsvStringWriter({"fields": {"v": {"type": type, "format": ".,"}}});
+            }, NOTHING, type + " writer");
+        }
+        # a time zone is only valid for dates
+        foreach string type in ("int", "*number", "float") {
+            assertThrows("ABSTRACTCSVITERATOR-ERROR", "only valid for", sub () {
+                new CsvDataIterator("v\n1\n", {"header_names": True, "fields": {"v": {"type": type,
+                    "timezone": "UTC"}}});
+            }, NOTHING, type);
+        }
+    }
+
+    writeTest() {
+        CsvStringWriter w({
+            "separator": ";",
+            "number_format": ",.2",
+            "fields": {
+                "n": {"type": "number", "format": ".,1"},
+                "f": {"type": "float", "format": ".,2"},
+                "i": {"type": "int", "format": "."},
+                "d": "number",
+                "o": {"type": "*number", "format": ".,1"},
+            },
+        });
+        w.write(({"n": 1234.5n, "f": -7.25, "i": 1234567, "d": 1234.5n, "o": NOTHING},));
+        assertEq("n;f;i;d;o\n1.234,5;-7,25;1.234.567;1,234.50;\n", w.getContent());
+    }
+
+    roundTripTest() {
+        hash<auto> fields = {
+            "n": {"type": "number", "format": ".,2"},
+            "f": {"type": "float", "format": ".,3"},
+            "i": {"type": "int", "format": "."},
+        };
+        list<hash<auto>> records = (
+            {"n": 1234567.25n, "f": -0.125, "i": -1234567},
+            {"n": 0.5n, "f": 1000.0, "i": 7},
+        );
+        CsvStringWriter w({"separator": ";", "fields": fields});
+        w.write(records);
+        string csv = w.getContent();
+        assertEq(records, read(new CsvDataIterator(csv, {"separator": ";", "header_names": True, "fields": fields})));
+    }
+
+    dataProviderTest() {
+        # reading
+        CsvReadDataProvider rdp({"data": Data, "separator": ";", "header_names": True, "fields": Fields});
+        assertEq(Records, (map $1, rdp.searchRecords()));
+        assertEq("*softnumber", rdp.getRecordType().n.getType().getName());
+        # writing
+        StringOutputStream out();
+        CsvWriteDataProvider wdp({"stream": out, "separator": ";", "write_headers": False,
+            "fields": {"n": {"type": "number", "format": ".,1"}, "i": {"type": "int", "format": "."}}});
+        wdp.createRecord({"n": 1234.5n, "i": 1234});
+        assertEq("1.234,5;1.234\n", out.getData());
+    }
+
+    #! Returns the records of an iterator
+    private static list<hash<auto>> read(AbstractCsvIterator i) {
+        list<hash<auto>> rv = ();
+        while (i.next()) {
+            rv += i.getValue();
+        }
+        return rv;
+    }
+}

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore AbstractCsvIterator class definition
 
-/*  AbstractCsvIterator.qc Copyright 2012 - 2024 Qore Technologies, s.r.o.
+/*  AbstractCsvIterator.qc Copyright 2012 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -671,6 +671,18 @@ while (i.next()) {
             return getRawLine().split(separator, quote, ignoreWhitespace);
         }
 
+        #! Returns the value without the separators of the given number format, so that its digits can be checked
+        /** @param val the value
+            @param fmt a number format: the thousands separator, optionally followed by the decimal separator and the
+            number of decimals (ex: \c ".," or \c ".,2"); the format can have only the thousands separator
+        */
+        private static string removeNumberSeparators(string val, string fmt) {
+            for (int i = 0; i < 2 && i < fmt.length(); ++i) {
+                val = replace(val, fmt[i], "");
+            }
+            return val;
+        }
+
         private auto handleType(hash<auto> fh, *string val) {
             auto rv;
             string type = fh.type;
@@ -691,8 +703,7 @@ while (i.next()) {
                     *string fmt = fh.format ?? number_format;
                     if (fmt) {
                         # check for invalid chars
-                        string tmp = replace(val, fmt[0], "");
-                        tmp = replace(tmp, fmt[1], "");
+                        string tmp = removeNumberSeparators(val, fmt);
                         if (!is_int(tmp)) {
                             throw "FIELD-VALUE-ERROR", sprintf("invalid %s value: %y", type, val);
                         }
@@ -709,8 +720,7 @@ while (i.next()) {
                     *string fmt = fh.format ?? number_format;
                     if (fmt) {
                         # check for invalid chars
-                        string tmp = replace(val, fmt[0], "");
-                        tmp = replace(tmp, fmt[1], "");
+                        string tmp = removeNumberSeparators(val, fmt);
                         if (!is_float(tmp)) {
                             throw "FIELD-VALUE-ERROR", sprintf("invalid %s value: %y", type, val);
                         }
@@ -727,8 +737,7 @@ while (i.next()) {
                     *string fmt = fh.format ?? number_format;
                     if (fmt) {
                         # check for invalid chars
-                        string tmp = replace(val, fmt[0], "");
-                        tmp = replace(tmp, fmt[1], "");
+                        string tmp = removeNumberSeparators(val, fmt);
                         if (!is_number(tmp)) {
                             throw "FIELD-VALUE-ERROR", sprintf("invalid %s value: %y", type, val);
                         }
