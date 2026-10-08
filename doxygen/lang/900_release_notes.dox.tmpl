@@ -4149,6 +4149,11 @@ while (*binary chunk = input.read(65536)) {
       up in the Program that was called last, so they raised \c UNKNOWN-TYPED-HASH for the caller's own declarations
       or found declarations that are not visible to the caller
 
+    - Fixed closures never running as native code with JIT and tiered execution when they were called often by
+      builtin code, such as \c map, @ref Qore::call_function() "call_function()" or @ref Qore::sort() "sort()":
+      a closure already compiled with the function that creates it was compiled again, which failed, and it stayed
+      on the IR tier
+
     - Fixed a memory leak with JIT and tiered execution and in compiled (AOT) code when
       @ref Qore::zzz8stringzzz9::toInt() "<string>::toInt()" converted a string to an integer outside the range
       -140737488355328 to 140737488355327, such as \c "9223372036854775807"

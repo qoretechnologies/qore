@@ -768,6 +768,20 @@ private:
             const std::vector<BatchCallee>& callees,
             QoreIRFunction* rewrite_root = nullptr);
 
+    //! Checks whether a function's standard entry is already compiled or was defined by a batch module
+    /** A function compiled into another function's batch module without being published there (an internal
+        closure, for one) has its standard entry defined in the JIT, but not cached: compiling it again would define
+        its symbol a second time, which LLVM rejects.  Such an entry is looked up and cached instead.
+
+        Assumes compile_mutex is held.
+
+        @param name the symbol of the function's standard entry
+        @param error set to the reason when the defined entry cannot be looked up
+
+        @return 1 if the entry is now cached, 0 if it is not defined and must be compiled, -1 on error
+    */
+    int adoptDefinedFunction(const std::string& name, std::string& error);
+
     //! Background compilation work item
     struct BgCompileWork {
         const UserVariantBase* uvb;                         //!< function to compile

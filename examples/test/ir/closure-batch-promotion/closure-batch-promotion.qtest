@@ -1,0 +1,127 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ClosureBatchPromotionTest
+
+#! the output and the native compilation trace of a worker
+hashdecl WorkerResult {
+    #! the lines printed on stdout
+    string out;
+    #! the native compilation trace (QORE_JIT_TIMING)
+    list<string> trace;
+}
+
+#! Tests that a closure compiled in the batch of the function that creates it reaches native code itself
+/** A closure created by a function is compiled to native code in that function's batch module, but is not promoted
+    there.  When builtin code (\c map, call_function(), sort()) later calls the closure often enough to promote it,
+    its own compilation defined its symbol a second time; LLVM rejected the module with "duplicate definition of
+    symbol", and the closure stayed on the IR tier for good.  The entry compiled in the batch is now reused, so each
+    closure is compiled once and promoted to native code.
+
+    The worker runs with synchronous native compilation following the first call of a function
+    (QORE_JIT_SYNC_COMPILE=1, QORE_JIT_THRESHOLD=1), so the order of the compilations does not depend on timing, and
+    with QORE_JIT_TIMING, which traces each compilation.
+*/
+class ClosureBatchPromotionTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the result printed by the worker
+        const Expected = "[22, [1, 2, 3], [3, 2, 1], 22, [1, 2, 3], [3, 2, 1], 22, [1, 2, 3], [3, 2, 1], 22, "
+            "[1, 2, 3], [3, 2, 1]]\n";
+
+        #! the number of closures in the worker
+        const ClosureCount = 2;
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("ClosureBatchPromotionTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("negative: the trace check", \testTraceCheck());
+        addTestCase("each execution mode", \testExecModes());
+        set_return_value(main());
+    }
+
+    testTraceCheck() {
+        # what the defect produced: the closure's own compilation failed and it was never promoted
+        list<string> trace = (
+            "[BG-JIT] compiled 'scale@1_1' and promoted to JIT tier",
+            "[BG-JIT] compiled 'sorted@1_0' and promoted to JIT tier",
+            "[BG-JIT] failed to compile '<anonymous closure>@1_3': failed to add module to JIT: In "
+                "qore_jit_<anonymous closure>@1_3, duplicate definition of symbol '_<anonymous closure>@1_3'",
+        );
+        assertEq(("[BG-JIT] failed to compile '<anonymous closure>@1_3': failed to add module to JIT: In "
+            "qore_jit_<anonymous closure>@1_3, duplicate definition of symbol '_<anonymous closure>@1_3'",),
+            getFailures(trace));
+        assertEq({}, getClosurePromotions(trace));
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            hash<WorkerResult> r = runWorker(mode);
+            assertEq(Expected, r.out, mode + ": result");
+            if (mode == "ast" || mode == "ir") {
+                assertEq((), r.trace, mode + ": no code is compiled to native code");
+                continue;
+            }
+            assertEq((), getFailures(r.trace), mode + ": no compilation fails");
+            foreach string fn in (("scale", "sorted")) {
+                assertEq(1, (select r.trace, $1 =~ /promoted/ && $1.find("'" + fn + "@") >= 0).size(),
+                    sprintf("%s: %s() is compiled to native code", mode, fn));
+            }
+            # each closure is promoted to native code once, with the entry compiled in its creator's batch
+            hash<string, int> promotions = getClosurePromotions(r.trace);
+            assertEq(ClosureCount, promotions.size(), mode + ": each closure is promoted: " + r.trace.join("\n"));
+            hash<string, int> once = map {$1: 1}, keys promotions;
+            assertEq(once, promotions, mode + ": each closure is promoted once");
+            assertEq(ClosureCount, (select r.trace, $1 =~ /^\[BG-JIT\] reused '<anonymous closure>@/).size(),
+                mode + ": each closure reuses the entry compiled in its creator's batch");
+        }
+    }
+
+    #! returns the lines of a trace that report a failed compilation
+    private list<string> getFailures(list<string> trace) {
+        return select trace, $1 =~ /failed|duplicate definition/;
+    }
+
+    #! returns the number of times each closure is promoted to native code in a trace
+    private hash<string, int> getClosurePromotions(list<string> trace) {
+        hash<string, int> rv = {};
+        foreach string line in (trace) {
+            *string name = (line =~ x/^\[BG-JIT\] compiled '(<anonymous closure>@[^']+)' and promoted to JIT tier$/)[0];
+            if (name) {
+                rv{name} = (rv{name} ?? 0) + 1;
+            }
+        }
+        return rv;
+    }
+
+    #! runs the worker in the given execution mode and returns its output and its native compilation trace
+    private hash<WorkerResult> runWorker(string mode) {
+        TmpFile err("qore-closure-batch-promotion-", ".err");
+        string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1 "
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>%s", libqore_dir, libqore_dir,
+            qore_bin, mode, get_script_dir() + DirSep + "closure-batch-promotion-worker.q", err.path));
+        list<string> err_lines = select (ReadOnlyFile::readTextFile(err.path) ?? "").split("\n"), $1.val();
+        # any output on stderr other than the compilation trace is an error
+        assertEq((), (select err_lines, $1 !~ /^\[BG-JIT\]/), mode + ": no errors");
+        return <WorkerResult>{
+            "out": out,
+            "trace": select err_lines, $1 =~ /^\[BG-JIT\]/,
+        };
+    }
+}
