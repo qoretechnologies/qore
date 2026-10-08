@@ -4139,6 +4139,10 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref exec_mode_tiered "tiered execution" never compiling small functions and methods to native code when
+      they were called directly, for example from top-level code: the IR interpreter runs such calls in the caller
+      and did not count them, so a function called thousands of times stayed on the IR tier
+
     - Fixed conversions from malformed UTF-8 succeeding on macOS with the system iconv library, which accepts some
       malformed sequences (for example a sequence above U+10FFFF); @ref Qore::convert_encoding() "convert_encoding()",
       encoding conversion streams, and everything built on them, such as the CSV profiler's detection of non-UTF-8

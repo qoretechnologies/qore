@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class TieredInlinePromotionTest
+
+#! Tests that tiered execution compiles functions that the IR interpreter runs in their caller
+/** The IR interpreter runs a direct call of a small function or method in the caller - a leaf function is evaluated
+    without running its body, and a function or method with IR is run inline - instead of calling it.  Those calls
+    were not counted, so once such a function had IR, tiered execution never compiled it to native code, however
+    often it was called: a function called 2000 times from top-level code stayed on the IR tier.  The calls are now
+    counted like the calls made through the runtime, and promote the function once it is hot.
+
+    The worker runs through ExecModeHarness, with synchronous native compilation that follows the first counted call
+    of a function on the IR tier, so whether a function is compiled does not depend on timing.
+*/
+class TieredInlinePromotionTest inherits QUnit::Test {
+    public {
+        #! the result printed by the worker
+        const Expected = "9224750\n";
+
+        #! the functions and methods that tiered execution must compile
+        const Compiled = ("leaf", "looped", "use_method", "add");
+    }
+
+    private {
+        string qore_bin;
+        string env;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("TieredInlinePromotionTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        worker = get_script_dir() + DirSep + "tiered-inline-promotion-worker.q";
+
+        addTestCase("negative: the promotion check", \testPromotionCheck());
+        addTestCase("each execution mode", \testExecModes());
+        set_return_value(main());
+    }
+
+    testPromotionCheck() {
+        # what the defect produced: nothing was compiled with tiered execution
+        assertEq(Compiled, getMissing(()));
+        assertEq(("add",), getMissing(("[BG-JIT] compiled 'leaf@1_0' and promoted to JIT tier",
+            "[BG-JIT] compiled 'looped@1_1' and promoted to JIT tier",
+            "[BG-JIT] compiled 'use_method@1_2' and promoted to JIT tier")));
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --exec-mode=%s %s",
+                env, qore_bin, mode, worker));
+            assertEq(Expected, r.out, mode);
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::JitAndTiered);
+            if (mode == "tiered") {
+                assertEq((), getMissing(r.trace), sprintf("%s: the functions run as native code: %s", mode,
+                    r.trace.join("\n")));
+            }
+        }
+    }
+
+    #! returns the functions and methods in #Compiled that the trace does not show as compiled
+    private list<string> getMissing(list<string> trace) {
+        list<string> rv = ();
+        foreach string fn in (Compiled) {
+            string name = "'" + fn + "@";
+            if (!(select trace, $1 =~ /promoted/ && $1.find(name) >= 0)) {
+                push rv, fn;
+            }
+        }
+        return rv;
+    }
+}

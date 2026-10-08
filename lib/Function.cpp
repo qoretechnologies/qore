@@ -6521,6 +6521,11 @@ void UserVariantBase::recordFastCallExecution() const {
     // reached only as a callee never accrues exec_count there and would never be
     // promoted by the threshold mechanism.  Mirror evalTiered()'s IR-tier
     // promotion tail here so hot tiered-mode functions still reach the JIT tier.
+    // --exec-mode=ir never compiles code to native code (see attemptJITCompilation()), so its calls, which include
+    // every call that the IR interpreter runs inline, are not counted
+    if (pgm && pgm->getExecMode() == QEM_IR) {
+        return;
+    }
     QoreIRFunction* ir = cached_ir.load(std::memory_order_acquire);
     if (jit_compile_failed.load(std::memory_order_acquire) || !ir) {
         return;

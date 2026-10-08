@@ -3726,6 +3726,10 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
+    // the callee runs in this interpreter instead of being called, so the call is counted here for its promotion
+    // to native code, as qore_rt_call_fast() counts the calls it makes; once the callee is native, this inline
+    // path is no longer taken (see hasCachedFunction() above)
+    uvb->recordFastCallExecution();
     ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
     if (xsink && *xsink) {
         result = QoreValue();
@@ -3799,6 +3803,9 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
+    // the method runs in this interpreter instead of being called, so the call is counted here for its promotion
+    // to native code; once it is native, this inline path is no longer taken
+    uvb->recordFastCallExecution();
 
     QoreProgram* exec_pgm = qore_ir_method_execution_program(method, uvb);
     if (!exec_pgm) {
@@ -14251,6 +14258,9 @@ load_local_done:
                             && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs) > 0
                             && !direct_inst->cached_uvb->hasCachedFunction()
                             && qore_ir_try_execute_native_leaf(direct_inst, nanboxed_args, nargs, res)) {
+                        // the call is evaluated without entering the callee, so it is counted here for its
+                        // promotion to native code, as qore_rt_call_fast() counts the calls it makes
+                        direct_inst->cached_uvb->recordFastCallExecution();
                         inline_may_invalidate_external_caches = false;
                         used_inline_ir = true;
                     } else {
