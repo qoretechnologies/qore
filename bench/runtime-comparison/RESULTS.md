@@ -4704,3 +4704,13 @@ simple pure-call epoch-skipping proposal is insufficient: statement-boundary
 cleanup also invalidates caches and can run destructors. An effect-aware boundary
 must preserve earlier generic effects even when a later call is pure. The rejected
 native-only local prototype must not be revived without declaration-order cleanup.
+
+The optimization was committed as `57f6aa11e`. A subsequent fetch brought
+`9951c7d3e`, fixing missing notifier dependencies in standalone debug compilation.
+It merged without conflicts and leaves the optimization sources unchanged.
+Standalone Debug syntax checks pass for the debug implementation and notifier
+header. Release/debug each pass five focused QUnit files (9 cases / 1384
+assertions), plus the debug C++ async-I/O wrapper (1 case / 2 assertions); old
+AOT retains 300 records. [Integration evidence](results-class-node-store-merge-macos-arm64.json)
+contains the full 62-item audit. The timings above are premerge; no new merged
+performance or full non-SCU build result is claimed.
