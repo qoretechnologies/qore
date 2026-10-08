@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ClosureDestroyedSelfTest
+
+#! Tests that a closure created in a method can be called on the IR tier after its object was destroyed
+/** A closure created in a method captures the object, which is checked when the closure uses it: a closure that
+    uses no member, method or \c self of the object can still be called after the object was destroyed, while one
+    that uses a member raises \c OBJECT-ALREADY-DELETED.  When the IR interpreter ran such a closure in its caller,
+    it checked the object before running it, so with IR, JIT and tiered execution a closure that did not use the
+    object raised \c OBJECT-ALREADY-DELETED once it was on the IR tier.
+
+    The worker calls the closures more often than the IR threshold; it runs in every execution mode through
+    ExecModeHarness and as a qcc-compiled executable.
+*/
+class ClosureDestroyedSelfTest inherits QUnit::Test {
+    public {
+        const Expected = "250 -250\n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+        string env;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("ClosureDestroyedSelfTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        worker = get_script_dir() + DirSep + "closure-destroyed-self-worker.q";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("qcc-compiled executable", \testCompiled());
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, ExecModeHarness::run(sprintf("%s %s -b --enable-debug --exec-mode=%s %s", env,
+                qore_bin, mode, worker)), mode);
+        }
+    }
+
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-closure-destroyed-self-");
+        string exe = tmp.path + DirSep + "closure-destroyed-self";
+        string compile_out = backquote(sprintf("%s %s -o %s %s 2>&1", env, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "qcc: " + compile_out);
+        assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "aot");
+    }
+}

@@ -4239,11 +4239,9 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     std::optional<QoreClosureSelfContextHelper> closure_self_ctx;
     std::optional<ObjectSubstitutionHelper> object_ctx;
     if (self) {
+        // the captured object is checked where the closure uses it (self, its members and its methods), as with
+        // AST and JIT execution: a closure that does not use the object can be called after it was destroyed
         closure_self_ctx.emplace(self);
-        if (qore_ir_check_closure_self_valid(self, xsink)) {
-            result = QoreValue();
-            return true;
-        }
         object_ctx.emplace(self, cb->getClassCtx());
     }
     // A closure created in a static method has no captured object, but it keeps the lexical class context of the

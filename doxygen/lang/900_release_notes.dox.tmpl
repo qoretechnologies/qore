@@ -4139,6 +4139,10 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a closure created in a method raising \c OBJECT-ALREADY-DELETED with IR, JIT and tiered execution, once it
+      had been called often, when it was called after its object was destroyed although it did not use the object;
+      as with AST execution, the exception is now only raised when the closure uses the object
+
     - Fixed a closure created in a static method losing access to its class's private members with IR and tiered
       execution once it had been called often: a call of a private constructor or private static method in the
       closure raised \c RUNTIME-OVERLOAD-ERROR
