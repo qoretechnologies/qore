@@ -34,7 +34,11 @@ class CoalescingProxy {
         Socket listener();
         int port;
         Counter threads();
-        bool quit;
+        # the open connections, closed by shutdown()
+        hash<string, Socket> conns;
+        int conn_id;
+        Mutex m();
+        bool down;
     }
 
     constructor() {
@@ -49,27 +53,55 @@ class CoalescingProxy {
         return port;
     }
 
+    #! closes the listener and all connections, which wakes the blocked accept and receive calls, and waits for
+    #! all threads to end
     shutdown() {
-        quit = True;
-        listener.close();
+        {
+            m.lock();
+            on_exit m.unlock();
+            down = True;
+            listener.close();
+            map $1.close(), conns.iterator();
+        }
         threads.waitForZero();
     }
 
     private acceptLoop() {
         on_exit threads.dec();
-        while (!quit) {
+        while (True) {
+            *Socket s;
             try {
-                if (!listener.isDataAvailable(50ms)) {
-                    continue;
-                }
-                Socket s = listener.accept();
-                threads.inc();
-                background serve(s);
+                # blocks until a connection arrives or the listener is closed
+                s = listener.accept();
             } catch (hash<ExceptionInfo> ex) {
                 # the listener was closed
                 break;
             }
+            if (!s) {
+                # the listener was closed
+                break;
+            }
+            threads.inc();
+            background serve(s);
         }
+    }
+
+    #! registers a connection to be closed by shutdown(); returns its key, or NOTHING if the proxy is shut down
+    private *string register(Socket s) {
+        m.lock();
+        on_exit m.unlock();
+        if (down) {
+            return;
+        }
+        string key = (++conn_id).toString();
+        conns{key} = s;
+        return key;
+    }
+
+    private unregister(string key) {
+        m.lock();
+        on_exit m.unlock();
+        remove conns{key};
     }
 
     private serve(Socket s) {
@@ -77,6 +109,11 @@ class CoalescingProxy {
             s.close();
             threads.dec();
         }
+        *string s_key = register(s);
+        if (!s_key) {
+            return;
+        }
+        on_exit unregister(s_key);
         string head;
         while (head !~ /\r\n\r\n/) {
             *binary b = s.recvBinary(-1, 10s);
@@ -85,13 +122,19 @@ class CoalescingProxy {
             }
             head += b.toString();
         }
-        *list<*string> m = (head =~ x/^CONNECT ([^:]+):([0-9]+) /);
-        if (!m) {
+        *list<*string> cm = (head =~ x/^CONNECT ([^:]+):([0-9]+) /);
+        if (!cm) {
             s.send("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
             return;
         }
         Socket target();
-        target.connectINET(m[0], m[1].toInt(), 10s);
+        target.connectINET(cm[0], cm[1].toInt(), 10s);
+        *string target_key = register(target);
+        if (!target_key) {
+            target.close();
+            return;
+        }
+        on_exit unregister(target_key);
         s.send("HTTP/1.1 200 Connection established\r\n\r\n");
         Counter c(1);
         background sub () {
@@ -111,14 +154,9 @@ class CoalescingProxy {
         binary pending;
         bool holding;
         try {
-            while (!quit) {
-                if (!from.isDataAvailable(50ms)) {
-                    if (!from.isOpen()) {
-                        break;
-                    }
-                    continue;
-                }
-                *binary b = from.recvBinary(-1, 10s);
+            while (True) {
+                # blocks until data arrives or the connection is closed (also by shutdown())
+                *binary b = from.recvBinary(-1, 20s);
                 if (!b) {
                     break;
                 }
