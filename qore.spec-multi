@@ -363,6 +363,8 @@ build/qore -b --enable-debug modules/ml/test/ml.qtest -v
 build/qore -b --enable-debug modules/dataframe/test/parquet-read-api.qtest -v
 cmake --build build --target qore-mongodb-bson-array-test -- %{?_smp_mflags}
 build/modules/mongodb/qore-mongodb-bson-array-test
+QORE_TEST_BUILD_DIR=$PWD/build QORE_TEST_CXXFLAGS="%{optflags} -DNDEBUG" \
+    python3 -B -W error examples/test/cmake/test_ignored_qpp_parameters.py -v
 %endif
 
 %files

@@ -178,7 +178,7 @@ qclass AsyncIoController [dom=NETWORK; arg=AsyncIoControllerPriv* ctrl; ns=Qore]
     @throw ASYNCIOCONTROLLER-CONSTRUCTOR-ERROR cannot be instantiated directly; use
     static methods instead
 */
-AsyncIoController::constructor(bool auto_stop = True) [flags=NAMED_ARGS] {
+AsyncIoController::constructor(bool[doc] auto_stop = True) [flags=NAMED_ARGS] {
     xsink->raiseException("ASYNCIOCONTROLLER-CONSTRUCTOR-ERROR",
         "AsyncIoController cannot be instantiated; use static methods");
 }

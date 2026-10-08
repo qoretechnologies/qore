@@ -1,0 +1,178 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+%requires reflection
+
+%exec-class FactoryConstructorLookupTest
+
+#! a data provider with an option hash constructor only
+class HashOnlyProvider inherits AbstractDataProvider {
+    public {
+        *hash<auto> opts;
+    }
+
+    constructor(*hash<auto> opts) {
+        self.opts = opts;
+    }
+
+    string getName() {
+        return "hash-only";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"type": "HashOnlyProvider"};
+    }
+}
+
+#! a data provider with a template constructor and an option hash constructor
+class TemplateProvider inherits AbstractDataProvider {
+    public {
+        *hash<auto> template_opts;
+        *hash<auto> opts;
+    }
+
+    constructor(hash<auto> template_opts, *hash<auto> opts) {
+        self.template_opts = template_opts;
+        self.opts = opts;
+    }
+
+    constructor(*hash<auto> opts) {
+        self.opts = opts;
+    }
+
+    string getName() {
+        return "template";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"type": "TemplateProvider"};
+    }
+}
+
+#! a data provider whose only constructor takes an int
+class IntOnlyProvider inherits AbstractDataProvider {
+    constructor(int i) {
+    }
+
+    string getName() {
+        return "int-only";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"type": "IntOnlyProvider"};
+    }
+}
+
+#! a data provider that declares no constructor at all
+class NoConstructorProvider inherits AbstractDataProvider {
+    string getName() {
+        return "no-constructor";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"type": "NoConstructorProvider"};
+    }
+}
+
+#! a factory for any of the test classes, or for a class held by another Program
+class TestFactory inherits AbstractDataProviderFactory {
+    private {
+        Class cls;
+    }
+
+    constructor(Class cls) {
+        self.cls = cls;
+    }
+
+    private hash<DataProviderFactoryInfo> getInfoImpl() {
+        return <DataProviderFactoryInfo>{
+            "name": "test-factory",
+            "desc": "test factory",
+        };
+    }
+
+    private hash<DataProviderInfo> getProviderInfoImpl() {
+        return <DataProviderInfo>{"type": "TestFactory"};
+    }
+
+    private Class getClassImpl() {
+        return cls;
+    }
+}
+
+#! a factory whose getClassImpl() itself fails with an error code that the constructor lookup also uses
+class FailingClassFactory inherits TestFactory {
+    constructor() : TestFactory(Class::forName("HashOnlyProvider")) {
+    }
+
+    private Class getClassImpl() {
+        throw "METHOD-ERROR", "getClassImpl() failed";
+    }
+}
+
+public class FactoryConstructorLookupTest inherits QUnit::Test {
+    constructor() : Test("FactoryConstructorLookupTest", "1.0", \ARGV) {
+        addTestCase("create() with an option hash constructor", \createTest());
+        addTestCase("createWithTemplate() constructor selection", \createWithTemplateTest());
+        addTestCase("no matching constructor gives the friendly error", \noConstructorTest());
+        addTestCase("other constructor lookup errors are not hidden", \lookupErrorTest());
+        set_return_value(main());
+    }
+
+    createTest() {
+        TestFactory f(Class::forName("HashOnlyProvider"));
+        HashOnlyProvider p = cast<HashOnlyProvider>(f.create({"a": 1}));
+        assertEq({"a": 1}, p.opts);
+        p = cast<HashOnlyProvider>(f.create());
+        assertNothing(p.opts);
+    }
+
+    createWithTemplateTest() {
+        # the template constructor is preferred when it exists
+        TestFactory f(Class::forName("TemplateProvider"));
+        TemplateProvider t = cast<TemplateProvider>(f.createWithTemplate({"t": 1}, {"o": 2}));
+        assertEq({"t": 1}, t.template_opts);
+        assertEq({"o": 2}, t.opts);
+
+        # otherwise the option hash constructor is used and the template options are ignored
+        f = new TestFactory(Class::forName("HashOnlyProvider"));
+        HashOnlyProvider h = cast<HashOnlyProvider>(f.createWithTemplate({"t": 1}, {"o": 2}));
+        assertEq({"o": 2}, h.opts);
+    }
+
+    noConstructorTest() {
+        foreach string cname in ("IntOnlyProvider", "NoConstructorProvider") {
+            TestFactory f(Class::forName(cname));
+            assertThrows("DATA-PROVIDER-ERROR", "does not support a constructor from an option hash",
+                \f.create(), ({"a": 1},), cname + " create()");
+            assertThrows("DATA-PROVIDER-ERROR", "does not support a constructor from a template option hash "
+                "and an option hash nor a constructor from an option hash",
+                \f.createWithTemplate(), ({"t": 1}, {"a": 1}), cname + " createWithTemplate()");
+        }
+    }
+
+    lookupErrorTest() {
+        # a class whose Program has been deleted cannot be looked up; that must not be reported as a missing
+        # constructor
+        Program pgm(PO_NEW_STYLE | PO_NO_TOP_LEVEL_STATEMENTS);
+        pgm.parse("class Detached { constructor(*hash<auto> h) {} }", "detached");
+        Class cls = Class::forName(pgm, "Detached");
+        delete pgm;
+
+        TestFactory f(cls);
+        assertThrows("PROGRAM-ERROR", "has already been deleted", \f.create(), ({"a": 1},));
+        assertThrows("PROGRAM-ERROR", "has already been deleted", \f.createWithTemplate(), ({"t": 1}, {"a": 1}));
+
+        # an exception from the factory's own getClassImpl() is not mistaken for a missing constructor even when
+        # it uses the same error code as the reflection lookup
+        FailingClassFactory ff();
+        assertThrows("METHOD-ERROR", "getClassImpl\\(\\) failed", \ff.create(), ({"a": 1},));
+        assertThrows("METHOD-ERROR", "getClassImpl\\(\\) failed", \ff.createWithTemplate(), ({"t": 1}, {"a": 1}));
+    }
+}

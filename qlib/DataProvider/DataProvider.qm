@@ -1374,6 +1374,12 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_9 DataProvider v3.9
+    - @ref DataProvider::AbstractDataProviderFactory::create() "AbstractDataProviderFactory::create()" and
+      @ref DataProvider::AbstractDataProviderFactory::createWithTemplate() "createWithTemplate()" report that a data
+      provider does not support a constructor from an option hash only when its class really has no such
+      constructor; any other error raised while looking up the constructor (for example \c PROGRAM-ERROR when the
+      @ref Qore::Program "Program" holding the class has been deleted) is now raised unchanged instead of being
+      hidden behind that message
     - a DPQL field name can be written without quotes in any script: <tt>\@menge_bestätigt</tt> and
       <tt>\@größe</tt> are read like <tt>\@name</tt>, and the serializer and completion write such names bare;
       a non-ASCII field name was read byte by byte, so it failed with a parse error whose message held a single
