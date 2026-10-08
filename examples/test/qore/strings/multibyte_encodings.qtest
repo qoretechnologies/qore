@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# Strings in multi-byte encodings (EUC-JP, Shift_JIS, CP932, GB18030, GBK, WINDOWS-936, GB2312, Big5, EUC-KR,
+# CP949) are made of characters, not bytes: every character operation must give the same
+# result as for the same text in UTF-8.  In Shift_JIS, double-byte characters have second bytes in the ASCII range
+# (ex: 0x5c in "表", 0x7c in "ポ"), which searches and splits must not match.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class MultiByteEncodingTest
+
+class MultiByteEncodingTest inherits QUnit::Test {
+    public {
+        #! the text for each encoding; each character exists in the encoding
+        const Texts = {
+            "EUC-JP": "日本語のテキスト ｱｲｳ abc 12 表ポ",
+            "SHIFT_JIS": "日本語のテキスト ｱｲｳ abc 12 表ポソ",
+            "SJIS": "日本語 ｱｲｳ abc 表ポソ",
+            "CP932": "日本語 ｱｲｳ abc 表ポソ",
+            "GB18030": "中文文本 abc 12 丂😀",
+            "GBK": "中文文本 abc 12 丂",
+            # a built-in encoding
+            "WINDOWS-936": "中文文本 abc 12 丂",
+            "GB2312": "中文文本 abc 12",
+            "BIG5": "繁體中文 abc 12 許功",
+            "EUC-KR": "한국어 텍스트 abc 12",
+            "CP949": "한국어 텍스트 abc 12 갂",
+        };
+
+        #! the names of Shift_JIS and its variants
+        const ShiftJisNames = ("SHIFT_JIS", "SHIFT-JIS", "SJIS", "MS_KANJI", "CP932", "WINDOWS-31J");
+    }
+
+    constructor() : Test("MultiByteEncodingTest", "1.0", \ARGV) {
+        addTestCase("character operations", \testCharacters());
+        addTestCase("streams", \testStreams());
+        addTestCase("Shift_JIS", \testShiftJis());
+        addTestCase("invalid strings", \testInvalid());
+        set_return_value(main());
+    }
+
+    #! returns True if iconv supports the encoding and the text
+    private bool supported(string enc, string text) {
+        try {
+            return convert_encoding(convert_encoding(text, enc), "UTF-8") == text;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    testCharacters() {
+        int tested = 0;
+        foreach hash<auto> i in (Texts.pairIterator()) {
+            string enc = i.key;
+            string text = i.value;
+            if (!supported(enc, text)) {
+                continue;
+            }
+            ++tested;
+            string s = convert_encoding(text, enc);
+            assertEq(text.length(), s.length(), enc + " length()");
+            for (int j = 0; j < text.length(); ++j) {
+                string label = sprintf("%s character %d", enc, j);
+                assertEq(text.substr(j, 1), convert_encoding(s.substr(j, 1), "UTF-8"), label);
+                assertEq(string(text[j]), convert_encoding(string(s[j]), "UTF-8"), label + " []");
+                assertEq(text.getUnicode(j), s.getUnicode(j), label + " getUnicode()");
+                assertEq(text.substr(j), convert_encoding(s.substr(j), "UTF-8"), label + " substr()");
+                assertEq(text.substr(j, 2), convert_encoding(s.substr(j, 2), "UTF-8"), label + " substr() 2");
+            }
+            assertEq(text.substr(-3), convert_encoding(s.substr(-3), "UTF-8"), enc + " substr() from the end");
+            foreach string part in (text.split(" ")) {
+                assertEq(text.find(part), s.find(part), enc + " find() " + part);
+                assertEq(text.find(part), s.find(convert_encoding(part, enc)), enc + " find() in the encoding");
+                assertEq(text.rfind(part), s.rfind(part), enc + " rfind() " + part);
+            }
+            assertEq(text.split(" "), (map convert_encoding($1, "UTF-8"), s.split(" ")), enc + " split()");
+            assertEq(reverse(text), convert_encoding(reverse(s), "UTF-8"), enc + " reverse()");
+            assertEq(text, convert_encoding(s, "UTF-8"), enc + " unchanged");
+            assertTrue(s == text, enc + " ==");
+            assertEq((text,), keys {s: 1}, enc + " hash key");
+        }
+        assertTrue(tested > 0, "an encoding is supported");
+    }
+
+    testStreams() {
+        foreach hash<auto> i in (Texts.pairIterator()) {
+            string enc = i.key;
+            string text = i.value;
+            if (!supported(enc, text)) {
+                continue;
+            }
+            binary data = binary(convert_encoding(text + "\n" + text, enc));
+            StreamReader sr(new BinaryInputStream(data), enc);
+            # a number of characters, not bytes
+            assertEq(text.substr(0, 5), convert_encoding(sr.readString(5), "UTF-8"), enc + " readString()");
+            assertEq(text.substr(5), convert_encoding(sr.readLine(), "UTF-8"), enc + " readLine()");
+            assertEq(text, convert_encoding(sr.readLine(), "UTF-8"), enc + " readLine() 2");
+        }
+    }
+
+    testShiftJis() {
+        foreach string enc in (ShiftJisNames) {
+            if (!supported(enc, "表ポソ")) {
+                continue;
+            }
+            # "ポ" is 0x83 0x7c and "ソ" is 0x83 0x5c: the second bytes are not "|" and "\\"
+            string s = convert_encoding("ポ|ソ表", enc);
+            assertEq(("ポ", "ソ表"), (map convert_encoding($1, "UTF-8"), s.split("|")), enc + " split()");
+            assertEq(3, s.find("表"), enc + " find()");
+            assertEq(-1, s.find("|", 2), enc + " find() of a second byte");
+            assertEq(4, s.length(), enc + " length()");
+            assertEq(("ポ|ソ表",), keys {s: 1}, enc + " hash key");
+            # the second byte of a character is not an ASCII character
+            assertEq("ソ表", convert_encoding(s.substr(2), "UTF-8"), enc + " substr()");
+            assertEq(0, int(convert_encoding("ソ1", enc)), enc + " int()");
+        }
+    }
+
+    testInvalid() {
+        foreach hash<auto> i in ({"enc": "EUC-JP", "data": <a4>}, {"enc": "GB18030", "data": <8130>},
+                {"enc": "SHIFT_JIS", "data": <82>}) {
+            if (!supported(i.enc, "abc")) {
+                continue;
+            }
+            # an incomplete character at the end
+            string s = binary_to_string(<6162> + i.data, i.enc);
+            assertThrows("INVALID-ENCODING", sub () { s.substr(0, 3); }, NOTHING, i.enc);
+        }
+    }
+}

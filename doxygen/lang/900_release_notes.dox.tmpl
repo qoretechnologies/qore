@@ -4260,6 +4260,13 @@ while (*binary chunk = input.read(65536)) {
       @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" and
       @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream"
 
+    - Fixed strings in multi-byte character encodings such as \c "EUC-JP", \c "SHIFT_JIS", \c "CP932",
+      \c "GB18030", \c "GBK", \c "WINDOWS-936", \c "BIG5", \c "EUC-KR" and \c "CP949" being handled one byte per
+      character: lengths, offsets, @ref Qore::zzz8stringzzz9::substr() "<string>::substr()", character access,
+      @ref Qore::zzz8stringzzz9::getUnicode() "<string>::getUnicode()", searches and splitting counted and cut bytes,
+      and searches and splits could match the second byte of a double-byte character (ex: \c "|" in the Shift_JIS
+      character \c "ポ", 0x83 0x7c).  Such strings now have the same characters as the same text in UTF-8.
+
     - Fixed character encodings that %Qore creates from their name, such as \c "UTF-32", \c "UTF-32LE",
       \c "UTF-32BE", \c "UCS-4", \c "UCS-2LE", \c "UCS-2BE" and EBCDIC code pages such as \c "IBM1140", being
       handled as single-byte encodings compatible with ASCII: hash keys in them were cut at their first null byte

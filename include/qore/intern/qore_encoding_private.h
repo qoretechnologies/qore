@@ -74,6 +74,12 @@ struct qore_encoding_private {
     //! the encoding in the other byte order, if \c swapped_bom is set (ex: \c "UTF-32LE")
     std::string swapped_code;
 
+    //! true for a variable-width encoding whose multi-byte characters can contain bytes that are other characters
+    /** (ex: Shift_JIS, GBK, Big5, EUC-JP); a byte-oriented search must check that a match starts at a character
+        boundary; see qore_char_boundary
+    */
+    bool needs_boundary_check = false;
+
     DLLLOCAL qore_encoding_private(const char* code, const char* desc = nullptr, unsigned char minwidth = 1,
             unsigned char maxwidth = 1, mbcs_length_t flength = nullptr, mbcs_end_t fend = nullptr,
             mbcs_pos_t fpos = nullptr, mbcs_charlen_t fcharlen = nullptr, mbcs_get_unicode_t get_unicode = nullptr,
