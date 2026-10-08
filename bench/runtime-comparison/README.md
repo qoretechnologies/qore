@@ -311,6 +311,14 @@ for changes to this guard. Java retains the target call while Qore may inline
 the exact-base arithmetic, so this kernel is not an equal-inlining-policy or
 isolated call-latency comparison.
 
+The runtime-only [receiver-validity follow-up](RESULTS.md#direct-node-receiver-validity-2026-10-08)
+keeps that per-call live deletion check but skips generic scalar/enum type
+dispatch for pointer-tagged receivers, including opaque strong references.
+Non-object nodes still fail and non-pointer representations retain the original
+generic path. The helper ABI and compiler are unchanged, allowing identical-AOT
+before/after measurements. The measured monomorphic gain does not extend to all
+method kinds; deleted/null/weak/error paths are tested but not timed.
+
 `optional_method_call` times strong, non-null inputs only. It does not benchmark
 null errors or reflective mutation; `AOTOptionalClassLocals.qtest` covers those
 semantics separately. Older AOT artifacts can appear fast by missing reflective

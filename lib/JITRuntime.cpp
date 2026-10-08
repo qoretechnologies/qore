@@ -15662,6 +15662,15 @@ extern "C" DLLEXPORT QoreAOTContext* qore_rt_try_get_aot_call_target_context(
 
 extern "C" DLLEXPORT int qore_rt_object_is_valid(uint64_t value) {
     QoreValue receiver = fromBits(value);
+    // Strong receivers (including opaque references) need only a node-type
+    // check. Keep the live deletion test on every call; neither a stable local
+    // nor an unchanged class implies that the object is still valid.
+    if (receiver.isPointer()) {
+        AbstractQoreNode* node = receiver.getPtr();
+        return node && node->getType() == NT_OBJECT && static_cast<QoreObject*>(node)->isValid();
+    }
+    // Preserve generic dispatch for indirect scalar representations such as
+    // enums, rather than changing this helper's accepted-value contract.
     return receiver.getType() == NT_OBJECT && receiver.get<QoreObject>()->isValid();
 }
 

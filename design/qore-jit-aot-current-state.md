@@ -345,6 +345,17 @@ including subclass overrides, without changing local storage or destruction
 order. No source-level write is not a sufficient cache-validity proof. Old AOT
 artifacts must be recompiled to receive this generated guard.
 
+The runtime `qore_rt_object_is_valid` helper specializes pointer-tagged values
+with direct node-type inspection, including opaque strong references. It still
+calls the ordinary live `QoreObject::isValid()` on every invocation; object
+validity is never hoisted or cached. Null pointers and non-object nodes fail;
+non-pointer values retain generic dispatch, including enum handling. This does
+not change object ownership, status synchronization, access/Program guards,
+compiler output or the helper ABI. Identical-AOT comparisons at 1024/4096 loop
+iterations show 26.0%/31.7% lower monomorphic kernel time (about 1.85 ns/element),
+with 56 bytes of additional runtime text. Other call kinds do not show a repeated
+gain. See `bench/runtime-comparison/results-receiver-validity-macos-arm64.json`.
+
 Plain-class AOT parameters can avoid repeated reload-helper calls only with
 both a compiler proof and live invalidation. Admission excludes written,
 captured, reference/weak, AST-visible, self/top-level and parameterized

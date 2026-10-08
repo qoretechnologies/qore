@@ -6065,3 +6065,99 @@ Hoisting must retain NOTHING/weak/opaque handling, reflective writes, receiver
 lifetime, access and Program checks, dispatch/body changes, debugger observation
 and stack diagnostics. Do not replace those semantics with an unchecked pointer
 cache merely to reduce the benchmark number.
+
+## Direct-node receiver validity (2026-10-08)
+
+Retain the runtime-only specialization in `qore_rt_object_is_valid`. Baseline is
+the clean committed rebuild of `97d69f3131222182ac18bfbbbb8305fd535512e0`, after
+merging `origin/develop` at `1369d1bd538f1c25c04ee5c4db278c3c2d5b90f6`.
+Baseline release SHA-256 is
+`aaa4a31c00aa2dbe574ed1ca9d3f506810ca661884c90018e7de57d64f2c6b4e`;
+the measured precommit candidate is
+`05367116ebc76288a0820ce03e5eef24795138df647e858f3ef7bf6604dc3727`.
+Neither is replaced by a subsequent committed rebuild in the evidence.
+[Full evidence](results-receiver-validity-macos-arm64.json) records the exact
+source diff, binary identities, raw windows, recomputed statistics and audit.
+
+Apple M4 Pro, macOS arm64, release SCU, Temurin 25.0.2/JMH 1.37. Each run uses
+five randomized forks, three warmups, five 500 ms samples and three startup
+observations per mode. All 750 measurement windows ran without competing task
+builds, tests, profiling, disassembly or evidence validation. Intermittent macOS
+backup/background activity was observed before timing and was not stopped;
+host activity and filesystem caches remain uncontrolled. Each before/after pair
+runs the identical AOT executable, using unchanged tools and helper ABI.
+
+Values are median fork means in ns/element for entire kernels, not isolated
+call latency. Range overlap is descriptive, not a significance test.
+
+Count 1024, seed 810805, `run-19cpr6k5`
+(450 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap|!Java JIT
+|monomorphic_call|7.139|5.282|-26.01%|no|1.663
+|method_call|2.690|2.687|-0.09%|yes|0.880
+|optional_method_call|11.968|11.989|+0.18%|yes|1.661
+|polymorphic_call|50.336|49.273|-2.11%|no|2.525
+|indirect_wide|8.403|8.353|-0.59%|yes|1.673
+|arithmetic|2.421|2.412|-0.36%|yes|0.882
+
+Count 4096, seed 810806, `run-1o6o9w06`
+(300 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|monomorphic_call|5.847|3.996|-31.65%|no
+|method_call|1.423|1.422|-0.08%|yes
+|optional_method_call|10.534|10.706|+1.63%|yes
+|polymorphic_call|48.026|48.004|-0.05%|yes
+|indirect_wide|7.149|7.224|+1.04%|yes
+|arithmetic|1.342|1.345|+0.21%|yes
+
+Monomorphic improves 26.01% and 31.65%, saving 1.857 and 1.851 ns/element with
+non-overlapping fork ranges at both sizes. Its primary ratio is now **3.18x Java
+JIT** (5.282 versus 1.663 ns/element). Qore may inline the exact-base method
+arithmetic, whereas Java's DynamicStep targets retain `DONT_INLINE`; this is
+not an equal-inlining-policy comparison or proof of native-call parity.
+
+Polymorphic improves 2.11% with non-overlapping ranges at 1024, but only 0.05%
+with overlapping ranges at 4096: no repeated general polymorphic benefit is
+claimed. All remaining controls overlap. Preserve the adverse optional-method
+movement (+0.18%/+1.63%) and wide-callback movement (-0.59%/+1.04%); overlap does
+not prove exact neutrality. Nullable remains 7.22x Java and polymorphic 19.51x
+in the primary run. No Java timing was collected at 4096 in this experiment.
+
+Startup before/after medians are 31.481/31.266 and 29.896/30.673 ms, with
+overlapping ranges; Java startup is 24.473 ms. Each pair has only one compile
+observation (359.34/365.19 ms for the separate runs), not a before/after compile
+comparison. No startup or compilation improvement is claimed.
+
+Implementation and validation:
+
+- Strong and opaque pointer values inspect the node tag directly, then perform
+  the same live deletion-status test. Null pointers and non-object nodes fail;
+  non-pointer values retain the exact generic expression, including enums.
+  No extra object owner, cached validity, new shared state, exported symbol,
+  context/dispatch guard removal or compiler change is introduced.
+- The strong-object path avoids two out-of-line generic accessor calls. The
+  complete helper grows from 21 to 35 AArch64 instructions (84 to 140 bytes),
+  with unchanged 32-byte stack reservation. Runtime text grows 56 bytes,
+  13,975,160 to 13,975,216; total segment size remains 21,774,336 bytes. No new
+  profile was collected; other architectures and non-SCU builds are unmeasured.
+- The native fixture checks the helper against the original generic expression
+  for strong/opaque objects, weak wrappers, NOTHING, NULL, inline/boxed scalars,
+  strings, containers and an int-backed enum. It then deletes the still-owned
+  object and requires ordinary/opaque/weak probes to reject it. Error/invalid
+  inputs are correctness checks, not timed workloads.
+- The expanded fixture passes on unchanged baseline and candidate, release and
+  debug, under O0/O3, independent stack-guard controls and eager/deferred context.
+  Candidate release/debug each pass 33 selected files: 25 QUnit files with
+  67 cases/4,038 assertions, plus eight standalones. The native driver has
+  120 assertions plus C++ probes, including foreign-thread re-registration.
+- All six candidate/baseline/Java modes pass 330 independent references each.
+  The saved baseline AOT executable also passes all 330 against the candidate;
+  all 11 benchmark-harness tests pass. No external-service tests were needed.
+
+Next: preserve this measured reduction while investigating invocation-local
+preparation for stable nullable receivers. Parameter mutation-epoch caching
+already covers optional classes; the remaining target is dispatch/admission,
+not a duplicate local cache. Separately compare polymorphic dispatch with its
+receiver-selection control before attributing its much larger gap to calls.

@@ -239,6 +239,10 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     QoreObject* old_object = rc->getObject();
     const qore_class_private* old_class = rc->getClass();
     auto check = [&](QoreValue receiver, bool accepted) {
+        // The exact-class caller's independent validity guard must agree with
+        // generic value dispatch, including opaque objects and weak wrappers.
+        bool valid = receiver.getType() == NT_OBJECT && receiver.get<QoreObject>()->isValid();
+        assert(qore_rt_object_is_valid(receiver.rawBits()) == static_cast<int>(valid));
         int64_t result = -123;
         assert(qore_rt_try_method_int_unary_v1(ctx, slot, receiver.rawBits(), 7, &result, &xsink, rc)
             == static_cast<int>(accepted));
@@ -279,6 +283,13 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     assert(!xsink && enumeration->isEnum());
     check(*enumeration, false);
     check(*object, true);
+    // The guard must reread deletion status, even for an unchanged receiver
+    // still owned by both ordinary and opaque references.
+    object->get<QoreObject>()->doDelete(&xsink);
+    assert(!xsink);
+    check(*object, false);
+    check(*opaque, false);
+    check(*weak, false);
 }
 
 // An int-backed enum can resolve to the same int(int) method, but its dispatch
