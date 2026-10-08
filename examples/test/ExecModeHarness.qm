@@ -41,12 +41,19 @@ module ExecModeHarness {
     - native compilation is synchronous and follows the first call of a function (\c QORE_JIT_SYNC_COMPILE=1 and
       \c QORE_JIT_THRESHOLD=1), so whether code runs as native code does not depend on timing: with
       <tt>--exec-mode=jit</tt>, top-level code is compiled before it runs and a function before its first call
-      returns; with <tt>--exec-mode=tiered</tt>, a function is compiled once its IR tier has run it
+      returns; with <tt>--exec-mode=tiered</tt>, a function is compiled after a call that its IR tier counts, so
+      top-level code and functions that the IR interpreter runs inline in their caller are not compiled
     - \c QORE_JIT_TIMING traces every native compilation on stderr, and the trace is checked: native code must have
-      been compiled with <tt>--exec-mode=jit</tt> (and with <tt>--exec-mode=tiered</tt> when the caller requires
-      it), and nothing may be compiled with <tt>--exec-mode=ast</tt> or <tt>--exec-mode=ir</tt>
+      been compiled with <tt>--exec-mode=jit</tt>, and with <tt>--exec-mode=tiered</tt> when the caller requires
+      it with NativeCheck::JitAndTiered, which a script must be written for; nothing may be compiled with
+      <tt>--exec-mode=ast</tt> or <tt>--exec-mode=ir</tt>
 
     The trace is removed from the output; any other output on stderr follows the output on stdout.
+
+    run() runs a command with an execution mode, checks it and returns its output; run_any() does the same for any
+    command and checks only commands with an execution mode; run_command() and check_native() serve harnesses that
+    inspect the result or the trace themselves.  NativeCheck::None turns the check off for a run that is expected to
+    fail before any code runs, or for a script that chooses the execution mode of its code itself.
 */
 
 #! the namespace of the module
@@ -59,7 +66,8 @@ public const TraceEnv = "QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_JIT_T
 
 #! the native compilation that a run must show
 public enum NativeCheck : string {
-    #! no native compilation is required; for scripts that are expected to fail before or instead of running code
+    #! nothing is checked: for scripts that are expected to fail before they run code, and for scripts that choose
+    #! the execution mode of their code themselves, such as a script that runs a child Program with JIT execution
     None = "none",
     #! code must be compiled to native code with --exec-mode=jit
     Jit = "jit",
@@ -73,6 +81,10 @@ public hashdecl ModeRunResult {
     *string mode;
     #! the output on stdout followed by the output on stderr that is not part of the trace
     string out;
+    #! the output on stdout
+    string stdout;
+    #! the output on stderr that is not part of the trace
+    string stderr;
     #! the native compilation trace
     list<string> trace;
     #! the exit status of the command
@@ -97,7 +109,7 @@ public bool sub is_native_compilation(string line) {
     @throw EXEC-MODE-HARNESS-ERROR the command has more than one \c --exec-mode option
 */
 public *string sub get_mode(string command) {
-    *list<*string> modes = (command =~ x/--exec-mode[= ]([a-z]+)/g);
+    *list<*string> modes = (command =~ x/--exec-mode[= ]['"]?([a-z]+)/g);
     if (modes.size() > 1) {
         throw "EXEC-MODE-HARNESS-ERROR", sprintf("expecting at most one --exec-mode option in command %y", command);
     }
@@ -121,9 +133,12 @@ public hash<ModeRunResult> sub run_command(string command) {
     }
     list<string> errors = select err_lines, !is_trace_line($1);
     list<string> trace = select err_lines, is_trace_line($1);
+    string err_out = errors ? errors.join("\n") + "\n" : "";
     return <ModeRunResult>{
         "mode": mode,
-        "out": out + (errors ? errors.join("\n") + "\n" : ""),
+        "out": out + err_out,
+        "stdout": out,
+        "stderr": err_out,
         "trace": trace,
         "rc": rc,
     };
@@ -142,6 +157,9 @@ public sub check_native(hash<ModeRunResult> r, NativeCheck check = NativeCheck::
         throw "EXEC-MODE-HARNESS-ERROR", "the command gave no --exec-mode option, so its native compilation cannot "
             "be checked";
     }
+    if (check == NativeCheck::None) {
+        return;
+    }
     if (r.mode == "ast" || r.mode == "ir") {
         if (r.trace) {
             throw "EXEC-MODE-NATIVE-ERROR", sprintf("--exec-mode=%s compiled code to native code:\n%s", r.mode,
@@ -149,7 +167,7 @@ public sub check_native(hash<ModeRunResult> r, NativeCheck check = NativeCheck::
         }
         return;
     }
-    if (check == NativeCheck::None || (r.mode == "tiered" && check == NativeCheck::Jit)) {
+    if (r.mode == "tiered" && check == NativeCheck::Jit) {
         return;
     }
     if (!(select r.trace, is_native_compilation($1))) {
@@ -171,6 +189,25 @@ public sub check_native(hash<ModeRunResult> r, NativeCheck check = NativeCheck::
 public string sub run(string command, NativeCheck check = NativeCheck::Jit) {
     hash<ModeRunResult> r = run_command(command);
     check_native(r, check);
+    return r.out;
+}
+
+#! runs any command and returns its output; a command that runs qore with an execution mode is checked like by run()
+/** For harness code that runs the commands of an execution mode and others, such as qcc or a compiled executable,
+    through one function
+
+    @param command the shell command; it must not redirect stderr, which holds the trace
+    @param check the native compilation required when the command gives an execution mode
+
+    @return the output on stdout followed by the output on stderr that is not part of the trace
+
+    @throw EXEC-MODE-NATIVE-ERROR see check_native()
+*/
+public string sub run_any(string command, NativeCheck check = NativeCheck::Jit) {
+    hash<ModeRunResult> r = run_command(command);
+    if (r.mode) {
+        check_native(r, check);
+    }
     return r.out;
 }
 }

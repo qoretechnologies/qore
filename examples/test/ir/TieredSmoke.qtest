@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class TieredSmokeTest
 
@@ -57,9 +58,9 @@ class TieredSmokeTest inherits QUnit::Test {
         tmp.file.write(code);
         tmp.file.close();
         string path = tmp.path;
-        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s %s 2>&1",
+        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s %s",
             qore_bin, mode, extra_opts ?? "", path);
-        return backquote(cmd);
+        return ExecModeHarness::run(cmd);
     }
 
     testTieredBasicCorrectness() {

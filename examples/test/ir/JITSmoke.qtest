@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class JITSmokeTest
 
@@ -218,20 +219,22 @@ printf(\"%d:%y\\n\", ok, p.last_shape);
         assertEq("20000:1", result, "enum param survives native lvalue store");
     }
 
-    private string runScript(string code, *string exec_mode, *string suffix) {
-        return runScriptWithOpts(code, exec_mode, NOTHING, suffix);
+    private string runScript(string code, *string exec_mode, *string suffix,
+            ExecModeHarness::NativeCheck check = ExecModeHarness::NativeCheck::Jit) {
+        return runScriptWithOpts(code, exec_mode, NOTHING, suffix, check);
     }
 
-    private string runScriptWithOpts(string code, *string exec_mode, *string extra_opts, *string suffix) {
+    private string runScriptWithOpts(string code, *string exec_mode, *string extra_opts, *string suffix,
+            ExecModeHarness::NativeCheck check = ExecModeHarness::NativeCheck::Jit) {
         string mode = exec_mode ?? "jit";
         # .qr implies %modern for standalone smoke scripts.
         TmpFile tmp(NOTHING, suffix ?? ".qr");
         tmp.file.write(code);
         tmp.file.close();
         string path = tmp.path;
-        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s %s 2>&1",
+        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s %s",
             qore_bin, mode, extra_opts ?? "", path);
-        return backquote(cmd);
+        return ExecModeHarness::run(cmd, check);
     }
 
     testJitIntArithmetic() {
@@ -431,9 +434,9 @@ printf(\"%s\\n\", h.key);
     }
 
     testJitNonModernFallback() {
-        # Non-%modern code should fail with EXEC-MODE-ERROR in JIT mode
+        # Non-%modern code should fail with EXEC-MODE-ERROR in JIT mode, before any code runs
         string code = "printf(\"%d\\n\", 42);\n";
-        string result = runScript(code, NOTHING, ".q");
+        string result = runScript(code, NOTHING, ".q", ExecModeHarness::NativeCheck::None);
         assertRegex("EXEC-MODE-ERROR", result, "non-modern code should fail in JIT mode");
     }
 
@@ -4991,7 +4994,8 @@ for (int i = 0; i < 10; ++i) {
 }
 printf(\"%d:%s\\n\", result[0], result[1]);
 ";
-        string result = trim(runScript(code, "ast"));
+        # the child Program runs with JIT execution
+        string result = trim(runScript(code, "ast", NOTHING, ExecModeHarness::NativeCheck::None));
         assertEq("42:Hello, Alice", result, "child Program JIT IR-only locals");
     }
 

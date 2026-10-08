@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../../../qlib/QUnit.qm
 %requires ../../../qlib/FsUtil.qm
+%requires ../ExecModeHarness.qm
 
 %exec-class IRBlockScopedObjectLifetimeTest
 
@@ -112,10 +113,9 @@ class IRBlockScopedObjectLifetimeTest inherits QUnit::Test {
     }
 
     private checkTier(string mode, string env) {
-        # synchronous compilation makes promotion deterministic instead of racing the compiler
-        string output = backquote(sprintf("%sQORE_JIT_SYNC_COMPILE=1 LD_LIBRARY_PATH=%s %s -b --enable-debug "
-            "--exec-mode=%s %s 2>&1", env, shellQuote(libqore_dir), shellQuote(qore_bin), mode,
-            shellQuote(fixture)));
+        # ExecModeHarness compiles synchronously, which makes promotion deterministic instead of racing the compiler
+        string output = ExecModeHarness::run(sprintf("%sLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+            env, shellQuote(libqore_dir), shellQuote(qore_bin), mode, shellQuote(fixture)));
         assertEq(expected(), output, sprintf("exec-mode=%s %s output", mode, env));
     }
 

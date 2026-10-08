@@ -7,6 +7,7 @@
 %requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class StackGuardCompiledTest
 
@@ -80,7 +81,7 @@ try {
 
     private string runCommand(string cmd) {
         string prefix = timeout_cmd.val() ? timeout_cmd + " 30s " : "";
-        return backquote(prefix + cmd + " 2>&1; echo EXIT=$?");
+        return ExecModeHarness::run_any(prefix + cmd + "; echo EXIT=$?");
     }
 
     private assertStackLimit(string output, string label) {

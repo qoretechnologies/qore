@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../../../qlib/QUnit.qm
 %requires ../../../qlib/FsUtil.qm
+%requires ../ExecModeHarness.qm
 
 %exec-class ClosureBlockScopedCaptureTest
 
@@ -56,13 +57,11 @@ class ClosureBlockScopedCaptureTest inherits QUnit::Test {
         script.file.write("%modern\n" + code);
         script.file.close();
 
-        TmpFile out();
-        TmpFile err();
-        string cmd = sprintf("QORE_JIT_SYNC_COMPILE=1 %s -b --enable-debug --exec-mode=%s %s > %s 2> %s",
-            qore_bin, mode, script.path, out.path, err.path);
-        int rc = system(cmd);
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s", qore_bin, mode, script.path));
+        int rc = r.rc;
         if (rc != 0) {
-            string err_output = ReadOnlyFile::readTextFile(err.path) ?? "";
+            string err_output = r.stderr;
             if (err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
                 testSkip("exec-mode option not supported");
                 return "";
@@ -71,8 +70,9 @@ class ClosureBlockScopedCaptureTest inherits QUnit::Test {
             # the exit status rather than an unexplained empty-string mismatch
             assertEq(0, rc, sprintf("%s: qore exited %d: %s", mode, rc, err_output));
         }
-        assertEq("", ReadOnlyFile::readTextFile(err.path) ?? "", "no warnings or errors: " + mode);
-        return ReadOnlyFile::readTextFile(out.path) ?? "";
+        assertEq("", r.stderr, "no warnings or errors: " + mode);
+        ExecModeHarness::check_native(r);
+        return r.stdout;
     }
 
     private assertSameInAllModes(string code, string expected, string desc, *list<string> modes) {

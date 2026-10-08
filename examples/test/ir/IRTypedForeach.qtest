@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -463,7 +464,7 @@ script.write(code);
 script.close();
 
 string sub runMode(string mode, bool disabled, string arg, bool virtual_disabled = False) {
-    return backquote(sprintf("%s%sLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s %s 2>&1",
+    return ExecModeHarness::run(sprintf("%s%sLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s %s",
         disabled ? "QORE_DISABLE_IR_TYPED_FOREACH=1 " : "",
         virtual_disabled ? "QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT=1 " : "",
         libqore_dir, qore_bin, mode, script_path, arg));
@@ -530,8 +531,8 @@ foreach string sparse_test in (("sparse-int", "sparse-float", "sparse-bool", "sp
     }
 }
 
-string stats = backquote(sprintf(
-    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+string stats = ExecModeHarness::run(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s",
     libqore_dir, qore_bin, script_path));
 if (stats !~ /IR-OPT: sumInt:.*typed-foreach=1/
         || stats !~ /IR-OPT: sumFloat:.*typed-foreach=1/

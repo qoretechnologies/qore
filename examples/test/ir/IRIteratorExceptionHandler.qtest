@@ -15,6 +15,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires Util
+%requires ../ExecModeHarness.qm
 
 %exec-class IRIteratorExceptionHandlerTest
 
@@ -200,7 +201,8 @@ map:VALUE-ERROR,select:VALUE-ERROR,foldl:VALUE-ERROR,map-next:NEXT-ERROR
     }
 
     private string run(string cmd) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, cmd));
+        return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir,
+            cmd));
     }
 
     private modeTest() {

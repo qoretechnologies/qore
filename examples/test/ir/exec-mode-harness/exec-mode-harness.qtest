@@ -69,6 +69,7 @@ class ExecModeHarnessTest inherits QUnit::Test {
     testGetMode() {
         assertEq("jit", ExecModeHarness::get_mode("qore -b --exec-mode=jit x.q"));
         assertEq("tiered", ExecModeHarness::get_mode("A=1 qore --exec-mode tiered x.q; echo $?"));
+        assertEq("ir", ExecModeHarness::get_mode("qore --exec-mode='ir' x.q"));
         assertEq(NOTHING, ExecModeHarness::get_mode("qore x.q"));
         assertThrows("EXEC-MODE-HARNESS-ERROR", \ExecModeHarness::get_mode(),
             "qore --exec-mode=ast a.q; qore --exec-mode=jit b.q");
@@ -79,6 +80,11 @@ class ExecModeHarnessTest inherits QUnit::Test {
             toplevel));
         assertEq(NOTHING, r.mode);
         assertEq("3\n", r.out);
+        # run_any() runs a command without an execution mode, and checks one with an execution mode
+        assertEq("3\n", ExecModeHarness::run_any(sprintf("%s %s -b %s", env, qore_bin, toplevel)));
+        assertEq("3\n", ExecModeHarness::run_any(sprintf("%s %s -b --exec-mode=jit %s", env, qore_bin, toplevel)));
+        assertThrows("EXEC-MODE-NATIVE-ERROR", \ExecModeHarness::run_any(), (sprintf("%s %s -b --exec-mode=jit %s",
+            env, qore_bin, parse_error),));
     }
 
     testTopLevel() {
@@ -116,6 +122,8 @@ class ExecModeHarnessTest inherits QUnit::Test {
         # the output on stderr that is not part of the trace follows the output on stdout
         hash<ExecModeHarness::ModeRunResult> r = runScript("jit", output);
         assertEq("out\nerr\n", r.out);
+        assertEq("out\n", r.stdout);
+        assertEq("err\n", r.stderr);
         assertEq(3, r.rc);
         assertEq("jit", r.mode);
         # a shell command that adds to the output
@@ -138,11 +146,17 @@ class ExecModeHarnessTest inherits QUnit::Test {
         r = <ExecModeHarness::ModeRunResult>{
             "mode": "ir",
             "out": "",
+            "stdout": "",
+            "stderr": "",
             "trace": ("[BG-JIT] compiled 'f@1_0' and promoted to JIT tier",),
             "rc": 0,
         };
         assertThrows("EXEC-MODE-NATIVE-ERROR", "--exec-mode=ir compiled code to native code",
-            \ExecModeHarness::check_native(), (r, ExecModeHarness::NativeCheck::None));
+            \ExecModeHarness::check_native(), (r,));
+        assertThrows("EXEC-MODE-NATIVE-ERROR", "--exec-mode=ir compiled code to native code",
+            \ExecModeHarness::check_native(), (r, ExecModeHarness::NativeCheck::JitAndTiered));
+        # unless nothing is checked, as for a script that runs a child Program with JIT execution
+        ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::None);
     }
 
     private hash<ExecModeHarness::ModeRunResult> runScript(string mode, string script) {

@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../../../qlib/QUnit.qm
 %requires ../../../qlib/FsUtil.qm
+%requires ../ExecModeHarness.qm
 
 %exec-class TypedConversionTiersTest
 
@@ -56,7 +57,7 @@ class TypedConversionTiersTest inherits QUnit::Test {
         string expected = getExpected(scenario);
         string script = dir + "/" + scenario + ".qr";
         foreach string mode in ("ast", "ir", "jit") {
-            assertEq(expected, run(sprintf("%s %s -b --exec-mode=%s %s", getEnv(mode), qore_bin, mode, script)),
+            assertEq(expected, run(sprintf("%s -b --exec-mode=%s %s", qore_bin, mode, script)),
                 sprintf("%s in %s mode", scenario, mode));
         }
     }
@@ -82,7 +83,7 @@ class TypedConversionTiersTest inherits QUnit::Test {
         string expected = getExpected("static_init");
         string script = dir + "/static_init.qr";
         foreach string mode in ("ast", "ir", "jit") {
-            assertEq(expected, run(sprintf("%s %s -b --exec-mode=%s -l %s %s", getEnv(mode), qore_bin, mode, qmod,
+            assertEq(expected, run(sprintf("%s -b --exec-mode=%s -l %s %s", qore_bin, mode, qmod,
                 script)), "compiled module static initializers used in " + mode + " mode");
         }
         # the source module is the reference for the compiled one
@@ -105,13 +106,15 @@ class TypedConversionTiersTest inherits QUnit::Test {
 
     testSharedCallee() {
         string script = dir + "/shared_callee.qr";
-        string out = run(sprintf("QORE_JIT_TIMING=1 %s %s -b --exec-mode=jit %s 2>&1", getEnv("jit"), qore_bin,
-            script));
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --exec-mode=jit %s",
+            qore_bin, script));
+        ExecModeHarness::check_native(r);
+        string out = r.trace.join("\n") + "\n" + r.out;
         # a second function calling an already compiled callee used to fail with a duplicate fast entry symbol and
         # remain in the IR interpreter
         assertEq(-1, out.find("failed to compile"), out);
         assertNeq(-1, out.find("compiled 'second@"), out);
-        assertEq(getExpected("shared_callee"), run(sprintf("%s %s -b --exec-mode=jit %s", getEnv("jit"), qore_bin,
+        assertEq(getExpected("shared_callee"), run(sprintf("%s -b --exec-mode=jit %s", qore_bin,
             script)));
     }
 
@@ -119,17 +122,20 @@ class TypedConversionTiersTest inherits QUnit::Test {
         return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
     }
 
-    #! native compilation must complete before the code runs so that the native code is what is tested
-    private string getEnv(string mode) {
-        return mode == "jit" ? "QORE_JIT_SYNC_COMPILE=1" : "";
-    }
 
     private string getLibEnv() {
         return sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
     }
 
     #! returns standard output only, so parse warnings cannot affect the comparison
+    /** a command with an execution mode runs through ExecModeHarness, which makes native compilation complete before
+        the code runs, so that the native code is what is tested, and checks it
+    */
     private string run(string cmd) {
-        return backquote(cmd);
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        return r.stdout;
     }
 }

@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -250,8 +251,8 @@ string expected =
     "5:8:15:24:33:42:41:51:81:23:11:right:91:185:45:94:2:"
         + "OBJECT-ALREADY-DELETED:101:103:77:105:2:OBJECT-ALREADY-DELETED\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
-    string actual = backquote(sprintf(
-        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+    string actual = ExecModeHarness::run(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
         libqore_dir, qore_bin, mode, src));
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",

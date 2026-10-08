@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class IRTypedForeachExceptionStateTest
 
@@ -69,7 +70,7 @@ class IRTypedForeachExceptionStateTest inherits QUnit::Test {
     }
 
     private string runMode(string script_path, string mode) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
             libqore_dir, qore_bin, mode, script_path));
     }
 

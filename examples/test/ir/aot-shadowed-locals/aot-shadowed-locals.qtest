@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../ExecModeHarness.qm
 
 %exec-class AotShadowedLocalsTest
 
@@ -127,7 +128,7 @@ class AotShadowedLocalsTest inherits QUnit::Test {
 
     testExecModes() {
         foreach string mode in (ExecModes) {
-            string out = backquote(sprintf("%s %s -b --exec-mode=%s %s 2>&1", env, qore_bin, mode, worker));
+            string out = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, worker));
             checkResults(mode, parseOutput(mode, out));
         }
     }

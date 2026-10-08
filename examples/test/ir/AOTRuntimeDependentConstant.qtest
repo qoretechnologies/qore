@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class AOTRuntimeDependentConstantTest
 
@@ -124,7 +125,12 @@ map printf(\"%s=%s\\n\", $1.key, $1.value ? \"True\" : \"False\"), h.pairIterato
 
     #! Returns the \c key=True|False lines a child prints as a hash
     private hash<string, bool> runChild(string cmd, string what) {
-        string output = backquote(cmd + " 2>&1; echo \"rc=$?\"");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd + "; echo \"rc=$?\"");
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        # the exit status is the last line
+        string output = r.stderr + r.stdout;
         *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
         assertEq("0", rc[0], sprintf("%s exits normally: %s", what, output));
         hash<string, bool> h();

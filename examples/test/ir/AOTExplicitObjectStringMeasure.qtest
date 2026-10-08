@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -44,8 +45,8 @@ main();
 ");
 hot_file.close();
 
-string hot_ast = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+string hot_ast = ExecModeHarness::run(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s",
     libqore_dir, qore_bin, hot_source));
 string hot_enabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
@@ -169,12 +170,12 @@ main();
 ");
 safety_file.close();
 
-string safety_ast = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+string safety_ast = ExecModeHarness::run(sprintf(
+    "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s",
     libqore_dir, qore_bin, safety_source));
 foreach string mode in (("ir", "tiered", "jit")) {
-    string output = backquote(sprintf(
-        "LD_LIBRARY_PATH=%s %s --exec-mode=%s %s 2>&1",
+    string output = ExecModeHarness::run(sprintf(
+        "LD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
         libqore_dir, qore_bin, mode, safety_source));
     if (output != safety_ast) {
         printf("safety output mismatch in %s:\nast:\n%sactual:\n%s",

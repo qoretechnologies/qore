@@ -19,6 +19,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../ExecModeHarness.qm
 
 %exec-class JitCompileThreadStackTest
 
@@ -96,17 +97,17 @@ class JitCompileThreadStackTest inherits QUnit::Test {
         return script_path;
     }
 
-    #! Runs the script in the given execution mode and appends the child's exit status
-    /** QORE_JIT_SYNC_COMPILE makes the calling thread wait for each compilation, which still runs on the
-        background compile thread: without it the program can finish first, and Program teardown cancels a
-        compilation that is still queued, so the compile thread would never run.
+    #! Runs the script in the given execution mode and returns its compilation trace, its output and its exit status
+    /** ExecModeHarness runs the script with QORE_JIT_SYNC_COMPILE, which makes the calling thread wait for each
+        compilation, which still runs on the background compile thread: without it the program can finish first,
+        and Program teardown cancels a compilation that is still queued, so the compile thread would never run.
     */
     private string run(string mode, string path) {
-        return backquote(sprintf(
-            "QORE_JIT_THRESHOLD=1 QORE_JIT_SYNC_COMPILE=1 QORE_JIT_TIMING=1 LD_LIBRARY_PATH=%s %s -b "
-            "--exec-mode=%s %s 2>&1; "
-            "echo \"exit=$?\"",
-            shellQuote(libqore_dir), shellQuote(qore_bin), mode, shellQuote(path)));
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s -b "
+            "--exec-mode=%s %s; echo \"exit=$?\"", shellQuote(libqore_dir), shellQuote(qore_bin), mode,
+            shellQuote(path)));
+        ExecModeHarness::check_native(r);
+        return (r.trace ? r.trace.join("\n") + "\n" : "") + r.stderr + r.stdout;
     }
 
     #! Returns the value the run printed, or NOTHING when it printed none

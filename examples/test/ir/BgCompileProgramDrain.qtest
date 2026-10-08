@@ -21,6 +21,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../ExecModeHarness.qm
 
 %exec-class BgCompileProgramDrainTest
 
@@ -40,9 +41,9 @@ class BgCompileProgramDrainTest inherits QUnit::Test {
     private int runScenario(string mode) {
         # Force every function native on first call (QORE_JIT_THRESHOLD=1) so each
         # child Program has in-flight compiles to drain at teardown.
-        string cmd = sprintf("QORE_JIT_THRESHOLD=1 %s -b --enable-debug --exec-mode=%s %s 2>&1",
+        string cmd = sprintf("QORE_JIT_THRESHOLD=1 %s -b --enable-debug --exec-mode=%s %s",
             qore_bin, mode, scenario);
-        string out = backquote(cmd);
+        string out = ExecModeHarness::run(cmd);
         on_error printf("scenario (%s mode) output:\n%s\n", mode, out);
         *list<string> m = (out =~ x/total=(-?[0-9]+)/);
         assertTrue(exists m, sprintf("scenario produced a total in %s mode", mode));

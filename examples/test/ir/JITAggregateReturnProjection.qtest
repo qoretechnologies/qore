@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -79,8 +80,8 @@ script.write(code);
 script.close();
 
 string sub runMode(string mode, string env = "") {
-    return backquote(sprintf(
-        "%s LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+    return ExecModeHarness::run(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
         env, libqore_dir, qore_bin, mode, script_path));
 }
 
@@ -99,8 +100,11 @@ if (disabled != expected) {
     exit(2);
 }
 
-string enabled = runMode("jit",
-    "QORE_JIT_TEST_WARMUP=1 QORE_JIT_TIMING=1");
+# the compilation trace shows the fusion
+hash<ExecModeHarness::ModeRunResult> enabled_run = ExecModeHarness::run_command(sprintf(
+    "QORE_JIT_TEST_WARMUP=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=jit %s", libqore_dir, qore_bin, script_path));
+ExecModeHarness::check_native(enabled_run);
+string enabled = enabled_run.trace.join("\n") + "\n" + enabled_run.out;
 if (enabled !~ /fused [1-9][0-9]* aggregate-return projection group/
         || enabled !~ /2006000:NOTHING:11:2:rejected\n$/) {
     printf("enabled JIT aggregate-return projection mismatch:\n%s", enabled);

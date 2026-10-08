@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class AOTDeferredHashDeclImpliedConstructorTest
 
@@ -318,12 +319,12 @@ int main(int argc, char** argv) {
 
     #! Returns the command's combined output
     private string run(string cmd) {
-        return backquote(cmd + " 2>&1");
+        return ExecModeHarness::run_any(cmd);
     }
 
     #! Returns the command's combined output with its exit status appended
     private string runStatus(string cmd) {
-        return backquote(sprintf("%s 2>&1; echo \"exit=$?\"", cmd));
+        return ExecModeHarness::run_any(sprintf("%s; echo \"exit=$?\"", cmd));
     }
 
     private static write(string path, string contents) {
