@@ -5175,6 +5175,15 @@ static QoreValue f_dbg_get_scan_object_count(const QoreListNode* params, Runtime
     return q_get_scan_object_count();
 }
 
+//! returns the number of heap integers that exist in the process
+/** An integer outside the inline (48-bit) range of a value is a heap object; code that does not release one leaks
+    it, so tests compare the count before and after the code under test, in every execution mode and on every
+    platform.
+*/
+static QoreValue f_dbg_get_live_bigint_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return q_get_live_bigint_count();
+}
+
 //! returns the number of recursive sets that scans in the current thread have created
 /** A scan that finds the recursive sets it would compute already in place creates none and leaves them alone,
     so tests use this to verify that a scan of an unchanged graph does not replace a set with an identical one.
@@ -5844,6 +5853,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_live_bigint_count", f_dbg_get_live_bigint_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_rset_create_count", f_dbg_get_rset_create_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,14 +31,37 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreBigIntNode.h>
+#include "qore/intern/QoreLibIntern.h"
+
+#ifdef DEBUG
+#include <atomic>
+
+namespace {
+//! the number of heap integers that exist in the process; see q_get_live_bigint_count()
+std::atomic<int64> live_bigint_count{0};
+}
+
+int64 q_get_live_bigint_count() {
+    return live_bigint_count.load(std::memory_order_relaxed);
+}
+#endif
 
 QoreBigIntNode::QoreBigIntNode(int64 n) : SimpleValueQoreNode(NT_INT), val(n) {
+#ifdef DEBUG
+    live_bigint_count.fetch_add(1, std::memory_order_relaxed);
+#endif
 }
 
 QoreBigIntNode::QoreBigIntNode(const QoreBigIntNode& old) : SimpleValueQoreNode(NT_INT), val(old.val) {
+#ifdef DEBUG
+    live_bigint_count.fetch_add(1, std::memory_order_relaxed);
+#endif
 }
 
 QoreBigIntNode::~QoreBigIntNode() {
+#ifdef DEBUG
+    live_bigint_count.fetch_sub(1, std::memory_order_relaxed);
+#endif
 }
 
 int64 QoreBigIntNode::getValue() const {

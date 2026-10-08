@@ -2,7 +2,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # converts strings to integers outside the inline (48-bit) integer range, which are heap values in compiled code,
-# with <string>::toInt() and strtoint(), and prints the results; run under a leak checker by pseudo-to-int-leak.qtest
+# with <string>::toInt() and strtoint(), and prints the results; with library debugging it also prints how many heap
+# integers the conversions left behind (dbg_get_live_bigint_count()), which pseudo-to-int-leak.qtest checks
 
 %modern
 
@@ -61,6 +62,8 @@ hash<string, code<auto(string)>> calls = {
     "discarded": \discarded(),
     "in_closure": \in_closure(),
 };
+# the heap integers that exist before the conversions; NOTHING without library debugging
+*int live_before = Option::HAVE_LIBRARY_DEBUGGING ? call_function("dbg_get_live_bigint_count") : NOTHING;
 list<auto> results;
 for (int i = 0; i < 3; ++i) {
     foreach hash<auto> c in (calls.pairIterator()) {
@@ -68,3 +71,8 @@ for (int i = 0; i < 3; ++i) {
     }
 }
 printf("%y\n", results);
+# the results hold heap integers of their own; every other one the conversions made must have been released
+remove results;
+if (exists live_before) {
+    printf("live heap integers: %d\n", call_function("dbg_get_live_bigint_count") - live_before);
+}

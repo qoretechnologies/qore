@@ -12,14 +12,16 @@
 
 %exec-class PseudoToIntLeakTest
 
-#! the output, the native compilation trace and the leak report of a worker
+#! the output, the native compilation trace and the heap integer count of a worker
 hashdecl WorkerResult {
-    #! the lines printed on stdout
+    #! the result line printed on stdout
     string out;
     #! the native compilation trace (QORE_JIT_TIMING)
     list<string> trace;
-    #! all output other than the trace, which includes the leak checker's report
+    #! all output other than the trace
     string err;
+    #! the number of heap integers the conversions left behind, or NOTHING without library debugging
+    *int live;
 }
 
 #! Tests that integers converted from strings outside the inline integer range are released by compiled code
@@ -28,15 +30,13 @@ hashdecl WorkerResult {
     such conversion leaked with JIT and tiered execution and in AOT-compiled code; strtoint() returning a clamped
     value with its exception in a closure leaked on the IR tier.
 
-    A leaked integer cannot be observed from %Qore, so the worker runs under the platform leak checker, which must
-    report no leaks; the test is skipped where no supported leak checker is available (\c leaks on macOS).  The
-    worker runs in every execution mode, with synchronous native compilation following the first call of a
-    function, and as a qcc-compiled executable.
+    The worker counts the heap integers that exist before and after the conversions with
+    dbg_get_live_bigint_count(), which needs library debugging, and reports how many the conversions left behind,
+    which must be none; the check runs in-process on every platform.  The worker runs in every execution mode, with
+    synchronous native compilation following the first call of a function, and as a qcc-compiled executable.
 */
 class PseudoToIntLeakTest inherits QUnit::Test {
     public {
-        const ExecModes = ("ast", "ir", "jit", "tiered");
-
         #! the result printed by the worker
         const Expected = "[1, -9223372036854775808, 1, 1, \"STRTOINT-ERROR\", 1, -9223372036854775808, 1, 1, "
             "\"STRTOINT-ERROR\", 1, -9223372036854775808, 1, 1, \"STRTOINT-ERROR\"]\n";
@@ -51,8 +51,6 @@ class PseudoToIntLeakTest inherits QUnit::Test {
         *string qcc_bin;
         string env;
         string worker;
-        #! the leak checker command prefix, if available
-        *string leak_checker;
     }
 
     constructor() : QUnit::Test("PseudoToIntLeakTest", "1.0", \ARGV) {
@@ -69,30 +67,25 @@ class PseudoToIntLeakTest inherits QUnit::Test {
         }
         env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
         worker = get_script_dir() + DirSep + "pseudo-to-int-leak-worker.q";
-        if (PlatformOS == "Darwin" && is_executable("/usr/bin/leaks")) {
-            leak_checker = "/usr/bin/leaks --atExit --";
-        }
 
-        addTestCase("negative: the leak report check", \testLeakReportCheck());
+        addTestCase("negative: the heap integer report check", \testLiveReportCheck());
         addTestCase("each execution mode", \testExecModes());
         addTestCase("qcc-compiled executable", \testCompiled());
         set_return_value(main());
     }
 
-    testLeakReportCheck() {
-        assertEq(0, getLeakCount("Process 1234: 0 leaks for 0 total leaked bytes.\n"));
-        assertEq(6, getLeakCount("x\nProcess 1234: 6 leaks for 192 total leaked bytes.\ny\n"));
-        assertThrows("LEAK-REPORT-ERROR", \getLeakCount(), "no report\n");
+    testLiveReportCheck() {
+        assertEq(0, getLiveCount("[1]\nlive heap integers: 0\n"));
+        assertEq(6, getLiveCount("x\nlive heap integers: 6\ny\n"));
+        assertEq(NOTHING, getLiveCount("[1]\n"));
     }
 
     testExecModes() {
-        if (!leak_checker) {
-            testSkip("no supported leak checker is available");
-        }
-        foreach string mode in (ExecModes) {
+        checkDebugging();
+        foreach string mode in (ExecModeHarness::ExecModes) {
             hash<WorkerResult> r = runWorker(sprintf("%s -b --exec-mode=%s %s", qore_bin, mode, worker));
             assertEq(Expected, r.out, mode + ": result");
-            assertEq(0, getLeakCount(r.err), mode + ": leaks: " + r.err);
+            assertEq(0, r.live, mode + ": heap integers left behind: " + r.err);
             if (mode == "ast" || mode == "ir") {
                 assertEq((), r.trace, mode + ": no code is compiled to native code");
             } else {
@@ -105,9 +98,7 @@ class PseudoToIntLeakTest inherits QUnit::Test {
     }
 
     testCompiled() {
-        if (!leak_checker) {
-            testSkip("no supported leak checker is available");
-        }
+        checkDebugging();
         if (!qcc_bin) {
             testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
                 libqore_dir));
@@ -118,44 +109,42 @@ class PseudoToIntLeakTest inherits QUnit::Test {
         assertTrue(is_file(exe), "qcc: " + compile_out);
         hash<WorkerResult> r = runWorker(exe);
         assertEq(Expected, r.out, "aot: result");
-        assertEq(0, getLeakCount(r.err), "aot: leaks: " + r.err);
+        assertEq(0, r.live, "aot: heap integers left behind: " + r.err);
     }
 
-    #! runs a command under the leak checker and returns its output, compilation trace and leak report
+    #! skips the test without library debugging, which dbg_get_live_bigint_count() needs
+    private checkDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_get_live_bigint_count() requires library debugging");
+        }
+    }
+
+    #! runs a command and returns its output, compilation trace and heap integer count
     /** ExecModeHarness runs the command with synchronous native compilation following the first call of a function,
         so with --exec-mode=jit or tiered the functions run as native code from their second call on, and checks the
         compilation trace: native code must have been compiled with JIT and tiered execution and none with AST and
         IR execution.
     */
     private hash<WorkerResult> runWorker(string command) {
-        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s", env, leak_checker,
-            command));
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env, command));
         if (r.mode) {
             ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::JitAndTiered);
         }
-        # the leak checker writes its report on stdout; only the worker's own output is the result
+        # the result is the line printed by the worker that starts with the list
         list<string> result = select r.out.split("\n"), $1 =~ /^\[/;
         return <WorkerResult>{
             "out": result ? result.join("\n") + "\n" : "",
             "trace": r.trace,
             "err": r.out,
+            "live": getLiveCount(r.out),
         };
     }
 
-    #! returns the number of leaks in a leak checker's report
-    /** The test is skipped when the leak checker cannot inspect the process's heap, as with a qore built with
-        AddressSanitizer, whose allocator the leak checker does not support
-
-        @throw LEAK-REPORT-ERROR the output holds no leak report
+    #! returns the number of heap integers the worker reported left behind, or NOTHING if it reported none
+    /** The worker reports the count only with library debugging
     */
-    private int getLeakCount(string report) {
-        if (report =~ /unable to inspect heap ranges of target process/) {
-            testSkip("the leak checker cannot inspect the heap of the process (sanitizer build)");
-        }
-        *string count = (report =~ x/^Process [0-9]+: ([0-9]+) leaks? for /m)[0];
-        if (!exists count) {
-            throw "LEAK-REPORT-ERROR", sprintf("no leak report in: %s", report);
-        }
-        return count.toInt();
+    private *int getLiveCount(string out) {
+        *string count = (out =~ x/^live heap integers: (-?[0-9]+)$/m)[0];
+        return exists count ? count.toInt() : NOTHING;
     }
 }

@@ -363,6 +363,14 @@ DLLLOCAL QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringN
 // returns true if the node needs to be scanned for recursive references or not
 DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
+
+#ifdef DEBUG
+//! Returns the number of heap integers (QoreBigIntNode) that exist in the process
+/** An integer outside the inline range of a value is allocated on the heap, and code that fails to release one
+    leaks it; tests compare the count before and after the code under test; see dbg_get_live_bigint_count().
+*/
+DLLLOCAL int64 q_get_live_bigint_count();
+#endif
 // increments or decrements the object count depending on the sign of the argument (cannot be 0)
 DLLLOCAL void inc_container_obj(const AbstractQoreNode* n, int dt);
 
