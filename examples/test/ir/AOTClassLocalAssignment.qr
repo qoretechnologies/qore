@@ -13,11 +13,37 @@ class ClassLocalValue {
 class ClassLocalDerived inherits ClassLocalValue {
     constructor(int id) : ClassLocalValue(id) { }
 }
+class ClassLocalGenericDerived<T> inherits ClassLocalValue {
+    constructor(T id) : ClassLocalValue(int(id)) { }
+}
+class ClassLocalRawAccept<T> [legacy_raw_accepts] {
+    public { T value; }
+    constructor(T value) { self.value = value; }
+}
 class ClassLocalPrivate inherits private ClassLocalValue {
     constructor() : ClassLocalValue(13) { }
     static string check() {
         ClassLocalPrivate value();
         return privateContext(value);
+    }
+    static int accepted() {
+        ClassLocalPrivate value();
+        ClassLocalValue receiver = value;
+        return receiver.id;
+    }
+}
+
+int sub rawClassSource(auto input) {
+    ClassLocalRawAccept receiver = input;
+    return int(receiver.value);
+}
+
+string sub parameterizedClassSource(auto input) {
+    try {
+        ClassLocalRawAccept<int> receiver = input;
+        return sprintf("%d", receiver.value);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
     }
 }
 
@@ -137,6 +163,14 @@ code<int()> sub escapedTarget(ClassLocalValue input) {
 ClassLocalValue left(3);
 ClassLocalDerived right(5);
 for (int round = 0; round < 8; ++round) {
+    if (rawClassSource(new ClassLocalRawAccept<int>(29)) != 29
+            || rawClassSource(new ClassLocalRawAccept<string>("31")) != 31
+            || checkedSource(new ClassLocalGenericDerived<int>(37)) != "37"
+            || parameterizedClassSource(new ClassLocalRawAccept<int>(41)) != "41"
+            || parameterizedClassSource(new ClassLocalRawAccept<string>("43")) != "RUNTIME-TYPE-ERROR"
+            || ClassLocalPrivate::accepted() != 13) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "class access or generic acceptance changed";
+    }
     int capture_before = destroyed;
     {
         code<int()> reader = escapedTarget(new ClassLocalValue(23));

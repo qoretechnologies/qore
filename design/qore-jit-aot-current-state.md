@@ -108,6 +108,30 @@ The stored value remains runtime-backed, so scope/exception cleanup and local
 ordering do not change. `QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE=1` restores the
 ordinary lvalue path at runtime (presence sampled once).
 
+For that same fresh slot, a single unmapped required-class acceptance spec can
+use `acceptsRequiredClassValueWithoutFilter()` before generic conversion dispatch.
+It shares the ordinary raw/parameterized-object gate and inheritance/access
+validator; a failed positive check always falls back to `acceptAssignment()`
+for the original conversion or diagnostic. Optional, union, mapped and
+parameterized target specs retain generic acceptance. A parameterized object
+can still satisfy a plain base class or a `legacy_raw_accepts` target. No result,
+class-compatibility or access decision is cached across calls.
+
+This changes neither slot ownership nor weak normalization or cleanup ordering.
+`QORE_DISABLE_AOT_CLASS_ACCEPT_FAST_PATH=1` disables the positive check at runtime
+(presence sampled once). The compiler and versioned helper ABI are unchanged;
+existing AOT artifacts using the fresh-store helper can use the specialization.
+
+The associated runtime comparison requests 16-byte alignment on the twelve
+prepared scalar callback v3 entrypoints. The unaligned class-check candidate
+repeatedly regressed wide callbacks; a 128-byte alternative recovered that AOT
+control but increased runtime text by 95,700 bytes and showed an unfavorable IR
+wide-callback signal. The retained 16-byte build adds 9,284 bytes over the
+unaligned candidate (9,640 over its baseline) and the final before/after run
+does not reproduce the IR-wide slowdown. Alignment changes no entry ABI, guard,
+frame lifetime or publication protocol; no equivalent benefit is established
+on other targets.
+
 An experimental native-only class-local lowering was rejected before timing:
 separate native/runtime cleanup phases changed destructor order on exception
 exits, including mixed typed/`auto` locals. `AOTClassBodyLocals.qtest` retains the

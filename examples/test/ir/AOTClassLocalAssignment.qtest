@@ -48,7 +48,7 @@ class ClassLocalAssignmentTest inherits QUnit::Test {
                 string executable = dir.path + "/fixture";
                 string ir = run((qcc, level, "--strip-source", "-o", executable, source),
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
-                foreach string name in (("classLocalPhi", "classLocalInvoke")) {
+                foreach string name in (("classLocalPhi", "classLocalInvoke", "rawClassSource")) {
                     *list<*string> body = regex_extract(ir, "(?s)define [^\n]*@" + name
                         + "_[^\n]*\n(.*?)\n\\}");
                     assertTrue(!!body, name + " LLVM definition");
@@ -71,11 +71,18 @@ class ClassLocalAssignmentTest inherits QUnit::Test {
                 assertTrue(!!captured_body, "captured local definition");
                 assertFalse(regex(captured_body[0] ?? "", "qore_rt_assign_class_local_result_aot"),
                     "captured target keeps the post-cleanup reload");
+                *list<*string> parameterized_body = regex_extract(ir,
+                    "(?s)define [^\n]*@parameterizedClassSource_[^\n]*\n(.*?)\n\\}");
+                assertTrue(!!parameterized_body, "parameterized target definition");
+                assertFalse(regex(parameterized_body[0] ?? "", "qore_rt_assign_class_local_result_aot"),
+                    "parameterized target keeps generic acceptance");
                 assertEq(expected, run((executable,)), prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_IR_CONTEXT_ELISION=1 "),
                     "runtime context control " + prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE=1 "),
                     "runtime fresh-store control " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLASS_ACCEPT_FAST_PATH=1 "),
+                    "generic class-acceptance control " + prefix + level);
             }
         }
     }

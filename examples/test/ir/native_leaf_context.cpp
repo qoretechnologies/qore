@@ -112,6 +112,70 @@ static QoreValue paddedSweep(const void* ptr, const QoreListNode*, RuntimeConfig
     return QoreValue(result);
 }
 
+// Exercise a warmed native method PIC through its real compiled caller, including
+// early rejection, published method overflow, and successful reuse afterward.
+static void checkMethod(QoreProgram* program) {
+    ExceptionSink xsink;
+    ValueHolder object(program->callFunction("makeMethodProbe", nullptr, &xsink), &xsink);
+    assert(!xsink && object->getType() == NT_OBJECT);
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+    args->push(object->refSelf(), &xsink);
+    assert(!xsink);
+    args->push(QoreValue(int64_t{7}), &xsink);
+    assert(!xsink);
+    for (unsigned i = 0; i < 16; ++i) {
+        ValueHolder result(program->callFunction("methodProbe", *args, &xsink), &xsink);
+        assert(!xsink && result->getAsBigInt() == 24);
+    }
+    RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    QoreProgram* caller = qore_get_call_program_context();
+    size_t* limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
+#if defined(__aarch64__) || defined(__x86_64__)
+    if (limit) {
+        const size_t saved_limit = *limit;
+        unsigned observed_method = 0;
+        unsigned observed_early = 0;
+        // Include the compiled caller and public Program entry in the sweep.
+        // Restore the real limit before inspecting diagnostics or cleanup.
+        for (unsigned gap = 0; gap < 32768; gap += 16) {
+            *limit = get_stack_pos() - gap;
+            QoreValue value = program->callFunction("methodProbe", *args, &xsink);
+            *limit = saved_limit;
+            ValueHolder result(value, &xsink);
+            assert(qore_get_call_program_context() == caller);
+            if (xsink) {
+                assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+                ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+                assert(!xsink);
+                const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+                assert(stack);
+                bool method = false;
+                for (size_t i = 0; i < stack->size(); ++i) {
+                    const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                    assert(frame);
+                    const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                    method |= name && std::strstr(name->c_str(), "NativeLeafMethodDerived");
+                    if (!(i % 100)) {
+                        assert(!qore_check_cancel(&xsink, "native method stack inspection"));
+                    }
+                }
+                ++(method ? observed_method : observed_early);
+            } else {
+                assert(result->getAsBigInt() == 24);
+            }
+            if (!(gap % 160)) {
+                assert(!qore_check_cancel(&xsink, "native method guard sweep"));
+            }
+        }
+        assert(observed_method && observed_early);
+    }
+#else
+    assert(!limit);
+#endif
+    ValueHolder result(program->callFunction("methodProbe", *args, &xsink), &xsink);
+    assert(!xsink && result->getAsBigInt() == 24 && qore_get_call_program_context() == caller);
+}
+
 // Check the FP helper's independently compiled frame/return path as well as
 // the integer path below. Keep this before switching parsed callers to AST.
 static void checkFloat(QoreProgram* program, bool inline_entry) {
@@ -275,6 +339,7 @@ static void check(bool inline_entry) {
         assert(qore_rt_try_funcref_int_int_v3(bits, i, &result, &xsink, rc, &cache) == 1);
         assert(!xsink && result == i + 17);
     }
+    checkMethod(*program);
     checkFloat(*program, inline_entry);
     invocation.bits = bits;
     invocation.cache = &cache;

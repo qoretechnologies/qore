@@ -4425,6 +4425,9 @@ while (*binary chunk = input.read(65536)) {
     - Specialized fresh required-class AOT local stores to avoid generic lvalue setup while
       retaining assignment type/access checks, real-reference bookkeeping, runtime-backed
       storage, and destructor ordering; nonfresh or special slots retain the ordinary path
+    - Specialized successful acceptance of an unfiltered required-class value in fresh AOT local
+      stores, avoiding generic conversion dispatch while preserving raw generic compatibility,
+      inheritance/private-access checks, diagnostics, and ownership
     - Added guarded native scalar AOT method entries on polymorphic cache hits, avoiding parameter TLS
       binding for proven non-throwing <tt>int(int)</tt> bodies while retaining context, stack, ownership,
       receiver, Program, and debugger checks

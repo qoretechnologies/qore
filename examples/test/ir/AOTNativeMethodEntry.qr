@@ -32,6 +32,9 @@ class NativeMethodSelf inherits NativeMethodBase {
     int verifyContext(NativeMethodBase other) {
         return nativeMethodCall(other, 2) + privateValue();
     }
+    int verifyWideContext(NativeMethodBase other, int value) {
+        return nativeMethodCall(other, value) + privateValue();
+    }
 }
 class NativeMethodArgv inherits NativeMethodBase {
     int next(int value, ...) { return value + (argv ? argv[0] : 0); }
@@ -118,6 +121,8 @@ for (int round = 0; round < 16; ++round) {
             || nativeMethodInvoke(throwing, 2) != "NATIVE-METHOD-ERROR"
             || nativeMethodCall(self_context, 2) != 25
             || self_context.verifyContext(derived) != 44
+            || self_context.verifyWideContext(derived, 1125899906842624) != 5629499534213154
+            || self_context.verifyWideContext(derived, -1125899906842624) != -5629499534213086
             || nativeMethodExcess(argv_context, 2) != 31
             || nativeMethodExcess(derived, 2) != "RUNTIME-OVERLOAD-ERROR"
             || nativeMethodArgs(derived, "wrong") != "REJECTED"

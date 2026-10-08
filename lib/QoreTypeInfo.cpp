@@ -3020,6 +3020,27 @@ static bool type_spec_accept_object(const QoreClass& type_class, const QoreClass
     return false;
 }
 
+// Shared by generic class acceptance and the admitted fresh class-local path.
+static bool type_spec_accept_class_object(const QoreClass& type_class, const QoreObject& object,
+        bool& priv_error) {
+    const qore_class_private* target = qore_class_private::get(type_class);
+    return (!object.getInstantiatedTypeInfo() || !target->hasTypeParams()
+        || target->rawAcceptsParameterized())
+        && type_spec_accept_object(type_class, *object.getClass(), priv_error);
+}
+
+bool QoreTypeInfo::acceptsRequiredClassValueWithoutFilter(const QoreValue& n) const {
+    // Only one unmapped QTS_CLASS spec and a strong object are admitted; the
+    // object may still be parameterized if the ordinary raw-class gate allows it.
+    // Failure falls back to acceptAssignment(), preserving its exact diagnostic.
+    if (accept_vec.size() != 1 || accept_vec[0].map
+            || accept_vec[0].spec.getTypeSpec() != QTS_CLASS || n.getType() != NT_OBJECT) {
+        return false;
+    }
+    bool priv_error = false;
+    return type_spec_accept_class_object(*accept_vec[0].spec.getClass(), *n.get<const QoreObject>(), priv_error);
+}
+
 // Decides whether a container element type that the target element type does not already accept may
 // still be converted into it, one element at a time, by the fold loops in the two callers below.
 //
@@ -3285,18 +3306,10 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
         case QTS_CLASS: {
             if (t == NT_OBJECT) {
                 const QoreObject* obj = n.get<const QoreObject>();
-                const qore_class_private* target = qore_class_private::get(*u.qc);
-                if (!obj->getInstantiatedTypeInfo() || !target->hasTypeParams()
-                        || target->rawAcceptsParameterized()) {
-                    ok = type_spec_accept_object(*u.qc, *obj->getClass(), priv_error);
-                }
+                ok = type_spec_accept_class_object(*u.qc, *obj, priv_error);
             } else if (t == NT_WEAKREF) {
                 const QoreObject* obj = n.get<const WeakReferenceNode>()->get();
-                const qore_class_private* target = qore_class_private::get(*u.qc);
-                if (!obj->getInstantiatedTypeInfo() || !target->hasTypeParams()
-                        || target->rawAcceptsParameterized()) {
-                    ok = type_spec_accept_object(*u.qc, *obj->getClass(), priv_error);
-                }
+                ok = type_spec_accept_class_object(*u.qc, *obj, priv_error);
             }
             break;
         }

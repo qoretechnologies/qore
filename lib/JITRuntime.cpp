@@ -10367,6 +10367,8 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
     return 1;
 }
 
+// Keep the hot prepared-entry alignment stable as unrelated runtime code grows.
+// A modest boundary avoids imposing cache-line padding on the runtime text.
 #define QORE_TYPED_FUNCREF_UNARY(NAME, TYPE, RET_KIND, ARG_NAME, ARG_TYPE, ARG_KIND) \
     extern "C" DLLEXPORT int qore_rt_try_funcref_##NAME##_##ARG_NAME##_v1( \
             uint64_t ref, ARG_TYPE arg, TYPE* result, ExceptionSink* xsink) { \
@@ -10376,7 +10378,7 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
             uint64_t ref, ARG_TYPE arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc) { \
         return tryTypedFunctionRefExplicit<TYPE, RET_KIND | (ARG_KIND << 2)>(*rc, ref, result, xsink, arg); \
     } \
-    extern "C" DLLEXPORT int qore_rt_try_funcref_##NAME##_##ARG_NAME##_v3( \
+    extern "C" DLLEXPORT __attribute__((aligned(16))) int qore_rt_try_funcref_##NAME##_##ARG_NAME##_v3( \
             uint64_t ref, ARG_TYPE arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, \
             QorePreparedFunctionRefV3* cache) { \
         return tryPreparedFunctionRef<TYPE, RET_KIND | (ARG_KIND << 2)>(*rc, *cache, ref, result, xsink, arg); \
@@ -10390,7 +10392,7 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
             uint64_t ref, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc) { \
         return tryTypedFunctionRefExplicit<TYPE, KIND>(*rc, ref, result, xsink); \
     } \
-    extern "C" DLLEXPORT int qore_rt_try_funcref_##NAME##_0_v3( \
+    extern "C" DLLEXPORT __attribute__((aligned(16))) int qore_rt_try_funcref_##NAME##_0_v3( \
             uint64_t ref, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, \
             QorePreparedFunctionRefV3* cache) { \
         return tryPreparedFunctionRef<TYPE, KIND>(*rc, *cache, ref, result, xsink); \

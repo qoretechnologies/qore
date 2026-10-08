@@ -137,6 +137,15 @@ public:
         return false;
     }
 
+    //! Tests a single unfiltered class constraint without generic conversion dispatch.
+    /** Uses the ordinary object's raw/parameterized and inheritance/access checks.
+        A false result requires normal acceptance for conversions or diagnostics;
+        neither the value nor the exception sink is modified here.
+        @param n borrowed, weak-normalized assignment value
+        @return true only when one unfiltered required-class spec accepts the object
+    */
+    DLLLOCAL bool acceptsRequiredClassValueWithoutFilter(const QoreValue& n) const;
+
     DLLLOCAL const QoreAcceptSpec& getFirstAcceptSpec() const {
         assert(!accept_vec.empty());
         return accept_vec[0];

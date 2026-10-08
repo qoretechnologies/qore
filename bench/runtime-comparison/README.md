@@ -102,6 +102,16 @@ Storage and destructor cleanup remain runtime-backed. This runtime-only change
 can use `--reuse-aot-for-baseline` when both runtimes provide the versioned helper.
 The presence flag is sampled once, on first helper use.
 
+`QORE_DISABLE_AOT_CLASS_ACCEPT_FAST_PATH=1` at runtime keeps generic conversion
+dispatch for those fresh class stores. The enabled path positively checks a
+single unmapped class constraint with the ordinary raw/parameterized-object and
+inheritance/access validators; misses retain the original diagnostics. No
+compatibility/access result is cached. The compiler and helper ABI are unchanged,
+so runtime-only before/after comparisons can reuse the identical AOT executable.
+The prepared scalar callback v3 entrypoints also request 16-byte alignment.
+The layout comparison includes the unaligned and 128-byte-aligned alternatives;
+alignment changes no callback guard, helper ABI or frame lifetime.
+
 `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` disables the pure scalar method binding
 at compilation and its polymorphic-cache native path at runtime. Eligible
 `int(int)` overrides bypass parameter TLS binding but retain receiver, Program,

@@ -44,6 +44,7 @@
 #include "qore/intern/qore_debug_narrowing.h"
 
 #include <atomic>
+#include <cstdlib>
 #include <memory>
 
 // defined in lib/QoreTypeInfo.cpp; declared in "qore/intern/QoreTypeInfo.h"
@@ -922,7 +923,10 @@ public:
         assert(QoreTypeInfo::getUniqueReturnClass(ti) && !QoreTypeInfo::isComplex(ti)
             && !QoreTypeInfo::isReference(ti));
         ValueHolder stored(value.refSelf(), xsink);
-        QoreTypeInfo::acceptAssignment(ti, "<lvalue>", *stored, xsink);
+        static const bool fast_class_accept = !std::getenv("QORE_DISABLE_AOT_CLASS_ACCEPT_FAST_PATH");
+        if (!fast_class_accept || !ti->acceptsRequiredClassValueWithoutFilter(*stored)) {
+            QoreTypeInfo::acceptAssignment(ti, "<lvalue>", *stored, xsink);
+        }
         if (*xsink) {
             return true;
         }

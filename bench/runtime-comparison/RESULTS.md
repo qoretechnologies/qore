@@ -3965,3 +3965,185 @@ current matched Java comparison in this snapshot.
 227 jobs / 1135 samples across the pilot, primary, disabled control and fresh
 call census, plus exact diffs/hashes, rejected-prototype evidence and all 62
 audit checks (20 Pass/42 N/A). No timing overlapped validation or other experiments.
+
+## Rejected deferred method frames and inline stack pops (2026-10-08)
+
+Baseline `2ba74f4f6`, same macOS arm64 host. A prepared native method frame
+deferred pure-body thread-private markers/context while retaining eager
+object/class substitution, stack publication and reader synchronization. Stack
+exceptions and wide-result allocation materialized the full context. A second
+variant inlined stack-pop publication and moved only the rare reader wait to
+a cold helper. Both runtime prototypes were removed; neither is a retained win.
+
+All timings use 4096 elements, three warmups and five windows per fork, with
+identical AOT executables against each pair of libraries. Values are medians
+of fork means, ns/element, not isolated call latency. Pilot windows are 300 ms;
+the seven-fork repeat uses 500 ms. No timing overlapped builds, tests, profiles,
+disassembly or evidence validation.
+
+|!Experiment|!Kernel|!Before|!After|!Change
+|Deferred frame pilot, 5 forks|polymorphic_call|89.46827|89.12539|-0.38%
+|Deferred frame repeat, 7 forks|polymorphic_call|91.02040|90.43374|-0.64%
+|Deferred frame repeat, 7 forks|indirect_wide|7.18986|7.19222|0.03%
+|Deferred frame repeat, 7 forks|indirect_float|9.04453|9.13060|0.95%
+|Inline pop over deferred frame, 5 forks|polymorphic_call|90.44226|88.89771|-1.71%
+|Inline pop over deferred frame, 5 forks|indirect_wide|7.28363|7.58726|4.17%
+|Inline pop over deferred frame, 5 forks|indirect_float|9.10725|9.06435|-0.47%
+|Inline pop over deferred frame, 5 forks|direct_call|1.33530|1.34049|0.39%
+
+Every before/after fork range overlaps. The deferred repeat includes unfavorable
+wide/float outliers (9.29/10.50 ns); none were discarded. The small target changes
+and mixed controls do not establish a worthwhile optimization. Profiles and
+assembly confirm both intended paths were selected, so this is not a missed
+lowering. Shared-host load, frequency and thermal state remain uncontrolled;
+fork ranges are descriptive, not confidence intervals.
+
+Both variants build in release/debug and pass native-method and native-leaf
+context regressions (316/40 assertions per build); the inline-pop variant also
+passes concurrent stack readers (7 assertions per build). Retained coverage
+adds wide-result caller-class restoration and warmed method stack-limit sweeps,
+including foreign-thread calls. After removing the obsolete disable controls,
+these tests pass against the original saved baseline (284/32 assertions).
+
+[Evidence](results-rejected-method-frame-macos-arm64.json) retains exact rejected
+diffs/hashes, all 122 jobs / 610 samples, recomputed medians and qualifications.
+No full suite, sanitizer, Linux or Java-parity claim is made. The next target is
+the larger checked class-local assignment hotspot: specialize successful class
+acceptance without removing inheritance/access checks or changing diagnostics.
+
+## Checked class acceptance and prepared-entry alignment (2026-10-08)
+
+Baseline: `2ba74f4f65ee184391841eb77bcaefb053863d00`. The retained runtime
+specializes successful fresh required-class acceptance and requests 16-byte
+alignment on the twelve prepared scalar callback v3 entrypoints. Final
+polymorphic AOT improves **3.77%**, **91.87791 → 88.40956 ns/element**.
+Fresh Java is **2.53907**, leaving a **34.82×** whole-workload gap. Java parity
+is not achieved.
+
+### Contract and layout tradeoff
+
+The fresh, ordinary, runtime-backed class local retains its owned value holder,
+weak normalization, real-reference accounting and declaration-order cleanup.
+Only a single unmapped `QTS_CLASS` acceptance spec with a strong object can use
+the positive predicate. It shares the ordinary raw/parameterized-object gate
+and inheritance/private-access validator. Failed predicates call the original
+`acceptAssignment()` for conversion or diagnostics. No class/access decision
+is cached; optional, union, mapped and parameterized target constraints retain
+generic acceptance. Generic objects may still satisfy a plain base class or a
+`legacy_raw_accepts` target.
+
+`QORE_DISABLE_AOT_CLASS_ACCEPT_FAST_PATH=1` retains generic acceptance dispatch;
+the presence flag is sampled on first helper use. The compiler, helper ABI,
+stack checks, Program/debugger guards, frame publication and reader synchronization
+are unchanged. All comparisons with AOT reuse one identical executable per pair.
+
+The unaligned candidate repeatedly regressed wide callbacks. A 128-byte-aligned
+alternative recovered that AOT control but increased text by 95,700 bytes over
+the unaligned candidate and showed an unfavorable IR-wide signal. The retained
+16-byte candidate costs 9,284 bytes over unaligned, or **9,640 bytes over HEAD**
+(13,883,608 → 13,893,248). The larger growth than twelve entry paddings reflects
+broader generated layout effects; their exact cause is not established.
+No corresponding benefit is claimed on other platforms.
+
+### Final comparison
+
+`run-lzfbwmjt`: 1024 elements, five forks, three warmups and five 500 ms windows;
+100 jobs / 500 samples across baseline/current IR and AOT plus fresh Java.
+Every mode passes 270 independent reference checks. Jobs are sequential and
+shuffled; no build, test, profile, disassembly or evidence validation overlaps timing.
+Values are medians of fork means, including loop, receiver selection, assignment,
+computation and checksum, not isolated call instructions.
+
+|!Mode and kernel|!Before|!After|!Change|!Before / after fork-mean ranges
+|AOT polymorphic_call|91.87791|88.40956|-3.77%|90.75425–92.68528 / 87.70481–92.39431
+|AOT indirect_wide|8.19413|8.12048|-0.90%|8.12768–8.24447 / 8.09186–8.21653
+|AOT indirect_float|10.03025|10.02601|-0.04%|9.91918–10.09567 / 9.87475–10.03706
+|AOT direct_call|2.26906|2.25009|-0.84%|2.25229–2.28232 / 2.24727–2.26772
+|IR polymorphic_call|412.82238|411.04999|-0.43%|403.00963–414.30176 / 408.99696–414.45292
+|IR indirect_wide|344.69701|342.65629|-0.59%|334.18264–347.82098 / 333.26298–352.23769
+|IR indirect_float|295.74118|295.23630|-0.17%|292.36642–298.46339 / 289.37822–296.61927
+|IR direct_call|359.08206|359.05582|-0.01%|358.15679–360.83170 / 353.90043–363.17048
+
+All final ranges overlap, including the target because one unfavorable after
+fork reaches 92.39431 ns/element. No sample is dropped. Earlier target gains
+across the unaligned and 128-byte variants support the specialization, but the
+entire final 3.77% is not attributed to one helper. The final controls do not
+establish gains or equivalence; shared-host scheduling, frequency and thermal
+state remain uncontrolled, and fork ranges are not confidence intervals.
+
+Fresh Java wide/float/direct medians are 1.67421 / 1.64661 / 0.88674, giving
+AOT ratios **4.85× / 6.09× / 2.54×**. Direct calls permit inlining, and Qore
+can inline the base polymorphic body while Java retains all three methods.
+The computations match, but runtime contracts and retained-call patterns differ.
+
+### Earlier variants and controls
+
+All experiments remain in the evidence, including rejected alternatives and
+outliers. The isolated 128-byte pilot compares against the saved unaligned
+class candidate, not HEAD.
+
+|!Experiment|!Key observations
+|Unaligned pilot, 4096 elements, 5 forks, 300 ms|Polymorphic -4.78%; wide +3.80%
+|Unaligned primary, 1024 elements, 5 forks, 500 ms|Polymorphic -3.03%; wide +3.36%, separated ranges
+|Unaligned disabled control, 4096 elements, 7 forks, 500 ms|Polymorphic -0.07%; wide +2.93%, separated ranges
+|128-byte isolated pilot, 4096 elements, 5 forks, 300 ms|Bounded integer callback -6.18%; branch integer -4.26%; wide -1.58%, overlap
+|128-byte primary, 1024 elements, 5 forks, 500 ms|Polymorphic 91.90444 → 87.48944 (-4.80%); wide +0.20%, overlap
+|128-byte disabled/IR control, 1024 elements, 5 forks, 500 ms|Disabled AOT polymorphic +2.01%; IR wide +2.71%, separated ranges
+|128-byte IR repeat, 1024 elements, 7 forks, 500 ms|IR wide +1.28%, overlap; direct +0.07%, overlap
+|16-byte final primary, 1024 elements, 5 forks, 500 ms|Polymorphic -3.77%; wide AOT -0.90% and IR -0.59%, both overlap
+
+The wide AOT regression persists when the unaligned class predicate is disabled,
+supporting an effect outside the positive shortcut, such as layout, without
+proving its exact cause. The 128-byte IR signal weakened on repeat but was not
+dismissed; the smaller alignment was selected and remeasured. No performance
+claim is based on subtraction of unrelated-run medians.
+
+### Validation and audit
+
+The unaligned class candidate passes release/debug matrices of 60 selected
+files per build: 42 QUnit wrappers, 235 cases / 17,319 assertions, plus 18
+standalones. Both aligned variants pass nine focused wrappers per build:
+12 cases / 4,111 assertions. This is focused validation of alignment, not a
+claim that the whole 60-file matrix was rerun on each aligned build.
+
+Expanded class fixtures cover positive/negative private access, raw generic
+acceptance, a generic derived object assigned to its plain base, and exclusion
+of parameterized targets. Existing cases retain weak/deleted objects, captures,
+alias ownership, lifetime order and error recovery. Retained method tests add
+wide-result private-context restoration and warmed method stack-limit sweeps
+on main/foreign threads. Guard, debugger, cancellation, concurrency, scalar ABI
+and reader tests remain green.
+
+Final standalone runtime syntax passes with 79 existing warnings; unchanged
+class implementation syntax passes with 80. Eleven Python harness tests pass.
+Old AOT v2/v3 executables retain byte-identical 225/270 records. Disassembly
+confirms the positive class helper and generic fallback, and all twelve final
+prepared entry addresses are 16-byte aligned.
+
+The `audit-changes` skill was applied to all retained changes, including the
+tests/evidence from the rejected method-frame experiments above. All 62 checks
+are reported individually with evidence: **21 Pass, 41 N/A, 0 Fail**. Review
+added the missing immediate exception-sink assertion after the first new test
+argument push; baseline and candidate tests pass with that assertion.
+
+|!Audit group|!Status|!Evidence
+|Module, QPP, DataProvider, factory and JAR registration|N/A|No such implementation or registration changes
+|Test structure and dependencies|Pass|Modern executable fixtures; repository paths; bundled QUnit/FsUtil
+|Sandboxing and cancellation|Pass|No production I/O; bounded helpers; sweep polls every 10 calls and stack walk every 100 entries
+|Exception, thread, type and input safety|Pass|Owned holders, exact admission tags, unchanged live access checks and reader protocol
+|Performance, documentation, security and correctness|Pass|All raw trials retained; explicit layout costs/limits; focused and broad coverage scoped above
+
+[Complete evidence](results-class-acceptance-macos-arm64.json) retains all
+**500 jobs / 2,500 samples**, exact variant diffs/library hashes, integrity
+checks and the complete audit. Rejected method-frame evidence remains separate.
+Final runtime diff SHA-256 is
+`6cb27db13d24bb1c3bf8826e68360de8a219489c37d6c70ea5ad4a329f197f96`;
+release/debug library hashes are
+`f35473d120a7650d85c03433f1dc3674c8315f0c1c1e01416a4873e6350f818c` /
+`5d9c36e363109cf3a83c70fc5ba38c7b6542a4b6388ad850ae464181e54c0f9e`.
+
+No full suite, sanitizer/race detector, Linux, allocation-failure injection or
+full split-runtime claim is made. The goal remains active. Next: extend the
+existing bounded IR integer-leaf evaluator to composed scalar expressions,
+then investigate immutable caller-owned diagnostic frames and unboxed method
+continuations without weakening observability or cleanup.

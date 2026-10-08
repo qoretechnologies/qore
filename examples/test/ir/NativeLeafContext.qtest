@@ -31,7 +31,13 @@ class NativeLeafContextTest inherits QUnit::Test {
             "int sub nativeLeafProbe(int value) { return (value + 17) & 65535; }\n"
             "code<int(int)> sub makeProbe() { return \\nativeLeafProbe(); }\n"
             "float sub nativeLeafFloatProbe(float value) { return value + 0.5; }\n"
-            "code<float(float)> sub makeFloatProbe() { return \\nativeLeafFloatProbe(); }\n");
+            "code<float(float)> sub makeFloatProbe() { return \\nativeLeafFloatProbe(); }\n"
+            "class NativeLeafMethodBase { int next(int value) { return value + 7; } }\n"
+            "class NativeLeafMethodDerived inherits NativeLeafMethodBase {\n"
+            "    int next(int value) { return value + 17; }\n}\n"
+            "NativeLeafMethodBase sub makeMethodProbe() { return new NativeLeafMethodDerived(); }\n"
+            "int sub methodProbe(NativeLeafMethodBase input, int value) {\n"
+            "    NativeLeafMethodBase receiver = input; return receiver.next(value);\n}\n");
         file.close();
         string control = dir.path + "/control.qr";
         file.open2(control, O_WRONLY | O_CREAT | O_TRUNC);
@@ -59,6 +65,8 @@ class NativeLeafContextTest inherits QUnit::Test {
                     + " 2>&1", \status);
                 assertEq(0, status, output);
                 assertRegex("qore_rt_bind_function_call_ref_typed_v2", output, "typed provider binding");
+                assertRegex("qore_rt_bind_method_int_unary_v1[^\n]*NativeLeafMethodDerived", output,
+                    "pure method companion binding");
                 assertEq(prefix.empty(), output.find("qore_rt_bind_function_call_ref_typed_v3") >= 0,
                     "deferred eligible entry or eager control");
                 list<string> objects = glob(dir.path + "/*.qo");
