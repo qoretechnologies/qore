@@ -4,7 +4,7 @@
 
     Qore mongodb module - BSON to/from Qore value conversion
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -327,14 +327,26 @@ int qore_value_to_bson_append(bson_t* doc, const char* key, const QoreValue& v_i
 }
 
 int qore_list_to_bson_array(bson_t* doc, const char* key, const QoreListNode* list, ExceptionSink* xsink) {
+    if (qore_check_cancel(xsink, "converting BSON array")) {
+        return -1;
+    }
     bson_t child;
+#if BSON_CHECK_VERSION(2, 3, 0)
+    // The renamed API requires sequential numeric keys, which the list
+    // iterator supplies below.  The old name is a deprecated alias in 2.3+.
+    if (!bson_append_array_unsafe_begin(doc, key, -1, &child)) {
+#else
     if (!bson_append_array_begin(doc, key, -1, &child)) {
+#endif
         xsink->raiseException("MONGODB-BSON-ERROR", "failed to begin array");
         return -1;
     }
 
     ConstListIterator li(list);
     while (li.next()) {
+        if (li.index() && !(li.index() % 100) && qore_check_cancel(xsink, "converting BSON array")) {
+            return -1;
+        }
         QoreStringMaker idx("%zd", li.index());
         if (qore_value_to_bson_append(&child, idx.c_str(), li.getValue(), xsink)) {
             return -1;

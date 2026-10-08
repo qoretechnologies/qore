@@ -2744,6 +2744,24 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
             return nullptr;
         }
     }
+#if PARQUET_VERSION_MAJOR >= 24
+    // Arrow 24 replaced the output-parameter overloads with Result-returning
+    // reads.  Keep the older API below for distribution SDKs predating it.
+    auto table_result = [&]() -> arrow::Result<std::shared_ptr<arrow::Table>> {
+        if (read_by_row_group && has_read_columns) {
+            return reader->ReadRowGroups(row_groups_to_read, column_indices);
+        } else if (read_by_row_group) {
+            return reader->ReadRowGroups(row_groups_to_read);
+        } else if (has_read_columns) {
+            return reader->ReadTable(column_indices);
+        }
+        return reader->ReadTable();
+    }();
+    status = table_result.status();
+    if (table_result.ok()) {
+        table = std::move(table_result).ValueOrDie();
+    }
+#else
     if (read_by_row_group && has_read_columns) {
         status = reader->ReadRowGroups(row_groups_to_read, column_indices, &table);
     } else if (read_by_row_group) {
@@ -2753,6 +2771,7 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
     } else {
         status = reader->ReadTable(&table);
     }
+#endif
     if (!status.ok()) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "error reading Parquet table from '%s': %s", path.c_str(),
