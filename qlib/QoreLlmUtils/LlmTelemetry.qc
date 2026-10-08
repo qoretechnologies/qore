@@ -68,7 +68,7 @@ public class LlmTelemetry {
         int cached_input_tokens = firstInt(usage, (
             "cached_input_tokens", "cache_read_input_tokens",
             "cachedInputTokens", "cacheReadInputTokens",
-            "cached_content_token_count", "cachedContentTokenCount"));
+            "cached_content_token_count", "cachedContentTokenCount", "prompt_cache_hit_tokens"));
         int cache_creation_input_tokens = firstInt(usage, (
             "cache_creation_input_tokens", "cache_write_input_tokens",
             "cacheCreationInputTokens", "cacheWriteInputTokens"));

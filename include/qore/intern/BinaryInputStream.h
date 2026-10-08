@@ -78,9 +78,11 @@ public:
     }
 
     DLLLOCAL int64 peek(ExceptionSink* xsink) override {
-        if ((len - offset) == 0) // No more data.
+        if ((len - offset) == 0) { // No more data.
             return -1;
-        return static_cast<const char*>(ptr)[offset];
+        }
+        // the byte is returned as an unsigned value, so that 0xff is not taken for the end of the stream
+        return static_cast<const unsigned char*>(ptr)[offset];
     }
 
 private:

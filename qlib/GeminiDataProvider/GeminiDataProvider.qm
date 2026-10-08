@@ -32,6 +32,7 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) GeminiRestClient
+%requires GeminiBodyShape
 
 %requires json
 
@@ -409,6 +410,8 @@ module GeminiDataProvider {
     @section geminidataproviderRelnotes Release Notes
 
     @subsection geminidataproviderv1_0 GeminiDataProvider v1.0
+    - Gemini 3.x generation requests omit deprecated sampling parameters and numeric thinking budgets; use
+      thinking levels instead. Gemini 2.5 behavior is preserved; see @ref geminibodyshapegeneration.
     - initial release
 */
 

@@ -1,0 +1,309 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file string-conversion-encoding-checks.qi checks that strings in any encoding convert to numbers, booleans, and dates
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+/** Numbers, booleans, and dates are parsed from strings with ASCII syntax.  Each check converts a string in an
+    encoding that is not ASCII-compatible (UTF-16LE, UTF-16BE, and the generic UTF-16 with and without a byte order
+    mark) and verifies that it gives the same result as the same characters in UTF-8, for every conversion: the
+    conversion functions, the string pseudo-methods, soft parameter, lvalue, and member types, boolean context,
+    comparisons, the parse functions, and date parsing with and without a mask.  A UTF-16 string is not cut at the
+    first null byte of its representation: \c "12" in UTF-16LE is \c 12, not \c 1.
+
+    Each execution engine has its own conversion code, so the checks are run in each execution mode by
+    string-conversion-encoding-worker.q, which includes this file in its main program (code in a user module loaded
+    from source does not take the execution mode given on the command line), and as a compiled (AOT) module by
+    StringConversionEncodingChecks.qm, which includes it as well.
+*/
+public namespace StringConversionEncodingChecks {
+#! a constant in UTF-16LE; the constant is evaluated when the code is parsed
+const C16 = convert_encoding("42", "UTF-16LE");
+#! a constant boolean string in UTF-16BE
+const B16 = convert_encoding("0", "UTF-16BE");
+
+#! the UTF-8 strings converted in each encoding
+const Inputs = (
+    "12", "-12", "+7", "  42", "0", "1", "007", "0x1f", "1f", "077", "1.5", "-2.25e3", ".5", "1e400",
+    "9223372036854775807", "9223372036854775808", "-9223372036854775808",
+    "12abc", "abc", "", " ", "true", "TRUE", "false", "yes", "on", "off", "enable", "y", "no",
+    "Bestätigung", "3€", "€3", "1.234,5", "1,234.5",
+    "2024-01-02", "2024-01-02 03:04:05", "20240102T030405", "2024-01-02T03:04:05.123456Z", "P1DT2H",
+    "2024-13-45", "12:30:45",
+);
+
+hashdecl SoftHash {
+    softint i = 0;
+    softfloat f = 0.0;
+    softnumber n = 0n;
+    softbool b = False;
+}
+
+class SoftObj {
+    public {
+        softint i = 0;
+        softfloat f = 0.0;
+        softnumber n = 0n;
+        softbool b = False;
+        softdate d = 1970-01-01Z;
+    }
+}
+
+int sub si(softint i) {
+    return i;
+}
+
+float sub sf(softfloat f) {
+    return f;
+}
+
+number sub sn(softnumber n) {
+    return n;
+}
+
+bool sub sb(softbool b) {
+    return b;
+}
+
+*int sub osi(*softint i) {
+    return i;
+}
+
+*float sub osf(*softfloat f) {
+    return f;
+}
+
+*number sub osn(*softnumber n) {
+    return n;
+}
+
+*bool sub osb(*softbool b) {
+    return b;
+}
+
+#! returns the result of a conversion or the error code of the exception it raises
+auto sub try_conv(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return "exception: " + ex.err;
+    }
+}
+
+#! collects the result of each check as \c "ok <label>" or \c "FAIL <label>: <reason>"
+class ConvChecker {
+    private {
+        list<string> results = ();
+        string prefix = "";
+    }
+
+    setPrefix(string prefix) {
+        self.prefix = prefix;
+    }
+
+    chk(string label, auto actual, auto expected) {
+        if (actual !== expected) {
+            results += sprintf("FAIL %s%s: got %y expected %y", prefix, label, actual, expected);
+            return;
+        }
+        results += "ok " + prefix + label;
+    }
+
+    fail(string label, hash<ExceptionInfo> ex) {
+        results += sprintf("FAIL %s%s: %s: %s", prefix, label, ex.err, ex.desc);
+    }
+
+    list<string> getResults() {
+        return results;
+    }
+}
+
+#! the checks with both strings declared as \c string, which some engines convert with string fast paths
+sub check_typed(ConvChecker c, string s, string u) {
+    c.chk("int()", int(s), int(u));
+    c.chk("int() base 16", int(s, 16), int(u, 16));
+    c.chk("int() base 0", int(s, 0), int(u, 0));
+    c.chk("<string>::toInt()", s.toInt(), u.toInt());
+    c.chk("<string>::toInt() base 16", s.toInt(16), u.toInt(16));
+    c.chk("<string>::toInt() base 36", s.toInt(36), u.toInt(36));
+    c.chk("<string>::intp()", s.intp(), u.intp());
+    c.chk("float()", float(s), float(u));
+    c.chk("<value>::toFloat()", s.toFloat(), u.toFloat());
+    c.chk("number()", number(s), number(u));
+    c.chk("<value>::toNumber()", s.toNumber(), u.toNumber());
+    c.chk("boolean()", boolean(s), boolean(u));
+    c.chk("<value>::toBool()", s.toBool(), u.toBool());
+    c.chk("parse_boolean()", parse_boolean(s), parse_boolean(u));
+    c.chk("strtoint()", try_conv(auto sub () { return strtoint(s, 10); }), try_conv(auto sub () { return strtoint(u, 10); }));
+    c.chk("parse_int()", parse_int(s, ".,"), parse_int(u, ".,"));
+    c.chk("parse_float()", parse_float(s, ".,"), parse_float(u, ".,"));
+    c.chk("parse_number()", parse_number(s, ".,"), parse_number(u, ".,"));
+    c.chk("parse_number() UTF-16 format", parse_number(s, convert_encoding(",.", "UTF-16BE")),
+        parse_number(u, ",."));
+    c.chk("softint param", si(s), si(u));
+    c.chk("softfloat param", sf(s), sf(u));
+    c.chk("softnumber param", sn(s), sn(u));
+    c.chk("softbool param", sb(s), sb(u));
+    c.chk("*softint param", osi(s), osi(u));
+    c.chk("*softfloat param", osf(s), osf(u));
+    c.chk("*softnumber param", osn(s), osn(u));
+    c.chk("*softbool param", osb(s), osb(u));
+    softint li = s;
+    softint lu = u;
+    c.chk("softint local", li, lu);
+    li = s;
+    c.chk("softint assign", li, lu);
+    softfloat lf = s;
+    c.chk("softfloat local", lf, float(u));
+    softnumber ln = s;
+    c.chk("softnumber local", ln, number(u));
+    softbool lb = s;
+    c.chk("softbool local", lb, boolean(u));
+    hash<SoftHash> sh = <SoftHash>{"i": s, "f": s, "n": s, "b": s};
+    hash<SoftHash> uh = <SoftHash>{"i": u, "f": u, "n": u, "b": u};
+    c.chk("hashdecl soft members", sh, uh);
+    SoftObj so();
+    so.i = s;
+    so.f = s;
+    so.n = s;
+    so.b = s;
+    c.chk("object soft members", (so.i, so.f, so.n, so.b), (si(u), sf(u), sn(u), sb(u)));
+    c.chk("boolean context", s ? True : False, u ? True : False);
+    c.chk("not", !s, !u);
+    bool if_s;
+    if (s) {
+        if_s = True;
+    }
+    bool if_u;
+    if (u) {
+        if_u = True;
+    }
+    c.chk("if", if_s, if_u);
+    c.chk("== int", s == 12, u == 12);
+    c.chk("< int", s < 13, u < 13);
+    c.chk("== float", s == 1.5, u == 1.5);
+    c.chk("minus", s - 0, u - 0);
+    c.chk("sprintf %d", sprintf("%d", s), sprintf("%d", u));
+    c.chk("date()", try_conv(auto sub () { return date(s); }), try_conv(auto sub () { return date(u); }));
+    c.chk("softdate member", try_conv(auto sub () { so.d = s; return so.d; }),
+        try_conv(auto sub () { so.d = u; return so.d; }));
+    c.chk("date() mask", try_conv(auto sub () { return date(s, "YYYY-MM-DD"); }),
+        try_conv(auto sub () { return date(u, "YYYY-MM-DD"); }));
+    c.chk("date() UTF-16 mask", try_conv(auto sub () { return date(s, convert_encoding("YYYY-MM-DD", "UTF-16LE")); }),
+        try_conv(auto sub () { return date(u, "YYYY-MM-DD"); }));
+    TimeZone tz("Europe/Prague");
+    c.chk("TimeZone::date()", try_conv(auto sub () { return tz.date(s); }), try_conv(auto sub () { return tz.date(u); }));
+    c.chk("TimeZone::date() mask", try_conv(auto sub () { return tz.date(s, "YYYYMMDD"); }),
+        try_conv(auto sub () { return tz.date(u, "YYYYMMDD"); }));
+}
+
+#! the checks with both values declared as \c auto
+sub check_auto(ConvChecker c, auto s, auto u) {
+    c.chk("auto int()", int(s), int(u));
+    c.chk("auto <value>::toInt()", s.toInt(), u.toInt());
+    c.chk("auto <value>::toFloat()", s.toFloat(), u.toFloat());
+    c.chk("auto <value>::toNumber()", s.toNumber(), u.toNumber());
+    c.chk("auto <value>::toBool()", s.toBool(), u.toBool());
+    c.chk("auto boolean context", s ? True : False, u ? True : False);
+    c.chk("auto softint param", si(s), si(u));
+    c.chk("auto softbool param", sb(s), sb(u));
+    c.chk("auto parse_boolean()", parse_boolean(s), parse_boolean(u));
+    c.chk("auto date()", try_conv(auto sub () { return date(s); }), try_conv(auto sub () { return date(u); }));
+    c.chk("auto == int", s == 12, u == 12);
+}
+
+#! returns the UTF-8 string in each encoding that is not ASCII-compatible
+hash<string, string> sub get_variants(string u) {
+    return {
+        "UTF-16LE": convert_encoding(u, "UTF-16LE"),
+        "UTF-16BE": convert_encoding(u, "UTF-16BE"),
+        "UTF-16": convert_encoding(u, "UTF-16"),
+        "UTF-16 LE BOM": binary_to_string(<fffe> + binary(convert_encoding(u, "UTF-16LE")), "UTF-16"),
+        "UTF-16 BE BOM": binary_to_string(<feff> + binary(convert_encoding(u, "UTF-16BE")), "UTF-16"),
+    };
+}
+
+#! checks strings that are not valid in their encoding and constants
+sub check_special(ConvChecker c) {
+    c.setPrefix("constants: ");
+    c.chk("int()", int(C16), 42);
+    c.chk("<string>::toInt()", C16.toInt(), 42);
+    c.chk("softint", si(C16), 42);
+    c.chk("float()", float(C16), 42.0);
+    c.chk("boolean() 0", boolean(B16), False);
+    c.chk("boolean context 0", B16 ? True : False, False);
+
+    c.setPrefix("invalid: ");
+    # an odd number of bytes: "1", "2", and a byte that is not a complete character
+    string odd = binary_to_string(<3100320033>, "UTF-16LE");
+    c.chk("odd length int()", int(odd), 12);
+    c.chk("odd length toInt()", odd.toInt(), 12);
+    c.chk("odd length float()", float(odd), 12.0);
+    c.chk("odd length number()", number(odd), 12n);
+    c.chk("odd length boolean()", boolean(odd), True);
+    # only a byte that is not a complete character: not empty, so True, as for any string that is not "0"
+    string bad = binary_to_string(<33>, "UTF-16LE");
+    c.chk("incomplete boolean()", boolean(bad), True);
+    c.chk("incomplete int()", int(bad), 0);
+    # an unpaired high surrogate followed by "5"
+    string surr = binary_to_string(<d8000035>, "UTF-16BE");
+    c.chk("unpaired surrogate int()", int(surr), 0);
+    c.chk("unpaired surrogate boolean()", boolean(surr), True);
+    string surr2 = binary_to_string(<0037d800>, "UTF-16BE");
+    c.chk("trailing high surrogate int()", int(surr2), 7);
+    # a UTF-16 "0" with a byte order mark is "0", which is False
+    c.chk("BOM 0 boolean()", boolean(binary_to_string(<fffe3000>, "UTF-16")), False);
+    # a byte order mark in an explicit-endian encoding is a character (U+FEFF), as in UTF-8
+    string lebom = binary_to_string(<fffe31003200>, "UTF-16LE");
+    c.chk("UTF-16LE U+FEFF int()", int(lebom), int(convert_encoding(lebom, "UTF-8")));
+    c.chk("UTF-16LE U+FEFF boolean()", boolean(lebom), True);
+    # the string itself is not changed by a conversion
+    string s16 = convert_encoding("12", "UTF-16LE");
+    int i = int(s16);
+    c.chk("unchanged", (i, s16.encoding(), binary(s16)), (12, "UTF-16LE", <31003200>));
+}
+
+#! runs every check and returns the results
+public list<string> sub get_results() {
+    ConvChecker c();
+    foreach string u in (Inputs) {
+        foreach hash<auto> i in (get_variants(u).pairIterator()) {
+            c.setPrefix(sprintf("%s %y: ", i.key, u));
+            try {
+                check_typed(c, i.value, u);
+            } catch (hash<ExceptionInfo> ex) {
+                c.fail("typed checks", ex);
+            }
+            try {
+                check_auto(c, i.value, u);
+            } catch (hash<ExceptionInfo> ex) {
+                c.fail("auto checks", ex);
+            }
+        }
+    }
+    try {
+        check_special(c);
+    } catch (hash<ExceptionInfo> ex) {
+        c.fail("special checks", ex);
+    }
+    return c.getResults();
+}
+}

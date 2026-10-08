@@ -33,6 +33,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_date_private.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 DateTimeNode::DateTimeNode(qore_date_private* n_priv) : SimpleValueQoreNode(NT_DATE), DateTime(n_priv) {
 }
@@ -305,6 +306,11 @@ DateTimeValueHelper::DateTimeValueHelper(const QoreValue& n) {
             dt = DateTime::makeRelativeFromSeconds((int64)f, (int)((f - (double)((int)f)) * 1000000));
             del = true;
             return;
+        } else if (t == NT_STRING) {
+            // a short string is not a node; the helper provides one
+            QoreStringNodeValueHelper str(n);
+            dt = str->getDateTimeRepresentation(del);
+            return;
         } else if (n.hasNode()) {
             dt = n.getInternalNode()->getDateTimeRepresentation(del);
             return;
@@ -338,7 +344,8 @@ DateTimeNodeValueHelper::DateTimeNodeValueHelper(const AbstractQoreNode* n, Exce
     // special logic for strings to verify that the input data represents a valid date
     if (t == NT_STRING) {
         del = true;
-        dt = new DateTimeNode(reinterpret_cast<const QoreStringNode*>(n)->c_str(), xsink);
+        QoreAsciiCompatStringHelper str(*reinterpret_cast<const QoreStringNode*>(n));
+        dt = new DateTimeNode(str.c_str(), xsink);
         return;
     }
 
@@ -362,6 +369,13 @@ DateTimeNodeValueHelper::DateTimeNodeValueHelper(const QoreValue& n) {
             double f = n.getAsFloat();
             dt = DateTimeNode::makeRelativeFromSeconds((int64)f, (int)((f - (double)((int)f)) * 1000000));
             del = true;
+            return;
+        } else if (t == NT_STRING) {
+            // a short string is not a node; the helper provides one
+            QoreStringNodeValueHelper str(n);
+            del = true;
+            dt = new DateTimeNode;
+            str->getDateTimeRepresentation(*dt);
             return;
         } else if (n.hasNode()) {
             del = true;

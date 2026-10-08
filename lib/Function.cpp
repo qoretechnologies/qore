@@ -4934,11 +4934,11 @@ void UserVariantBase::registerPrecompiledAOTFunction(
     }
     if (ctx) {
         if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
-            uses_argv = signature.argvid != nullptr;
-            uses_self = signature.selfid != nullptr;
+            uses_argv.store(signature.argvid != nullptr, std::memory_order_release);
+            uses_self.store(signature.selfid != nullptr, std::memory_order_release);
         } else {
-            uses_argv = ctx->uses_argv;
-            uses_self = ctx->uses_self;
+            uses_argv.store(ctx->uses_argv, std::memory_order_release);
+            uses_self.store(ctx->uses_self, std::memory_order_release);
         }
     }
     jit_compile_state.store(2, std::memory_order_relaxed);
@@ -4958,11 +4958,11 @@ void UserVariantBase::registerLazyPrecompiledAOTFunction(AotFunctionPtr fn,
         has_aot_lazy_function_ir.store(true, std::memory_order_release);
     }
     if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
-        uses_argv = signature.argvid != nullptr;
-        uses_self = signature.selfid != nullptr;
+        uses_argv.store(signature.argvid != nullptr, std::memory_order_release);
+        uses_self.store(signature.selfid != nullptr, std::memory_order_release);
     } else {
-        uses_argv = context_uses_argv;
-        uses_self = context_uses_self;
+        uses_argv.store(context_uses_argv, std::memory_order_release);
+        uses_self.store(context_uses_self, std::memory_order_release);
     }
     jit_compile_state.store(2, std::memory_order_relaxed);
     current_tier.store(TIER_JIT, std::memory_order_release);
@@ -5023,7 +5023,28 @@ bool UserVariantBase::areAllBodyLocalsIROnly() const {
     if (QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire)) {
         return ctx->all_body_locals_ir_only;
     }
-    return all_body_locals_ir_only;
+    return all_body_locals_ir_only.load(std::memory_order_acquire);
+}
+
+UserVariantBase::IRContextFlags UserVariantBase::getIRContextFlags(const QoreIRFunction* ir) const {
+    assert(ir);
+    IRContextFlags flags;
+    flags.all_body_locals_ir_only = ir->areAllBodyLocalsIROnly();
+    if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+        flags.uses_argv = signature.argvid != nullptr;
+        flags.uses_self = signature.selfid != nullptr;
+    } else {
+        QoreIRFunction::ContextUsage usage = ir->getContextUsage(signature.argvid, signature.selfid);
+        flags.uses_argv = usage.argv;
+        flags.uses_self = usage.self;
+    }
+    return flags;
+}
+
+void UserVariantBase::publishIRContextFlags(const IRContextFlags& flags) const {
+    all_body_locals_ir_only.store(flags.all_body_locals_ir_only, std::memory_order_release);
+    uses_argv.store(flags.uses_argv, std::memory_order_release);
+    uses_self.store(flags.uses_self, std::memory_order_release);
 }
 
 const std::vector<LocalVar*>& UserVariantBase::getASTVisibleBodyLocals() const {
@@ -5041,29 +5062,17 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
     std::unique_ptr<QoreIRFunction> ir_holder(ir);
     // Derived variant metadata is applied only after this body wins publication, so a
     // losing writer cannot clobber the fields describing the generation that did win.
-    bool derived_all_body_locals_ir_only = all_body_locals_ir_only;
-    bool derived_uses_argv = uses_argv;
-    bool derived_uses_self = uses_self;
+    IRContextFlags derived_flags;
     if (ir) {
         ir->computeIROnlyLocals();
-        derived_all_body_locals_ir_only = ir->areAllBodyLocalsIROnly();
-        if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
-            derived_uses_argv = signature.argvid != nullptr;
-            derived_uses_self = signature.selfid != nullptr;
-        } else {
-            QoreIRFunction::ContextUsage usage =
-                ir->getContextUsage(signature.argvid, signature.selfid);
-            derived_uses_argv = usage.argv;
-            derived_uses_self = usage.self;
-        }
 
         if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
             if (!ir->ir_only_locals.empty()) {
                 ir->ir_only_locals.clear();
                 ir->ast_visible_body_locals = ir->all_body_locals;
-                derived_all_body_locals_ir_only = false;
             }
         }
+        derived_flags = getIRContextFlags(ir);
 
         // Keep deserialized cached IR aligned with source-lowered IR metadata:
         // IR-only and closure-use body locals are owned by the LLVM/IR frame,
@@ -5120,9 +5129,7 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
         if (cached_ir.compare_exchange_strong(expected, ir_holder.get(),
                 std::memory_order_release, std::memory_order_acquire)) {
             ir_holder.release();
-            all_body_locals_ir_only = derived_all_body_locals_ir_only;
-            uses_argv = derived_uses_argv;
-            uses_self = derived_uses_self;
+            publishIRContextFlags(derived_flags);
         }
         // else: another thread published first; ir_holder deletes our unpublished body
     }
@@ -5693,10 +5700,9 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         return nullptr;
     }
 
-    // Classify locals as IR-only vs AST-visible for optimization
+    // Classify locals as IR-only vs AST-visible for optimization; the variant's flags describing the body are set
+    // only if and when it is published (see publishIRContextFlags())
     func->computeIROnlyLocals();
-    // Check if all body locals are IR-only (enables skipping instantiation in fast call path)
-    all_body_locals_ir_only = func->areAllBodyLocalsIROnly();
 
     // When debugger is enabled, all locals must be on the TLS stack so
     // get_local_vars() and set_local_var_value() can access them
@@ -5704,7 +5710,6 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         if (!func->ir_only_locals.empty()) {
             func->ir_only_locals.clear();
             func->ast_visible_body_locals = func->all_body_locals;
-            all_body_locals_ir_only = false;
         }
     }
 
@@ -5790,18 +5795,10 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
             optimization_stats.redundant_phis_eliminated);
     }
 
-    if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
-        uses_argv = signature.argvid != nullptr;
-        uses_self = signature.selfid != nullptr;
-    } else {
-        QoreIRFunction::ContextUsage usage =
-            func->getContextUsage(signature.argvid, signature.selfid);
-        uses_argv = usage.argv;
-        uses_self = usage.self;
-    }
     if (getenv("QORE_IR_CONTEXT_STATS")) {
+        IRContextFlags flags = getIRContextFlags(func);
         fprintf(stderr, "IR-CONTEXT: %s: argv=%d self=%d\n",
-            name ? name : "<fn>", uses_argv, uses_self);
+            name ? name : "<fn>", flags.uses_argv, flags.uses_self);
     }
     // Initialize type profiling for guards
     func->initGuardProfiles();
@@ -5916,10 +5913,12 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
     // The ir_lower_once flag serialises lowerings against each other but gives no edge to
     // setCachedIR(), which publishes without holding it, so the CAS is what makes this safe.
     const int num_guards = func->num_guards;
+    const IRContextFlags flags = getIRContextFlags(func.get());
     QoreIRFunction* expected = nullptr;
     if (cached_ir.compare_exchange_strong(expected, func.get(),
             std::memory_order_release, std::memory_order_acquire)) {
         func.release();
+        publishIRContextFlags(flags);
     }
     if (promote_to_ir) {
         current_tier.store(TIER_IR, std::memory_order_release);
@@ -6148,6 +6147,13 @@ void UserVariantBase::attemptJITCompilation() const {
     QoreIRFunction* ir = cached_ir.load(std::memory_order_acquire);
     assert(ir);
 
+    // --exec-mode=ir executes code with the IR interpreter only: its functions are never compiled to native code,
+    // whatever their execution count or the hot loops the interpreter detects.  Every native promotion of a
+    // function goes through this function, so this is the only check needed.
+    if (pgm && pgm->getExecMode() == QEM_IR) {
+        return;
+    }
+
     // Atomically claim JIT compilation (CAS 0→1).
     // This is the single point of guard — callers should NOT do their own CAS.
     int expected = 0;
@@ -6294,17 +6300,16 @@ void UserVariantBase::attemptJITRecompilation() const {
     // Reset deopt counter before recompilation
     deopt_count.store(0, std::memory_order_relaxed);
 
-    // Use a versioned name so LLVM ORC creates a new symbol (old one stays in memory)
-    std::string orig_name = ir->name;
-    ir->name = orig_name + "_reopt";
-    // Pre-copy the lookup name before compilation — LLVM 21 corrupts adjacent heap on Linux
-    const std::string lookup_name = ir->name;
+    // Compile under a versioned symbol so LLVM ORC creates a new symbol (the old one stays in memory).  The name is
+    // given to the compiler rather than set in the IR function, which is published and read by other threads
+    // without a lock, for example when they collect batch callees (collectBatchCallees()).
+    const std::string orig_name = ir->name;
+    const std::string lookup_name = orig_name + "_reopt";
 
     // Recompile with the accumulated type profiles and deopt tracking
     std::string error;
     if (!QoreJIT::instance().compileFunctionLocked(*ir, error,
-            const_cast<void*>(static_cast<const void*>(&deopt_count)))) {
-        ir->name = orig_name;
+            const_cast<void*>(static_cast<const void*>(&deopt_count)), &lookup_name)) {
         QoreJIT::instance().releaseCompileLock();
         jit_recompile_state.store(2, std::memory_order_release);
         printd(2, "UserVariantBase::attemptJITRecompilation() '%s' failed: %s\n",
@@ -6312,7 +6317,6 @@ void UserVariantBase::attemptJITRecompilation() const {
         return;
     }
     JitFunctionPtr fn = QoreJIT::instance().lookupFunction(lookup_name);
-    ir->name = orig_name;
     QoreJIT::instance().releaseCompileLock();
     if (!fn) {
         jit_recompile_state.store(2, std::memory_order_release);
@@ -6598,17 +6602,20 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             return QoreValue();
         }
         QoreAOTContext* aot_ctx = cached_aot_ctx.load(std::memory_order_acquire);
+        // read once for the call, so that argv and self are uninstantiated exactly when they were instantiated
+        const bool call_uses_argv = uses_argv.load(std::memory_order_acquire);
+        const bool call_uses_self = uses_self.load(std::memory_order_acquire);
         printd(3, "evalTiered JIT/AOT '%s' exec_count=%lu aot_ctx=%p\n",
             name, exec_count.load(), static_cast<void*>(aot_ctx));
 
         // self might be 0 if instantiated by a constructor call
         // Only instantiate if actually used in the function body
-        if (uses_self && self && signature.selfid) {
+        if (call_uses_self && self && signature.selfid) {
             signature.selfid->instantiateSelf(self);
         }
 
         // Only instantiate argv if actually used in the function body
-        if (uses_argv) {
+        if (call_uses_argv) {
             assert(signature.argvid);
             signature.argvid->instantiate(argv ? argv->refSelf() : nullptr);
         }
@@ -6627,7 +6634,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         {
             // Only create ArgvContextHelper if argv is used
             std::optional<ArgvContextHelper> argv_helper;
-            if (uses_argv) {
+            if (call_uses_argv) {
                 argv_helper.emplace(argv.release(), xsink);
             } else {
                 // argv not used - just discard the reference without creating context
@@ -6742,10 +6749,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         }
 
         // Only uninstantiate if we instantiated them
-        if (uses_argv) {
+        if (call_uses_argv) {
             signature.argvid->uninstantiate(xsink);
         }
-        if (uses_self && self && signature.selfid) {
+        if (call_uses_self && self && signature.selfid) {
             signature.selfid->uninstantiateSelf();
         }
 

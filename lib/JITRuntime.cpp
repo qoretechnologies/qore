@@ -38,6 +38,8 @@
 #include "qore/intern/QoreTransliterationOperatorNode.h"
 #include "qore/intern/QoreIterateOperatorNode.h"
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QoreHashKeyHelper.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/qore_number_private.h"
 
 // Macro for JIT runtime functions: check xsink and throw C++ exception
@@ -3770,12 +3772,15 @@ extern "C" DLLEXPORT void qore_rt_hash_set_key_value(uint64_t hash_bits, uint64_
     QoreValue hash_val = fromBits(hash_bits);
     QoreValue key_val = fromBits(key_bits);
     QoreValue value_val = fromBits(value_bits);
-    QoreStringValueHelper key_str(key_val);
+    QoreHashKeyHelper key_str(key_val, xsink);
+    if (*xsink) {
+        return;
+    }
     QoreHashNode* hash = hash_val.get<QoreHashNode>();
     if (value_val.hasNode()) {
         value_val.refSelf();
     }
-    hash->setKeyValue(key_str->c_str(), value_val, xsink);
+    hash->setKeyValue(key_str.c_str(), value_val, xsink);
     // Do NOT discard key_val — the caller (JIT/IR) manages the key's lifetime.
     // Discarding here causes a double-free since the key is also cleaned up by
     // the JIT function's exit cleanup or the IR value map cleanup mechanism.
@@ -4585,7 +4590,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, c
         }
         QoreValue key = fromBits(kv_pairs[i * 2]);
         QoreValue val = fromBits(kv_pairs[i * 2 + 1]);
-        QoreStringValueHelper key_str(key);
+        QoreHashKeyHelper key_str(key, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
         if (val.hasNode()) {
             val.refSelf();
         }
@@ -4596,7 +4604,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, c
         } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
             vcommon = false;
         }
-        hash->setKeyValue(key_str->c_str(), val, xsink);
+        hash->setKeyValue(key_str.c_str(), val, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }
@@ -5985,8 +5993,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow(
         LocalVar* var, uint64_t hash_bits, uint64_t key_bits,
         uint64_t value_bits, ExceptionSink* xsink) {
     QoreValue key_val = fromBits(key_bits);
-    QoreStringValueHelper key_str(key_val);
-    return qore_rt_hash_key_store_cow(var, hash_bits, key_str->c_str(), value_bits, xsink);
+    QoreHashKeyHelper key_str(key_val, xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_hash_key_store_cow(var, hash_bits, key_str.c_str(), value_bits, xsink);
 }
 
 // AOT path: hash[dynamic_key] = value with COW (key is NaN-boxed QoreValue, converted to string)
@@ -5995,8 +6006,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow_aot(
         uint64_t hash_bits, uint64_t key_bits,
         uint64_t value_bits, ExceptionSink* xsink) {
     QoreValue key_val = fromBits(key_bits);
-    QoreStringValueHelper key_str(key_val);
-    return qore_rt_hash_key_store_cow_aot(ctx, local_slot, hash_bits, key_str->c_str(), value_bits, xsink);
+    QoreHashKeyHelper key_str(key_val, xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_hash_key_store_cow_aot(ctx, local_slot, hash_bits, key_str.c_str(), value_bits, xsink);
 }
 
 // JIT path: list[index] = value with COW
@@ -7590,8 +7604,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys(uint64_t list_val, const
             if (*xsink) {
                 return toBits(QoreValue());
             }
-            QoreStringValueHelper sh(k);
-            result->setKeyValue(sh->c_str(), val.refSelf(), xsink);
+            QoreHashKeyHelper sh(k, xsink);
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
+            result->setKeyValue(sh.c_str(), val.refSelf(), xsink);
             if (*xsink) {
                 return toBits(QoreValue());
             }
@@ -7644,8 +7661,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys_prehashed(uint64_t list_
         if (*xsink) {
             return toBits(QoreValue());
         }
-        QoreStringValueHelper key_string(key_value);
-        result_priv->setKeyValueIntern(key_string->c_str(), mapped.refSelf());
+        QoreHashKeyHelper key_string(key_value, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        result_priv->setKeyValueIntern(key_string.c_str(), mapped.refSelf());
     }
     return toBits(result.release());
 }
@@ -9815,13 +9835,7 @@ extern "C" DLLEXPORT uint64_t qore_fast_hash_exists(uint64_t hash_bits, uint64_t
 
     // Handle hash
     if (auto* hash = dynamic_cast<const QoreHashNode*>(hash_node)) {
-        // Convert key to string if needed
-        QoreString key_str;
-        if (key_val.hasNode()) {
-            key_val.getInternalNode()->getAsString(key_str, -1, xsink);
-        } else {
-            key_str.concat(key_val.getAsBigInt());
-        }
+        QoreHashKeyHelper key_str(key_val, xsink);
         if (*xsink) {
             return toBits(false);
         }
@@ -12590,7 +12604,11 @@ static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, Ex
         return (static_cast<size_t>(idx) < ctx->global_names.size())
             ? ctx->global_names[idx].c_str() : "";
     };
-    Var* var = ctx->globals[idx];
+    // A slot is resolved once and then read by every thread running the code without the lock: the acquire load
+    // pairs with the release store below, so a thread that sees a resolved slot also sees the resolved Var.
+    static_assert(std::atomic_ref<Var*>::is_always_lock_free, "global slots must be lock-free atomics");
+    std::atomic_ref<Var*> slot(ctx->globals[idx]);
+    Var* var = slot.load(std::memory_order_acquire);
     if (var) {
         if (trace_slot()) {
             fprintf(stderr, "[qore-aot-global] slot=%d name=%s cached var=%p\n",
@@ -12606,7 +12624,7 @@ static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, Ex
     }
 
     std::lock_guard<std::mutex> lock(ctx->global_resolution_mutex);
-    var = ctx->globals[idx];
+    var = slot.load(std::memory_order_relaxed);
     if (var) {
         return var;
     }
@@ -12616,7 +12634,7 @@ static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, Ex
         const qore_ns_private* vns = nullptr;
         var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, ctx->global_names[idx].c_str(), vns);
         if (var) {
-            ctx->globals[idx] = var;
+            slot.store(var, std::memory_order_release);
             if (trace_slot()) {
                 fprintf(stderr, "[qore-aot-global] slot=%d name=%s resolved var=%p\n",
                     idx, slot_name(), static_cast<void*>(var));
@@ -13360,9 +13378,10 @@ static int qore_rt_get_self_member_lvalue(const char* member_name,
 // Copy path steps and patch dynamic operands from NaN-boxed array.
 // Note: slice_values stores BORROWED QoreValues aliasing the dyn_vals array;
 // the caller must not use path_copy beyond the lifetime of dyn_vals.
-static void patchLVPath(std::vector<LVPathStep>& path_copy,
+// Returns 0 for OK, -1 if an exception was raised converting a dynamic hash key to the default encoding.
+static int patchLVPath(std::vector<LVPathStep>& path_copy,
         const QoreIRLValuePathInstruction* inst,
-        const uint64_t* dyn_vals) {
+        const uint64_t* dyn_vals, ExceptionSink* xsink) {
     path_copy = inst->path;
     int dyn_idx = 0;
     for (auto& step : path_copy) {
@@ -13370,8 +13389,11 @@ static void patchLVPath(std::vector<LVPathStep>& path_copy,
             QoreValue key_val = fromBits(dyn_vals[dyn_idx++]);
             step.slice_values.clear();
             step.slice_values.push_back(key_val);
-            QoreStringValueHelper key_str(key_val);
-            step.name = key_str->c_str();
+            QoreHashKeyHelper key_str(key_val, xsink);
+            if (*xsink) {
+                return -1;
+            }
+            step.name.assign(key_str.c_str(), key_str.size());
         } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
             QoreValue idx_val = fromBits(dyn_vals[dyn_idx++]);
             step.index = idx_val.getAsBigInt();
@@ -13385,6 +13407,7 @@ static void patchLVPath(std::vector<LVPathStep>& path_copy,
             }
         }
     }
+    return 0;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
@@ -13394,7 +13417,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
         return toBits(QoreValue());
     }
     std::vector<LVPathStep> path_copy;
-    patchLVPath(path_copy, inst, dyn_vals);
+    if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
+        return toBits(QoreValue());
+    }
 
     QoreValue val = fromBits(rhs_bits);
     ValueHolder val_holder(val.refSelf(), xsink);
@@ -13472,7 +13497,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_consume(QoreIRLValuePathIns
         return toBits(QoreValue());
     }
     std::vector<LVPathStep> path_copy;
-    patchLVPath(path_copy, inst, dyn_vals);
+    if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
+        return toBits(QoreValue());
+    }
 
     LValueHelper lvh(xsink);
     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
@@ -13632,7 +13659,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound(
         const LVPathStep& step = inst->path[1];
         index = step.operand_idx == UINT32_MAX ? step.index : fromBits(dyn_vals[0]).getAsBigInt();
     } else {
-        patchLVPath(path_copy, inst, dyn_vals);
+        if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
+            return toBits(QoreValue());
+        }
     }
     const auto& path = single_index ? inst->path : path_copy;
 
@@ -13791,17 +13820,17 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         const unsigned old_count = qore_hash_private::getScanCount(*h);
         ReferenceHolder<QoreHashNode> rvh(new QoreHashNode(autoTypeInfo), xsink);
         if (for_each_key([&](const QoreValue& key_val) -> bool {
-            QoreStringValueHelper mem(key_val, QCS_DEFAULT, xsink);
+            QoreHashKeyHelper mem(key_val, xsink);
             if (*xsink) {
                 return true;
             }
             bool exists;
-            QoreValue n = hp->takeKeyValueIntern(mem->c_str(), exists);
+            QoreValue n = hp->takeKeyValueIntern(mem.c_str(), exists);
             if (!exists) {
                 return false;
             }
             // note that no exception can occur here
-            rvh->setKeyValue(mem->c_str(), n, xsink);
+            rvh->setKeyValue(mem.c_str(), n, xsink);
             if (*xsink) {
                 return true;
             }
@@ -14195,7 +14224,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         return toBits(QoreValue());
     }
     std::vector<LVPathStep> path_copy;
-    patchLVPath(path_copy, inst, dyn_vals);
+    if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
+        return toBits(QoreValue());
+    }
 
     bool is_remove = (inst->unary_op == LVUnaryOp::Remove || inst->unary_op == LVUnaryOp::Delete);
     QoreValue res;
@@ -14660,7 +14691,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut(
         return toBits(QoreValue());
     }
     std::vector<LVPathStep> path_copy;
-    patchLVPath(path_copy, inst, dyn_vals);
+    if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
+        return toBits(QoreValue());
+    }
 
     QoreValue rhs = fromBits(rhs_bits);
 
@@ -14758,29 +14791,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         uint64_t a_bits, uint64_t b_bits, uint64_t c_bits,
         ExceptionSink* xsink) {
-    // Resolve dynamic key/index operands
-    uint32_t dyn_idx = 0;
-    for (auto& step : inst->path) {
-        if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
-            QoreValue key_val = fromBits(dyn_vals[dyn_idx++]);
-            QoreStringValueHelper key_str(key_val);
-            step.name = key_str->c_str();
-        } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
-            QoreValue idx_val = fromBits(dyn_vals[dyn_idx++]);
-            step.index = idx_val.getAsBigInt();
-        }
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    // the instruction and its path are shared by every thread running this code, so the dynamic keys and indexes
+    // of this call are resolved in a private copy of the path, as for the other lvalue path operations
+    std::vector<LVPathStep> path_copy;
+    if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
+        return toBits(QoreValue());
     }
     QoreValue offset_val = fromBits(a_bits);
     QoreValue length_val = fromBits(b_bits);
     QoreValue replacement_val = fromBits(c_bits);
-    // For extract without replacement, avoid vivification
-    bool no_vivify = (inst->ternary_op == LVTernaryOp::Extract && replacement_val.isNothing());
     ReferenceHolder<QoreListNode> removed_list(xsink);
     LValueHelper lvh(xsink);
-    if (lvh.navigatePath(inst->path.data(), inst->path.size(), no_vivify)) {
-        if (no_vivify && !*xsink) {
-            return toBits(QoreValue());
-        }
+    // as with AST execution, a hash member or list element that does not exist is created, and then raises
+    // EXTRACT-ERROR below like any other lvalue that is not a list, string or binary
+    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
+        // a vivifying navigation fails only with an exception
+        assert(*xsink);
         return toBits(QoreValue());
     }
     QoreValue res;
@@ -14794,9 +14823,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
             }
         }
     }
-    if (vt == NT_NOTHING) {
-        // Nothing to extract/splice — return NOTHING
-    } else if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
+    if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
         xsink->raiseException("EXTRACT-ERROR",
             "first (lvalue) argument to the extract operator is not a list, "
             "string, or binary object");
@@ -19379,7 +19406,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_intp_noguard(uint64_t val_bi
     if (str->empty()) {
         return toBits(QoreValue(false));
     }
-    const char* data = str->c_str();
+    QoreAsciiCompatStringHelper text(**str);
+    const char* data = text.c_str();
     char c = data[0];
     if (c == '-') {
         c = data[1];
@@ -19623,14 +19651,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_
         return toBits(QoreValue(strtoll(buf, nullptr, 10)));
     }
     QoreStringValueHelper str(v);
-    if (!str->getEncoding()->isAsciiCompat()) {
-        if (xsink) {
-            xsink->raiseException("UNSUPPORTED-ENCODING", "cannot convert string in non-ASCII-compatible "
-                "encoding \"%s\" to an integer", str->getEncoding()->getCode());
-        }
-        return toBits(QoreValue());
-    }
-    return toBits(QoreValue(strtoll(str->c_str(), nullptr, 10)));
+    QoreAsciiCompatStringHelper text(**str);
+    return toBits(QoreValue(strtoll(text.c_str(), nullptr, 10)));
 }
 
 //! Fast pseudo-method: type() - return type name string

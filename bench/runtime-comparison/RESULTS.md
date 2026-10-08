@@ -2,6 +2,12 @@
 
 Copyright (c) 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT.
 
+**Historical IR-mode caveat (2026-10-08):** before upstream `5243c8aef`,
+`--exec-mode=ir` could compile and promote hot code to JIT. Those runs record
+the requested mode, not a verified pure interpreter. A saved-runtime probe
+confirms this for the polymorphic workload. AOT/Java comparisons are unaffected;
+see the upstream integration/engine-provenance section below.
+
 Java is useful here as two reference points: `-Xint` for interpreter costs and
 warmed HotSpot for optimized native execution. The comparison identified an IR
 return-path cost that was removed, reducing direct-call kernel time by 23.3%
@@ -4488,3 +4494,45 @@ and Qore's polymorphic base case can inline while Java retains all three.
 The goal remains active. Next: commit the audited closure improvement, fetch/
 merge origin/develop as requested, revalidate, then implement explicit-context
 unboxed polymorphic caller continuations and broaden call-category coverage.
+
+## Upstream integration and IR engine provenance (2026-10-08)
+
+After audited closure commit `a3d430d0672eeb9e5626cd2542ed4d54f8f60fcd`,
+fetched and integrated `origin/develop` at
+`2e272bdd8beef659ecdb29e88be287d2bfff5e35`. Two manual conflicts preserve
+both parents: dynamic closure fields coexist with the compiler's new native
+symbol override; the single-list-index mutation shortcut remains, while the
+general path now passes the sink to fallible hash-key conversion and propagates
+its error before RHS retention or lvalue mutation.
+
+Both release/debug qore/qcc builds pass. Each build passes 23 selected files:
+21 QUnit wrappers / 62 cases / 82,292 assertions plus 2 standalones, including
+the closure/callback/native-method tests and upstream IR-only, concurrent
+promotion, hash-key encoding, concurrent lvalue paths, expression-result and
+string-conversion encoding regressions. Old AOT artifacts retain byte-identical
+225 / 270 / 300 reference records. This is focused integration validation, not
+a full upstream suite, sanitizer/Linux run or validation of unrelated changed
+qlib modules.
+
+The merge includes upstream `5243c8aef`, which prevents native compilation in
+explicit IR mode. A diagnostic using the unchanged polymorphic benchmark and
+`QORE_JIT_TIMING=1` (no threshold override) confirms the distinction:
+
+|!Runtime|!Requested mode|!Native promotion trace
+|Saved premerge a3d430d06, library05392bbf|ir|polymorphicCall and two next methods compiled and promoted
+|Merged runtime, library1c75a52b|ir|No compilation trace
+
+Both invocations use `polymorphic_call 1024 3 5 100 7` and exit successfully.
+The diagnostic's SAMPLE output is not a performance result. It demonstrates
+that historical qore-ir labels are requested modes, not verified pure-IR
+measurements; it cannot identify the engine of each historical timing sample.
+AOT/Java comparisons are unaffected. A fresh pure-IR baseline must precede
+further interpreter comparisons; the correction must not be called an
+optimization regression.
+
+[Integration evidence](results-dynamic-closure-merge-macos-arm64.json) records
+parents, library hashes, the trace, test totals and all 62 audit items for the
+manual resolutions/documentation (13 Pass / 49 N/A / 0 Fail). It is not a new
+audit of all 178 upstream-only changed files. Next: capture a fresh merged
+AOT/Java baseline, profile polymorphic dispatch, and implement the explicit-
+context scalar method continuation described above.

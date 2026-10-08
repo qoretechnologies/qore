@@ -34,6 +34,7 @@
 #include <qore/QoreEnumDecl.h>
 
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/QoreFormatBounds.h"
 
 #include <cstdarg>
@@ -109,15 +110,21 @@ QoreStringNode::QoreStringNode(const char* str, size_t len, const QoreEncoding* 
 
 // virtual function
 int QoreStringNode::getAsIntImpl() const {
-    return (int)strtoll(c_str(), 0, 10);
+    return QoreAsciiCompatStringHelper::withText(*this, [] (const char* p, size_t) -> int {
+        return (int)strtoll(p, nullptr, 10);
+    });
 }
 
 int64 QoreStringNode::getAsBigIntImpl() const {
-    return strtoll(c_str(), 0, 10);
+    return QoreAsciiCompatStringHelper::withText(*this, [] (const char* p, size_t) -> int64 {
+        return strtoll(p, nullptr, 10);
+    });
 }
 
 double QoreStringNode::getAsFloatImpl() const {
-    return q_strtod(c_str());
+    return QoreAsciiCompatStringHelper::withText(*this, [] (const char* p, size_t) -> double {
+        return q_strtod(p);
+    });
 }
 
 QoreString* QoreStringNode::getAsString(bool& del, int foff, ExceptionSink* xsink) const {
@@ -163,7 +170,9 @@ bool qore_string_get_as_bool(const char* str, size_t len) {
 }
 
 bool QoreStringNode::getAsBoolImpl() const {
-    return qore_string_get_as_bool(priv->effective_buf(), priv->len);
+    return QoreAsciiCompatStringHelper::withText(*this, [] (const char* p, size_t len) -> bool {
+        return qore_string_get_as_bool(p, len);
+    });
 }
 
 // get the value of the type in a string context, empty string for complex types (default implementation)
@@ -324,12 +333,14 @@ void QoreStringNode::getStringRepresentation(QoreString &str) const {
 // if del is true, then the returned DateTime * should be deleted, if false, then it should not
 DateTime *QoreStringNode::getDateTimeRepresentation(bool& del) const {
     del = true;
-    return new DateTime(c_str());
+    QoreAsciiCompatStringHelper str(*this);
+    return new DateTime(str.c_str());
 }
 
 // assign date representation to a DateTime * (no action for complex types = default implementation)
 void QoreStringNode::getDateTimeRepresentation(DateTime& dt) const {
-    dt.setDate(c_str());
+    QoreAsciiCompatStringHelper str(*this);
+    dt.setDate(str.c_str());
 }
 
 bool QoreStringNode::is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {

@@ -7,23 +7,35 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Logger
-%requires Mime
-%requires HttpServerUtil
-%requires RestClientIo
-%requires QoreLlmTypes
-%requires QoreLlmUtils
-%requires OpenAiRestClient
-%requires MistralRestClient
-%requires AzureOpenAiRestClient
-%requires GeminiBodyShape
-%requires GeminiRestClient
-%requires AnthropicRestClient
-%requires QoreAgentStrategies
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/OpenAiRestClient.qm
+%requires ../../../../qlib/DeepSeekRestClient.qm
+%requires ../../../../qlib/MistralRestClient.qm
+%requires ../../../../qlib/AzureOpenAiRestClient.qm
+%requires ../../../../qlib/GeminiBodyShape.qm
+%requires ../../../../qlib/GeminiRestClient.qm
+%requires ../../../../qlib/GeminiDataProvider
+%requires ../../../../qlib/AnthropicRestClient.qm
+%requires ../../../../qlib/QoreAgentStrategies
 %requires json
-%requires QUnit
+%requires ../../../../qlib/QUnit.qm
 
 %exec-class LlmStreamingTest
+
+#! Queue-based completion signaling for the Gemini data-provider stream test
+class GeminiStreamObserver inherits DataProvider::Observer {
+    public {
+        Queue events();
+    }
+    update(string event_id, hash<auto> data_) {
+        events.push(data_);
+    }
+}
 
 #! A scripted reply of the fake LLM server
 hashdecl FakeReply {
@@ -200,6 +212,8 @@ public class LlmStreamingTest inherits QUnit::Test {
         addTestCase("Gemini: an error event raises", \geminiStreamErrorEventTest());
         addTestCase("Gemini: an invalid event raises", \geminiInvalidEventTest());
         addTestCase("Gemini: a blocked prompt is reported as filtered", \geminiPromptBlockedTest());
+        addTestCase("Gemini: data-provider streaming config", \geminiDataProviderStreamTest());
+        addTestCase("Gemini: generation config migration on streams", \geminiGenerationConfigTest());
         addTestCase("Gemini: a stalled stream times out", \geminiStallTest());
         addTestCase("Gemini: a stream closed without a finish reason", \geminiUnterminatedStreamTest());
         addTestCase("Gemini: a response that is not an event stream raises", \geminiNonSseResponseTest());
@@ -223,6 +237,8 @@ public class LlmStreamingTest inherits QUnit::Test {
         addTestCase("Mistral: reasoning responses and history", \mistralReasoningResponseTest());
         addTestCase("Mistral: mixed reasoning and text streams", \mistralReasoningStreamTest());
         addTestCase("Mistral: strict JSON projection retains reasoning", \mistralReasoningStrictTest());
+        addTestCase("DeepSeek: reasoning-only frames and native history", \deepseekReasoningTest());
+        addTestCase("DeepSeek: rejected strict output retains billable usage", \deepseekRejectedUsageTest());
         set_return_value(main());
     }
 
@@ -233,6 +249,43 @@ public class LlmStreamingTest inherits QUnit::Test {
 
     globalTearDown() {
         server.stop();
+    }
+
+    geminiDataProviderStreamTest() {
+        server.script((sseReply((geminiChunk("classified", "STOP"),)),));
+        GeminiRestClient::GeminiRestClientIo rest({"url": "http://localhost:" + port, "apikey": "test-only-key"});
+        GeminiDataProvider::GeminiStreamContentDataProvider stream(rest);
+        GeminiStreamObserver observer();
+        stream.registerObserver(observer);
+        stream.observersReady();
+        on_exit stream.stopEvents();
+        stream.doRequest({"model": "gemini-3.5-flash", "prompt": "invoice",
+            "generationConfig": {"temperature": 0.2, "topP": 0.8, "topK": 20,
+                "thinkingConfig": {"thinkingBudget": 256, "thinkingLevel": "LOW"}}});
+        hash<auto> event = observer.events.get(5s);
+        assertEq("classified", event.candidates[0].content.parts[0].text);
+        event = observer.events.get(5s);
+        assertEq("done", event.type);
+        stream.stopEvents();
+        assertEq({"thinkingConfig": {"thinkingLevel": "LOW"}}, server.requests[0].body.generationConfig);
+    }
+
+    geminiGenerationConfigTest() {
+        server.script((sseReply((geminiChunk("classified", "STOP"),)),
+            sseReply((geminiChunk("classified", "STOP"),))));
+        LlmBackend llm = geminiBackend();
+        string text;
+        llm.chatStream(userMessage("invoice"), sub (hash<ChatStreamEvent> e) { text += e.delta; }, NOTHING,
+            <LlmRequestOptions>{"model": "gemini-3.5-flash", "reasoning_effort": "low",
+                "reasoning_token_budget": 0, "temperature": 0.2});
+        assertEq("classified", text);
+        assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "LOW"}},
+            server.requests[0].body.generationConfig);
+        llm.chatCompletionsStream({"model": "gemini-3.5-flash", "messages": ({"role": "user", "content": "invoice"},),
+            "generationConfig": {"temperature": 0.2, "topP": 0.8, "top_k": 20,
+                "thinkingConfig": {"thinkingBudget": 256, "thinkingLevel": "HIGH"}}},
+            sub (hash<auto> chunk) {});
+        assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "HIGH"}}, server.requests[1].body.generationConfig);
     }
 
     geminiTextStreamTest() {
@@ -990,13 +1043,15 @@ public class LlmStreamingTest inherits QUnit::Test {
         server.script((reply, reply, reply, reply));
         LlmBackend llm = mistralBackend();
         hash<auto> body = {"messages": ({"role": "user", "content": "multiply"},),
-            "reasoning_effort": "high", "temperature": 0};
+            "reasoning_effort": "high", "temperature": 0, "prompt_cache_key": "design-123"};
         hash<auto> response = llm.chatCompletions(body);
         assertEq("391", response.choices[0].message.content);
         assertEq((thinking,), response.choices[0].message.reasoning_blocks);
         assertEq(30, response.usage.total_tokens);
+        assertEq("design-123", server.requests[0].body.prompt_cache_key);
         assertEq(1, server.requests[0].body.top_p);
         assertEq("high", server.requests[0].body.reasoning_effort);
+        body = parse_json(make_json(body));
         body = parse_json(make_json(body));
         push body.messages, response.choices[0].message;
         push body.messages, {"role": "user", "content": "again"};
@@ -1044,8 +1099,9 @@ public class LlmStreamingTest inherits QUnit::Test {
         LlmBackend llm = mistralBackend();
         list<hash<auto>> chunks = ();
         hash<auto> response = llm.chatCompletionsStream(
-            {"messages": ({"role": "user", "content": "multiply"},)},
+            {"messages": ({"role": "user", "content": "multiply"},), "prompt_cache_key": "design-123"},
             sub (hash<auto> chunk) { push chunks, chunk; });
+        assertEq("design-123", server.requests[0].body.prompt_cache_key);
         assertEq("391", response.choices[0].message.content);
         assertEq((thinking,), response.choices[0].message.reasoning_blocks);
         assertEq(30, response.usage.total_tokens, "usage after terminal preserved");
@@ -1102,6 +1158,86 @@ public class LlmStreamingTest inherits QUnit::Test {
         assertEq({"answer": 391}, parse_json(response.choices[0].message.content));
         assertEq((thinking,), response.choices[0].message.reasoning_blocks);
         assertEq(30, response.usage.total_tokens);
+    }
+
+    deepseekReasoningTest() {
+        hash<FakeReply> reply = openAiReply((
+            {"created": 1791363040, "choices": ({"delta": {"reasoning_content": "private "}},)},
+            {"choices": ({"delta": {"reasoning_content": "reasoning"}},)},
+            {"choices": ({"delta": {"content": "391"}, "finish_reason": "stop"},)},
+            {"choices": (), "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120,
+                "prompt_cache_hit_tokens": 80, "prompt_cache_miss_tokens": 20,
+                "completion_tokens_details": {"reasoning_tokens": 17}}},
+        ));
+        hash<auto> raw = {"created": 1791363040, "choices": ({"message": {"content": "391",
+            "reasoning_content": "private reasoning"}, "finish_reason": "stop"},), "usage": {"total_tokens": 120}};
+        server.script((reply, errorReply(200, make_json(raw)), errorReply(200, make_json(raw))));
+        LlmBackend llm(<LlmBackendConfig>{"mode": "deepseek", "url": "http://localhost:" + port,
+            "protocol": "h1", "api_key": "test-key", "model": "deepseek-flash", "max_retries": 0});
+        list<hash<auto>> chunks;
+        hash<auto> body = {"messages": ({"role": "user", "content": "multiply"},),
+            "reasoning_effort": "low", "user_id": "project_1", "prompt_cache_key": "not_supported"};
+        hash<auto> response = llm.chatCompletionsStream(body, sub (hash<auto> chunk) { push chunks, chunk; });
+        assertEq("391", response.choices[0].message.content);
+        assertEq(({"type": "deepseek_reasoning", "text": "private reasoning"},),
+            response.choices[0].message.reasoning_blocks);
+        assertEq(1791363040, response.created);
+        assertEq(80, LlmTelemetry::normalizeUsage(response.usage).cached_input_tokens);
+        assertEq(17, LlmTelemetry::normalizeUsage(response.usage).reasoning_tokens);
+        assertEq(("391", NOTHING), map $1.choices[0].delta.content, chunks);
+        assertEq("project_1", server.requests[0].body.user_id);
+        assertFalse(exists server.requests[0].body.prompt_cache_key);
+        body = parse_json(make_json(body));
+        push body.messages, response.choices[0].message;
+        push body.messages, {"role": "user", "content": "again"};
+        response = llm.chatCompletions(body);
+        assertEq("private reasoning", server.requests[1].body.messages[1].reasoning_content);
+        assertEq(1791363040, response.created);
+        body.messages[1] = {"role": "assistant", "content": "391", "reasoning_content": ""};
+        llm.chatCompletions(body);
+        assertEq("", server.requests[2].body.messages[1].reasoning_content);
+    }
+
+    deepseekRejectedUsageTest() {
+        hash<auto> usage = {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120,
+            "prompt_cache_hit_tokens": 80, "prompt_cache_miss_tokens": 20,
+            "completion_tokens_details": {"reasoning_tokens": 17}};
+        string invalid = "{\"answer\":\"invalid\"}";
+        hash<FakeReply> sync = errorReply(200, make_json({"created": 1791363040,
+            "model": "deepseek-flash", "choices": ({"message": {"content": invalid},
+                "finish_reason": "stop"},), "usage": usage}));
+        server.script((sync, openAiReply((
+            {"created": 1791363040, "model": "deepseek-flash",
+                "choices": ({"delta": {"content": invalid}, "finish_reason": "stop"},)},
+            {"choices": (), "usage": usage},
+        )), sync));
+        list<hash<LlmTelemetryEvent>> errors;
+        LlmBackend llm(<LlmBackendConfig>{"mode": "deepseek", "url": "http://localhost:" + port,
+            "protocol": "h1", "api_key": "test-key", "model": "deepseek-flash", "max_retries": 0,
+            "telemetry_observer": <LlmTelemetryObserver>{
+                "error_callback": sub (hash<LlmTelemetryEvent> event) { push errors, event; }}});
+        hash<auto> schema = {"type": "object", "properties": {"answer": {"type": "integer"}},
+            "required": ("answer",), "additionalProperties": False};
+        hash<auto> body = {"messages": ({"role": "user", "content": "multiply"},),
+            "response_format": {"type": "json_schema", "json_schema": {
+                "name": "answer", "strict": True, "schema": schema}}};
+        int deltas = 0;
+        foreach int operation in ((0, 1, 2)) {
+            assertThrows("OPENAI-STRUCTURED-OUTPUT-ERROR", NOTHING, sub () {
+                if (operation == 0) { llm.chatCompletions(body); }
+                else if (operation == 1) {
+                    llm.chatCompletionsStream(body, sub (hash<auto> chunk) { ++deltas; });
+                } else { llm.complete("Calculate", "multiply", schema); }
+            });
+            assertEq(operation + 1, errors.size());
+            assertEq(usage, errors[-1].raw_usage);
+            assertEq(120, errors[-1].usage.total_tokens);
+            assertEq(80, errors[-1].usage.cached_input_tokens);
+            assertEq(17, errors[-1].usage.reasoning_tokens);
+            assertEq(20, errors[-1].usage.output_tokens);
+        }
+        assertEq(0, deltas);
+        assertEq(3, server.requests.size(), "validation errors never retry paid calls");
     }
 
     private LlmBackend mistralBackend() {

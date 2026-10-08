@@ -47,6 +47,7 @@
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreQuestionMarkOperatorNode.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <atomic>
 #include <cctype>
@@ -572,6 +573,18 @@ int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
     }
     parse_context.analysis.known_type = parse_context.typeInfo;
     return 0;
+}
+
+void qore_set_result_parse_analysis(QoreParseContext& parse_context, const QoreTypeInfo* typeInfo) {
+    parse_context.analysis.clear();
+    if (!QoreTypeInfo::hasType(typeInfo)) {
+        return;
+    }
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.known_type = typeInfo;
+    if (QoreTypeInfo::parseReturns(typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    }
 }
 
 QoreParseContext::QoreParseContext(LocalVar* oflag, QoreProgram* pgm) : pgm(pgm), oflag(oflag),
@@ -2555,7 +2568,8 @@ void LVarSet::add(LocalVar* var) {
 bool q_parse_bool(QoreValue n) {
     if (n.getType() == NT_STRING) {
         QoreStringValueHelper str(n);
-        return q_parse_bool(str->c_str());
+        QoreAsciiCompatStringHelper text(**str);
+        return q_parse_bool(text.c_str());
     }
     return n.getAsBool();
 }

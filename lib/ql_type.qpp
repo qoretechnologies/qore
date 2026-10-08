@@ -36,6 +36,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/StringReaderHelper.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <memory>
 
@@ -229,7 +230,8 @@ int("0x21", 0);  // returns 33 (base = 16)
 int int(string value, int base = 10) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (base < 0 || base == 1 || base > 36)
         return xsink->raiseException("INVALID-BASE", "base " QLLD " is invalid; base must be 0 or 2 - 36 inclusive", base);
-    return strtoll(value->getBuffer(), 0, (int)base);
+    QoreAsciiCompatStringHelper text(*value);
+    return strtoll(text.c_str(), 0, (int)base);
 }
 
 //! Converts the argument to an integer value

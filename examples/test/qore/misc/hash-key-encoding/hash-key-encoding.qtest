@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%include hash-key-encoding-checks.qi
+
+%exec-class HashKeyEncodingTest
+
+#! the output and the native compilation trace of a worker
+hashdecl WorkerResult {
+    #! the lines printed on stdout, followed by any error output
+    string out;
+    #! the native compilation trace (QORE_JIT_TIMING)
+    list<string> trace;
+}
+
+#! Tests that hash keys and member names given in any encoding are UTF-8 keys in every execution engine
+/** The checks in hash-key-encoding-checks.qi run in this program, in each execution mode, and from a compiled
+    (AOT) module; every engine must give the same results, and every check must pass.
+*/
+class HashKeyEncodingTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        #! the results of the checks in this program
+        list<string> expected;
+    }
+
+    constructor() : QUnit::Test("HashKeyEncodingTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("in this program", \testInProcess());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("a compiled module", \testCompiledModule());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        expected = HashKeyEncodingChecks::get_results();
+    }
+
+    testInProcess() {
+        checkResults("in-process", expected);
+        # every check ran for each key set, as for the UTF-8 keys, and the constant and error checks ran
+        int utf8 = (select expected, $1 =~ /^ok UTF-8: /).size();
+        assertTrue(utf8 > 0, "UTF-8 checks ran");
+        assertEq(utf8, (select expected, $1 =~ /^ok ISO-8859-2\/UTF-16LE: /).size(), "ISO-8859-2 and UTF-16LE");
+        assertEq(utf8, (select expected, $1 =~ /^ok WINDOWS-1250\/UTF-16BE: /).size(), "WINDOWS-1250 and UTF-16BE");
+        assertTrue((select expected, $1 =~ /^ok constants: /).size() > 0, "constant checks ran");
+        assertTrue((select expected, $1 =~ /^ok errors: /).size() > 0, "error checks ran");
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            hash<WorkerResult> r = runWorker("hash-key-encoding-worker.q", get_script_dir(), "--exec-mode=" + mode);
+            checkWorkerOutput(mode, r.out);
+            checkEngine(mode, r.trace);
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-hash-key-encoding-");
+        string qmod_path = tmp.path + DirSep + "HashKeyEncodingChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "HashKeyEncodingChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker("hash-key-encoding-module-worker.q", tmp.path).out);
+    }
+
+    #! runs a worker with the given module directory and options and returns its output and compilation trace
+    /** The worker runs the checks twice.  Compilation to native code is synchronous and follows the first call of a
+        function (QORE_JIT_SYNC_COMPILE=1, QORE_JIT_THRESHOLD=1), so with --exec-mode=jit or tiered the first pass
+        runs with the IR interpreter and the second one as native code; QORE_JIT_TIMING traces every compilation on
+        stderr.  Any other output on stderr is added to the output, where it fails the checks.
+    */
+    private hash<WorkerResult> runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        TmpFile err("qore-worker-", ".err");
+        string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1 "
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>%s", libqore_dir, libqore_dir,
+            module_dir, qore_bin, opts, worker, err.path));
+        list<string> err_lines = select (ReadOnlyFile::readTextFile(err.path) ?? "").split("
+"), $1.val();
+        list<string> errors = select err_lines, $1 !~ /^\[BG-JIT\]/;
+        return <WorkerResult>{
+            "out": out + (errors ? errors.join("
+") + "
+" : ""),
+            "trace": select err_lines, $1 =~ /^\[BG-JIT\]/,
+        };
+    }
+
+    #! checks that a worker ran the checks with the engine named by its execution mode
+    /** No code is compiled to native code with the AST or the IR interpreter; with JIT and tiered execution the
+        functions with the checks are compiled after their first call, so the second pass runs them as native code.
+    */
+    private checkEngine(string mode, list<string> trace) {
+        if (mode == "ast" || mode == "ir") {
+            assertEq((), trace, mode + ": no code is compiled to native code");
+        } else {
+            list<string> promoted = select trace, $1 =~ /promoted/ && $1 =~ /'check_values@/;
+            assertTrue(promoted.size() > 0, mode + ": the checks run as native code: " + trace.join("
+"));
+        }
+    }
+
+    #! compares the lines printed by a worker with the results of the checks in this program
+    private checkWorkerOutput(string label, string out) {
+        list<string> results = select out.split("\n"), $1.val();
+        checkResults(label, results);
+        # the worker runs the checks twice
+        assertEq(expected + expected, results, label + ": the same checks as in this program, twice");
+    }
+
+    #! checks that every check passed
+    private checkResults(string label, list<string> results) {
+        assertTrue(results.size() > 0, label + ": checks ran");
+        foreach string line in (results) {
+            assertTrue(line =~ /^ok /, label + ": " + line);
+        }
+    }
+}

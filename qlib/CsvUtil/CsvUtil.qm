@@ -250,6 +250,24 @@ while (i.next())
 
     Use the \c "header_lines" and \c "header_names" @ref abstractcsviterator_options "options" to automatically read the header names from the file if present.  Use the \c "fields" @ref abstractcsviterator_options "option" to describe the fields and perform transformations on the data read.  For more information, see the @ref CsvUtil::CsvFileIterator "CsvFileIterator" class.
 
+    @section csvutil_bom Byte Order Marks
+
+    A byte order mark (U+FEFF) at the start of a file marks its character encoding; spreadsheet programs write one
+    when saving "CSV UTF-8".  It is not part of the content, and the CSV readers skip it, so the first header or
+    value of the file does not start with it and headers match field names:
+    - in file, stream, and binary input read as UTF-8 (under any of its names, such as \c "utf8"), a UTF-8 byte
+      order mark at the start is skipped
+    - in input read as UTF-16LE or UTF-16BE, a UTF-16 byte order mark is removed when the lines are read
+    - in string input (@ref CsvUtil::CsvDataIterator "CsvDataIterator" or text \c data of the read data provider), a
+      U+FEFF character at the start is removed
+    - in input read in another encoding (an explicit \c encoding such as \c "ISO-8859-1"), the bytes of a UTF-8 byte
+      order mark are characters of the content and are kept
+    - the lines of a line iterator given to @ref CsvUtil::CsvIterator::constructor() "CsvIterator::constructor()"
+      are read as the line iterator returns them
+
+    @ref CsvUtil::CsvProfiler "CsvProfiler" follows the same rule: it reports the mark and reads the data as the
+    readers do.
+
     @section csvutil_multitype Multi-type support
 
     The %CsvUtil module supports multi-type records, meaning that different input lines may have different structures, and input record type
@@ -353,6 +371,9 @@ while (i.next()) {
     @section csvutil_relnotes Release Notes
 
     @subsection csvutil_v1_12 Version 1.12
+    - the CSV readers skip a byte order mark at the start of UTF-8 file, stream, binary, and string input, so the first
+      header of a file saved as "CSV UTF-8" by a spreadsheet program matches its field name, as the CSV profiler
+      already read it (see @ref csvutil_bom)
     - the CSV profiler and the \c profile action take a \c quote option for files quoted with another character
       than \c "\""; the profile's text format reports the quote character
     - completed the option metadata of the read data provider and the \c read and \c read-data actions, so tools

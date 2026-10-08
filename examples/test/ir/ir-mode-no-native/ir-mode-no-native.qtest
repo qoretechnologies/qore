@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class IRModeNoNativeTest
+
+#! the output and the native compilation trace of a worker
+hashdecl WorkerResult {
+    #! the lines printed on stdout
+    string out;
+    #! the native compilation trace (QORE_JIT_TIMING)
+    list<string> trace;
+}
+
+#! Tests that --exec-mode=ir never compiles code to native code
+/** The worker runs functions, a closure and a method many times and a long loop.  Native compilation is made
+    synchronous and is requested after the first call of a function (QORE_JIT_SYNC_COMPILE=1, QORE_JIT_THRESHOLD=1),
+    so whether a function is compiled does not depend on timing, and QORE_JIT_TIMING traces every compilation on
+    stderr: with IR execution there must be no compilation at all, while the same code is compiled with tiered and
+    JIT execution, which shows that the trace reports compilations.
+*/
+class IRModeNoNativeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("IRModeNoNativeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("IR mode compiles nothing", \testIrMode());
+        addTestCase("JIT and tiered modes compile the same code", \testNativeModes());
+        set_return_value(main());
+    }
+
+    testIrMode() {
+        hash<WorkerResult> r = runWorker("ir");
+        assertEq(Expected, r.out, "ir: result");
+        assertEq((), r.trace, "ir: no code is compiled to native code");
+    }
+
+    testNativeModes() {
+        foreach string mode in (("jit", "tiered")) {
+            hash<WorkerResult> r = runWorker(mode);
+            assertEq(Expected, r.out, mode + ": result");
+            foreach string fn in (("hot", "loop", "add")) {
+                string name = "'" + fn + "@";
+                assertTrue((select r.trace, $1 =~ /promoted/ && $1.find(name) >= 0).size() > 0,
+                    sprintf("%s: %s() is compiled to native code", mode, fn));
+            }
+        }
+    }
+
+    #! the result printed by the worker
+    const Expected = "7798982\n";
+
+    #! runs the worker in the given execution mode and returns its output and its native compilation trace
+    private hash<WorkerResult> runWorker(string mode) {
+        TmpFile err("qore-ir-mode-no-native-", ".err");
+        string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1 "
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>%s", libqore_dir, libqore_dir,
+            qore_bin, mode, get_script_dir() + DirSep + "ir-mode-no-native-worker.q", err.path));
+        list<string> err_lines = select (ReadOnlyFile::readTextFile(err.path) ?? "").split("\n"), $1.val();
+        # any output on stderr other than the compilation trace is an error
+        assertEq((), (select err_lines, $1 !~ /^\[BG-JIT\]/), mode + ": no errors");
+        return <WorkerResult>{
+            "out": out,
+            "trace": select err_lines, $1 =~ /^\[BG-JIT\]/,
+        };
+    }
+}

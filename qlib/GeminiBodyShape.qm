@@ -71,6 +71,7 @@ module GeminiBodyShape {
       (in compact mode) flatten deep object/array payloads
     - @ref openAiToolChoiceToGeminiConfig() — adapt OpenAI \c tool_choice
       to Gemini \c toolConfig
+    - @ref normalizeGenerationConfig() — model-specific generation controls, applied after body overrides
     - @ref applyCachedContent() — make a request use a cached content resource
       (explicit prompt caching)
     - @ref shapeCachedContentBody() / @ref shapeCacheExpiration() — the bodies
@@ -90,10 +91,41 @@ module GeminiBodyShape {
     - @ref modelResource() — \c "models/<name>" canonicalization
     - @ref bareModelName() — strip \c "models/" prefix
 
+    @section geminibodyshapegeneration Generation parameters
+
+    Gemini and Vertex AI select generation parameters using the effective model for each request, including
+    per-call model overrides. For Gemini 3.x, \c temperature, \c topP and \c topK are omitted even when
+    supplied in \c body_options. Use \c reasoning_effort to set \c generationConfig.thinkingConfig.thinkingLevel:
+    \c minimal, \c low, \c medium or \c high. The provider-neutral \c xhigh and \c max values map to \c HIGH.
+    Supported levels depend on the model; for example Gemini 3.1 Pro does not support \c minimal.
+    An explicit native thinking level in \c body_options takes precedence.
+
+    Numeric \c reasoning_token_budget values (including zero and -1) are omitted on Gemini 3.x, since a token
+    budget has no exact thinking-level equivalent. Without an explicit level, the model default applies.
+    Gemini 3.x cannot fully disable thinking; \c disable_reasoning is therefore not mapped to a level.
+    Older models, including Gemini 2.5, retain sampling parameters and numeric thinking budgets. Generic
+    \c reasoning_effort is ignored for these models; Gemini 2.5's generateContent API does not accept thinking levels.
+
+    @par Example
+    An invoice classifier using either the Gemini or Vertex LLM provider can limit reasoning depth per request:
+    @code{.py}
+provider.complete("Classify invoices by department", invoice_text, NOTHING,
+    <QoreLlmUtils::LlmRequestOptions>{"model": "gemini-3.1-pro-preview", "reasoning_effort": "low"});
+    @endcode
+
+    Direct data-provider requests use \c generationConfig.thinkingConfig.thinkingLevel; Gemini's simple-chat
+    action accepts \c thinkingConfig directly. All generation actions normalize their final request before
+    sending it, including streaming. Raw generic REST calls remain caller-controlled.
+
+    See https://ai.google.dev/gemini-api/docs/generate-content/thinking and
+    https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/migrate for Google's model guidance.
+
     @section geminibodyshaperelnotes Release Notes
 
     @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
     - initial release
+    - Gemini 3.x uses qualitative thinking levels and omits deprecated sampling parameters and numeric budgets;
+      Gemini 2.5 retains its existing controls (see @ref geminibodyshapegeneration)
     - explicit prompt caching: @ref shapeChatBody() takes a \c cached_content reference and then leaves out
       \c systemInstruction, \c tools and \c toolConfig, which belong to the cached content
       (@ref shapeCachedContentBody()); providers take it from
@@ -608,6 +640,81 @@ public hash<auto> sub parseToolResponse(*string content) {
     }
 }
 
+#! Returns whether a model belongs to the Gemini 3 family
+/** @param model a bare model ID or a Gemini/Vertex model resource name
+    @return @ref True for Gemini 3.x, @ref False for older or unknown models
+*/
+public bool sub usesThinkingLevel(string model) {
+    model =~ s/^.*\///;
+    return model =~ /^gemini-3([.-]|$)/;
+}
+
+#! Applies Gemini 3 generation-parameter compatibility rules after all body overrides
+/** Removes deprecated sampling parameters and numeric thinking budgets for Gemini 3.x.
+    Other model families retain their existing request body. Both REST camelCase names and protobuf
+    snake_case aliases are handled. A supplied thinking level is normalized to uppercase.
+
+    @param model the selected model ID or resource name
+    @param body the complete request body, including provider-specific overrides
+    @return the normalized request body; the caller's hash is not modified
+    @throw GEMINI-GENERATION-CONFIG-ERROR configuration objects or thinking levels are invalid, or both
+        spellings of a configuration object are supplied
+    @note Numeric budgets have no exact level equivalent and are omitted on Gemini 3.x, including zero
+        and the dynamic budget -1. Supply an explicit thinking level to override the model default.
+        Supported levels depend on the model; Gemini 3.x cannot fully disable thinking.
+
+    @par Example
+    A support-ticket classifier can request low reasoning effort while allowing the model to manage sampling:
+    @code{.py}
+hash<auto> body = GeminiBodyShape::normalizeGenerationConfig("gemini-3.1-pro-preview", {
+    "generationConfig": {"thinkingConfig": {"thinkingLevel": "low"}},
+});
+    @endcode
+*/
+public hash<auto> sub normalizeGenerationConfig(string model, hash<auto> body) {
+    if (!usesThinkingLevel(model)) {
+        return body;
+    }
+    if (exists body.generationConfig && exists body.generation_config) {
+        throw "GEMINI-GENERATION-CONFIG-ERROR", "use only one of generationConfig and generation_config";
+    }
+    auto config = remove body.generation_config ?? body.generationConfig;
+    if (config.typeCode() == NT_NOTHING) {
+        return body;
+    }
+    if (config.typeCode() != NT_HASH) {
+        throw "GEMINI-GENERATION-CONFIG-ERROR", "generationConfig must be a hash";
+    }
+    hash<auto> gen = cast<hash>(config) - ("temperature", "topP", "topK", "top_p", "top_k");
+    if (exists gen.thinkingConfig && exists gen.thinking_config) {
+        throw "GEMINI-GENERATION-CONFIG-ERROR", "use only one of thinkingConfig and thinking_config";
+    }
+    auto thinking = remove gen.thinking_config ?? gen.thinkingConfig;
+    if (thinking.typeCode() != NT_NOTHING) {
+        if (thinking.typeCode() != NT_HASH) {
+            throw "GEMINI-GENERATION-CONFIG-ERROR", "thinkingConfig must be a hash";
+        }
+        hash<auto> tc = cast<hash>(thinking) - ("thinkingBudget", "thinking_budget");
+        if (exists tc.thinkingLevel && exists tc.thinking_level) {
+            throw "GEMINI-GENERATION-CONFIG-ERROR", "use only one of thinkingLevel and thinking_level";
+        }
+        auto level = remove tc.thinking_level ?? tc.thinkingLevel;
+        if (level.typeCode() != NT_NOTHING) {
+            if (level.typeCode() != NT_STRING || !("MINIMAL", "LOW", "MEDIUM", "HIGH").contains(toupper(level))) {
+                throw "GEMINI-GENERATION-CONFIG-ERROR", "thinkingLevel must be minimal, low, medium, or high";
+            }
+            tc.thinkingLevel = toupper(level);
+        }
+        if (tc) {
+            gen.thinkingConfig = tc;
+        } else {
+            delete gen.thinkingConfig;
+        }
+    }
+    body.generationConfig = gen;
+    return body;
+}
+
 #! Builds a Gemini \c generateContent request body from generic chat inputs
 /** Counterpart to the legacy \c buildGeminiBody private instance method.
     The function is pure-static; callers resolve their request-option
@@ -629,10 +736,12 @@ public hash<auto> sub parseToolResponse(*string content) {
     @param tools optional tool definitions
     @param output_schema optional JSON schema for structured output
     @param resolved already-resolved per-call knobs:
+        - \c model (\c *string): selected model; enables Gemini 3.x parameter normalization
         - \c max_output_tokens (\c int): mapped to \c generationConfig.maxOutputTokens
         - \c temperature (\c float): mapped to \c generationConfig.temperature
         - \c reasoning_token_budget (\c *int): mapped to
-          \c generationConfig.thinkingConfig.thinkingBudget when present
+          \c generationConfig.thinkingConfig.thinkingBudget for models before Gemini 3
+        - \c reasoning_effort (\c *string): Gemini 3.x \c thinkingLevel; \c xhigh and \c max map to \c HIGH
         - \c extra_body (<tt>*hash&lt;auto&gt;</tt>): merged into the final body so
           callers can pass through provider-specific knobs without
           modifying this shaper
@@ -725,7 +834,12 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
         "maxOutputTokens": resolved.max_output_tokens,
         "temperature": resolved.temperature,
     };
-    if (exists resolved.reasoning_token_budget
+    if (usesThinkingLevel(resolved.model ?? "") && resolved.reasoning_effort.typeCode() != NT_NOTHING) {
+        string effort = toupper(resolved.reasoning_effort);
+        generation_config.thinkingConfig = {
+            "thinkingLevel": ("XHIGH", "MAX").contains(effort) ? "HIGH" : effort,
+        };
+    } else if (exists resolved.reasoning_token_budget
             && resolved.reasoning_token_budget.typeCode() != NT_NOTHING) {
         generation_config.thinkingConfig = {
             "thinkingBudget": resolved.reasoning_token_budget,
@@ -752,8 +866,9 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
     }
 
     if (resolved.extra_body.typeCode() == NT_HASH) {
-        body += resolved.extra_body;
+        body += normalizeGenerationConfig(resolved.model ?? "", resolved.extra_body);
     }
+    body = normalizeGenerationConfig(resolved.model ?? "", body);
     if (resolved.cached_content.val()) {
         return GeminiBodyShape::applyCachedContent(body, resolved.cached_content);
     }
@@ -1371,16 +1486,19 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         }
         hash<auto!> rv;
         rv += body;
-        foreach string key in (keys opts.body_options) {
+        # Canonicalize aliases before merging, so a snake_case override does not collide with the generated
+        # camelCase configuration. Normalize again after merging to cover all effective request settings.
+        hash<auto> extra = GeminiBodyShape::normalizeGenerationConfig(getModelName(opts), opts.body_options);
+        foreach string key in (keys extra) {
             if (key == "generationConfig"
                     && rv.generationConfig.typeCode() == NT_HASH
-                    && opts.body_options{key}.typeCode() == NT_HASH) {
+                    && extra{key}.typeCode() == NT_HASH) {
                 hash<auto!> gc;
                 gc += rv.generationConfig;
-                gc += opts.body_options{key};
+                gc += extra{key};
                 rv.generationConfig = gc;
             } else {
-                rv{key} = opts.body_options{key};
+                rv{key} = extra{key};
             }
         }
         return rv;
@@ -1514,14 +1632,17 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         *string cached_content = getRequestCachedContent(opts);
         hash<auto> resolved = {
+            "model": getModelName(opts),
             "max_output_tokens": getRequestMaxOutputTokens(opts),
             "temperature": getRequestTemperature(opts),
             "reasoning_token_budget": getRequestReasoningTokenBudget(opts),
+            "reasoning_effort": getRequestReasoningEffort(opts),
             "cached_content": cached_content,
         };
         hash<auto> body = GeminiBodyShape::shapeChatBody(messages, tools,
             output_schema, resolved);
         body = mergeRequestBodyOptions(body, opts);
+        body = GeminiBodyShape::normalizeGenerationConfig(getModelName(opts), body);
         # body options such as a toolConfig translated from an OpenAI tool_choice must not be sent with a cache
         return cached_content
             ? GeminiBodyShape::applyCachedContent(body, cached_content)

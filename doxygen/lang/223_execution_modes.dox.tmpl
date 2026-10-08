@@ -38,7 +38,9 @@ qore --exec-mode=ast oldstyle.q
 
     IR mode lowers @ref modern "%modern" code to Qore IR and executes it with
     the IR interpreter. This avoids AST dispatch while keeping startup overhead
-    lower than native compilation.
+    lower than native compilation. Code is never compiled to native code in IR
+    mode, however often a function is called or a loop runs; only compiled
+    (AOT) modules run native code.
 
     @code{.sh}
 qore --exec-mode=ir script.qr

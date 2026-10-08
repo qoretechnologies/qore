@@ -62,7 +62,17 @@ public class DeepSeekRestClientTest inherits QUnit::Test {
         if (ENV.DEEPSEEK_LIVE) {
             addTestCase("live valid and invalid authentication", \livePingTest());
         }
+        addTestCase("current models expose supported reasoning levels", \modelEfforts());
         set_return_value(main());
+    }
+
+    private modelEfforts() {
+        assertEq("deepseek-flash", DeepSeekRestClientBase::DefaultChatModel);
+        foreach string model in (("deepseek-flash", "deepseek-v4-pro", "deepseek-v4-flash",
+                "deepseek-v4-flash-vision-exp")) {
+            assertEq(("none", "low", "high", "max"), DeepSeekRestClientBase::getModelReasoningEfforts(model));
+        }
+        assertNothing(DeepSeekRestClientBase::getModelReasoningEfforts("deepseek-unknown"));
     }
 
     private connectionConfigTest() {
@@ -190,7 +200,7 @@ public class DeepSeekRestClientTest inherits QUnit::Test {
         hash<QoreLlmUtils::LlmProviderInfo> info = f.getInfo();
         assertTrue(info.supports_streaming);
         assertTrue(info.supports_tools);
-        assertTrue(info.supports_structured_output);
+        assertFalse(info.supports_structured_output, "JSON mode does not enforce JSON schemas");
         assertTrue(info.supports_multimodal);
     }
 

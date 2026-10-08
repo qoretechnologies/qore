@@ -1,0 +1,402 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file hash-key-encoding-checks.qi checks that hash keys and member names given in any encoding are UTF-8 keys
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+/** Hash keys and object member names are stored in the default character encoding (UTF-8).  Each check uses a key
+    given as a string in another encoding (ISO-8859-2, WINDOWS-1250, UTF-16LE, UTF-16BE) and verifies that it names
+    the same key as the UTF-8 string with the same characters, for every operation that takes a key: lookup,
+    assignment, compound assignment, exists, remove, delete, slices, literals, the minus operators, hash methods,
+    object members, hashdecl members, map and select, references and closures.  The UTF-16 key \c "PO" checks that
+    no key is cut at the first null byte of its UTF-16 representation.
+
+    Each execution engine has its own key code, so the checks are run in each execution mode by
+    hash-key-encoding-worker.q, which includes this file in its main program (code in a user module loaded from
+    source does not take the execution mode given on the command line), and as a compiled (AOT) module by
+    HashKeyEncodingChecks.qm, which includes it as well.
+*/
+public namespace HashKeyEncodingChecks {
+#! constant keys in other encodings; the constants are evaluated when the code is parsed
+const K = convert_encoding("Bestätigung", "ISO-8859-2");
+const U = convert_encoding("PO", "UTF-16LE");
+const KU = convert_encoding("Plzeň", "WINDOWS-1250");
+
+hashdecl KeyHd {
+    int PO = 0;
+    int x = 0;
+}
+
+hashdecl KeyHd2 {
+    int PO = 0;
+}
+
+class KeyObj {
+    public {
+        int PO = 0;
+    }
+}
+
+class DynObj {
+    setSelf(string k, auto v) {
+        self.(k) = v;
+    }
+
+    auto getSelf(string k) {
+        return self.(k);
+    }
+
+    incSelf(string k) {
+        self{k} += 1;
+    }
+
+    removeSelf(string k) {
+        remove self{k};
+    }
+}
+
+our hash<auto> g_h;
+
+sub refset(reference<hash<auto>> r, string k, auto v) {
+    r{k} = v;
+}
+
+#! collects the result of each check as \c "ok <label>" or \c "FAIL <label>: <reason>"
+class KeyChecker {
+    private {
+        list<string> results = ();
+        string prefix = "";
+    }
+
+    setPrefix(string prefix) {
+        self.prefix = prefix;
+    }
+
+    chk(string label, auto actual, auto expected) {
+        string name = prefix + label;
+        if (actual !== expected) {
+            results += sprintf("FAIL %s: got %y expected %y", name, actual, expected);
+            return;
+        }
+        # keys must be the same bytes as the UTF-8 strings, not only the same characters
+        if (actual.typeCode() == NT_LIST && expected.typeCode() == NT_LIST) {
+            foreach auto v in (actual) {
+                if (v.typeCode() == NT_STRING && (v.encoding() != "UTF-8" || binary(v) != binary(expected[$#]))) {
+                    results += sprintf("FAIL %s: key %y is not in UTF-8 (%s)", name, v, v.encoding());
+                    return;
+                }
+            }
+        }
+        if (actual.typeCode() == NT_HASH) {
+            foreach string k in (keys actual) {
+                if (k.encoding() != "UTF-8") {
+                    results += sprintf("FAIL %s: key %y is not in UTF-8 (%s)", name, k, k.encoding());
+                    return;
+                }
+            }
+        }
+        results += "ok " + name;
+    }
+
+    fail(string label, hash<ExceptionInfo> ex) {
+        results += sprintf("FAIL %s%s: %s: %s", prefix, label, ex.err, ex.desc);
+    }
+
+    #! a key that cannot be converted to UTF-8 raises an exception that can be caught
+    tryit(string label, code c) {
+        string name = prefix + label;
+        try {
+            auto v = c();
+            results += sprintf("FAIL %s: no exception: %y", name, v);
+        } catch (hash<ExceptionInfo> ex) {
+            results += ex.err == "ENCODING-CONVERSION-ERROR"
+                ? "ok " + name
+                : sprintf("FAIL %s: %s: %s", name, ex.err, ex.desc);
+        }
+    }
+
+    list<string> getResults() {
+        return results;
+    }
+}
+
+sub check_values(KeyChecker c, string a, string b, string u, string an, string bn, string un) {
+    hash<string, int> h = map {$1: $#}, (a, b, u);
+    c.chk("map keys", keys h, (an, bn, un));
+    c.chk("lookup a", h{a}, 0);
+    c.chk("lookup b dot", h.(b), 1);
+    c.chk("lookup u", h{u}, 2);
+    c.chk("exists a", exists h{a}, True);
+    c.chk("hasKey b", h.hasKey(b), True);
+    c.chk("hasKey u", h.hasKey(u), True);
+    c.chk("hasKeyValue a", h.hasKeyValue(a), True);
+    hash lit = {a: 1, u: 3};
+    c.chk("literal", keys lit, (an, un));
+    hash pe = {};
+    pe += {b: 2};
+    c.chk("plus-equals", keys pe, (bn,));
+    hash<auto> rm = {an: 1, "x": 2};
+    remove rm{a};
+    c.chk("remove", keys rm, ("x",));
+    hash<auto> dl = {an: 1, "x": 2};
+    delete dl{a};
+    c.chk("delete", keys dl, ("x",));
+    hash<auto> mi = {an: 1, un: 3, "x": 1};
+    mi -= a;
+    c.chk("minus-equals", keys mi, (un, "x"));
+    hash<auto> ml = {an: 1, un: 3, "x": 1};
+    c.chk("minus list", keys (ml - (a, u)), ("x",));
+    c.chk("minus str", keys (ml - u), (an, "x"));
+    ml -= (a, u);
+    c.chk("minus-equals list", keys ml, ("x",));
+    hash<auto> lv = {};
+    lv{a} = 1;
+    lv{a} += 1;
+    lv{a} *= 3;
+    lv{u} = 5;
+    c.chk("lvalue", lv, {an: 6, un: 5});
+    hash<auto> lv2 = {};
+    lv2{a}{u} = 1;
+    c.chk("nested lvalue", lv2, {an: {un: 1}});
+    c.chk("hash-elem", ({an: 7}){a}, 7);
+    c.chk("hash-elem u", ({un: 8}){u}, 8);
+    hash<auto> sl = {an: 1, bn: 2, un: 3};
+    c.chk("slice", sl{a, u}, {an: 1, un: 3});
+    c.chk("slice list", sl{(b, u)}, {bn: 2, un: 3});
+    c.chk("firstKey", sl.firstKey(), an);
+    c.chk("firstKey round-trip", sl{sl.firstKey()}, 1);
+    c.chk("lastKey", sl.lastKey(), un);
+    hash<KeyHd> hd();
+    try {
+    hd.(u) = 4;
+    c.chk("hashdecl u", hd.PO, 4);
+    hd{u} += 1;
+    c.chk("hashdecl read", hd{u}, 5);
+    c.chk("hashdecl exists", exists hd{u}, True);
+    try {
+        hd{a} = 1;
+        c.chk("hashdecl invalid member", True, False);
+    } catch (hash<ExceptionInfo> ex) {
+        c.chk("hashdecl invalid member", ex.err, "INVALID-MEMBER");
+    }
+    } catch (hash<ExceptionInfo> ex) {
+        c.fail("hashdecl", ex);
+    }
+    KeyObj ko();
+    try {
+    ko{u} = 6;
+    c.chk("object member u", ko.PO, 6);
+    c.chk("object read u", ko.(u), 6);
+    } catch (hash<ExceptionInfo> ex) {
+        c.fail("typed object", ex);
+    }
+    object o = new DynObj();
+    o.(a) = 5;
+    o{u} = 6;
+    c.chk("object member", o.(an), 5);
+    c.chk("object member u2", o.(un), 6);
+    c.chk("object read", o.(a), 5);
+    c.chk("object read u", o{u}, 6);
+    c.chk("object exists", exists o.(a), True);
+    c.chk("object slice", o{a, u}, {an: 5, un: 6});
+    o.(a) += 2;
+    c.chk("object lvalue", o.(an), 7);
+    remove o.(a);
+    c.chk("object remove", exists o.(an), False);
+    hash<auto> mp = map {$1: $#}, (a, u);
+    c.chk("map literal", mp, {an: 0, un: 1});
+    hash<auto> cnt = {};
+    foreach string k in (a, a, u) {
+        ++cnt{k};
+    }
+    c.chk("increment", cnt, {an: 2, un: 1});
+    hash<auto> ctx = {};
+    ctx{a} = ctx{a} ?? 7;
+    c.chk("coalesce", ctx, {an: 7});
+    c.chk("in keys", inlist(an, keys ({a: 1})), True);
+    *hash<auto> nh = {a: 1};
+    c.chk("nullable hash lookup", nh{a}, 1);
+    hash<auto> ex = {an: {un: 2}};
+    c.chk("nested read", ex{a}{u}, 2);
+    c.chk("nested exists", exists ex{a}{u}, True);
+
+    # more operators and storage kinds
+    hash<auto> mm = {};
+    mm{a} = mm{a} ?? 1;
+    mm{a} = mm{a} ?? 2;
+    mm{u} = "x";
+    mm{u} += "y";
+    mm{u} += "z";
+    c.chk("??= and string ops", mm, {an: 1, un: "xyz"});
+    mm{b} = ();
+    push mm{b}, 1;
+    mm{b} += 2;
+    unshift mm{b}, 0;
+    c.chk("push/unshift", mm{bn}, (0, 1, 2));
+    splice mm{b}, 0, 1;
+    c.chk("splice", mm{bn}, (1, 2));
+    c.chk("extract", (extract mm{b}, 0, 1), (1,));
+    c.chk("pop", pop mm{b}, 2);
+    mm{a}++;
+    ++mm{a};
+    mm{a}--;
+    c.chk("inc/dec", mm{an}, 2);
+    mm{a} -= 1;
+    mm{a} /= 1;
+    mm{a} %= 7;
+    mm{a} |= 4;
+    mm{a} &= 5;
+    mm{a} ^= 1;
+    mm{a} <<= 1;
+    mm{a} >>= 1;
+    c.chk("int ops", mm{an}, 4);
+    c.chk("coalesce read", mm{u} ?? "none", "xyz");
+    c.chk("ternary read", exists mm{a} ? mm{a} : -1, 4);
+    g_h = {};
+    g_h{a} = 1;
+    g_h{u} += 2;
+    c.chk("global", g_h, {an: 1, un: 2});
+    remove g_h{a};
+    c.chk("global remove", keys g_h, (un,));
+    hash<auto> cl = {};
+    code f = sub () { cl{a} = 1; cl{u} += 3; };
+    f();
+    c.chk("closure", cl, {an: 1, un: 3});
+    c.chk("closure read", (auto sub () { return cl{a}; })(), 1);
+    hash<auto> rh = {};
+    refset(\rh, a, 9);
+    c.chk("reference", rh, {an: 9});
+    reference<auto> r = \rh{u};
+    r = 4;
+    c.chk("reference to key", rh, {an: 9, un: 4});
+    DynObj d();
+    d.setSelf(a, 1);
+    d.incSelf(a);
+    c.chk("self member", d.getSelf(an), 2);
+    c.chk("self member read", d.getSelf(a), 2);
+    d.removeSelf(a);
+    c.chk("self member remove", d.getSelf(an), NOTHING);
+    hash<auto> sr = {an: 1, un: 2, "x": 3};
+    c.chk("remove slice", remove sr{a, u}, {an: 1, un: 2});
+    c.chk("remove slice left", sr, {"x": 3});
+    hash<auto> dr = {an: 1, un: 2, "x": 3};
+    delete dr{(a, u)};
+    c.chk("delete slice", dr, {"x": 3});
+    object so = new DynObj();
+    so.(an) = 1;
+    so.(un) = 2;
+    c.chk("object remove slice", remove so{a, u}, {an: 1, un: 2});
+    hash<KeyHd> hd2 = cast<hash<KeyHd>>({u: 1});
+    c.chk("hashdecl from literal", hd2.PO, 1);
+    c.chk("hashdecl cast", cast<hash<KeyHd>>({u: 2}).PO, 2);
+    c.chk("hash constructor", (new hash<KeyHd>({u: 3})).PO, 3);
+    list<hash<auto>> lh = ({an: 1, un: 2}, {an: 3, un: 4});
+    c.chk("map key projection", (map $1{a}, lh), (1, 3));
+    c.chk("map two keys", (map {$1{a}: $1{u}}, lh), {"1": 2, "3": 4});
+    c.chk("select key", (select lh, $1{a} > 1), ({an: 3, un: 4},));
+    hash<auto> vh = {a: u};
+    c.chk("value-key map", (map {$1.value: $1.key}, vh.pairIterator()), {un: an});
+    c.chk("hash iterator key", (map $1.key, ({a: 1}).pairIterator()), (an,));
+    c.chk("context key", (foldl $1 + $2, (map $1{u}, lh)), 6);
+    hash<string, int> tsi = {};
+    tsi{a} = 1;
+    tsi{a} += 1;
+    c.chk("typed hash<string, int>", tsi, {an: 2});
+    hash<string, hash<string, int>> nested = {};
+    nested{a}{u} = 1;
+    c.chk("typed nested", nested, {an: {un: 1}});
+    hash<auto> plus_base = {an: 1};
+    hash<auto> plus = plus_base + {a: 2};
+    c.chk("hash plus", plus, {an: 2});
+    hash<auto> ph = {};
+    ph += {a: 1, u: 2};
+    ph += {a: 3};
+    c.chk("hash plus-equals twice", ph, {an: 3, un: 2});
+    c.chk("in operator", inlist(an, keys {a: 1}), True);
+    c.chk("hash in", ({a: 1}).hasKey(an), True);
+    c.chk("hash values by key", ({an: 1, un: 2}){(a,)}, {an: 1});
+}
+
+sub check_constants(KeyChecker c) {
+    c.chk("const encoding", K.encoding(), "ISO-8859-2");
+    hash<auto> h = {K: 1, U: 2};
+    c.chk("const literal keys", keys h, ("Bestätigung", "PO"));
+    c.chk("const lookup", h{K}, 1);
+    c.chk("const lookup u", h.(U), 2);
+    c.chk("const exists", exists h{K}, True);
+    h{KU} = 3;
+    h{K} += 10;
+    c.chk("const lvalue", h, {"Bestätigung": 11, "PO": 2, "Plzeň": 3});
+    remove h{U};
+    c.chk("const remove", keys h, ("Bestätigung", "Plzeň"));
+    c.chk("const literal deref", ({"Bestätigung": 7}){K}, 7);
+    c.chk("const literal both", ({K: 8}){K}, 8);
+    hash<KeyHd2> hd = cast<hash<KeyHd2>>({U: 4});
+    c.chk("const hashdecl literal", hd.PO, 4);
+    list<hash<auto>> l = ({"Bestätigung": 1, "PO": 2}, {"Bestätigung": 3, "PO": 4});
+    c.chk("const map key", (map $1{K}, l), (1, 3));
+    c.chk("const map two keys", (map {$1{K}: $1{U}}, l), {"1": 2, "3": 4});
+    c.chk("const hash key in map", (map {K: $1}, (1,)), {"Bestätigung": 1});
+    c.chk("const dup keys", keys {K: 1, "Bestätigung": 2}, ("Bestätigung",));
+}
+
+sub check_errors(KeyChecker c, string bad) {
+    hash<auto> h = {"a": 1};
+    c.tryit("lookup", auto sub () { return h{bad}; });
+    c.tryit("exists", auto sub () { return exists h{bad}; });
+    c.tryit("hasKey", auto sub () { return h.hasKey(bad); });
+    c.tryit("literal", auto sub () { return {bad: 1}; });
+    c.tryit("assign", auto sub () { h{bad} = 1; return h; });
+    c.tryit("compound", auto sub () { h{bad} += 1; return h; });
+    c.tryit("nested assign", auto sub () { hash<auto> n = {}; n{bad}{bad} = 1; return n; });
+    c.tryit("remove", auto sub () { return remove h{bad}; });
+    c.tryit("delete", auto sub () { delete h{bad}; return h; });
+    c.tryit("slice", auto sub () { return h{bad, "a"}; });
+    c.tryit("minus", auto sub () { return h - bad; });
+    c.tryit("minus-equals", auto sub () { h -= bad; return h; });
+    c.tryit("map", auto sub () { return map {$1: 1}, (bad,); });
+    object o = new DynObj();
+    c.tryit("object read", auto sub () { return o.(bad); });
+    c.tryit("object assign", auto sub () { o.(bad) = 1; return o; });
+    c.tryit("local assign", auto sub () { hash<auto> x = {}; x{bad} = 1; return x; });
+    c.tryit("local remove", auto sub () { hash<auto> x = {"a": 1}; remove x{bad}; return x; });
+    c.chk("unchanged after errors", h, {"a": 1});
+}
+
+#! runs every check and returns the results
+public list<string> sub get_results() {
+    KeyChecker c();
+    c.setPrefix("ISO-8859-2/UTF-16LE: ");
+    check_values(c, convert_encoding("Bestätigung", "ISO-8859-2"), convert_encoding("Plzeň", "ISO-8859-2"),
+        convert_encoding("PO", "UTF-16LE"), "Bestätigung", "Plzeň", "PO");
+    c.setPrefix("WINDOWS-1250/UTF-16BE: ");
+    check_values(c, convert_encoding("Bestätigung", "WINDOWS-1250"), convert_encoding("Plzeň", "WINDOWS-1250"),
+        convert_encoding("PO", "UTF-16BE"), "Bestätigung", "Plzeň", "PO");
+    c.setPrefix("UTF-8: ");
+    check_values(c, "Bestätigung", "Plzeň", "PO", "Bestätigung", "Plzeň", "PO");
+    c.setPrefix("constants: ");
+    check_constants(c);
+    c.setPrefix("errors: ");
+    # an odd number of bytes is not valid UTF-16
+    check_errors(c, binary_to_string(<410042>, "UTF-16LE"));
+    return c.getResults();
+}
+}

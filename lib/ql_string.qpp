@@ -33,6 +33,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/ql_string.h"
 #include "qore/intern/qore_number_private.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <cctype>
 #include <cfloat>
@@ -2668,7 +2669,8 @@ bool b = parse_boolean(str);
     @ref qore_code_flags_portability.
  */
 bool parse_boolean(string str) [flags=CONSTANT,NAMED_ARGS] {
-   return q_parse_bool(str->c_str());
+   QoreAsciiCompatStringHelper text(*str);
+   return q_parse_bool(text.c_str());
 }
 
 //! returns the first value passed as a boolean
@@ -2703,13 +2705,17 @@ number n = parse_number("1.150.200,55", ".,");
     @since %Qore 0.8.11.1
 */
 number parse_number(string str, string format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-   TempEncodingHelper tfmt(format, str->getEncoding(), xsink);
-   if (*xsink)
+   // the number is parsed from the text in an ASCII-compatible encoding, and the format must be in the same encoding
+   QoreAsciiCompatStringHelper text(*str);
+   TempEncodingHelper tfmt(format, text.getEncoding(), xsink);
+   if (*xsink) {
       return QoreValue();
+   }
 
-   QoreString tmp(*str);
-   if (fix_num(tmp, **tfmt, xsink))
+   QoreString tmp(text.c_str(), text.size(), text.getEncoding());
+   if (fix_num(tmp, **tfmt, xsink)) {
       return QoreValue();
+   }
 
    return new QoreNumberNode(tmp.getBuffer());
 }
@@ -2732,13 +2738,17 @@ float f = parse_float("1.150.200,55", ".,");
     @since %Qore 0.8.11.1
 */
 float parse_float(string str, string format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-   TempEncodingHelper tfmt(format, str->getEncoding(), xsink);
-   if (*xsink)
+   // the number is parsed from the text in an ASCII-compatible encoding, and the format must be in the same encoding
+   QoreAsciiCompatStringHelper text(*str);
+   TempEncodingHelper tfmt(format, text.getEncoding(), xsink);
+   if (*xsink) {
       return QoreValue();
+   }
 
-   QoreString tmp(*str);
-   if (fix_num(tmp, **tfmt, xsink))
+   QoreString tmp(text.c_str(), text.size(), text.getEncoding());
+   if (fix_num(tmp, **tfmt, xsink)) {
       return QoreValue();
+   }
 
    return q_strtod(tmp.getBuffer());
 }
@@ -2761,13 +2771,17 @@ int i = parse_int("1.150.200,55", ".,");
     @since %Qore 0.8.13
 */
 int parse_int(string str, string format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-   TempEncodingHelper tfmt(format, str->getEncoding(), xsink);
-   if (*xsink)
+   // the number is parsed from the text in an ASCII-compatible encoding, and the format must be in the same encoding
+   QoreAsciiCompatStringHelper text(*str);
+   TempEncodingHelper tfmt(format, text.getEncoding(), xsink);
+   if (*xsink) {
       return QoreValue();
+   }
 
-   QoreString tmp(*str);
-   if (fix_num(tmp, **tfmt, xsink))
+   QoreString tmp(text.c_str(), text.size(), text.getEncoding());
+   if (fix_num(tmp, **tfmt, xsink)) {
       return QoreValue();
+   }
 
    return strtoll(tmp.getBuffer(), 0, 10);
 }

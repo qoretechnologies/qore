@@ -211,8 +211,8 @@ public class EmpathicBuildingRestClient inherits RestClient::RestClient {
     server, a new token is acquired with the login API whenever a username and password are set, otherwise with the
     refresh token.
 
-    Token acquisition is serialized; a thread that waits while another thread acquires a new token uses that token
-    instead of logging in again.
+    Token acquisition is serialized; concurrent requests rejected with the same token share a new token,
+    including requests whose rejection arrives after another request has already acquired the new token.
 
     @since EmpathicBuildingDataProvider 1.2
 */
@@ -326,6 +326,23 @@ public class EmpathicBuildingRestClientIo inherits RestClientIo::RestClientIo {
     #! Returns @ref True if a new token can be acquired after an HTTP 401 response
     private bool canRetryAuth() {
         return canLogin();
+    }
+
+    #! Reuses a newer token or acquires one after a request is rejected
+    /** @param hdr the prepared headers of the rejected request, with lowercase names
+    */
+    private refreshTokenForRequest(*hash<auto> hdr) {
+        AutoLock al(login_lock);
+        {
+            AutoReadLock al(config_lock);
+            string header = token_api_key_header_val.val() ? token_api_key_header_val : "authorization";
+            # Compare with the token actually sent, not the token current when the response arrived.
+            # A late rejection of an old token must not invalidate another request's retry.
+            if (headers{header}.val() && headers{header} != hdr{header}) {
+                return;
+            }
+        }
+        acquireTokenLocked();
     }
 
     #! Acquires a new token

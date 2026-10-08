@@ -1606,7 +1606,10 @@ if(BISON_VERSION VERSION_GREATER_EQUAL 3.0)
 else()
     bison_target(qoreparser lib/parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp)
 endif()
-flex_target(qorescanner lib/scanner.lpp ${CMAKE_CURRENT_BINARY_DIR}/scanner.cpp COMPILE_FLAGS --nowarn)
+# Flex line directives must identify the source independently of the compiler's
+# build-directory working directory, including in separate RPM debug sources.
+flex_target(qorescanner "${CMAKE_CURRENT_SOURCE_DIR}/lib/scanner.lpp"
+    ${CMAKE_CURRENT_BINARY_DIR}/scanner.cpp COMPILE_FLAGS --nowarn)
 add_flex_bison_dependency(qorescanner qoreparser)
 
 # Enforce the parser grammar conflict budget (0 shift/reduce, 1 reduce/reduce).  Re-runs whenever
@@ -2718,6 +2721,18 @@ add_executable(qore-number-round-trip-test EXCLUDE_FROM_ALL
 target_include_directories(qore-number-round-trip-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-number-round-trip-test PRIVATE libqore)
+add_executable(qore-date-add-test examples/test/qore/vars/date_add.cpp)
+target_include_directories(qore-date-add-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-date-add-test PRIVATE libqore)
+add_executable(qore-hash-lookup-test examples/test/qore/misc/hash_lookup.cpp)
+target_include_directories(qore-hash-lookup-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-hash-lookup-test PRIVATE libqore)
+add_executable(qore-stream-peek-test examples/test/qore/streams/stream_peek.cpp)
+target_include_directories(qore-stream-peek-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR})
+target_link_libraries(qore-stream-peek-test PRIVATE libqore)
 add_executable(qore-asn1-time-test EXCLUDE_FROM_ALL
     examples/test/qore/classes/SSLCertificate/asn1_time.cpp)
 target_include_directories(qore-asn1-time-test PRIVATE

@@ -592,8 +592,8 @@
           "message": "生成におけるランダム性を制御"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGVtcGVyYXR1cmU.desc": {
-          "source": "Controls the randomness of the output. Values range from `0.0` to `2.0`. Higher values produce more random output",
-          "message": "出力のランダム性を制御します。値は`0.0`から`2.0`の範囲です。高い値はよりランダムな出力を生成します。"
+          "source": "Ignored on Gemini 3.x. For older models, controls the randomness of the output. Values range from `0.0` to `2.0`. Higher values produce more random output",
+          "message": "Gemini 3.x では無視されます。以前のモデルでは次の説明が適用されます： 出力のランダム性を制御します。値は`0.0`から`2.0`の範囲です。高い値はよりランダムな出力を生成します。"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wSw.display_name": {
           "source": "Top K",
@@ -604,8 +604,8 @@
           "message": "Top-K サンプリングパラメータ"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wSw.desc": {
-          "source": "The maximum number of tokens to consider when sampling",
-          "message": "サンプリング時に考慮する最大トークン数"
+          "source": "Ignored on Gemini 3.x. For older models, the maximum number of tokens to consider when sampling",
+          "message": "Gemini 3.x では無視されます。以前のモデルでは次の説明が適用されます： サンプリング時に考慮する最大トークン数"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wUA.display_name": {
           "source": "Top P",
@@ -616,8 +616,8 @@
           "message": "Nucleusサンプリングパラメータ"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wUA.desc": {
-          "source": "The maximum cumulative probability of tokens to consider when sampling. Used for nucleus sampling",
-          "message": "サンプリング時に考慮するトークンの最大累積確率。Nucleusサンプリングに使用"
+          "source": "Ignored on Gemini 3.x. For older models, the maximum cumulative probability of tokens to consider when sampling. Used for nucleus sampling",
+          "message": "Gemini 3.x では無視されます。以前のモデルでは次の説明が適用されます： サンプリング時に考慮するトークンの最大累積確率。Nucleusサンプリングに使用"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.display_name": {
           "source": "Safety Settings",
@@ -796,8 +796,8 @@
           "message": "生成におけるランダム性を制御"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
-          "source": "Controls the randomness of the output. Values range from `0.0` to `2.0`",
-          "message": "出力のランダム性を制御します。値の範囲は `0.0` から `2.0` です"
+          "source": "Ignored on Gemini 3.x. For older models, controls the randomness of the output. Values range from `0.0` to `2.0`",
+          "message": "Gemini 3.x では無視されます。以前のモデルでは次の説明が適用されます： 出力のランダム性を制御します。値の範囲は `0.0` から `2.0` です"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wUA.display_name": {
           "source": "Top P",
@@ -808,8 +808,8 @@
           "message": "Nucleusサンプリングパラメータ"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wUA.desc": {
-          "source": "The maximum cumulative probability of tokens to consider when sampling",
-          "message": "サンプリング時に考慮するトークンの最大累積確率"
+          "source": "Ignored on Gemini 3.x. For older models, the maximum cumulative probability of tokens to consider when sampling",
+          "message": "Gemini 3.x では無視されます。以前のモデルでは次の説明が適用されます： サンプリング時に考慮するトークンの最大累積確率"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wSw.display_name": {
           "source": "Top K",
@@ -820,8 +820,8 @@
           "message": "Top-K サンプリングパラメータ"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wSw.desc": {
-          "source": "The maximum number of tokens to consider when sampling",
-          "message": "サンプリング時に考慮する最大トークン数"
+          "source": "Ignored on Gemini 3.x. For older models, the maximum number of tokens to consider when sampling",
+          "message": "Gemini 3.x では無視されます。以前のモデルでは次の説明が適用されます： サンプリング時に考慮する最大トークン数"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bWF4T3V0cHV0VG9rZW5z.display_name": {
           "source": "Max Output Tokens",
@@ -1100,8 +1100,8 @@
           "message": "生成におけるランダム性を制御"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGVtcGVyYXR1cmU.desc": {
-          "source": "Controls the randomness of the output. Values range from `0.0` to `2.0`. Higher values produce more random output",
-          "message": "出力のランダム性を制御します。値は`0.0`から`2.0`の範囲です。高い値はよりランダムな出力を生成します。"
+          "source": "Ignored on Gemini 3.x. For older models, controls the randomness of the output. Values range from `0.0` to `2.0`. Higher values produce more random output",
+          "message": "Gemini 3.x では無視されます。以前のモデルでは次の説明が適用されます： 出力のランダム性を制御します。値は`0.0`から`2.0`の範囲です。高い値はよりランダムな出力を生成します。"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wSw.display_name": {
           "source": "Top K",
@@ -1112,8 +1112,8 @@
           "message": "Top-K サンプリングパラメータ"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wSw.desc": {
-          "source": "The maximum number of tokens to consider when sampling",
-          "message": "サンプリング時に考慮する最大トークン数"
+          "source": "Ignored on Gemini 3.x. For older models, the maximum number of tokens to consider when sampling",
+          "message": "Gemini 3.x では無視されます。以前のモデルでは次の説明が適用されます： サンプリング時に考慮する最大トークン数"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wUA.display_name": {
           "source": "Top P",
@@ -1124,8 +1124,8 @@
           "message": "Nucleusサンプリングパラメータ"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dG9wUA.desc": {
-          "source": "The maximum cumulative probability of tokens to consider when sampling. Used for nucleus sampling",
-          "message": "サンプリング時に考慮するトークンの最大累積確率。Nucleusサンプリングに使用"
+          "source": "Ignored on Gemini 3.x. For older models, the maximum cumulative probability of tokens to consider when sampling. Used for nucleus sampling",
+          "message": "Gemini 3.x では無視されます。以前のモデルでは次の説明が適用されます： サンプリング時に考慮するトークンの最大累積確率。Nucleusサンプリングに使用"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c2FmZXR5U2V0dGluZ3M.display_name": {
           "source": "Safety Settings",
@@ -2482,6 +2482,198 @@
         "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZU5hbWU.desc": {
           "source": "The resource name of an already-uploaded file to import (e.g., `files/abc-123`). Use this or `file` to upload a new file directly",
           "message": "インポートするアップロード済みファイルのリソース名（例: `files/abc-123`）。これを使用するか、`file` を使用して新しいファイルを直接アップロードしてください"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGhpbmtpbmdDb25maWc.display_name": {
+          "source": "Thinking Config",
+          "message": "思考設定"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGhpbmtpbmdDb25maWc.short_desc": {
+          "source": "Control reasoning depth and cost",
+          "message": "推論の深さとコストを制御"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGhpbmtpbmdDb25maWc.desc": {
+          "source": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5.",
+          "message": "Gemini 3.x には `thinkingLevel`、Gemini 2.5 には `thinkingBudget` を使用します。"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.display_name": {
+          "source": "Include Thoughts",
+          "message": "思考を含める"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.short_desc": {
+          "source": "Include reasoning summaries in the response",
+          "message": "回答に推論の要約を含める"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.desc": {
+          "source": "Set `True` to include thought summaries for inspecting the model's reasoning.",
+          "message": "モデルの推論を確認するための要約を含めるには `True` を設定します。"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.display_name": {
+          "source": "Thinking Budget",
+          "message": "思考予算"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.short_desc": {
+          "source": "Legacy reasoning token budget for Gemini 2.5",
+          "message": "Gemini 2.5 用の従来の推論トークン予算"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.desc": {
+          "source": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x; set `thinkingLevel` instead. Numeric budgets have no exact thinking-level equivalent.",
+          "message": "Gemini 2.5 の推論トークン予算。Gemini 3.x では省略されるため、代わりに `thinkingLevel` を設定してください。数値予算に正確に対応する思考レベルはありません。"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.display_name": {
+          "source": "Thinking Level",
+          "message": "思考レベル"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.short_desc": {
+          "source": "Reasoning effort for Gemini 3 models",
+          "message": "Gemini 3 モデルの推論の強度"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.desc": {
+          "source": "Choose reasoning depth for Gemini 3.x. Omit to use the model default. Supported levels depend on the model; `MINIMAL` does not fully disable thinking. Use `thinkingBudget` on 2.5.",
+          "message": "Gemini 3.x の推論の深さを選択します。省略するとモデルの既定値が適用されます。対応レベルはモデルによって異なり、`MINIMAL` でも思考は完全には無効になりません。2.5 では `thinkingBudget` を使用します。"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1JTklNQUw.display_name": {
+          "source": "Minimal",
+          "message": "最小"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkxPVw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1FRElVTQ.display_name": {
+          "source": "Medium",
+          "message": "中"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkhJR0g.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.display_name": {
+          "source": "Thinking Config",
+          "message": "思考設定"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.short_desc": {
+          "source": "Control reasoning depth and cost",
+          "message": "推論の深さとコストを制御"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.desc": {
+          "source": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5.",
+          "message": "Gemini 3.x には `thinkingLevel`、Gemini 2.5 には `thinkingBudget` を使用します。"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.aW5jbHVkZVRob3VnaHRz.display_name": {
+          "source": "Include Thoughts",
+          "message": "思考を含める"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.aW5jbHVkZVRob3VnaHRz.short_desc": {
+          "source": "Include reasoning summaries in the response",
+          "message": "回答に推論の要約を含める"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.aW5jbHVkZVRob3VnaHRz.desc": {
+          "source": "Set `True` to include thought summaries for inspecting the model's reasoning.",
+          "message": "モデルの推論を確認するための要約を含めるには `True` を設定します。"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdCdWRnZXQ.display_name": {
+          "source": "Thinking Budget",
+          "message": "思考予算"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdCdWRnZXQ.short_desc": {
+          "source": "Legacy reasoning token budget for Gemini 2.5",
+          "message": "Gemini 2.5 用の従来の推論トークン予算"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdCdWRnZXQ.desc": {
+          "source": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x; set `thinkingLevel` instead. Numeric budgets have no exact thinking-level equivalent.",
+          "message": "Gemini 2.5 の推論トークン予算。Gemini 3.x では省略されるため、代わりに `thinkingLevel` を設定してください。数値予算に正確に対応する思考レベルはありません。"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.display_name": {
+          "source": "Thinking Level",
+          "message": "思考レベル"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.short_desc": {
+          "source": "Reasoning effort for Gemini 3 models",
+          "message": "Gemini 3 モデルの推論の強度"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.desc": {
+          "source": "Choose reasoning depth for Gemini 3.x. Omit to use the model default. Supported levels depend on the model; `MINIMAL` does not fully disable thinking. Use `thinkingBudget` on 2.5.",
+          "message": "Gemini 3.x の推論の深さを選択します。省略するとモデルの既定値が適用されます。対応レベルはモデルによって異なり、`MINIMAL` でも思考は完全には無効になりません。2.5 では `thinkingBudget` を使用します。"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1JTklNQUw.display_name": {
+          "source": "Minimal",
+          "message": "最小"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkxPVw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1FRElVTQ.display_name": {
+          "source": "Medium",
+          "message": "中"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGhpbmtpbmdDb25maWc.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkhJR0g.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGhpbmtpbmdDb25maWc.display_name": {
+          "source": "Thinking Config",
+          "message": "思考設定"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGhpbmtpbmdDb25maWc.short_desc": {
+          "source": "Control reasoning depth and cost",
+          "message": "推論の深さとコストを制御"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.field.dGhpbmtpbmdDb25maWc.desc": {
+          "source": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5.",
+          "message": "Gemini 3.x には `thinkingLevel`、Gemini 2.5 には `thinkingBudget` を使用します。"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.display_name": {
+          "source": "Include Thoughts",
+          "message": "思考を含める"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.short_desc": {
+          "source": "Include reasoning summaries in the response",
+          "message": "回答に推論の要約を含める"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.desc": {
+          "source": "Set `True` to include thought summaries for inspecting the model's reasoning.",
+          "message": "モデルの推論を確認するための要約を含めるには `True` を設定します。"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.display_name": {
+          "source": "Thinking Budget",
+          "message": "思考予算"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.short_desc": {
+          "source": "Legacy reasoning token budget for Gemini 2.5",
+          "message": "Gemini 2.5 用の従来の推論トークン予算"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.desc": {
+          "source": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x; set `thinkingLevel` instead. Numeric budgets have no exact thinking-level equivalent.",
+          "message": "Gemini 2.5 の推論トークン予算。Gemini 3.x では省略されるため、代わりに `thinkingLevel` を設定してください。数値予算に正確に対応する思考レベルはありません。"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.display_name": {
+          "source": "Thinking Level",
+          "message": "思考レベル"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.short_desc": {
+          "source": "Reasoning effort for Gemini 3 models",
+          "message": "Gemini 3 モデルの推論の強度"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.desc": {
+          "source": "Choose reasoning depth for Gemini 3.x. Omit to use the model default. Supported levels depend on the model; `MINIMAL` does not fully disable thinking. Use `thinkingBudget` on 2.5.",
+          "message": "Gemini 3.x の推論の深さを選択します。省略するとモデルの既定値が適用されます。対応レベルはモデルによって異なり、`MINIMAL` でも思考は完全には無効になりません。2.5 では `thinkingBudget` を使用します。"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1JTklNQUw.display_name": {
+          "source": "Minimal",
+          "message": "最小"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkxPVw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1FRElVTQ.display_name": {
+          "source": "Medium",
+          "message": "中"
+        },
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkhJR0g.display_name": {
+          "source": "High",
+          "message": "高"
         }
       }
     }

@@ -1,0 +1,259 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RestClientIoDeadline.qtest Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/AwsRestClient.qm
+%exec-class RestDeadlineTest
+
+# All simulated requests run on the test thread; no wall-clock waits or network I/O.
+class RequestClock {
+    public {
+        int ticks = 0;
+        int preparation_us = 600;
+        int requests = 0;
+        int cancellations = 0;
+        list<int> waits = ();
+        *string first_error;
+        Promise pending();
+        Future pending_future = pending.getFuture();
+    }
+    prepare() {
+        ++requests;
+        ticks += preparation_us;
+    }
+    hash<auto> response(int timeout_ms) {
+        push waits, timeout_ms;
+        if (requests == 1 && first_error) {
+            ticks += 500;
+            throw first_error, "early failure", {"status_code": 503};
+        }
+        ticks += timeout_ms * 1000;
+        throw "FUTURE-TIMEOUT", "simulated response wait expired";
+    }
+    bool cancel() {
+        ++cancellations;
+        return True;
+    }
+}
+
+class DeadlineRestFuture inherits RestFuture {
+    private {
+        RequestClock clock;
+    }
+    constructor(RequestClock clock) : RestFuture(clock.pending_future, bool sub () {
+            return clock.cancel();
+        }, hash<RestClient::RestResponseInfo> sub (hash<auto> raw) {
+            return cast<hash<RestClient::RestResponseInfo>>(raw);
+        }) {
+        self.clock = clock;
+    }
+    hash<RestClient::RestResponseInfo> get(timeout timeout_ms = 30s) {
+        return cast<hash<RestClient::RestResponseInfo>>(clock.response(timeout_ms));
+    }
+}
+
+class DeadlineHttpFuture inherits HttpClientIo::HttpCancellableFuture {
+    private {
+        RequestClock clock;
+    }
+    constructor(RequestClock clock) : HttpCancellableFuture(clock.pending_future, bool sub () {
+            return clock.cancel();
+        }) {
+        self.clock = clock;
+    }
+    auto get(timeout timeout_ms = 0) {
+        return clock.response(timeout_ms);
+    }
+}
+
+class DeadlineManager inherits HttpClientIo::HttpClientConnectionManager {
+    private {
+        RequestClock clock;
+    }
+    constructor(RequestClock clock) {
+        self.clock = clock;
+    }
+    HttpClientIo::HttpCancellableFuture requestAsync(string url, string method, string path,
+            *hash<auto> headers, *data body, bool decode_text = True,
+            *hash<HttpClientIo::HttpClientRequestOptions> options) {
+        clock.prepare();
+        return new DeadlineHttpFuture(clock);
+    }
+}
+
+class DeadlineRestClient inherits RestClientIo {
+    private {
+        RequestClock clock;
+    }
+    constructor(RequestClock clock, DeadlineManager mgr) : RestClientIo({"url": "http://localhost"}, mgr) {
+        self.clock = clock;
+    }
+    private int requestNow() {
+        return clock.ticks;
+    }
+    RestFuture restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr) {
+        clock.prepare();
+        return new DeadlineRestFuture(clock);
+    }
+}
+
+class DeadlineAwsClient inherits AwsRestClient::AwsRestClientIo {
+    private {
+        RequestClock clock;
+    }
+    constructor(RequestClock clock, DeadlineManager mgr) : AwsRestClientIo({
+        "url": "http://localhost", "aws_region": "us-east-1", "aws_service": "bedrock",
+        "aws_keyid": "fixture", "aws_secret": "fixture", "aws_imds_disabled": True,
+    }, mgr) {
+        self.clock = clock;
+    }
+    private int requestNow() {
+        return clock.ticks;
+    }
+}
+
+class DeadlineRetryPolicy inherits RestRetryPolicy {
+    private {
+        RequestClock clock;
+    }
+    constructor(RequestClock clock) : RestRetryPolicy(<RestRetryOptions>{
+        "timeout": 200ms, "retry_max_delay": 0,
+    }) {
+        self.clock = clock;
+    }
+    private int retryNow() {
+        return clock ? clock.ticks : 0;
+    }
+}
+
+class RestDeadlineTest inherits QUnit::Test {
+    constructor() : Test("REST request deadlines", "1.0", \ARGV) {
+        addTestCase("nested budgets do not add a retry at deadline", \testRetryDeadline());
+        addTestCase("positive fractional milliseconds remain usable", \testRounding());
+        addTestCase("expired preparation cancels without waiting", \testExpired());
+        addTestCase("invalid timeouts send no request", \testInvalid());
+        addTestCase("largest supported budget rounds without overflow", \testLargeBudget());
+        addTestCase("request errors preserve their identity and cancel I/O", \testErrors());
+        set_return_value(main());
+    }
+    private hash<ExceptionInfo> failure(code<hash<auto>(int)> request, int timeout_ms) {
+        try {
+            request(timeout_ms);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        fail("expected a timeout");
+        return <ExceptionInfo>{};
+    }
+    private code<hash<auto>(int)> request(RequestClock clock, DeadlineManager mgr, bool aws) {
+        if (aws) {
+            DeadlineAwsClient client(clock, mgr);
+            return hash<auto> sub (int timeout_ms) {
+                return client.restDoEncodedRawRequest("POST", "/embedding", "{}", NOTHING, timeout_ms);
+            };
+        }
+        DeadlineRestClient client(clock, mgr);
+        return hash<auto> sub (int timeout_ms) {
+            return client.restDoRequestWithTimeout("POST", "/embedding", {}, NOTHING, timeout_ms);
+        };
+    }
+    testRetryDeadline() {
+        foreach bool aws in ((False, True)) {
+            # Early transport timeouts must still retry, just like a transient HTTP status.
+            foreach string first_error in (("REST-RESPONSE-ERROR", "HTTPCLIENT-TIMEOUT", "SOCKET-TIMEOUT")) {
+                RequestClock clock();
+                clock.first_error = first_error;
+                DeadlineManager mgr(clock);
+                on_exit mgr.closeAll();
+                DeadlineRetryPolicy policy(clock);
+                code<hash<auto>(int)> send = request(clock, mgr, aws);
+                hash<ExceptionInfo> ex = failure(hash<auto> sub (int ignored) {
+                    return policy.execute(send);
+                }, 0);
+                assertEq("HTTPCLIENT-TIMEOUT", ex.err);
+                assertEq(2, ex.arg.attempts, "no third request at the shared deadline");
+                assertEq(2, clock.requests);
+                assertEq(2, clock.cancellations);
+                assertEq((200, 198), clock.waits);
+                assertEq(199700, clock.ticks, "only the outer budget may truncate a fractional millisecond");
+            }
+        }
+    }
+    testRounding() {
+        foreach bool aws in ((False, True)) {
+            foreach hash<string, int> row in (({"prep": 0, "wait": 2}, {"prep": 1, "wait": 2},
+                    {"prep": 999, "wait": 2}, {"prep": 1000, "wait": 1},
+                    {"prep": 1001, "wait": 1}, {"prep": 1999, "wait": 1})) {
+                RequestClock clock();
+                clock.preparation_us = row.prep;
+                DeadlineManager mgr(clock);
+                on_exit mgr.closeAll();
+                hash<ExceptionInfo> ex = failure(request(clock, mgr, aws), 2);
+                assertEq("HTTPCLIENT-TIMEOUT", ex.err);
+                assertEq((row.wait,), clock.waits);
+                assertEq(1, clock.cancellations);
+                assertTrue(clock.ticks >= 2000 && clock.ticks < 3000,
+                    "rounding must not expire early or extend the deadline by a millisecond");
+            }
+        }
+    }
+    testExpired() {
+        foreach bool aws in ((False, True)) {
+            foreach int preparation_us in ((2000, 2001, 4000)) {
+                RequestClock clock();
+                clock.preparation_us = preparation_us;
+                DeadlineManager mgr(clock);
+                on_exit mgr.closeAll();
+                hash<ExceptionInfo> ex = failure(request(clock, mgr, aws), 2);
+                assertEq("HTTPCLIENT-TIMEOUT", ex.err);
+                assertEq((), clock.waits, "an expired deadline must never become an infinite future wait");
+                assertEq(1, clock.cancellations);
+            }
+        }
+    }
+    testInvalid() {
+        foreach bool aws in ((False, True)) {
+            foreach int timeout_ms in ((0, -1, 9223372036854775807)) {
+                RequestClock clock();
+                DeadlineManager mgr(clock);
+                on_exit mgr.closeAll();
+                hash<ExceptionInfo> ex = failure(request(clock, mgr, aws), timeout_ms);
+                assertEq("RESTCLIENTIO-OPTION-ERROR", ex.err);
+                assertEq(0, clock.requests);
+                assertEq((), clock.waits);
+            }
+        }
+    }
+    testLargeBudget() {
+        foreach bool aws in ((False, True)) {
+            RequestClock clock();
+            clock.preparation_us = 1;
+            DeadlineManager mgr(clock);
+            on_exit mgr.closeAll();
+            hash<ExceptionInfo> ex = failure(request(clock, mgr, aws), 9223372036854775);
+            assertEq("HTTPCLIENT-TIMEOUT", ex.err);
+            assertEq((9223372036854775,), clock.waits);
+            assertEq(1, clock.cancellations);
+        }
+    }
+    testErrors() {
+        foreach bool aws in ((False, True)) {
+            foreach string error in (("THREAD-CANCELLED", "PROGRAM-INTERRUPTED", "TEST-ERROR")) {
+                RequestClock clock();
+                clock.first_error = error;
+                DeadlineManager mgr(clock);
+                on_exit mgr.closeAll();
+                hash<ExceptionInfo> ex = failure(request(clock, mgr, aws), 200);
+                assertEq(error, ex.err);
+                assertEq("early failure", ex.desc);
+                assertEq({"status_code": 503}, ex.arg);
+                assertEq(1, clock.cancellations);
+                assertEq(1, clock.requests);
+            }
+        }
+    }
+}

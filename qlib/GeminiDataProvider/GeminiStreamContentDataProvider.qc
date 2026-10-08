@@ -203,7 +203,7 @@ public class GeminiStreamContentDataProvider inherits GeminiDataProviderBase, Da
             }
             req.tools = ({"file_search": {"file_search_store_names": (store,)}},);
         }
-        stream_req = req;
+        stream_req = GeminiBodyShape::normalizeGenerationConfig(req.model, req);
         if (ready && !started) {
             start();
         }

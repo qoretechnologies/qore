@@ -1330,7 +1330,10 @@ class StringTest inherits QUnit::Test {
         assertThrows("UNSUPPORTED-ENCODING", \encode_url(), a);
         assertThrows("UNSUPPORTED-ENCODING", \encode_uri_request(), a);
         assertThrows("UNSUPPORTED-ENCODING", sub (string str) { str.equalPartialPath(str); }, a);
-        assertThrows("UNSUPPORTED-ENCODING", sub (string str) { str.toInt(16); }, a);
+
+        # a string in an encoding that is not ASCII-compatible converts to an integer as the same string in UTF-8
+        assertEq(254, convert_encoding("fe", "UTF16BE").toInt(16));
+        assertEq(convert_encoding(a, "UTF-8").toInt(16), a.toInt(16));
 
         assertEq("%22hello%22", encode_url("\"hello\""));
         assertEq("%22hello%22", encode_uri_request("\"hello\""));

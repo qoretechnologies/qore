@@ -34,7 +34,7 @@
 %requires QoreRagTypes
 
 module MistralRestClient {
-    version = "1.1";
+    version = "1.2";
     desc = "user module for calling Mistral AI REST services";
     author = "Qore Technologies <info@qoretechnologies.com>";
     url = "https://qore.org";
@@ -83,6 +83,10 @@ printf("%Y\n", ans.body);
 
     @section MistralRestClientRelnotes Release Notes
 
+    @subsection MistralRestClientv1_2 MistralRestClient v1.2
+    - support prompt-cache routing keys for synchronous and streaming LLM requests
+    - expose model-specific reasoning choices for application policy adapters
+
     @subsection MistralRestClientv1_1 MistralRestClient v1.1
     - support reasoning responses and streams, preserving reasoning across tool and conversation turns
     - preserve sampling options and supply the compatible default for zero-temperature requests
@@ -110,6 +114,44 @@ public class MistralRestClientBase {
             "api": DefaultApiVersion,
             "default_path": "/" + DefaultApiVersion,
         };
+    }
+
+    #! Returns the supported reasoning efforts for a known Mistral model
+    /** @param model exact API model ID, including the aliases listed by Mistral
+        @return ordered efforts, an empty list for known non-reasoning models,
+            or @ref nothing for an unknown model
+        @note Verified against the model catalogue and reasoning API on 2026-10-07.
+            Aliases can change; unknown models must retain their own API semantics.
+            This metadata does not change explicit requests made to the provider.
+        @par Example
+        @code{.py}
+list<string> efforts = MistralRestClientBase::getModelReasoningEfforts("mistral-large-4");
+# A design assistant can escalate from "none" to "high", but not to "xhigh".
+        @endcode
+    */
+    public static *list<string> getModelReasoningEfforts(string model) {
+        switch (model) {
+            case "mistral-large-4":
+            case "mistral-large-4-0":
+            case "mistral-medium-3-5":
+            case "mistral-medium-3.5":
+            case "mistral-medium-3":
+            case "mistral-medium-2604":
+            case "mistral-medium-latest":
+            case "mistral-medium":
+            case "mistral-vibe-cli-latest":
+            case "mistral-vibe-cli-with-tools":
+            case "magistral-medium-latest":
+            case "mistral-small-2603":
+            case "mistral-small-latest":
+            case "mistral-vibe-cli-fast":
+            case "magistral-small-latest":
+                return ("none", "high");
+            case "mistral-large-2512":
+            case "mistral-large-latest":
+                return ();
+        }
+        return NOTHING;
     }
 
     static hash<auto> getOptions(hash<auto> opts) {
@@ -305,6 +347,16 @@ public class MistralLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
 
     string getMode() {
         return "mistral";
+    }
+
+    #! @copydoc QoreLlmUtils::AbstractLlmProvider::applyOpenAiRequestControls()
+    applyOpenAiRequestControls(reference<hash<auto!>> body_options, hash<auto> request) {
+        OpenAiRestClient::OpenAiLlmProvider::applyOpenAiRequestControls(\body_options, request);
+        # Mistral also supports this routing hint. Cache hits remain authoritative
+        # only when reported in usage.prompt_tokens_details.cached_tokens.
+        if (request.prompt_cache_key.typeCode() == NT_STRING && request.prompt_cache_key.val()) {
+            body_options.prompt_cache_key = request.prompt_cache_key;
+        }
     }
 
     #! @copydoc QoreLlmUtils::AbstractLlmProvider::updateOpenAiStreamStateFromRaw()

@@ -65,9 +65,11 @@ public:
     }
 
     DLLLOCAL int64 peek(ExceptionSink* xsink) override {
-        if ((src->size() - offset) == 0) // No more data.
+        if ((src->size() - offset) == 0) { // No more data.
             return -1;
-        return src->getBuffer()[offset];
+        }
+        // the byte is returned as an unsigned value, so that 0xff is not taken for the end of the stream
+        return static_cast<unsigned char>(src->getBuffer()[offset]);
     }
 
     DLLLOCAL const QoreEncoding* getEncoding() const {

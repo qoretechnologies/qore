@@ -71,6 +71,7 @@ public class EncodingConversionInputStreamTest inherits QUnit::Test {
         addTestCase("invalidAtEnd", \invalidAtEnd());
         addTestCase("circular reference", \circRef());
         addTestCase("large file", \largeFile());
+        addTestCase("UTF-16 byte order marks", \utf16ByteOrderMarks());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -135,6 +136,32 @@ public class EncodingConversionInputStreamTest inherits QUnit::Test {
         assertEq(utf16le, convert(utf8, "UTF-8", "UTF-16LE", 100000, 100000));
         assertEq(utf8, convert(utf16le, "UTF-16LE", "UTF-8", 1, 100000));
         assertEq(utf8, convert(utf16le, "UTF-16LE", "UTF-8", 100000, 1));
+    }
+
+    #! a byte order mark at the start of UTF-16 input is not content; for the generic UTF-16 encoding it gives the
+    #! byte order of the input
+    utf16ByteOrderMarks() {
+        binary utf8 = binary("PO,Množství\n");
+        binary le = convert_encoding("PO,Množství\n", "UTF-16LE").toBinary();
+        binary be = convert_encoding("PO,Množství\n", "UTF-16BE").toBinary();
+        # the mark may be split over reads
+        foreach int chunk in (1, 2, 3, 100) {
+            string label = sprintf("chunk %d", chunk);
+            assertEq(utf8, convert(<fffe> + le, "UTF-16", "UTF-8", chunk, 100), label + " UTF-16 little-endian mark");
+            assertEq(utf8, convert(<feff> + be, "UTF-16", "UTF-8", chunk, 100), label + " UTF-16 big-endian mark");
+            assertEq(utf8, convert(be, "UTF-16", "UTF-8", chunk, 100), label + " UTF-16 without a mark");
+            assertEq(utf8, convert(<fffe> + le, "UTF-16LE", "UTF-8", chunk, 100), label + " UTF-16LE mark");
+            assertEq(utf8, convert(<feff> + be, "UTF-16BE", "UTF-8", chunk, 100), label + " UTF-16BE mark");
+            assertEq(le, convert(<fffe> + le, "UTF-16", "UTF-16LE", chunk, 100), label + " UTF-16 to UTF-16LE");
+        }
+        # in UTF-16LE, the big-endian mark is not a mark but the character U+FFFE
+        assertEq(<efbfbe> + utf8, convert(<feff> + le, "UTF-16LE", "UTF-8", 100, 100));
+        # a first character starting with a byte of a mark is content
+        binary fw = convert_encoding("Ａb", "UTF-16BE").toBinary();
+        assertEq(binary("Ａb"), convert(fw, "UTF-16", "UTF-8", 1, 100));
+        # a mark alone and a single byte
+        assertEq(binary(), convert(<fffe>, "UTF-16", "UTF-8", 1, 100));
+        assertThrows("ENCODING-CONVERSION-ERROR", \convert(), (<ff>, "UTF-16", "UTF-8", 1, 100));
     }
 
     private binary convert(binary src, string srcEnc, string dstEnc, int chunk, int readSize) {

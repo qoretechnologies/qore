@@ -36,7 +36,7 @@ public namespace CsvUtil {
         <b>AbstractCsvIterator Options</b>
         |!Option|!Data Type|!Description
         |\c "date_format"|@ref string_type "string"|the default date format for \c "date" fields (see @ref date_formatting "date formatting" for the value in this case)
-        |\c "encoding"|@ref string_type "string"|the @ref character_encoding "character encoding" for the file (and for tagging string data read); if the value of this key is not a string then it will be ignored
+        |\c "encoding"|@ref string_type "string"|the @ref character_encoding "character encoding" for the file (and for tagging string data read); if the value of this key is not a string then it will be ignored; a byte order mark at the start of UTF-8 or UTF-16 data is skipped (see @ref csvutil_bom)
         |\c "eol"|@ref string_type "string"|the end of line character(s) (default: auto-detect); if the value of this key is not a string then it will be ignored
         |\c "header_lines"|@ref int_type "int"|the number of headers lines in the file (if not present and \c "header_names" is @ref True "True", assumed to be \c 1)
         |\c "header_names"|\c bool|if @ref True "True" then the object will parse the header names from \

@@ -102,6 +102,8 @@ stream.close();
     @section GeminiRestClientRelnotes Release Notes
 
     @subsection GeminiRestClientv1_0 GeminiRestClient v1.0
+    - Gemini 3.x generation requests omit deprecated sampling parameters and numeric thinking budgets; use
+      thinking levels instead. Gemini 2.5 behavior is preserved; see @ref geminibodyshapegeneration.
     - initial release
 */
 
@@ -618,6 +620,7 @@ public class GeminiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvider
             "supports_structured_output": True,
             "supports_multimodal": True,
             "supports_reasoning_token_budget": True,
+            "supports_reasoning_effort": True,
             "prefers_narrow_tool_catalogue": True,
             "preferred_max_tool_count": 8,
             "prefers_single_tool_dispatch": True,

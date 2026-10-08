@@ -127,17 +127,20 @@ public:
     }
 
     DLLLOCAL int64 peek(ExceptionSink* xsink) override {
-        if (outBufCount > 0)
-            return outBuf[outBufOffset];
+        // the byte is returned as an unsigned value, so that 0xff is not taken for the end of the stream
+        if (outBufCount > 0) {
+            return static_cast<unsigned char>(outBuf[outBufOffset]);
+        }
         int64 rc = read(outBuf, outBufSize, xsink);
-        if (*xsink)
+        if (*xsink) {
             return -2;
+        }
         if (rc == 0) {
             eof = true;
             return -1;
         }
         outBufCount += rc;
-        return outBuf[0];
+        return static_cast<unsigned char>(outBuf[0]);
     }
 
 private:

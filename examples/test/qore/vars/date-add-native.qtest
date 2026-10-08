@@ -1,0 +1,47 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%exec-class DateAddNativeTest
+
+class DateAddNativeTest inherits QUnit::Test {
+    constructor() : Test("DateTime C++ addition", "1.0") {
+        addTestCase("native pointer and reference addition APIs", \nativeAddition());
+        addTestCase("elapsed components normalize across zero units", \relativeSigns());
+        set_return_value(main());
+    }
+
+    private nativeAddition() {
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string native = ENV.QORE_DATE_ADD_TEST ?? dirname(qore) + "/qore-date-add-test";
+        if (!is_file(native)) {
+            testSkip("the native date addition test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertEq("PASS: 1836 DateTime addition cases\n", output);
+    }
+
+    private relativeSigns() {
+        list<list<date>> pairs = (
+            (-24h + 999999us, -23h - 59m - 59s - 1us),
+            (24h - 999999us, 23h + 59m + 59s + 1us),
+            (-1h + 1us, -59m - 59s - 999999us),
+            (1h - 1us, 59m + 59s + 999999us),
+            (-1m + 1us, -59s - 999999us),
+            (1m - 1us, 59s + 999999us),
+            (-1h + 1m, -59m),
+            (1h - 1m, 59m),
+            (-1s + 1s, 0us)
+        );
+        foreach list<date> pair in (pairs) {
+            assertEq(pair[0].durationMicroseconds(), pair[1].durationMicroseconds());
+            assertEq(pair[0], pair[1]);
+            assertEq(0us, pair[0] - pair[1]);
+        }
+    }
+}

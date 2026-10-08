@@ -159,6 +159,8 @@ AbstractDataProvider p = DataProvider::getFactoryObjectFromString(
     @section vertexaidataproviderrelnotes Release Notes
 
     @subsection vertexaidataprovider_v1_0 VertexAiDataProvider v1.0
+    - Gemini 3.x generation requests omit deprecated sampling parameters and numeric thinking budgets; use
+      thinking levels instead. Gemini 2.5 behavior is preserved; see @ref geminibodyshapegeneration.
     - initial release
 */
 

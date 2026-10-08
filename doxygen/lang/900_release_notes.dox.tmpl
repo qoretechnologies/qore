@@ -4,6 +4,26 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    The exception-aware C++ <tt>QoreHashNode</tt> existence APIs now set their
+    <tt>exists</tt> output to false on key-conversion or member-validation errors.
+
+    The C++ <tt>DateTime::add()</tt> API now adds the right operand correctly when the left
+    operand is an absolute date. Previously an implicit pointer conversion caused that operand
+    to be ignored. Both pointer and reference overloads preserve their inputs and return an owned sum.
+    Relative elapsed-time components now normalize opposite signs across zero-valued units, so
+    mathematically equal durations such as <tt>-24h + 999999us</tt> and
+    <tt>-23h - 59m - 59s - 1us</tt> compare equal.
+
+    Out-of-tree builds now record the lexer source at its correct location in debug information,
+    allowing RPM debug-source extraction and debugger source lookup to find <tt>lib/scanner.lpp</tt>.
+
+    Gemini and Vertex AI generation requests now use model-specific reasoning controls. Gemini 3.x omits
+    deprecated sampling parameters and numeric thinking budgets, including values supplied in request body
+    overrides. Set <tt>reasoning_effort</tt> or native <tt>thinkingConfig.thinkingLevel</tt> to control reasoning;
+    without a level, the model default applies. Numeric budgets, including zero and -1, are not converted to
+    levels. Gemini 2.5 retains its sampling and budget controls. The same rules apply to chat, completion,
+    streaming, and data-provider generation actions; Gemini data-provider types now expose thinking options.
+
     AOT-compiled typed <tt>foreach</tt> loops now safely skip uninitialized or removed
     lists, matching the interpreter. A conditionally assigned list inside an outer
     loop could previously crash when no assignment occurred before iteration.
@@ -53,6 +73,11 @@
     Split user modules now parse their <tt>.qc</tt> and <tt>.ql</tt> files in filename order
     after the main <tt>.qm</tt> file. Filesystem enumeration and file creation order no longer
     change declaration order, class signatures, or compiled module metadata.
+
+    Directory modules found through relative module search paths now report the correct
+    absolute entry-point filename and directory in <tt>get_module_hash()</tt>. Previously,
+    the importing script's directory could be applied twice, causing resource lookup through
+    the reported filename to fail even though the module itself loaded successfully.
 
     Closing a socket now wakes operations submitted concurrently with its cancellation
     phase. A late accept or receive completes with <tt>SOCKET-CLOSED</tt> instead of
@@ -2601,6 +2626,8 @@ while (*binary chunk = input.read(65536)) {
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref restclientiointro "RestClientIo" module
+      - fixed nested request deadlines rounding response waits down twice and allowing an extra retry just
+        before the total timeout; positive fractional milliseconds are retained for REST and signed AWS waits
       - fixed initial OAuth2 login with an \c update_options token-persistence callback raising
         \c RUNTIME-TYPE-ERROR when no previous token or token type is set; this also fixes
         Pinecone Admin connection pings using \c client_credentials without a refresh token
@@ -4052,6 +4079,97 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a function being compiled to native code with JIT and tiered execution while other threads called it,
+      which could make those threads read the function's information on its use of \c argv and \c self and of its
+      local variables while it was being changed, with possible wrong local variable handling or a crash
+
+    - Fixed recompiling a function to native code with JIT and tiered execution changing the name of the function's
+      shared IR code while other threads could read it, with a possible crash when they compiled callers of the
+      function at the same time
+
+    - Fixed @ref exec_mode_ir "IR execution" (<tt>--exec-mode=ir</tt>) compiling functions that were called often
+      or ran long loops to native code, as tiered execution does; IR execution now runs code only with the IR
+      interpreter, as documented, so its behavior and performance no longer depend on how often code runs
+
+    - Fixed \c extract and \c splice on a list element or hash member that does not exist, such as
+      <tt>extract l[16], 0, 1</tt> on a shorter list, returning \c NOTHING with IR, tiered and JIT execution and in
+      compiled (AOT) modules; as with AST execution, the element is created and the operator raises
+      \c EXTRACT-ERROR, as it does for any other value that is not a list, string or binary object
+
+    - Fixed some expressions being taken for a value of another type with IR, tiered and JIT execution and in compiled
+      (AOT) modules, which gave wrong results or raised type errors where AST execution did not: a hash literal with
+      keys that are not constants, or a hash \c map, was taken for its last value, so for example
+      <tt>{a: 1} + {b: 2}</tt> with variables \c a and \c b returned \c 0 instead of a hash, and assigning it raised
+      \c RUNTIME-TYPE-ERROR; \c extract was taken for its offset or length, so <tt>(extract a, 0, 1) + (extract b, 0,
+      1)</tt> returned \c 0; and the \c +=, \c -=, \c *=, \c /=, \c &=, \c |=, \c ^=, \c %=, \c <<= and \c >>=
+      operators were taken for their right operand, so for example the sum of two <tt>*=</tt> expressions on
+      floats multiplied by integers was calculated as an integer
+
+    - Fixed \c extract and \c splice on a hash member or list element selected by a key or index that is not a
+      constant, such as <tt>extract h{k}, 0, 1</tt>, operating on the element selected by another thread when
+      threads ran the same code at the same time with JIT and tiered execution and in compiled (AOT) modules: the
+      key or index of each call was stored in data shared by every thread running the code, so a call could
+      extract from or splice the wrong element, or read a key while another thread was changing it
+
+    - Fixed hash keys and object member names given as strings in a character encoding other than the default
+      (UTF-8), such as ISO-8859-2, WINDOWS-1250 or UTF-16LE, being used as raw bytes in many operations: keys were
+      stored with invalid UTF-8 bytes, keys stored correctly were not found, and UTF-16 keys were cut at their first
+      null byte (\c "PO" in UTF-16LE became \c "P").  This affected hash literals, lookups, assignments, compound
+      assignments, \c exists, \c remove, \c delete, slices, the \c - and \c -= operators,
+      @ref Qore::zzz8hashzzz9::hasKey() "<hash>::hasKey()", object members and hashdecl members, with IR, tiered
+      and JIT execution, in compiled (AOT) modules, and partly with AST execution.  Every execution mode now
+      converts such a key to UTF-8, so it names the same key as the UTF-8 string with the same characters; a key that
+      cannot be converted raises \c ENCODING-CONVERSION-ERROR.  Keys that are already in UTF-8, or that contain
+      only ASCII characters in an ASCII-compatible encoding, are used without conversion
+      - For example, records read by the @ref csvutilintro "CsvUtil" module from data in ISO-8859-2, WINDOWS-1250,
+        ISO-8859-1, WINDOWS-1252 or UTF-16 were keyed by mis-encoded header names, so a record could not be accessed
+        by its header names, and \c "fields" options naming the headers in UTF-8 did not match
+
+    - Fixed reading lines from a stream or file in the generic \c "UTF-16" encoding that starts with a
+      little-endian byte order mark: @ref Qore::InputStreamLineIterator "InputStreamLineIterator",
+      @ref Qore::StreamReader::readLine() "StreamReader::readLine()" and
+      @ref csvutilintro "CsvUtil" iterators raised \c INVALID-ENCODING or returned garbled lines, because the
+      end-of-line marker was converted to big-endian UTF-16 before the byte order mark was read, and
+      @ref Qore::FileLineIterator "FileLineIterator" and
+      @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" decoded such data as big-endian.  The
+      byte order mark now gives the byte order of the data, which is big-endian without one, and
+      @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" (and therefore
+      @ref Qore::FileLineIterator "FileLineIterator") and
+      @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" no longer return the byte order mark
+      at the start of UTF-16, UTF-16LE or UTF-16BE data as a character
+
+    - Fixed converting strings in a character encoding that is not ASCII-compatible (UTF-16, UTF-16LE and
+      UTF-16BE) to numbers, booleans and dates: the raw bytes of the string were parsed, so a number was cut at the
+      first null byte of its UTF-16 representation (\c "12" in UTF-16LE converted to \c 1), \c "0" was
+      @ref True, and dates could not be parsed.  This affected \c int(), \c float(), \c number(), \c boolean(),
+      @ref Qore::parse_boolean() "parse_boolean()", \c parse_int(), \c parse_float(), \c parse_number(),
+      \c strtoint(), \c date() (also with a format mask), @ref Qore::TimeZone::date() "TimeZone::date()", the
+      \c softint, \c softfloat, \c softnumber, \c softbool and \c softdate types,
+      @ref Qore::zzz8stringzzz9::toInt() "<string>::toInt()", @ref Qore::zzz8stringzzz9::intp() "<string>::intp()",
+      the \c toInt(), \c toFloat(), \c toNumber() and \c toBool() methods, boolean evaluation, and comparisons
+      with numbers, in every execution mode and in compiled (AOT) modules.  Such a string now gives the same result
+      as the UTF-8 string with the same characters, and @ref Qore::zzz8stringzzz9::toInt() "<string>::toInt()" no
+      longer raises \c UNSUPPORTED-ENCODING; a byte sequence that is not a valid character ends a number or date
+      like any other character that cannot be part of it.  Strings in ASCII-compatible encodings are parsed as
+      before, with no additional cost
+      - For example, \c "int", \c "float", \c "number", \c "bool" and \c "date" fields read by the
+        @ref csvutilintro "CsvUtil" module from UTF-16 data were converted incorrectly
+
+    - Fixed a string of up to 6 bytes stored inline in a value, such as an element of a constant list in a
+      compiled (AOT) module, converting to \c 1970-01-01 instead of the date it represents (ex: \c "P1DT2H") when
+      assigned to a \c softdate variable or member
+
+    - Fixed \c peek() returning a byte 0x80 - 0xff as a negative value with
+      @ref Qore::BinaryInputStream::peek() "BinaryInputStream::peek()",
+      @ref Qore::StringInputStream::peek() "StringInputStream::peek()",
+      @ref Qore::TransformInputStream::peek() "TransformInputStream::peek()" and
+      @ref Qore::EncodingConversionInputStream::peek() "EncodingConversionInputStream::peek()", so a 0xff byte was
+      reported as the end of the stream (-1) and bytes 0x80 - 0xfe as errors; \c peek() now returns the byte value
+      (0 - 255) of every input stream.  The internal stream readers had the same flaw, so invalid serialized data
+      with a byte 0x80 - 0xff where a type code was expected was reported as the end of the stream or with a
+      negative type code, and line reads with an end-of-line marker containing bytes 0x80 - 0xff did not find the
+      marker on platforms where \c char is unsigned (ex: Linux on ARM)
+
     - Fixed an exception raised while a loop or a functional operator advances an iterator escaping the
       enclosing \c try block with IR, tiered and JIT execution: an exception from an iterator's \c next() or
       \c getValue() in a \c foreach loop, or in an operator such as \c map, \c select or \c foldl, returned from
@@ -4527,6 +4645,8 @@ while (*binary chunk = input.read(65536)) {
       under a debugger. Timeouts remain failed tests and the runner proceeds to the next test.
     - Fixed parallel binary-module documentation builds reading unfinished core tags, abstract-method
       parameters disappearing from generated documentation, and MIME wildcards opening nested comments.
+      MIME wildcards and URL paths now render literally in prose and code/verbatim examples; escaped
+      command names preserve documentation, with linear Unicode scanning for long comment lines.
 
     - Fixed concurrent dereferences repeatedly rescanning a cycle with an obsolete reference-count snapshot,
       which could stall HTTP streaming callback workers and prevent subsequent requests from completing.

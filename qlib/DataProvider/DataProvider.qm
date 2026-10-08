@@ -1504,7 +1504,13 @@ fetch
       @ref DataProvider::TabularWorkbookProfileDataType "TabularWorkbookProfileDataType" for \c profile application
       actions, and @ref DataProvider::AbstractTabularProfileDataProvider "AbstractTabularProfileDataProvider" and
       @ref DataProvider::TabularProfileRequestDataType "TabularProfileRequestDataType" implement such an action for
-      a spreadsheet format given a reader for its raw cells
+      a spreadsheet format given a reader for its raw cells; its totals row rule is public
+      (@ref DataProvider::TabularProfiler::isTotalsLabel() "TabularProfiler::isTotalsLabel()",
+      @ref DataProvider::TabularProfiler::isTotalsFormula() "TabularProfiler::isTotalsFormula()", and
+      @ref DataProvider::TabularProfiler::hasTotalsFormula() "TabularProfiler::hasTotalsFormula()"), so that records
+      read at run time with their formulas recognize totals rows as the profile does; a \c SUM, \c SUBTOTAL, or
+      \c AGGREGATE formula marks a totals row only when it totals the rows above it in its own column, so a line
+      total across a data row does not
 
     @subsection dataprovider_v3_8 DataProvider v3.8
     - added @ref DataProvider::DataProvider::listKnownFactories() "DataProvider::listKnownFactories()", which returns

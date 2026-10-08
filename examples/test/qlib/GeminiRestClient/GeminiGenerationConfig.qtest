@@ -1,0 +1,219 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/GeminiBodyShape.qm
+%requires ../../../../qlib/GeminiRestClient.qm
+%requires ../../../../qlib/VertexAiRestClient.qm
+%exec-class GeminiGenerationConfigTest
+
+class CaptureGenerationRest inherits RestClientIo::RestClientIo {
+    public {
+        hash<auto> body;
+        string path;
+    }
+    constructor() : RestClientIo({"url": "http://localhost", "data": "json"}) {
+    }
+    hash<RestClient::RestResponseInfo> restPostWithTimeout(string path, auto body, *hash<auto> hdr, int timeout_ms) {
+        self.path = path;
+        self.body = body;
+        return <RestClient::RestResponseInfo>{"status_code": 200, "body": {
+            "candidates": ({"content": {"parts": ({"text": "classified"},)}, "finishReason": "STOP"},),
+        }};
+    }
+}
+
+class CaptureGeminiProvider inherits GeminiRestClient::GeminiLlmProvider {
+    private {
+        CaptureGenerationRest rest;
+    }
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config, CaptureGenerationRest rest) : GeminiLlmProvider(config) {
+        self.rest = rest;
+    }
+    RestClientIo::RestClientIo createRestClient() {
+        return rest;
+    }
+}
+
+class CaptureVertexProvider inherits VertexAiRestClient::VertexAiLlmProvider {
+    private {
+        CaptureGenerationRest rest;
+    }
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config, CaptureGenerationRest rest) : VertexAiLlmProvider(config) {
+        self.rest = rest;
+    }
+    RestClientIo::RestClientIo createRestClient() {
+        return rest;
+    }
+    *hash<auto> getRequestHeaders(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return NOTHING;
+    }
+}
+
+class GeminiGenerationConfigTest inherits QUnit::Test {
+    constructor() : Test("Gemini generation config", "1.0", \ARGV) {
+        addTestCase("model family detection", \models());
+        addTestCase("sampling and budget migration preserves other fields", \normalization());
+        addTestCase("snake case aliases and empty configs", \aliases());
+        addTestCase("invalid config rejects before sending", \invalid());
+        addTestCase("chat shaping handles reasoning effort", \shaping());
+        addTestCase("both providers resolve options before normalization", \providers());
+        set_return_value(main());
+    }
+
+    models() {
+        foreach string model in (("gemini-3-pro-preview", "gemini-3.1-pro-preview", "gemini-3.5-flash",
+                "models/gemini-3-flash-preview", "projects/p/locations/global/publishers/google/models/gemini-3.8-flash")) {
+            assertTrue(GeminiBodyShape::usesThinkingLevel(model), model);
+        }
+        foreach string model in (("", "gemini-2.5-flash", "models/gemini-2.5-pro", "gemini-30-flash",
+                "custom-gemini-3", "some-model", "gemini-4-preview")) {
+            assertFalse(GeminiBodyShape::usesThinkingLevel(model), model);
+        }
+    }
+
+    normalization() {
+        foreach int budget in ((-1, 0, 1024)) {
+            hash<auto> original = {"contents": ({"role": "user"},), "generationConfig": {
+                "temperature": 0.0, "topP": 0.9, "topK": 20, "maxOutputTokens": 512,
+                "responseMimeType": "application/json", "thinkingConfig": {"thinkingBudget": budget,
+                    "thinkingLevel": "low", "includeThoughts": True},
+            }};
+            hash<auto> body = GeminiBodyShape::normalizeGenerationConfig("gemini-3.1-pro-preview", original);
+            assertEq({"maxOutputTokens": 512, "responseMimeType": "application/json",
+                "thinkingConfig": {"thinkingLevel": "LOW", "includeThoughts": True}}, body.generationConfig);
+            assertEq(original.contents, body.contents);
+            assertEq(budget, original.generationConfig.thinkingConfig.thinkingBudget, "input hash is unchanged");
+            assertEq(0.0, original.generationConfig.temperature);
+            hash<auto> legacy = original;
+            delete legacy.generationConfig.thinkingConfig.thinkingLevel;
+            foreach string model in (("gemini-2.5-flash", "custom-model")) {
+                assertEq(legacy, GeminiBodyShape::normalizeGenerationConfig(model, legacy));
+            }
+            body = GeminiBodyShape::normalizeGenerationConfig("gemini-3-flash-preview", {
+                "generationConfig": {"thinkingConfig": {"thinkingBudget": budget}},
+            });
+            assertEq({}, body.generationConfig, "numeric budgets leave the model default on 3.x");
+        }
+    }
+
+    aliases() {
+        assertEq({}, GeminiBodyShape::normalizeGenerationConfig("gemini-3.5-flash", {}));
+        assertEq({"generationConfig": {}}, GeminiBodyShape::normalizeGenerationConfig("gemini-3.5-flash",
+            {"generationConfig": {}}));
+        assertEq({"generationConfig": {"thinkingConfig": {"thinkingLevel": "MEDIUM", "include_thoughts": True}}},
+            GeminiBodyShape::normalizeGenerationConfig("gemini-3.5-flash", {"generation_config": {
+                "temperature": 0.2, "top_p": 0.8, "top_k": 10, "thinking_config": {
+                    "thinking_budget": 0, "thinking_level": "medium", "include_thoughts": True},
+            }}));
+        foreach string level in (("minimal", "LOW", "Medium", "high")) {
+            hash<auto> body = GeminiBodyShape::normalizeGenerationConfig("gemini-3.5-flash",
+                {"generationConfig": {"thinkingConfig": {"thinkingLevel": level}}});
+            assertEq(toupper(level), body.generationConfig.thinkingConfig.thinkingLevel);
+        }
+    }
+
+    invalid() {
+        foreach hash<auto> body in ((
+            {"generationConfig": "bad"},
+            {"generationConfig": {}, "generation_config": {}},
+            {"generationConfig": {"thinkingConfig": 1}},
+            {"generationConfig": {"thinkingConfig": {}, "thinking_config": {}}},
+            {"generationConfig": {"thinkingConfig": {"thinkingLevel": "low", "thinking_level": "high"}}},
+            {"generationConfig": {"thinkingConfig": {"thinkingLevel": ""}}},
+            {"generationConfig": {"thinkingConfig": {"thinkingLevel": 2}}},
+            {"generationConfig": {"thinkingConfig": {"thinkingLevel": "unlimited"}}}
+        )) {
+            assertThrows("GEMINI-GENERATION-CONFIG-ERROR", \GeminiBodyShape::normalizeGenerationConfig(),
+                ("gemini-3.5-flash", body));
+        }
+    }
+
+    shaping() {
+        foreach string effort in (("minimal", "low", "medium", "high", "xhigh", "max")) {
+            hash<auto> body = GeminiBodyShape::shapeChatBody((), NOTHING, NOTHING, {
+                "model": "gemini-3.5-flash", "temperature": 0.1, "max_output_tokens": 512,
+                "reasoning_token_budget": 1024, "reasoning_effort": effort,
+            });
+            assertEq({"maxOutputTokens": 512, "thinkingConfig": {"thinkingLevel":
+                ("xhigh", "max").contains(effort) ? "HIGH" : toupper(effort)}}, body.generationConfig);
+        }
+        hash<auto> body = GeminiBodyShape::shapeChatBody((), NOTHING, NOTHING, {
+            "model": "gemini-3.5-flash", "extra_body": {"generationConfig": {
+                "topP": 0.5, "thinkingConfig": {"thinkingBudget": 64, "thinkingLevel": "low"},
+            }},
+        });
+        assertEq({"thinkingConfig": {"thinkingLevel": "LOW"}}, body.generationConfig);
+        body = GeminiBodyShape::shapeChatBody((), NOTHING, NOTHING, {
+            "model": "gemini-3.5-flash", "max_output_tokens": 256, "extra_body": {"generation_config": {
+                "top_p": 0.5, "thinking_config": {"thinking_budget": 64, "thinking_level": "low"},
+            }},
+        });
+        assertFalse(body.hasKey("generation_config"));
+        assertEq({"thinkingConfig": {"thinkingLevel": "LOW"}}, body.generationConfig,
+            "extra_body retains its existing top-level replacement semantics");
+    }
+
+    providers() {
+        CaptureGenerationRest rest();
+        hash<QoreLlmUtils::LlmBackendConfig> config = <QoreLlmUtils::LlmBackendConfig>{
+            "model": "gemini-3.5-flash", "api_key": "test-only-key", "max_retries": 0,
+            "reasoning_effort": "medium", "reasoning_token_budget": 1024,
+            "provider_options": {"gcp_project_id": "test-project"},
+        };
+        foreach GeminiBodyShape::AbstractGeminiModelProvider provider in ((
+                new CaptureGeminiProvider(config, rest), new CaptureVertexProvider(config, rest))) {
+            hash<QoreLlmUtils::LlmCompletionResult> response = provider.complete("classify tickets", "invoice issue");
+            assertEq("classified", response.content);
+            assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "MEDIUM"}}, rest.body.generationConfig);
+            provider.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "invoice"},), NOTHING,
+                <QoreLlmUtils::LlmRequestOptions>{"reasoning_effort": "low"});
+            assertEq("LOW", rest.body.generationConfig.thinkingConfig.thinkingLevel);
+            provider.complete("", "invoice", NOTHING, <QoreLlmUtils::LlmRequestOptions>{
+                "model": "gemini-2.5-flash", "temperature": 0.2, "reasoning_token_budget": 0,
+            });
+            assertEq(0.2, rest.body.generationConfig.temperature);
+            assertEq({"thinkingBudget": 0}, rest.body.generationConfig.thinkingConfig);
+            assertTrue(rest.path =~ /gemini-2.5-flash:generateContent$/);
+            provider.complete("", "invoice", NOTHING, <QoreLlmUtils::LlmRequestOptions>{
+                "body_options": {"generationConfig": {"temperature": 0.4, "topP": 0.8, "topK": 20,
+                    "thinkingConfig": {"thinkingBudget": 1024, "thinkingLevel": "high", "includeThoughts": True}}},
+            });
+            assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "HIGH", "includeThoughts": True}}, rest.body.generationConfig);
+            provider.complete("", "invoice", NOTHING, <QoreLlmUtils::LlmRequestOptions>{
+                "body_options": {"generation_config": {"temperature": 0.4, "top_p": 0.8, "top_k": 20,
+                    "thinking_config": {"thinking_budget": 1024, "thinking_level": "low"}}},
+            });
+            assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "LOW"}}, rest.body.generationConfig);
+            assertFalse(rest.body.hasKey("generation_config"));
+            hash<auto> previous = rest.body;
+            assertThrows("GEMINI-GENERATION-CONFIG-ERROR", \provider.complete(), ("", "invoice", NOTHING,
+                <QoreLlmUtils::LlmRequestOptions>{"reasoning_effort": "invalid"}));
+            assertEq(previous, rest.body, "invalid effort does not send a request");
+        }
+        hash<QoreLlmUtils::LlmBackendConfig> defaults = config;
+        delete defaults.reasoning_effort;
+        defaults.disable_reasoning = True;
+        foreach int budget in ((-1, 0, 1024)) {
+            defaults.reasoning_token_budget = budget;
+            foreach GeminiBodyShape::AbstractGeminiModelProvider provider in ((
+                    new CaptureGeminiProvider(defaults, rest), new CaptureVertexProvider(defaults, rest))) {
+                provider.complete("", "invoice");
+                assertEq({"maxOutputTokens": 4096}, rest.body.generationConfig,
+                    "unsupported numeric budgets and disable_reasoning leave Gemini 3 model defaults");
+            }
+        }
+        config.model = "gemini-2.5-flash";
+        foreach GeminiBodyShape::AbstractGeminiModelProvider provider in ((
+                new CaptureGeminiProvider(config, rest), new CaptureVertexProvider(config, rest))) {
+            provider.complete("", "invoice", NOTHING, <QoreLlmUtils::LlmRequestOptions>{"model": "gemini-3.1-pro-preview"});
+            assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "MEDIUM"}}, rest.body.generationConfig);
+        }
+        GeminiRestClient::GeminiLlmProviderFactory gemini();
+        VertexAiRestClient::VertexAiLlmProviderFactory vertex();
+        assertTrue(gemini.getInfo().supports_reasoning_effort);
+        assertTrue(vertex.getInfo().supports_reasoning_effort);
+    }
+}

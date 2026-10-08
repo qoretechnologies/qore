@@ -23,6 +23,7 @@
 #include <qore/QoreNumberNode.h>
 #include <qore/BinaryNode.h>
 #include <qore/intern/QoreLibIntern.h>
+#include <qore/intern/QoreHashKeyHelper.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/ParseNode.h>
@@ -4785,8 +4786,9 @@ static bool isConstKeyHashSubscript(const QoreValue& expr,
     if (!right.hasNode() || right.getType() != NT_STRING) {
         return false;
     }
-    QoreStringValueHelper key(right);
-    key_name = key->c_str();
+    if (QoreHashKeyHelper::getConstKey(right, key_name)) {
+        return false;
+    }
     key_expr = right;  // Also return the QoreValue for lowerExpression
     const auto* vr = dynamic_cast<const VarRefNode*>(hd->getLeft().getInternalNode());
     if (!vr) {
@@ -5033,10 +5035,9 @@ static bool extractLValuePath(const QoreValue& expr,
         }
         // Add hash key step
         LVPathStep step;
-        if (right.hasNode() && right.getType() == NT_STRING) {
+        if (right.hasNode() && right.getType() == NT_STRING
+                && !QoreHashKeyHelper::getConstKey(right, step.name)) {
             step.kind = LVPathStepKind::HashKeyConst;
-            QoreStringValueHelper key(right);
-            step.name = key->c_str();
         } else {
             step.kind = LVPathStepKind::HashKey;
             // Store the expression to lower as a dynamic operand
@@ -9956,9 +9957,10 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
     // QoreHashObjectDereferenceOperatorNode handles both hash key access and object
     // member access via {"key"} syntax. qore_rt_hash_key_access handles both types.
     QoreValue right_val = op->getRight();
-    if (right_val.hasNode() && right_val.getType() == NT_STRING) {
-        QoreStringValueHelper key(right_val);
-        const char* key_str = key->c_str();
+    std::string const_key;
+    if (right_val.hasNode() && right_val.getType() == NT_STRING
+            && !QoreHashKeyHelper::getConstKey(right_val, const_key)) {
+        const char* key_str = const_key.c_str();
         // QoreHashNode bases are already-evaluated constant values.  Select
         // the requested member directly so AOT does not reconstruct a large
         // constant hash merely to discard every other member.  Nested
@@ -11137,9 +11139,9 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
     std::vector<std::string> const_keys;
     const_keys.reserve(keys.size());
     for (size_t i = 0; i < keys.size(); ++i) {
-        if (keys[i].getType() == NT_STRING) {
-            QoreStringValueHelper key(keys[i]);
-            const_keys.push_back(key->c_str());
+        std::string const_key;
+        if (keys[i].getType() == NT_STRING && !QoreHashKeyHelper::getConstKey(keys[i], const_key)) {
+            const_keys.push_back(std::move(const_key));
         } else {
             all_const_keys = false;
             break;
@@ -13691,9 +13693,7 @@ static bool getImplicitHashKeyAccess(const QoreValue& expr, std::string& key_nam
     if (!right_val.hasNode() || right_val.getType() != NT_STRING) {
         return false;
     }
-    QoreStringValueHelper key(right_val);
-    key_name = key->c_str();
-    return true;
+    return !QoreHashKeyHelper::getConstKey(right_val, key_name);
 }
 
 // Pattern analysis for hash-key map operations

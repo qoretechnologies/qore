@@ -326,6 +326,18 @@ private:
     QoreParseAnalysis saved;
 };
 
+//! sets the parse analysis of the expression being initialized to describe a result of the given type
+/** An expression must describe its own result in the parse analysis: initializing its operands leaves the analysis
+    of the last operand in \a parse_context, which would otherwise be stored and used as the analysis of the
+    expression itself; for example a hash literal whose last value is an integer would be taken for an integer.
+
+    Only the type of the result and whether it can be NOTHING are set; with no type, the analysis is empty.
+
+    @param parse_context the parse context of the expression
+    @param typeInfo the type of the result of the expression; may be nullptr if unknown
+*/
+DLLLOCAL void qore_set_result_parse_analysis(QoreParseContext& parse_context, const QoreTypeInfo* typeInfo);
+
 class QoreParseContextLvarHelper {
 public:
     DLLLOCAL QoreParseContextLvarHelper(QoreParseContext& parse_context, LVList*& lvars)

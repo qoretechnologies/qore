@@ -58,6 +58,8 @@ class FileLineIteratorTest inherits QUnit::Test {
         addTestCase("CRLF UTF-16BE Explicit tests", sub() {doTestsExplicitEnc("UTF16BE", "\r\n");});
         addTestCase("CRLF UTF-16BE Auto tests", sub() {doTestsAutoEnc("UTF16BE", "\r\n");});
 
+        addTestCase("UTF-16 byte order marks", \utf16ByteOrderMarks());
+
         set_return_value(main());
     }
 
@@ -278,5 +280,32 @@ class FileLineIteratorTest inherits QUnit::Test {
         prepareFile(dataEncoded);
         FileLineIterator fli(TestFileName, enc);
         doTestsIntern(fli);
+    }
+
+    #! a byte order mark at the start of a UTF-16 file is not content; for the generic UTF-16 encoding it gives the
+    #! byte order of the file
+    utf16ByteOrderMarks() {
+        list<string> lines = ("PO,Množství", "ab,1");
+        string text = (foldl $1 + "\n" + $2, lines) + "\n";
+        binary le = convert_encoding(text, "UTF-16LE").toBinary();
+        binary be = convert_encoding(text, "UTF-16BE").toBinary();
+        foreach hash<auto> c in (
+            {"label": "UTF-16 with a little-endian mark", "data": <fffe> + le, "enc": "UTF-16"},
+            {"label": "UTF-16 with a big-endian mark", "data": <feff> + be, "enc": "UTF-16"},
+            {"label": "UTF-16 without a mark", "data": be, "enc": "UTF-16"},
+            {"label": "UTF-16LE with a mark", "data": <fffe> + le, "enc": "UTF-16LE"},
+            {"label": "UTF-16BE with a mark", "data": <feff> + be, "enc": "UTF-16BE"},
+        ) {
+            File f();
+            f.open2(TestFileName, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            f.write(c.data);
+            f.close();
+            FileLineIterator fli(TestFileName, c.enc);
+            list<string> l = ();
+            while (fli.next()) {
+                l += fli.getValue();
+            }
+            assertEq(lines, l, c.label);
+        }
     }
 }

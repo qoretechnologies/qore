@@ -81,6 +81,8 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
                 err = -1;
             }
             parse_context.typeInfo = ti = bigIntTypeInfo;
+            // the analysis left by the right operand describes that operand, not the result
+            qore_set_result_parse_analysis(parse_context, ti);
             val = makeSpecialization<QoreIntMinusEqualsOperatorNode>();
             if (val.hasNode()) {
                 auto* parse_node = dynamic_cast<ParseNode*>(val.getInternalNode());
@@ -94,6 +96,8 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
         }
     }
     parse_context.typeInfo = ti;
+    // the analysis left by the right operand describes that operand, not the result
+    qore_set_result_parse_analysis(parse_context, ti);
     return err;
 }
 

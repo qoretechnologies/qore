@@ -69,7 +69,22 @@ public class MistralRestClientTest inherits QUnit::Test {
         if (ENV.MISTRALAI_APIKEY) {
             addTestCase("live: valid and invalid API keys", \livePingTest());
         }
+        addTestCase("model-specific reasoning capabilities", \reasoningCapabilitiesTest());
         set_return_value(main());
+    }
+
+    private reasoningCapabilitiesTest() {
+        foreach string model in (("mistral-large-4", "mistral-large-4-0", "mistral-medium-3-5",
+                "mistral-medium-3.5", "mistral-medium-2604", "mistral-medium-latest", "mistral-medium",
+                "mistral-small-2603", "mistral-small-latest", "magistral-small-latest")) {
+            assertEq(("none", "high"), MistralRestClientBase::getModelReasoningEfforts(model));
+        }
+        foreach string model in (("mistral-large-2512", "mistral-large-latest")) {
+            assertEq((), MistralRestClientBase::getModelReasoningEfforts(model));
+        }
+        foreach string model in (("unknown-model", "zai-glm-5-3", "mistral-large-4 ", "MISTRAL-LARGE-4")) {
+            assertNothing(MistralRestClientBase::getModelReasoningEfforts(model));
+        }
     }
 
     private connectionSchemeTest() {

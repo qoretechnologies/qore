@@ -34,6 +34,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <memory>
 
 DateTime::DateTime(qore_date_private* n_priv) : priv(n_priv) {
 }
@@ -294,16 +295,13 @@ DateTime* DateTime::add(const DateTime* dt) const {
 }
 
 DateTime* DateTime::add(const DateTime& dt) const {
-   DateTime* rv;
-   if (isRelative()) {
-      rv = new DateTime(dt);
-      rv->priv->add(*priv);
-   }
-   else {
-      rv = new DateTime(*this);
-      rv->priv->add(dt.priv);
-   }
-   return rv;
+    std::unique_ptr<DateTime> rv(new DateTime(isRelative() ? dt : *this));
+    if (isRelative()) {
+        rv->priv->add(*priv);
+    } else {
+        rv->priv->add(*dt.priv);
+    }
+    return rv.release();
 }
 
 DateTime* DateTime::subtractBy(const DateTime* dt) const {

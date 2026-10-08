@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <algorithm>
 #include <charconv>
@@ -590,7 +591,8 @@ QoreNumberNode::QoreNumberNode(const QoreValue n) : SimpleValueQoreNode(NT_NUMBE
 
     if (t == NT_STRING) {
         QoreStringValueHelper str(n);
-        priv = new qore_number_private(str->c_str());
+        QoreAsciiCompatStringHelper text(**str);
+        priv = new qore_number_private(text.c_str());
         return;
     }
 
@@ -870,7 +872,8 @@ QoreNumberNode* QoreNumberNode::toNumber(const QoreValue n) {
 
     if (t == NT_STRING) {
         QoreStringValueHelper str(n);
-        return new QoreNumberNode(str->c_str());
+        QoreAsciiCompatStringHelper text(**str);
+        return new QoreNumberNode(text.c_str());
     }
 
     if (t == NT_INT)

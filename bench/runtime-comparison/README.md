@@ -153,6 +153,15 @@ once at runtime, not toggled during measurement.
 
 ## Workloads and units
 
+Engine provenance matters: upstream commit `5243c8aef` fixes unintended native
+promotion under `--exec-mode=ir`. Earlier results record the requested mode,
+not a verified pure-interpreter execution. A diagnostic on the saved pre-merge
+`a3d430d06` runtime confirms JIT promotion of the polymorphic benchmark loop
+and two target methods; the merged runtime produces no compilation trace for
+the same invocation. AOT/Java comparisons are unaffected. Re-establish the IR
+baseline after this merge; do not interpret the engine correction as an
+optimization regression. See the merge/provenance note in `RESULTS.md`.
+
 Each invocation processes `--count` elements, normally 1024. The reported unit
 is nanoseconds per element, including all passes in that workload. One list
 build therefore means appending one element plus its share of the final

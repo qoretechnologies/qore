@@ -1,0 +1,47 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ConcurrentPromotionTest
+
+#! Tests functions and methods running in many threads while they and their callers are compiled to native code
+/** Native compilation of a function with callees lowers its IR again, and the variant's flags telling whether the
+    function uses argv and self and whether all its locals are IR-only are read by every thread calling it; the
+    worker calls functions and methods that use argv and self, and that do not, from many threads at once, with
+    asynchronous (background) compilation after a few calls, in each execution mode.  Every result must be correct;
+    run under ThreadSanitizer, the test also shows any unsynchronized access to that shared state.
+*/
+class ConcurrentPromotionTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("ConcurrentPromotionTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("each execution mode", \testExecModes());
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            # functions are compiled after a few calls, in the background, while the threads keep calling them
+            string out = backquote(sprintf("QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b "
+                "--exec-mode=%s %s 2>&1", libqore_dir, libqore_dir, qore_bin, mode,
+                get_script_dir() + DirSep + "concurrent-promotion-worker.q"));
+            assertEq("wrong: 0\n", out, mode);
+        }
+    }
+}

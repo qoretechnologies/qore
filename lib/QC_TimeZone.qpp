@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/QC_Serializable.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 static void create_timezone_from_region(const QoreString& region, QoreObject& self, ExceptionSink* xsink) {
     bool is_path = (!region.empty() && region.c_str()[0] == '.') || q_absolute_path(region.c_str());
@@ -229,7 +230,8 @@ date http_dt = tz.date(date_string: "Sun, 06 Nov 1994 08:49:37 GMT");  # RFC 723
     @since %Qore 3.0.0 RFC 7231 (HTTP) and RFC 2822 (email) date formats are supported
  */
 date TimeZone::date(string date_string) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    ReferenceHolder<DateTimeNode> rv(new DateTimeNode(z->get(), date_string->getBuffer(), xsink), xsink);
+    QoreAsciiCompatStringHelper text(*date_string);
+    ReferenceHolder<DateTimeNode> rv(new DateTimeNode(z->get(), text.c_str(), xsink), xsink);
     if (*xsink) {
         return QoreValue();
     }

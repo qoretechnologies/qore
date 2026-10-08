@@ -116,6 +116,12 @@
     @ref qore_regex "Regular expression" operators and functions convert UTF-16 strings to \c UTF-8 before
     matching, so any strings they return are tagged with \c UTF-8 and not with the source encoding.
 
+    Conversions of UTF-16 strings to numbers, booleans and dates (ex: \c int(), \c float(), \c number(),
+    \c boolean(), @ref Qore::parse_boolean() "parse_boolean()", \c date(), the \c softint, \c softfloat,
+    \c softnumber, \c softbool and \c softdate types, and boolean evaluation) decode the string, so they give the same
+    result as the \c UTF-8 string with the same characters: \c "12" in UTF-16LE converts to \c 12.  A byte sequence
+    that is not a valid UTF-16 character ends a number or date like any other character that cannot be part of it.
+
     @note Unlike \c UTF-8, UTF-16 is not self-synchronizing: the low byte of one code unit and the high byte of
     the next can form the byte sequence of a different character.  Substring searches
     (index(), rindex(), @ref <string>::contains() "<string>::contains()",

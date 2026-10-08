@@ -46,6 +46,8 @@ public class TabularProfilerTest inherits QUnit::Test {
         addTestCase("clean header in row 1", \cleanHeader());
         addTestCase("title rows and a merged banner above the header", \titleRows());
         addTestCase("totals rows and blank-row gaps", \totalsAndGaps());
+        addTestCase("totals formulas and line totals", \totalsFormulas());
+        addTestCase("the totals row rule", \totalsRule());
         addTestCase("dates stored as text", \datesAsText());
         addTestCase("numbers stored as text in a local format", \localNumbers());
         addTestCase("identifiers with leading zeros", \leadingZeros());
@@ -149,6 +151,82 @@ public class TabularProfilerTest inherits QUnit::Test {
         assertEq(("SUM",), finding(sheet, "formulas").detail);
         assertEq(3, sheet.formula_count);
         assertEq(10, sheet.data_region.last_row);
+    }
+
+    totalsFormulas() {
+        # an order sheet: a line total in each data row, a SUM-only totals row without a label
+        hash<TabularSheetGrid> grid({
+            "name": "Order",
+            "rows": (
+                ("Item", "Qty", "Price", "Line"),
+                ("A-1", 2, 5, 10),
+                ("B-2", 3, 4, 12),
+                ("C-3", 1, 7, 7),
+                (NOTHING, 6, NOTHING, 29),
+            ),
+            "formulas": {
+                "D2": "B2*C2",
+                "D3": "SUM(B3:C3)",
+                "D4": "SUM($B4:$C4)",
+                "B5": "SUM(B2:B4)",
+                "D5": "SUBTOTAL(9,D2:D4)",
+            },
+        });
+        hash<TabularSheetProfile> sheet = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "xlsx",
+            "sheets": (grid,),
+        }).sheets[0];
+        assertEq((5,), sheet.totals_rows, "only the row totalling the rows above is a totals row");
+        # the data rows are the rows whose values the column profiles count
+        assertEq(3, sheet.columns[3].non_empty, "line totals in data rows keep them data rows");
+
+        # a labelled totals row without formulas
+        push grid.rows, ("Total", 6, NOTHING, 29);
+        grid.formulas -= ("B5", "D5");
+        sheet = TabularProfiler::profile(<TabularWorkbookGrid>{"format": "xlsx", "sheets": (grid,)}).sheets[0];
+        assertEq((6,), sheet.totals_rows);
+    }
+
+    totalsRule() {
+        # totals of the rows above in the formula's own column
+        assertTrue(TabularProfiler::isTotalsFormula("B10", "SUM(B2:B9)"));
+        assertTrue(TabularProfiler::isTotalsFormula("B10", "=SUM(B2:B9)"));
+        assertTrue(TabularProfiler::isTotalsFormula("B10", "sum(b2:b9)"));
+        assertTrue(TabularProfiler::isTotalsFormula("$B$10", "SUM($B$2:$B$9)"));
+        assertTrue(TabularProfiler::isTotalsFormula("C10", "SUBTOTAL(9,C2:C9)"));
+        assertTrue(TabularProfiler::isTotalsFormula("C10", "AGGREGATE(9,4,C2:C9)"));
+        assertTrue(TabularProfiler::isTotalsFormula("C10", "SUM(B2:D9)"), "a block including the column");
+        assertTrue(TabularProfiler::isTotalsFormula("C10", "SUM(C9:C2)"), "a range written bottom-up");
+        assertTrue(TabularProfiler::isTotalsFormula("AA10", "SUM(AA2:AA9)"));
+        assertTrue(TabularProfiler::isTotalsFormula("C10", "SUM(C2:C4,C6:C9)"));
+        # not totals of the rows above
+        assertFalse(TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"), "a line total");
+        assertFalse(TabularProfiler::isTotalsFormula("D3", "SUM(D3:F3)"), "a range starting in its own row");
+        assertFalse(TabularProfiler::isTotalsFormula("B10", "SUM(C2:C9)"), "another column");
+        assertFalse(TabularProfiler::isTotalsFormula("B10", "SUM(B11:B20)"), "rows below");
+        assertFalse(TabularProfiler::isTotalsFormula("B10", "SUM(Data!B2:B9)"), "another sheet");
+        assertFalse(TabularProfiler::isTotalsFormula("B10", "SUM('Q1 data'!B2:B9)"), "another quoted sheet");
+        assertFalse(TabularProfiler::isTotalsFormula("B10", "SUM(Data.B2:B9)"), "another sheet in ODF notation");
+        assertFalse(TabularProfiler::isTotalsFormula("B10", "B2+B3"), "not an aggregate");
+        assertFalse(TabularProfiler::isTotalsFormula("B10", "AVERAGE(B2:B9)"), "not a total");
+        assertFalse(TabularProfiler::isTotalsFormula("B10", "ROUND(SUM(B2:B9),2)"), "not starting with the total");
+        assertFalse(TabularProfiler::isTotalsFormula("B10", "SUM(B2,B3)"), "single cells");
+        # a row's formulas
+        assertTrue(TabularProfiler::hasTotalsFormula({"D3": "SUM(B3:C3)", "B10": "SUM(B2:B9)"}));
+        assertFalse(TabularProfiler::hasTotalsFormula({"D3": "SUM(B3:C3)"}));
+        assertFalse(TabularProfiler::hasTotalsFormula());
+        assertFalse(TabularProfiler::hasTotalsFormula({}));
+        # labels
+        assertTrue(TabularProfiler::isTotalsLabel("Grand total"));
+        assertTrue(TabularProfiler::isTotalsLabel("Celkem"));
+        assertTrue(TabularProfiler::isTotalsLabel("ZWISCHENSUMME"));
+        assertFalse(TabularProfiler::isTotalsLabel("Totally new item"));
+        assertFalse(TabularProfiler::isTotalsLabel(42));
+        assertFalse(TabularProfiler::isTotalsLabel());
+        # an invalid cell reference
+        assertThrows("TABULAR-PROFILE-ERROR", \TabularProfiler::isTotalsFormula(), ("B", "SUM(B2:B9)"));
+        assertThrows("TABULAR-PROFILE-ERROR", \TabularProfiler::isTotalsFormula(), ("B2:B9", "SUM(B2:B9)"));
+        assertThrows("TABULAR-PROFILE-ERROR", \TabularProfiler::hasTotalsFormula(), {"x": "SUM(B2:B9)"});
     }
 
     datesAsText() {

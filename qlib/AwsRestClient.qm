@@ -95,6 +95,7 @@ printf("%Y\n", ans.body);
     @section Awsrestclientrelnotes Release Notes
 
     @subsection awsrestclientv1_4 AwsRestClient v1.4
+    - preserve fractional milliseconds in signed response waits to avoid premature timeouts and extra retries
     - the data provider of a connection uses an @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" and is
       created without connecting to the server; before, creating the data provider failed without a schema
     - added incremental signed event-stream sessions with response validation, cancellation, and timeouts
@@ -1766,7 +1767,7 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
             *hash<auto> hdr, *string assume_content_type, *bool raw_body, *bool path_is_encoded, *timeout timeout_ms) {
         *int deadline_us;
         if (exists timeout_ms) {
-            int started = clock_get_monotonic_us();
+            int started = requestNow();
             if (timeout_ms <= 0 || timeout_ms > (9223372036854775807 - started) / 1000) {
                 throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be positive and fit a monotonic deadline";
             }
@@ -1787,11 +1788,12 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
             HttpClientIo::HttpCancellableFuture future = getConnectionManager().requestAsync(
                 getUrl(), method, path, hdr, prepared.serialized_body, False);
             try {
-                int remaining = (deadline_us - clock_get_monotonic_us()) / 1000;
-                if (remaining <= 0) {
+                int remaining_us = deadline_us - requestNow();
+                if (remaining_us <= 0) {
                     throw "HTTPCLIENT-TIMEOUT", "AWS request deadline exhausted";
                 }
-                raw = future.get(remaining);
+                # Match RestClientIo's ceiling conversion; nested retry budgets must not expire early.
+                raw = future.get(1 + (remaining_us - 1) / 1000);
             } catch (hash<ExceptionInfo> ex) {
                 defer_thread_cancel(sub () { future.cancel(); });
                 if (ex.err == "FUTURE-TIMEOUT") {

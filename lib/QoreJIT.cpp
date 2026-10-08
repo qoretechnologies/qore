@@ -1077,7 +1077,7 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
 }
 
 bool QoreJIT::compileFunctionLocked(const QoreIRFunction& func, std::string& error,
-        void* deopt_counter) {
+        void* deopt_counter, const std::string* symbol_name) {
     // Thread-safe initialization using std::call_once
     std::call_once(init_flag, [this]() {
         init_success = initialize(init_error);
@@ -1090,12 +1090,12 @@ bool QoreJIT::compileFunctionLocked(const QoreIRFunction& func, std::string& err
     // Check if already compiled (fast path)
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
-        if (compiled_functions.find(func.name) != compiled_functions.end()) {
+        if (compiled_functions.find(symbol_name ? *symbol_name : func.name) != compiled_functions.end()) {
             return true;
         }
     }
 
-    return compileFunctionInternal(func, error, deopt_counter);
+    return compileFunctionInternal(func, error, deopt_counter, symbol_name);
 }
 
 //! Returns false when \a instruction_count exceeds the native-compilation budget
@@ -1123,13 +1123,13 @@ static bool jit_check_size_budget(const std::string& func_name, size_t instructi
 }
 
 bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& error,
-        void* deopt_counter) {
+        void* deopt_counter, const std::string* symbol_name) {
     // Copy func.name before any LLVM operations.
     // On Linux, LLVM 21's addIRModule()/lookup() can corrupt adjacent heap memory
     // (specifically the std::string::_M_string_length field) when compiling closures
     // or functions with complex IR patterns.  The local copy is made before any LLVM
     // heap activity and remains valid even if the original is corrupted.
-    const std::string func_name = func.name;
+    const std::string func_name = symbol_name ? *symbol_name : func.name;
 
     // Re-check cache under compile lock (another thread may have compiled this function)
     {
@@ -1158,6 +1158,9 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
         QoreIRToLLVM lowering(*ctx);
         if (deopt_counter) {
             lowering.setDeoptCounter(deopt_counter);
+        }
+        if (symbol_name) {
+            lowering.setSymbolName(*symbol_name);
         }
         if (!lowering.lowerFunction(func, *module, error)) {
             return false;

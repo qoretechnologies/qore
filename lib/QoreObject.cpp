@@ -49,6 +49,7 @@
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreHashKeyHelper.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -1902,11 +1903,11 @@ ClassAccess QoreObject::getClassAccess(const QoreClass& cls) const {
 
 QoreValue QoreObject::evalMember(const QoreString* member, ExceptionSink* xsink) {
     // make sure to convert string encoding if necessary to default character set
-    TempEncodingHelper tstr(member, QCS_DEFAULT, xsink);
+    QoreHashKeyHelper tstr(*member, xsink);
     if (!tstr)
         return QoreValue();
 
-    return evalMember(tstr->c_str(), xsink);
+    return evalMember(tstr.c_str(), xsink);
 }
 
 QoreValue QoreObject::evalMember(const char* mem, ExceptionSink* xsink) {
@@ -2044,12 +2045,12 @@ void QoreObject::obliterate(ExceptionSink* xsink) {
 
 // unlocking the lock is managed with the AutoVLock object
 QoreValue QoreObject::getMemberValueNoMethod(const QoreString* key, AutoVLock *vl, ExceptionSink* xsink) const {
-    TempEncodingHelper enc(key, QCS_DEFAULT, xsink);
+    QoreHashKeyHelper enc(*key, xsink);
     if (!enc) {
         return QoreValue();
     }
 
-    return getMemberValueNoMethod(enc->c_str(), vl, xsink);
+    return getMemberValueNoMethod(enc.c_str(), vl, xsink);
 }
 
 // unlocking the lock is managed with the AutoVLock object
@@ -2132,11 +2133,11 @@ int QoreObject::setMemberValue(const char* key, const QoreClass* cls, QoreValue 
 }
 
 void QoreObject::deleteMemberValue(const QoreString* key, ExceptionSink* xsink) {
-    TempEncodingHelper enc(key, QCS_DEFAULT, xsink);
+    QoreHashKeyHelper enc(*key, xsink);
     if (!enc)
         return;
 
-    deleteMemberValue(enc->getBuffer(), xsink);
+    deleteMemberValue(enc.c_str(), xsink);
 }
 
 void QoreObject::deleteMemberValue(const char* key, ExceptionSink* xsink) {
@@ -2173,11 +2174,11 @@ void QoreObject::deleteMemberValue(const char* key, ExceptionSink* xsink) {
 }
 
 QoreValue QoreObject::takeMember(const QoreString* key, ExceptionSink* xsink) {
-    TempEncodingHelper enc(key, QCS_DEFAULT, xsink);
+    QoreHashKeyHelper enc(*key, xsink);
     if (!enc)
         return QoreValue();
 
-    return priv->takeMember(xsink, enc->getBuffer());
+    return priv->takeMember(xsink, enc.c_str());
 }
 
 QoreValue QoreObject::takeMember(const char* key, ExceptionSink* xsink) {
@@ -2185,11 +2186,11 @@ QoreValue QoreObject::takeMember(const char* key, ExceptionSink* xsink) {
 }
 
 void QoreObject::removeMember(const QoreString* key, ExceptionSink* xsink) {
-    TempEncodingHelper enc(key, QCS_DEFAULT, xsink);
+    QoreHashKeyHelper enc(*key, xsink);
     if (!enc)
         return;
 
-    removeMember(enc->getBuffer(), xsink);
+    removeMember(enc.c_str(), xsink);
 }
 
 void QoreObject::removeMember(const char* key, ExceptionSink* xsink) {

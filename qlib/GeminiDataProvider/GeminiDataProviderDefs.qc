@@ -130,28 +130,80 @@ public class GeminiContentDataType inherits HashDataType {
     }
 }
 
+#! Thinking configuration for controlling reasoning cost and latency
+public class GeminiThinkingConfigDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "thinkingLevel": {
+                "display_name": "Thinking Level",
+                "short_desc": "Reasoning effort for Gemini 3 models",
+                "desc": "Choose reasoning depth for Gemini 3.x. Omit to use the model default. Supported levels "
+                    "depend on the model; `MINIMAL` does not fully disable thinking. Use `thinkingBudget` on 2.5.",
+                "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "LOW",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "MINIMAL", "display_name": "Minimal"},
+                    <AllowedValueInfo>{"value": "LOW", "display_name": "Low"},
+                    <AllowedValueInfo>{"value": "MEDIUM", "display_name": "Medium"},
+                    <AllowedValueInfo>{"value": "HIGH", "display_name": "High"},
+                ),
+            },
+            "thinkingBudget": {
+                "display_name": "Thinking Budget",
+                "short_desc": "Legacy reasoning token budget for Gemini 2.5",
+                "desc": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x; set `thinkingLevel` "
+                    "instead. Numeric budgets have no exact thinking-level equivalent.",
+                "type": AbstractDataProviderTypeMap."*softint",
+                "example_value": 1024,
+            },
+            "includeThoughts": {
+                "display_name": "Include Thoughts",
+                "short_desc": "Include reasoning summaries in the response",
+                "desc": "Set `True` to include thought summaries for inspecting the model's reasoning.",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type, "GeminiThinkingConfigDataType") {
+        addQoreFields(Fields);
+    }
+}
+
+public const GeminiThinkingConfigType = new GeminiThinkingConfigDataType();
+
 #! Generation configuration data type
 public class GeminiGenerationConfigDataType inherits HashDataType {
     public {
         const Fields = {
+            "thinkingConfig": {
+                "display_name": "Thinking Config",
+                "short_desc": "Control reasoning depth and cost",
+                "desc": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5.",
+                "type": new GeminiThinkingConfigDataType(AutoHashOrNothingType),
+            },
             "temperature": {
                 "display_name": "Temperature",
                 "short_desc": "Controls randomness in generation",
-                "desc": "Controls the randomness of the output. Values range from `0.0` to `2.0`. Higher values "
-                    "produce more random output",
+                "desc": "Ignored on Gemini 3.x. For older models, controls the randomness of the output. "
+                    "Values range from `0.0` to `2.0`. Higher values produce more random output",
                 "type": AbstractDataProviderTypeMap."*float",
             },
             "topP": {
                 "display_name": "Top P",
                 "short_desc": "Nucleus sampling parameter",
-                "desc": "The maximum cumulative probability of tokens to consider when sampling. Used for nucleus "
-                    "sampling",
+                "desc": "Ignored on Gemini 3.x. For older models, the maximum cumulative probability of tokens "
+                    "to consider when sampling. Used for nucleus sampling",
                 "type": AbstractDataProviderTypeMap."*float",
             },
             "topK": {
                 "display_name": "Top K",
                 "short_desc": "Top-K sampling parameter",
-                "desc": "The maximum number of tokens to consider when sampling",
+                "desc": "Ignored on Gemini 3.x. For older models, the maximum number of tokens to consider when sampling",
                 "type": AbstractDataProviderTypeMap."*softint",
             },
             "maxOutputTokens": {
@@ -500,6 +552,12 @@ public class GeminiGenerateContentResponseDataType inherits HashDataType {
 public class GeminiSimpleChatRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "thinkingConfig": {
+                "display_name": "Thinking Config",
+                "short_desc": "Control reasoning depth and cost",
+                "desc": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5.",
+                "type": new GeminiThinkingConfigDataType(AutoHashOrNothingType),
+            },
             "model": {
                 "display_name": "Model",
                 "short_desc": "The model to use for generation",
@@ -529,19 +587,21 @@ public class GeminiSimpleChatRequestDataType inherits HashDataType {
             "temperature": {
                 "display_name": "Temperature",
                 "short_desc": "Controls randomness in generation",
-                "desc": "Controls the randomness of the output. Values range from `0.0` to `2.0`",
+                "desc": "Ignored on Gemini 3.x. For older models, controls the randomness of the output. "
+                    "Values range from `0.0` to `2.0`",
                 "type": AbstractDataProviderTypeMap."*float",
             },
             "topP": {
                 "display_name": "Top P",
                 "short_desc": "Nucleus sampling parameter",
-                "desc": "The maximum cumulative probability of tokens to consider when sampling",
+                "desc": "Ignored on Gemini 3.x. For older models, the maximum cumulative probability of tokens "
+                    "to consider when sampling",
                 "type": AbstractDataProviderTypeMap."*float",
             },
             "topK": {
                 "display_name": "Top K",
                 "short_desc": "Top-K sampling parameter",
-                "desc": "The maximum number of tokens to consider when sampling",
+                "desc": "Ignored on Gemini 3.x. For older models, the maximum number of tokens to consider when sampling",
                 "type": AbstractDataProviderTypeMap."*softint",
             },
             "maxOutputTokens": {

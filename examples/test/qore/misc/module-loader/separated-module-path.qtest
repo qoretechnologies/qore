@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+%requires ../../../../../qlib/FsUtil.qm
+%exec-class SeparatedModulePathTest
+
+#! Directory-module metadata must identify the file found in the module search path
+class SeparatedModulePathTest inherits QUnit::Test {
+    constructor() : Test("Separated module paths", "1.0", \ARGV) {
+        addTestCase("relative search paths with relative and absolute importers", \relativePaths());
+        addTestCase("absolute search paths with relative and absolute importers", \absolutePaths());
+        addTestCase("explicit relative directory import", \explicitPath());
+        addTestCase("missing directory-module entry point", \missingMain());
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private checkPath(bool absolute_search, bool absolute_importer, bool append, bool explicit_path = False) {
+        TmpDir tmp("qore-separated-path-");
+        string cwd = getcwd2();
+        chdir(tmp.path);
+        on_exit chdir(cwd);
+        mkdir("scripts", 0755);
+        mkdir("module files", 0755);
+        # Every variant has a distinct feature, so the process-wide module cache cannot mask a load.
+        string name = sprintf("SeparatedPath%d%d%d%d", absolute_search, absolute_importer, append,
+            explicit_path);
+        string dir = tmp.path + "/module files/" + name;
+        mkdir(dir, 0755);
+        write(dir + "/" + name + ".qm", "%modern\nmodule " + name + " {\n"
+            "version = \"1.0\"; desc = \"directory path regression\";\n"
+            "author = \"Qore Technologies, s.r.o.\"; license = \"MIT\";\n}\n");
+        write(dir + "/resource.qc", "public namespace " + name + " {\n"
+            "public class ResourcePath { static string get() { return get_script_dir(); } }\n}\n");
+        write(dir + "/resource.txt", "resource belonging to " + name);
+
+        string script = (absolute_importer ? tmp.path + "/" : "") + "scripts/import.qr";
+        string search = absolute_search ? tmp.path + "/module files" : "./scripts/../module files";
+        string source = "%modern\n";
+        if (explicit_path) {
+            source += "%requires ../module files/" + name + "\n";
+        } else {
+            source += (append ? "%append-module-path \"" : "%prepend-module-path \"") + search
+                + "\"\n%requires " + name + "\n";
+        }
+        source += "hash<auto> sub metadata() { return get_module_hash()." + name + "; }\n"
+            "string sub resource_dir() { return " + name + "::ResourcePath::get(); }\n";
+        write(script, source);
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.setScriptPath(script);
+        p.parse(source, script);
+        hash<auto> info = p.callFunction("metadata");
+        assertEq(dir + "/" + name + ".qm", info.filename, "metadata identifies the loaded entry point");
+        assertEq(dir, info.path, "metadata identifies the loaded module directory");
+        assertTrue(is_file(info.filename), "the reported module filename exists");
+        assertEq(dir + "/", p.callFunction("resource_dir"), "separated code resolves sibling resources");
+        File resource();
+        resource.open2(dirname(info.filename) + "/resource.txt", O_RDONLY);
+        assertEq("resource belonging to " + name, resource.read(-1), "metadata locates the actual resource");
+    }
+
+    private relativePaths() {
+        foreach bool absolute_importer in (False, True) {
+            foreach bool append in (False, True) {
+                checkPath(False, absolute_importer, append);
+            }
+        }
+    }
+
+    private absolutePaths() {
+        foreach bool absolute_importer in (False, True) {
+            foreach bool append in (False, True) {
+                checkPath(True, absolute_importer, append);
+            }
+        }
+    }
+
+    private explicitPath() {
+        checkPath(False, False, False, True);
+    }
+
+    private missingMain() {
+        TmpDir tmp("qore-separated-missing-");
+        mkdir(tmp.path + "/SeparatedPathMissing", 0755);
+        write(tmp.path + "/SeparatedPathMissing/other.qc", "const Unexpected = 1;\n");
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse("%modern\n%prepend-module-path \"" + tmp.path + "\"\n", "missing-main");
+        assertThrows("LOAD-MODULE-ERROR", \p.loadModule(), ("SeparatedPathMissing",));
+    }
+}

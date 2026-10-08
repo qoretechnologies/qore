@@ -70,7 +70,7 @@ public class VertexAiGenerateContentDataProvider inherits VertexAiDataProviderCo
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string model = remove req.model;
         string path = getVertexPath("google", model, "generateContent");
-        return rest.restPost(path, req, getAuthHeader()).body;
+        return rest.restPost(path, GeminiBodyShape::normalizeGenerationConfig(model, req), getAuthHeader()).body;
     }
 }
 }

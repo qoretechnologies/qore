@@ -43,7 +43,7 @@
 %requires QoreRagTypes
 
 module OpenAiRestClient {
-    version = "1.1";
+    version = "1.2";
     desc = "user module for calling OpenAi REST API services";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -120,6 +120,9 @@ stream.close();
     @endcode
 
     @section OpenAiRestClientRelnotes Release Notes
+
+    @subsection OpenAiRestClientv1_2 OpenAiRestClient v1.2
+    - Preserve reasoning-only stream frames for compatible providers such as DeepSeek.
 
     @subsection OpenAiRestClientv1_1 OpenAiRestClient v1.1
 
@@ -618,8 +621,16 @@ class OpenAiStrictOutputSchema {
         return projection;
     }
 
-    string restoreJson(string content) {
-        if (!projection) {
+    #! Restores compiled optional fields and optionally validates an unchanged wire schema
+    /** @param content complete JSON response
+        @param validate validate even when no optional-field projection was necessary
+        @return JSON satisfying the original schema
+        @throw OPENAI-STRUCTURED-OUTPUT-ERROR schema validation failed
+        @throw JSON-PARSE-ERROR invalid JSON
+        @note Providers without server schema enforcement must request local validation.
+    */
+    string restoreJson(string content, bool validate = False) {
+        if (!projection && !validate) {
             return content;
         }
         auto value = parse_json(content);
@@ -1307,6 +1318,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             # with the end of the response, not with the finish reason.
             if (delta.val() || has_tool_call_delta
                     || parsed.choices[0].delta.content.typeCode() == NT_LIST
+                    || parsed.choices[0].delta.reasoning_content.typeCode() == NT_STRING
                     || parsed.choices[0].finish_reason.val()
                     || parsed.usage.typeCode() == NT_HASH) {
                 callback(<QoreLlmUtils::ChatStreamEvent>{
@@ -1331,6 +1343,10 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                     "structured response stream ended without a terminal frame";
             }
             hash<auto> response = restoreStrictResponse({
+                "id": structured_state.id, "model": structured_state.model,
+                "created": terminal.created ?? structured_state.created,
+                "usage": stream_usage ?? structured_state.usage ?? {},
+                "service_tier": served_service_tier,
                 "choices": ({
                     "finish_reason": terminal.choices[0].finish_reason,
                     "message": {"content": structured_state.content,
@@ -1806,7 +1822,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     }
 
     #! Compiles strict schemas and keeps restoration metadata off the wire
-    private static hash<auto> prepareStrictRequest(hash<auto> body) {
+    private hash<auto> prepareStrictRequest(hash<auto> body) {
         hash<auto!> rv = {"tools": {}, "project": False};
         if (body.response_format.type == "json_schema"
                 && body.response_format.json_schema.strict == True) {
@@ -1839,50 +1855,64 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         if (!schema_context.project || response.choices.typeCode() != NT_LIST) {
             return response;
         }
-        list<auto> choices = ();
-        foreach hash<auto> choice in (response.choices) {
-            # Refusals and truncated JSON retain the provider's failure shape.
-            if ((choice.finish_reason == "stop" || choice.finish_reason == "tool_calls")
-                    && !choice.message.refusal.val()) {
-                if (schema_context.response_schema && choice.message.content.val()) {
-                    string restored = schema_context.response_schema.restoreJson(
-                        openAiContentText(choice.message.content) ?? "");
-                    if (choice.message.content.typeCode() == NT_LIST) {
-                        # Keep native reasoning for replay while projecting the
-                        # complete visible JSON, even when text spans blocks.
-                        list<auto> parts = ();
-                        bool wrote_text = False;
-                        foreach auto part in (choice.message.content) {
-                            if (part.typeCode() == NT_HASH && part.type == "text") {
-                                if (wrote_text) {
-                                    continue;
+        try {
+            list<auto> choices = ();
+            foreach hash<auto> choice in (response.choices) {
+                # Refusals and truncated JSON retain the provider's failure shape.
+                if ((choice.finish_reason == "stop" || choice.finish_reason == "tool_calls")
+                        && !choice.message.refusal.val()) {
+                    if (schema_context.response_schema
+                            && (choice.message.content.val() || schema_context.validate == True)) {
+                        string restored = schema_context.response_schema.restoreJson(
+                            openAiContentText(choice.message.content) ?? "", schema_context.validate ?? False);
+                        if (choice.message.content.typeCode() == NT_LIST) {
+                            # Keep native reasoning for replay while projecting the
+                            # complete visible JSON, even when text spans blocks.
+                            list<auto> parts = ();
+                            bool wrote_text = False;
+                            foreach auto part in (choice.message.content) {
+                                if (part.typeCode() == NT_HASH && part.type == "text") {
+                                    if (wrote_text) {
+                                        continue;
+                                    }
+                                    part.text = restored;
+                                    wrote_text = True;
                                 }
-                                part.text = restored;
-                                wrote_text = True;
+                                push parts, part;
                             }
-                            push parts, part;
+                            choice.message.content = parts;
+                        } else {
+                            choice.message.content = restored;
                         }
-                        choice.message.content = parts;
-                    } else {
-                        choice.message.content = restored;
+                    }
+                    if (choice.message.tool_calls.typeCode() == NT_LIST) {
+                        list<auto> calls = ();
+                        foreach hash<auto> call in (choice.message.tool_calls) {
+                            if (schema_context.tools{call.function.name}) {
+                                call.function.arguments = schema_context.tools{call.function.name}
+                                    .restoreJson(call.function.arguments);
+                            }
+                            calls += call;
+                        }
+                        choice.message.tool_calls = calls;
                     }
                 }
-                if (choice.message.tool_calls.typeCode() == NT_LIST) {
-                    list<auto> calls = ();
-                    foreach hash<auto> call in (choice.message.tool_calls) {
-                        if (schema_context.tools{call.function.name}) {
-                            call.function.arguments = schema_context.tools{call.function.name}
-                                .restoreJson(call.function.arguments);
-                        }
-                        calls += call;
-                    }
-                    choice.message.tool_calls = calls;
-                }
+                choices += choice;
             }
-            choices += choice;
+            response.choices = choices;
+            return response;
+        } catch (hash<ExceptionInfo> ex) {
+            if (!inlist(ex.err, ("OPENAI-STRUCTURED-OUTPUT-ERROR", "JSON-PARSE-ERROR"))) {
+                rethrow;
+            }
+            # A paid response rejected locally still has billable usage. Carry
+            # only accounting metadata, never the rejected content or prompt.
+            throw "OPENAI-STRUCTURED-OUTPUT-ERROR", "structured output failed local schema validation", {
+                "_qore_llm_response": {"id": response.id, "model": response.model,
+                    "created": response.created, "usage": response.usage ?? {},
+                    "service_tier": response.service_tier},
+            };
         }
-        response.choices = choices;
-        return response;
     }
 
     #! Preserves reasoning controls and avoids unsupported sampling defaults

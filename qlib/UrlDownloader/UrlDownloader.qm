@@ -299,17 +299,22 @@ public string sub get_download_error_code(hash<ExceptionInfo> ex) {
     if (err == "THREAD-CANCELLED" || err =~ /-CANCELLED$/) {
         return "DOWNLOAD-CANCELLED";
     }
-    if (err =~ /TIMEOUT/ || ex.desc =~ /timed? ?out/i) {
+    if (err =~ /TIMEOUT/) {
         return "DOWNLOAD-TIMEOUT";
     }
-    if (err =~ /SSL|TLS|CERT/ || ex.desc =~ /certificate|SSL|TLS handshake/i) {
-        return "DOWNLOAD-TLS-ERROR";
-    }
+    # file system and location errors are classified by their code alone, before the description is examined, as
+    # their descriptions contain user-supplied paths and locations, which can contain any text
     if (err =~ /^(FILE|DIR)-/) {
         return "DOWNLOAD-IO-ERROR";
     }
     if (err == "LOCATION-ERROR") {
         return "DOWNLOAD-URL-ERROR";
+    }
+    if (ex.desc =~ /timed? ?out/i) {
+        return "DOWNLOAD-TIMEOUT";
+    }
+    if (err =~ /SSL|TLS|CERT/ || ex.desc =~ /certificate|SSL|TLS handshake/i) {
+        return "DOWNLOAD-TLS-ERROR";
     }
     if (err =~ /LOGIN|AUTH/) {
         return "DOWNLOAD-AUTH-ERROR";
