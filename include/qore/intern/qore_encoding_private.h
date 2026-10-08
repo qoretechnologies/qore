@@ -80,6 +80,11 @@ struct qore_encoding_private {
     */
     bool needs_boundary_check = false;
 
+    //! true if iconv decodes the "-" that ends a UTF-7 base64 run as a character at the end of its input
+    /** (Apple's libiconv: "+AOk-" gives "é-"); see IconvHelper::iconvUtf7()
+    */
+    bool utf7_final_dash_literal = false;
+
     DLLLOCAL qore_encoding_private(const char* code, const char* desc = nullptr, unsigned char minwidth = 1,
             unsigned char maxwidth = 1, mbcs_length_t flength = nullptr, mbcs_end_t fend = nullptr,
             mbcs_pos_t fpos = nullptr, mbcs_charlen_t fcharlen = nullptr, mbcs_get_unicode_t get_unicode = nullptr,

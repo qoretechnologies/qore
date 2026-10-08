@@ -4287,7 +4287,9 @@ while (*binary chunk = input.read(65536)) {
       decoded (ex: \c "é" converted to UTF-7 gave \c "+AO" instead of \c "+AOk-"); this affected
       @ref Qore::convert_encoding() "convert_encoding()", every other string conversion, and
       @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" and
-      @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream"
+      @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream"; also, with the system iconv on macOS,
+      UTF-7 data that ends with an encoded character (ex: \c "+AOk-") is no longer decoded with an extra \c "-"
+      character at the end
 
     - Fixed strings in multi-byte character encodings such as \c "EUC-JP", \c "SHIFT_JIS", \c "CP932",
       \c "GB18030", \c "GBK", \c "WINDOWS-936", \c "BIG5", \c "EUC-KR" and \c "CP949" being handled one byte per

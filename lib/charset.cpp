@@ -1469,6 +1469,15 @@ void qore_encoding_private::probe() {
         return;
     }
 
+    // UTF-7 (found by its encoding of "é"): Apple's libiconv decodes the "-" that ends a base64 run as a "-" character
+    // when it is the last byte of the input of a conversion; conversions from the encoding then give it on its own
+    {
+        std::string enc, dec;
+        if (to.convert("\xc3\xa9", enc) && enc == "+AOk-" && from.convert(enc, dec) && dec == "\xc3\xa9-") {
+            utf7_final_dash_literal = true;
+        }
+    }
+
     // converts UTF-8 text to the encoding; returns false if it cannot be represented in the encoding, including when
     // iconv substitutes a character without reporting it, as Apple's libiconv does
     auto convert = [&to, &from](const std::string& utf8, std::string& out) -> bool {

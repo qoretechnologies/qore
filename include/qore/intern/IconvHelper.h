@@ -51,7 +51,8 @@ public:
    */
    DLLLOCAL IconvHelper(const QoreEncoding *to, const QoreEncoding *from, ExceptionSink *xsink,
          bool validate_utf8 = false) : to(to), from(from),
-         validateUtf8(from == QCS_UTF8 && (validate_utf8 || !rejectsMalformedUtf8())) {
+         validateUtf8(from == QCS_UTF8 && (validate_utf8 || !rejectsMalformedUtf8())),
+         splitFinalDash(qore_encoding_private::get(*from)->utf7_final_dash_literal) {
 #ifdef NEED_ICONV_TRANSLIT
       QoreString to_code(getIconvTargetCode(to));
       to_code.concat("//TRANSLIT");
@@ -90,6 +91,9 @@ public:
       if (c == (iconv_t)-1) {
          errno = EINVAL;
          return (size_t)-1;
+      }
+      if (splitFinalDash) {
+         return iconvUtf7(inbuf, inavail, outbuf, outavail);
       }
       if (!validateUtf8 || !inbuf || !*inbuf) {
          return iconv_adapter(::iconv, c, inbuf, inavail, outbuf, outavail);
@@ -343,11 +347,91 @@ private:
       return (*iconv_f) (handle, const_cast<T>(inbuf), inavail, outbuf, outavail);
    }
 
+   //! the state of UTF-7 input (RFC 2152) after the bytes converted so far
+   enum Utf7State : unsigned char {
+      //! directly encoded characters
+      Utf7Direct,
+      //! after the "+" that starts a modified base64 run (or "+-", which encodes "+")
+      Utf7Plus,
+      //! in a modified base64 run
+      Utf7Base64,
+   };
+
+   //! returns true if the byte is a character of modified base64 in UTF-7
+   DLLLOCAL static bool isUtf7Base64(unsigned char ch) {
+      return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '+'
+         || ch == '/';
+   }
+
+   //! returns the UTF-7 state after the given bytes
+   DLLLOCAL static Utf7State advanceUtf7(Utf7State state, const char* p, size_t len) {
+      for (size_t i = 0; i < len; ++i) {
+         unsigned char ch = static_cast<unsigned char>(p[i]);
+         switch (state) {
+            case Utf7Direct:
+               if (ch == '+') {
+                  state = Utf7Plus;
+               }
+               break;
+            case Utf7Plus:
+               // "+-" is "+"; any other character that is not base64 ends the (empty) run
+               state = isUtf7Base64(ch) ? Utf7Base64 : Utf7Direct;
+               break;
+            case Utf7Base64:
+               if (!isUtf7Base64(ch)) {
+                  // a "-" that ends a run is absorbed; any other character is a direct character
+                  state = Utf7Direct;
+               }
+               break;
+         }
+      }
+      return state;
+   }
+
+   //! converts UTF-7 input with an iconv that outputs a "-" ending a base64 run at the end of its input
+   /** Apple's libiconv decodes the "-" that ends a modified base64 run (RFC 2152), which is part of the encoding and
+       not a character, as a "-" character when it is the last byte of the input given to iconv(), and absorbs it
+       otherwise; for example, it decodes "+AOk-" as "é-" but "+AOk-b" as "éb".  Such a "-" is therefore given to
+       iconv() on its own, which it decodes correctly.  The encodings that need this are found by
+       qore_encoding_private::probe().
+   */
+   DLLLOCAL size_t iconvUtf7(char **inbuf, size_t *inavail, char **outbuf, size_t *outavail) {
+      if (!inbuf || !*inbuf) {
+         // a reset or the end of the output returns to the initial state
+         utf7State = Utf7Direct;
+         return iconv_adapter(::iconv, c, inbuf, inavail, outbuf, outavail);
+      }
+      const char* start = *inbuf;
+      const size_t total = *inavail;
+      size_t rc;
+      if (total > 1 && start[total - 1] == '-' && advanceUtf7(utf7State, start, total - 1) == Utf7Base64) {
+         size_t head = total - 1;
+         rc = iconv_adapter(::iconv, c, inbuf, &head, outbuf, outavail);
+         *inavail = head + 1;
+         if (rc != static_cast<size_t>(-1)) {
+            assert(!head);
+            size_t dash = 1;
+            size_t rc2 = iconv_adapter(::iconv, c, inbuf, &dash, outbuf, outavail);
+            *inavail = dash;
+            rc = (rc2 == static_cast<size_t>(-1)) ? rc2 : rc + rc2;
+         }
+      } else {
+         rc = iconv_adapter(::iconv, c, inbuf, inavail, outbuf, outavail);
+      }
+      // errno is not changed by advanceUtf7()
+      utf7State = advanceUtf7(utf7State, start, *inbuf - start);
+      return rc;
+   }
+
 private:
    const QoreEncoding *to;
    const QoreEncoding *from;
    //! true if UTF-8 input is validated here because the platform's iconv accepts malformed UTF-8
    bool validateUtf8;
+   //! true if a "-" ending a UTF-7 base64 run at the end of the input is converted on its own; see iconvUtf7()
+   bool splitFinalDash;
+   //! the UTF-7 state after the input converted so far, if splitFinalDash is set
+   Utf7State utf7State = Utf7Direct;
    iconv_t c;
 };
 
