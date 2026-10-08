@@ -5362,3 +5362,99 @@ Investigate whether immutable checked-entry facts can remove redundant work,
 and whether compiler-proven receiver/native-body facts permit narrower guarded
 entrypoints. Keep mutable Program/body/debugger/receiver guards, stack checks
 and concurrent frame-reader semantics; do not simply omit observable frames.
+
+
+## Native method frame wrapper inlining (2026-10-08)
+
+This runtime-only change adds explicit constructor/destructor inlining hints to
+the native method diagnostic-frame wrapper, matching existing callback wrappers.
+It retains the same frame publication, observer handshake, variable-stack markers,
+RuntimeConfig save/restore, parse policy, stack guards and fallback checks.
+Baseline is clean `c84d9fc502e8d8417317581b7874c0f3d99fb2ad`; candidate is that
+revision plus the C++ diff in
+[the full evidence](results-method-frame-inline-macos-arm64.json).
+Measured libraries are identified by hashes, not relabelled as the later commit.
+
+Apple M4 Pro, macOS arm64, release single-compilation-unit build, Temurin 25.0.2,
+JMH 1.37. Each run uses five randomized forks, three warmups, five 500 ms sample
+windows and three startup observations. Values are median fork means in
+ns/element for the whole kernel, not isolated call latency. All 950 windows ran
+without simultaneous builds, tests, disassembly or profiling.
+`--reuse-aot-for-baseline` runs an identical AOT executable on both libraries
+within each pair; this is appropriate because the compiler did not change.
+
+Count 1024, seed 810488, `run-h6ey3mfh` (600 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|optional_method_call|20.727|19.806|-4.44%|no|1.658|11.94x
+|polymorphic_call|55.318|54.541|-1.41%|yes|2.517|21.67x
+|monomorphic_call|7.485|7.255|-3.08%|yes|1.664|4.36x
+|method_call|2.670|2.638|-1.20%|yes|0.878|3.00x
+|indirect_wide|8.247|8.288|+0.49%|yes|1.670|4.96x
+|arithmetic|2.378|2.366|-0.49%|yes|0.877|2.70x
+|direct_call|2.379|2.384|+0.24%|yes|0.876|2.72x
+|dispatch_control|2.561|2.553|-0.31%|yes|0.939|2.72x
+
+Independent count-4096 replication, seed 810489, `run-_5hbiv36` (200 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|optional_method_call|19.256|18.406|-4.41%|no
+|polymorphic_call|53.605|52.704|-1.68%|yes
+|monomorphic_call|5.984|5.967|-0.27%|yes
+|arithmetic|1.315|1.320|+0.42%|yes
+
+Nullable method calls improve **4.44% and 4.41%**, with non-overlapping fork
+ranges at both counts. Other call and arithmetic/control movements overlap:
+no established improvement or regression is claimed for them. The nullable
+kernel remains about **11.94x Java** in the count-1024 comparison; this is not
+Java parity or a general IR/AOT speedup.
+
+Negative control, count 1024, seed 810490, `run-nslvfd0x` (150 windows):
+`QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` is set at both compilation and execution
+for both libraries. This executable differs from the enabled runs but is identical
+within its own before/after pair.
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|optional_method_call|140.109|139.522|-0.42%|yes
+|polymorphic_call|152.329|150.539|-1.18%|yes
+|arithmetic|2.388|2.366|-0.92%|yes
+
+All disabled-entry movements overlap. Nullable movement is only -0.42%, supporting
+attribution of the repeated enabled-path gain to native frame-wrapper inlining.
+Startup medians before/after are 30.261/30.202 ms at 1024, 28.954/28.434 ms at 4096,
+and 31.544/30.585 ms for the disabled control; all paired ranges overlap.
+Java startup is 23.423 ms in the first run. The three candidate AOT compilations
+took 355.193, 344.668 and 347.825 ms, respectively; no baseline compile timing
+exists because the artifacts are reused. These are descriptive observations,
+not startup or compilation speedup claims.
+
+Assembly of `qore_rt_try_method_int_unary_v1` changes from three static wrapper
+constructor/destructor call sites to zero. The helper keeps its 0x140-byte stack
+reservation; instruction/directive rows including encoded `.long` instructions
+increase from 441 to 613 as wrapper code moves into the helper. These are static
+counts, not dynamic work. Runtime `__text` grows 2,564 bytes, from 13,966,516 to
+13,969,080 (+0.0184%); executable text is identical within each benchmark pair.
+Benefits and code generation on non-SCU builds or other targets are not established.
+
+Release and debug each pass 28 files: 51 QUnit cases/3,844 assertions in 22 files
+plus six standalones. The method continuation test includes 546 assertions,
+ownership cleanup, normal/invoke, O0/O3, stripped sources, disabled/parallel
+controls, concurrent frame readers and debugger coverage. Six benchmark modes
+each pass 330 independent reference checks; a saved pre-change AOT executable
+also passes all 330 on the candidate. All 11 harness tests pass.
+
+A separate five-second, 1 ms sampling profile of the count-4096 nullable kernel
+has 3,804 main-thread samples (idle signal thread excluded). Leading self counts:
+native method helper 1,591; caller 496; local marker push 346; QoreValue type
+access 258; closure marker push 181; frame unpublish 171; parse-policy override
+157; stack check 93. The helper now includes formerly outlined frame code, so
+its samples must not all be labelled admission cost. Sampling attributes remaining
+work; it does not measure the percentage gain.
+
+Next investigate deferred empty variable markers/private context for proven pure
+native method bodies, while preserving published diagnostic frames and live-body
+overflow checks. Existing callback descriptor v3 is a stable native ABI: do not
+change its layout to share machinery. Method v2 already has a pure-body proof
+and explicit stack guard, but compatibility and error materialization must be
+audited before reusing that contract. Keep object/class context and mutable
+dispatch/Program/debugger guards unless separately proven unnecessary.

@@ -17083,12 +17083,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_consume_args(
 // the publishing helper, whose destructor waits for stack readers before return.
 class QoreNativeMethodStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
 public:
-    QoreNativeMethodStackLocation(RuntimeConfig& rc, const std::string& name,
+    __attribute__((always_inline)) QoreNativeMethodStackLocation(RuntimeConfig& rc, const std::string& name,
             const UserVariantBase* uvb, QoreProgram* pgm, ExceptionSink* xsink)
         : name(name), statements(uvb->getStatementBlock()), pgm(pgm),
           helper(rc, this, loc, uvb->getUserSignature()->getParseLocation(),
               uvb->getParseOptions(pgm->getParseOptions()), pgm, xsink) {
     }
+    // Expose the publishing helper's save/restore to the native dispatch
+    // caller's register allocator, as for explicit callback frames. Frame
+    // publication and reader synchronization remain unchanged.
+    __attribute__((always_inline)) ~QoreNativeMethodStackLocation() override = default;
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
     bool isAOTFrame() const override { return true; }
     const std::string& getCallName() const override { return name; }

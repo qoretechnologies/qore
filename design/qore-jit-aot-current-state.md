@@ -404,6 +404,16 @@ particular, an integer annotation never licenses converting a subclass's
 check after merging with the non-throwing helper. Runtime-backed receiver locals
 and generic-call invalidation remain unchanged.
 
+The native method diagnostic-frame constructor/destructor use the same explicit
+inlining hints as callback frame wrappers. This exposes context save/restore to
+the dispatch caller's register allocator without changing fields, publication
+order, variable markers, guards or reader synchronization. It is a runtime-only
+optimization; identical AOT artifacts can be compared across compatible saved
+and new libraries. Measurements use the normal single-compilation-unit build;
+code generation and benefits on other builds are not guaranteed. See
+`results-method-frame-inline-macos-arm64.json` for repeated nullable-call gains,
+overlapping controls, runtime code growth and native-entry-disabled comparisons.
+
 Unresolved name-dispatched calls can also use this continuation after ordinary
 dispatch has populated the full-key PIC. This includes nullable-class and dynamic
 receivers; it does not resolve an AST/IR target or narrow its unknown return type.

@@ -195,6 +195,16 @@ the native entry with `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1`, not just its
 admission cache: both prepared and ordinary native admission use the explicit
 context helper.
 
+The native method diagnostic-frame wrapper also uses explicit inlining hints,
+matching the callback wrappers. No frame or guard is omitted. This runtime-only
+change can use `--reuse-aot-for-baseline`; the same executable must run on both
+libraries. The [frame-wrapper follow-up](RESULTS.md#native-method-frame-wrapper-inlining-2026-10-08)
+records repeated nullable-call gains, overlapping control movements and code
+growth in the single-compilation-unit macOS build. Its disabled-entry control
+sets `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` at both compilation and execution,
+so it uses a different executable from the enabled runs, but one identical
+executable within each before/after pair.
+
 `QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1` disables the dynamic native `int(int)`
 closure companion at compilation and execution. Use it in both phases for an
 attribution control: enabling compilation retains a normal native body to publish
