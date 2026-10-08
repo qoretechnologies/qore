@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+class NativeDebugBase {
+    int next(int value) { return value + 17; }
+}
+class NativeDebugDerived inherits NativeDebugBase {
+    int next(int value) {
+        return value + 19; # METHOD_ENTRY
+    }
+}
+int sub nativeDebugCall(NativeDebugBase input, int value) {
+    NativeDebugBase receiver = input;
+    return receiver.next(value);
+}
+class NativeMethodRecorder inherits DebugProgram {
+    public { int method_entries = 0; int method_exits = 0; }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        *hash<auto> loc = pgm.getStatementIdInfo(sid);
+        # Keep this equal to the METHOD_ENTRY source line above. Pure scalar
+        # debug IR has function events but need not retain a statement temp mark.
+        if (loc.start_line == 12) { ++method_entries; }
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+        *hash<auto> loc = pgm.getStatementIdInfo(sid);
+        if (loc.start_line == 12) { ++method_exits; }
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+NativeDebugDerived object();
+for (int i = 0; i < 32; ++i) {
+    if (nativeDebugCall(object, i) != i + 19) { throw "NATIVE-DEBUG-TEST", "warmup"; }
+}
+NativeMethodRecorder recorder();
+ProgramControl pc = ProgramControl::getProgram();
+recorder.addProgram(pc);
+for (int i = 0; i < 16; ++i) {
+    if (nativeDebugCall(object, i) != i + 19) { throw "NATIVE-DEBUG-TEST", "debug call"; }
+}
+recorder.removeProgram(pc);
+if (recorder.method_entries != 16 || recorder.method_exits != 16) {
+    throw "NATIVE-DEBUG-TEST", sprintf("method entry/exit events: %d/%d",
+        recorder.method_entries, recorder.method_exits);
+}
+for (int i = 0; i < 16; ++i) {
+    if (nativeDebugCall(object, i) != i + 19) { throw "NATIVE-DEBUG-TEST", "restored call"; }
+}
+printf("native-method-debugger: ok\n");

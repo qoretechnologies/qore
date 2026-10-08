@@ -888,6 +888,15 @@ void qore_rt_bind_function_call_ref_typed_v3(uint64_t ref_bits,
 //! Acquire a borrowed RuntimeConfig for this native invocation, on this thread only.
 RuntimeConfig* qore_rt_get_fast_runtime_config();
 
+//! Publish an optional pure int(int) method entry in its runtime-owned AOT context.
+//! @param ctx context for the normal body; must already identify normal in its PC metadata
+//! @param normal normal entry identifying this exact compiled body
+//! @param entry context-independent, non-throwing native int(int) body plus context and sink
+//! @note Publication is idempotent and thread-safe; old binaries keep the generic path.
+void qore_rt_bind_method_int_unary_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*));
+
 //! Acquire an optional borrowed live context for generated loop cancellation checks.
 //! @return nullptr after thread-data teardown; only valid within this thread's invocation
 RuntimeConfig* qore_rt_get_loop_runtime_config();

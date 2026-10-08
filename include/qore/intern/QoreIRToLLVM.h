@@ -230,6 +230,9 @@ public:
     }
 
 private:
+    //! Publish a same-body scalar companion from an eligible normal AOT method entry.
+    void emitNativeMethodBinding(llvm::Module& module, llvm::Function* normal);
+
     llvm::LLVMContext& ctx;
 
     // Type cache

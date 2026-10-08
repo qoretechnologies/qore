@@ -3384,3 +3384,119 @@ existing fast-entry contracts and keep actual override returns, Program/debugger
 body/readiness guards, receiver validity, ownership, stack publication/readers
 and cancellation. This work is not implemented by the initializer change;
 the broader performance goal remains active.
+
+## Native scalar polymorphic entries (2026-10-08)
+
+Retained result: the final AOT polymorphic workload improves **26.04%**,
+183.07909 → 135.40062 ns/element, with separated fork ranges. The earlier
+4096-element pilot improves 28.22%; it predates the final idempotent binding
+load and debugger fallback correction and is reported separately. Java parity
+is **not** achieved.
+
+Baseline: `b9040b7e6d10bdde522ae3fceeb39f600e6d928a` on the same macOS arm64
+workstation. Separate before/after artifacts were compiled against preserved
+baseline and candidate runtimes; no AOT executable reuse was used. Raw samples,
+exact source/test diffs, hashes and validation counts are in
+[the sanitized evidence](results-native-method-entry-macos-arm64.json).
+
+### Change and preserved semantics
+
+A pure, non-throwing, context-independent `int(int)` instance method publishes
+its existing typed companion when its normal AOT entry first executes. The
+versioned binding is context-owned and atomically published, checks normal-body
+identity, and keeps hidden native symbols alive without dynamic lookup. An
+already-bound load avoids repeated CAS on generic entry calls. The context
+field is appended; the existing function table and serialized format do not change.
+Old artifacts remain on the fallback.
+
+On a polymorphic-cache hit, the native path avoids TLS parameter binding but
+retains the resolved override's exact signature and integer input checks,
+receiver validity, access/epoch key, live normal-body/readiness/PC-map checks,
+matching caller/object/execution/context Programs, and debugger exclusion.
+Self/argv users, generic/imported/specialized/capturing bodies, changed or optional
+returns and potentially throwing expressions are excluded. Object/class RAII,
+explicit RuntimeConfig frame setup, local/closure markers, parse/source context,
+reader publication/waiting, native stack checks and ordinary boxed return
+ownership remain. The existing bounded scalar proof is shared with function refs.
+
+The audit also found and fixed a pre-existing debugger fallback bug: warmed
+resolved fast-method calls bypassed debugger-aware AST/lazy-debug-IR execution.
+The baseline regression reports zero method entry/exit events after attachment;
+the corrected runtime reports all 16 pairs and restores normal calls after detach.
+
+### Final repeat
+
+1024 elements, five forks, three warmups and five 500 ms measurement windows per
+fork; current/baseline IR and AOT plus fresh Java: 75 jobs / 375 samples.
+All five modes passed 270 independent reference checks before timing. No build,
+test, profile, disassembly or evidence validation overlapped timing.
+
+|!Mode and kernel|!Before ns/element|!After ns/element|!Change|!Before / after fork-mean ranges
+|qore-ir polymorphic_call|407.81036|409.82739|0.49%|404.58180–413.96168 / 400.17125–417.90815
+|qore-aot polymorphic_call|183.07909|135.40062|-26.04%|181.28356–184.86307 / 132.19223–136.26415
+|qore-ir indirect_wide|340.64802|343.14110|0.73%|336.03192–344.91094 / 331.22746–354.64220
+|qore-aot indirect_wide|8.41224|8.21040|-2.40%|8.28679–8.46256 / 7.98045–8.25596
+|qore-ir temporary_hash|672.34192|657.65298|-2.18%|661.66472–682.79488 / 654.48595–671.53243
+|qore-aot temporary_hash|329.89560|304.86293|-7.59%|308.89460–334.00731 / 300.04838–310.88154
+
+IR ranges overlap; no IR speedup or clear regression is claimed. The AOT hash
+ranges also overlap. Wide-callback ranges are separated, but that control also
+improves with the native method entry disabled, so its change is not attributed
+to this optimization. Fork ranges are descriptive, not confidence intervals.
+
+Fresh Java medians are 2.51959 ns/element for polymorphic calls, 1.66986 for wide
+callbacks and 15.38452 for temporary hashes. Current Qore AOT is therefore about
+53.74× Java on the polymorphic workload and 4.92× on wide callbacks. Qore's
+base-class arithmetic case can inline while the two derived targets retain
+native calls; Java prevents inlining all three target bodies. These are complete
+workload comparisons, not equivalent isolated call instructions.
+
+### Pilot and disabled-entry attribution control
+
+The earlier pilot used 4096 elements, five forks, three warmups and five 300 ms
+windows: 30 jobs / 150 samples. Polymorphic time was 179.53007 → 128.85878
+ns/element (−28.22%), with ranges 178.03810–181.89702 vs 127.71571–129.64106.
+Wide callbacks were 7.70401 → 7.17309 (−6.89%); direct calls were
+1.28492 → 1.29217 (+0.56%, overlapping ranges). Only the target improvement
+is attributed, subject to the final repeat and control.
+
+The final control set `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` during compilation
+and execution: 4096 elements, seven forks, three warmups and five 500 ms windows,
+28 jobs / 140 samples.
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Before / after fork-mean ranges
+|polymorphic_call|182.16129|182.64991|+0.27%|179.32106–184.20223 / 181.28181–184.15179
+|indirect_wide|7.47651|7.19906|−3.71%|7.38058–7.49570 / 7.06470–7.26225
+
+The target benefit disappears with overlapping ranges. The unrelated wide
+control still improves, confirming why its change is not counted as a native
+method-entry benefit. Both favorable and unfavorable control medians are retained.
+
+### Validation and next work
+
+Release and debug builds each pass 57 selected files: 39 QUnit wrappers,
+206 cases / 16801 assertions, plus 18 standalone tests. The new wrapper contributes
+three cases / 250 assertions across AST/IR/JIT/tiered with synchronous thresholds,
+stripped AOT -O0/-O3, native EH, forced split codegen, no DWARF, and disable controls.
+Its fixtures cover actual override returns, wrong/missing/excess arguments,
+wide integers, self/private/argv fallback, foreign Programs, concurrent first
+registration, stack readers and warmed debugger attachment/detachment.
+
+Both standalone C++ syntax checks pass (79/76 existing warnings), 11 harness tests
+pass, and older v2/v3 AOT executables retain byte-identical 225/270 reference
+records. Final native disassembly shows a 14-instruction derived scalar entry
+using an integer register, retaining `qore_rt_check_stack`, and returning a native
+integer. The primary binary references the new binding helper; the disabled
+binary does not. Runtime text grows 13873796 → 13878420 bytes (+4624).
+
+All 133 jobs / 665 samples and startup samples were checked for complete unique
+mode/kernel/fork coverage, finite positive values and independently recomputed
+medians. The full 62-item audit records 21 Pass / 41 N/A. This is not a full
+repository, sanitizer/race-detector, Linux, allocation-failure or complete
+split-runtime-build result.
+
+Next: move immutable resolved-method admission facts into the existing PIC entry,
+keeping mutable guards live; then evaluate a typed caller continuation and an
+explicit-RuntimeConfig native method entry. Parameter TLS is only one part of
+the remaining type/access/PIC, boxed-value, context/frame and native stack-entry
+cost. The broader performance goal remains active.

@@ -108,6 +108,46 @@ private members, explicit self, closures, recursion, nested contexts, argv,
 object-argument destruction and exception recovery against source, qmod and
 disabled-cache/context controls. No method entry or serialized ABI changes.
 
+### Native scalar entries on polymorphic cache hits
+
+A whole-body-proven, context-independent, non-throwing `int(int)` instance method
+can publish its existing typed native companion through
+`qore_rt_bind_method_int_unary_v1` when its normal AOT entry first executes.
+The binding checks the normal body's identity against the context's `pc_loc_fn`.
+An append-only context field holds the acquire/release-published entry; repeated
+generic calls use a relaxed already-bound check before attempting publication.
+No `QoreAOTFunc` table stride or serialized symbol-index format changes, and old
+native artifacts have no binding and retain their existing path.
+
+A polymorphic cache hit still validates the resolved override, receiver validity,
+dispatch epoch/access key, exact integer argument and actual `int(int)` signature.
+The native path additionally requires a ready context/PC map, unchanged normal
+body, matching caller/object/execution/context Programs, no debugger and no
+generic receiver. Imported/specialized/capturing bodies, self/argv users, optional
+or changed return contracts and potentially throwing expressions are excluded.
+The bounded whole-body proof is shared with the function-reference adapter;
+an integer annotation alone is not sufficient.
+
+The runtime passes an unboxed integer to the native entry without parameter TLS
+binding, then returns a normally owned boxed integer, including full-width values.
+It retains object/defining-class substitution, explicit `RuntimeConfig` frame
+setup, empty local/closure markers, source/parse-policy state and the stack-reader
+publication handshake. Both runtime and native-entry stack checks remain. The
+bounded scalar body introduces no loop or cancellation omission. This is not yet
+an unboxed caller continuation or a completely TLS-free call convention.
+
+The resolved fast-method fallback also rejects attached debuggers before entering
+native code, allowing `evalTiered()` to use AST or lazy source-stripped debug IR.
+`AOTNativeMethodEntry.qtest` covers registration/exclusions, normal/invoke calls,
+wide ownership, foreign Programs, concurrent first calls, concurrent stack readers
+and debugger attachment after warming the cache. The debugger regression checks
+function entry/exit events; pure scalar debug IR need not retain a separate
+statement temporary marker.
+
+`QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` suppresses binding at compilation and
+native admission at runtime. Compiler comparisons require separate artifacts:
+old runtimes cannot load a new executable referencing the additive helper.
+
 ### Guarded AOT method entries after typed assignment
 
 Exact boxed-local analysis can prove a receiver assigned and non-NOTHING while

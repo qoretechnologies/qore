@@ -85,6 +85,14 @@ the checked assignment and reloads its stored value; it does not remove class
 access or weak-reference checks. Use separate before/after compilation for this
 compiler optimization, not `--reuse-aot-for-baseline`.
 
+`QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` disables the pure scalar method binding
+at compilation and its polymorphic-cache native path at runtime. Eligible
+`int(int)` overrides bypass parameter TLS binding but retain receiver, Program,
+debugger, body-identity, stack and observer guards. Use separate before/after
+compilation: the additive helper is absent from older runtimes. The caller still
+uses boxed arguments/results, so these measurements are not an isolated native
+call instruction or evidence of Java retained-call parity.
+
 ## Workloads and units
 
 Each invocation processes `--count` elements, normally 1024. The reported unit

@@ -390,32 +390,13 @@ static constexpr uint64_t VAL_TRUE           = 0xFFFB000000000003ULL;
 static constexpr int64_t INT48_MIN           = -(1LL << 47);
 static constexpr int64_t INT48_MAX           = (1LL << 47) - 1;
 
-void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
-        const QoreIRInstruction* inst, llvm::Module& module) {
-    if (!aot_mode || std::getenv("QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY")) {
-        return;
-    }
-    auto definition = function_call_ref_definitions.find(inst->result.id);
-    if (definition == function_call_ref_definitions.end()) {
-        return;
-    }
-    const auto* variant = definition->second;
-    const BatchCalleeInfo* info = getBatchCallee(variant);
-    // Exclude context-dependent bodies, specializations, captures, and imported
-    // entries. The normal entry must identify the same body as the typed entry.
-    if (!info || !info->single_variant_function || !info->approach_b_eligible
-            || !info->context_independent_fast_entry || info->preloaded_fast_entry
-            || info->generic_specialized_fast_entry || info->implicit_self_method
-            || !info->capture_locals.empty() || info->num_params > 16
-            || !isFastFunctionCallEligible(variant)) {
-        return;
-    }
+static bool isNonThrowingScalarBody(const BatchCalleeInfo* info, bool& scalar_leaf_body) {
     // The lazy PC registry currently describes normal entries, not adapter
     // symbols. Until adapters have their own registered ranges, only bodies
     // proved to be non-throwing scalar expressions may omit the normal entry.
     // These bounded summaries describe the whole body, not just its return.
     bool nothrow_scalar = false;
-    bool scalar_leaf_body = false;
+    scalar_leaf_body = false;
     if ((info->return_kind == BatchCalleeReturnKind::NativeInt
                 || info->return_kind == BatchCalleeReturnKind::NativeBool)
             && info->int_expression
@@ -508,7 +489,65 @@ void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
             }
         }
     }
-    if (!nothrow_scalar) {
+    return nothrow_scalar;
+}
+
+void QoreIRToLLVM::emitNativeMethodBinding(llvm::Module& module, llvm::Function* normal) {
+    if (!aot_mode || !fast_entry_name.empty() || !current_ir_func
+            || std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")) {
+        return;
+    }
+    const auto* variant = current_ir_func->source_variant;
+    const BatchCalleeInfo* info = getBatchCallee(variant);
+    const auto* method_variant = dynamic_cast<const MethodVariantBase*>(variant);
+    if (!info || !method_variant || !method_variant->isStaticallyFastMethodCallEligible()
+            || !info->approach_b_eligible || !info->implicit_self_method
+            || !info->context_independent_fast_entry || info->preloaded_fast_entry
+            || info->generic_specialized_fast_entry || !info->capture_locals.empty()
+            || info->num_params != 1 || info->return_kind != BatchCalleeReturnKind::NativeInt
+            || getFastEntryParamKind(*info, 0) != BatchCalleeParamKind::NativeInt) {
+        return;
+    }
+    const UserSignature* sig = variant->getUserVariantBase()->getUserSignature();
+    bool scalar_leaf_body;
+    if (sig->getParamTypeInfo(0) != bigIntTypeInfo || sig->getReturnTypeInfo() != bigIntTypeInfo
+            || !isNonThrowingScalarBody(info, scalar_leaf_body)) {
+        return;
+    }
+    llvm::Function* fast = module.getFunction(info->fast_name);
+    if (!fast || fast->getFunctionType() != llvm::FunctionType::get(i64_type,
+            {i64_type, ptr_type, ptr_type}, false)) {
+        return;
+    }
+    // Referencing the companion keeps its native symbol alive without relying
+    // on dynamic lookup of hidden symbols or changing QoreAOTFunc's stride.
+    auto bind = module.getOrInsertFunction("qore_rt_bind_method_int_unary_v1",
+        llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+    builder->CreateCall(bind, {aot_ctx_arg, normal, fast});
+}
+
+void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
+        const QoreIRInstruction* inst, llvm::Module& module) {
+    if (!aot_mode || std::getenv("QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY")) {
+        return;
+    }
+    auto definition = function_call_ref_definitions.find(inst->result.id);
+    if (definition == function_call_ref_definitions.end()) {
+        return;
+    }
+    const auto* variant = definition->second;
+    const BatchCalleeInfo* info = getBatchCallee(variant);
+    // Exclude context-dependent bodies, specializations, captures, and imported
+    // entries. The normal entry must identify the same body as the typed entry.
+    if (!info || !info->single_variant_function || !info->approach_b_eligible
+            || !info->context_independent_fast_entry || info->preloaded_fast_entry
+            || info->generic_specialized_fast_entry || info->implicit_self_method
+            || !info->capture_locals.empty() || info->num_params > 16
+            || !isFastFunctionCallEligible(variant)) {
+        return;
+    }
+    bool scalar_leaf_body = false;
+    if (!isNonThrowingScalarBody(info, scalar_leaf_body)) {
         return;
     }
     const UserSignature* sig = variant->getUserVariantBase()->getUserSignature();
@@ -11127,6 +11166,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     scope_obe_counts.clear();
     if (!func.blocks.empty()) {
         builder->SetInsertPoint(block_map[func.blocks.front().get()]);
+        emitNativeMethodBinding(module, llvm_func);
         emitLocalInstantiation(module);
         preCreateLocalAllocas(module, llvm_func);
 

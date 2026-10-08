@@ -1,0 +1,163 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+class NativeMethodBase {
+    int next(int value) { return value * 3 + 7; }
+}
+class NativeMethodDerived inherits NativeMethodBase {
+    int next(int value) { return value * 5 + 11; }
+}
+class NativeMethodOther inherits NativeMethodBase {
+    int next(int value) { return (value ^ 17) + 19; }
+}
+class NativeMethodThread inherits NativeMethodBase {
+    int next(int value) { return value * 7 + 13; }
+}
+class NativeMethodOptional inherits NativeMethodBase {
+    *int next(int value) { return NOTHING; }
+}
+class NativeMethodString inherits NativeMethodBase {
+    string next(int value) { return "override"; }
+}
+class NativeMethodThrowing inherits NativeMethodBase {
+    int next(int value) { throw "NATIVE-METHOD-ERROR", "override"; }
+}
+class NativeMethodSelf inherits NativeMethodBase {
+    private:internal { int offset = 23; }
+    int next(int value) { return value + offset; }
+    private:internal int privateValue() { return offset; }
+    int verifyContext(NativeMethodBase other) {
+        return nativeMethodCall(other, 2) + privateValue();
+    }
+}
+class NativeMethodArgv inherits NativeMethodBase {
+    int next(int value, ...) { return value + (argv ? argv[0] : 0); }
+}
+class NativeMethodDivide inherits NativeMethodBase {
+    int next(int value) { return 100 / value; }
+}
+
+auto sub nativeMethodCall(NativeMethodBase input, int value) {
+    NativeMethodBase receiver = input;
+    return receiver.next(value);
+}
+auto sub nativeMethodInvoke(NativeMethodBase input, int value) {
+    NativeMethodBase receiver = input;
+    try {
+        return receiver.next(value);
+    } catch (hash<ExceptionInfo> e) {
+        return e.err;
+    }
+}
+auto sub nativeMethodArgs(NativeMethodBase input, auto value) {
+    try {
+        return input.next(value);
+    } catch (hash<ExceptionInfo> e) {
+        return e.err == "RUNTIME-OVERLOAD-ERROR" || e.err == "RUNTIME-TYPE-ERROR"
+            ? "REJECTED" : e.err;
+    }
+}
+auto sub nativeMethodExcess(auto input, int value) {
+    try {
+        return input.next(value, 29);
+    } catch (hash<ExceptionInfo> e) {
+        return e.err;
+    }
+}
+int sub nativeMethodWorkload() {
+    NativeMethodBase base();
+    NativeMethodDerived derived();
+    NativeMethodThread other();
+    int result = 0;
+    for (int i = 0; i < 256; ++i) {
+        NativeMethodBase receiver = i % 3 == 0 ? base : i % 3 == 1 ? derived : other;
+        result += receiver.next(i);
+    }
+    return result;
+}
+
+NativeMethodBase base();
+NativeMethodDerived derived();
+NativeMethodOther other();
+NativeMethodOptional optional();
+NativeMethodString text();
+NativeMethodThrowing throwing();
+NativeMethodSelf self_context();
+NativeMethodArgv argv_context();
+NativeMethodDivide divide();
+for (int round = 0; round < 16; ++round) {
+    if (nativeMethodCall(derived, 2) != 21
+            || nativeMethodInvoke(derived, 2) != 21
+            || nativeMethodCall(other, 2) != 38
+            || nativeMethodInvoke(other, 2) != 38
+            || nativeMethodCall(derived, 1125899906842624) != 5629499534213131
+            || nativeMethodInvoke(derived, -1125899906842624) != -5629499534213109
+            || exists nativeMethodCall(optional, 2)
+            || exists nativeMethodInvoke(optional, 2)
+            || nativeMethodCall(text, 2) != "override"
+            || nativeMethodInvoke(text, 2) != "override"
+            || nativeMethodInvoke(throwing, 2) != "NATIVE-METHOD-ERROR"
+            || nativeMethodCall(self_context, 2) != 25
+            || self_context.verifyContext(derived) != 44
+            || nativeMethodExcess(argv_context, 2) != 31
+            || nativeMethodExcess(derived, 2) != "RUNTIME-OVERLOAD-ERROR"
+            || nativeMethodArgs(derived, "wrong") != "REJECTED"
+            || nativeMethodArgs(derived, NOTHING) != "REJECTED"
+            || nativeMethodInvoke(divide, 0) != "DIVISION-BY-ZERO"
+            || nativeMethodCall(divide, 2) != 50) {
+        throw "NATIVE-METHOD-CONTRACT", sprintf("argument, override, context or ownership mismatch: %y",
+            (nativeMethodCall(derived, 2), nativeMethodInvoke(derived, 2),
+                nativeMethodCall(other, 2), nativeMethodInvoke(other, 2),
+                nativeMethodCall(derived, 1125899906842624),
+                nativeMethodInvoke(derived, -1125899906842624),
+                nativeMethodCall(optional, 2), nativeMethodInvoke(optional, 2),
+                nativeMethodCall(text, 2), nativeMethodInvoke(text, 2),
+                nativeMethodInvoke(throwing, 2), nativeMethodCall(self_context, 2),
+                self_context.verifyContext(derived), nativeMethodExcess(argv_context, 2),
+                nativeMethodExcess(derived, 2), nativeMethodArgs(derived, "wrong"),
+                nativeMethodArgs(derived, NOTHING), nativeMethodInvoke(divide, 0),
+                nativeMethodCall(divide, 2)));
+    }
+}
+# Imported objects and calls from another Program retain the generic context transition.
+Program foreign(PO_NO_INHERIT_USER_CLASSES | PO_NO_CHILD_PO_RESTRICTIONS);
+foreign.importClass("NativeMethodBase");
+foreign.importClass("NativeMethodDerived");
+foreign.setExecMode(EM_IR);
+foreign.parse("%modern\nNativeMethodDerived sub make() { return new NativeMethodDerived(); }\n"
+    "int sub invoke(NativeMethodBase receiver, int value) { return receiver.next(value); }\n",
+    "native-method-foreign");
+NativeMethodBase imported = foreign.callFunction("make");
+for (int i = 0; i < 16; ++i) {
+    if (nativeMethodCall(imported, i) != i * 5 + 11
+            || nativeMethodInvoke(imported, i) != i * 5 + 11
+            || foreign.callFunction("invoke", derived, i) != i * 5 + 11
+            || nativeMethodCall(derived, i) != i * 5 + 11) {
+        throw "NATIVE-METHOD-PROGRAM", "cross-Program call or restoration mismatch";
+    }
+}
+
+# Concurrent first-entry registration uses a fresh process and distinct call site.
+# This stresses publication, not a substitute for a race detector.
+Counter gate(1);
+Counter running(8);
+Queue results();
+for (int i = 0; i < 8; ++i) {
+    background sub () {
+        on_exit running.dec();
+        gate.waitForZero();
+        results.push(nativeMethodWorkload());
+    }();
+}
+gate.dec();
+running.waitForZero();
+int expected = nativeMethodWorkload();
+for (int i = 0; i < 8; ++i) {
+    if (results.get() != expected) {
+        throw "NATIVE-METHOD-CONCURRENCY", "concurrent checksum mismatch";
+    }
+}
+printf("%d\n", expected);
+printf("native-method-entry: ok\n");

@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class NativeMethodEntryTest
+
+class NativeMethodEntryTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("native polymorphic method entries", "1.0", \ARGV) {
+        addTestCase("native entry and guarded fallback contracts", \check());
+        addTestCase("concurrent native method stack readers", \checkReaders());
+        addTestCase("debugger attach invalidates native admission", \checkDebugger());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTNativeMethodEntry.qr";
+        string expected = "165672\nnative-method-entry: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-native-method-entry-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string name in (("Base", "Derived", "Other", "Thread")) {
+                    assertEq(!prefix.startsWith("QORE_DISABLE_"),
+                        regex(ir, "call void @qore_rt_bind_method_int_unary_v1[^\\n]*NativeMethod" + name),
+                        name + " native binding " + prefix + level);
+                }
+                foreach string name in (("Optional", "String", "Throwing", "Self", "Argv", "Divide")) {
+                    assertFalse(regex(ir, "call void @qore_rt_bind_method_int_unary_v1[^\\n]*NativeMethod"
+                        + name), name + " excluded body " + prefix + level);
+                }
+                foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
+                        "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+
+    private checkDebugger() {
+        string source = get_script_dir() + "/AOTNativeMethodDebugger.qr";
+        string expected = "native-method-debugger: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-native-method-debugger-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                "QORE_DUMP_LLVM_IR=1 ");
+            assertRegex("call void @qore_rt_bind_method_int_unary_v1[^\n]*NativeDebugDerived", ir);
+            assertEq(expected, run((executable,)), level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "),
+                "fallback " + level);
+        }
+    }
+
+    private checkReaders() {
+        string source = get_script_dir() + "/AOTNativeMethodFrameReaders.qr";
+        string expected = "native-method-frame-readers: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-native-method-readers-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                assertRegex("call void @qore_rt_bind_method_int_unary_v1[^\n]*NativeReaderB", ir);
+                assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "),
+                    "fallback " + prefix + level);
+            }
+        }
+    }
+}

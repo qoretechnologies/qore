@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+hashdecl NativeMethodFrameReadResult {
+    int seen;
+    list<string> errors;
+}
+
+class NativeReaderA {
+    int next(int value) { return (value + 17) & 65535; }
+}
+class NativeReaderB inherits NativeReaderA {
+    int next(int value) { return (value + 19) & 65535; }
+}
+
+int sub nativeMethodReaderBatch(NativeReaderA first, NativeReaderA second, bool replace) {
+    int value = 0;
+    for (int i = 0; i < 4096; ++i) {
+        NativeReaderA receiver = replace && (i & 1) ? first : second;
+        value = receiver.next(value);
+    }
+    return value;
+}
+
+sub nativeMethodReaderCaller(Counter started, Counter readers, Counter done, Queue failures) {
+    on_exit done.dec();
+    NativeReaderA first();
+    NativeReaderB second();
+    started.dec();
+    bool replace = False;
+    while (readers.getCount()) {
+        int actual = nativeMethodReaderBatch(first, second, replace);
+        if (actual != (replace ? 8192 : 12288)) {
+            failures.push("incorrect callback result");
+            return;
+        }
+        replace = !replace;
+    }
+}
+
+sub nativeMethodReader(Counter readers, Counter done, Queue results) {
+    on_exit {
+        readers.dec();
+        done.dec();
+    }
+    hash<NativeMethodFrameReadResult> result();
+    result.seen = 0;
+    result.errors = ();
+    for (int i = 0; i < 400; ++i) {
+        hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
+        foreach hash<auto> tid_stack in (stacks.pairIterator()) {
+            bool caller = False;
+            foreach hash<CallStackInfo> frame in (tid_stack.value) {
+                if (frame.function == "nativeMethodReaderCaller") {
+                    caller = True;
+                    break;
+                }
+            }
+            if (!caller) {
+                continue;
+            }
+            foreach hash<CallStackInfo> frame in (tid_stack.value) {
+                # Baseline compiled background scopes can have an empty name;
+                # AST method frames use bare "next". Validate named method
+                # frames without treating those existing representations as new failures.
+                if (frame.type == "user" && !frame.function.empty()
+                        && frame.function != "nativeMethodReaderCaller"
+                        && frame.function != "nativeMethodReaderBatch" && frame.function != "NativeReaderA::next"
+                        && frame.function != "NativeReaderB::next" && frame.function != "next") {
+                    result.errors += sprintf("unexpected caller frame: %y", frame);
+                }
+                if (frame.function == "NativeReaderA::next" || frame.function == "NativeReaderB::next"
+                        || frame.function == "next") {
+                    ++result.seen;
+                    if (frame.type != "user" || frame.file.empty() || frame.line < 0
+                            || frame.endline < frame.line) {
+                        result.errors += sprintf("invalid native frame: %y", frame);
+                    }
+                }
+            }
+        }
+    }
+    results.push(result);
+}
+
+Counter started(4);
+Counter readers(2);
+Counter callers_done(4);
+Counter readers_done(2);
+Queue failures();
+Queue results();
+for (int i = 0; i < 4; ++i) {
+    background nativeMethodReaderCaller(started, readers, callers_done, failures);
+}
+started.waitForZero();
+for (int i = 0; i < 2; ++i) {
+    background nativeMethodReader(readers, readers_done, results);
+}
+readers_done.waitForZero();
+callers_done.waitForZero();
+int seen = 0;
+for (int i = 0; i < 2; ++i) {
+    hash<NativeMethodFrameReadResult> result = results.get(10000);
+    seen += result.seen;
+    if (result.errors) {
+        throw "NATIVE-METHOD-FRAME-TEST", result.errors.join("\n");
+    }
+}
+if (!seen || failures.size()) {
+    throw "NATIVE-METHOD-FRAME-TEST", sprintf("observed %d leaf frames; %d caller failures", seen, failures.size());
+}
+printf("native-method-frame-readers: ok\n");

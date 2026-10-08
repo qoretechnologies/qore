@@ -180,6 +180,7 @@ struct QoreAOTMethodDispatchCacheEntry {
     const QoreMethod* method = nullptr;
     const AbstractQoreFunctionVariant* variant = nullptr;
     QoreParseOptions parse_options;
+    std::string call_name; //!< Stable diagnostic name for a native method frame
     uint64_t dispatch_epoch = 0;
     std::array<const QoreTypeInfo*, MAX_ARGS> arg_types{};
     std::array<uint8_t, MAX_ARGS> arg_states{};
@@ -361,6 +362,12 @@ struct QoreAOTContext {
 
     //! Metadata-only statements registered for source-stripped ProgramControl lookups.
     std::vector<AbstractStatement*> owned_debug_statements;
+
+    //! Optional whole-body-proven scalar method entry, published by its normal entry.
+    //! Appended to preserve existing generated-code field offsets; no serialized ABI change.
+    //! pc_loc_fn identifies the same body; Program/context lifetime bounds the borrowed pointer.
+    using NativeIntUnaryMethodEntry = int64_t (*)(int64_t, QoreAOTContext*, ExceptionSink*);
+    std::atomic<NativeIntUnaryMethodEntry> native_int_unary_method_entry{nullptr};
 
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
