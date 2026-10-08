@@ -1237,7 +1237,10 @@ const multibyte_family multibyte_families[] = {
     QORE_MULTIBYTE_FAMILY("EUC", EUC_get_char_len, 3, false),
     QORE_MULTIBYTE_FAMILY("DBCS", DBCS_get_char_len, 2, false),
     QORE_MULTIBYTE_FAMILY("GB18030", GB18030_get_char_len, 4, false),
-    QORE_MULTIBYTE_FAMILY("SJIS", SJIS_get_char_len, 2, false),
+    // Shift_JIS maps 0x5c and 0x7e to the yen sign and overline of JIS X 0201 (iconv implementations differ), and
+    // the second bytes of its double-byte characters are ASCII characters, so it is not ASCII-compatible on any
+    // platform
+    QORE_MULTIBYTE_FAMILY("SJIS", SJIS_get_char_len, 2, true),
 };
 #undef QORE_MULTIBYTE_FAMILY
 

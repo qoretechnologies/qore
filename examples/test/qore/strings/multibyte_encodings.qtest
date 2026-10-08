@@ -5,8 +5,9 @@
 
 # Strings in multi-byte encodings (EUC-JP, Shift_JIS, CP932, GB18030, GBK, WINDOWS-936, GB2312, Big5, EUC-KR,
 # CP949) are made of characters, not bytes: every character operation must give the same
-# result as for the same text in UTF-8.  In Shift_JIS, double-byte characters have second bytes in the ASCII range
-# (ex: 0x5c in "表", 0x7c in "ポ"), which searches and splits must not match.
+# result as for the same text in UTF-8.  Shift_JIS and its variants are not ASCII-compatible on any platform: their
+# double-byte characters have second bytes in the ASCII range (ex: 0x5c in "表", 0x7c in "ポ"), and 0x5c and 0x7e
+# are the yen sign and the overline in JIS X 0201.
 
 %modern
 
@@ -116,6 +117,11 @@ class MultiByteEncodingTest inherits QUnit::Test {
             assertEq(-1, s.find("|", 2), enc + " find() of a second byte");
             assertEq(4, s.length(), enc + " length()");
             assertEq(("ポ|ソ表",), keys {s: 1}, enc + " hash key");
+            # 0x5c and 0x7e are not used as ASCII characters, but converted as for any other character, so a hash
+            # key gives the same characters as a conversion to UTF-8 on every platform
+            string jis = binary_to_string(<5c7e41>, enc);
+            assertEq((convert_encoding(jis, "UTF-8"),), keys {jis: 1}, enc + " 0x5c and 0x7e in a hash key");
+            assertTrue(jis == convert_encoding(jis, "UTF-8"), enc + " 0x5c and 0x7e ==");
             # the second byte of a character is not an ASCII character
             assertEq("ソ表", convert_encoding(s.substr(2), "UTF-8"), enc + " substr()");
             assertEq(0, int(convert_encoding("ソ1", enc)), enc + " int()");
