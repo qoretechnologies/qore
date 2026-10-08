@@ -433,6 +433,31 @@ ABI or serialized metadata layout changes; floating callback marker policy
 remains eager. The boundary test checks required and nullable native method
 continuations with caller-owned local and closure stacks still live.
 
+An additive method-v3 companion applies the same live-stack view as callback v3.
+It exists only after the complete non-throwing scalar proof and successful v2
+emission. Every invocation loads the live limit and its current native SP; a null
+view or failed unsigned comparison tail-calls v2 with a noinline callsite and
+returns directly, so the hot body need not preserve arguments across the full
+guard. Only supported downward-growing 64-bit aarch64/x86_64 runtimes provide a
+nonnull view; other targets retain the full helper, including IA64 register-stack
+checks. No limit value or previous SP is cached. The dispatch entry guard,
+receiver/access/full-PIC-key/Program/body/readiness/debugger checks and published
+frame remain. The full overflow path still materializes private context before
+raising. A typed atomic is appended to the runtime-owned AOT context, preserving
+prior generated field offsets; v1/v2 entry signatures and serialized layouts are
+unchanged. `QORE_DISABLE_AOT_NATIVE_METHOD_INLINE_STACK_CHECK` is a method-only
+compilation control. Old artifacts retain v2; new artifacts require the additive
+binder, so compiler/runtime comparisons must compile both artifacts separately.
+
+The native boundary fixture checks actual v3 binding, current-SP/live-load LLVM,
+both method and callback compilation controls, O0/O3, and eager/deferred context.
+Its test-only adapter delegates to the real compiled entry with a null view or
+with the same-thread limit changed after frame publication. This verifies the
+callee's own overflow and recovery even when its smaller native frame stays
+above the dispatch guard's SP throughout an external boundary sweep. The test
+restores the live limit on every exit and the original bound entry before its
+unshared Program is destroyed; production has no test-only guard bypass.
+
 Unresolved name-dispatched calls can also use this continuation after ordinary
 dispatch has populated the full-key PIC. This includes nullable-class and dynamic
 receivers; it does not resolve an AST/IR target or narrow its unknown return type.

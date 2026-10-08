@@ -527,48 +527,93 @@ void QoreIRToLLVM::emitNativeMethodBinding(llvm::Module& module, llvm::Function*
     if (std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION")) {
         return;
     }
-    std::string name = info->fast_name + "_method_v2";
-    llvm::Function* explicit_entry = module.getFunction(name);
-    if (!explicit_entry) {
-        explicit_entry = llvm::Function::Create(llvm::FunctionType::get(i64_type,
-            {i64_type, ptr_type, ptr_type, ptr_type}, false),
-            llvm::GlobalValue::InternalLinkage, name, module);
-        explicit_entry->addFnAttr("frame-pointer", "all");
-        llvm::IRBuilder<>::InsertPointGuard ip_guard(*builder);
-        builder->SetCurrentDebugLocation(llvm::DebugLoc());
-        auto* entry = llvm::BasicBlock::Create(ctx, "entry", explicit_entry);
-        auto* body = llvm::BasicBlock::Create(ctx, "body", explicit_entry);
-        auto* overflow = llvm::BasicBlock::Create(ctx, "stack_overflow", explicit_entry);
-        builder->SetInsertPoint(entry);
-        auto check = module.getOrInsertFunction("qore_rt_check_stack_v2",
-            llvm::FunctionType::get(i32_type, {ptr_type, ptr_type}, false));
-        auto* status = builder->CreateCall(check, {explicit_entry->getArg(2), explicit_entry->getArg(3)});
-        builder->CreateCondBr(builder->CreateICmpEQ(status, llvm::ConstantInt::get(i32_type, 0)),
-            body, overflow);
-        builder->SetInsertPoint(overflow);
-        builder->CreateRet(llvm::ConstantInt::get(i64_type, 0));
-        builder->SetInsertPoint(body);
-        std::vector<llvm::Value*> args{explicit_entry->getArg(0)};
-        bool proven_nothrow = false;
-        llvm::Value* result;
-        if (scalar_leaf_body) {
-            result = emitAOTScalarLeaf(*info, args);
-            proven_nothrow = result != nullptr;
-        } else {
-            result = emitAOTIntExpression(*info, args, module, nullptr, &proven_nothrow);
+    for (bool inline_stack : {false, true}) {
+        if (inline_stack && std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_INLINE_STACK_CHECK")) {
+            break;
         }
-        // Re-emit the whole scalar proof instead of wrapping v1's TLS stack guard.
-        if (!result || !proven_nothrow || result->getType() != i64_type) {
-            explicit_entry->eraseFromParent();
-            explicit_entry = nullptr;
-        } else {
-            builder->CreateRet(result);
+        llvm::Function* full_entry = inline_stack ? module.getFunction(info->fast_name + "_method_v2") : nullptr;
+        if (inline_stack && !full_entry) {
+            break;
         }
-    }
-    if (explicit_entry) {
-        auto bind_v2 = module.getOrInsertFunction("qore_rt_bind_method_int_unary_v2",
-            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
-        builder->CreateCall(bind_v2, {aot_ctx_arg, normal, explicit_entry});
+        std::string name = info->fast_name + (inline_stack ? "_method_v3" : "_method_v2");
+        llvm::Function* explicit_entry = module.getFunction(name);
+        if (!explicit_entry) {
+            std::vector<llvm::Type*> params{i64_type, ptr_type, ptr_type, ptr_type};
+            if (inline_stack) {
+                params.push_back(ptr_type);
+            }
+            explicit_entry = llvm::Function::Create(llvm::FunctionType::get(i64_type, params, false),
+                llvm::GlobalValue::InternalLinkage, name, module);
+            explicit_entry->addFnAttr("frame-pointer", "all");
+            llvm::IRBuilder<>::InsertPointGuard ip_guard(*builder);
+            builder->SetCurrentDebugLocation(llvm::DebugLoc());
+            auto* entry = llvm::BasicBlock::Create(ctx, "entry", explicit_entry);
+            auto* body = llvm::BasicBlock::Create(ctx, "body", explicit_entry);
+            builder->SetInsertPoint(entry);
+            if (inline_stack) {
+                auto* full_check = llvm::BasicBlock::Create(ctx, "stack_full_check", explicit_entry);
+                auto* inline_check = llvm::BasicBlock::Create(ctx, "stack_inline_check", explicit_entry);
+                llvm::Value* limit_ptr = explicit_entry->getArg(4);
+                builder->CreateCondBr(builder->CreateICmpEQ(limit_ptr,
+                    llvm::Constant::getNullValue(ptr_type)), full_check, inline_check);
+                builder->SetInsertPoint(inline_check);
+                // Same versioned live view as callback v3: only supported
+                // downward-growing 64-bit stacks supply a nonnull address.
+                // Reload its value and use this entry's current SP on every call.
+                llvm::Value* limit = builder->CreateLoad(i64_type, limit_ptr);
+#if LLVM_VERSION_MAJOR >= 20
+                auto* stacksave = llvm::Intrinsic::getOrInsertDeclaration(&module,
+                    llvm::Intrinsic::stacksave, {ptr_type});
+#else
+                auto* stacksave = llvm::Intrinsic::getDeclaration(&module, llvm::Intrinsic::stacksave,
+                    llvm::Intrinsic::isOverloaded(llvm::Intrinsic::stacksave)
+                        ? llvm::ArrayRef<llvm::Type*>(ptr_type) : llvm::ArrayRef<llvm::Type*>());
+#endif
+                llvm::Value* sp = builder->CreatePtrToInt(builder->CreateCall(stacksave), i64_type);
+                builder->CreateCondBr(builder->CreateICmpUGT(limit, sp), full_check, body);
+                builder->SetInsertPoint(full_check);
+                // Return directly through v2 on the cold path. Merging back
+                // into this body would keep scalar arguments live across the
+                // full helper call and introduce saves on the hot path.
+                auto* full_result = builder->CreateCall(full_entry, {explicit_entry->getArg(0),
+                    explicit_entry->getArg(1), explicit_entry->getArg(2), explicit_entry->getArg(3)});
+                full_result->setTailCallKind(llvm::CallInst::TCK_Tail);
+                full_result->addFnAttr(llvm::Attribute::NoInline);
+                builder->CreateRet(full_result);
+            } else {
+                auto* overflow = llvm::BasicBlock::Create(ctx, "stack_overflow", explicit_entry);
+                auto check = module.getOrInsertFunction("qore_rt_check_stack_v2",
+                    llvm::FunctionType::get(i32_type, {ptr_type, ptr_type}, false));
+                auto* status = builder->CreateCall(check, {explicit_entry->getArg(2), explicit_entry->getArg(3)});
+                builder->CreateCondBr(builder->CreateICmpEQ(status, llvm::ConstantInt::get(i32_type, 0)),
+                    body, overflow);
+                builder->SetInsertPoint(overflow);
+                builder->CreateRet(llvm::ConstantInt::get(i64_type, 0));
+            }
+            builder->SetInsertPoint(body);
+            std::vector<llvm::Value*> args{explicit_entry->getArg(0)};
+            bool proven_nothrow = false;
+            llvm::Value* result;
+            if (scalar_leaf_body) {
+                result = emitAOTScalarLeaf(*info, args);
+                proven_nothrow = result != nullptr;
+            } else {
+                result = emitAOTIntExpression(*info, args, module, nullptr, &proven_nothrow);
+            }
+            // Re-emit the whole scalar proof instead of wrapping v1's TLS stack guard.
+            if (!result || !proven_nothrow || result->getType() != i64_type) {
+                explicit_entry->eraseFromParent();
+                explicit_entry = nullptr;
+            } else {
+                builder->CreateRet(result);
+            }
+        }
+        if (explicit_entry) {
+            auto explicit_bind = module.getOrInsertFunction(inline_stack
+                ? "qore_rt_bind_method_int_unary_v3" : "qore_rt_bind_method_int_unary_v2",
+                llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+            builder->CreateCall(explicit_bind, {aot_ctx_arg, normal, explicit_entry});
+        }
     }
 }
 

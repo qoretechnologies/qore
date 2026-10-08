@@ -5595,3 +5595,142 @@ callback inline live-stack check contract; retain full fallback on unsupported
 targets and overflow materialization. No stale stack limit, missing observer
 frame, removed debugger guard or changed old-artifact ABI is justified by these
 measurements.
+
+## Native method live-stack companion (2026-10-08)
+
+An additive method-v3 entry re-emits the existing complete pure int(int) body
+with the callback-v3 live-stack view: load the current limit and current callee
+SP, then execute the scalar body or tail-call method-v2's full guard. Null views
+also use v2; unsupported layouts never omit the full check. The runtime retains
+the dispatch-entry guard, full PIC key, receiver/access/Program/body/readiness/
+debugger checks, object/class context, diagnostic publication and overflow
+materialization. V1/v2 signatures, generated field offsets and serialized
+metadata remain compatible; the new runtime-owned atomic is appended.
+A method-only compile flag omits v3 for comparison.
+
+Baseline is clean merged `53b60925647155d53808b417c07c4e54a72e69b9`;
+candidate is that revision plus the recorded compiler/runtime/header diff.
+[Full evidence](results-method-inline-stack-macos-arm64.json) includes every
+sample, exact library/executable hashes, reproduction scripts, assembly and audit.
+These measured precommit identities must not be relabelled as later rebuilds.
+
+Apple M4 Pro, macOS arm64, release SCU, Temurin 25.0.2/JMH 1.37. Five randomized
+forks, three warmups, five 500 ms windows and three startup observations per mode.
+All 1,575 windows ran without competing builds, tests, profiling, disassembly or
+evidence validation. Numbers are median fork means in ns/element for whole
+kernels, not isolated call latency. Both primary comparisons compile separate
+artifacts against their corresponding runtimes: v3 artifacts require a binder
+absent from the baseline, so reusing one artifact across old/new is invalid.
+
+Count 1024, seed 810501, `run-fxor7upn` (675 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|optional_method_call|15.246|14.797|-2.95%|no|1.659|8.92x
+|polymorphic_call|52.411|51.763|-1.24%|yes|2.523|20.52x
+|monomorphic_call|7.143|7.018|-1.76%|yes|1.668|4.21x
+|method_call|2.685|2.674|-0.41%|yes|0.885|3.02x
+|indirect_wide|8.232|8.374|+1.72%|yes|1.666|5.03x
+|indirect_float|10.226|10.255|+0.28%|yes|1.636|6.27x
+|arithmetic|2.411|2.391|-0.82%|yes|0.878|2.72x
+|direct_call|2.414|2.412|-0.09%|yes|0.879|2.74x
+|dispatch_control|2.576|2.581|+0.20%|yes|0.954|2.70x
+
+Count 4096, seed 810502, `run-6a5qidrc` (300 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|optional_method_call|13.888|13.490|-2.87%|yes
+|polymorphic_call|50.641|50.648|+0.01%|yes
+|monomorphic_call|5.750|5.685|-1.12%|yes
+|indirect_wide|7.262|7.267|+0.08%|yes
+|indirect_float|9.018|9.022|+0.05%|yes
+|arithmetic|1.337|1.336|-0.10%|yes
+
+Nullable-method time improves **2.95%** at 1024 with non-overlapping ranges and
+**2.87%** at 4096 with overlapping ranges. The latter is consistent in median
+but weaker evidence. Other primary movements overlap; neither improvement,
+regression nor exact neutrality is established for them. In particular, retain
+the wide-callback +1.72% movement rather than discarding an adverse control.
+
+### Same-runtime compilation control
+
+`QORE_DISABLE_AOT_NATIVE_METHOD_INLINE_STACK_CHECK=1` compiles method-v2 only.
+Both modes use the same candidate library and freshly, separately compiled
+executables; runtime flags are identical. The native continuation, frame and
+guard semantics remain enabled. This tests v3 compilation without cross-library
+layout changes, but does not isolate executable layout effects.
+
+Seed 810503, `method-stack-toggle-7b2r2xxv` (300 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|optional_method_call|15.427|14.946|-3.12%|no
+|polymorphic_call|52.642|51.218|-2.71%|yes
+|monomorphic_call|7.415|6.985|-5.80%|no
+|indirect_wide|8.192|8.329|+1.67%|yes
+|indirect_float|10.250|10.209|-0.40%|yes
+|arithmetic|2.405|2.401|-0.16%|yes
+
+Seed 810504, `method-stack-toggle-repeat-ndbvt9_c` (300 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|optional_method_call|15.440|14.859|-3.76%|no
+|polymorphic_call|52.014|51.949|-0.12%|yes
+|monomorphic_call|7.314|7.076|-3.26%|yes
+|indirect_wide|8.350|8.263|-1.04%|yes
+|indirect_float|10.280|10.294|+0.14%|yes
+|arithmetic|2.404|2.410|+0.25%|yes
+
+Nullable gains repeat at **3.12% and 3.76%**, both non-overlapping. This supports
+retaining v3 as a targeted nullable-method improvement. The first monomorphic
+control improves 5.80% with non-overlapping ranges, but its 3.26% repeat and both
+primary comparisons overlap: do not claim a general monomorphic improvement.
+Polymorphic ranges overlap throughout. Wide-callback adverse movements overlap
+and reverse in the repeat; no callback speedup or proven regression is claimed.
+
+Startup before/after medians: 31.920/29.189 ms (primary 1024),
+30.155/29.899 ms (primary 4096), 29.162/29.375 ms (control),
+28.680/28.720 ms (repeat). Only the first pair has non-overlapping ranges; the
+difference does not replicate, so no startup improvement is attributed. Java
+startup is 23.059 ms. Before/after compile observations: 375.208/360.227 ms,
+370.453/371.815 ms, 358.969/359.443 ms, 353.395/363.165 ms. These are single
+observations, not evidence of compilation improvement; filesystem caches were
+uncontrolled.
+
+### Correctness, code size and remaining cost
+
+Release/debug each pass 29 files: 52 cases/3,964 assertions in 23 QUnit files and
+six standalones. NativeLeafContext now has 120 driver assertions and inspects
+actual v3 binding/current-SP/live-limit/cold-v2 LLVM. It independently tests
+method/callback compilation controls, O0/O3, and eager/deferred context.
+The original external sweep found no published overflow in the smaller v3 frame:
+the dispatch full guard reserves 48 bytes while this v3 guard uses 16.
+The strengthened fixture retains early/success and full/null-view boundary
+sweeps and delegates to the actual compiler-bound entry with a null view or a
+live limit changed after publication. It verifies published method/file
+diagnostics, recovery and caller-owned AST locals/captures. Test-only pointer/
+limit overrides restore on exit; production has no guard bypass.
+
+Broader regressions retain source-stripped normal/invoke/EH, parallel compilation,
+ownership/return contracts, weak/generic/deleted/foreign-Program/access negatives,
+concurrent readers and debugger events. Six benchmark modes pass 330 independent
+references each, saved old AOT passes 330 on the candidate, and 11 harness tests
+pass. Internal fixture dependency includes use CPATH where required.
+
+Runtime `__text` grows 1,232 bytes (13,969,884 to 13,971,116, +0.0088%).
+The check-pair AOT `__text` grows 288 bytes (110,944 to 111,232).
+Dispatch helper stack reservation grows 336 to 352 bytes; instruction/directive
+rows grow 715 to 743. The new callee has a live load/compare and a cold branch to
+v2, without a full helper call on success. These are static code observations,
+not dynamic work counts. Other architectures and non-SCU performance are unmeasured.
+
+A separate five-second/1 ms nullable profile has 3,837 main-thread samples, excluding
+the idle signal thread. Leading self counts: dispatch helper 1,963, caller 686,
+QoreValue::getType 408, entry checkStack 145, frame unpublish 140 and native-v3
+body 135. The old callee qore_rt_check_stack_v2/stub is no longer a leading hot
+entry. The dispatch helper still includes inlined admission/context/frame work;
+do not label all of it TLS or lookup.
+
+Nullable remains **8.92x Java JIT** and polymorphic **20.52x** in the 1024 run.
+Next investigate localized strong-object tag admission to avoid generic type
+dispatch on the positive method path, while retaining enum/weak/generic fallback
+and every access/Program/body/debugger guard. This is not general IR improvement
+or Java retained-call parity.

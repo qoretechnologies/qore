@@ -445,6 +445,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_bind_method_int_unary_v1) },
     { "qore_rt_bind_method_int_unary_v2",
         reinterpret_cast<void*>(&qore_rt_bind_method_int_unary_v2) },
+    { "qore_rt_bind_method_int_unary_v3",
+        reinterpret_cast<void*>(&qore_rt_bind_method_int_unary_v3) },
     { "qore_rt_try_method_int_unary_v1",
         reinterpret_cast<void*>(&qore_rt_try_method_int_unary_v1) },
     { "qore_rt_bind_closure_int_unary_v1",
@@ -10276,6 +10278,17 @@ extern "C" DLLEXPORT void qore_rt_bind_method_int_unary_v2(QoreAOTContext* ctx,
         std::memory_order_release, std::memory_order_relaxed);
 }
 
+extern "C" DLLEXPORT void qore_rt_bind_method_int_unary_v3(QoreAOTContext* ctx,
+        uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+        int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*)) {
+    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal) {
+        return;
+    }
+    QoreAOTContext::NativeIntUnaryMethodEntryV3 expected = nullptr;
+    ctx->native_int_unary_method_entry_v3.compare_exchange_strong(expected, entry,
+        std::memory_order_release, std::memory_order_relaxed);
+}
+
 extern "C" DLLEXPORT void qore_rt_bind_closure_int_unary_v1(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
         QoreAOTContext::NativeIntUnaryClosureEntry entry) {
@@ -18001,8 +18014,9 @@ extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v1(QoreAOTContext* caller_
             || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return 0;
     }
-    auto entry = ctx->native_int_unary_method_entry_v2.load(std::memory_order_acquire);
-    if (!entry) {
+    auto inline_entry = ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire);
+    auto entry = inline_entry ? nullptr : ctx->native_int_unary_method_entry_v2.load(std::memory_order_acquire);
+    if (!inline_entry && !entry) {
         return 0;
     }
     *result = 0;
@@ -18013,7 +18027,9 @@ extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v1(QoreAOTContext* caller_
     auto invoke = [&]() __attribute__((always_inline)) {
         if (!*xsink) {
             try {
-                *result = entry(arg, ctx, xsink, rc);
+                *result = inline_entry
+                    ? inline_entry(arg, ctx, xsink, rc, qore_rt_get_stack_limit_v1(rc))
+                    : entry(arg, ctx, xsink, rc);
             } catch (const QoreJITException&) {
                 // The sink owns the exception; frame/context restoration remains RAII.
             }

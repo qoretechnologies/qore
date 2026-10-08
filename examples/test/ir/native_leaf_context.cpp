@@ -1,12 +1,11 @@
 /* Copyright (c) 2026 Qore Technologies, s.r.o.
  * SPDX-License-Identifier: MIT
  */
+#define _QORE_LIB_INTERN
 #include <qore/Qore.h>
 #include <qore/QoreAOT.h>
-struct QoreAOTContext;
-struct QoreTypeParamInstantiation;
+#include <qore/intern/QoreAOT.h>
 #include <qore/intern/JITRuntime.h>
-const qore_class_private* runtime_get_class();
 #include <qore/intern/CallReferenceNode.h>
 
 extern "C" void init_NATIVE_LEAF_CONTEXT_qo(QoreProgram*);
@@ -31,6 +30,64 @@ struct LeafInvocation {
     uint64_t bits = 0;
     QorePreparedFunctionRefV3* cache = nullptr;
     QoreProgram* program = nullptr;
+    bool inline_method = false;
+};
+
+// Test-only adapter: the actual compiler-proven entry still executes, using a
+// null view or a changed live limit after frame publication. Each test owns an unshared Program;
+// the saved target belongs only to this thread and is restored before teardown.
+static thread_local QoreAOTContext::NativeIntUnaryMethodEntryV3 null_view_target = nullptr;
+static thread_local unsigned null_view_calls = 0;
+static thread_local bool method_null_view = false;
+static thread_local bool method_force_overflow = false;
+static int64_t nullViewMethod(int64_t arg, QoreAOTContext* ctx, ExceptionSink* xsink,
+        RuntimeConfig* rc, const size_t* view) {
+    ++null_view_calls;
+    struct RestoreLimit {
+        size_t* limit;
+        size_t saved;
+        ~RestoreLimit() {
+            if (limit) {
+                *limit = saved;
+            }
+        }
+    } restore{nullptr, 0};
+    if (method_force_overflow) {
+#if defined(__aarch64__) || defined(__x86_64__)
+        restore.limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
+        assert(restore.limit && restore.limit == view);
+        restore.saved = *restore.limit;
+        *restore.limit = get_stack_pos() + 4096;
+#else
+        assert(false && "forced live limit requires a supported native stack view");
+#endif
+    }
+    return null_view_target(arg, ctx, xsink, rc, method_null_view ? nullptr : view);
+}
+
+class MethodStackProbe {
+public:
+    MethodStackProbe(QoreAOTContext* ctx, bool null_view, bool overflow = false)
+            : ctx(null_view || overflow ? ctx : nullptr) {
+        if (this->ctx) {
+            assert(!null_view_target);
+            null_view_target = ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire);
+            assert(null_view_target && null_view_target != nullViewMethod);
+            null_view_calls = 0;
+            method_null_view = null_view;
+            method_force_overflow = overflow;
+            ctx->native_int_unary_method_entry_v3.store(nullViewMethod, std::memory_order_release);
+        }
+    }
+    ~MethodStackProbe() {
+        if (ctx) {
+            assert(null_view_calls);
+            ctx->native_int_unary_method_entry_v3.store(null_view_target, std::memory_order_release);
+            null_view_target = nullptr;
+        }
+    }
+private:
+    QoreAOTContext* ctx;
 };
 
 // Rejected signatures and NOTHING must neither populate an empty slot nor
@@ -115,7 +172,8 @@ static QoreValue paddedSweep(const void* ptr, const QoreListNode*, RuntimeConfig
 
 // Exercise a warmed native method PIC through its real compiled caller, including
 // early rejection, published method overflow, and successful reuse afterward.
-static void checkMethod(QoreProgram* program, const char* caller_name) {
+static void checkMethod(QoreProgram* program, const char* caller_name, bool inline_method,
+        bool null_view = false) {
     ExceptionSink xsink;
     ValueHolder object(program->callFunction("makeMethodProbe", nullptr, &xsink), &xsink);
     assert(!xsink && object->getType() == NT_OBJECT);
@@ -128,6 +186,15 @@ static void checkMethod(QoreProgram* program, const char* caller_name) {
         ValueHolder result(program->callFunction(caller_name, *args, &xsink), &xsink);
         assert(!xsink && result->getAsBigInt() == 24);
     }
+    const QoreMethod* method = object->get<QoreObject>()->getClass()->findMethod("next");
+    assert(method);
+    const UserVariantBase* uvb = qore_method_private::get(*method)->getFunction()->first()->getUserVariantBase();
+    assert(uvb && uvb->hasCachedAOT());
+    QoreAOTContext* ctx = uvb->getCachedAOTContext();
+    assert(ctx && ctx->pc_loc_fn == uvb->getCachedAOTFunction());
+    assert(ctx->native_int_unary_method_entry_v2.load(std::memory_order_acquire));
+    assert((ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire) != nullptr) == inline_method);
+    MethodStackProbe force_null(ctx, null_view);
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
     QoreProgram* caller = qore_get_call_program_context();
     size_t* limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
@@ -136,6 +203,7 @@ static void checkMethod(QoreProgram* program, const char* caller_name) {
         const size_t saved_limit = *limit;
         unsigned observed_method = 0;
         unsigned observed_early = 0;
+        unsigned observed_success = 0;
         // Include the compiled caller and public Program entry in the sweep.
         // Restore the real limit before inspecting diagnostics or cleanup.
         for (unsigned gap = 0; gap < 32768; gap += 16) {
@@ -163,18 +231,56 @@ static void checkMethod(QoreProgram* program, const char* caller_name) {
                 ++(method ? observed_method : observed_early);
             } else {
                 assert(result->getAsBigInt() == 24);
+                ++observed_success;
             }
             if (!(gap % 160)) {
                 assert(!qore_check_cancel(&xsink, "native method guard sweep"));
             }
         }
-        assert(observed_method && observed_early);
+        assert(observed_early && observed_success);
+        // The smaller inline entry can stay above the earlier dispatch guard's
+        // SP, leaving no published-overflow interval in this external sweep.
+        // v2/null-view still exercise that interval; v3's own overflow is forced
+        // below by changing the live limit only after publication.
+        assert(observed_method || (inline_method && !null_view));
     }
 #else
     assert(!limit);
 #endif
     ValueHolder result(program->callFunction(caller_name, *args, &xsink), &xsink);
     assert(!xsink && result->getAsBigInt() == 24 && qore_get_call_program_context() == caller);
+    if (inline_method && !null_view) {
+        checkMethod(program, caller_name, inline_method, true);
+        if (limit) {
+            for (bool forced_null : {false, true}) {
+                {
+                    MethodStackProbe forced(ctx, forced_null, true);
+                    ValueHolder failed(program->callFunction(caller_name, *args, &xsink), &xsink);
+                    assert(xsink && qore_get_call_program_context() == caller);
+                    assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+                    ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+                    assert(!xsink);
+                    const auto* file = info->getKeyValue("file").get<const QoreStringNode>();
+                    assert(file && !file->empty());
+                    const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+                    assert(stack);
+                    bool published = false;
+                    for (size_t i = 0; i < stack->size(); ++i) {
+                        const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                        assert(frame);
+                        const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                        published |= name && std::strstr(name->c_str(), "NativeLeafMethodDerived");
+                        if (!(i % 100)) {
+                            assert(!qore_check_cancel(&xsink, "forced method stack inspection"));
+                        }
+                    }
+                    assert(published);
+                }
+                ValueHolder recovered(program->callFunction(caller_name, *args, &xsink), &xsink);
+                assert(!xsink && recovered->getAsBigInt() == 24 && qore_get_call_program_context() == caller);
+            }
+        }
+    }
 }
 
 // Called with the parsed caller's owned locals and captures still live. The
@@ -182,8 +288,8 @@ static void checkMethod(QoreProgram* program, const char* caller_name) {
 // when a native method overflow materializes its otherwise-empty markers.
 static QoreValue paddedMethodSweep(const void* ptr, const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
     const auto& invocation = *static_cast<const LeafInvocation*>(ptr);
-    checkMethod(invocation.program, "methodProbe");
-    checkMethod(invocation.program, "optionalMethodProbe");
+    checkMethod(invocation.program, "methodProbe", invocation.inline_method);
+    checkMethod(invocation.program, "optionalMethodProbe", invocation.inline_method);
     return QoreValue(int64_t{24});
 }
 
@@ -259,11 +365,12 @@ static void checkFloat(QoreProgram* program, bool inline_entry) {
     assert(!xsink);
 }
 
-static void check(bool inline_entry) {
+static void check(bool inline_entry, bool inline_method) {
     ExceptionSink xsink;
     QoreProgramHelper program(PO_MODERN, xsink);
     LeafInvocation invocation;
     invocation.program = *program;
+    invocation.inline_method = inline_method;
     {
         ProgramRuntimeExternalParseContextHelper parse_context(*program);
         assert(parse_context);
@@ -353,8 +460,8 @@ static void check(bool inline_entry) {
         assert(qore_rt_try_funcref_int_int_v3(bits, i, &result, &xsink, rc, &cache) == 1);
         assert(!xsink && result == i + 17);
     }
-    checkMethod(*program, "methodProbe");
-    checkMethod(*program, "optionalMethodProbe");
+    checkMethod(*program, "methodProbe", inline_method);
+    checkMethod(*program, "optionalMethodProbe", inline_method);
     checkFloat(*program, inline_entry);
     invocation.bits = bits;
     invocation.cache = &cache;
@@ -419,15 +526,17 @@ static void check(bool inline_entry) {
 }
 
 int main(int argc, char** argv) {
-    assert(argc == 2);
+    assert(argc == 3);
     bool inline_entry = !std::strcmp(argv[1], "inline");
     assert(inline_entry || !std::strcmp(argv[1], "eager"));
+    bool inline_method = !std::strcmp(argv[2], "inline");
+    assert(inline_method || !std::strcmp(argv[2], "eager"));
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
-    check(inline_entry);
-    std::thread worker([inline_entry]() {
+    check(inline_entry, inline_method);
+    std::thread worker([inline_entry, inline_method]() {
         for (unsigned i = 0; i < 3; ++i) {
             QoreForeignThreadHelper foreign;
-            check(inline_entry);
+            check(inline_entry, inline_method);
         }
     });
     worker.join();

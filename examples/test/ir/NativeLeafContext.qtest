@@ -48,8 +48,10 @@ class NativeLeafContextTest inherits QUnit::Test {
         string executable = dir.path + "/guard-test";
         string env = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
             + " ";
-        list<string> args = (ENV.CXX ?? "c++", "-std=c++17", "-pthread", "-g",
-            "-I" + root + "/include", "-I" + libdir + "/include",
+        # The internal-header fixture needs the build's dependency include paths;
+        # use the compiler's CPATH when dependencies are outside its default search.
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-pthread", "-g", "-DHAVE_UNIX_CONFIG_H",
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir,
             get_script_dir() + "/native_leaf_context.cpp", "-L" + libdir,
             "-Wl,-rpath," + libdir, "-lqore", "-o", executable);
         *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
@@ -58,7 +60,10 @@ class NativeLeafContextTest inherits QUnit::Test {
         }
         int status;
         string output;
-        foreach string prefix in (("", "QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1 ")) {
+        foreach string prefix in (("", "QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1 ",
+                "QORE_DISABLE_AOT_NATIVE_METHOD_INLINE_STACK_CHECK=1 ")) {
+            bool inline_callback = prefix.find("FUNCREF") < 0;
+            bool inline_method = prefix.find("NATIVE_METHOD") < 0;
             foreach string level in (("-O0", "-O3")) {
                 output = backquote(env + prefix + "QORE_DUMP_LLVM_IR=1 " + quote(qcc) + " " + level
                     + " -c --batch-script-aggregate=NATIVE_LEAF_CONTEXT --script-aggregate-native-registers"
@@ -71,6 +76,18 @@ class NativeLeafContextTest inherits QUnit::Test {
                     "pure method companion binding");
                 assertRegex("qore_rt_bind_method_int_unary_v2[^\n]*NativeLeafMethodDerived", output,
                     "guarded pure method-v2 binding");
+                assertEq(inline_method, output.find("qore_rt_bind_method_int_unary_v3") >= 0,
+                    "method-v3 binding or method-only full-guard control");
+                if (inline_method) {
+                    *list<*string> entry = regex_extract(output,
+                        "(?s)define [^\n]*@NativeLeafMethodDerived[^\n]*_method_v3\\([^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!entry, "actual derived method-v3 LLVM entry");
+                    assertRegex("icmp eq ptr [^\n]*null", entry[0] ?? "", "null-view guard");
+                    assertRegex("load i64, ptr", entry[0] ?? "", "live limit load");
+                    assertRegex("@llvm.stacksave", entry[0] ?? "", "current callee stack pointer");
+                    assertRegex("icmp ugt i64", entry[0] ?? "", "unsigned live stack boundary");
+                    assertRegex("tail call i64 @[^\n]*_method_v2", entry[0] ?? "", "cold full-check fallback");
+                }
                 foreach string name in (("methodProbe", "optionalMethodProbe")) {
                     *list<*string> body = regex_extract(output,
                         "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
@@ -78,7 +95,7 @@ class NativeLeafContextTest inherits QUnit::Test {
                     assertRegex("call i32 @qore_rt_try_method_int_unary_v1", body[0] ?? "",
                         name + " must exercise the native continuation");
                 }
-                assertEq(prefix.empty(), output.find("qore_rt_bind_function_call_ref_typed_v3") >= 0,
+                assertEq(inline_callback, output.find("qore_rt_bind_function_call_ref_typed_v3") >= 0,
                     "deferred eligible entry or eager control");
                 list<string> objects = glob(dir.path + "/*.qo");
                 assertEq(3, objects.size(), "two native inputs plus aggregate");
@@ -86,7 +103,8 @@ class NativeLeafContextTest inherits QUnit::Test {
                     + (map quote($1), objects).join(" ") + " 2>&1", \status);
                 assertEq(0, status, output);
                 foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ")) {
-                    output = backquote(env + runtime + quote(executable) + (prefix.empty() ? " inline" : " eager")
+                    output = backquote(env + runtime + quote(executable) + (inline_callback ? " inline" : " eager")
+                        + (inline_method ? " inline" : " eager")
                         + " 2>&1", \status);
                     assertEq(0, status, output);
                     assertEq("native-leaf-context: ok\n", output);

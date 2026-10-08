@@ -388,6 +388,12 @@ struct QoreAOTContext {
     using NativeIntUnaryMethodEntryV2 = int64_t (*)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*);
     std::atomic<NativeIntUnaryMethodEntryV2> native_int_unary_method_entry_v2{nullptr};
 
+    //! Additive scalar method companion with the live stack-limit view from qore_rt_get_stack_limit_v1.
+    //! A null view or failed inline check must tail-call v2's full native guard before executing the body.
+    using NativeIntUnaryMethodEntryV3 = int64_t (*)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*,
+        const size_t*);
+    std::atomic<NativeIntUnaryMethodEntryV3> native_int_unary_method_entry_v3{nullptr};
+
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
     ~QoreAOTContext();

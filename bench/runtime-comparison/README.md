@@ -213,6 +213,19 @@ it can compare the same AOT artifact on the same runtime. The default defers
 private state until an overflow needs it, using the compiler's whole pure-body
 proof. Method-v1 and floating callback marker policy are unchanged. This is a
 runtime-only change, so compatible baseline comparisons may reuse AOT artifacts.
+
+`QORE_DISABLE_AOT_NATIVE_METHOD_INLINE_STACK_CHECK=1` at compilation omits the
+additive method-v3 companion and keeps method-v2's full stack-guard helper.
+The default companion loads the live limit from the invocation's RuntimeConfig
+and compares it against its current native SP. Null views and failed comparisons
+return through v2's full guard, including deferred-context materialization on
+overflow. Unsupported stack layouts always use that full path. Diagnostic
+frames, entry stack checks, receiver/access/Program/body/debugger guards and the
+old v1/v2 ABIs remain. Compare separately compiled artifacts: new artifacts need
+the v3 binder absent from old runtimes; do not use `--reuse-aot-for-baseline`.
+For the internal-header `NativeLeafContext.qtest` fixture, provide dependency
+include directories through the compiler's `CPATH` if needed (for example,
+`CPATH=/opt/local/include` with a MacPorts dependency installation).
 The [measured follow-up](RESULTS.md#deferred-private-context-for-native-methods-2026-10-08)
 records repeated nullable/polymorphic gains, same-runtime eager controls,
 callback variability, stack/code growth and the remaining Java gap.

@@ -906,6 +906,15 @@ void qore_rt_bind_method_int_unary_v2(QoreAOTContext* ctx,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
     int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*));
 
+//! Publish an additive pure scalar method companion with an inline live-stack guard.
+//! @param ctx runtime-owned context whose normal body must match
+//! @param normal immutable body identity, rechecked on every call
+//! @param entry same pure int(int) proof as v2, appending the borrowed live stack-limit address
+//! @note A null limit or failed inline check must use v2's full guard; v1/v2 bindings remain unchanged.
+void qore_rt_bind_method_int_unary_v3(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*));
+
 //! Try a warmed immutable polymorphic cache entry without boxing a scalar argument or result.
 //! @param ctx caller context owning the call-target slot
 //! @param slot pre-resolved non-generic object method call target
