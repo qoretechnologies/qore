@@ -5,6 +5,20 @@
 see README-GIT to learn how to build qore from git sources
 see README-WINDOWS for info specific to the windows builds
 
+Source revision metadata
+------------------------
+CMake records the current commit when building a Git checkout, including linked
+worktrees, and refreshes it on the next build after HEAD changes. Unchanged
+metadata does not cause recompilation. Archives created with `git archive`
+carry their original commit in .git-archive-revision, so their revision metadata
+does not depend on Git being installed or on an enclosing checkout. For example:
+
+    git archive --format=tar --prefix=qore-source/ HEAD > qore-source.tar
+
+Keep .git-archive-revision when repacking an exported archive. An unversioned
+source copy reports "unknown"; an invalid archive marker or broken Git checkout
+fails instead of silently retaining a stale revision.
+
 Build Requirements
 ------------------
 *) a C++ compiler with C++17 support

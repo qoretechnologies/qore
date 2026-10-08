@@ -4,6 +4,10 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    CMake source-archive builds now retain the commit exported by <tt>git archive</tt>,
+    including when extracted inside another repository. Revision updates reject corrupt
+    metadata, and standalone compiler-fingerprint generation sets its list policy explicitly.
+
     ASCII scans of hash keys in other ASCII-compatible encodings now check for thread
     cancellation and program interruption at most every 100 bytes. Cleanup cancellation
     deferral remains effective, and interrupted existence lookups set their output to false.
