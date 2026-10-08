@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ClassLocalAssignmentTest
+
+class ClassLocalAssignmentTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("class-local assignment checks", "1.0", \ARGV) {
+        addTestCase("assignment checks, weak values and ownership", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_JIT_SYNC_COMPILE=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTClassLocalAssignment.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertTrue(expected.startsWith("0:24:5:1:1:3\n"), expected);
+        assertFalse(expected.find("unexpected-") >= 0, expected);
+        assertTrue(expected.endsWith("RUNTIME-TYPE-ERROR\nclass-local-assignment: ok\n"), expected);
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-class-local-assignment-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string name in (("classLocalPhi", "classLocalInvoke")) {
+                    *list<*string> body = regex_extract(ir, "(?s)define [^\n]*@" + name
+                        + "_[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " LLVM definition");
+                    # The invoke fixture also filters its catch hash. Match the
+                    # receiver's slot, not unrelated coercions in the function.
+                    int receiver_slot = name == "classLocalPhi" ? 5 : 1;
+                    string slot_pattern = "[^\\n]*\\(ptr %ctx, i32 " + receiver_slot + ",";
+                    assertEq(prefix.startsWith("QORE_DISABLE_"),
+                        regex(body[0] ?? "", "qore_rt_coerce_value_aot" + slot_pattern),
+                        name + " separate class coercion selection " + prefix + level);
+                    assertEq(!prefix.startsWith("QORE_DISABLE_"),
+                        regex(body[0] ?? "", "qore_rt_assign_local_eval_weak_aot" + slot_pattern),
+                        name + " checked assignment retained " + prefix + level);
+                }
+                assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_IR_CONTEXT_ELISION=1 "),
+                    "runtime context control " + prefix + level);
+            }
+        }
+    }
+}

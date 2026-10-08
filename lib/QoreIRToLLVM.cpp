@@ -15141,6 +15141,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && operand_facts->assigned_state == QoreIRAssignedState::Assigned
                 && operand_facts->never_nothing;
 
+            // A runtime-backed class initializer can be checked and weak-normalized
+            // by the assignment itself. Reload its actual stored value below;
+            // there is no separate coerced temporary to retain and release.
+            // Keep the runtime check: an identical declared class does not
+            // prove private-inheritance access in this function's context.
+            bool runtime_checked_class_store = is_aot_body_local && !is_ir_only
+                && linst->initial_assignment && !inst->result.isValid()
+                && linst->mode == AssignmentMode::Normal && !is_complex_typed
+                && !QoreTypeInfo::isReference(local_ti)
+                && QoreTypeInfo::getUniqueReturnClass(local_ti)
+                && !std::getenv("QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE");
+
             // Case 3: Scalar typed locals also need assignment coercion before
             // storing into the LLVM alloca.  Otherwise a softint local assigned
             // from a string is coerced on the runtime stack but remains a string
@@ -15152,7 +15164,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && !is_complex_typed
                 && !needs_type_strip
                 && !QoreTypeInfo::getTypedHash(local_ti)
-                && !exact_assigned_string;
+                && !exact_assigned_string
+                && !runtime_checked_class_store;
             bool needs_plain_any = local_ti == anyTypeInfo || local_ti == autoNoNarrowTypeInfo;
             bool needs_value_coerce = is_complex_typed || needs_scalar_coerce || needs_plain_any;
             llvm::Value* consumed_cleanup = nullptr;
@@ -15292,7 +15305,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     LocalCacheClearMode::IncludeFastEntryOwner);
                 clearLocalReloadTracker(key, module, llvm_func);
             }
-            builder->CreateStore(boxed, it->second);
+            // The checked initializer has not succeeded yet. Keep its cache
+            // unassigned on the error edge; the successful assignment is
+            // reloaded below before any native consumer can observe it.
+            builder->CreateStore(runtime_checked_class_store
+                ? llvm::ConstantInt::get(i64_type, VAL_NOTHING) : boxed, it->second);
             markLocalCacheFresh(key, llvm_func);
             if (inst->result.isValid()) {
                 values[inst->result.id] = boxed;

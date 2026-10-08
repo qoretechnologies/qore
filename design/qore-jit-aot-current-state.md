@@ -63,6 +63,25 @@ access that the plain function does not. `AOTPlainFunctionClassContext.qtest`
 compares this boundary with AST execution, including normal/invoke/callback
 calls, return filtering, caller-context restoration and native-EH AOT.
 
+### Checked AOT class-local initialization
+
+A normal initial assignment to a runtime-backed AOT body local with one required,
+non-complex class type can use the existing checked/eval-weak assignment directly.
+It does not need a separate pre-coercion temporary and unchecked store. The
+native cache remains NOTHING until assignment succeeds, then reloads the actual
+stored value with the existing ownership/reload tracking. Private-inheritance
+access, weak-reference normalization, missing/wrong-type errors and cleanup are
+still handled by the runtime; a matching class annotation does not remove them.
+
+This lowering excludes reassignments, value-producing IR stores, optional or
+reference types, complex/parameterized types, IR-only locals and non-normal
+assignment modes. `AOTClassLocalAssignment.qtest` checks normal/invoke paths,
+weak/deleted values, captured/reference mutation, escaped-capture lifetime,
+failed reassignment, exception cleanup and caller/callee access differences.
+`QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE=1` at compilation restores the
+separate coercion path. Existing native artifacts require recompilation; no
+runtime helper or ABI is added.
+
 ### AOT method context elision
 
 The resolved dot-eval fast-method path (also used by polymorphic dispatch-cache

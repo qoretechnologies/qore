@@ -79,6 +79,12 @@ control in [the results](RESULTS.md#plain-function-access-context-2026-10-08).
 It corrects a caller-class access leak and has a measured generic-call cost;
 do not describe it as a performance improvement.
 
+`QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE=1` at compilation restores separate
+coercion for required-class AOT local initializers. The optimized form retains
+the checked assignment and reloads its stored value; it does not remove class
+access or weak-reference checks. Use separate before/after compilation for this
+compiler optimization, not `--reuse-aot-for-baseline`.
+
 ## Workloads and units
 
 Each invocation processes `--count` elements, normally 1024. The reported unit

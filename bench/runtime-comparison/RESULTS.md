@@ -3289,3 +3289,98 @@ The separate receiver-initializer experiment is not part of this fix. Next,
 measure its checked-assignment consolidation against this corrected baseline;
 then investigate native parameters on polymorphic cache hits, reusing existing
 fast-entry contracts where sound. The broader performance goal remains active.
+
+## Checked class-local initialization (2026-10-08)
+
+Baseline `114eb51e3`, including the plain-function access-context fix above,
+macOS arm64 M4 Pro. Required-class AOT body-local initializers now use the
+existing checked/eval-weak assignment directly, then reload the stored value.
+This removes a separate coercion temporary and its extra reference cleanup;
+it does not remove type/access checks or weak-reference normalization. The
+native cache stays NOTHING until the assignment succeeds. Reassignments,
+value-producing stores, optional/reference/complex types, IR-only locals and
+non-normal assignment modes keep their previous lowering. No new runtime
+helper, metadata cache or ABI is introduced.
+
+### Measurements
+
+All runs compile separate before/after AOT artifacts against their compatible
+libraries, pass 270 independent reference records per implementation, and run
+sequentially in shuffled mode/kernel/fork order. Each fork has three warmups
+and five measurement windows. Values are medians of independent fork means,
+ns/element including receiver selection/assignment, computation, loop and
+checksum—not isolated call latency. No build, test, profile, disassembly or
+evidence validator overlaps timing. All samples and unfavorable medians remain.
+
+Pilot `run-zmx1uzee`: 4096 elements, five forks, 300 ms windows.
+
+|!Kernel|!Before|!After|!Change|!Before range|!After range
+|polymorphic_call|193.17560|180.33761|-6.65%|190.91942–196.54221|178.48663–182.83127
+|indirect_wide|7.24994|7.28873|0.54%|7.13772–7.28196|6.90491–7.35551
+|temporary_hash|316.13354|307.25925|-2.81%|304.63364–319.41634|299.61162–317.64752
+|direct_call|1.28327|1.28175|-0.12%|1.27844–1.30640|1.26521–1.29904
+
+Primary/repeat `run-k2ptife0`: 1024 elements, five forks, 500 ms windows and
+fresh Java measurements.
+
+|!Kernel|!Before|!After|!Change|!Java
+|polymorphic_call|194.71968|183.27666|-5.88%|2.54110
+|indirect_wide|8.19036|8.22909|0.47%|1.68414
+|temporary_hash|314.25230|313.69379|-0.18%|15.43691
+
+The primary polymorphic ranges separate: 192.41724–196.25488 before versus
+182.58325–185.55041 after. All other before/after ranges overlap in both runs;
+overlap does not establish equivalence. In particular, the small wide-callback
+slowdowns remain reported, and the pilot's favorable hash/direct medians are
+not separate optimization claims.
+
+Diagnostic `run-ywyg4emx`: 4096 elements, seven forks, 500 ms windows with
+`QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE=1` during compilation/execution.
+
+|!Kernel|!Before|!After|!Change|!Before range|!After range
+|polymorphic_call|193.25011|194.14440|0.46%|189.65654–196.50286|192.21379–197.69428
+|indirect_wide|7.14267|7.12129|-0.30%|7.08488–7.21334|7.02772–7.25922
+
+The benefit disappears with the lowering disabled, and both native binaries
+retain separate coercion followed by unchecked assignment. Default pilot native
+code instead has checked assignment plus reload, with 386 versus 430 instructions
+in the inspected polymorphic function. This supports the mechanism without
+isolating each instruction's cost or controlling all code-layout effects.
+
+The primary polymorphic workload remains about 72.1 times Java; wide callbacks
+remain about 4.89 times Java. Qore still inlines the exact base-class arithmetic
+case while its two derived cases enter general method runtime dispatch. Java
+uses DONT_INLINE on all three targets. This is neither Java parity nor a ratio
+of three retained Qore calls to three retained Java calls.
+
+### Validation, audit and next work
+
+Release/debug qore/qcc builds and 56 selected files per build pass: 38 QUnit
+wrappers with 203 cases / 16551 assertions, plus 18 standalone tests. The new
+wrapper has 76 assertions and checks normal/invoke code generation, -O0/-O3,
+stripped-source AOT, native EH, disabled-lowering and runtime-context controls.
+Source AST/IR/JIT/tiered agree on private access, missing/wrong/removed values,
+weak references, captured/reference mutation, owned alias cleanup, failed
+reassignment and escaped-capture lifetime. The release wrapper was repeated
+after the capture test was expanded; the debug matrix uses that expanded fixture.
+
+The corrected saved baseline passes expanded AST/AOT semantics and fails the
+intended new codegen assertion after 13 assertions. Old v2/v3 AOT artifacts
+retain byte-identical 225/270 reference records. Eleven harness tests, standalone
+LLVM compiler syntax, strict documentation tables, hashes and whitespace checks
+pass. Runtime text grows 13873616 → 13873796 bytes (+180). No full-suite,
+sanitizer, allocation-failure injection, Linux runtime or full split-runtime
+build claim. Existing native artifacts require recompilation for this change.
+
+The [full 62-check audit](FOLLOWUP-AUDIT.md#checked-class-initializer-audit-2026-10-08)
+and [sanitized evidence](results-checked-class-store-macos-arm64.json) retain
+exact diffs/hashes, all 113 jobs / 565 samples, settings, source/binary inspection
+and validation counts. Mode/kernel/fork completeness, uniqueness, finite positive
+values, startup counts and independently recomputed medians were checked.
+
+Next: reach typed native method entries from polymorphic cache hits, avoiding
+repeated TLS parameter binding where the actual resolved body permits it. Reuse
+existing fast-entry contracts and keep actual override returns, Program/debugger/
+body/readiness guards, receiver validity, ownership, stack publication/readers
+and cancellation. This work is not implemented by the initializer change;
+the broader performance goal remains active.
