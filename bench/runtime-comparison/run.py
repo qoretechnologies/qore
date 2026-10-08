@@ -25,7 +25,7 @@ KERNELS = ("arithmetic", "direct_call", "method_call", "indirect_call", "polymor
            "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
            "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
            "dispatch_control", "list_read", "list_build",
-           "list_mutate", "temporary_list", "temporary_hash")
+           "list_mutate", "temporary_list", "temporary_hash", "closure_call", "closure_capture")
 MODES = ("qore-ir", "qore-aot", "java-int", "java-jit")
 MAIN = "org.qore.bench.RuntimeBench"
 # JMH 1.37 and its runtime/annotation-processor dependencies, from Maven Central.

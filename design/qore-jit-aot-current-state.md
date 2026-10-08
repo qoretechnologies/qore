@@ -24,6 +24,44 @@ This document is the durable index for the current IR/JIT/AOT architecture. It
 should describe stable contracts and link to narrower design notes; transient
 milestones and unfinished task lists belong under `docs/plans/`.
 
+## Bounded IR integer leaves and closure observability
+
+The interpreter's integer leaf evaluator accepts one- or multi-block compositions
+with one or two exact integer parameters and an exact integer return. Admission
+remains bounded to eight forward-only blocks, eight IR-only body locals, 64
+instructions and value IDs below 128. Captures, references, side effects and
+backward branches retain ordinary execution. Compact single-operation descriptors
+remain preferred because native AOT summaries also consume them.
+
+Composed leaves support integer bitwise AND/OR/XOR and three-way comparison in
+addition to the existing integer arithmetic and comparison operations. Addition,
+subtraction, multiplication and local increment use unsigned intermediates to
+preserve full-width wrapping without signed C++ overflow. Invalid/unassigned
+operands and exceptional modulo cases abandon the scratch evaluator and use the
+ordinary call path. No externally visible state is changed before fallback.
+`QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE` and
+`QORE_DISABLE_IR_NATIVE_LEAF_INLINE` retain the corresponding ordinary paths.
+
+Closure runtime shortcuts reject attached debuggers, and leaf execution is
+limited to the same Program. Normal closure dispatch selects AST or debug IR
+when attached. QORD version 20 preserves each closure's entry file/source label,
+offset, line range and lexical parse options in a fixed 40-byte payload after
+its varargs flags and before captures. Both expression and expression-slot
+readers attach an immutable, variant-owned entry statement before publishing the
+closure. Entry statements receive IDs but do not replace executable statements
+in the file/line index. This supplies the identity required for function entry
+and exit events from source-stripped closure IR. File/source labels use the
+normal compiler prefix-map writer; debugger entry locations must not restore
+physical build paths after other source metadata has been mapped.
+
+Older supported QORD versions remain readable without that payload; recompiling
+is required to supply missing closure entry metadata. Older runtimes reject
+version-20 artifacts. No prepared scalar callback helper ABI changes. Compiler
+comparisons must use separate before/after AOT compilation, not a newly compiled
+executable against the older runtime. `IRComposedIntLeaf.qtest` covers full-width
+compositions, effects and exception fallback, concurrent first calls, Program
+churn/crossings, and warmed/cold debugger attachment through source-stripped AOT.
+
 ## JIT Runtime
 
 JIT-compiled functions call C ABI helpers in `JITRuntime.cpp` for operations

@@ -2769,6 +2769,13 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         } else {
             QoreAOTBinaryReader::readU8(p);  // legacy varargs
         }
+        if (rdr.getHeader().version >= QORE_AOT_CLOSURE_ENTRY_VERSION) {
+            if (p > e || static_cast<size_t>(e - p) < QORE_AOT_CLOSURE_ENTRY_BYTES) {
+                p = e;
+                return;
+            }
+            p += QORE_AOT_CLOSURE_ENTRY_BYTES;
+        }
         uint16_t nc = QoreAOTBinaryReader::readU16(p);
         for (uint16_t i = 0; i < nc; ++i) {
             rdr.readStringRef(p);  // captured name
@@ -6214,6 +6221,16 @@ static QoreAOTContext* buildContextFromSlotMap(
                     closure_needs_extra_args = old_varargs;
                 }
 
+                QoreAOTClosureEntry closure_entry;
+                std::string entry_error;
+                if (!qore_aot_read_closure_entry(reader, ptr, entry_end ? entry_end : end,
+                        closure_entry, entry_error)) {
+                    setClosureIRError(entry_error);
+                    closure_ir_missing = true;
+                    ptr = entry_end ? entry_end : end;
+                    continue;
+                }
+
                 // Read captured variable names and parent slot indices
                 uint16_t num_captured = QoreAOTBinaryReader::readU16(ptr);
                 std::vector<std::string> captured_names(num_captured);
@@ -6276,7 +6293,8 @@ static QoreAOTContext* buildContextFromSlotMap(
 
                 // Construct UserClosureFunction + UserClosureVariant FIRST
                 // so signature locals are available for IR deserialization.
-                auto* ucf = new UserClosureFunction(nullptr, 0, 0, QoreValue(), nullptr);
+                auto closure_owner = std::make_unique<UserClosureFunction>(nullptr, 0, 0, QoreValue(), nullptr);
+                auto* ucf = closure_owner.get();
                 auto* closure_variant = static_cast<UserClosureVariant*>(
                     const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
                 UserSignature* closure_sig = closure_variant->getUserSignature();
@@ -6407,7 +6425,6 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (trace_slot_reg) {
                         fprintf(stderr, "[aot-slot-reg] '%s': %s\n", name, msg.c_str());
                     }
-                    delete ucf;
                     closure_ir_missing = true;
                     continue;
                 }
@@ -6499,7 +6516,6 @@ static QoreAOTContext* buildContextFromSlotMap(
                     }
                     if (parameter_restore_cancelled) {
                         setClosureIRError("closure parameter metadata restoration was cancelled");
-                        delete ucf;
                         closure_ir_missing = true;
                         continue;
                     }
@@ -6530,6 +6546,10 @@ static QoreAOTContext* buildContextFromSlotMap(
 
                 // Create QoreClosureParseNode
                 auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
+                closure_owner.release();
+                SimpleRefHolder<QoreClosureParseNode> closure_holder(closure_node);
+                qore_aot_attach_closure_entry(pgm, *closure_variant, closure_entry);
+                closure_holder.release();
                 ctx->exprs[i] = toBitsNB(QoreValue(closure_node));
                 continue;
             }

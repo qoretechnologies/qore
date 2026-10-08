@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ComposedIntLeafTest
+
+class ComposedIntLeafTest inherits QUnit::Test {
+    private { string libdir; }
+    constructor() : Test("composed integer leaf execution", "1.0", \ARGV) {
+        libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        addTestCase("compositions, wrapping and guarded fallback", \check());
+        addTestCase("debugger attachment preserves closure events", \checkDebugger());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote("LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " " + prefix
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string qore = libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string source = get_script_dir() + "/IRComposedIntLeaf.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertTrue(expected.contains("0:22:22:22:1125899906842628:-49:-31:6:4:3:7:58\n"),
+            "independent zero-input arithmetic reference");
+        assertTrue(expected.contains("9223372036854775807:65527:65527:65527:1125899906908155"
+            + ":-41:12:4:-3:-9223372036854775808:9223372036854775800:9223372036854775749\n"),
+            "full-width wrapping reference");
+        assertTrue(expected.contains("effects:11\nmodulo:DIVISION-BY-ZERO\n"
+            + "closure-modulo:DIVISION-BY-ZERO\nargument:RUNTIME-OVERLOAD-ERROR\n"),
+            "effects and exception fallback");
+        assertTrue(expected.contains("concurrent:8720\nprograms:64\n"),
+            "concurrent first calls and Program lifetime churn");
+        foreach string prefix in (("", "QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE=1 ",
+                "QORE_DISABLE_IR_NATIVE_LEAF_INLINE=1 ")) {
+            assertEq(expected, run((qore, "--exec-mode=ir", source), prefix),
+                "IR enabled/disabled leaf paths");
+        }
+        assertEq(expected, run((qore, "--exec-mode=tiered", source)), "tiered");
+        # This fixture targets AST/IR/AOT. The saved baseline's JIT corrupts a
+        # borrowed wide first printf argument while evaluating later arguments;
+        # keep the fixture unchanged as its reproducer, not a JIT parity claim.
+        TmpDir dir("qore-composed-int-leaf-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            run((qcc, level, "--strip-source", "-o", executable, source));
+            assertEq(expected, run((executable,)), "AOT " + level);
+        }
+    }
+    private checkDebugger() {
+        string qore = libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string source = get_script_dir() + "/IRComposedIntLeafDebugger.qr";
+        string expected = "composed-leaf-debugger: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-composed-leaf-debugger-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            run((qcc, level, "--strip-source", "-o", executable, source));
+            assertEq(expected, run((executable,)), "AOT " + level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_IR_NATIVE_LEAF_INLINE=1 "),
+                "disabled native leaf " + level);
+        }
+    }
+}

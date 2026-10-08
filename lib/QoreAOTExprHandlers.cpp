@@ -1398,6 +1398,11 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         closure_needs_extra_args = old_varargs;
     }
 
+    QoreAOTClosureEntry closure_entry;
+    if (!qore_aot_read_closure_entry(ctx.reader, ctx.ptr, ctx.end, closure_entry, ctx.error)) {
+        return QoreValue();
+    }
+
     // Read captured variable names and parent slot indices
     uint16_t num_captured = QoreAOTBinaryReader::readU16(ctx.ptr);
     std::vector<std::string> captured_names(num_captured);
@@ -1432,7 +1437,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     }
 
     // Construct UserClosureFunction + UserClosureVariant
-    auto* ucf = new UserClosureFunction(nullptr, 0, 0, QoreValue(), nullptr);
+    auto closure_owner = std::make_unique<UserClosureFunction>(nullptr, 0, 0, QoreValue(), nullptr);
+    auto* ucf = closure_owner.get();
     auto* closure_variant = static_cast<UserClosureVariant*>(
         const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
     UserSignature* closure_sig = closure_variant->getUserSignature();
@@ -1522,7 +1528,6 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
 
     if (!closure_ir) {
         printd(2, "AOT: closure IR deser failed in expr context: %s\n", ir_error.c_str());
-        delete ucf;
         ctx.error = "closure IR deserialization failed: " + ir_error;
         return QoreValue();
     }
@@ -1614,6 +1619,10 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
 
     // Create QoreClosureParseNode
     auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
+    closure_owner.release();
+    SimpleRefHolder<QoreClosureParseNode> closure_holder(closure_node);
+    qore_aot_attach_closure_entry(ctx.pgm, *closure_variant, closure_entry);
+    closure_holder.release();
     return QoreValue(closure_node);
 }
 

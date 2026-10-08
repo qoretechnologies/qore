@@ -2668,7 +2668,7 @@ static bool tryExecuteSimpleClosureIncrement(const QoreClosureBase* cb,
 
 static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
         const UserSignature* sig, unsigned num_params) {
-    if (!ir || !sig || !num_params || num_params > 2 || ir->blocks.size() < 2
+    if (!ir || !sig || !num_params || num_params > 2 || ir->blocks.empty()
             || ir->blocks.size() > 8 || ir->all_body_locals.size() > 8
             || sig->getReturnTypeInfo() != bigIntTypeInfo) {
         return false;
@@ -2722,6 +2722,10 @@ static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
                 case QoreIROpcode::MulInt:
                 case QoreIROpcode::ModInt:
                 case QoreIROpcode::MulAssignAny:
+                case QoreIROpcode::AndInt:
+                case QoreIROpcode::OrInt:
+                case QoreIROpcode::XorInt:
+                case QoreIROpcode::CmpInt:
                 case QoreIROpcode::EqInt:
                 case QoreIROpcode::NeInt:
                 case QoreIROpcode::LtInt:
@@ -2796,15 +2800,24 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
             std::memory_order_acq_rel, std::memory_order_acquire)) {
         return expected > 0;
     }
-    auto reject = [&]() {
-        inst->native_leaf_state.store(-1, std::memory_order_release);
-        return false;
-    };
-
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserVariantBase* uvb = inst->cached_uvb;
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
     unsigned num_params = sig ? sig->numParams() : 0;
+    auto reject = [&]() {
+        // Prefer the compact single-operation descriptors, including the ones
+        // exported as AOT scalar summaries. A composed single-block integer
+        // body can instead use the same bounded evaluator as a forward CFG.
+        if (callee_ir && callee_ir->blocks.size() == 1
+                && nargs == static_cast<int>(num_params)
+                && isInterpreterNativeIntProgram(callee_ir, sig, num_params)) {
+            inst->native_leaf_kind = QoreIRCallDirectInstruction::NativeLeafKind::IntProgram;
+            inst->native_leaf_state.store(1, std::memory_order_release);
+            return true;
+        }
+        inst->native_leaf_state.store(-1, std::memory_order_release);
+        return false;
+    };
     if (!callee_ir || !sig || num_params > 2
             || nargs != static_cast<int>(num_params)) {
         return reject();
@@ -3420,7 +3433,8 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
                         if (index < 0 || !local_assigned[index]) {
                             return false;
                         }
-                        local_values[index] += increment->delta;
+                        local_values[index] = static_cast<int64_t>(static_cast<uint64_t>(local_values[index])
+                            + static_cast<uint64_t>(increment->delta));
                         writeResult(local_values[index]);
                         break;
                     }
@@ -3438,6 +3452,10 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
                     case QoreIROpcode::MulInt:
                     case QoreIROpcode::ModInt:
                     case QoreIROpcode::MulAssignAny:
+                    case QoreIROpcode::AndInt:
+                    case QoreIROpcode::OrInt:
+                    case QoreIROpcode::XorInt:
+                    case QoreIROpcode::CmpInt:
                     case QoreIROpcode::EqInt:
                     case QoreIROpcode::NeInt:
                     case QoreIROpcode::LtInt:
@@ -3452,10 +3470,25 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
                             return false;
                         }
                         switch (operation->opcode) {
-                            case QoreIROpcode::AddInt: writeResult(lhs + rhs); break;
-                            case QoreIROpcode::SubInt: writeResult(lhs - rhs); break;
+                            // Integer arithmetic wraps; unsigned intermediates
+                            // keep full-width compositions free of signed UB.
+                            case QoreIROpcode::AddInt:
+                                writeResult(static_cast<int64_t>(static_cast<uint64_t>(lhs)
+                                    + static_cast<uint64_t>(rhs)));
+                                break;
+                            case QoreIROpcode::SubInt:
+                                writeResult(static_cast<int64_t>(static_cast<uint64_t>(lhs)
+                                    - static_cast<uint64_t>(rhs)));
+                                break;
                             case QoreIROpcode::MulInt:
-                            case QoreIROpcode::MulAssignAny: writeResult(lhs * rhs); break;
+                            case QoreIROpcode::MulAssignAny:
+                                writeResult(static_cast<int64_t>(static_cast<uint64_t>(lhs)
+                                    * static_cast<uint64_t>(rhs)));
+                                break;
+                            case QoreIROpcode::AndInt: writeResult(lhs & rhs); break;
+                            case QoreIROpcode::OrInt: writeResult(lhs | rhs); break;
+                            case QoreIROpcode::XorInt: writeResult(lhs ^ rhs); break;
+                            case QoreIROpcode::CmpInt: writeResult(lhs < rhs ? -1 : lhs > rhs ? 1 : 0); break;
                             case QoreIROpcode::ModInt:
                                 if (!rhs || (lhs == INT64_MIN && rhs == -1)) { return false; }
                                 writeResult(lhs % rhs);

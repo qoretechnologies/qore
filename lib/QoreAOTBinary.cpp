@@ -13362,6 +13362,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                     closure_flags |= 0x0004;
                 }
                 writer.writeU16(closure_flags);
+                qore_aot_write_closure_entry(writer, *variant);
 
                 // Lower closure before writing captures so embedded expression
                 // payloads (for example \local reference expressions) can add
@@ -18847,6 +18848,74 @@ static bool readAndSetupVariantSignature(
     }
 
     return true;
+}
+
+void qore_aot_write_closure_entry(QoreAOTBinaryWriter& writer, const UserVariantBase& variant) {
+    const StatementBlock* block = variant.getEntryStatementBlock();
+    const QoreProgramLocation* loc = block ? block->loc : nullptr;
+    writer.writeSourcePath(loc ? loc->getFileValue() : "");
+    writer.writeSourcePath(loc ? loc->getSourceValue() : "");
+    writer.writeI64(loc ? loc->offset : 0);
+    qore_aot_write_line(writer, loc ? loc->start_line : 0);
+    qore_aot_write_line(writer, loc ? loc->end_line : 0);
+    QoreParseOptions po = variant.getParseOptions(variant.pgm
+        ? variant.pgm->getParseOptions() : QoreParseOptions());
+    writer.writeI64(po.getLo());
+    writer.writeI64(po.getHi());
+}
+
+bool qore_aot_read_closure_entry(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        const uint8_t* end, QoreAOTClosureEntry& entry, std::string& error) {
+    if (reader.getHeader().version < QORE_AOT_CLOSURE_ENTRY_VERSION) {
+        return true;
+    }
+    if (ptr > end || static_cast<size_t>(end - ptr) < QORE_AOT_CLOSURE_ENTRY_BYTES) {
+        error = "truncated closure entry metadata";
+        return false;
+    }
+    entry.file = reader.readStringRef(ptr);
+    entry.source = reader.readStringRef(ptr);
+    int64_t offset = QoreAOTBinaryReader::readI64(ptr);
+    entry.first_line = qore_aot_read_line(reader, ptr);
+    entry.last_line = qore_aot_read_line(reader, ptr);
+    int64_t lo = QoreAOTBinaryReader::readI64(ptr);
+    int64_t hi = QoreAOTBinaryReader::readI64(ptr);
+    auto validString = [&reader](const char* value) {
+        // getString() already checked the offset; also require termination
+        // within the decoded pool before any interning or strlen operation.
+        return value && std::memchr(value, 0, reader.getStringPoolSize()
+            - static_cast<size_t>(value - reinterpret_cast<const char*>(reader.getStringPoolData())));
+    };
+    if (!validString(entry.file) || !validString(entry.source)
+            || offset < INT32_MIN || offset > INT32_MAX
+            || entry.first_line < -1 || entry.last_line < -1
+            || (entry.first_line >= 0 && entry.last_line >= 0 && entry.last_line < entry.first_line)) {
+        error = "invalid closure entry metadata";
+        return false;
+    }
+    entry.offset = static_cast<int>(offset);
+    entry.parse_options = QoreParseOptions(lo, hi);
+    entry.present = true;
+    return true;
+}
+
+void qore_aot_attach_closure_entry(QoreProgram* pgm, UserVariantBase& variant,
+        const QoreAOTClosureEntry& entry) {
+    if (!entry.present) {
+        return;
+    }
+    assert(pgm);
+    auto* pp = qore_program_private::get(*pgm);
+    AutoLocker al(&pp->plock);
+    const char* file = pp->addString(entry.file);
+    const char* source = *entry.source ? pp->addString(entry.source) : nullptr;
+    QoreProgramLocation location(file, entry.first_line, entry.last_line, source, entry.offset);
+    const QoreProgramLocation* loc = pp->getLocation(location, entry.first_line, entry.last_line);
+    auto block = std::make_unique<StatementBlock>(pp, loc);
+    block->pwo.parse_options = entry.parse_options;
+    // Preserve the executable-statement index; the entry only needs a stable ID.
+    qore_program_private::registerStatement(pgm, block.get(), false);
+    variant.setAOTEntryStatementBlock(block.release());
 }
 
 static void attachAOTEntryStatementBlock(QoreProgram* pgm, UserVariantBase* uvb,

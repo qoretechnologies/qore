@@ -29,6 +29,7 @@ public class RuntimeBench {
     private ArrayList<Long> data;
     private Stepper receiver;
     private LongUnaryOperator callback;
+    private LongUnaryOperator closureCallback, capturedCallback;
     private LongUnaryOperator wideCallback;
     private LongUnaryOperator affineCallback, branchIntCallback;
     private DoubleUnaryOperator floatCallback, taggedCallback, branchCallback;
@@ -39,6 +40,8 @@ public class RuntimeBench {
         data = makeData(count, 7);
         receiver = new Stepper();
         callback = RuntimeBench::boundaryStep;
+        closureCallback = new ClosureStep();
+        capturedCallback = new CapturedStep(17);
         wideCallback = RuntimeBench::wideStep;
         affineCallback = RuntimeBench::affineStep;
         branchIntCallback = RuntimeBench::branchIntStep;
@@ -52,6 +55,20 @@ public class RuntimeBench {
 
     static long step(long value) {
         return (value * 33 + 17) & 65535;
+    }
+
+    static final class ClosureStep implements LongUnaryOperator {
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        public long applyAsLong(long value) { return (value * 33 + 17) & 65535; }
+    }
+
+    // Non-final storage models Qore's captured variable, not a constant folded
+    // into the target body. Neither workload mutates this capture while timed.
+    static final class CapturedStep implements LongUnaryOperator {
+        private long increment;
+        CapturedStep(long increment) { this.increment = increment; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        public long applyAsLong(long value) { return (value * 33 + increment) & 65535; }
     }
 
     static final class Stepper {
@@ -266,6 +283,8 @@ public class RuntimeBench {
     @Benchmark public long direct_call() { return directCall(count, nextSeed()); }
     @Benchmark public long method_call() { return methodCall(count, nextSeed(), receiver); }
     @Benchmark public long indirect_call() { return indirectCall(count, nextSeed(), callback); }
+    @Benchmark public long closure_call() { return indirectCall(count, nextSeed(), closureCallback); }
+    @Benchmark public long closure_capture() { return indirectCall(count, nextSeed(), capturedCallback); }
     @Benchmark public long indirect_wide() { return wideIndirectCall(count, nextSeed(), wideCallback); }
     @Benchmark public long indirect_affine() { return indirectCall(count, nextSeed(), affineCallback); }
     @Benchmark public long indirect_affine_wide() { return wideIndirectCall(count, nextSeed(), affineCallback); }
@@ -291,6 +310,7 @@ public class RuntimeBench {
         }
         Stepper receiver = new Stepper();
         LongUnaryOperator callback = RuntimeBench::boundaryStep;
+        LongUnaryOperator closureCallback = new ClosureStep(), capturedCallback = new CapturedStep(17);
         LongUnaryOperator wideCallback = RuntimeBench::wideStep;
         LongUnaryOperator affineCallback = RuntimeBench::affineStep, branchIntCallback = RuntimeBench::branchIntStep;
         DoubleUnaryOperator floatCallback = RuntimeBench::floatStep, taggedCallback = RuntimeBench::taggedFloatStep;
@@ -303,7 +323,8 @@ public class RuntimeBench {
                     "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
                     "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
                     "polymorphic_call", "dispatch_control", "list_read",
-                    "list_build", "list_mutate", "temporary_list", "temporary_hash"};
+                    "list_build", "list_mutate", "temporary_list", "temporary_hash",
+                    "closure_call", "closure_capture"};
                 long[] results = {arithmetic(count, seed), directCall(count, seed),
                     methodCall(count, seed, receiver), indirectCall(count, seed, callback),
                     wideIndirectCall(count, seed, wideCallback), floatIndirectCall(count, seed, floatCallback),
@@ -313,7 +334,8 @@ public class RuntimeBench {
                     indirectCall(count, seed, branchIntCallback),
                     polymorphicCall(count, seed, a, b, c), dispatchControl(count, seed),
                     listRead(values, seed), listBuild(count, seed),
-                    listMutate(count, seed), temporaryList(count, seed), temporaryHash(count, seed)};
+                    listMutate(count, seed), temporaryList(count, seed), temporaryHash(count, seed),
+                    indirectCall(count, seed, closureCallback), indirectCall(count, seed, capturedCallback)};
                 for (int i = 0; i < names.length; ++i) {
                     System.out.printf("CHECK\t%s\t%d\t%d\t%d%n", names[i], count, seed, results[i]);
                 }

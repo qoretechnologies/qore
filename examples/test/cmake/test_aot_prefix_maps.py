@@ -59,6 +59,11 @@ class AotPrefixMapsTest(unittest.TestCase):
         if (QCC.parent / "libqore.so").exists():
             self.env["LD_LIBRARY_PATH"] = str(QCC.parent)
             self.env["QORE_LIBDIR"] = str(QCC.parent)
+        elif (QCC.parent / "libqore.dylib").exists():
+            # Set the child environment explicitly: macOS system Python may
+            # strip inherited DYLD_* variables before these tests start.
+            self.env["DYLD_LIBRARY_PATH"] = str(QCC.parent)
+            self.env["QORE_LIBDIR"] = str(QCC.parent)
 
     def run_tool(self, *args, success=True, **kwargs):
         result = subprocess.run(list(map(str, args)), env=self.env, text=True,
@@ -286,6 +291,22 @@ public class Zeta inherits Alpha {
                         'code<string()> fn = make_closure("value"); printf("%s\\n", fn());'))
         for output in outputs[1:]:
             self.assertEqual(outputs[0], output)
+
+    def test_closure_debugger_entries_preserve_prefix_maps(self):
+        fixture = ROOT / "examples/test/ir/IRComposedIntLeafDebugger.qr"
+        for name in ("first checkout", "different second checkout"):
+            # The compiler canonicalizes source paths; macOS /var is a symlink
+            # to /private/var, so map the physical directory on every platform.
+            directory = (self.root / name).resolve()
+            directory.mkdir()
+            source = directory / "closure.qr"
+            source.write_text(fixture.read_text())
+            artifact = directory / "closure"
+            self.run_tool(QCC, "-O3", "--strip-source", "--aot-metadata-compression=none",
+                          f"--file-prefix-map={directory}=/usr/src/qore-test",
+                          "-o", artifact, source)
+            self.env["QORE_EXPECT_CLOSURE_FILE"] = "/usr/src/qore-test/closure.qr"
+            self.assertEqual("composed-leaf-debugger: ok\n", self.run_tool(artifact))
 
     def test_binary_default_signatures_are_stable_across_processes(self):
         source = self.root / "ReproProbe.qm"

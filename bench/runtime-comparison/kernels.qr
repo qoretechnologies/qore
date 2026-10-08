@@ -9,6 +9,14 @@ int sub step(int value) {
     return (value * 33 + 17) & 65535;
 }
 
+code<int(int)> sub makeClosure(bool captured) {
+    int increment = 17;
+    if (captured) {
+        return int sub (int value) { return (value * 33 + increment) & 65535; };
+    }
+    return int sub (int value) { return (value * 33 + 17) & 65535; };
+}
+
 int sub wideStep(int value) {
     return ((value * 33 + 17) & 65535) | 1125899906842624;
 }
@@ -202,12 +210,15 @@ int sub temporaryHash(int count, int seed) {
 int sub dispatch(string name, int count, int seed, list<int> data, Stepper receiver,
         code<int(int)> callback, DynamicStep a, DynamicStep b, DynamicStep c,
         code<int(int)> wideCallback, code<float(float)> floatCallback, code<float(float)> taggedCallback,
-        code<float(float)> branchCallback, code<int(int)> affineCallback, code<int(int)> branchIntCallback) {
+        code<float(float)> branchCallback, code<int(int)> affineCallback, code<int(int)> branchIntCallback,
+        code<int(int)> closureCallback, code<int(int)> capturedCallback) {
     switch (name) {
         case "arithmetic": return arithmetic(count, seed);
         case "direct_call": return directCall(count, seed);
         case "method_call": return methodCall(count, seed, receiver);
         case "indirect_call": return indirectCall(count, seed, callback);
+        case "closure_call": return indirectCall(count, seed, closureCallback);
+        case "closure_capture": return indirectCall(count, seed, capturedCallback);
         case "indirect_wide": return wideIndirectCall(count, seed, wideCallback);
         case "indirect_affine": return indirectCall(count, seed, affineCallback);
         case "indirect_affine_wide": return wideIndirectCall(count, seed, affineCallback);
@@ -245,6 +256,8 @@ sub main() {
     if (ARGV.size() == 1 && ARGV[0] == "check") {
         Stepper receiver();
         code<int(int)> callback = \step();
+        code<int(int)> closureCallback = makeClosure(False);
+        code<int(int)> capturedCallback = makeClosure(True);
         code<int(int)> wideCallback = \wideStep();
         code<int(int)> affineCallback = \affineStep();
         code<int(int)> branchIntCallback = \branchIntStep();
@@ -261,10 +274,12 @@ sub main() {
                         "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
                         "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
                         "polymorphic_call", "dispatch_control", "list_read",
-                        "list_build", "list_mutate", "temporary_list", "temporary_hash")) {
+                        "list_build", "list_mutate", "temporary_list", "temporary_hash",
+                        "closure_call", "closure_capture")) {
                     printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed,
                         dispatch(name, count, seed, data, receiver, callback, a, b, c,
-                            wideCallback, floatCallback, taggedCallback, branchCallback, affineCallback, branchIntCallback));
+                            wideCallback, floatCallback, taggedCallback, branchCallback, affineCallback, branchIntCallback,
+                            closureCallback, capturedCallback));
                 }
             }
         }
@@ -282,6 +297,8 @@ sub main() {
     list<int> data = makeData(count, 7);
     Stepper receiver();
     code<int(int)> callback = \step();
+    code<int(int)> closureCallback = makeClosure(False);
+    code<int(int)> capturedCallback = makeClosure(True);
     code<int(int)> wideCallback = \wideStep();
     code<int(int)> affineCallback = \affineStep();
     code<int(int)> branchIntCallback = \branchIntStep();
@@ -299,7 +316,8 @@ sub main() {
         do {
             seed = (seed + 1) & 65535;
             checksum ^= dispatch(name, count, seed, data, receiver, callback, a, b, c,
-                wideCallback, floatCallback, taggedCallback, branchCallback, affineCallback, branchIntCallback);
+                wideCallback, floatCallback, taggedCallback, branchCallback, affineCallback, branchIntCallback,
+                closureCallback, capturedCallback);
             ++calls;
             elapsed = clock_get_monotonic_us() - start;
         } while (elapsed < duration_us);

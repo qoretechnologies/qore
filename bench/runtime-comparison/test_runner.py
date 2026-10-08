@@ -30,6 +30,8 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(8450, run.reference("temporary_list", 2, 7))
         self.assertEqual(8450, run.reference("temporary_hash", 2, 7))
         self.assertEqual(8449, run.reference("indirect_call", 2, 7))
+        self.assertEqual(8449, run.reference("closure_call", 2, 7))
+        self.assertEqual(8449, run.reference("closure_capture", 2, 7))
         self.assertEqual(8449, run.reference("indirect_wide", 2, 7))
         self.assertEqual(65535, run.reference("indirect_float", 2, 7))
         self.assertEqual(0, run.reference("indirect_float", 1, 65535))

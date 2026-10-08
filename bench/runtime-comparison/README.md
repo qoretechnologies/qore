@@ -147,6 +147,8 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |direct_call|Same recurrence through a small function
 |method_call|Same recurrence through a method on a final class; receiver created outside timing
 |indirect_call|Typed Qore function reference / Java LongUnaryOperator; callback created outside timing
+|closure_call|Noncapturing Qore closure / Java functional object; created outside timing, passed into the callback loop
+|closure_capture|Qore closure reading a captured integer / Java functional object reading a non-final integer field; no timed capture mutation
 |indirect_wide|Same low-bit recurrence with bit 50 retained across the callback boundary; checksum uses low 16 bits
 |indirect_float|Double callback with bounded addition/subtraction and an integer checksum
 |indirect_tagged_float|Double callback alternating -3e307 and -6e307, which require heap encoding when boxed in Qore
@@ -176,6 +178,21 @@ NOTHING, and cancellation semantics differ from Java's. Java's boxed elements
 can allocate while Qore's small integers are inline. A compiler may eliminate
 temporary aggregates; this is an intended optimization opportunity. Do not
 interpret a temporary-pair result as a general list throughput measurement.
+
+The closure workloads pass their callbacks as parameters to the same loop used
+by `indirect_call`; construction and capture initialization are outside timing.
+Java's two functional-object `applyAsLong()` targets have `DONT_INLINE`, just as
+the function-reference targets do. A Qore captured variable has different
+ownership/synchronization semantics from a Java non-final field; these are
+matched computations, not identical contracts or a benchmark of capture mutation.
+
+An AOT caller does not imply a native closure body: an eligible noncapturing
+closure can execute through the bounded IR leaf evaluator. The caller retains
+the runtime helper call. `QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE=1` disables
+the composed integer evaluator; set it for compilation and execution when
+comparing AOT closures, because admission also controls generic native-body
+emission. QORD20 closure debugger metadata requires paired before/after AOT
+compilation when the baseline predates that format.
 
 The original direct/final-method kernels permit inlining. Indirect callbacks
 retain calls in Qore AOT, as did the earlier polymorphic baselines. Java's indirect
@@ -213,7 +230,7 @@ eligible branch bodies; it is not a blanket native-callback disable.
 
 ## Measurement contract
 
-- Each selected mode first passes 270 checks: every kernel at sizes 0, 1, 17, 1024,
+- Each selected mode first passes 300 checks: every kernel at sizes 0, 1, 17, 1024,
   and 4096, each with seeds 0, 7, and 65535. Python independently computes the
   expected results. Missing, duplicate, extra, or incorrect records fail.
 - Kernel definitions are identical between Qore IR and AOT. There are no

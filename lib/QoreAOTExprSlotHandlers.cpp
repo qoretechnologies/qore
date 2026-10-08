@@ -1111,6 +1111,7 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
         closure_flags |= 0x0004;
     }
     ctx.writer.writeU16(closure_flags);
+    qore_aot_write_closure_entry(ctx.writer, *variant);
 
     // Lower closure before writing captures so embedded expression payloads
     // can contribute parent locals not present in the parser's closure vlist.

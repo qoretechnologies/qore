@@ -6734,7 +6734,11 @@ static uint64_t execFunctionRefNative(const FunctionCallReferenceNode* ref,
 static bool closureDirectArgsNeedNoBinding(const UserVariantBase* uvb,
         const uint64_t* args, int nargs, ExceptionSink* xsink) {
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
-    if (!sig || nargs != static_cast<int>(sig->numParams())) {
+    // Attachment is live state, not an admission fact that may be cached.
+    // execValue()/evalTiered() select AST or materialize source-stripped debug
+    // IR; neither the leaf evaluator nor execClosureDirect does that selection.
+    if (!sig || nargs != static_cast<int>(sig->numParams())
+            || qore_program_private::get(*uvb->pgm)->hasDebuggerAttached()) {
         return false;
     }
     for (int i = 0; i < nargs; ++i) {
@@ -6832,7 +6836,7 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
         uint64_t** arg_cleanups, uint64_t& result_bits) {
     static const bool disabled =
         std::getenv("QORE_DISABLE_IR_NATIVE_CLOSURE_LEAF_INLINE") != nullptr;
-    if (disabled || !uvb || arg_cleanups
+    if (disabled || !uvb || arg_cleanups || uvb->pgm != getProgram()
             || uvb->hasLazyAOTClosureIR()
             || !uvb->isStaticallyFastCallEligible()) {
         return false;

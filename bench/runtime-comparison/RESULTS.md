@@ -4147,3 +4147,172 @@ full split-runtime claim is made. The goal remains active. Next: extend the
 existing bounded IR integer-leaf evaluator to composed scalar expressions,
 then investigate immutable caller-owned diagnostic frames and unboxed method
 continuations without weakening observability or cleanup.
+
+## Composed IR integer leaves and closure call census (2026-10-08)
+
+Baseline: `16367e39957d2f84d840d976d54d8c9f0bdd9bd8`. Bounded composed
+integer leaf admission reduces the IR direct-call workload **60.27%**, from
+359.33210 to 142.77692 ns/element. AOT noncapturing closures improve **57.64%**,
+107.43783 to 45.51332. Both before/after fork ranges separate. These are not
+isolated native-call latencies or evidence of Java parity.
+
+### Admission and observability
+
+The existing integer evaluator now admits single-block compositions, bitwise
+AND/OR/XOR and three-way comparison. Compact single-operation summaries remain
+preferred. Admission retains exact integer signatures, at most two parameters,
+eight forward-only blocks, eight IR-only body locals, 64 instructions and value
+IDs below 128. Captures, references, effects and backward branches are excluded.
+Invalid operands and exceptional modulo abandon scratch evaluation before any
+visible effect. Unsigned intermediates preserve full-width arithmetic wrapping.
+
+This also changes AOT closure compilation: an admitted leaf need not emit a
+generic native closure body. Its native caller still calls the runtime helper,
+which can execute the bounded evaluator. The matched Java functional-object
+targets explicitly prevent inlining. Captured-variable synchronization and
+ownership differ from Java field access; the new capture benchmark reads an
+integer without mutating it, with construction outside timing.
+
+Validation exposed a pre-existing debugger problem: retained AOT closures did
+not report entry/exit events after attachment. Direct/leaf closure shortcuts
+now reject attached debuggers, and leaf execution requires the same Program.
+QORD20 preserves entry file/source labels, offset, lines and lexical parse
+options in a 40-byte payload. Both closure readers attach immutable,
+variant-owned entry metadata before publication. Older supported formats remain
+readable, but need recompilation to supply missing entry metadata; older runtimes
+reject QORD20. The prepared scalar callback helper ABI is unchanged.
+
+Review also corrected a unity-build-hidden `QoreParseOptions` header dependency
+and routed new source labels through the prefix-map writer. A regression checks
+all 48 debugger entries from two physical roots with spaces: the saved pre-map
+candidate fails with an unmapped closure entry, while release/debug final builds
+pass. The Python harness now explicitly selects macOS child-process libraries;
+inherited `DYLD_*` variables are not reliable through system Python.
+
+### Final paired measurements
+
+`run-2adfuvk6`: 1024 elements, five forks, three warmups and five 500 ms windows;
+175 jobs / 875 samples. Baseline/current IR and separately compiled AOT artifacts
+plus fresh Java each pass 300 independent reference checks. Jobs run sequentially
+in shuffled order, without overlapping builds, tests, profiles or evidence checks.
+Values are medians of fork means in ns/element, including loop, dispatch,
+computation and checksum. The expanded harness passes two additional closure
+arguments per batch; do not subtract earlier-harness medians from these results.
+
+|!Kernel|!IR before|!IR after|!AOT before|!AOT after|!Java JIT
+|direct_call|359.33210|142.77692|2.35964|2.37417|0.88624
+|indirect_wide|340.60394|340.16457|8.20412|8.22985|1.67833
+|indirect_float|295.97036|298.93464|10.18199|10.16668|1.64416
+|polymorphic_call|407.74319|404.83213|88.11007|87.36582|2.53789
+|arithmetic|93.62041|95.59812|2.33129|2.34765|0.88658
+|closure_call|368.44074|370.11959|107.43783|45.51332|1.66773
+|closure_capture|403.01069|408.15201|126.80795|126.24921|1.75026
+
+IR direct-call fork means range from 351.43068–363.81890 before and
+138.85556–144.59000 after. AOT noncapturing closure ranges are
+106.90270–108.00984 and 45.10210–46.00707. All other before/after ranges overlap;
+their small movements are not claimed as improvements or proof of equivalence.
+In particular, IR arithmetic is **2.11% slower** by median. Its earlier pilot
+was 4.09% slower; this consistent direction is retained as an unresolved modest
+cost, not dismissed because the ranges overlap. Shared-host scheduling,
+frequency and thermal state remain uncontrolled. Fork ranges are not confidence
+intervals, and startup samples do not establish cold-cache behavior.
+
+The fresh AOT/Java workload ratios are **4.90×** for wide integer callbacks,
+**6.18×** for floating callbacks, **34.42×** for polymorphic dispatch,
+**27.29×** for noncapturing closures and **72.13×** for captured closures.
+Direct calls allow inlining; Qore's polymorphic base body can inline while
+Java retains all three targets. The new closure numbers must not be represented
+as general capture-mutation or isolated native-call costs.
+
+### Attribution control and pilot
+
+`run-haxft31z` sets `QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE=1` for both
+compilation and execution, with the same five-fork/500 ms settings and a new
+shuffle: 60 jobs / 300 samples, 300 reference checks per mode.
+
+|!Disabled-path workload|!Before|!After|!Change
+|IR direct_call|356.26954|362.63930|+1.79%
+|AOT direct_call|2.34098|2.36023|+0.82%
+|IR closure_call|372.21566|370.69473|-0.41%
+|AOT closure_call|106.95306|108.81225|+1.74%
+|IR arithmetic|94.00202|95.74695|+1.86%
+|AOT arithmetic|2.33872|2.36247|+1.02%
+
+All disabled-control ranges overlap, and both large target gains disappear.
+The arithmetic slowdown remains with the evaluator disabled; execution of the
+new leaf path does not explain it. Other runtime/layout effects are not isolated.
+No universal no-regression claim is made.
+
+The initial IR-only pilot `run-ijj48usb` predates the debugger/metadata fixes:
+five forks, three warmups and five 300 ms windows, 40 jobs / 200 samples. IR
+direct calls improve 352.62501 → 140.58286 (-60.13%, separated ranges).
+Indirect bounded/wide controls move +0.04%/+0.88%; arithmetic moves +4.09%.
+All raw pilot samples and its exact separate runtime diff are retained.
+
+### Validation and audit
+
+Release/debug each pass the 72-file selected matrix before the final include
+and source-map corrections: 49 QUnit wrappers, 247 cases / 17,594 assertions,
+plus 23 standalones. Final builds rerun eight closure/metadata files per build:
+five wrappers, nine cases / 164 assertions, plus three standalones. The composed
+wrapper is rerun after the debugger path-check extension: 37 assertions per
+build. Coverage includes wrapping, effects/errors, concurrent first calls,
+Program churn/crossings, warmed/cold debugger attachment, metadata compression,
+shared-module closure lifetime, cancellation, stack readers and typed callbacks.
+
+The focused prefix-map regression passes release/debug. The wider 17-test
+prefix-map suite is **not green** on this macOS host: final has 13 failures and
+one skip; saved HEAD has those same failures plus the new debugger regression.
+The unchanged failures include physical-path and byte-reproducibility problems;
+their full cause diagnosis is not claimed. Early library-selection probes were
+inconclusive and superseded by explicit child environments.
+
+Standalone syntax checks pass for the interpreter, JIT runtime, binary
+serializer, AOT runtime and owning expression/slot registry translation units;
+the latter use their Qore header prerequisite. This is not a full split build.
+Eleven benchmark-harness tests pass. Old AOT outputs retain byte-identical
+225/270 reference records. The full-width fixture preserves a baseline JIT
+borrowed-argument reproducer and therefore checks AST/IR/tiered/AOT, not JIT;
+the separate debugger fixture does test JIT.
+
+All 62 `audit-changes` checks are recorded individually: **20 Pass, 42 N/A,
+0 Fail**, scoped to these changes and the stated validation limitations.
+
+|!Audit group|!Status|!Evidence
+|Module, QPP, DataProvider, factory and JAR registration|N/A|No such implementation or registration changes
+|Test structure and dependencies|Pass|Modern executable fixtures; repository QUnit/FsUtil; isolated test artifacts
+|Sandboxing and cancellation|Pass|No production I/O; bounded evaluator; existing cancellation and Program guards retained
+|Exception, thread, type and input safety|Pass|RAII closure ownership; release/acquire descriptor publication; bounded payload/string validation
+|Performance and correctness|Pass|Paired samples and disabled control; explicit arithmetic cost and baseline failures; no parity claim
+|Documentation and source metadata|Pass|Version/lifetime contract; mapped debugger entry regression; no new public API
+
+[Complete evidence](results-composed-ir-closures-macos-arm64.json) retains all
+**275 jobs / 1,375 samples**, variant diffs/hashes, integrity checks, profile
+summary and audit. Final production diff SHA-256:
+`67298937350a496c481d9c73458b2489736b564765f203499b14b6fbf05365ec`.
+Release/debug libraries:
+`bdfcfdee3608a8122e56ebdb5aed99099ada531dc03b5995eeff507efe81516e` /
+`6639e17beea88b381c0533a64a86b48791d6a8143853a93bf48865def29058ac`.
+Runtime text grows 13,893,248 → 13,898,064 bytes (+4,816).
+No full suite, sanitizer, Linux, allocation-failure or malformed-entry injection
+claim is made. The overall performance goal remains active.
+
+### Next measured bottleneck
+
+A separate five-second profile of the actual captured-closure workload has
+3,798 main-thread samples (the signal-wait thread is excluded). The native
+closure body is reached through `execClosureDirect`, which still instantiates
+scalar parameters in TLS, installs the capture environment/frame, and uses
+boxed local/capture loads and cleanup. Leaf samples include 286 in
+`execClosureDirect`, 152 in `LocalVarValue::set`, 146 in TLS access, 108 in
+statement-context swapping and 102 in parameter instantiation. These are
+sampling observations, not additive isolated latency estimates.
+
+Next: expose guarded typed native closure entry to dynamically passed callbacks,
+preserving capture synchronization, lexical Program/object/class context,
+debugger fallback, stack/cancellation guards and reader-safe frame lifetime.
+Existing compiler typed dispatch requires a recoverable closure-create target;
+this callback-parameter loop does not provide one. After that, return to unboxed
+polymorphic continuations and immutable caller-owned diagnostic frames. Neither
+larger optimization is implemented by this iteration.

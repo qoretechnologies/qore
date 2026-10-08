@@ -48,6 +48,7 @@
 #include <vector>
 #include <qore/QoreValue.h>
 #include <qore/QoreEnumDecl.h>
+#include <qore/QoreParseOptions.h>
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_aot_deps.h"
 
@@ -195,7 +196,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      variable to a same-named local of the function).  A v9-v18 file carries no binding and is resolved by
 //!      name and type as before.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 19;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 20;
+//! Closure records preserve their entry location and lexical parse options.
+constexpr uint16_t QORE_AOT_CLOSURE_ENTRY_VERSION = 20;
+constexpr size_t QORE_AOT_CLOSURE_ENTRY_BYTES = 40;
 //! First format version identifying the variable each local slot record binds to (see
 //! QORE_AOT_LOCAL_SLOT_TOP_LEVEL and AOTIRLocalBinding).
 constexpr uint16_t QORE_AOT_LOCAL_BINDING_VERSION = 19;
@@ -4100,6 +4104,41 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     //! For a nested handler: the slot-id -> LocalVar map of the IR function containing it.  A nested
     //! handler's slots below its parent_slot_count are the containing function's slots with the same ids.
     const std::unordered_map<uint32_t, LocalVar*>* container_slot_locals = nullptr);
+
+//! Source-stripped closure entry metadata, borrowed from the reader until attached.
+struct QoreAOTClosureEntry {
+    const char* file = nullptr;
+    const char* source = nullptr;
+    int offset = 0;
+    int first_line = 0;
+    int last_line = 0;
+    QoreParseOptions parse_options;
+    bool present = false;
+};
+
+//! Write the version-20 closure entry payload before its capture table.
+/** @param writer output metadata writer
+    @param variant closure whose location and lexical parse options are preserved
+*/
+DLLLOCAL void qore_aot_write_closure_entry(QoreAOTBinaryWriter& writer, const UserVariantBase& variant);
+//! Read and validate a closure entry; older binaries have no payload.
+/** @param reader owner of the decoded string pool
+    @param ptr input cursor, advanced over the payload when present
+    @param end end of the containing record
+    @param entry output metadata; string pointers remain borrowed until attachment
+    @param error diagnostic on invalid metadata
+    @return true for valid metadata or an older format without an entry payload
+*/
+DLLLOCAL bool qore_aot_read_closure_entry(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+    const uint8_t* end, QoreAOTClosureEntry& entry, std::string& error);
+//! Attach immutable, variant-owned debugger metadata before the closure is published.
+/** @param pgm owning Program, kept alive by the caller
+    @param variant unpublished closure receiving the entry statement
+    @param entry validated metadata whose strings are interned in the owning Program
+    @note Holds only the Program metadata registry lock, not parse ownership.
+*/
+DLLLOCAL void qore_aot_attach_closure_entry(QoreProgram* pgm, UserVariantBase& variant,
+    const QoreAOTClosureEntry& entry);
 
 //! Compress metadata blob using zlib
 /** Compresses the serialized metadata blob to reduce size and LLVM compilation overhead.

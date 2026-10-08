@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+int sub debugComposed(int value) {
+    return ((value * 33 + 17) & 65535) ^ 7; # DIRECT_ENTRY: line 8
+}
+code<int(int)> composed_closure = int sub (int value) {
+    return ((value * 33 + 17) & 65535) ^ 7; # CLOSURE_ENTRY: line 11
+};
+code<int(int)> late_closure = int sub (int value) {
+    return ((value * 17 + 9) & 65535) ^ 7; # LATE_ENTRY: line 14
+};
+class ComposedLeafRecorder inherits DebugProgram {
+    public {
+        int direct_entries = 0;
+        int direct_exits = 0;
+        int closure_entries = 0;
+        int closure_exits = 0;
+        int late_entries = 0;
+        int late_exits = 0;
+        list<string> entry_files = ();
+    }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow,
+            reference rs, reference rts) { rs = DebugStep; }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        *hash<auto> loc = pgm.getStatementIdInfo(sid);
+        if (loc.start_line == 8) { ++direct_entries; }
+        if (loc.start_line == 11) { ++closure_entries; }
+        if (loc.start_line == 14) { ++late_entries; }
+        if (loc.start_line == 8 || loc.start_line == 11 || loc.start_line == 14) {
+            push entry_files, loc.file;
+        }
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+        *hash<auto> loc = pgm.getStatementIdInfo(sid);
+        if (loc.start_line == 8) { ++direct_exits; }
+        if (loc.start_line == 11) { ++closure_exits; }
+        if (loc.start_line == 14) { ++late_exits; }
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss,
+            reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+int sub exerciseComposedDebugger(code<int(int)> direct, code<int(int)> closure, int value) {
+    return direct(value) + closure(value);
+}
+int sub exerciseLateDebugger(code<int(int)> closure, int value) {
+    return closure(value);
+}
+for (int i = 0; i < 32; ++i) {
+    if (exerciseComposedDebugger(\debugComposed(), composed_closure, i)
+            != (((i * 33 + 17) & 65535) ^ 7) * 2) {
+        throw "COMPOSED-DEBUGGER", "warmup result";
+    }
+}
+ComposedLeafRecorder recorder();
+ProgramControl pc = ProgramControl::getProgram();
+recorder.addProgram(pc);
+for (int i = 0; i < 16; ++i) {
+    if (exerciseComposedDebugger(\debugComposed(), composed_closure, i)
+            != (((i * 33 + 17) & 65535) ^ 7) * 2) {
+        throw "COMPOSED-DEBUGGER", "attached result";
+    }
+    if (exerciseLateDebugger(late_closure, i) != (((i * 17 + 9) & 65535) ^ 7)) {
+        throw "COMPOSED-DEBUGGER", "first call while attached";
+    }
+}
+recorder.removeProgram(pc);
+if (ENV.QORE_EXPECT_CLOSURE_FILE) {
+    foreach string file in (recorder.entry_files) {
+        if (file != ENV.QORE_EXPECT_CLOSURE_FILE) {
+            throw "COMPOSED-DEBUGGER", "unmapped entry location: " + file;
+        }
+    }
+}
+if (recorder.direct_entries != 16 || recorder.direct_exits != 16
+        || recorder.closure_entries != 16 || recorder.closure_exits != 16
+        || recorder.late_entries != 16 || recorder.late_exits != 16) {
+    throw "COMPOSED-DEBUGGER", sprintf("direct %d/%d, closure %d/%d, late %d/%d",
+        recorder.direct_entries, recorder.direct_exits,
+        recorder.closure_entries, recorder.closure_exits,
+        recorder.late_entries, recorder.late_exits);
+}
+for (int i = 0; i < 16; ++i) {
+    if (exerciseComposedDebugger(\debugComposed(), composed_closure, i)
+            != (((i * 33 + 17) & 65535) ^ 7) * 2) {
+        throw "COMPOSED-DEBUGGER", "detached result";
+    }
+    if (exerciseLateDebugger(late_closure, i) != (((i * 17 + 9) & 65535) ^ 7)) {
+        throw "COMPOSED-DEBUGGER", "late native publication";
+    }
+}
+printf("composed-leaf-debugger: ok\n");
