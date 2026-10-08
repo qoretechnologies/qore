@@ -5,6 +5,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
+%requires FsUtil
 %requires QUnit
 
 %exec-class SystemCallTest
@@ -27,10 +28,11 @@ class SystemCallTest inherits QUnit::Test {
 %ifdef Windows
         testSkip("Windows");
 %endif
-        string file = tmp_location() + "/output";
+        # a directory of its own, so that concurrent runs of this test do not share the file
+        TmpDir tmp("qore-system-");
+        string file = tmp.path + DirSep + "output";
 
         testAssertion("system() call", \system(), "/bin/echo OUTPUT > " + file, 0);
-        on_exit unlink(file);
 
         assertEq("OUTPUT", chomp(ReadOnlyFile::readTextFile(file)));
     }
