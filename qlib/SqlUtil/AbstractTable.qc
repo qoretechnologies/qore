@@ -664,6 +664,79 @@ table.create();
         ds.beginTransaction();
     }
 
+    #! Returns whether the driver supports database-enforced transaction, statement and lock deadlines
+    /** @return True when @ref beginBoundedTransaction() is available
+        @throw DBI-ERROR if server capability discovery fails
+        @note PostgreSQL 17 and later support this capability. Unsupported drivers must not substitute
+            application-side elapsed-time checks for database-enforced deadlines.
+        @par Example
+        A bounded maintenance operation checks this capability before requesting storage admission.
+        @since SqlUtil 3.3.0
+    */
+    bool supportsBoundedTransactions() {
+        return supportsBoundedTransactionsImpl();
+    }
+
+    #! Begins a new transaction with database-enforced execution limits
+    /** The caller must obtain any storage admission before calling and own the complete transaction.
+        Existing transactions and autocommit datasources are rejected. Limits last until commit or rollback;
+        stricter existing session limits remain effective, and session defaults are never changed.
+
+        @param lock_timeout_ms maximum time for each database lock acquisition, in milliseconds
+        @param statement_timeout_ms maximum time for each database statement, in milliseconds
+        @param transaction_timeout_ms maximum time in the database transaction, in milliseconds
+        @return effective limits with keys \c lock_timeout_ms, \c statement_timeout_ms and \c transaction_timeout_ms
+        @throw OPTION-ERROR unless 1 <= lock <= statement <= transaction <= 60000 milliseconds
+        @throw TRANSACTION-ERROR for an existing transaction
+        @throw AUTOCOMMIT-ERROR if the datasource has autocommit enabled
+        @throw TRANSACTION-LIMIT-NOT-SUPPORTED if the driver/server lacks these three timeout facilities
+        @throw TRANSACTION-LIMIT-EXCEEDED if the total budget expires during limit installation
+        @throw DBI-ERROR if the transaction cannot be started or the limits cannot be installed
+        @note The returned transaction limit subtracts time already spent installing the limits.
+        @note Limits apply at the database, not to client transport latency. A transaction deadline may close
+            its connection. The caller must roll back/reconcile and restart the complete operation, including
+            admission and these limits; it must never continue partway through the failed transaction.
+        @note These are native server timeouts, not an absolute wall-clock guarantee: interruption can be
+            deferred in server critical sections, and PostgreSQL disables its transaction timer before the
+            final commit record and WAL flush. Storage admission must separately budget rows, bytes and WAL.
+        @note A callback, statement or savepoint that disables these limits or commits early violates this
+            contract. The API does not authorize an operation, bound its rows/bytes/WAL, or resolve a lost commit reply.
+        @par Example
+        @code{.py}
+table.beginBoundedTransaction(100, 1000, 5000);
+on_error table.rollback();
+# Lock and revalidate the admitted owner before executing the bounded mutation.
+table.update({"part_period": target}, {"id": admitted_id});
+table.commit();
+        @endcode
+        @since SqlUtil 3.3.0
+    */
+    hash<string, int> beginBoundedTransaction(int lock_timeout_ms, int statement_timeout_ms,
+            int transaction_timeout_ms) {
+        if (lock_timeout_ms < 1 || statement_timeout_ms < lock_timeout_ms
+                || transaction_timeout_ms < statement_timeout_ms || transaction_timeout_ms > 60000) {
+            throw "OPTION-ERROR", "transaction limits require 1 <= lock <= statement <= transaction <= 60000 ms";
+        }
+        if (ds.currentThreadInTransaction()) {
+            throw "TRANSACTION-ERROR", "bounded transaction requires an idle datasource";
+        }
+        if (!supportsBoundedTransactions()) {
+            throw "TRANSACTION-LIMIT-NOT-SUPPORTED", "the database driver does not support bounded transactions";
+        }
+        ds.beginTransaction();
+        on_error ds.rollback();
+        return beginBoundedTransactionImpl(lock_timeout_ms, statement_timeout_ms, transaction_timeout_ms);
+    }
+
+    private bool supportsBoundedTransactionsImpl() {
+        return False;
+    }
+
+    private hash<string, int> beginBoundedTransactionImpl(int lock_timeout_ms, int statement_timeout_ms,
+            int transaction_timeout_ms) {
+        throw "TRANSACTION-LIMIT-NOT-SUPPORTED", "the database driver does not support bounded transactions";
+    }
+
     #! commits the current transaction on the underlying @ref Qore::SQL::AbstractDatasource
     commit() {
         ds.commit();

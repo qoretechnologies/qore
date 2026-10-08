@@ -505,6 +505,14 @@
     without failure records.
     @endparblock
 
+    @par Database-Enforced Maintenance Deadlines
+    @parblock
+    SqlUtil can start maintenance transactions with database-enforced lock, statement and transaction deadlines
+    on PostgreSQL 17 and later. Limits are local to one transaction, preserve stricter session settings, and are
+    cleared by commit or rollback. Unsupported drivers reject this operation; see
+    @ref SqlUtil::AbstractTable::beginBoundedTransaction() "beginBoundedTransaction()".
+    @endparblock
+
     @par Safe Removal of Empty Retention Partitions
     @parblock
     SqlUtil can now remove an empty PostgreSQL partition while excluding concurrent inserts. The operation
