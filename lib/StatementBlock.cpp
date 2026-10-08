@@ -786,8 +786,8 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     // do not instantiate local vars here; they are instantiated by the QoreProgram object for each thread
 
     // Get the parse options from the current program at runtime.
-    // Use getProgram() (the thread-local current program set by ProgramThreadCountContextHelper)
-    // rather than rc.getProgram() which may return the outer/calling program.
+    // Use getProgram() (the thread-local current program set by ProgramThreadCountContextHelper,
+    // which also updates rc); rc.getProgram() is only the fallback when the thread has no program.
     // NOTE: We can't use pwo.parse_options because the TopLevelStatementBlock is constructed
     // before the program's pwo is initialized (due to C++ member initialization order).
     QoreProgram* pgm = getProgram();

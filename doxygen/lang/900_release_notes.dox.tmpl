@@ -4128,6 +4128,13 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed code executed with @ref exec_mode_ast "AST execution" (<tt>--exec-mode=ast</tt>) resolving names in
+      the wrong @ref Qore::Program "Program" after calling code in another Program, such as a method that its class
+      inherits from a module: later statements in the same block that resolve a name at runtime, for example
+      the \c TypedHash constructor of the \c reflection module with a typed hash name, looked it
+      up in the Program that was called last, so they raised \c UNKNOWN-TYPED-HASH for the caller's own declarations
+      or found declarations that are not visible to the caller
+
     - Fixed a function being compiled to native code with JIT and tiered execution while other threads called it,
       which could make those threads read the function's information on its use of \c argv and \c self and of its
       local variables while it was being changed, with possible wrong local variable handling or a crash

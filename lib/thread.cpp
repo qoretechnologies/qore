@@ -2296,6 +2296,17 @@ LVarStackBreakHelper::~LVarStackBreakHelper() {
     }
 }
 
+// The thread's RuntimeConfig carries the current Program and its thread-local data for the code that holds a
+// reference to it across nested calls (ex: a statement block evaluating its statements); every helper that changes
+// the thread's current Program must therefore also update the RuntimeConfig, and restore it when the helper exits,
+// in the same way as the object and class context helpers below; otherwise the caller keeps seeing the Program of
+// the last cross-Program call it made
+static void sync_runtime_config_program(const ThreadData* td) {
+    RuntimeConfig& rc = rc_get_tls_ref();
+    rc.setProgram(td->current_pgm);
+    rc.setThreadLocalProgramData(td->tlpd);
+}
+
 ProgramCallContextHelper::ProgramCallContextHelper(QoreProgram* new_pgm) {
     if (new_pgm) {
         ThreadData* td = thread_data.get();
@@ -2322,6 +2333,7 @@ QoreProgramContextHelper::QoreProgramContextHelper(QoreProgram* pgm) {
     ThreadData* td  = thread_data.get();
     old_pgm = td->current_pgm;
     td->current_pgm = pgm;
+    sync_runtime_config_program(td);
 }
 
 QoreProgramContextHelper::~QoreProgramContextHelper() {
@@ -2330,6 +2342,7 @@ QoreProgramContextHelper::~QoreProgramContextHelper() {
     }
     ThreadData* td  = thread_data.get();
     td->current_pgm = old_pgm;
+    sync_runtime_config_program(td);
 }
 
 ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c) {
@@ -2644,6 +2657,7 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     td->current_pgm = old_pgm;
     td->tlpd = old_tlpd;
     td->current_pgm_ctx = old_ctx;
+    sync_runtime_config_program(td);
 
     if (thread_count_incremented) {
         qore_program_private::decThreadCount(*pgm, td->tid);
@@ -2694,6 +2708,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     td->current_pgm = pgm;
     init_tlpd = td->tpd->saveProgram(runtime, xsink); // set new td->tlpd
     td->current_pgm_ctx = this;
+    sync_runtime_config_program(td);
     save_frameCount = td->tlpd->lvstack.getFrameCount();
 
     printd(5, "ProgramThreadCountContextHelper::set() this:%p tlpd:%p savefc:%d oldfc:%d "
@@ -2947,6 +2962,7 @@ ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(E
         old_tlpd = td->tlpd;
         td->current_pgm = pgm;
         td->tpd->saveProgram(false, 0);
+        sync_runtime_config_program(td);
     } else {
         assert(qore_program_private::get(*pgm)->parsingLocked());
     }
@@ -2964,6 +2980,7 @@ ProgramRuntimeParseCommitContextHelper::~ProgramRuntimeParseCommitContextHelper(
         "restoring old pgm: %p old tlpd: %p\n", td->current_pgm, old_pgm, old_tlpd);
     td->current_pgm = old_pgm;
     td->tlpd        = old_tlpd;
+    sync_runtime_config_program(td);
 
     qore_program_private::unlockParsing(*pgm);
 }
@@ -2982,6 +2999,7 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
     ThreadData* td = thread_data.get();
     old_pgm = td->current_pgm;
     td->current_pgm = pgm;
+    sync_runtime_config_program(td);
 }
 
 ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
@@ -2991,6 +3009,7 @@ ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
     ThreadData* td = thread_data.get();
     qore_program_private::unlockParsing(*td->current_pgm);
     td->current_pgm = old_pgm;
+    sync_runtime_config_program(td);
 }
 
 CurrentProgramRuntimeParseContextHelper::CurrentProgramRuntimeParseContextHelper() {
@@ -3056,6 +3075,7 @@ ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* 
         restore = true;
         old_pgm = td->current_pgm;
         td->current_pgm = pgm;
+        sync_runtime_config_program(td);
     }
 }
 
@@ -3066,6 +3086,7 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
     ThreadData* td = thread_data.get();
     qore_program_private::decThreadCount(*td->current_pgm, td->tid);
     td->current_pgm = old_pgm;
+    sync_runtime_config_program(td);
 }
 
 QoreProgram* getProgram() {
