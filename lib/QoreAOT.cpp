@@ -24787,17 +24787,29 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
     });
 
     // Record the AOT runtime identity of this libqore; the loader refuses the module when it is loaded by a libqore
-    // with a different identity, before any generated code runs
+    // with a different identity, before any generated code runs.  The helper is referenced weakly and only called
+    // when it resolves: a libqore that predates it then still maps the module and runs this descriptor, and refuses
+    // the module with its own clear "native ABI version ... rebuild the module" error for descriptor revision 2,
+    // instead of failing in dlopen() with an unresolved symbol
     {
         auto* identity_fn_type = llvm::FunctionType::get(void_type, {
             ptr_type,   // QoreModuleInfo*
             ptr_type    // identity
         }, false);
-        auto identity_fn = module.getOrInsertFunction("qore_aot_fill_module_runtime_identity",
+        auto identity_callee = module.getOrInsertFunction("qore_aot_fill_module_runtime_identity",
             identity_fn_type);
+        auto* identity_fn = llvm::cast<llvm::Function>(identity_callee.getCallee());
+        identity_fn->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
         auto* identity_gv = createPrivateString("qore_aot_desc_runtime_identity",
             qore_aot_get_compile_runtime_identity());
-        builder.CreateCall(identity_fn, {mod_info_arg, identity_gv});
+
+        auto* call_bb = llvm::BasicBlock::Create(ctx, "fill_identity", desc_fn);
+        auto* cont_bb = llvm::BasicBlock::Create(ctx, "identity_done", desc_fn);
+        builder.CreateCondBr(builder.CreateIsNotNull(identity_fn), call_bb, cont_bb);
+        builder.SetInsertPoint(call_bb);
+        builder.CreateCall(identity_callee, {mod_info_arg, identity_gv});
+        builder.CreateBr(cont_bb);
+        builder.SetInsertPoint(cont_bb);
     }
 
     // Deliver any child module declarations with a separate call, so that .qmod artifacts compiled before
