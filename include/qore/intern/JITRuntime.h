@@ -1391,6 +1391,23 @@ void qore_rt_reload_local_if_stale_aot(QoreAOTContext* ctx, int32_t idx, uint64_
 void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 void qore_rt_assign_local_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 
+//! Checked required-class initializer returning an owned copy of the actual stored value.
+/** Only emitted for a normal, non-captured, non-self AOT body-local initializer. Weak inputs
+    are normalized and all assignment checks remain. Nonfresh/captured runtime
+    slots retain the ordinary post-cleanup reload instead of returning an earlier
+    snapshot. The caller transfers the returned reference to its reload tracker.
+    @param ctx current AOT context
+    @param idx valid body-local slot
+    @param val borrowed input value
+    @param xsink exception sink; errors return NOTHING with no owned result
+    @return owned NaN-boxed stored value, or NOTHING on error
+*/
+uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t val, ExceptionSink* xsink);
+//! Native-EH form; throws QoreJITException on a populated exception sink.
+uint64_t qore_rt_assign_class_local_result_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t val, ExceptionSink* xsink);
+
 //! Assign to a local variable via AOT context slot without type coercion.
 //! Used when coercion has already been applied.
 void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);

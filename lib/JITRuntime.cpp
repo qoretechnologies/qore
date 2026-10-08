@@ -380,6 +380,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_reload_local_if_stale", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale) },
     { "qore_rt_reload_local_if_stale_aot", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_aot) },
     { "qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot) },
+    { "qore_rt_assign_class_local_result_aot_v1",
+        reinterpret_cast<void*>(&qore_rt_assign_class_local_result_aot_v1) },
+    { "qore_rt_assign_class_local_result_aot_throwing_v1",
+        reinterpret_cast<void*>(&qore_rt_assign_class_local_result_aot_throwing_v1) },
     { "qore_rt_assign_local_no_coerce_aot", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot) },
     { "qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing) },
     { "qore_rt_assign_local_no_coerce_aot_throwing",
@@ -12207,6 +12211,50 @@ extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak_aot(QoreAOTContext* ctx
     qore_rt_assign_local_eval_weak(ctx->locals[idx], val, xsink);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    LocalVar* var = ctx->locals[idx];
+    if (!var || *xsink) {
+        return toBits(QoreValue());
+    }
+    if (var->closureUse()) {
+        qore_rt_assign_local_eval_weak(var, value, xsink);
+        return *xsink ? toBits(QoreValue()) : qore_rt_load_local(var, xsink);
+    }
+    ValueHolder result(xsink);
+    bool fresh = false;
+    {
+        QoreValue val = fromBits(value);
+        ValueHolder weak_eval_holder(xsink);
+        qore_rt_normalize_weak_reference_for_assignment(val, weak_eval_holder, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        LValueHelper helper(xsink);
+        if (var->getLValue(helper, false, true)) {
+            return toBits(QoreValue());
+        }
+        // A plain empty local has no replaced value or recursive root whose
+        // cleanup could reenter Qore and change the stored value. Do not extend
+        // this shortcut to reassignment, references or captured/shared slots.
+        fresh = helper.isNothing();
+        QoreValue stored = val.hasNode() ? val.refSelf() : val;
+        if (helper.assign(stored, "<lvalue>", true)) {
+            return toBits(QoreValue());
+        }
+        if (fresh) {
+            result = helper.getReferencedValue();
+        }
+    }
+    // Finish lvalue and weak-input cleanup before reporting success. Keep the
+    // normal reload order when a preexisting value could run a destructor.
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    return fresh ? toBits(result.release()) : qore_rt_load_local(var, xsink);
+}
+
 extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_assign_local_no_coerce(ctx->locals[idx], val, xsink);
@@ -12688,6 +12736,16 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_eval_we
     if (xsink && *xsink) {
         throw QoreJITException();
     }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_assign_class_local_result_aot_throwing_v1(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_assign_class_local_result_aot_v1(ctx, idx, val, xsink);
+    if (*xsink) {
+        fromBits(result).discard(xsink);
+        throw QoreJITException();
+    }
+    return result;
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_no_coerce_aot_throwing(

@@ -80,7 +80,24 @@ weak/deleted values, captured/reference mutation, escaped-capture lifetime,
 failed reassignment, exception cleanup and caller/callee access differences.
 `QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE=1` at compilation restores the
 separate coercion path. Existing native artifacts require recompilation; no
-runtime helper or ABI is added.
+serialized format or existing helper ABI is changed.
+
+For a reloadable, noncaptured, non-self local, the versioned
+`qore_rt_assign_class_local_result_aot_v1` helper combines this checked store
+with producing the owned value for the existing cache/reload tracker. A plain
+empty runtime slot has no replaced value or recursive root whose cleanup can
+reenter Qore and change the result. Only that case retains the actual stored
+value through lvalue and weak-input cleanup instead of looking up/evaluating
+the local again. Nonfresh slots and defensive captured-slot fallback still
+reload after cleanup. Reference targets, special `self` lookup and nonreloadable
+caches are excluded at compilation; normal and native-EH error paths retain
+ownership cleanup. The returned reference is transferred, not retained again,
+into the usual tracker/deferred-release chain.
+
+`QORE_DISABLE_AOT_CLASS_STORE_RESULT=1` at compilation keeps the separate reload.
+The regression also checks this control, captured fallback and split codegen.
+The additive versioned symbols require a compatible runtime for newly compiled
+artifacts; older artifacts keep their existing helpers.
 
 ### AOT method context elision
 

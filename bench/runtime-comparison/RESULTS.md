@@ -3708,3 +3708,120 @@ ownership as larger costs than method dispatch. Investigate a fused checked
 class-local assignment/result path to avoid a redundant local reload, while
 retaining class access, type and weak-reference checks, cleanup ordering and
 owned cache lifetime across aliases. The performance goal remains active.
+
+## Owned checked class-local result (2026-10-08)
+
+Retained result: polymorphic AOT improves **3.72%**, 107.09243 → 103.10729
+ns/element, with separated fork ranges. The pilot improves 4.64%. Two disabled
+controls have overlapping ranges, with the repeat near flat. Fresh Java is
+2.52757 ns/element: Qore remains **40.79×** slower on this whole workload, not
+at Java retained-call parity.
+
+Baseline: `d698514a016a3c5b82a5831de77bdbce300e5f3c` on
+`feature/performance`, same macOS arm64 workstation.
+[Sanitized evidence](results-class-store-result-macos-arm64.json) retains the
+exact runtime/compiler and test diffs, hashes, all 161 jobs / 805 samples, test
+rows and all 62 audit checks. Before and after use separately compiled AOT
+artifacts: the new helper symbols do not exist in the saved baseline.
+
+### Change and invariants
+
+Eligible noncaptured, non-self required-class initializers return the owned
+actual stored value from their checked assignment directly into the existing
+native cache/reload tracker. Only an empty plain runtime slot uses this
+shortcut. It has no replaced value or recursive root whose cleanup could
+reenter Qore and change the value. Nonfresh slots and defensive captured-slot
+fallback keep the ordinary post-cleanup reload.
+
+Class/access checks, weak normalization and all assignment errors remain.
+The owned snapshot survives lvalue/weak-input cleanup; the compiler checks
+errors before transferring its reference into the existing tracker and
+deferred-release chain. Reference targets, special self lookup, nonreloadable
+caches, reassignments and value-producing stores are excluded. The native-EH
+wrapper releases any result before throwing. No runtime ownership, call guard,
+cancellation checkpoint or existing serialized ABI is removed.
+
+This removes a repeated local lookup/evaluation, not the assignment itself.
+The separate earlier profile motivating it sampled receiver-local operations
+more often than method dispatch; those sample counts were not isolated latency.
+
+### Longer repeat
+
+1024 elements, five forks, three warmups and five 500 ms measured windows.
+75 jobs / 375 samples include before/after IR and AOT plus fresh Java. Every mode
+passes 270 independent reference checks. No build, test, profile, disassembly
+or evidence validation overlaps timing.
+
+|!Mode and kernel|!Before ns/element|!After ns/element|!Change|!Before / after fork-mean ranges
+|qore-ir polymorphic_call|407.41618|412.21871|1.18%|401.11834–408.36012 / 406.83740–420.36672
+|qore-ir indirect_wide|342.95866|345.16775|0.64%|336.39869–343.85018 / 335.48819–347.50377
+|qore-ir temporary_hash|657.03415|666.22882|1.40%|656.04265–665.12676 / 655.17357–675.95388
+|qore-aot polymorphic_call|107.09243|103.10729|-3.72%|105.48737–110.46176 / 102.39946–104.64754
+|qore-aot indirect_wide|8.15872|8.19979|0.50%|8.05349–8.23566 / 8.02945–8.34138
+|qore-aot temporary_hash|319.84364|308.85647|-3.44%|304.90313–337.50640 / 300.81660–312.36892
+
+All IR and unrelated wide/hash ranges overlap; no improvement is attributed
+there. Fresh Java wide/hash medians are 1.67594 / 15.52544 ns/element. Qore can
+inline the base polymorphic method while retaining derived calls; Java prevents
+inlining all three bodies. These are equivalent computations, not identical
+runtime contracts or isolated call instructions.
+
+### Pilot and disabled controls
+
+Pilot: 4096 elements, five forks, three warmups and five 300 ms windows;
+30 jobs / 150 samples.
+
+|!Mode and kernel|!Before ns/element|!After ns/element|!Change|!Before / after fork-mean ranges
+|qore-aot polymorphic_call|107.16124|102.18518|-4.64%|106.24384–108.49531 / 101.07611–103.74105
+|qore-aot indirect_wide|7.13816|7.15826|0.28%|7.02531–7.15510 / 6.98205–7.23139
+|qore-aot direct_call|1.31556|1.31970|0.31%|1.31050–1.32796 / 1.31407–1.32002
+
+Both controls set `QORE_DISABLE_AOT_CLASS_STORE_RESULT=1` at compilation and
+runtime, restoring the separate reload. Each uses 4096 elements, seven forks,
+three warmups and five 500 ms windows; 28 jobs / 140 samples. The baseline does
+not recognize the new control and retains its original lowering.
+
+First disabled control:
+
+|!Mode and kernel|!Before ns/element|!After ns/element|!Change|!Before / after fork-mean ranges
+|qore-aot polymorphic_call|105.35023|107.78449|2.31%|103.00641–106.43602 / 105.70640–112.78808
+|qore-aot indirect_wide|7.05492|7.22292|2.38%|6.92417–7.50194 / 7.15401–7.31777
+
+Both medians drifted upward by about 2.3% with overlapping ranges. Rather than
+discarding that unfavorable run, a new shuffle seed repeated the same control:
+
+|!Mode and kernel|!Before ns/element|!After ns/element|!Change|!Before / after fork-mean ranges
+|qore-aot polymorphic_call|107.24579|106.47765|-0.72%|106.30350–108.21440 / 104.93213–107.26010
+|qore-aot indirect_wide|7.20131|7.18356|-0.25%|6.99791–7.29401 / 7.08477–7.30078
+
+Both repeated-control ranges overlap and their medians are near flat. The
+enabled target benefit repeats with separated ranges; it does not repeat with
+the optimization disabled. All samples remain in the evidence, including the
+initial unfavorable control. Fork ranges are descriptive, not confidence
+intervals; shared-host scheduling/frequency/thermal state and startup filesystem
+caches are uncontrolled.
+
+### Validation and next work
+
+Release/debug builds each pass 57 selected files: 39 QUnit wrappers,
+206 cases / 16919 assertions plus 18 standalone files. The expanded class-local
+wrapper contributes 160 assertions per build, comparing AST with IR/JIT/tiered
+and O0/O3 AOT, native EH, both compiler controls, runtime context control and
+split codegen. It checks actual helper selection and captured fallback as well
+as private inheritance, weak/deleted values, alias ownership and error cleanup.
+
+Standalone runtime/compiler syntax passes with 79/76 existing warnings;
+11 Python harness tests pass. Old AOT v2/v3 artifacts retain byte-identical
+225/270-record outputs. Runtime/compiler diff SHA-256:
+`c9e645acb299a04dd38eb5d4c64d0d392f9bef31e139aac7681bb15043041068`.
+Release/debug library SHA-256:
+`4c05a7e34825439dbebc6ca7d633c51dd26892a1c92297ad14cdb99f7feb6c2f` /
+`6d7978146d5a944d1c0c23ae8e08a3f850b58764cbed6aebbcae4e777ff82877`.
+Release text grows 13881348 → 13882644 bytes (+1296).
+
+No full repository suite, sanitizer/race detector, Linux, allocation-failure
+injection or complete split-runtime build is claimed. The next investigation
+is native-only receiver-local storage with an explicit destructor/exception
+ordering proof, or a fresh plain-slot assignment specialization if that proof
+cannot be established. Prepared native method frames remain another target.
+The performance goal is active; this is an incremental workload improvement.

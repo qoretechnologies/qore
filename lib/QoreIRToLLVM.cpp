@@ -5166,9 +5166,10 @@ void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
 }
 
 void QoreIRToLLVM::reloadLocalFromRuntime(const void* key, llvm::Module& module,
-        llvm::Function* llvm_func, bool honor_reload_exempt) {
+        llvm::Function* llvm_func, bool honor_reload_exempt, llvm::Value* owned_value) {
     auto alloca_it = local_allocas.find(key);
     if (!canReloadLocalFromRuntime(key, honor_reload_exempt)) {
+        assert(!owned_value);
         return;
     }
 
@@ -5217,14 +5218,14 @@ void QoreIRToLLVM::reloadLocalFromRuntime(const void* key, llvm::Module& module,
     llvm::Value* old_deferred = builder->CreateLoad(i64_type, deferred_it->second);
 
     // Load new value from runtime stack
-    llvm::Value* reloaded;
-    if (aot_mode) {
+    llvm::Value* reloaded = owned_value;
+    if (!reloaded && aot_mode) {
         auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
                 llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
         reloaded = builder->CreateCall(load_fn, {aot_ctx_arg,
                 llvm::ConstantInt::get(i32_type, slot), xsink_arg});
-    } else {
+    } else if (!reloaded) {
         auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
                 llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
         llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(key));
@@ -15192,6 +15193,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && !QoreTypeInfo::isReference(local_ti)
                 && QoreTypeInfo::getUniqueReturnClass(local_ti)
                 && !std::getenv("QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE");
+            bool return_class_store_result = runtime_checked_class_store
+                && !linst->local->closureUse() && !linst->local->isSelf()
+                && strcmp(linst->local->getName(), "self") && canReloadLocalFromRuntime(key, false)
+                && !std::getenv("QORE_DISABLE_AOT_CLASS_STORE_RESULT");
 
             // Case 3: Scalar typed locals also need assignment coercion before
             // storing into the LLVM alloca.  Otherwise a softint local assigned
@@ -15421,17 +15426,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         : (use_no_coerce ? "qore_rt_assign_local_no_coerce_eval_weak_throwing"
                             : "qore_rt_assign_local_eval_weak_throwing");
 
+                llvm::Value* stored_result = nullptr;
                 if (aot_mode) {
-                    auto aot_ft = llvm::FunctionType::get(void_type,
+                    if (return_class_store_result) {
+                        aot_helper_name = "qore_rt_assign_class_local_result_aot_v1";
+                        aot_helper_throwing_name = "qore_rt_assign_class_local_result_aot_throwing_v1";
+                    }
+                    auto aot_ft = llvm::FunctionType::get(return_class_store_result ? i64_type : void_type,
                             {ptr_type, i32_type, i64_type, ptr_type}, false);
                     auto assign_helper = module.getOrInsertFunction(aot_helper_name, aot_ft);
                     auto assign_helper_throwing = module.getOrInsertFunction(
                             aot_helper_throwing_name, aot_ft);
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
-                    emitMaybeInvoke(assign_helper, assign_helper_throwing,
+                    llvm::Value* assigned = emitMaybeInvoke(assign_helper, assign_helper_throwing,
                             {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
                              boxed, xsink_arg},
                             module, llvm_func, inst);
+                    if (return_class_store_result) {
+                        stored_result = assigned;
+                    }
                 } else {
                     auto jit_ft = llvm::FunctionType::get(void_type,
                             {ptr_type, i64_type, ptr_type}, false);
@@ -15457,7 +15470,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // runtime slot stores the same bits already in the alloca.  Keep
                 // the cache correct by retaining those bits directly instead of
                 // emitting a qore_rt_load_local_aot() round trip.
-                if (QoreTypeInfo::isReference(linst->local->getTypeInfo())) {
+                if (stored_result) {
+                    reloadLocalFromRuntime(key, module, llvm_func, false, stored_result);
+                } else if (QoreTypeInfo::isReference(linst->local->getTypeInfo())) {
                     // Reference locals write through to another variable; any local
                     // cache could now be stale.
                     reloadAllLocalsFromRuntime(module, llvm_func);

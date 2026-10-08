@@ -85,6 +85,14 @@ the checked assignment and reloads its stored value; it does not remove class
 access or weak-reference checks. Use separate before/after compilation for this
 compiler optimization, not `--reuse-aot-for-baseline`.
 
+`QORE_DISABLE_AOT_CLASS_STORE_RESULT=1` at compilation retains a separate local
+reload after that checked assignment. Otherwise eligible noncaptured, non-self
+class initializers use a versioned helper returning the owned stored value to
+the existing cache/reload tracker. Only an empty plain runtime slot returns the
+snapshot; nonfresh/captured slots reload after cleanup. Type/access checks and
+weak normalization remain. Compile separate before/after artifacts: the new
+helper symbols are absent from older runtimes.
+
 `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` disables the pure scalar method binding
 at compilation and its polymorphic-cache native path at runtime. Eligible
 `int(int)` overrides bypass parameter TLS binding but retain receiver, Program,

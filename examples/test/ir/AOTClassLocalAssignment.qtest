@@ -39,7 +39,11 @@ class ClassLocalAssignmentTest inherits QUnit::Test {
         }
         TmpDir dir("qore-class-local-assignment-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ",
-                "QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE=1 ")) {
+                "QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE=1 ",
+                "QORE_DISABLE_AOT_CLASS_STORE_RESULT=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            bool separate_coercion = prefix.startsWith("QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE");
+            bool stored_result = !separate_coercion && !prefix.startsWith("QORE_DISABLE_AOT_CLASS_STORE_RESULT");
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
                 string ir = run((qcc, level, "--strip-source", "-o", executable, source),
@@ -52,13 +56,21 @@ class ClassLocalAssignmentTest inherits QUnit::Test {
                     # receiver's slot, not unrelated coercions in the function.
                     int receiver_slot = name == "classLocalPhi" ? 5 : 1;
                     string slot_pattern = "[^\\n]*\\(ptr %ctx, i32 " + receiver_slot + ",";
-                    assertEq(prefix.startsWith("QORE_DISABLE_"),
+                    assertEq(separate_coercion,
                         regex(body[0] ?? "", "qore_rt_coerce_value_aot" + slot_pattern),
                         name + " separate class coercion selection " + prefix + level);
-                    assertEq(!prefix.startsWith("QORE_DISABLE_"),
+                    assertEq(!separate_coercion && !stored_result,
                         regex(body[0] ?? "", "qore_rt_assign_local_eval_weak_aot" + slot_pattern),
                         name + " checked assignment retained " + prefix + level);
+                    assertEq(stored_result,
+                        regex(body[0] ?? "", "qore_rt_assign_class_local_result_aot" + slot_pattern),
+                        name + " owned stored result " + prefix + level);
                 }
+                *list<*string> captured_body = regex_extract(ir,
+                    "(?s)define [^\n]*@escapedTarget_[^\n]*\n(.*?)\n\\}");
+                assertTrue(!!captured_body, "captured local definition");
+                assertFalse(regex(captured_body[0] ?? "", "qore_rt_assign_class_local_result_aot"),
+                    "captured target keeps the post-cleanup reload");
                 assertEq(expected, run((executable,)), prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_IR_CONTEXT_ELISION=1 "),
                     "runtime context control " + prefix + level);

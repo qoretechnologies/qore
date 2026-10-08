@@ -4419,7 +4419,9 @@ while (*binary chunk = input.read(65536)) {
       and restoring the caller's context on return
     - Consolidated required-class AOT local initialization into the checked assignment path, reducing
       temporary reference ownership while preserving type/access checks, weak-reference normalization,
-      exception behavior, and the actual stored value in native local caches
+      exception behavior, and the actual stored value in native local caches; eligible fresh,
+      noncaptured class locals return that owned value directly from the checked store, avoiding
+      a redundant local reload while retaining post-cleanup reloads for nonfresh slots
     - Added guarded native scalar AOT method entries on polymorphic cache hits, avoiding parameter TLS
       binding for proven non-throwing <tt>int(int)</tt> bodies while retaining context, stack, ownership,
       receiver, Program, and debugger checks

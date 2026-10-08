@@ -1418,8 +1418,10 @@ private:
     // Reload a specific local variable's alloca from the Qore runtime stack.
     // Called after lvalue operations (PostInc, StoreLvalue, etc.) that modify the
     // runtime stack without updating the LLVM alloca cache.
+    // owned_value, when supplied, replaces the load and transfers its reference
+    // to the usual tracker/deferred-cleanup chain; the local must be reloadable.
     void reloadLocalFromRuntime(const void* key, llvm::Module& module, llvm::Function* llvm_func,
-            bool honor_reload_exempt = true);
+            bool honor_reload_exempt = true, llvm::Value* owned_value = nullptr);
 
     // Retain a just-assigned value directly in the local alloca cache without
     // loading it back from the runtime stack.
