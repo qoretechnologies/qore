@@ -37,6 +37,7 @@
 #include "qore/qore_bitopts.h"
 #include "qore/InputStream.h"
 #include "qore/intern/StringReaderHelper.h"
+#include "qore/intern/qore_encoding_private.h"
 
 DLLLOCAL extern qore_classid_t CID_STREAMREADER;
 DLLLOCAL extern QoreClass* QC_STREAMREADER;
@@ -133,11 +134,17 @@ public:
     }
 
     DLLLOCAL QoreStringNode* readLineEol(const QoreString* eol, bool trim, ExceptionSink* xsink) {
-        // the byte order of a stream in the generic UTF-16 encoding is given by a byte order mark at its start; it
-        // must be known before the end-of-line marker is converted to the encoding of the stream
-        char start[2];
+        // the byte order of a stream in the generic UTF-16 encoding (or a Unicode encoding created on the fly with
+        // a byte order mark, ex: "UTF-32") is given by a byte order mark at its start; it must be known before the
+        // end-of-line marker is converted to the encoding of the stream
+        char start[4];
         size_t start_len = 0;
-        if (enc == QCS_UTF16 && resolveUtf16ByteOrder(start, start_len, xsink)) {
+        if (enc == QCS_UTF16) {
+            if (resolveUtf16ByteOrder(start, start_len, xsink)) {
+                return nullptr;
+            }
+        } else if (!qore_encoding_private::get(*enc)->swapped_bom.empty()
+                && resolveByteOrder(start, start_len, xsink)) {
             return nullptr;
         }
 
@@ -149,42 +156,25 @@ public:
 
         SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
 
-        size_t eolpos = 0;
+        const size_t eolsize = eolstr->size();
+        // the width of the smallest character; the end-of-line marker is a whole number of characters
+        const size_t width = enc->getMinCharWidth();
 
         // adds a byte to the line; returns true if the line is complete
         auto add_byte = [&](char c) -> bool {
             str->concat(c);
-
-            // the bytes are compared directly, as QoreString::operator[] gives a byte 0x80 - 0xff as a negative
-            // value only where char is signed
-            if (eolstr->c_str()[eolpos] == c) {
-                ++eolpos;
-                if (eolpos == eolstr->size()) {
-                    return true;
-                }
-            } else if (eolpos) {
-                // check all positions to see if the string matches
-                bool found = false;
-                for (size_t i = eolpos; i; --i) {
-                    // we have to use memcmp here because we could be dealing with character
-                    // encodings that include nulls in the string (ex: UTF-16*)
-                    if (!memcmp(eolstr->c_str(), str->c_str() + str->size() - i, i)) {
-                        found = true;
-                        if (eolpos != i)
-                            eolpos = i;
-                        break;
-                    }
-                }
-                if (!found)
-                    eolpos = 0;
-            }
-            return false;
+            // the marker only ends the line at a character boundary: in an encoding with characters of more than one
+            // byte (ex: UTF-32), the bytes of the marker can also be the end of one character and the start of the
+            // next one; memcmp() is used, as the encoding can have null bytes in characters (ex: UTF-16*)
+            size_t size = str->size();
+            return eolsize && size >= eolsize && !(size % width)
+                && !memcmp(str->c_str() + size - eolsize, eolstr->c_str(), eolsize);
         };
 
         // returns the complete line
         auto finish_line = [&]() -> QoreStringNode* {
             if (trim) {
-                str->terminate(str->size() - eolpos);
+                str->terminate(str->size() - eolsize);
             }
             return q_remove_bom_utf16(str.release(), enc);
         };
@@ -203,8 +193,8 @@ public:
             }
             char c;
             int64 rc = readData(xsink, &c, 1, false);
-            //printd(5, "StreamReader::readLineEol() eolpos: %d/%d rc: %d c: %d str: '%s' (%s)\n", eolpos,
-            //    eolstr->size(), rc, c, str->c_str(), enc->getCode());
+            //printd(5, "StreamReader::readLineEol() eol size: %zu rc: %d c: %d str: '%s' (%s)\n", eolsize, rc, c,
+            //    str->c_str(), enc->getCode());
             if (*xsink)
                 return 0;
             if (!rc)
@@ -480,6 +470,50 @@ private:
             start_len = 0;
         }
         return 0;
+    }
+
+    //! Resolves the byte order of a stream in a Unicode encoding created on the fly with a byte order mark
+    /** As resolveUtf16ByteOrder(), for an encoding such as \c "UTF-32": if the next bytes are a byte order mark of
+        the encoding in either byte order, they are consumed, and the encoding of the stream is set to the encoding
+        of that byte order (ex: \c "UTF-32LE"); otherwise the bytes read are returned to the caller as content.
+
+        @param start receives the bytes read that are not a byte order mark; must have space for four bytes
+        @param start_len receives the number of bytes in \a start (0 - 4)
+        @param xsink exception sink
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int resolveByteOrder(char* start, size_t& start_len, ExceptionSink* xsink) {
+        const qore_encoding_private* ep = qore_encoding_private::get(*enc);
+        assert(!ep->bom.empty() && !ep->swapped_bom.empty());
+        assert(ep->bom.size() <= 4 && ep->swapped_bom.size() <= 4);
+        start_len = 0;
+        // returns true if the bytes read are the start of the given byte order mark
+        auto is_prefix = [&](const std::string& bom) -> bool {
+            return start_len <= bom.size() && !memcmp(start, bom.data(), start_len);
+        };
+        // the bytes are read one at a time while they can be the start of a byte order mark
+        while (true) {
+            int64 rc = readData(xsink, start + start_len, 1, false);
+            if (*xsink) {
+                return -1;
+            }
+            if (!rc) {
+                return 0;
+            }
+            ++start_len;
+            if (!is_prefix(ep->bom) && !is_prefix(ep->swapped_bom)) {
+                return 0;
+            }
+            size_t bom_len;
+            const QoreEncoding* bom_enc = ep->getBomEncoding(enc, start, start_len, bom_len);
+            if (bom_enc) {
+                assert(bom_len == start_len);
+                enc = bom_enc;
+                start_len = 0;
+                return 0;
+            }
+        }
     }
 
     //! Read data until a limit.

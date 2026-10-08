@@ -33,6 +33,11 @@ public class CsvEncodingTest inherits QUnit::Test {
             {"encoding": "UTF-8", "headers": CzechHeaders},
             {"encoding": "UTF-16LE", "headers": CzechHeaders},
             {"encoding": "UTF-16BE", "headers": CzechHeaders},
+            # encodings created on the fly
+            {"encoding": "UTF-32LE", "headers": CzechHeaders},
+            {"encoding": "UTF-32BE", "headers": CzechHeaders},
+            {"encoding": "UTF-32", "headers": CzechHeaders},
+            {"encoding": "UCS-2LE", "headers": CzechHeaders},
         );
 
         #! the headers of the data with typed fields
@@ -94,7 +99,16 @@ public class CsvEncodingTest inherits QUnit::Test {
             {"encoding": "UTF-16", "data_encoding": "UTF-16LE", "bom": <fffe>},
             {"encoding": "UTF-16", "data_encoding": "UTF-16BE", "bom": <feff>},
             {"encoding": "UTF-16", "data_encoding": "UTF-16BE"},
+            {"encoding": "UTF-32LE"},
+            {"encoding": "UTF-32BE"},
+            {"encoding": "UTF-32", "data_encoding": "UTF-32LE", "bom": <fffe0000>},
+            {"encoding": "UTF-32", "data_encoding": "UTF-32BE", "bom": <0000feff>},
+            {"encoding": "UTF-32", "data_encoding": "UTF-32BE"},
+            {"encoding": "UCS-2BE"},
         );
+
+        #! an EBCDIC code page, used if iconv supports it
+        const Ebcdic = "IBM1140";
 
         #! the data rows
         const Rows = (
@@ -116,6 +130,7 @@ public class CsvEncodingTest inherits QUnit::Test {
         addTestCase("UTF-16 byte order marks", \utf16ByteOrderMarks());
         addTestCase("generic UTF-16", \genericUtf16());
         addTestCase("typed fields", \typedFields());
+        addTestCase("EBCDIC", \ebcdic());
         set_return_value(main());
     }
 
@@ -284,6 +299,25 @@ public class CsvEncodingTest inherits QUnit::Test {
             checkTyped(c, label + " number format", FormatHeaders, FormatRows, FormatRecords,
                 {"fields": FormatFields, "number_format": ".,"});
         }
+    }
+
+    ebcdic() {
+        try {
+            if (convert_encoding("A", Ebcdic).toBinary() != <c1>) {
+                testSkip(Ebcdic + " is not an EBCDIC code page in iconv on this platform");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(Ebcdic + " is not supported by iconv on this platform");
+        }
+        # the separators, quotes, and line ends of a CSV file in EBCDIC are not ASCII bytes
+        binary data = encode(GermanHeaders, Ebcdic);
+        hash<auto> opts = {"separator": ";", "header_names": True};
+        checkRecords(GermanHeaders, read(new CsvIterator(new BinaryInputStream(data), Ebcdic, opts)), "CsvIterator");
+        checkRecords(GermanHeaders, read(new CsvFileIterator(writeFile("ebcdic.csv", data),
+            opts + {"encoding": Ebcdic})), "CsvFileIterator");
+        checkRecords(GermanHeaders, search(new CsvReadDataProvider(opts + {"data": data, "encoding": Ebcdic})),
+            "CsvReadDataProvider");
+        checkTyped({"encoding": Ebcdic}, Ebcdic, TypedHeaders, TypedRows, TypedRecords, {"fields": TypedFields});
     }
 
     #! Checks the records read from data with typed fields in the given encoding

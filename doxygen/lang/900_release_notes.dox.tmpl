@@ -4204,6 +4204,22 @@ while (*binary chunk = input.read(65536)) {
       - For example, \c "int", \c "float", \c "number", \c "bool" and \c "date" fields read by the
         @ref csvutilintro "CsvUtil" module from UTF-16 data were converted incorrectly
 
+    - Fixed character encodings that %Qore creates from their name, such as \c "UTF-32", \c "UTF-32LE",
+      \c "UTF-32BE", \c "UCS-4", \c "UCS-2LE", \c "UCS-2BE" and EBCDIC code pages such as \c "IBM1140", being
+      handled as single-byte encodings compatible with ASCII: hash keys in them were cut at their first null byte
+      or used as raw bytes, they converted to wrong numbers (\c "12" in UTF-32LE converted to \c 1), string lengths,
+      offsets and searches counted bytes, and @ref Qore::StreamReader "StreamReader",
+      @ref Qore::InputStreamLineIterator "InputStreamLineIterator", @ref Qore::FileLineIterator "FileLineIterator",
+      @ref Qore::DataLineIterator "DataLineIterator" and the @ref csvutilintro "CsvUtil" iterators could not split
+      their lines.  The properties of such an encoding are now taken from the encoding itself: UTF-32, UCS-4 and
+      UCS-2 strings have the characters of their Unicode encoding form, and an encoding that is not compatible with
+      ASCII (such as EBCDIC) is converted wherever text is parsed or split.  A string converted to the generic
+      \c "UTF-32" encoding is big-endian and no longer starts with a byte order mark, and a byte order mark at the
+      start of data in it gives the byte order, as for the generic \c "UTF-16" encoding.  The end-of-line marker of a
+      line read from a stream in an encoding with characters of more than one byte now only ends a line at a
+      character boundary, so a UTF-32 or UTF-16 line is no longer cut where the bytes of the marker span two
+      characters.  Encodings that iconv does not support are handled as before
+
     - Fixed a string of up to 6 bytes stored inline in a value, such as an element of a constant list in a
       compiled (AOT) module, converting to \c 1970-01-01 instead of the date it represents (ex: \c "P1DT2H") when
       assigned to a \c softdate variable or member

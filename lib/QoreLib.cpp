@@ -3295,6 +3295,21 @@ int q_env_subst(QoreString& str) {
 
 static void q_remove_bom_utf16_intern(QoreString* str, const QoreEncoding*& enc) {
     assert(str->getEncoding() == enc);
+    if (enc != QCS_UTF16 && enc != QCS_UTF16BE && enc != QCS_UTF16LE) {
+        // a Unicode encoding created on the fly (ex: UTF-32): the byte order mark of the encoding is removed, and for
+        // an encoding with a byte order mark (ex: "UTF-32"), the string gets the encoding of the byte order found
+        size_t bom_len;
+        const QoreEncoding* bom_enc = qore_encoding_private::get(*enc)->getBomEncoding(enc, str->c_str(),
+            str->size(), bom_len);
+        if (bom_enc) {
+            str->replace(0, bom_len, static_cast<const char*>(nullptr));
+            if (bom_enc != enc) {
+                str->setEncoding(bom_enc);
+                enc = bom_enc;
+            }
+        }
+        return;
+    }
     if (str->size() > 1 && !enc->isAsciiCompat()) {
         if ((enc == QCS_UTF16 || enc == QCS_UTF16BE) && str->c_str()[0] == (char)0xfe && str->c_str()[1] == (char)0xff) {
             str->replace(0, 2, (const char*)nullptr);
@@ -3311,6 +3326,12 @@ static void q_remove_bom_utf16_intern(QoreString* str, const QoreEncoding*& enc)
             }
         }
     }
+}
+
+// returns the number of bytes needed to check text in the given multi-byte encoding for a byte order mark
+static size_t q_bom_check_size(const QoreEncoding* enc) {
+    const qore_encoding_private* ep = qore_encoding_private::get(*enc);
+    return ep->bom.empty() ? 2 : ep->bom.size();
 }
 
 QoreString* q_remove_bom_utf16(QoreString* str, const QoreEncoding*& enc) {
@@ -3394,7 +3415,7 @@ QoreStringNode* q_read_string(ExceptionSink* xsink, int64 size, const QoreEncodi
             if ((size_t)size == str->size())
                 break;
             continue;
-        } else if (!check_bom && str->size() > 1) {
+        } else if (!check_bom && str->size() >= q_bom_check_size(enc)) {
             check_bom = true;
             q_remove_bom_utf16(*str, enc);
         }
@@ -3478,7 +3499,7 @@ QoreStringNode* q_read_string_short(ExceptionSink* xsink, int64 size, const Qore
         return str.release();
     }
 
-    if (str->size() > 1) {
+    if (str->size() >= q_bom_check_size(enc)) {
         q_remove_bom_utf16(*str, enc);
     }
 

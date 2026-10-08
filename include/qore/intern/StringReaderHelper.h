@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -42,10 +42,10 @@ using namespace std::placeholders;
 
 typedef std::function<qore_offset_t(void*, size_t, ExceptionSink*)> f_read_t;
 
-//! remove any BOM in UTF-16 strings, adjust the encoding if required
+//! remove any BOM in UTF-16 strings and strings in Unicode encodings created on the fly (ex: UTF-32), adjust the encoding if required
 DLLLOCAL QoreString* q_remove_bom_utf16(QoreString* str, const QoreEncoding*& enc);
 
-//! remove any BOM in UTF-16 strings, adjust the encoding if required
+//! remove any BOM in UTF-16 strings and strings in Unicode encodings created on the fly (ex: UTF-32), adjust the encoding if required
 DLLLOCAL QoreStringNode* q_remove_bom_utf16(QoreStringNode* str, const QoreEncoding*& enc);
 
 //! helper function for reading all possible data and returning it as a string

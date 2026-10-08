@@ -24,7 +24,8 @@
 
 /** Numbers, booleans, and dates are parsed from strings with ASCII syntax.  Each check converts a string in an
     encoding that is not ASCII-compatible (UTF-16LE, UTF-16BE, and the generic UTF-16 with and without a byte order
-    mark) and verifies that it gives the same result as the same characters in UTF-8, for every conversion: the
+    mark, and the encodings created on the fly UTF-32LE, UTF-32BE, the generic UTF-32 with and without a byte order
+    mark, UCS-2LE, and the EBCDIC code page IBM1140 if iconv supports it) and verifies that it gives the same result as the same characters in UTF-8, for every conversion: the
     conversion functions, the string pseudo-methods, soft parameter, lvalue, and member types, boolean context,
     comparisons, the parse functions, and date parsing with and without a mask.  A UTF-16 string is not cut at the
     first null byte of its representation: \c "12" in UTF-16LE is \c 12, not \c 1.
@@ -39,6 +40,8 @@ public namespace StringConversionEncodingChecks {
 const C16 = convert_encoding("42", "UTF-16LE");
 #! a constant boolean string in UTF-16BE
 const B16 = convert_encoding("0", "UTF-16BE");
+#! a constant in UTF-32BE, an encoding created on the fly
+const C32 = convert_encoding("42", "UTF-32BE");
 
 #! the UTF-8 strings converted in each encoding
 const Inputs = (
@@ -230,15 +233,34 @@ sub check_auto(ConvChecker c, auto s, auto u) {
     c.chk("auto == int", s == 12, u == 12);
 }
 
+#! returns True if iconv on this platform supports the EBCDIC code page used in the checks
+public bool sub has_ebcdic() {
+    try {
+        return convert_encoding("A", "IBM1140").toBinary() == <c1>;
+    } catch (hash<ExceptionInfo> ex) {
+        return False;
+    }
+}
+
 #! returns the UTF-8 string in each encoding that is not ASCII-compatible
-hash<string, string> sub get_variants(string u) {
-    return {
+public hash<string, string> sub get_variants(string u) {
+    hash<string, string> rv = {
         "UTF-16LE": convert_encoding(u, "UTF-16LE"),
         "UTF-16BE": convert_encoding(u, "UTF-16BE"),
         "UTF-16": convert_encoding(u, "UTF-16"),
         "UTF-16 LE BOM": binary_to_string(<fffe> + binary(convert_encoding(u, "UTF-16LE")), "UTF-16"),
         "UTF-16 BE BOM": binary_to_string(<feff> + binary(convert_encoding(u, "UTF-16BE")), "UTF-16"),
+        "UTF-32LE": convert_encoding(u, "UTF-32LE"),
+        "UTF-32BE": convert_encoding(u, "UTF-32BE"),
+        "UTF-32": convert_encoding(u, "UTF-32"),
+        "UTF-32 LE BOM": binary_to_string(<fffe0000> + binary(convert_encoding(u, "UTF-32LE")), "UTF-32"),
+        "UTF-32 BE BOM": binary_to_string(<0000feff> + binary(convert_encoding(u, "UTF-32BE")), "UTF-32"),
+        "UCS-2LE": convert_encoding(u, "UCS-2LE"),
     };
+    if (has_ebcdic()) {
+        rv."IBM1140" = convert_encoding(u, "IBM1140");
+    }
+    return rv;
 }
 
 #! checks strings that are not valid in their encoding and constants
@@ -250,6 +272,9 @@ sub check_special(ConvChecker c) {
     c.chk("float()", float(C16), 42.0);
     c.chk("boolean() 0", boolean(B16), False);
     c.chk("boolean context 0", B16 ? True : False, False);
+    c.chk("UTF-32 int()", int(C32), 42);
+    c.chk("UTF-32 softint", si(C32), 42);
+    c.chk("UTF-32 number()", number(C32), 42n);
 
     c.setPrefix("invalid: ");
     # an odd number of bytes: "1", "2", and a byte that is not a complete character
@@ -279,6 +304,30 @@ sub check_special(ConvChecker c) {
     string s16 = convert_encoding("12", "UTF-16LE");
     int i = int(s16);
     c.chk("unchanged", (i, s16.encoding(), binary(s16)), (12, "UTF-16LE", <31003200>));
+    # a number of bytes that is not a multiple of four: "1", "2", and bytes that are not a complete character
+    string odd32 = binary_to_string(<31000000320000003300>, "UTF-32LE");
+    c.chk("UTF-32 odd length int()", int(odd32), 12);
+    c.chk("UTF-32 odd length float()", float(odd32), 12.0);
+    # a value that is not a Unicode code point, followed by "5"
+    string bad32 = binary_to_string(<0011000000000035>, "UTF-32BE");
+    c.chk("UTF-32 invalid code point int()", int(bad32), 0);
+    c.chk("UTF-32 invalid code point boolean()", boolean(bad32), True);
+    # the generic UTF-32 encoding is big-endian without a byte order mark
+    string g32 = convert_encoding("12", "UTF-32");
+    c.chk("UTF-32 no byte order mark", binary(g32), <0000003100000032>);
+    c.chk("UTF-32 generic int()", int(g32), 12);
+    c.chk("UTF-32 BOM 0 boolean()", boolean(binary_to_string(<fffe000030000000>, "UTF-32")), False);
+    c.chk("UTF-32 unchanged", (int(g32), g32.encoding(), binary(g32)), (12, "UTF-32", <0000003100000032>));
+    c.chk("UTF-32 date() mask", date(convert_encoding("2024-01-02", "UTF-32"),
+        convert_encoding("YYYY-MM-DD", "UTF-32LE")), 2024-01-02);
+    c.chk("UTF-32 parse_number() format", parse_number(convert_encoding("1.234,5", "UTF-32LE"),
+        convert_encoding(".,", "UTF-32BE")), 1234.5n);
+    if (has_ebcdic()) {
+        # in EBCDIC, the digits are 0xf0 - 0xf9, and the ASCII bytes are other characters
+        c.chk("EBCDIC int()", int(binary_to_string(<f1f2>, "IBM1140")), 12);
+        c.chk("EBCDIC ASCII bytes int()", int(binary_to_string(<3132>, "IBM1140")), 0);
+        c.chk("EBCDIC boolean() 0", boolean(binary_to_string(<f0>, "IBM1140")), False);
+    }
 }
 
 #! runs every check and returns the results

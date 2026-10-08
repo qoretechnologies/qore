@@ -58,8 +58,14 @@ class HashKeyEncodingTest inherits QUnit::Test {
         assertTrue(utf8 > 0, "UTF-8 checks ran");
         assertEq(utf8, (select expected, $1 =~ /^ok ISO-8859-2\/UTF-16LE: /).size(), "ISO-8859-2 and UTF-16LE");
         assertEq(utf8, (select expected, $1 =~ /^ok WINDOWS-1250\/UTF-16BE: /).size(), "WINDOWS-1250 and UTF-16BE");
+        assertEq(utf8, (select expected, $1 =~ /^ok UTF-32LE\/UTF-32: /).size(), "UTF-32LE, UTF-32BE, and UTF-32");
+        # the EBCDIC checks run if iconv supports the code page
+        assertEq(HashKeyEncodingChecks::has_ebcdic() ? utf8 : 0,
+            (select expected, $1 =~ /^ok IBM1140\/UCS-2LE: /).size(), "IBM1140 and UCS-2LE");
         assertTrue((select expected, $1 =~ /^ok constants: /).size() > 0, "constant checks ran");
         assertTrue((select expected, $1 =~ /^ok errors: /).size() > 0, "error checks ran");
+        assertEq((select expected, $1 =~ /^ok errors: /).size(), (select expected, $1 =~ /^ok errors UTF-32: /).size(),
+            "UTF-32 error checks ran");
     }
 
     testExecModes() {

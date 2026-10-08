@@ -20,7 +20,6 @@
 class StringConversionEncodingTest inherits QUnit::Test {
     public {
         const ExecModes = ("ast", "ir", "jit", "tiered");
-        const Variants = ("UTF-16LE", "UTF-16BE", "UTF-16", "UTF-16 LE BOM", "UTF-16 BE BOM");
     }
 
     private {
@@ -49,7 +48,10 @@ class StringConversionEncodingTest inherits QUnit::Test {
         # every check ran for each encoding and input, and the constant and invalid string checks ran
         int per_variant = (select expected, $1 =~ /^ok UTF-16LE "12": /).size();
         assertTrue(per_variant > 50, "checks per input");
-        foreach string variant in (Variants) {
+        # the variants that the platform's iconv supports
+        list<string> variants = keys StringConversionEncodingChecks::get_variants("0");
+        assertEq(StringConversionEncodingChecks::has_ebcdic() ? 12 : 11, variants.size(), "variants");
+        foreach string variant in (variants) {
             string re = "^ok " + variant + " \"";
             assertEq(per_variant * StringConversionEncodingChecks::Inputs.size(),
                 (select expected, $1.regex(re)).size(), variant);

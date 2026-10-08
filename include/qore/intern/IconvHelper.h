@@ -32,6 +32,7 @@
 #define INCLUDE_QORE_INTERN_ICONVHELPER_H_
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_encoding_private.h"
 
 #include <cerrno>
 #include <iconv.h>
@@ -41,11 +42,11 @@ class IconvHelper {
 public:
    DLLLOCAL IconvHelper(const QoreEncoding *to, const QoreEncoding *from, ExceptionSink *xsink) : to(to), from(from) {
 #ifdef NEED_ICONV_TRANSLIT
-      QoreString to_code(getIconvCode(to));
+      QoreString to_code(getIconvTargetCode(to));
       to_code.concat("//TRANSLIT");
       c = iconv_open(to_code.getBuffer(), getIconvCode(from));
 #else
-      c = iconv_open(getIconvCode(to), getIconvCode(from));
+      c = iconv_open(getIconvTargetCode(to), getIconvCode(from));
 #endif
       if (c == (iconv_t) -1) {
          if (xsink) {
@@ -154,6 +155,17 @@ private:
     */
    DLLLOCAL static const char* getIconvCode(const QoreEncoding* enc) {
       return enc == QCS_UTF16 ? "UTF-16BE" : enc->getCode();
+   }
+
+   //! Returns the encoding name to pass to iconv_open() to convert text to the given %Qore encoding
+   /** As getIconvCode(), and for an encoding created on the fly whose iconv conversion writes a byte order mark
+       (ex: \c "UTF-32"), the name of the encoding in the byte order of the characters without one (ex:
+       \c "UTF-32BE"), which is what the character functions of the encoding expect; see
+       qore_encoding_private::probe().  Text converted from such an encoding is converted with its own name, so a
+       byte order mark at the start of the input gives its byte order.
+   */
+   DLLLOCAL static const char* getIconvTargetCode(const QoreEncoding* enc) {
+      return enc == QCS_UTF16 ? "UTF-16BE" : qore_encoding_private::get(*enc)->getIconvTargetCode();
    }
 
    // needed for platforms where the input buffer is defined as "const char"
