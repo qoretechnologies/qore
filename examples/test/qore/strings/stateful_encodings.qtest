@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# In a stateful encoding (UTF-7, ISO-2022-JP), the output of a conversion ends with the bytes that return to the
+# initial state (the "-" that ends a UTF-7 base64 run, the escape sequence that returns ISO-2022-JP to ASCII);
+# without them, the last characters of the output cannot be decoded.  Every conversion must write them: strings
+# converted with convert_encoding(), and data converted by EncodingConversionOutputStream and
+# EncodingConversionInputStream, written or read in any chunks.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class StatefulEncodingTest
+
+class StatefulEncodingTest inherits QUnit::Test {
+    public {
+        #! texts for each stateful encoding; each ends with a character outside the initial state
+        const Texts = {
+            "UTF-7": ("é", "abc é", "Grüße 😀", "a+b", "日本語"),
+            "ISO-2022-JP": ("中", "abc 日本語", "テキスト", "日本 abc 語"),
+        };
+    }
+
+    constructor() : Test("StatefulEncodingTest", "1.0", \ARGV) {
+        addTestCase("convert_encoding()", \testConvert());
+        addTestCase("output streams", \testOutputStream());
+        addTestCase("input streams", \testInputStream());
+        set_return_value(main());
+    }
+
+    #! returns True if iconv supports the encoding
+    private bool supported(string enc) {
+        try {
+            convert_encoding("a", enc);
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    testConvert() {
+        if (supported("UTF-7")) {
+            assertEq(<2b414f6b2d>, binary(convert_encoding("é", "UTF-7")), "é in UTF-7 is \"+AOk-\"");
+        }
+        if (supported("ISO-2022-JP")) {
+            # ESC $ B, the character, ESC ( B
+            assertEq(<1b244243661b2842>, binary(convert_encoding("中", "ISO-2022-JP")), "中 in ISO-2022-JP");
+        }
+        foreach hash<auto> i in (Texts.pairIterator()) {
+            if (!supported(i.key)) {
+                continue;
+            }
+            foreach string text in (i.value) {
+                string s = convert_encoding(text, i.key);
+                assertEq(text, convert_encoding(s, "UTF-8"), sprintf("%s %y round trip", i.key, text));
+                assertEq(text, convert_encoding(binary_to_string(binary(s), i.key), "UTF-8"),
+                    sprintf("%s %y from binary", i.key, text));
+            }
+        }
+    }
+
+    #! writes the text to an EncodingConversionOutputStream in chunks of the given number of characters
+    private binary writeStream(string text, string enc, int chunk) {
+        BinaryOutputStream bos();
+        EncodingConversionOutputStream os(bos, "UTF-8", enc);
+        for (int i = 0; i < text.length(); i += chunk) {
+            os.write(binary(text.substr(i, chunk)));
+        }
+        os.close();
+        return bos.getData();
+    }
+
+    testOutputStream() {
+        foreach hash<auto> i in (Texts.pairIterator()) {
+            if (!supported(i.key)) {
+                continue;
+            }
+            foreach string text in (i.value) {
+                binary expected = binary(convert_encoding(text, i.key));
+                foreach int chunk in (1, 2, 1000) {
+                    binary b = writeStream(text, i.key, chunk);
+                    string label = sprintf("%s %y in chunks of %d", i.key, text, chunk);
+                    assertEq(text, convert_encoding(binary_to_string(b, i.key), "UTF-8"), label);
+                    if (chunk == 1000) {
+                        assertEq(expected, b, label + " bytes");
+                    }
+                }
+            }
+        }
+    }
+
+    testInputStream() {
+        foreach hash<auto> i in (Texts.pairIterator()) {
+            if (!supported(i.key)) {
+                continue;
+            }
+            foreach string text in (i.value) {
+                # from UTF-8 to the stateful encoding, read one byte at a time and all at once
+                foreach int chunk in (1, 1000) {
+                    EncodingConversionInputStream is(new BinaryInputStream(binary(text)), "UTF-8", i.key);
+                    binary b = binary();
+                    while (*binary d = is.read(chunk)) {
+                        b += d;
+                    }
+                    assertEq(text, convert_encoding(binary_to_string(b, i.key), "UTF-8"),
+                        sprintf("%s %y to the encoding in chunks of %d", i.key, text, chunk));
+                }
+                # from the stateful encoding to UTF-8
+                EncodingConversionInputStream is(new BinaryInputStream(binary(convert_encoding(text, i.key))),
+                    i.key, "UTF-8");
+                binary b = binary();
+                while (*binary d = is.read(1)) {
+                    b += d;
+                }
+                assertEq(text, b.toString(), sprintf("%s %y from the encoding", i.key, text));
+            }
+        }
+    }
+}

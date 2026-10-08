@@ -4253,6 +4253,13 @@ while (*binary chunk = input.read(65536)) {
       - For example, \c "int", \c "float", \c "number", \c "bool" and \c "date" fields read by the
         @ref csvutilintro "CsvUtil" module from UTF-16 data were converted incorrectly
 
+    - Fixed conversions to stateful character encodings such as \c "UTF-7" and \c "ISO-2022-JP" omitting the bytes
+      that return the encoding to its initial state at the end of the output, so the last characters could not be
+      decoded (ex: \c "é" converted to UTF-7 gave \c "+AO" instead of \c "+AOk-"); this affected
+      @ref Qore::convert_encoding() "convert_encoding()", every other string conversion, and
+      @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" and
+      @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream"
+
     - Fixed character encodings that %Qore creates from their name, such as \c "UTF-32", \c "UTF-32LE",
       \c "UTF-32BE", \c "UCS-4", \c "UCS-2LE", \c "UCS-2BE" and EBCDIC code pages such as \c "IBM1140", being
       handled as single-byte encodings compatible with ASCII: hash keys in them were cut at their first null byte

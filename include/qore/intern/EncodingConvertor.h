@@ -106,6 +106,20 @@ public:
             memmove(inBuf, inBuf + rc, inCount);
          }
 
+         // at the end of the input, write the bytes that return a stateful encoding (ex: UTF-7, ISO-2022-JP) to its
+         // initial state; without them, the last characters of the output cannot be decoded
+         if (src == nullptr && !inCount && !shiftWritten) {
+            if (conv->iconv(nullptr, nullptr, &outbuf, &outavail) == static_cast<size_t>(-1)) {
+               if (errno != E2BIG) {
+                  conv->reportUnknownError(xsink);
+                  return std::make_pair(0, 0);
+               }
+               // the output buffer is full; the bytes are written when it has been read
+            } else {
+               shiftWritten = true;
+            }
+         }
+
          size_t wc = BUFSIZE - outCount - outavail;
          outCount += wc;
 
@@ -132,6 +146,8 @@ private:
    bool checkBom;
    //! the byte length of a byte order mark in the input encoding
    size_t bomSize;
+   //! true once the bytes that return the output encoding to its initial state have been written at the end
+   bool shiftWritten = false;
    std::unique_ptr<IconvHelper> conv;
    char inBuf[BUFSIZE];
    size_t inCount;

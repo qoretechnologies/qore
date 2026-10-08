@@ -946,6 +946,24 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
             targ.clear();
             return -1;
         } else {
+            // write the bytes that return a stateful encoding (ex: UTF-7, ISO-2022-JP) to its initial state; without
+            // them, the last characters of the output cannot be decoded
+            if (c.iconv(nullptr, nullptr, &ob, &olen) == static_cast<size_t>(-1)) {
+                if (errno != E2BIG) {
+                    c.reportUnknownError(xsink);
+                    targ.clear();
+                    return -1;
+                }
+                // retry the conversion with a larger buffer
+                if (c.iconv(nullptr, nullptr, nullptr, nullptr) == static_cast<size_t>(-1)) {
+                    c.reportUnknownError(xsink);
+                    targ.clear();
+                    return -1;
+                }
+                al *= 2;
+                targ.allocate(al + 1);
+                continue;
+            }
             // terminate string
             targ.priv->buf[al - olen] = '\0';
             targ.priv->len = al - olen;
