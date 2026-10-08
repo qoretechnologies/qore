@@ -4536,3 +4536,75 @@ manual resolutions/documentation (13 Pass / 49 N/A / 0 Fail). It is not a new
 audit of all 178 upstream-only changed files. Next: capture a fresh merged
 AOT/Java baseline, profile polymorphic dispatch, and implement the explicit-
 context scalar method continuation described above.
+
+## Scalar polymorphic caller continuation (2026-10-08)
+
+Baseline: merged `5907d7c0e`, release library `1c75a52b`. Retained candidate:
+library `6cad7615`, compiler/runtime diff `b59dd357`. Five independent forks,
+three warmups, five 500 ms measurement windows; before/after AOT compiled
+separately from identical sources and interleaved. Primary count1024 includes
+Java; count4096 repeats the AOT comparison. Units are whole-loop ns/element,
+including selection, receiver locals, computation and checksum, not isolated
+call instruction latency.
+
+|!Polymorphic workload|!Before|!After|!Change|!Before fork range|!After fork range
+|Primary1024, run-7yz3lkk7|85.79750|78.69874|-8.27%|85.02125–87.58595|77.56925–79.85909
+|Repeat4096, run-_bysdvv6|84.86514|76.65974|-9.67%|84.49667–85.13727|76.23613–77.60042
+|Disabled4096, run-iujsmah6|84.75138|86.00696|+1.48%|83.96208–85.98207|84.88291–86.60289
+
+Java primary is 2.51916ns/element: the retained candidate is **31.24x Java**
+for this workload, so this is progress, not retained-call parity. Qore retains
+the exact-base fast/inlined case while two subclasses use the native helper;
+Java retains all three targets. Do not describe the comparison as three
+equivalent native call instructions.
+
+|!Control|!Primary before|!Primary after|!Primary change|!Repeat change
+|closure_call|26.08352|25.38384|-2.68%|-0.97%
+|closure_capture|31.11978|31.24201|+0.39%|-0.07%
+|indirect_wide|8.27192|8.15192|-1.45%|-1.12%
+|indirect_float|10.06262|10.14738|+0.84%|+0.41%
+|arithmetic|2.34155|2.35101|+0.40%|+0.05%
+
+Final control ranges overlap except the favorable primary closure movement;
+all disabled-path control ranges overlap. The disabled polymorphic median is
+still unfavorable: overlapping ranges do not prove absence of a layout cost.
+No claim of universal improvement or zero fallback overhead is made.
+
+The initial general-array lookup candidate is retained in the evidence, not
+discarded: run-astxwdhf and run-63ciyka_ improve the target 8.79%/7.05%, but the
+latter has a 1.04% floating-control slowdown with non-overlapping ranges.
+Disabled run-im9pudyl has a 2.51% polymorphic slowdown with non-overlapping
+ranges. Identical-executable diagnostic run-82mf4v4x still has a 2.29% unfavorable
+median, with narrowly overlapping ranges; it holds generated code fixed but
+does not isolate runtime layout from all other runtime changes. Inspection
+found the new scalar path constructing general argument-key arrays. The retained
+version compares the same complete key directly for its known unary integer ABI.
+Its three final runs above were measured independently against the original
+merged baseline; no unpaired initial/final speedup is claimed.
+
+The versioned try-helper passes live RuntimeConfig and native integer payloads
+without consuming borrowed receiver ownership. A sole exact native local store
+can avoid result boxing; arbitrary generic returns, coercion/EH, access/parse
+policy, Programs, epoch, deletion, debugger, body readiness and observable-frame
+guards remain. Old v1 bindings and artifacts still work.
+
+[Sanitized evidence](results-polymorphic-continuation-macos-arm64.json) includes
+all seven runs: 470 process jobs and 2350 measured windows, library/source hashes,
+every sample and recomputed summary, plus the full 62-item audit. Timing did not
+overlap builds, tests, profiling, disassembly or evidence validation. Release and
+debug each pass 24 selected files: 18 QUnit wrappers/46 cases/2510 assertions plus
+6 standalone scripts. The expanded method wrapper has 514 assertions/build. Old
+AOT retains all 300 checksum records. This is not a full-suite or sanitizer run.
+
+A separate 5-second/1ms profile of the retained candidate at 4096 records 3803
+main-thread samples, excluding 3803 signal-wait-thread samples. Direct caller
+branches include receiver assignment 1399, native method attempt 676, receiver
+cleanup 355 and stale-local reload 303. These are inclusive branch counts, not
+isolated costs; do not add their nested children. Prominent leaves remain value
+discard/type checks, object dereference, assignment and method frame setup.
+The profile's SAMPLE output is not performance evidence.
+
+Next: preserve caller-local caches after a proven-pure native hit while retaining
+generic fallback invalidation, then investigate receiver assignment/ownership
+and native frame setup. Preserve declaration-order destruction, reentrant effects,
+debugger/stack readers and cross-Program fallback in each separately measured step.

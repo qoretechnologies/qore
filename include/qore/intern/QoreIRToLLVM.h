@@ -396,7 +396,7 @@ private:
     std::unordered_set<uint32_t> fixed_typed_list_outputs;
     std::unordered_set<uint32_t> reserve_typed_list_outputs;
     std::unordered_map<uint32_t, BatchCalleeReturnKind> native_call_result_kinds;
-    // Single-use callback results assigned to an exact native scalar local.
+    // Single-use callback/method results assigned to an exact native scalar local.
     // The boxed value remains the fallback's owned result (NOTHING on the native
     // edge); only the proven StoreLocal consumer may read this side channel.
     std::unordered_map<uint32_t, const QoreTypeInfo*> native_funcref_store_types;

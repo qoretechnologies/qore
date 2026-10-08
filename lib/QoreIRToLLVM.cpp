@@ -524,6 +524,52 @@ void QoreIRToLLVM::emitNativeMethodBinding(llvm::Module& module, llvm::Function*
     auto bind = module.getOrInsertFunction("qore_rt_bind_method_int_unary_v1",
         llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
     builder->CreateCall(bind, {aot_ctx_arg, normal, fast});
+    if (std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION")) {
+        return;
+    }
+    std::string name = info->fast_name + "_method_v2";
+    llvm::Function* explicit_entry = module.getFunction(name);
+    if (!explicit_entry) {
+        explicit_entry = llvm::Function::Create(llvm::FunctionType::get(i64_type,
+            {i64_type, ptr_type, ptr_type, ptr_type}, false),
+            llvm::GlobalValue::InternalLinkage, name, module);
+        explicit_entry->addFnAttr("frame-pointer", "all");
+        llvm::IRBuilder<>::InsertPointGuard ip_guard(*builder);
+        builder->SetCurrentDebugLocation(llvm::DebugLoc());
+        auto* entry = llvm::BasicBlock::Create(ctx, "entry", explicit_entry);
+        auto* body = llvm::BasicBlock::Create(ctx, "body", explicit_entry);
+        auto* overflow = llvm::BasicBlock::Create(ctx, "stack_overflow", explicit_entry);
+        builder->SetInsertPoint(entry);
+        auto check = module.getOrInsertFunction("qore_rt_check_stack_v2",
+            llvm::FunctionType::get(i32_type, {ptr_type, ptr_type}, false));
+        auto* status = builder->CreateCall(check, {explicit_entry->getArg(2), explicit_entry->getArg(3)});
+        builder->CreateCondBr(builder->CreateICmpEQ(status, llvm::ConstantInt::get(i32_type, 0)),
+            body, overflow);
+        builder->SetInsertPoint(overflow);
+        builder->CreateRet(llvm::ConstantInt::get(i64_type, 0));
+        builder->SetInsertPoint(body);
+        std::vector<llvm::Value*> args{explicit_entry->getArg(0)};
+        bool proven_nothrow = false;
+        llvm::Value* result;
+        if (scalar_leaf_body) {
+            result = emitAOTScalarLeaf(*info, args);
+            proven_nothrow = result != nullptr;
+        } else {
+            result = emitAOTIntExpression(*info, args, module, nullptr, &proven_nothrow);
+        }
+        // Re-emit the whole scalar proof instead of wrapping v1's TLS stack guard.
+        if (!result || !proven_nothrow || result->getType() != i64_type) {
+            explicit_entry->eraseFromParent();
+            explicit_entry = nullptr;
+        } else {
+            builder->CreateRet(result);
+        }
+    }
+    if (explicit_entry) {
+        auto bind_v2 = module.getOrInsertFunction("qore_rt_bind_method_int_unary_v2",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+        builder->CreateCall(bind_v2, {aot_ctx_arg, normal, explicit_entry});
+    }
 }
 
 void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
@@ -9289,7 +9335,19 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     // coercing it to the speculative target's native return type.
     BatchCalleeReturnKind merged_return_kind = require_exact_object_class
         ? BatchCalleeReturnKind::Boxed : callee_info.return_kind;
-    if (require_exact_object_class) {
+    bool native_method = object_base && require_exact_object_class && nargs == 1
+        && callee_info.num_params == 1 && raw_args.size() == 1 && raw_arg_ids.size() == 1
+        && callee_info.return_kind == BatchCalleeReturnKind::NativeInt
+        && getFastEntryParamKind(callee_info, 0) == BatchCalleeParamKind::NativeInt
+        && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")
+        && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION");
+    auto native_store = native_funcref_store_types.find(inst->result.id);
+    bool native_continuation = native_method && native_store != native_funcref_store_types.end()
+        && native_store->second == bigIntTypeInfo;
+    llvm::Value* exact_native_result = native_continuation ? fast_result : nullptr;
+    if (native_continuation) {
+        fast_result = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+    } else if (require_exact_object_class) {
         switch (callee_info.return_kind) {
             case BatchCalleeReturnKind::NativeInt:
                 fast_result = boxIntInline(fast_result);
@@ -9312,6 +9370,55 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     fast_bb = builder->GetInsertBlock();
 
     builder->SetInsertPoint(fallback_bb);
+    llvm::BasicBlock* native_bb = nullptr;
+    llvm::Value* native_result = nullptr;
+    llvm::Value* native_boxed_result = nullptr;
+    if (native_method) {
+        auto* generic = llvm::BasicBlock::Create(ctx, "method_generic", llvm_func);
+        auto* attempt = llvm::BasicBlock::Create(ctx, "method_native_try", llvm_func);
+        native_bb = llvm::BasicBlock::Create(ctx, "method_native", llvm_func);
+        llvm::Value* arg = raw_args[0];
+        uint32_t id = raw_arg_ids[0];
+        if (!nanboxed_values.count(id) && !native_boxed_sources.count(id)
+                && arg->getType() == i64_type) {
+            // The fast-entry argument builder already proved this native value
+            // assigned. In particular, do not box full-width integers here.
+            builder->CreateBr(attempt);
+        } else {
+            llvm::Value* boxed = boxed_args[0] ? boxed_args[0] : boxValue(arg, id);
+            arg = builder->CreateAShr(builder->CreateShl(boxed,
+                llvm::ConstantInt::get(i64_type, 16)), llvm::ConstantInt::get(i64_type, 16));
+            builder->CreateCondBr(emitIsBoxedInt48(boxed), attempt, generic);
+        }
+        llvm::IRBuilder<> eb(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+        auto* output = eb.CreateAlloca(i64_type, nullptr, "native_method_result");
+        if (!fast_runtime_config) {
+            auto* logical_entry = block_map.at(current_ir_func->blocks.front().get());
+            llvm::IRBuilder<> rb(logical_entry, logical_entry->getFirstInsertionPt());
+            auto acquire = module.getOrInsertFunction("qore_rt_get_fast_runtime_config",
+                llvm::FunctionType::get(ptr_type, {}, false));
+            fast_runtime_config = rb.CreateCall(acquire, {}, "runtime_config");
+        }
+        builder->SetInsertPoint(attempt);
+        auto helper = module.getOrInsertFunction("qore_rt_try_method_int_unary_v1",
+            llvm::FunctionType::get(i32_type,
+                {ptr_type, i32_type, i64_type, i64_type, ptr_type, ptr_type, ptr_type}, false));
+        auto* handled = builder->CreateCall(helper,
+            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), object_base,
+             arg, output, xsink_arg, fast_runtime_config});
+        builder->CreateCondBr(builder->CreateICmpNE(handled, llvm::ConstantInt::get(i32_type, 0)),
+            native_bb, generic);
+        builder->SetInsertPoint(native_bb);
+        native_result = builder->CreateLoad(i64_type, output);
+        native_boxed_result = native_continuation ? llvm::ConstantInt::get(i64_type, VAL_NOTHING)
+            : boxIntInline(native_result);
+        if (has_arg_cleanups) {
+            emitArgCleanupClear(module, arg_cleanups, nargs, false);
+        }
+        builder->CreateBr(merge_bb);
+        native_bb = builder->GetInsertBlock();
+        builder->SetInsertPoint(generic);
+    }
     for (int i = 0; i < nargs; ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr,
@@ -9412,6 +9519,24 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     llvm::PHINode* result = builder->CreatePHI(fast_result->getType(), 2, "aot_batch_result");
     result->addIncoming(fast_result, fast_bb);
     result->addIncoming(fallback_result, fallback_bb);
+    if (native_bb) {
+        result->addIncoming(native_boxed_result, native_bb);
+        // The generic invoke only guarantees its own edge is sink-clean.
+        // Native stack/frame checks use xsink and still need the merged check.
+        skip_next_exception_check = false;
+        last_call_was_invoke_eh = false;
+    }
+    if (native_continuation) {
+        auto* handled = builder->CreatePHI(i1_type, 3, "method_native_handled");
+        handled->addIncoming(llvm::ConstantInt::getTrue(ctx), fast_bb);
+        handled->addIncoming(llvm::ConstantInt::getTrue(ctx), native_bb);
+        handled->addIncoming(llvm::ConstantInt::getFalse(ctx), fallback_bb);
+        auto* payload = builder->CreatePHI(i64_type, 3, "method_native_value");
+        payload->addIncoming(exact_native_result, fast_bb);
+        payload->addIncoming(native_result, native_bb);
+        payload->addIncoming(llvm::ConstantInt::get(i64_type, 0), fallback_bb);
+        native_funcref_results.emplace(inst->result.id, NativeFunctionRefResult{handled, payload});
+    }
     (void)inst;
     return result;
 }
@@ -11591,7 +11716,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
         }
     }
-    if (aot_mode && !std::getenv("QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION")) {
+    if (aot_mode) {
         size_t candidate_count = 0;
         for (const auto& [local, stores] : local_store_instructions) {
             if (candidate_count++ && !(candidate_count % 100)
@@ -11631,7 +11756,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         || def == value_definitions.end()) {
                     continue;
                 }
-                if (def->second->opcode == QoreIROpcode::CallClosureDirect) {
+                if ((def->second->opcode == QoreIROpcode::CallClosureDirect
+                            && !std::getenv("QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION"))
+                        || ((def->second->opcode == QoreIROpcode::DotEvalMethodDirect
+                                || def->second->opcode == QoreIROpcode::InvokeDotEvalMethodDirect)
+                            && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION"))) {
                     native_funcref_store_types.emplace(id, type);
                 }
             }

@@ -383,6 +383,11 @@ struct QoreAOTContext {
         int*, QoreAOTContext*, ExceptionSink*);
     std::atomic<NativeIntUnaryClosureEntry> native_int_unary_closure_entry{nullptr};
 
+    //! Optional scalar method companion using the caller's live thread view.
+    //! Append-only: retain the v1 entry and all existing generated field offsets.
+    using NativeIntUnaryMethodEntryV2 = int64_t (*)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*);
+    std::atomic<NativeIntUnaryMethodEntryV2> native_int_unary_method_entry_v2{nullptr};
+
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
     ~QoreAOTContext();

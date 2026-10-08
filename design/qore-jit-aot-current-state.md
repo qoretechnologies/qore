@@ -291,8 +291,38 @@ binding, then returns a normally owned boxed integer, including full-width value
 It retains object/defining-class substitution, explicit `RuntimeConfig` frame
 setup, empty local/closure markers, source/parse-policy state and the stack-reader
 publication handshake. Both runtime and native-entry stack checks remain. The
-bounded scalar body introduces no loop or cancellation omission. This is not yet
-an unboxed caller continuation or a completely TLS-free call convention.
+bounded scalar body introduces no loop or cancellation omission. This v1 path
+retains boxed caller arguments/results and the original native-entry stack guard.
+
+An optional `qore_rt_bind_method_int_unary_v2` companion re-emits the same whole
+scalar proof with an explicit live `RuntimeConfig` and its own v2 stack guard.
+The v1 entry remains separately callable; the extra context field is appended,
+without changing serialized table strides or old generated field offsets.
+Eligible speculative object calls first retain their exact-class fast/inlined
+branch, then try `qore_rt_try_method_int_unary_v1` on a subclass miss. This helper
+borrows the receiver and looks only in an existing immutable PIC. Its fixed
+unary-integer key avoids constructing a general argument array, but compares
+every receiver class/type, normalized access class, caller/object Program,
+parse-option, epoch and argument type/state component. Access class and parse
+options come from the live thread view, not refreshed compatibility snapshots.
+
+The helper rechecks deletion, actual body identity/readiness, Program and debugger
+state before calling the companion. Missing admission/companion data requests
+effect-free generic fallback; no receiver or argument ownership is consumed.
+The frame remains observable and retains its reader handshake. A sole exact
+native `StoreLocal` consumer receives a native-value/handled side channel; its
+boxed cleanup slot contains `NOTHING` only on native edges. Generic fallback
+results retain their real boxed value, assignment checks and cleanup. In
+particular, an integer annotation never licenses converting a subclass's
+`NOTHING` or incompatible return to zero. Normal and invoke paths retain a sink
+check after merging with the non-throwing helper. Runtime-backed receiver locals
+and generic-call invalidation remain unchanged.
+
+`QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1` at compile and runtime selects
+the v1 control path. New callers require the additive helper symbols; old
+artifacts continue to run. Before/after compiler comparisons must compile both
+artifacts separately. This only covers proven unary integer bodies, not arbitrary
+methods, multiple arguments or cross-Program calls.
 
 The resolved fast-method fallback also rejects attached debuggers before entering
 native code, allowing `evalTiered()` to use AST or lazy source-stripped debug IR.

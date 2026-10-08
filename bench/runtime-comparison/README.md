@@ -119,9 +119,21 @@ helper ABI or frame lifetime; it is not a portable performance guarantee.
 at compilation and its polymorphic-cache native path at runtime. Eligible
 `int(int)` overrides bypass parameter TLS binding but retain receiver, Program,
 debugger, body-identity, stack and observer guards. Use separate before/after
-compilation: the additive helper is absent from older runtimes. The caller still
-uses boxed arguments/results, so these measurements are not an isolated native
-call instruction or evidence of Java retained-call parity.
+compilation: the additive helper is absent from older runtimes. The original v1
+caller uses boxed arguments/results; neither that measurement nor the scalar
+continuation below isolates a native call instruction or proves Java retained-call parity.
+
+`QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1` disables the optional method v2
+binding and scalar caller continuation at compilation, and its try-helper at
+runtime. It retains the original v1 method path. Use separate before/after
+compilation for this compiler/runtime change. Eligible unary integer calls pass
+the live `RuntimeConfig` and scalar argument/result through a warmed full-key PIC;
+a sole exact native local assignment can consume the result without boxing.
+Unknown overrides still preserve arbitrary boxed returns and ordinary coercion,
+cleanup, side effects and exception behavior. Receiver ownership, current access
+context/parse policy, Program, epoch, debugger, body readiness and stack/frame
+guards remain. The exact-base fast/inlined case is retained, so this workload
+still does not represent three retained Qore methods.
 
 `QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1` disables caching immutable
 eligibility/signature/Program/class facts in polymorphic method entries without

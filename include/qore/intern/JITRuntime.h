@@ -898,6 +898,26 @@ void qore_rt_bind_method_int_unary_v1(QoreAOTContext* ctx,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
     int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*));
 
+//! Publish an optional exact-body scalar method companion with an explicit live RuntimeConfig.
+//! @param ctx runtime-owned context whose normal body must match
+//! @param normal immutable body identity, rechecked on every call
+//! @param entry non-throwing int(int) body retaining its native stack check
+void qore_rt_bind_method_int_unary_v2(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*));
+
+//! Try a warmed immutable polymorphic cache entry without boxing a scalar argument or result.
+//! @param ctx caller context owning the call-target slot
+//! @param slot pre-resolved non-generic object method call target
+//! @param base_bits borrowed receiver; ownership is unchanged on either outcome
+//! @param arg full-width integer argument, proven by the caller
+//! @param result initialized scalar result when handled (check xsink before using it)
+//! @param xsink exception sink, including stack exhaustion
+//! @param rc live same-thread invocation view, never a cached permission snapshot
+//! @return one when handled, zero for effect-free fallback without consuming arguments
+int qore_rt_try_method_int_unary_v1(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    int64_t arg, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc);
+
 //! Publish a pure dynamic int(int) closure companion, idempotently for this exact normal body.
 //! @param ctx runtime-owned context, without per-instance captured values
 //! @param normal body identity checked again at dispatch

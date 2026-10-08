@@ -115,6 +115,14 @@ public:
     DLLLOCAL static RuntimeConfig* tryGetCurrent();
     //! Read the live Program, not a snapshot that a nested call could refresh.
     DLLLOCAL static QoreProgram* getProgram(const RuntimeConfig& rc);
+    //! Read the live method access context without rediscovering TLS.
+    //! @param rc live same-thread invocation view
+    //! @return current method access class, or nullptr outside class context
+    DLLLOCAL static const qore_class_private* getClass(const RuntimeConfig& rc);
+    //! Read live parse options, including any nested runtime override.
+    //! @param rc live same-thread invocation view
+    //! @return effective runtime parse options, not the compatibility snapshot
+    DLLLOCAL static QoreParseOptions getParseOptions(const RuntimeConfig& rc);
     //! Whether this invocation has the variable stacks required by a native observable frame.
     DLLLOCAL static bool hasProgramData(const RuntimeConfig& rc);
     //! Preserve the normal stack guard without looking up TLS again.

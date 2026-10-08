@@ -4556,6 +4556,9 @@ while (*binary chunk = input.read(65536)) {
       Program context, native-body readiness, and debugger state at runtime
     - Reused the live <tt>RuntimeConfig</tt> view for native method object/class substitution, avoiding
       repeated TLS lookup while retaining independent live-state and snapshot restoration
+    - Added scalar AOT caller continuations and explicit-context native companions for proven unary
+      integer polymorphic methods, retaining complete dispatch guards, observable frames, old native
+      artifacts, and ordinary boxed fallback return/exception semantics
     - Reduced IR call-frame allocation overhead by retaining scope-stack storage and tracking local-owned
       value slots with a dense byte array instead of allocating hash nodes; scope-exit and object-lifetime
       behavior are preserved.

@@ -1966,6 +1966,14 @@ QoreProgram* RuntimeConfigNativeAccess::getProgram(const RuntimeConfig& rc) {
     return getThreadData(rc)->current_pgm;
 }
 
+const qore_class_private* RuntimeConfigNativeAccess::getClass(const RuntimeConfig& rc) {
+    return getThreadData(rc)->current_class;
+}
+
+QoreParseOptions RuntimeConfigNativeAccess::getParseOptions(const RuntimeConfig& rc) {
+    return getThreadData(rc)->runtime_po;
+}
+
 extern "C" DLLEXPORT void qore_rt_get_cancel_poll_state_v1(RuntimeConfig* rc, QoreCancelPollStateV1* state) {
     *state = {};
     // Expose a native atomic load ABI only when the runtime's representation

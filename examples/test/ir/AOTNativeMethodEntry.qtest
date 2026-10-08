@@ -40,21 +40,35 @@ class NativeMethodEntryTest inherits QUnit::Test {
         TmpDir dir("qore-native-method-entry-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ",
                 "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
                 string ir = run((qcc, level, "--strip-source", "-o", executable, source),
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
                 foreach string name in (("Base", "Derived", "Other", "Thread")) {
-                    assertEq(!prefix.startsWith("QORE_DISABLE_"),
+                    assertEq(prefix != "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
                         regex(ir, "call void @qore_rt_bind_method_int_unary_v1[^\\n]*NativeMethod" + name),
                         name + " native binding " + prefix + level);
+                    assertEq(!prefix.startsWith("QORE_DISABLE_"),
+                        regex(ir, "call void @qore_rt_bind_method_int_unary_v2[^\\n]*NativeMethod" + name),
+                        name + " explicit-context binding " + prefix + level);
                 }
-                foreach string name in (("Optional", "String", "Throwing", "Self", "Argv", "Divide")) {
+                foreach string name in (("Optional", "String", "Throwing", "Self", "Argv", "Divide", "Effect")) {
                     assertFalse(regex(ir, "call void @qore_rt_bind_method_int_unary_v1[^\\n]*NativeMethod"
                         + name), name + " excluded body " + prefix + level);
+                    assertFalse(regex(ir, "call void @qore_rt_bind_method_int_unary_v2[^\\n]*NativeMethod"
+                        + name), name + " excluded explicit-context body " + prefix + level);
+                }
+                if (!prefix.startsWith("QORE_DISABLE_")) {
+                    assertRegex("call i32 @qore_rt_try_method_int_unary_v1", ir);
+                    assertRegex("method_native_value", ir);
+                } else {
+                    assertFalse(regex(ir, "call i32 @qore_rt_try_method_int_unary_v1"),
+                        "disabled caller " + prefix + level);
                 }
                 foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
                         "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
                         "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {

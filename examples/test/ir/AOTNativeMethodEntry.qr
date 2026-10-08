@@ -42,6 +42,10 @@ class NativeMethodArgv inherits NativeMethodBase {
 class NativeMethodDivide inherits NativeMethodBase {
     int next(int value) { return 100 / value; }
 }
+class NativeMethodEffect inherits NativeMethodBase {
+    public { int calls = 0; }
+    int next(int value) { ++calls; return value + 29; }
+}
 
 auto sub nativeMethodCall(NativeMethodBase input, int value) {
     NativeMethodBase receiver = input;
@@ -51,6 +55,20 @@ auto sub nativeMethodInvoke(NativeMethodBase input, int value) {
     NativeMethodBase receiver = input;
     try {
         return receiver.next(value);
+    } catch (hash<ExceptionInfo> e) {
+        return e.err;
+    }
+}
+int sub nativeMethodStore(NativeMethodBase input, int value) {
+    NativeMethodBase receiver = input;
+    value = receiver.next(value);
+    return value;
+}
+auto sub nativeMethodStoreInvoke(NativeMethodBase input, int value) {
+    NativeMethodBase receiver = input;
+    try {
+        value = receiver.next(value);
+        return value;
     } catch (hash<ExceptionInfo> e) {
         return e.err;
     }
@@ -107,6 +125,7 @@ NativeMethodThrowing throwing();
 NativeMethodSelf self_context();
 NativeMethodArgv argv_context();
 NativeMethodDivide divide();
+NativeMethodEffect effect();
 for (int round = 0; round < 16; ++round) {
     if (nativeMethodCall(derived, 2) != 21
             || nativeMethodInvoke(derived, 2) != 21
@@ -114,6 +133,14 @@ for (int round = 0; round < 16; ++round) {
             || nativeMethodInvoke(other, 2) != 38
             || nativeMethodCall(derived, 1125899906842624) != 5629499534213131
             || nativeMethodInvoke(derived, -1125899906842624) != -5629499534213109
+            || nativeMethodStore(derived, 1125899906842624) != 5629499534213131
+            || nativeMethodStoreInvoke(derived, -1125899906842624) != -5629499534213109
+            || nativeMethodStoreInvoke(optional, 2) != "RUNTIME-TYPE-ERROR"
+            || nativeMethodStoreInvoke(text, 2) != "RUNTIME-TYPE-ERROR"
+            || nativeMethodStoreInvoke(throwing, 2) != "NATIVE-METHOD-ERROR"
+            || nativeMethodStore(effect, 2) != 31
+            || nativeMethodStoreInvoke(effect, 2) != 31
+            || effect.calls != 2 * (round + 1)
             || exists nativeMethodCall(optional, 2)
             || exists nativeMethodInvoke(optional, 2)
             || nativeMethodCall(text, 2) != "override"
@@ -160,6 +187,8 @@ NativeMethodBase imported = foreign.callFunction("make");
 for (int i = 0; i < 16; ++i) {
     if (nativeMethodCall(imported, i) != i * 5 + 11
             || nativeMethodInvoke(imported, i) != i * 5 + 11
+            || nativeMethodStore(imported, i) != i * 5 + 11
+            || nativeMethodStoreInvoke(imported, i) != i * 5 + 11
             || foreign.callFunction("invoke", derived, i) != i * 5 + 11
             || nativeMethodCall(derived, i) != i * 5 + 11) {
         throw "NATIVE-METHOD-PROGRAM", "cross-Program call or restoration mismatch";
