@@ -1,0 +1,173 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# Big5, GBK, GB18030, WINDOWS-936, and CP949 are ASCII-compatible multi-byte encodings whose double-byte characters
+# can have a second byte in the ASCII range: 許 (Big5 b3 5c, "\"), 功 (Big5 a5 5c), 乙 (Big5 a4 41, "A"), 弋 (Big5
+# a4 7c, "|"), 丂 (GBK 81 40, "@"), 丄 (GBK 81 41), 갂 (CP949 81 41).  Every operation must treat such a byte as part
+# of its character, never as the ASCII character, and give the same result as for the same text in UTF-8.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class AsciiTrailByteEncodingTest
+
+class AsciiTrailByteEncodingTest inherits QUnit::Test {
+    public {
+        #! the characters with second bytes in the ASCII range for each encoding
+        const Chars = {
+            "BIG5": "許功乙弋",
+            "GBK": "丂丄",
+            "GB18030": "丂丄",
+            "WINDOWS-936": "丂丄",
+            "CP949": "갂",
+        };
+
+        #! the ASCII characters that are also second bytes
+        const AsciiChars = ("\\", "|", "A", "@");
+    }
+
+    constructor() : Test("AsciiTrailByteEncodingTest", "1.0", \ARGV) {
+        addTestCase("encoding", \testEncoding());
+        addTestCase("searches and splits", \testSearch());
+        addTestCase("hash keys", \testHashKeys());
+        addTestCase("formatting", \testFormatting());
+        addTestCase("case and regular expressions", \testCaseRegex());
+        addTestCase("trim and length", \testTrimLength());
+        set_return_value(main());
+    }
+
+    #! returns the text for each encoding that iconv supports, with its characters and ASCII characters around them
+    private hash<string, string> getTexts() {
+        hash<string, string> rv = {};
+        foreach hash<auto> i in (Chars.pairIterator()) {
+            string text = sprintf("%s A\\|@ \"x|%s\" %s z", i.value, i.value, i.value);
+            try {
+                if (convert_encoding(convert_encoding(text, i.key), "UTF-8") != text) {
+                    continue;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                continue;
+            }
+            rv{i.key} = text;
+        }
+        assertTrue(rv.size() > 0, "an encoding is supported");
+        return rv;
+    }
+
+    #! returns the strings in a list in UTF-8
+    private static list<string> utf8(list<string> l) {
+        return map convert_encoding($1, "UTF-8"), l;
+    }
+
+    testEncoding() {
+        foreach hash<auto> i in (getTexts().pairIterator()) {
+            string s = convert_encoding(i.value, i.key);
+            string text = i.value;
+            assertEq(html_encode(text), convert_encoding(html_encode(s), "UTF-8"), i.key + " html_encode()");
+            foreach int flags in (CE_HTML, CE_XML, CE_XHTML, CE_NONASCII, CE_ALL) {
+                assertEq(text.getEncoded(flags), convert_encoding(s.getEncoded(flags), "UTF-8"),
+                    sprintf("%s getEncoded(%d)", i.key, flags));
+            }
+            assertEq(encode_url(text), encode_url(s), i.key + " encode_url()");
+            assertEq(encode_url(text, True), encode_url(s, True), i.key + " encode_url() all");
+        }
+    }
+
+    testSearch() {
+        foreach hash<auto> i in (getTexts().pairIterator()) {
+            string s = convert_encoding(i.value, i.key);
+            string text = i.value;
+            foreach string c in (AsciiChars) {
+                string label = sprintf("%s %y", i.key, c);
+                assertEq(text.split(c), utf8(s.split(c)), label + " split()");
+                assertEq(text.find(c), s.find(c), label + " find()");
+                assertEq(text.rfind(c), s.rfind(c), label + " rfind()");
+                assertEq(index(text, c), index(s, c), label + " index()");
+                assertEq(rindex(text, c), rindex(s, c), label + " rindex()");
+                assertEq(text.find(c, 3), s.find(c, 3), label + " find() from 3");
+                assertEq(replace(text, c, "/"), convert_encoding(replace(s, c, "/"), "UTF-8"), label + " replace()");
+                assertEq(text.split(c, "\""), utf8(s.split(c, "\"")), label + " split() with quotes");
+            }
+            assertEq(text.split(" ", "\""), utf8(s.split(" ", "\"")), i.key + " split() quoted field with \"|\"");
+            # the characters themselves are found
+            string chars = Chars{i.key};
+            assertEq(text.find(chars), s.find(chars), i.key + " find() characters");
+            assertEq(text.rfind(chars), s.rfind(convert_encoding(chars, i.key)), i.key + " rfind() characters");
+        }
+    }
+
+    testHashKeys() {
+        foreach hash<auto> i in (getTexts().pairIterator()) {
+            string s = convert_encoding(i.value, i.key);
+            hash<auto> h = {s: 1};
+            assertEq((i.value,), keys h, i.key + " literal key");
+            assertEq(1, h{i.value}, i.key + " lookup with UTF-8");
+            h{s} += 1;
+            assertEq({i.value: 2}, h, i.key + " lvalue key");
+            foreach string c in (Chars{i.key}.split("")) {
+                string k = convert_encoding(c, i.key);
+                assertEq((c,), keys {k: 1}, sprintf("%s %y key", i.key, c));
+            }
+        }
+    }
+
+    testFormatting() {
+        foreach hash<auto> i in (getTexts().pairIterator()) {
+            string s = convert_encoding(i.value, i.key);
+            string text = i.value;
+            foreach string f in ("%y", "%n", "%N", "%s") {
+                string label = sprintf("%s %s", i.key, f);
+                assertEq(sprintf(f, text), sprintf(f, s), label);
+                assertEq(sprintf(f, (text,)), sprintf(f, (s,)), label + " in a list");
+                # the format string and the output in the encoding
+                assertEq(sprintf(f, text), convert_encoding(sprintf(convert_encoding(f, i.key), s), "UTF-8"),
+                    label + " in the encoding");
+                assertEq(sprintf(f, (text,)), convert_encoding(sprintf(convert_encoding(f, i.key), (s,)), "UTF-8"),
+                    label + " in a list in the encoding");
+            }
+        }
+    }
+
+    testCaseRegex() {
+        foreach hash<auto> i in (getTexts().pairIterator()) {
+            string s = convert_encoding(i.value, i.key);
+            string text = i.value;
+            assertEq(text.lwr(), convert_encoding(s.lwr(), "UTF-8"), i.key + " lwr()");
+            assertEq(text.upr(), convert_encoding(s.upr(), "UTF-8"), i.key + " upr()");
+            assertEq(text =~ /A/, s =~ /A/, i.key + " regex match");
+            assertEq(text =~ /\\/, s =~ /\\/, i.key + " regex match \\");
+            assertEq(text =~ x/(A)(.)/, utf8(s =~ x/(A)(.)/), i.key + " regex extract");
+            string t = text;
+            t =~ s/[A@|\\]/_/g;
+            string u = s;
+            u =~ s/[A@|\\]/_/g;
+            assertEq(t, convert_encoding(u, "UTF-8"), i.key + " regex substitution");
+            t = text;
+            t =~ tr/A@|\\/a#!%/;
+            u = s;
+            u =~ tr/A@|\\/a#!%/;
+            assertEq(t, convert_encoding(u, "UTF-8"), i.key + " tr");
+        }
+    }
+
+    testTrimLength() {
+        foreach hash<auto> i in (getTexts().pairIterator()) {
+            string text = "  " + i.value + "\t ";
+            string s = convert_encoding(text, i.key);
+            assertEq(text.length(), s.length(), i.key + " length()");
+            trim text;
+            trim s;
+            assertEq(text, convert_encoding(s, "UTF-8"), i.key + " trim");
+            assertEq(text.length(), s.length(), i.key + " length() trimmed");
+            # characters with an ASCII second byte at the end
+            string c = Chars{i.key};
+            string e = convert_encoding(" " + c + " ", i.key);
+            trim e;
+            assertEq(c, convert_encoding(e, "UTF-8"), i.key + " trim of characters");
+        }
+    }
+}

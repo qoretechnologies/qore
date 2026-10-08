@@ -131,6 +131,7 @@ public class CsvEncodingTest inherits QUnit::Test {
         addTestCase("generic UTF-16", \genericUtf16());
         addTestCase("typed fields", \typedFields());
         addTestCase("EBCDIC", \ebcdic());
+        addTestCase("custom end-of-line in multi-byte data", \multiByteEol());
         set_return_value(main());
     }
 
@@ -318,6 +319,46 @@ public class CsvEncodingTest inherits QUnit::Test {
         checkRecords(GermanHeaders, search(new CsvReadDataProvider(opts + {"data": data, "encoding": Ebcdic})),
             "CsvReadDataProvider");
         checkTyped({"encoding": Ebcdic}, Ebcdic, TypedHeaders, TypedRows, TypedRecords, {"fields": TypedFields});
+    }
+
+    multiByteEol() {
+        # Big5 弋 is 0xa4 0x7c and 許 is 0xb3 0x5c: the end-of-line marker "|" and the escape character "\" are only
+        # the ASCII characters, not the second bytes of these characters
+        list<hash<auto>> cases = (
+            {"enc": "BIG5", "text": "弋許"},
+            {"enc": "GBK", "text": "丂丄"},
+            {"enc": "SHIFT_JIS", "text": "ポソ"},
+        );
+        int tested = 0;
+        foreach hash<auto> c in (cases) {
+            string text = "h1;h2|" + c.text + ";a" + c.text + "|x" + c.text + ";" + c.text + "|";
+            binary data;
+            try {
+                data = binary(convert_encoding(text, c.enc));
+            } catch (hash<ExceptionInfo> ex) {
+                continue;
+            }
+            ++tested;
+            list<hash<auto>> expected = (
+                {"h1": c.text, "h2": "a" + c.text},
+                {"h1": "x" + c.text, "h2": c.text},
+            );
+            hash<auto> opts = {"separator": ";", "eol": "|", "header_names": True};
+            string label = c.enc;
+            list<hash<auto>> recs = read(new CsvIterator(new BinaryInputStream(data), c.enc, opts));
+            assertEq(expected, map utf8Record($1), recs, label + " CsvIterator");
+            recs = read(new CsvFileIterator(writeFile("eol.csv", data), opts + {"encoding": c.enc}));
+            assertEq(expected, map utf8Record($1), recs, label + " CsvFileIterator");
+            recs = search(new CsvReadDataProvider(opts + {"data": data, "encoding": c.enc}));
+            assertEq(expected, map utf8Record($1), recs, label + " CsvReadDataProvider");
+        }
+        assertTrue(tested > 0, "an encoding is supported");
+    }
+
+    #! Returns the record with its string values converted to UTF-8
+    private static hash<auto> utf8Record(hash<auto> rec) {
+        return map {$1.key: $1.value.typeCode() == NT_STRING ? convert_encoding($1.value, "UTF-8") : $1.value},
+            rec.pairIterator();
     }
 
     #! Checks the records read from data with typed fields in the given encoding
