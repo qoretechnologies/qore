@@ -32,6 +32,7 @@
 #include <qore/AutoVLock.h>
 
 #include <cassert>
+#include <cerrno>
 #include <string>
 #include <vector>
 
@@ -151,6 +152,27 @@ VLock::VLock(int tid) : waiting_on(nullptr), tid(tid) {
 
 }
 
+int VLock::condWait(QoreCondition& cond, AbstractSmartLock* asl, int64 timeout_ms) {
+    if (!cancel_op) {
+        return timeout_ms ? cond.wait2(&asl->asl_lock, timeout_ms) : cond.wait(&asl->asl_lock);
+    }
+    int rc = cond.waitWithInterrupt(&asl->asl_lock, timeout_ms ? timeout_ms : -1);
+    if (rc == QORE_COND_RESULT_INTERRUPTED) {
+        return QORE_VLOCK_WAIT_CANCELLED;
+    }
+    return rc == QORE_COND_RESULT_TIMEOUT ? ETIMEDOUT : 0;
+}
+
+int VLock::waitIntern(QoreCondition& cond, AbstractSmartLock* asl, ExceptionSink* xsink, int timeout_ms) {
+    int rc = condWait(cond, asl, timeout_ms);
+    if (rc != QORE_VLOCK_WAIT_CANCELLED) {
+        return rc;
+    }
+    // a request that is not to be delivered (out of the thread's scope, now dropped) leaves the caller to recheck
+    // the lock and wait again
+    return raiseCancel(xsink) ? -1 : 0;
+}
+
 int VLock::waitOn(AbstractSmartLock* asl, VLock* vl, ExceptionSink* xsink, int timeout_ms) {
     assert(!waiting_on.load());
     waiting_on.store(asl);
@@ -177,7 +199,7 @@ int VLock::waitOn(AbstractSmartLock* asl, VLock* vl, ExceptionSink* xsink, int t
     if (!rc) {
         //printd(0, "AbstractSmartLock::block() this=%p asl=%p about to block on VRMutex owned by TID %d\n", this,
         //    asl, vl ? vl->tid : -1);
-        rc = asl->self_wait(timeout_ms);
+        rc = waitIntern(asl->asl_cond, asl, xsink, timeout_ms);
         //printd(0, "AbstractSmartLock::block() this=%p asl=%p regrabbed lock\n", this, asl);
     }
 
@@ -211,7 +233,7 @@ int VLock::waitOn(AbstractSmartLock* asl, QoreCondition *cond, VLock* vl, Except
     if (!rc) {
         //printd(0, "AbstractSmartLock::block() this=%p asl=%p about to block on VRMutex owned by TID %d\n", this,
         //    asl, vl ? vl->tid : -1);
-        rc = asl->self_wait(cond, timeout_ms);
+        rc = waitIntern(*cond, asl, xsink, timeout_ms);
         //printd(0, "AbstractSmartLock::block() this=%p asl=%p regrabbed lock\n", this, asl);
     }
 
@@ -249,7 +271,7 @@ int VLock::waitOn(AbstractSmartLock* asl, vlock_map_t& vmap, ExceptionSink* xsin
     if (!rc) {
         //printd(0, "AbstractSmartLock::block() this=%p asl=%p about to block on VRMutex owned by TID %d\n", this,
         //    asl, vl ? vl->tid : -1);
-        rc = asl->self_wait(timeout_ms);
+        rc = waitIntern(asl->asl_cond, asl, xsink, timeout_ms);
         //printd(0, "AbstractSmartLock::block() this=%p asl=%p regrabbed lock\n", this, asl);
     }
 

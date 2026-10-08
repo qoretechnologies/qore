@@ -52,6 +52,13 @@
     cancelled or its @ref Qore::Program "Program" is interrupted; \c channel_select() with a timeout previously
     noticed the request only when the timeout expired.
 
+    @ref Qore::Thread::Mutex::lock() "Mutex::lock()", @ref Qore::Thread::RWLock "RWLock" read and write locks,
+    @ref Qore::Thread::Gate::enter() "Gate::enter()", @ref Qore::Thread::Condition::wait() "Condition::wait()" and
+    the @ref Qore::Thread::AutoLock "AutoLock", @ref Qore::Thread::AutoReadLock "AutoReadLock",
+    @ref Qore::Thread::AutoWriteLock "AutoWriteLock" and @ref Qore::Thread::AutoGate "AutoGate" constructors now end
+    as soon as the thread is cancelled or its @ref Qore::Program "Program" is interrupted, instead of within
+    500 ms.  @ref Qore::Thread::Condition::wait() "Condition::wait()" still returns with its lock held.
+
     ASCII scans of hash keys in other ASCII-compatible encodings now check for thread
     cancellation and program interruption at most every 100 bytes. Cleanup cancellation
     deferral remains effective, and interrupted existence lookups set their output to false.

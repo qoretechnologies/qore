@@ -119,7 +119,8 @@ int SmartMutex::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsi
         rc = 0;
     } else {
         // wait for condition
-        rc = timeout_ms > 0 ? cond->wait2(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
+        // a cancellation point if the caller made it one; see VLock::condWait()
+        rc = nvl->condWait(*cond, this, timeout_ms > 0 ? timeout_ms : 0);
     }
 
     // check for signals before reacquiring the lock for efficiency
@@ -131,7 +132,13 @@ int SmartMutex::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsi
     // check the signal generation after reacquisition.  During grabImpl, this
     // thread waits on asl_cond (not the user's condition), so any broadcast on
     // the user's condition during that window would be lost without this check.
-    if (grabImpl(mtid, nvl, xsink)) {
+    // the lock is always reacquired before the wait returns, including when it reports a cancellation
+    int grab_rc;
+    {
+        VLockCancellationSuspend no_cancel(nvl);
+        grab_rc = grabImpl(mtid, nvl, xsink);
+    }
+    if (grab_rc) {
         // error: clean up cond map before returning
         if (!--(i->second)) {
             cmap.erase(i);
@@ -154,6 +161,10 @@ int SmartMutex::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsi
         cmap.erase(i);
     }
 
+    if (rc == QORE_VLOCK_WAIT_CANCELLED) {
+        // raised with the lock held again; a request that is no longer to be delivered is a wakeup
+        return nvl->raiseCancel(xsink) ? -1 : 0;
+    }
     return rc;
 }
 

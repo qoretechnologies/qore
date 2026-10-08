@@ -174,6 +174,51 @@ run_case("usleep", auto sub () {
     return usleep(60s);
 });
 
+# lock waits: the lock is held by this thread for the whole case
+{
+    Mutex m();
+    m.lock();
+    run_case("mutex lock", auto sub () { m.lock(); });
+    run_case("mutex lock timeout", auto sub () { return m.lock(60s); });
+    run_case("auto lock", auto sub () { AutoLock al(m); });
+    m.unlock();
+
+    RWLock rw();
+    rw.writeLock();
+    run_case("read lock", auto sub () { rw.readLock(); });
+    run_case("read lock timeout", auto sub () { return rw.readLock(60s); });
+    rw.writeUnlock();
+    rw.readLock();
+    run_case("write lock", auto sub () { rw.writeLock(); });
+    run_case("write lock timeout", auto sub () { return rw.writeLock(60s); });
+    rw.readUnlock();
+
+    Gate g();
+    g.enter();
+    run_case("gate enter", auto sub () { g.enter(); });
+    run_case("gate enter timeout", auto sub () { return g.enter(60s); });
+    g.exit();
+}
+
+# a condition wait: the lock is held again when the cancellation is raised
+{
+    Mutex m();
+    Condition c();
+    run_case("condition wait", auto sub () {
+        m.lock();
+        on_exit m.unlock();
+        try {
+            c.wait(m);
+        } catch (hash<ExceptionInfo> ex) {
+            # the wait ends with the lock held
+            if (!m.lockOwner()) {
+                throw "LOCK-NOT-HELD", "the lock is not held after the cancelled wait";
+            }
+            rethrow;
+        }
+    });
+}
+
 # a channel select wait, with and without a timeout
 {
     Channel ch();
