@@ -3655,6 +3655,13 @@ static void ut_negotiate_close_cancels_after_closed_state(UnitTestCounters& c) {
 
     int cache_before = ctl_priv_holder->getCacheSize();
 
+    // the state shared with the server's connection handler must outlive the server: its destructor joins the
+    // server thread, which can still be using them after this function has released the handler
+    std::mutex mu;
+    std::condition_variable cv;
+    bool accepted = false;
+    bool release_server = false;
+
     UtH1Server server;
     if (server.start() != 0) {
         UT_ASSERT(c, false, "negotiate close test server bind/listen failed");
@@ -3671,11 +3678,6 @@ static void ut_negotiate_close_cancels_after_closed_state(UnitTestCounters& c) {
         xsink.clear();
         return;
     }
-
-    std::mutex mu;
-    std::condition_variable cv;
-    bool accepted = false;
-    bool release_server = false;
 
     server.serveOnce([&](int cfd) {
         (void)cfd;
