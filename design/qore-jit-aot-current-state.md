@@ -47,6 +47,22 @@ Normal method dispatch cannot invoke a copy variant: its calling convention is
 different. `ImplicitCopyDispatch.qtest` exercises polymorphic copies and failing
 copy hooks in all four execution modes.
 
+### Plain-function access context
+
+Fast plain-function calls bind parameters in the caller's object/class context,
+then clear both contexts while executing the function body. Return filtering
+also uses the function's empty access context. `ObjectSubstitutionHelper` keeps
+the thread context and `RuntimeConfig` synchronized and restores both on exit;
+parameter cleanup retains the existing caller-context ordering. This applies
+to ordinary fast calls, target-prelinked calls and prelinked AOT function calls.
+Methods and closures retain their separate object/lexical-class conventions.
+
+An enforced class parameter type is not by itself proof that a later assignment
+to the same declared type cannot fail: the caller may have private-inheritance
+access that the plain function does not. `AOTPlainFunctionClassContext.qtest`
+compares this boundary with AST execution, including normal/invoke/callback
+calls, return filtering, caller-context restoration and native-EH AOT.
+
 ### AOT method context elision
 
 The resolved dot-eval fast-method path (also used by polymorphic dispatch-cache

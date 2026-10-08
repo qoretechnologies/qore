@@ -1,0 +1,54 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class PlainFunctionClassContextTest
+
+class PlainFunctionClassContextTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("plain function class context", "1.0", \ARGV) {
+        addTestCase("private inheritance does not leak through fast calls", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTPlainFunctionClassContext.qr";
+        string expected = "";
+        for (int i = 0; i < 16; ++i) {
+            expected += "RUNTIME-TYPE-ERROR:RUNTIME-TYPE-ERROR:RUNTIME-TYPE-ERROR:"
+                + "RUNTIME-TYPE-ERROR:1\n";
+        }
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-plain-function-context-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                foreach string control in (("", "QORE_AOT_DISABLE_PRELINKED_CALLS=1 ",
+                        "QORE_DISABLE_IR_CONTEXT_ELISION=1 ", "QORE_DISABLE_FUNCREF_FAST_CALL=1 ")) {
+                    assertEq(expected, run((executable,), control), prefix + level + control);
+                }
+            }
+        }
+    }
+}

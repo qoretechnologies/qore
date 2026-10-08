@@ -3207,3 +3207,85 @@ native method-parameter entry could reuse resolved polymorphic targets; the
 existing four-slot cache already avoids repeated name resolution. Any such
 entry must preserve actual override return contracts, live Program/debugger/body
 checks and diagnostic/stack/cancellation semantics.
+
+## Plain-function access context (2026-10-08)
+
+Baseline `c3ccb678e`, macOS arm64 M4 Pro. Investigation of repeated receiver
+assignment checks found that a declared class type is not a sufficient proof
+for removing the check: a parameter may be accepted with its caller's private
+inheritance access, while assignment to the same type in a plain function must
+fail. Blind check elision was rejected before measurement.
+
+That regression also exposed a pre-existing AOT bug. The saved runtime's
+prelinked plain-function path inherited its caller's object/class context.
+AST, IR, JIT and tiered execution rejected the illegal assignment; saved AOT
+accepted both assignments and the function return. Disabling prelinked calls
+restored the expected error; disabling context elision did not.
+
+The fix scopes the existing `ObjectSubstitutionHelper` around body execution
+and return filtering in three general plain-function fast helpers. Parameter
+binding and parameter cleanup keep their caller-context ordering. The helper
+clears/restores both thread and TLS RuntimeConfig object/class state, including
+exceptional exits. Methods, closures, native scalar adapters and ABI are unchanged.
+
+### Measured correctness cost
+
+These are runtime-only comparisons: each run uses one identical AOT executable
+with both compatible libraries. All four modes first pass 270 independent
+reference records. Jobs run sequentially in shuffled mode/kernel/fork order,
+without overlapping builds, tests, profiles or evidence validation. Values are
+medians of independent fork means, ns/element including loop/computation/checksum,
+not isolated call latency. No Java comparison was repeated for this fix.
+
+Primary `run-0wjj6czp`: 4096 elements, five forks, three warmups, five 300 ms
+measurement windows per fork.
+
+|!Mode|!Kernel|!Before|!After|!Change
+|IR|direct_call|360.28096|358.44484|-0.51%
+|IR|indirect_wide|331.28973|342.15799|3.28%
+|IR|polymorphic_call|407.09655|408.10680|0.25%
+|IR|temporary_hash|669.79424|676.92590|1.06%
+|AOT|direct_call|1.31753|1.32339|0.45%
+|AOT|indirect_wide|7.23129|7.20295|-0.39%
+|AOT|polymorphic_call|196.53903|194.95396|-0.81%
+|AOT|temporary_hash|311.12989|313.21635|0.67%
+
+Only the IR callback ranges separate: 319.04029–335.89904 before versus
+339.31964–343.69993 after. All other before/after ranges overlap; overlap does
+not establish equivalence. All unfavorable medians and outliers are retained.
+
+Longer `run-u7uytxq3`: 4096 elements, seven forks, three warmups and five
+500 ms windows. `QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY=1` disables AOT adapter
+registration, exercising the corrected general callback helper. The IR mode
+provides a longer repeat; this flag affects AOT compilation, not IR lowering.
+
+|!Mode|!Before|!After|!Change|!Before range|!After range
+|IR callback repeat|329.85275|338.82050|2.72%|328.14754–332.12842|331.91999–343.55842
+|AOT general callback|183.96689|195.59143|6.32%|182.47911–186.21590|194.23454–199.24751
+
+The IR repeat ranges narrowly overlap; the generic AOT ranges separate. This
+is retained as a correctness fix with a measured cost, not as an optimization.
+Future general-call improvements must preserve the corrected access boundary.
+
+### Validation and next work
+
+Release/debug qore/qcc builds and 55 selected files per build pass: 37 QUnit
+wrappers, 202 cases / 16475 assertions, plus 18 standalone tests. The new wrapper
+has 44 assertions, covering AST/IR/JIT/tiered, stripped-source -O0/-O3 AOT,
+native EH, direct/invoke/callback calls, return filtering, caller restoration
+and disabled-prelink/context/callback controls. The saved baseline fails at
+AOT -O0 after 11 assertions, as expected. Access, class and cast suites pass.
+
+Old v2/v3 AOT artifacts retain byte-identical 225/270 reference records. Eleven
+Python harness tests, standalone runtime syntax, strict tables and whitespace
+checks pass. Runtime text grows 13873380 → 13873616 bytes (+236). No full-suite,
+sanitizer, allocation-failure injection, Linux runtime or full split-runtime
+build claim. The workstation is shared with desktop/system applications.
+
+The [62-check audit](FOLLOWUP-AUDIT.md#plain-function-context-audit-2026-10-08)
+and [sanitized evidence](results-plain-function-context-macos-arm64.json) retain
+exact diffs/hashes, all 108 jobs / 540 samples, settings, test counts and costs.
+The separate receiver-initializer experiment is not part of this fix. Next,
+measure its checked-assignment consolidation against this corrected baseline;
+then investigate native parameters on polymorphic cache hits, reusing existing
+fast-entry contracts where sound. The broader performance goal remains active.

@@ -3631,3 +3631,126 @@ Runtime text: 13873068 → 13873380 bytes (+312). Exact diffs, hashes, all sampl
 and limitations are in [sanitized evidence](results-assigned-method-macos-arm64.json).
 Existing native artifacts need recompilation to change their code generation.
 The broader performance goal remains active.
+
+## Plain-function context audit (2026-10-08)
+
+Scope: the retained plain-function context fix against
+`c3ccb678e193d6d9404ae0ac13d8586bb096d2ef` on `feature/performance`.
+This covers `lib/JITRuntime.cpp`, the two new
+`AOTPlainFunctionClassContext` regression files, design/release documentation
+and benchmark evidence. The uncommitted `AOTClassLocalAssignment` experiment
+is excluded from this fix and commit; its compiler prototype is reverted.
+No qlib, module, QPP, public API, serialized format or ABI change.
+
+The complete audit skill and required module-structure, sandboxing and
+cooperative-cancellation guides were read and applied. The audit materially
+redirected the optimization: identical class annotations cannot justify blind
+assignment-check elision because caller and callee access differ. The saved
+AOT runtime leaked the caller's class; the new regression fails it at -O0.
+The fix establishes the AST access boundary with existing RAII, leaving
+parameter binding/cleanup, method/closure conventions and live guards intact.
+
+All 62 checklist items are reported below: 21 Pass and 41 N/A.
+No unresolved failure remains in this retained scope. The measured generic-call
+cost is explicitly accepted for correctness, not presented as a performance gain.
+
+|!#|!Check|!Status|!Evidence
+|1|Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new module, QPP class or relevant registration change.
+|2|Entry exists in doxygen/lang/900_release_notes.dox.tmpl (for modules in the Qore repo; external modules have release notes in their .qm)|Pass|Release notes describe corrected plain-function access context and caller-context restoration.
+|3|qore_user_module() or qore_external_user_module() call in CMakeLists.txt|N/A|No new module, QPP class or relevant registration change.
+|4|Module added to QMOD list in CMakeLists.txt|N/A|No new module, QPP class or relevant registration change.
+|5|.qm file has @section <lowercasemodname>intro as first doc section — must be all lowercase (e.g., avrodataproviderintro, not AvroDataProviderintro)|N/A|No new module, QPP class or relevant registration change.
+|6|%modern in .qm file — no redundant %new-style, %require-types, %strict-args, %enable-all-warnings|N/A|No new module, QPP class or relevant registration change.
+|7|No parse directives (%requires, %modern, %new-style) in separated .qc files (check OUTSIDE of @code blocks only)|N/A|No new module, QPP class or relevant registration change.
+|8|No %include usage (deprecated for modules)|N/A|No new module, QPP class or relevant registration change.
+|9|Copyright 2026 on all new files|Pass|The two new regression files and measurement evidence carry 2026 copyright and MIT/SPDX notices.
+|10|Directory layout: .qm inside qlib/<ModuleName>/ directory (not at qlib/<ModuleName>.qm for multi-file modules)|N/A|No new module, QPP class or relevant registration change.
+|11|No second .qm for the same module at qlib/<ModuleName>.qm|N/A|No new module, QPP class or relevant registration change.
+|12|ns=Qore::XX matches the QoreNamespace constructor path|N/A|No new module, QPP class or relevant registration change.
+|13|%modern directive present|Pass|The new .qr fixture and .qtest wrapper both use %modern.
+|14|Executable permission set (chmod +x)|Pass|Both new regression files have executable permissions and are staged as mode 100755.
+|15|Uses %prepend-module-path  before %requires for in-repo modules|Pass|The wrapper prepends the in-repository qlib path before requiring QUnit and FsUtil.
+|16|External module dependencies use %try-module — except modules delivered with Qore itself (DataProvider, ConnectionProvider, QUnit, etc.) which use hard %requires|Pass|Only Qore-delivered QUnit and FsUtil are required; there are no external module dependencies.
+|17|No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks|Pass|The runtime change adds no filesystem operation.
+|18|No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks|Pass|No C++ network operations are added.
+|19|If filesystem/network ops exist, verify QoreSandboxManagerHelper usage|N/A|No new C++ filesystem/network operations require a sandbox helper.
+|20|No File::, Dir::, Socket::, HTTPClient:: usage without justification|Pass|The test uses FsUtil::TmpDir and quoted child commands solely for isolated compiler fixtures, with automatic directory cleanup; no production Qore I/O is added.
+|21|All for/while loops that could iterate >100 times have qore_check_cancel() checks|Pass|No C++ loop is added or changed; existing stack and cancellation checks remain. Thread/program interruption suites pass.
+|22|Uses qore_check_cancel() (NOT deprecated qore_check_io_interrupt())|Pass|No deprecated cancellation API or replacement cancellation logic is introduced.
+|23|Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations|N/A|There are no new C++ loops requiring a new polling frequency.
+|24|No blocking operations without cancellation support|Pass|No blocking C++ operation is introduced.
+|25|Every action has display_name, short_desc (plain text, <80 chars), desc (markdown)|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|26|Every action has options populated via getActionOptionFromFields() — without this, the action shows an empty, unusable form|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|27|Every action has output_type set to a typed data type constant (e.g., MyResponseDataType) — not omitted|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|28|DPAT_API actions: provider has "supports_request": True and implements doRequestImpl()|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|29|DPAT_FIND actions: every option exists in SearchOptions, getRecordTypeImpl() returns *hash<string, AbstractDataField>|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|30|Scheme-based apps (with "scheme" in registerApp): actions use "path" and do NOT use "cls" — having both scheme and cls causes a runtime error|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|31|Single-key hash slices use trailing comma: Fields{"key",} (without trailing comma, Fields{"key"} returns the value, not a hash)|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|32|Typed data type classes exist for request and response types — inherit HashDataType, have const Fields hash, call addQoreFields(Fields) in constructor, export public constant at bottom (e.g., public const MyDataType = new MyDataType();)|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|33|Request/input types use public Fields (enables ClassName::Fields in action registration)|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|34|Response/output types use private Fields|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|35|Each field in data types has display_name, type, and desc (markdown-formatted)|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|36|Input fields have example_value where useful (string fields, endpoint URIs, SQL queries, etc.)|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|37|Fields with finite allowed values use allowed_values with AllowedValueInfo containing both value and display_name (Title Case, human-readable) — never bare values, never described only in text|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|38|Password/secret fields have "sensitive": True|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|39|groups uses AppGroup enum values from qlib/DataProvider/AppGroup.qc|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|40|App logo stored as separate file, loaded at module level in Priv namespace|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|41|App desc uses markdown: bullet list of capabilities, links to project website, business-language explanation of value|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|42|display_name is user-friendly ("Apache Avro" not "avro")|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|43|short_desc is plain text, under 80 chars, single sentence — no markdown|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|44|desc uses markdown: backticks for code/field refs ( field_name ,  True ,  pdf ), \n\n for paragraphs, -  bullet lists for enumerations, bold for caveats|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|45|Descriptions use plain business language relating to common challenges — not just technical "what" but "why" and "when to use"|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|46|No bare True/False/NOTHING — must be backtick-wrapped in desc|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|47|No bare field/option names in prose — must use backticks|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|48|Long descriptions (>500 chars) use bold section headers and bullet lists|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|49|Factory registration in Qore repo: every factory name registered in qlib/DataProvider/DataProvider.qc → FactoryMap (without this, module loads but doesn't appear in Qorus apps)|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|50|getRecordTypeImpl() signature: must be private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) — NOT returning *AbstractDataProviderType|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|51|Dependency JARs committed (for JNI modules): JAR files in qlib/*/jar/ may be gitignored — use git add -f to ensure they're tracked, otherwise CI compilation fails|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|52|JAR install rules in CMakeLists.txt for all dependency JARs|N/A|No DataProvider, app, factory, JNI or JAR changes.
+|53|No workarounds: No TODOs, FIXMEs, stubs, or partially-implemented features|Pass|The fix uses the existing complete context RAII helper; no TODO, stub, diagnostic print, new ABI or partial optimization is retained.
+|54|Exception safety: C++ uses ReferenceHolder for Qore allocations, std::unique_ptr for C++ allocations, *xsink checked after every fallible operation|Pass|ObjectSubstitutionHelper restores thread and TLS RuntimeConfig state on normal and exceptional scope exit. Parameter/argv ownership and cleanup ordering are unchanged; no allocation or new fallible call is added.
+|55|Thread safety: All mutable shared state protected by std::lock_guard<std::mutex> or documented as immutable-after-construction|Pass|Only the current thread's object/class fields are scoped; no mutable shared metadata, cache or publication protocol is added. Existing frame-reader and concurrent stack tests pass.
+|56|Type safety: Strongly-typed code<return(args)> instead of untyped code; static_cast instead of C casts; typed hashdecls for results; enums where appropriate|Pass|Existing typed RAII context helper is reused; the fixture uses a typed callback and ExceptionInfo catch hashes. No casts or untyped callable API is added.
+|57|Performance: No O(n²) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply|Pass|Two constant-time context scopes per general call preserve required semantics without new allocation or asymptotic work. Before/after costs, including the IR callback regression, are measured and reported; this is a correctness fix, not a speedup claim.
+|58|Error handling: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable|Pass|Existing call eligibility, parameter checks, Program switches, exception sinks and fallback routing remain. Binding and cleanup use caller context; body and return filtering use the plain function context.
+|59|Documentation: Doxygen @param, @return, @throw on all public methods; @par Example with realistic business scenarios; @note for important caveats|Pass|Design notes and release notes explain the caller/callee access distinction and why an enforced class annotation cannot justify blind assignment-check elision. No public method or API is added.
+|60|QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP method or flag changes.
+|61|Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|The regression closes inherited private-class access through plain-function fast calls. No new format-string input, array indexing or credentials; child arguments are quoted and evidence is sanitized.
+|62|Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug builds and 55 selected files per build pass: 202 QUnit cases / 16475 assertions plus 18 standalone tests. The 44-assertion new regression fails the saved baseline as expected. Old v2/v3 225/270 records, standalone runtime syntax and 11 harness tests pass.
+
+### Final validation record
+
+- Release/debug `cmake --build BUILD --target qore qcc -j 8` pass.
+- Each build passes 55 selected files: 37 QUnit wrappers with 202 cases /
+  16475 assertions, plus 18 standalone tests. The focused wrapper has 44
+  assertions; access/classes/cast extras account for 33 cases / 390 assertions.
+- The wrapper checks source AST/IR/JIT/tiered with synchronous low thresholds,
+  stripped-source AOT -O0/-O3, native EH and disabled prelink/context/callback
+  controls. Direct/invoke assignment, return filtering and caller restoration
+  agree with AST. The saved baseline fails the new wrapper after 11 assertions.
+- Standalone `JITRuntime.cpp` release syntax passes with 79 warnings in existing
+  included headers; eleven Python harness tests pass. Old v2/v3 AOT artifacts
+  reproduce all 225/270 reference records byte-for-byte.
+- Two sequential interleaved measurement runs pass all reference checks and
+  retain 108 unique jobs / 540 finite positive samples. Expected mode/kernel/
+  fork counts, startup counts, identical before/after AOT artifact hashes and
+  independently recomputed medians pass. No heavy validation overlaps timing.
+- Primary IR wide callbacks worsen 3.28% with separated ranges; the longer
+  repeat worsens 2.72% with narrowly overlapping ranges. Forcing AOT callbacks
+  through the general helper worsens 6.32% with separated ranges. Optimized
+  AOT controls have overlapping ranges; that is not proof of equivalence.
+- Strict Qore tables, whitespace, source/binary hash and evidence privacy checks
+  pass. No full-suite, sanitizer, allocation-failure injection, Linux runtime or
+  full split-runtime build was performed. No new Java parity claim.
+
+Release library:
+`d7c01fc0f768fc6dadeef454d8af181c3e22147c51a48ade126055db01946327`.
+Debug library:
+`51ffef11c04f1317cf00ae5fa5d62adf57936521aad45423f6b1eff53d370de0`.
+Runtime diff:
+`e87f7d6840e007714899cd68adad9c6078a049dedd94d487b5808b14659018a2`.
+Runtime text: 13873380 → 13873616 bytes (+236). Exact source/test diffs,
+hashes, all samples, settings and limitations are in
+[sanitized evidence](results-plain-function-context-macos-arm64.json).
+The receiver-initializer optimization resumes from this corrected baseline;
+the broader performance goal remains active.

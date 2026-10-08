@@ -72,6 +72,13 @@ Unused argv setup is omitted only without excess arguments; their ownership
 and cleanup remain unchanged. This flag also controls other context-elision
 paths, so treat it as a diagnostic control, not isolated cost attribution.
 
+For the general callback runtime path, compile and run with
+`QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY=1`; this omits native function-reference
+adapters. The plain-function context fix is measured both normally and with this
+control in [the results](RESULTS.md#plain-function-access-context-2026-10-08).
+It corrects a caller-class access leak and has a measured generic-call cost;
+do not describe it as a performance improvement.
+
 ## Workloads and units
 
 Each invocation processes `--count` elements, normally 1024. The reported unit

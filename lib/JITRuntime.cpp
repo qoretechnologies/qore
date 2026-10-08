@@ -10869,6 +10869,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
 
     QoreValue val{};
     {
+        // Parameter checks use the caller's access context, but a plain
+        // function body must not inherit its caller's object/class privileges.
+        ObjectSubstitutionHelper function_context(nullptr, nullptr);
         ArgvContextHelper argv_helper(argv.release(), xsink);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
@@ -10920,6 +10923,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     // Apply return type coercion (e.g. softlist wrapping) to match
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
+        ObjectSubstitutionHelper function_context(nullptr, nullptr);
         const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             // Missing return statement: check type and set location to method definition
@@ -11280,6 +11284,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
 
     QoreValue val{};
     {
+        ObjectSubstitutionHelper function_context(nullptr, nullptr);
         ArgvContextHelper argv_helper(argv.release(), xsink);
         execJITWithDeopt(uvb, call_name, [target_fn](ExceptionSink* xs, bool& /*inv*/) {
             return target_fn(xs);
@@ -11298,6 +11303,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     // Apply return type coercion (e.g. softlist wrapping) to match
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
+        ObjectSubstitutionHelper function_context(nullptr, nullptr);
         const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -15200,6 +15206,9 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
 
         QoreValue val{};
         {
+            // Match UserVariantBase::eval(): bind parameters in the caller's
+            // context, then clear object/class context for the function body.
+            ObjectSubstitutionHelper function_context(nullptr, nullptr);
             ArgvContextHelper argv_helper(argv.release(), xsink);
             if (uvb->hasCachedFunction()) {
                 execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
@@ -15240,6 +15249,7 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         }
 
         if (!*xsink) {
+            ObjectSubstitutionHelper function_context(nullptr, nullptr);
             const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
             if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
                 QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
