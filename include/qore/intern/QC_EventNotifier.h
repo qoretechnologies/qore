@@ -34,6 +34,7 @@
 
 #include <qore/Qore.h>
 
+DLLLOCAL extern QoreClass* QC_EVENTNOTIFIER;
 DLLLOCAL QoreClass* initEventNotifierClass(QoreNamespace& ns);
 
 #endif
