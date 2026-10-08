@@ -962,6 +962,17 @@ val = "string";      # OK
       <tt>ReferenceHolder&lt;QoreHttpClientObject&gt; client(new QoreHttpClientObject, xsink);</tt>
     @endparblock
 
+    @par C++ API: No Value Is Returned With an Exception Raised by Builtin Code
+    @parblock
+    Builtin functions and methods may still raise an exception and return a value, but the value is now released
+    when the builtin returns: a C++ caller that calls a builtin through the API, for example with
+    \c QoreProgram::callFunction() or \c QoreObject::evalMethod(), receives no value with an exception raised by the
+    call, as %Qore code never did.  See the signature types \c q_func_t and \c q_method_t for the contract.
+
+    <b>Workarounds:</b>
+    - None needed: a value returned with an exception was never meant to be used; use the exception
+    @endparblock
+
     @par qget Command-Line Changes
     @parblock
     \c qget was rewritten (see the new features); its options follow \c wget for download options and \c curl for

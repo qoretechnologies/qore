@@ -382,6 +382,12 @@ private:
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
 
     @return the return value of the function; the caller owns any reference returned in the return value
+
+    @note A builtin may raise an exception and still return a value (for example the partial or clamped result of a
+    conversion); since %Qore 3.0, the runtime releases such a value when the builtin returns, so that no caller, in any
+    execution mode, receives a value together with an exception raised by the call.  The implementation therefore
+    never needs to release a value it returns before raising an exception, but a value that is returned with an
+    exception is never used.
  */
 typedef QoreValue (*q_func_t)(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink);
 
@@ -392,6 +398,12 @@ typedef QoreValue (*q_func_t)(const QoreListNode* args, RuntimeConfig& rc, Excep
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
 
     @return the return value of the function; the caller owns any reference returned in the return value
+
+    @note A builtin may raise an exception and still return a value (for example the partial or clamped result of a
+    conversion); since %Qore 3.0, the runtime releases such a value when the builtin returns, so that no caller, in any
+    execution mode, receives a value together with an exception raised by the call.  The implementation therefore
+    never needs to release a value it returns before raising an exception, but a value that is returned with an
+    exception is never used.
 
     @since %Qore 0.9.5
  */
@@ -406,6 +418,12 @@ typedef QoreValue (*q_external_func_t)(const void* ptr, const QoreListNode* args
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
 
     @return the return value of the function (can be 0); the caller owns any reference returned in the return value
+
+    @note A builtin may raise an exception and still return a value (for example the partial or clamped result of a
+    conversion); since %Qore 3.0, the runtime releases such a value when the builtin returns, so that no caller, in any
+    execution mode, receives a value together with an exception raised by the call.  The implementation therefore
+    never needs to release a value it returns before raising an exception, but a value that is returned with an
+    exception is never used.
  */
 typedef QoreValue (*q_method_t)(QoreObject* self, AbstractPrivateData* private_data, const QoreListNode* args,
     RuntimeConfig& rc, ExceptionSink* xsink);
@@ -421,6 +439,12 @@ typedef QoreValue (*q_method_t)(QoreObject* self, AbstractPrivateData* private_d
 
     @return the return value of the function (can be 0); the caller owns any reference returned in the return value
 
+    @note A builtin may raise an exception and still return a value (for example the partial or clamped result of a
+    conversion); since %Qore 3.0, the runtime releases such a value when the builtin returns, so that no caller, in any
+    execution mode, receives a value together with an exception raised by the call.  The implementation therefore
+    never needs to release a value it returns before raising an exception, but a value that is returned with an
+    exception is never used.
+
     @since %Qore 0.8.13
  */
 typedef QoreValue (*q_external_method_t)(const QoreMethod& method, const void* ptr, QoreObject* self,
@@ -434,6 +458,12 @@ typedef QoreValue (*q_external_method_t)(const QoreMethod& method, const void* p
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
 
     @return the return value of the function; the caller owns any reference returned in the return value
+
+    @note A builtin may raise an exception and still return a value (for example the partial or clamped result of a
+    conversion); since %Qore 3.0, the runtime releases such a value when the builtin returns, so that no caller, in any
+    execution mode, receives a value together with an exception raised by the call.  The implementation therefore
+    never needs to release a value it returns before raising an exception, but a value that is returned with an
+    exception is never used.
 
     @since %Qore 0.8.13
  */

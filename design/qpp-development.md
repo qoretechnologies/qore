@@ -141,6 +141,27 @@ Key points for working with object parameters (which are `ReferenceHolder<Type>`
 - `if (socket)` works via `operator bool()`
 - For optional parameters (`*Type[Class] param`), the holder may be null
 
+### Return Values with Exceptions
+
+Builtin code may raise an exception and still return a value: `strtoint()` returns the clamped value of an
+out-of-range number together with `STRTOINT-ERROR`, and many builtins simply `return rv;` after raising.  This is
+allowed, and nothing needs to be released before returning, but a value returned with an exception is never used:
+
+- **Contract:** no caller receives a value together with an exception raised by the call it made.  Callers in every
+  execution engine (the AST and IR interpreters, JIT and AOT code, and C++ API callers such as
+  `QoreProgram::callFunction()`) may therefore treat a call that raised an exception as one that returned no value.
+- **Enforcement:** every builtin function and method variant calls its implementation through
+  `qore_eval_builtin_call()` (`include/qore/intern/BuiltinFunction.h`): when the call raised an exception, the value
+  is released there and `QoreValue()` is returned.  An exception that was already raised before the call is not the
+  call's, so the value is returned unchanged in that case.
+- **When adding a builtin variant type**, call the implementation through `qore_eval_builtin_call()` as well;
+  `examples/test/module-cpp-api/builtin-exception-result/` checks the contract for functions, normal methods and
+  static methods in every execution mode and from AOT code.
+- Constructors, destructors and copy methods return no value and are not affected.
+
+The public signature types (`q_func_t`, `q_external_func_t`, `q_method_t`, `q_external_method_t`,
+`q_external_static_method_t` in `include/qore/common.h`) document the same contract for module authors.
+
 ### Accessing the QoreObject* for Object Parameters
 
 When you have an object parameter like `Socket[QoreSocketObject] socket`, the QPP macro `HARD_QORE_VALUE_OBJ_DATA` (defined in `include/qore/params.h`) creates two variables:
