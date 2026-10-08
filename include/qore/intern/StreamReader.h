@@ -203,7 +203,7 @@ public:
             if (trim) {
                 str->terminate(str->size() - eolsize);
             }
-            return q_remove_bom_utf16(str.release(), enc);
+            return q_remove_bom(str.release(), enc);
         };
 
         // bytes read to resolve the byte order that are not a byte order mark belong to the line
@@ -225,7 +225,7 @@ public:
             if (*xsink)
                 return 0;
             if (!rc)
-                return str->empty() ? 0 : q_remove_bom_utf16(str.release(), enc);
+                return str->empty() ? 0 : q_remove_bom(str.release(), enc);
 
             if (add_byte(c)) {
                 return finish_line();

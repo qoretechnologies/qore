@@ -3293,7 +3293,7 @@ int q_env_subst(QoreString& str) {
     return 0;
 }
 
-static void q_remove_bom_utf16_intern(QoreString* str, const QoreEncoding*& enc) {
+static void q_remove_bom_intern(QoreString* str, const QoreEncoding*& enc) {
     assert(str->getEncoding() == enc);
     if (enc != QCS_UTF16 && enc != QCS_UTF16BE && enc != QCS_UTF16LE) {
         // a Unicode encoding created on the fly (ex: UTF-32): the byte order mark of the encoding is removed, and for
@@ -3334,13 +3334,13 @@ static size_t q_bom_check_size(const QoreEncoding* enc) {
     return ep->bom.empty() ? 2 : ep->bom.size();
 }
 
-QoreString* q_remove_bom_utf16(QoreString* str, const QoreEncoding*& enc) {
-    q_remove_bom_utf16_intern(str, enc);
+QoreString* q_remove_bom(QoreString* str, const QoreEncoding*& enc) {
+    q_remove_bom_intern(str, enc);
     return str;
 }
 
-QoreStringNode* q_remove_bom_utf16(QoreStringNode* str, const QoreEncoding*& enc) {
-    q_remove_bom_utf16_intern(str, enc);
+QoreStringNode* q_remove_bom(QoreStringNode* str, const QoreEncoding*& enc) {
+    q_remove_bom_intern(str, enc);
     return str;
 }
 
@@ -3366,7 +3366,7 @@ QoreStringNode* q_read_string_all(ExceptionSink* xsink, const QoreEncoding* enc,
     // resolve any UTF-16 byte order mark, as in q_read_string() and q_read_string_short(); without
     // this the mark would be decoded as a character and, with the byte-order-neutral "UTF-16"
     // encoding, little-endian data would be decoded as big-endian
-    q_remove_bom_utf16(*str, enc);
+    q_remove_bom(*str, enc);
     return str.release();
 }
 
@@ -3417,7 +3417,7 @@ QoreStringNode* q_read_string(ExceptionSink* xsink, int64 size, const QoreEncodi
             continue;
         } else if (!check_bom && str->size() >= q_bom_check_size(enc)) {
             check_bom = true;
-            q_remove_bom_utf16(*str, enc);
+            q_remove_bom(*str, enc);
         }
 
         // scan data read and find the last valid character position
@@ -3500,7 +3500,7 @@ QoreStringNode* q_read_string_short(ExceptionSink* xsink, int64 size, const Qore
     }
 
     if (str->size() >= q_bom_check_size(enc)) {
-        q_remove_bom_utf16(*str, enc);
+        q_remove_bom(*str, enc);
     }
 
     size_t last_char = 0;

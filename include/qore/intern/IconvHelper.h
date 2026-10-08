@@ -322,7 +322,7 @@ private:
        the string.
 
        Byte order marks in externally-supplied data are resolved separately by
-       q_remove_bom_utf16(), which strips the BOM and retags the string as \c QCS_UTF16BE or
+       q_remove_bom(), which strips the BOM and retags the string as \c QCS_UTF16BE or
        \c QCS_UTF16LE according to the BOM found.
     */
    DLLLOCAL static const char* getIconvCode(const QoreEncoding* enc) {

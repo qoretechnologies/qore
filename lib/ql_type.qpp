@@ -567,7 +567,7 @@ string binary_to_string(binary value, *string encoding) [flags=CONSTANT,NAMED_AR
     QoreStringNodeHolder str(new QoreStringNode(static_cast<const char*>(value->getPtr()), value->size(), qe));
     // resolve any UTF-16 byte order mark; this both removes the mark from the string and, for the
     // byte-order-neutral "UTF-16" encoding, selects the byte order for decoding the string
-    q_remove_bom_utf16(*str, qe);
+    q_remove_bom(*str, qe);
     return str.release();
 }
 

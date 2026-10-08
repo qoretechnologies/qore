@@ -42,11 +42,18 @@ using namespace std::placeholders;
 
 typedef std::function<qore_offset_t(void*, size_t, ExceptionSink*)> f_read_t;
 
-//! remove any BOM in UTF-16 strings and strings in Unicode encodings created on the fly (ex: UTF-32), adjust the encoding if required
-DLLLOCAL QoreString* q_remove_bom_utf16(QoreString* str, const QoreEncoding*& enc);
+//! removes a byte order mark from the start of a string in a Unicode encoding and adjusts the encoding if required
+/** For the UTF-16 encodings and the Unicode encodings created on the fly (UTF-32, UCS-2, ...): the byte order mark of
+    the encoding's byte order is removed, and in an encoding without a byte order (ex: \c "UTF-16" or \c "UTF-32"),
+    a byte order mark in either byte order is removed and the string and \a enc get the encoding of that byte order
+    (ex: \c "UTF-32LE").  Strings in other encodings are not changed.
+*/
+DLLLOCAL QoreString* q_remove_bom(QoreString* str, const QoreEncoding*& enc);
 
-//! remove any BOM in UTF-16 strings and strings in Unicode encodings created on the fly (ex: UTF-32), adjust the encoding if required
-DLLLOCAL QoreStringNode* q_remove_bom_utf16(QoreStringNode* str, const QoreEncoding*& enc);
+//! removes a byte order mark from the start of a string in a Unicode encoding and adjusts the encoding if required
+/** @see q_remove_bom(QoreString*, const QoreEncoding*&)
+*/
+DLLLOCAL QoreStringNode* q_remove_bom(QoreStringNode* str, const QoreEncoding*& enc);
 
 //! helper function for reading all possible data and returning it as a string
 /** @param xsink for Qore-language exceptions
