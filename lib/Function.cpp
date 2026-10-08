@@ -2114,11 +2114,13 @@ static QoreStringNode* getNoopError(const QoreFunction* func, const QoreFunction
             ExceptionSink xsink;
             RuntimeConfig& rc = rc_get_current_ref();
             CodeEvaluationHelper ceh(&xsink, rc, func, variant, "noop-dummy");
-            ValueHolder v(variant->evalFunction(nullptr, ceh), nullptr);
-            //ReferenceHolder<AbstractQoreNode> v(variant->evalFunction(func->getName(), ceh, 0), 0);
-            if (v->isNothing())
+            // builtin code takes a valid exception sink: a RUNTIME_NOOP variant raises nothing, but the runtime
+            // checks the sink when the builtin returns (see qore_eval_builtin_call())
+            ValueHolder v(variant->evalFunction(&xsink, ceh), &xsink);
+            assert(!xsink);
+            if (v->isNothing()) {
                 desc->concat("NOTHING");
-            else {
+            } else {
                 QoreNodeAsStringHelper vs(*v, FMT_NONE, 0);
                 desc->sprintf("the following value: %s (", vs->c_str());
                 QoreTypeInfo::getThisType(rti, *desc);
