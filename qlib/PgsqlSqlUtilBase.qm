@@ -215,6 +215,8 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev112 PgsqlSqlUtilBase v1.12
+    - Fixed bulk timestamp, date, and time writes in a different input time zone so they use the same
+      calendar conversion as scalar writes, including prepared bulk update predicates and upserts.
     - atomic empty-partition removal now detaches the leaf in the same transaction before dropping it;
       foreign keys referencing the partitioned parent remain enforced, and a failed drop restores attachment
     - direct dependencies on the leaf still reject removal without cascading changes
@@ -3032,7 +3034,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 # create typed array bind hash with the column's native PostgreSQL type
                 *AbstractColumn col = columns{i.key};
                 string ntype = col ? col.getNativeTypeString() : "text";
-                push array_binds, {"^pgtype^": ntype + "[]", "^value^": unwrapBindHashes(i.value)};
+                push array_binds, {"^pgtype^": ntype + "[]", "^value^": prepareBulkArrayValues(i.value, ntype)};
             } else {
                 push scalar_binds, i.value;
             }
@@ -3040,14 +3042,35 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return scalar_binds + array_binds;
     }
 
-    #! Unwraps driver-specific bind hashes from list elements for UNNEST array binding
-    /** Bind hashes (e.g., from pgsql_bind()) have the format {^pgtype^: oid, ^value^: val}.
-        The UNNEST SQL uses explicit @verbatim ::type[] @endverbatim casts, so only the raw values are needed.
-        @param l the list potentially containing bind hash elements
-        @return the list with bind hash elements replaced by their raw values
+    #! Prepares typed array values with the same calendar conversion as scalar binds
+    /** PostgreSQL ignores the input offset when parsing a timestamp/date/time
+        without a time zone. Convert absolute Qore dates into the datasource time
+        zone before the driver renders such typed array elements. Strings retain
+        their existing native literal semantics; relative intervals are unchanged.
+        @param values list potentially containing explicit bind hashes
+        @param native_type destination PostgreSQL type
+        @return unwrapped values with absolute calendar values in the datasource zone
     */
-    private list<auto> unwrapBindHashes(list<auto> l) {
-        return map ($1.typeCode() == NT_HASH && $1.hasKey("^value^") ? $1."^value^" : $1), l;
+    private list<auto> prepareBulkArrayValues(list<auto> values, string native_type) {
+        # Timestamp precision precedes WITH/WITHOUT TIME ZONE rather than ending the type name.
+        string normalized = native_type;
+        normalized =~ s/\(\s*\d+\s*\)//;
+        normalized = normalizePgTypeName(normalized);
+        bool calendar = normalized == "timestamp" || normalized == "timestamp without time zone"
+            || normalized == "date" || normalized == "time" || normalized == "time without time zone";
+        *TimeZone tz;
+        list<auto> result;
+        foreach auto value in (values) {
+            if (value.typeCode() == NT_HASH && value.hasKey("^value^")) {
+                value = value."^value^";
+            }
+            if (calendar && value.typeCode() == NT_DATE && value.absolute()) {
+                if (!tz) { tz = getPgDatasourceTimeZone(); }
+                value = tz.date(value);
+            }
+            result += (value,);
+        }
+        return result;
     }
 
     #! Deduplicates a hash-of-lists by primary key columns, keeping the last occurrence of each key
@@ -3185,7 +3208,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 # use plain %v; the bind hash carries the explicit array type via ^pgtype^
                 unnest_args += "%v";
                 # create typed array bind hash so driver knows the exact PostgreSQL array type
-                push array_binds, {"^pgtype^": ntype + "[]", "^value^": unwrapBindHashes(i.value)};
+                push array_binds, {"^pgtype^": ntype + "[]", "^value^": prepareBulkArrayValues(i.value, ntype)};
                 ++unnest_col_idx;
             } else {
                 # constant value (e.g. bind hash from cval): use scalar expression in SELECT
