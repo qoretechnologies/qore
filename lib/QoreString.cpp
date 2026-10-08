@@ -913,9 +913,13 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
         size_t ilen = src_len;
         char* ob = targ.priv->buf;
         size_t olen = al;
-        size_t rc = c.iconv(&ib, &ilen, &ob, &olen);
+        size_t rc = c.iconv(&ib, &ilen, &ob, &olen, xsink);
         if (rc == static_cast<size_t>(-1)) {
             switch (errno) {
+                case ECANCELED:
+                    // the exception has been raised
+                    targ.clear();
+                    return -1;
                 case EINVAL:
                 case EILSEQ:
                     c.reportIllegalSequence(ib - src, xsink);

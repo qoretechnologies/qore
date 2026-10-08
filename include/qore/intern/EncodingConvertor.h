@@ -79,8 +79,11 @@ public:
          size_t inavail = inCount;
          char *outbuf = outBuf + outCount;
          size_t outavail = BUFSIZE - outCount;
-         if (conv->iconv(&inbuf, &inavail, &outbuf, &outavail) == (size_t) -1) {
+         if (conv->iconv(&inbuf, &inavail, &outbuf, &outavail, xsink) == (size_t) -1) {
             switch (errno) {
+               case ECANCELED:
+                  // the exception has been raised
+                  return std::make_pair(0, 0);
                case EINVAL:
                   if (src == nullptr) {         //flushing - there will be no more input
                      conv->reportIllegalSequence(inbuf - inBuf, xsink);

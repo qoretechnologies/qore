@@ -4128,6 +4128,11 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed conversions from malformed UTF-8 succeeding on macOS with the system iconv library, which accepts some
+      malformed sequences (for example a sequence above U+10FFFF); @ref Qore::convert_encoding() "convert_encoding()",
+      encoding conversion streams, and everything built on them, such as the CSV profiler's detection of non-UTF-8
+      files, now raise \c ENCODING-CONVERSION-ERROR for malformed UTF-8 input on every platform
+
     - Fixed a @ref Qore::Thread::Queue "Queue" that once held an object, list or hash that could be part of a
       reference cycle being scanned for cycles by the garbage collector for the rest of its life, even when it no
       longer held any such value; values taken from the queue, for example with

@@ -34,13 +34,24 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_encoding_private.h"
 
+#include <cassert>
 #include <cerrno>
+#include <cstring>
 #include <iconv.h>
 
 class IconvHelper {
 
 public:
-   DLLLOCAL IconvHelper(const QoreEncoding *to, const QoreEncoding *from, ExceptionSink *xsink) : to(to), from(from) {
+   //! opens the conversion
+   /** @param to the target encoding
+       @param from the source encoding
+       @param xsink if an error occurs, the Qore-language exception is raised here
+       @param validate_utf8 true to validate UTF-8 input here even if the platform's iconv rejects malformed UTF-8;
+       by default, UTF-8 input is validated here only on a platform whose iconv accepts it (see rejectsMalformedUtf8())
+   */
+   DLLLOCAL IconvHelper(const QoreEncoding *to, const QoreEncoding *from, ExceptionSink *xsink,
+         bool validate_utf8 = false) : to(to), from(from),
+         validateUtf8(from == QCS_UTF8 && (validate_utf8 || !rejectsMalformedUtf8())) {
 #ifdef NEED_ICONV_TRANSLIT
       QoreString to_code(getIconvTargetCode(to));
       to_code.concat("//TRANSLIT");
@@ -66,12 +77,133 @@ public:
       }
    }
 
-   DLLLOCAL size_t iconv(char **inbuf, size_t *inavail, char **outbuf, size_t *outavail) {
+   //! Converts input like iconv(3); malformed UTF-8 input is rejected on every platform
+   /** If the platform's iconv accepts malformed UTF-8 input (see rejectsMalformedUtf8()), UTF-8 input is validated
+       here, and the conversion stops at the first malformed sequence with \c EILSEQ, or at a sequence truncated by
+       the end of the input with \c EINVAL, exactly as a strict iconv does.
+
+       @param xsink if given, the validation is a cancellation point; when it is cancelled, the exception is raised
+       here, and -1 is returned with \c errno set to \c ECANCELED
+   */
+   DLLLOCAL size_t iconv(char **inbuf, size_t *inavail, char **outbuf, size_t *outavail,
+         ExceptionSink* xsink = nullptr) {
       if (c == (iconv_t)-1) {
          errno = EINVAL;
          return (size_t)-1;
       }
-      return iconv_adapter(::iconv, c, inbuf, inavail, outbuf, outavail);
+      if (!validateUtf8 || !inbuf || !*inbuf) {
+         return iconv_adapter(::iconv, c, inbuf, inavail, outbuf, outavail);
+      }
+      bool incomplete;
+      bool cancelled = false;
+      size_t valid = validUtf8Prefix(*inbuf, *inavail, incomplete, xsink, &cancelled);
+      if (cancelled) {
+         errno = ECANCELED;
+         return (size_t)-1;
+      }
+      if (valid == *inavail) {
+         return iconv_adapter(::iconv, c, inbuf, inavail, outbuf, outavail);
+      }
+      // convert the valid prefix, then report the sequence after it as iconv does
+      size_t rest = *inavail - valid;
+      size_t prefix = valid;
+      size_t rc = iconv_adapter(::iconv, c, inbuf, &prefix, outbuf, outavail);
+      *inavail = prefix + rest;
+      if (rc == (size_t)-1) {
+         return rc;
+      }
+      assert(!prefix);
+      errno = incomplete ? EINVAL : EILSEQ;
+      return (size_t)-1;
+   }
+
+   //! Returns the length of the longest prefix of the input that is complete, well-formed UTF-8 (RFC 3629)
+   /** Overlong forms, surrogate code points, values above U+10FFFF, unexpected continuation bytes and the bytes
+       \c 0xc0, \c 0xc1 and \c 0xf5 - \c 0xff are malformed.
+
+       @param p the input
+       @param len the byte length of the input
+       @param incomplete set to true if the input after the prefix is a well-formed sequence truncated by the end of
+       the input, false if it is malformed or the whole input is well-formed
+       @param xsink if given, cancellation is checked every \c CancelCheckBytes bytes and raised here
+       @param cancelled if given, set to true if the validation was cancelled; the return value is then undefined
+
+       @return the byte length of the well-formed prefix
+   */
+   DLLLOCAL static size_t validUtf8Prefix(const char* p, size_t len, bool& incomplete,
+         ExceptionSink* xsink = nullptr, bool* cancelled = nullptr) {
+      const unsigned char* s = reinterpret_cast<const unsigned char*>(p);
+      size_t i = 0;
+      size_t next_check = CancelCheckBytes;
+      while (i < len) {
+         if (xsink && i >= next_check) {
+            if (qore_check_cancel(xsink, "UTF-8 validation")) {
+               incomplete = false;
+               if (cancelled) {
+                  *cancelled = true;
+               }
+               return i;
+            }
+            next_check = i + CancelCheckBytes;
+         }
+         unsigned char ch = s[i];
+         if (ch < 0x80) {
+            ++i;
+            continue;
+         }
+         // the number of continuation bytes and the range of the first one
+         size_t n;
+         unsigned char lo = 0x80;
+         unsigned char hi = 0xbf;
+         if (ch >= 0xc2 && ch <= 0xdf) {
+            n = 1;
+         } else if (ch == 0xe0) {
+            n = 2;
+            lo = 0xa0;
+         } else if ((ch >= 0xe1 && ch <= 0xec) || ch == 0xee || ch == 0xef) {
+            n = 2;
+         } else if (ch == 0xed) {
+            n = 2;
+            hi = 0x9f;
+         } else if (ch == 0xf0) {
+            n = 3;
+            lo = 0x90;
+         } else if (ch >= 0xf1 && ch <= 0xf3) {
+            n = 3;
+         } else if (ch == 0xf4) {
+            n = 3;
+            hi = 0x8f;
+         } else {
+            incomplete = false;
+            return i;
+         }
+         for (size_t k = 1; k <= n; ++k) {
+            if (i + k >= len) {
+               // every byte up to the end of the input fits the sequence
+               incomplete = true;
+               return i;
+            }
+            unsigned char cb = s[i + k];
+            if (k == 1 ? (cb < lo || cb > hi) : (cb < 0x80 || cb > 0xbf)) {
+               incomplete = false;
+               return i;
+            }
+         }
+         i += n + 1;
+      }
+      incomplete = false;
+      return len;
+   }
+
+   //! Returns true if the platform's iconv rejects malformed UTF-8 input
+   /** glibc and GNU libiconv fail with \c EILSEQ on malformed UTF-8 input; some versions of Apple's system libiconv
+       convert some malformed sequences, such as a lead byte followed by an ASCII character, without an error.  The
+       answer is a property of the library %Qore is linked against, so it is probed once with malformed sequences;
+       where any of them is accepted, iconv() validates UTF-8 input itself.
+   */
+   DLLLOCAL static bool rejectsMalformedUtf8() {
+      static bool rv = probeMalformedUtf8Rejection();
+      return rv;
    }
 
    //! Returns true if the iconv handle is valid
@@ -112,7 +244,43 @@ public:
       }
    }
 
+   //! The number of bytes validated between cancellation checks
+   static constexpr size_t CancelCheckBytes = 65536;
+
 private:
+   //! Performs the one-time probe described by rejectsMalformedUtf8()
+   DLLLOCAL static bool probeMalformedUtf8Rejection() {
+      iconv_t cd = iconv_open("UTF-16LE", "UTF-8");
+      if (cd == (iconv_t)-1) {
+         // the probe cannot run; assume the worst and validate UTF-8 input
+         return false;
+      }
+      // a lead byte followed by ASCII, a lone continuation byte, an overlong form, a surrogate and a value above
+      // U+10FFFF, each followed by ASCII text
+      static const char* const samples[] = {
+         "a\xc2 b", "a\x80 b", "a\xc0\x80 b", "a\xed\xa0\x80 b", "a\xf4\x90\x80\x80 b",
+      };
+      bool rv = true;
+      for (const char* sample : samples) {
+         char in[16];
+         size_t il = strlen(sample);
+         assert(il < sizeof(in));
+         memcpy(in, sample, il);
+         char out[64];
+         char* ib = in;
+         char* ob = out;
+         size_t ol = sizeof(out);
+         // reset the conversion state before each sample
+         iconv_adapter(::iconv, cd, nullptr, nullptr, nullptr, nullptr);
+         if (iconv_adapter(::iconv, cd, &ib, &il, &ob, &ol) != (size_t)-1) {
+            rv = false;
+            break;
+         }
+      }
+      iconv_close(cd);
+      return rv;
+   }
+
    //! Performs the one-time probe described by reportsNonReversibleConversions()
    DLLLOCAL static bool probeNonReversibleReporting() {
 #ifdef NEED_ICONV_TRANSLIT
@@ -178,6 +346,8 @@ private:
 private:
    const QoreEncoding *to;
    const QoreEncoding *from;
+   //! true if UTF-8 input is validated here because the platform's iconv accepts malformed UTF-8
+   bool validateUtf8;
    iconv_t c;
 };
 
