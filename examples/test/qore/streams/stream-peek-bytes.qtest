@@ -1,0 +1,144 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class StreamPeekBytesTest
+
+#! Tests that peek() returns every byte value (0 - 255) of every input stream and that reads keep bytes 0x80 - 0xff
+/** \c peek() returns the next byte as an unsigned value; -1 is only the end of the stream.  A byte 0x80 - 0xff
+    returned as a negative value made 0xff look like the end of the stream and 0x80 - 0xfe like errors.  The native
+    C++ readers are checked by stream-peek-bytes.cpp.
+*/
+class StreamPeekBytesTest inherits QUnit::Test {
+    private {
+        #! every byte value from 0 to 255
+        binary all_bytes;
+    }
+
+    constructor() : QUnit::Test("StreamPeekBytesTest", "1.0") {
+        addTestCase("BinaryInputStream", \binaryInputStream());
+        addTestCase("StringInputStream", \stringInputStream());
+        addTestCase("FileInputStream", \fileInputStream());
+        addTestCase("PipeInputStream", \pipeInputStream());
+        addTestCase("TransformInputStream", \transformInputStream());
+        addTestCase("EncodingConversionInputStream", \encodingConversionInputStream());
+        addTestCase("StreamReader lines", \streamReaderLines());
+        addTestCase("native readers", \nativeReaders());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        all_bytes = binary();
+        for (int i = 0; i < 256; ++i) {
+            all_bytes += chr(i).toBinary();
+        }
+        assertEq(256, all_bytes.size());
+    }
+
+    binaryInputStream() {
+        checkStream("BinaryInputStream", new BinaryInputStream(all_bytes), all_bytes);
+        # the bytes in reverse order, so that 0xff is the first byte
+        binary reversed = binary();
+        for (int i = 255; i >= 0; --i) {
+            reversed += chr(i).toBinary();
+        }
+        checkStream("BinaryInputStream reversed", new BinaryInputStream(reversed), reversed);
+    }
+
+    stringInputStream() {
+        string str = binary_to_string(all_bytes, "ISO-8859-1");
+        checkStream("StringInputStream", new StringInputStream(str), all_bytes);
+        # "é" in UTF-8 is <c3a9>
+        StringInputStream sis("é");
+        assertEq(0xc3, sis.peek());
+        assertEq(<c3>, sis.read(1));
+        assertEq(0xa9, sis.peek());
+    }
+
+    fileInputStream() {
+        TmpFile tmp("stream-peek-bytes-");
+        tmp.file.write(all_bytes);
+        tmp.file.close();
+        checkStream("FileInputStream", new FileInputStream(tmp.path), all_bytes);
+    }
+
+    pipeInputStream() {
+        StreamPipe pipe(False);
+        OutputStream os = pipe.getOutputStream();
+        os.write(all_bytes);
+        os.close();
+        checkStream("PipeInputStream", pipe.getInputStream(), all_bytes);
+    }
+
+    transformInputStream() {
+        # the data is decompressed by the transform, and peek() returns the decompressed bytes
+        checkStream("TransformInputStream", new TransformInputStream(new BinaryInputStream(gzip(all_bytes)),
+            get_decompressor(COMPRESSION_ALG_GZIP)), all_bytes);
+    }
+
+    encodingConversionInputStream() {
+        # ISO-8859-1 bytes 0x80 - 0xff become two UTF-8 bytes each, with lead bytes 0xc2 and 0xc3
+        binary latin1 = all_bytes.substr(0x80);
+        binary utf8 = convert_encoding(binary_to_string(latin1, "ISO-8859-1"), "UTF-8").toBinary();
+        checkStream("EncodingConversionInputStream", new EncodingConversionInputStream(new BinaryInputStream(latin1),
+            "ISO-8859-1", "UTF-8"), utf8);
+    }
+
+    streamReaderLines() {
+        # lines with bytes 0x80 - 0xff in ISO-8859-1, separated by "\r\n"; the byte after "\r" is peeked
+        string text = binary_to_string(all_bytes.substr(0x80, 0x40) + <0d0a> + all_bytes.substr(0xc0) + <0d0aff0d>,
+            "ISO-8859-1");
+        foreach string cls in ("StreamReader", "BufferedStreamReader") {
+            StreamReader r = create_object(cls, new StringInputStream(text), "ISO-8859-1");
+            assertEq(binary_to_string(all_bytes.substr(0x80, 0x40), "ISO-8859-1"), r.readLine(), cls);
+            assertEq(binary_to_string(all_bytes.substr(0xc0), "ISO-8859-1"), r.readLine(), cls);
+            # a 0xff byte after "\r" is not the end of the stream, and it is not part of the end of the line
+            assertEq(binary_to_string(<ff>, "ISO-8859-1"), r.readLine(), cls);
+            assertEq(NOTHING, r.readLine(), cls);
+        }
+
+        # an end-of-line marker with bytes 0x80 - 0xff ("¶" in UTF-8 is <c2b6>)
+        string data = "a\xffb¶é¶";
+        foreach string cls in ("StreamReader", "BufferedStreamReader") {
+            StreamReader r = create_object(cls, new StringInputStream(data), "UTF-8");
+            assertEq("a\xffb", r.readLine("¶"), cls + " non-ASCII eol");
+            assertEq("é", r.readLine("¶"), cls + " non-ASCII eol");
+            assertEq(NOTHING, r.readLine("¶"), cls + " non-ASCII eol");
+            r = create_object(cls, new StringInputStream(data), "UTF-8");
+            assertEq("a\xffb¶", r.readLine("¶", False), cls + " untrimmed non-ASCII eol");
+        }
+    }
+
+    nativeReaders() {
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string native = ENV.QORE_STREAM_PEEK_TEST ?? dirname(qore) + "/qore-stream-peek-test";
+        if (!is_file(native)) {
+            testSkip("the native stream peek test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertEq("PASS: stream peek\n", output);
+    }
+
+    #! checks that peek() returns each byte of the stream before it is read, and -1 at the end of the stream
+    private checkStream(string label, InputStream is, binary expected) {
+        for (int i = 0; i < expected.size(); ++i) {
+            int b = expected[i];
+            assertEq(b, is.peek(), sprintf("%s: peek at offset %d", label, i));
+            # peek() does not consume the byte
+            assertEq(b, is.peek(), sprintf("%s: second peek at offset %d", label, i));
+            *binary read = is.read(1);
+            assertEq(b, read ? read[0] : -1, sprintf("%s: read at offset %d", label, i));
+        }
+        assertEq(-1, is.peek(), label + ": end of stream");
+        assertEq(NOTHING, is.read(1), label + ": end of stream");
+    }
+}

@@ -2729,6 +2729,10 @@ add_executable(qore-hash-lookup-test examples/test/qore/misc/hash_lookup.cpp)
 target_include_directories(qore-hash-lookup-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-hash-lookup-test PRIVATE libqore)
+add_executable(qore-stream-peek-test examples/test/qore/streams/stream_peek.cpp)
+target_include_directories(qore-stream-peek-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR})
+target_link_libraries(qore-stream-peek-test PRIVATE libqore)
 add_executable(qore-asn1-time-test EXCLUDE_FROM_ALL
     examples/test/qore/classes/SSLCertificate/asn1_time.cpp)
 target_include_directories(qore-asn1-time-test PRIVATE

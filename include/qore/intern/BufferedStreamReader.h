@@ -149,13 +149,16 @@ private:
     */
    virtual int64 peek(ExceptionSink* xsink) override {
       if (!bufCount) {
-         int rc = fillBuffer(bufCapacity, xsink);
-         if (!rc)
-            return -1;
-         if (rc < 0)
+         int64 rc = fillBuffer(bufCapacity, xsink);
+         if (*xsink) {
             return -2;
+         }
+         if (!rc) {
+            return -1;
+         }
       }
-      return buf[0];
+      // the byte is returned as an unsigned value, so that 0xff is not taken for the end of the stream
+      return static_cast<unsigned char>(buf[0]);
    }
 
    //! returns 0 = no data read (end of stream or error), > 0 = number of bytes read, increments bufCount

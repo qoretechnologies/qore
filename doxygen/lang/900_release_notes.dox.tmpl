@@ -4156,6 +4156,17 @@ while (*binary chunk = input.read(65536)) {
       compiled (AOT) module, converting to \c 1970-01-01 instead of the date it represents (ex: \c "P1DT2H") when
       assigned to a \c softdate variable or member
 
+    - Fixed \c peek() returning a byte 0x80 - 0xff as a negative value with
+      @ref Qore::BinaryInputStream::peek() "BinaryInputStream::peek()",
+      @ref Qore::StringInputStream::peek() "StringInputStream::peek()",
+      @ref Qore::TransformInputStream::peek() "TransformInputStream::peek()" and
+      @ref Qore::EncodingConversionInputStream::peek() "EncodingConversionInputStream::peek()", so a 0xff byte was
+      reported as the end of the stream (-1) and bytes 0x80 - 0xfe as errors; \c peek() now returns the byte value
+      (0 - 255) of every input stream.  The internal stream readers had the same flaw, so invalid serialized data
+      with a byte 0x80 - 0xff where a type code was expected was reported as the end of the stream or with a
+      negative type code, and line reads with an end-of-line marker containing bytes 0x80 - 0xff did not find the
+      marker on platforms where \c char is unsigned (ex: Linux on ARM)
+
     - Fixed an exception raised while a loop or a functional operator advances an iterator escaping the
       enclosing \c try block with IR, tiered and JIT execution: an exception from an iterator's \c next() or
       \c getValue() in a \c foreach loop, or in an operator such as \c map, \c select or \c foldl, returned from

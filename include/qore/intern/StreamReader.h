@@ -152,10 +152,12 @@ public:
         size_t eolpos = 0;
 
         // adds a byte to the line; returns true if the line is complete
-        auto add_byte = [&](signed char c) -> bool {
+        auto add_byte = [&](char c) -> bool {
             str->concat(c);
 
-            if ((**eolstr)[eolpos] == c) {
+            // the bytes are compared directly, as QoreString::operator[] gives a byte 0x80 - 0xff as a negative
+            // value only where char is signed
+            if (eolstr->c_str()[eolpos] == c) {
                 ++eolpos;
                 if (eolpos == eolstr->size()) {
                     return true;
@@ -199,7 +201,7 @@ public:
             if (!(i % 1024) && qore_check_cancel(xsink, "StreamReader line read")) {
                 return nullptr;
             }
-            signed char c;
+            char c;
             int64 rc = readData(xsink, &c, 1, false);
             //printd(5, "StreamReader::readLineEol() eolpos: %d/%d rc: %d c: %d str: '%s' (%s)\n", eolpos,
             //    eolstr->size(), rc, c, str->c_str(), enc->getCode());
@@ -218,7 +220,7 @@ public:
         SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
 
         while (true) {
-            signed char c;
+            char c;
             int64 rc = readData(xsink, &c, 1, false);
             if (*xsink) {
                 return nullptr;
@@ -255,7 +257,7 @@ public:
         SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
 
         while (true) {
-            signed char c;
+            char c;
             int64 rc = readData(xsink, &c, 1, false);
             if (*xsink) {
                 return nullptr;
@@ -448,7 +450,7 @@ private:
     DLLLOCAL int resolveUtf16ByteOrder(char* start, size_t& start_len, ExceptionSink* xsink) {
         assert(enc == QCS_UTF16);
         start_len = 0;
-        // peek() is not used, as it cannot tell a 0xff byte from the end of the stream in all readers
+        // the bytes are read rather than peeked, as a byte order mark has two bytes, and only one can be peeked
         int64 rc = readData(xsink, start, 1, false);
         if (*xsink) {
             return -1;
