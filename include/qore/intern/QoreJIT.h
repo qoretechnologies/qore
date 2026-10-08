@@ -692,8 +692,10 @@ public:
 
     //! Compile an IR function to native code, assuming compile_mutex is already held.
     //! Use after tryAcquireCompileLock() returns true.
+    //! @param symbol_name the name of the native function, if not func.name; the compiled function is looked up
+    //! with this name
     bool compileFunctionLocked(const QoreIRFunction& func, std::string& error,
-            void* deopt_counter = nullptr);
+            void* deopt_counter = nullptr, const std::string* symbol_name = nullptr);
 
     //! Batch-compile functions, assuming compile_mutex is already held.
     //! Use after tryAcquireCompileLock() returns true.
@@ -760,7 +762,7 @@ private:
 
     //! Internal compilation logic (assumes compile_mutex is held)
     bool compileFunctionInternal(const QoreIRFunction& func, std::string& error,
-            void* deopt_counter);
+            void* deopt_counter, const std::string* symbol_name = nullptr);
     bool compileFunctionBatchInternal(const QoreIRFunction& root_func, std::string& error,
             void* root_deopt_counter,
             const std::vector<BatchCallee>& callees,

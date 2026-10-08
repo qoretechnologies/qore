@@ -6301,17 +6301,16 @@ void UserVariantBase::attemptJITRecompilation() const {
     // Reset deopt counter before recompilation
     deopt_count.store(0, std::memory_order_relaxed);
 
-    // Use a versioned name so LLVM ORC creates a new symbol (old one stays in memory)
-    std::string orig_name = ir->name;
-    ir->name = orig_name + "_reopt";
-    // Pre-copy the lookup name before compilation — LLVM 21 corrupts adjacent heap on Linux
-    const std::string lookup_name = ir->name;
+    // Compile under a versioned symbol so LLVM ORC creates a new symbol (the old one stays in memory).  The name is
+    // given to the compiler rather than set in the IR function, which is published and read by other threads
+    // without a lock, for example when they collect batch callees (collectBatchCallees()).
+    const std::string orig_name = ir->name;
+    const std::string lookup_name = orig_name + "_reopt";
 
     // Recompile with the accumulated type profiles and deopt tracking
     std::string error;
     if (!QoreJIT::instance().compileFunctionLocked(*ir, error,
-            const_cast<void*>(static_cast<const void*>(&deopt_count)))) {
-        ir->name = orig_name;
+            const_cast<void*>(static_cast<const void*>(&deopt_count)), &lookup_name)) {
         QoreJIT::instance().releaseCompileLock();
         jit_recompile_state.store(2, std::memory_order_release);
         printd(2, "UserVariantBase::attemptJITRecompilation() '%s' failed: %s\n",
@@ -6319,7 +6318,6 @@ void UserVariantBase::attemptJITRecompilation() const {
         return;
     }
     JitFunctionPtr fn = QoreJIT::instance().lookupFunction(lookup_name);
-    ir->name = orig_name;
     QoreJIT::instance().releaseCompileLock();
     if (!fn) {
         jit_recompile_state.store(2, std::memory_order_release);

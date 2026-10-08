@@ -9710,8 +9710,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
 
-    // Determine function name: use fast_entry_name if set (Approach B)
-    const std::string& fn_name = fast_entry_name.empty() ? func.name : fast_entry_name;
+    // Determine function name: use fast_entry_name if set (Approach B), then any symbol name override
+    const std::string& fn_name = !fast_entry_name.empty()
+        ? fast_entry_name
+        : (!symbol_name.empty() ? symbol_name : func.name);
     bool is_fast_entry = !fast_entry_name.empty();
 
     // Check if the function already exists in the module (forward-declared)

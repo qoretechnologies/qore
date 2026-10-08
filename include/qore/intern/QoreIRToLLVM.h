@@ -89,6 +89,14 @@ public:
         aot_direct_closure_fast_entry = v;
     }
 
+    //! Sets the name of the native function generated for the IR function, if not its own name
+    /** Lets a function be compiled again under another symbol without changing the IR function, which is shared by
+        every thread running it.
+    */
+    void setSymbolName(const std::string& name) {
+        symbol_name = name;
+    }
+
     //! Set deopt counter pointer for profile-informed guard failure tracking.
     //! When set, profiled guard failure paths emit a call to qore_rt_deopt()
     //! that increments this counter. The evalTiered() path checks the counter
@@ -271,6 +279,8 @@ private:
     // When fast_entry_name is non-empty, lowerFunction uses it instead of func.name
     // and initializes params from fast_entry_args instead of qore_rt_load_local().
     std::string fast_entry_name;
+    //! the name of the generated native function, if not the IR function's own name; see setSymbolName()
+    std::string symbol_name;
     const std::unordered_map<const void*, llvm::Value*>* fast_entry_args = nullptr;
     const std::unordered_map<const void*, BatchCalleeParamKind>* fast_entry_arg_kinds = nullptr;
     //! Proven noescape boxed parameters that borrow the caller's reference.
