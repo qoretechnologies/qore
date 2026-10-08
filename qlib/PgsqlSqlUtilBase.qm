@@ -4627,6 +4627,46 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return True;
     }
 
+    private bool supportsBoundedTransactionsImpl() {
+        getServerVersion();
+        return server_version_major >= 17;
+    }
+
+    private hash<string, int> beginBoundedTransactionImpl(int lock_timeout_ms, int statement_timeout_ms,
+            int transaction_timeout_ms) {
+        # Transaction-local settings cannot leak into the next pooled borrower. Preserve each stricter
+        # session setting independently; PostgreSQL applies the earliest applicable deadline.
+        hash<auto> previous = ds.selectRow(
+            "select (select setting::bigint from pg_catalog.pg_settings where name = 'lock_timeout') as lock_ms, "
+            "(select setting::bigint from pg_catalog.pg_settings where name = 'statement_timeout') as statement_ms, "
+            "(select setting::bigint from pg_catalog.pg_settings where name = 'transaction_timeout') as transaction_ms");
+        hash<string, int> limits = {
+            "lock_timeout_ms": previous.lock_ms ? min(lock_timeout_ms, previous.lock_ms) : lock_timeout_ms,
+            "statement_timeout_ms": previous.statement_ms
+                ? min(statement_timeout_ms, previous.statement_ms) : statement_timeout_ms,
+            "transaction_timeout_ms": previous.transaction_ms
+                ? min(transaction_timeout_ms, previous.transaction_ms) : transaction_timeout_ms,
+        };
+        ds.selectRow("select pg_catalog.set_config('lock_timeout', %v, true), "
+            "pg_catalog.set_config('statement_timeout', %v, true)",
+            limits.lock_timeout_ms.toString() + "ms", limits.statement_timeout_ms.toString() + "ms");
+        # PostgreSQL does not reschedule an already active transaction timer when its positive setting
+        # changes. Disable/rearm within one server statement, subtracting time already spent in this
+        # fresh transaction so neither a caller deadline nor the requested total budget is extended.
+        hash<auto> timer = ds.selectRow(
+            "with reset as materialized (select pg_catalog.set_config('transaction_timeout', '0', true) as v), "
+            "elapsed as materialized (select ceil(extract(epoch from "
+            "(clock_timestamp() - transaction_timestamp())) * 1000)::bigint as ms from reset where v = '0'), "
+            "remaining as materialized (select %v::bigint - ms as ms from elapsed) "
+            "select ms, pg_catalog.set_config('transaction_timeout', greatest(1, ms)::text || 'ms', true) "
+            "from remaining", limits.transaction_timeout_ms);
+        if (!timer || timer.ms <= 0) {
+            throw "TRANSACTION-LIMIT-EXCEEDED", "the transaction deadline expired while installing limits";
+        }
+        limits.transaction_timeout_ms = timer.ms.toInt();
+        return limits;
+    }
+
     private bool partitionUniqueKeysRequireAllColumnsImpl() {
         return True;
     }

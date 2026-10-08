@@ -1,0 +1,250 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires json
+%try-module pgsql
+%define NoPgsql
+%endtry
+%exec-class BoundedTransactionTest
+
+class BoundedTransactionTest inherits QUnit::Test {
+    private { int serial; }
+
+    constructor() : Test("database-enforced transaction limits", "1.0", \ARGV) {
+        addTestCase("capability, arguments and transaction ownership", \contract());
+        addTestCase("commit and rollback restore session defaults", \settings());
+        addTestCase("stricter caller settings remain effective", \stricter());
+        addTestCase("pooled borrowers do not inherit transaction limits", \pool());
+        addTestCase("blocked writer times out without changing either owner", \lockWait());
+        addTestCase("statement timeout rolls back preceding writes", \statement());
+        addTestCase("whole transaction deadline covers multiple short statements", \transaction());
+        set_return_value(main());
+    }
+
+    private Datasource connection(bool supported = True) {
+%ifdef NoPgsql
+        testSkip("pgsql module is unavailable");
+%endif
+        *string dsn = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!dsn) { testSkip("set QORE_DB_CONNSTR_PGSQL to a disposable test database"); }
+        Datasource ds(dsn);
+        ds.open();
+        ds.setAutoCommit(False);
+        if (supported && ds.getServerVersion() < 170000) {
+            testSkip("PostgreSQL 17 or later is required for transaction_timeout");
+        }
+        return ds;
+    }
+
+    private hash<auto> fixture(bool supported = True) {
+        Datasource ds = connection(supported);
+        string name = sprintf("bounded_tx_%d_%d", getpid(), ++serial);
+        AbstractTable table = (new Table(ds, {
+            "columns": {"id": {"qore_type": "number", "size": 10, "notnull": True},
+                "value": {"qore_type": "number", "size": 10, "notnull": True}},
+            "primary_key": {"name": name + "_pk", "columns": ("id",)},
+        }, name)).getTable();
+        table.createCommit();
+        on_error {
+            ds.rollback();
+            table.dropCommit();
+        }
+        table.insert({"id": 1, "value": 0});
+        table.commit();
+        return {"ds": ds, "table": table, "name": name};
+    }
+
+    private cleanup(hash<auto> f) {
+        # A transaction deadline closes its connection. A fresh observer owns cleanup and proves rollback.
+        Datasource observer = connection(False);
+        AbstractTable table = AbstractTable::getTable(observer, f.name);
+        on_exit {
+            table.dropCommit();
+            assertFalse(table.checkExistence(), "the exact owned fixture table is absent");
+            observer.commit();
+        }
+        f.ds.rollback();
+    }
+
+    private static hash<string, int> readSettings(AbstractDatasource ds) {
+        hash<auto> row = ds.selectRow(
+            "select (select setting::bigint from pg_settings where name = 'lock_timeout') as l, "
+            "(select setting::bigint from pg_settings where name = 'statement_timeout') as s, "
+            "(select setting::bigint from pg_settings where name = 'transaction_timeout') as t");
+        return {"lock_timeout_ms": row.l.toInt(), "statement_timeout_ms": row.s.toInt(),
+            "transaction_timeout_ms": row.t.toInt()};
+    }
+
+    private contract() {
+        hash<auto> f = fixture(False);
+        on_exit cleanup(f);
+        bool supported = f.ds.getServerVersion() >= 170000;
+        assertEq(supported, f.table.supportsBoundedTransactions());
+        if (!supported) {
+            assertThrows("TRANSACTION-LIMIT-NOT-SUPPORTED", sub() {
+                f.table.beginBoundedTransaction(50, 100, 500);
+            });
+            assertFalse(f.ds.currentThreadInTransaction());
+            return;
+        }
+        foreach list<int> limits in (((0, 100, 500), (101, 100, 500), (50, 501, 500), (50, 100, 60001))) {
+            assertThrows("OPTION-ERROR", sub() {
+                f.table.beginBoundedTransaction(limits[0], limits[1], limits[2]);
+            });
+            assertFalse(f.ds.currentThreadInTransaction());
+        }
+        f.ds.beginTransaction();
+        assertThrows("TRANSACTION-ERROR", sub() { f.table.beginBoundedTransaction(50, 100, 500); });
+        assertTrue(f.ds.currentThreadInTransaction(), "rejecting a nested call does not rollback its caller");
+        f.ds.rollback();
+        f.ds.setAutoCommit(True);
+        assertThrows("AUTOCOMMIT-ERROR", sub() { f.table.beginBoundedTransaction(50, 100, 500); });
+        assertTrue(f.ds.getAutoCommit());
+        f.ds.setAutoCommit(False);
+    }
+
+    private settings() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        hash<string, int> original = readSettings(f.ds);
+        f.ds.commit();
+        hash<string, int> effective = f.table.beginBoundedTransaction(100, 1000, 5000);
+        assertTrue(f.ds.currentThreadInTransaction());
+        assertEq(effective, readSettings(f.ds));
+        assertEq(100, effective.lock_timeout_ms);
+        assertEq(1000, effective.statement_timeout_ms);
+        assertTrue(effective.transaction_timeout_ms > 0 && effective.transaction_timeout_ms <= 5000);
+        f.table.update({"value": 1}, {"id": 1});
+        f.table.commit();
+        assertEq(original, readSettings(f.ds));
+        f.ds.commit();
+        f.table.beginBoundedTransaction(100, 1000, 5000);
+        f.table.update({"value": 2}, {"id": 1});
+        f.table.rollback();
+        assertEq(original, readSettings(f.ds));
+        assertEq(1, f.table.selectRow({"where": {"id": 1}}).value.toInt());
+        f.ds.commit();
+    }
+
+    private stricter() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        f.ds.execRaw("set lock_timeout = '50ms'");
+        f.ds.execRaw("set statement_timeout = '500ms'");
+        f.ds.execRaw("set transaction_timeout = '3000ms'");
+        f.ds.commit();
+        hash<string, int> original = readSettings(f.ds);
+        f.ds.commit();
+        hash<string, int> effective = f.table.beginBoundedTransaction(100, 1000, 5000);
+        assertEq(50, effective.lock_timeout_ms);
+        assertEq(500, effective.statement_timeout_ms);
+        assertTrue(effective.transaction_timeout_ms > 0 && effective.transaction_timeout_ms <= 3000);
+        assertEq(effective, readSettings(f.ds));
+        f.ds.rollback();
+        assertEq(original, readSettings(f.ds));
+        f.ds.commit();
+    }
+
+    private pool() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        hash<auto> config = parse_datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        config.min = 1;
+        config.max = 1;
+        DatasourcePool pool(config);
+        AbstractTable table = AbstractTable::getTable(pool, f.name);
+        hash<string, int> original = readSettings(pool);
+        pool.commit();
+        table.beginBoundedTransaction(50, 500, 2000);
+        table.update({"value": 4}, {"id": 1});
+        pool.commit();
+        table.beginBoundedTransaction(50, 500, 2000);
+        table.update({"value": 5}, {"id": 1});
+        pool.rollback();
+        Counter done(1);
+        hash<string, int> observed;
+        int observed_value;
+        *hash<ExceptionInfo> failure;
+        background sub() {
+            on_exit done.dec();
+            try {
+                on_error pool.rollback();
+                observed = readSettings(pool);
+                observed_value = table.selectRow({"where": {"id": 1}}).value.toInt();
+                pool.commit();
+            } catch (hash<ExceptionInfo> ex) { failure = ex; }
+        }();
+        assertEq(0, done.waitForZero(5s));
+        assertNothing(failure);
+        assertEq(original, observed, "the same pooled connection has its original defaults in another thread");
+        assertEq(4, observed_value, "the next borrower observes only the committed transaction");
+    }
+
+    private lockWait() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        Datasource owner = connection();
+        AbstractTable locked = AbstractTable::getTable(owner, f.name);
+        locked.update({"value": 7}, {"id": 1});
+        on_exit owner.rollback();
+        f.table.beginBoundedTransaction(50, 1000, 5000);
+        *hash<ExceptionInfo> failure;
+        try { f.table.update({"value": 9}, {"id": 1}); }
+        catch (hash<ExceptionInfo> ex) { failure = ex; }
+        assertTrue(exists failure, "the contended write fails");
+        assertTrue(make_json(failure).find("55P03") >= 0, "lock deadline is the database cause");
+        f.ds.rollback();
+        assertEq(7, locked.selectRow({"where": {"id": 1}}).value.toInt(), "the owner survives unchanged");
+        owner.rollback();
+        assertEq(0, f.table.selectRow({"where": {"id": 1}}).value.toInt());
+        f.ds.commit();
+    }
+
+    private statement() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        f.table.beginBoundedTransaction(20, 80, 1000);
+        f.table.update({"value": 2}, {"id": 1});
+        *hash<ExceptionInfo> failure;
+        try { f.ds.execRaw("select 1 from pg_sleep(0.4)"); }
+        catch (hash<ExceptionInfo> ex) { failure = ex; }
+        assertTrue(exists failure);
+        assertTrue(make_json(failure).find("57014") >= 0, "statement deadline is the database cause");
+        f.ds.rollback();
+        assertEq(0, f.table.selectRow({"where": {"id": 1}}).value.toInt());
+        f.ds.commit();
+    }
+
+    private transaction() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        # An existing positive timer must actually be tightened, not just display the new setting.
+        f.ds.execRaw("set transaction_timeout = '5000ms'");
+        f.ds.commit();
+        f.table.beginBoundedTransaction(20, 150, 300);
+        f.table.update({"value": 3}, {"id": 1});
+        *hash<ExceptionInfo> failure;
+        int completed;
+        try {
+            # Each individual statement fits its budget; the transaction as a whole must not.
+            for (int i = 0; i < 12; ++i) {
+                f.ds.execRaw("select 1 from pg_sleep(0.05)");
+                ++completed;
+            }
+            f.ds.commit();
+        } catch (hash<ExceptionInfo> ex) { failure = ex; }
+        assertTrue(exists failure, "the whole-transaction deadline is enforced");
+        assertTrue(completed > 0 && completed < 12, "short statements ran before the total budget expired");
+        # The native pgsql driver reports a terminated session as connection loss, without the server FATAL text.
+        assertEq("DBI:PGSQL:CONNECTION-ERROR", failure.err);
+        assertTrue(failure.desc.find("lost while in a transaction") >= 0);
+        f.ds.rollback();
+        Datasource observer = connection();
+        AbstractTable observed = AbstractTable::getTable(observer, f.name);
+        assertEq(0, observed.selectRow({"where": {"id": 1}}).value.toInt(), "an independent observer sees rollback");
+        observer.commit();
+    }
+}
