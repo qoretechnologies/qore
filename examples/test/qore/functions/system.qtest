@@ -17,6 +17,7 @@ class SystemCallTest inherits QUnit::Test {
         addTestCase("system() SIGINT handling", \testSignalHandling());
         addTestCase("system() interrupt kills process group", \testInterruptKillsProcessGroup());
         addTestCase("system() restricted access", \testRestrictedAccess());
+        addTestCase("system() thread cancellation", \testThreadCancellation());
 
         # Return for compatibility with test harness that checks return value
         set_return_value(main());
@@ -147,5 +148,51 @@ int sub run_system() {
             assertEq("PARSE-EXCEPTION", ex.err, "system() blocked by PO_NO_EXTERNAL_PROCESS");
         }
         assertTrue(parse_caught, "system() should be blocked by PO_NO_EXTERNAL_PROCESS");
+    }
+
+    #! a thread waiting in system() can be cancelled; the process is killed and reaped
+    testThreadCancellation() {
+%ifdef Windows
+        testSkip("Windows");
+%endif
+        string fifo = sprintf("%s/system_fifo_%d_%d", tmp_location(), getpid(), gettid());
+        assertEq(0, mkfifo(fifo));
+        on_exit unlink(fifo);
+
+        Counter done(1);
+        *string err;
+        int rc = -999;
+        int tid = background sub () {
+            on_exit done.dec();
+            try {
+                # the command reports its PID through the FIFO and then sleeps
+                rc = system(sprintf("echo $$ > %s; exec sleep 60", fifo));
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+            }
+        }();
+
+        # blocks until the command has written its PID
+        int pid;
+        {
+            ReadOnlyFile f(fifo);
+            pid = f.readLine().toInt();
+        }
+        assertGt(0, pid);
+        on_exit {
+            # ends the command if the wait was not interrupted, so that the thread ends
+            if (done.getCount()) {
+                kill(pid, SIGKILL);
+                done.waitForZero();
+            }
+        }
+
+        assertTrue(cancel_thread(tid, "test"));
+        # a backstop only: the cancellation ends the wait at once
+        assertEq(0, done.waitForZero(20s), "the cancelled wait ended");
+        assertEq("THREAD-CANCELLED", err);
+        assertEq(-999, rc);
+        # the process has been killed and reaped before system() returned
+        assertEq(-1, kill(pid, 0), "the process is gone");
     }
 }

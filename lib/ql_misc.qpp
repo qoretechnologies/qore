@@ -1557,7 +1557,11 @@ int rc;
 string files = backquote("ls", \rc);
     @endcode
 
-    @throw BACKQUOTE-ERROR An error occurred starting the process or opening the stdout pipe
+    @throw BACKQUOTE-ERROR An error occurred starting the process, opening the stdout pipe, or starting the thread
+    that waits for the process (the process is then killed)
+    @throw THREAD-CANCELLED the thread was cancelled while running the command; the process is killed
+    @throw PROGRAM-INTERRUPTED the Program was interrupted by its @ref Qore::SandboxManager "SandboxManager" while
+    running the command; the process group is killed
 
     @see
     - system()

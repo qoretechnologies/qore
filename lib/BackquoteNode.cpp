@@ -53,6 +53,9 @@ extern char **environ;
 #include <sys/types.h>
 #include <sys/wait.h>
 #endif
+#ifndef _Q_WINDOWS
+#include <pthread.h>
+#endif
 
 BackquoteNode::BackquoteNode(const QoreProgramLocation* loc, char *c_str) : ParseNode(loc, NT_BACKQUOTE), str(c_str) {
 }
@@ -92,6 +95,152 @@ QoreValue BackquoteNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const
 
 #ifndef READ_BLOCK
 #define READ_BLOCK 1024
+#endif
+
+#ifndef _Q_WINDOWS
+int qore_reap_child_process(pid_t pid, int& status) {
+    while (true) {
+        pid_t rc = waitpid(pid, &status, 0);
+        if (rc == pid) {
+            return 0;
+        }
+        assert(rc == -1);
+        if (errno != EINTR) {
+            return -1;
+        }
+    }
+}
+
+namespace {
+// the state that qore_wait_child_process() shares with its helper thread, which blocks until the process ends
+class QoreChildProcessWaiter {
+public:
+    DLLLOCAL QoreChildProcessWaiter(pid_t pid) : pid(pid) {
+    }
+
+    // the helper thread: waits for the process to end without reaping it, so that its PID stays valid for kill()
+    // until the caller reaps it
+    DLLLOCAL static void* run(void* arg) {
+        QoreChildProcessWaiter* w = static_cast<QoreChildProcessWaiter*>(arg);
+        int err = 0;
+        while (true) {
+            siginfo_t info;
+            if (!waitid(P_PID, static_cast<id_t>(w->pid), &info, WEXITED | WNOWAIT)) {
+                break;
+            }
+            if (errno != EINTR) {
+                err = errno;
+                break;
+            }
+        }
+        AutoLocker al(w->m);
+        w->wait_errno = err;
+        w->done = true;
+        w->cond.broadcast();
+        return nullptr;
+    }
+
+    pid_t pid;
+    QoreThreadLock m;
+    QoreCondition cond;
+    // the errno value of waitid() if it failed
+    int wait_errno = 0;
+    // set when the process has ended or waitid() failed
+    bool done = false;
+};
+}
+
+QoreChildWaitResult qore_wait_child_process(pid_t pid, pid_t kill_target, int& status, int& wait_errno,
+        const char* err, ExceptionSink* xsink) {
+    QoreChildProcessWaiter w(pid);
+    pthread_t ptid;
+    int rc;
+    {
+        // the helper thread inherits a mask blocking all signals: signals are handled by other threads
+        sigset_t all, old;
+        sigfillset(&all);
+        rc = pthread_sigmask(SIG_SETMASK, &all, &old);
+        if (!rc) {
+            rc = pthread_create(&ptid, nullptr, QoreChildProcessWaiter::run, &w);
+            int mrc = pthread_sigmask(SIG_SETMASK, &old, nullptr);
+            assert(!mrc);
+            (void)mrc;
+        }
+    }
+    if (rc) {
+        // the process cannot be waited for with cancellation; it is not left running unsupervised
+        kill(kill_target, SIGKILL);
+        int ignored;
+        qore_reap_child_process(pid, ignored);
+        xsink->raiseErrnoException(err, rc, "cannot start a thread to wait for process %d", static_cast<int>(pid));
+        return QoreChildWaitResult::RAISED;
+    }
+
+    // joins the helper thread on every path out of this function, so that it never outlives the state it uses
+    class ThreadJoiner {
+    public:
+        DLLLOCAL ThreadJoiner(pthread_t ptid) : ptid(ptid) {
+        }
+
+        DLLLOCAL ~ThreadJoiner() {
+            join();
+        }
+
+        DLLLOCAL void join() {
+            if (joinable) {
+                joinable = false;
+                int jrc = pthread_join(ptid, nullptr);
+                assert(!jrc);
+                (void)jrc;
+            }
+        }
+
+    private:
+        pthread_t ptid;
+        bool joinable = true;
+    } joiner(ptid);
+
+    bool interrupted = false;
+    {
+        AutoLocker al(w.m);
+        while (!w.done) {
+            // this wait is woken when the thread is cancelled or its Program is interrupted
+            if (w.cond.waitWithInterrupt(w.m) == QORE_COND_RESULT_INTERRUPTED
+                && qore_check_cancel(xsink, "process wait")) {
+                interrupted = true;
+                break;
+            }
+        }
+    }
+    if (interrupted) {
+        // the process has not been reaped, so its PID is still valid; SIGKILL ends it at once
+        kill(kill_target, SIGKILL);
+        AutoLocker al(w.m);
+        while (!w.done) {
+            w.cond.wait(w.m);
+        }
+    }
+    joiner.join();
+
+    if (interrupted) {
+        if (!w.wait_errno) {
+            int ignored;
+            qore_reap_child_process(pid, ignored);
+        }
+        return QoreChildWaitResult::RAISED;
+    }
+    if (w.wait_errno) {
+        wait_errno = w.wait_errno;
+        return QoreChildWaitResult::WAIT_FAILED;
+    }
+    int st = 0;
+    if (qore_reap_child_process(pid, st)) {
+        wait_errno = errno;
+        return QoreChildWaitResult::WAIT_FAILED;
+    }
+    status = st;
+    return QoreChildWaitResult::EXITED;
+}
 #endif
 
 QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
@@ -143,10 +292,15 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             }
 
             if (spawn_rc == 0) {
-                posix_spawn_file_actions_adddup2(&actions, pipefd[1], STDOUT_FILENO);
-                posix_spawn_file_actions_addclose(&actions, pipefd[0]);
-                posix_spawn_file_actions_addclose(&actions, pipefd[1]);
-
+                spawn_rc = posix_spawn_file_actions_adddup2(&actions, pipefd[1], STDOUT_FILENO);
+            }
+            if (spawn_rc == 0) {
+                spawn_rc = posix_spawn_file_actions_addclose(&actions, pipefd[0]);
+            }
+            if (spawn_rc == 0) {
+                spawn_rc = posix_spawn_file_actions_addclose(&actions, pipefd[1]);
+            }
+            if (spawn_rc == 0) {
                 const char* argv[] = {"sh", "-c", cmd, nullptr};
                 spawn_rc = posix_spawn(&pid, "/bin/sh", &actions, &attr, const_cast<char* const*>(argv), environ);
             }
@@ -155,11 +309,8 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         if (spawn_rc != 0) {
             close(pipefd[0]);
             close(pipefd[1]);
-            if (spawn_rc == -1) {
-                xsink->raiseException("BACKQUOTE-ERROR", q_strerror(errno));
-            } else {
-                xsink->raiseException("BACKQUOTE-ERROR", q_strerror(spawn_rc));
-            }
+            // posix_spawn() and the functions preparing it return an errno value and do not set errno
+            xsink->raiseException("BACKQUOTE-ERROR", q_strerror(spawn_rc));
             if (actions_inited) {
                 posix_spawn_file_actions_destroy(&actions);
             }
@@ -186,7 +337,8 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             if (qore_check_cancel(xsink, "backquote read")) {
                 // Use SIGKILL to enforce immediate termination on interrupt.
                 kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
-                waitpid(pid, &rc, 0);
+                int ignored;
+                qore_reap_child_process(pid, ignored);
                 close(pipefd[0]);
                 rc = -1;
                 return nullptr;
@@ -226,13 +378,23 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         }
 
         close(pipefd[0]);
-        int status;
-        if (waitpid(pid, &status, 0) != pid) {
-            rc = -1;
-            return s.release();
+        // the command may go on after closing its output; the wait can be cancelled
+        int status = 0;
+        int wait_errno = 0;
+        switch (qore_wait_child_process(pid, (use_pgroup && pgroup_ok) ? -pid : pid, status, wait_errno,
+            "BACKQUOTE-ERROR", xsink)) {
+            case QoreChildWaitResult::EXITED:
+                rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+                return s.release();
+            case QoreChildWaitResult::WAIT_FAILED:
+                rc = -1;
+                return s.release();
+            case QoreChildWaitResult::RAISED:
+                break;
         }
-        rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-        return s.release();
+        assert(*xsink);
+        rc = -1;
+        return nullptr;
     }
 #endif
 #if !defined(QORE_BACKQUOTE_POSIX_SPAWN) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING) && defined(HAVE_POLL)
@@ -282,7 +444,8 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             if (qore_check_cancel(xsink, "backquote read")) {
                 // Use SIGKILL to enforce immediate termination on interrupt.
                 kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
-                waitpid(pid, &rc, 0);
+                int ignored;
+                qore_reap_child_process(pid, ignored);
                 close(pipefd[0]);
                 rc = -1;
                 return nullptr;
@@ -322,13 +485,23 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         }
 
         close(pipefd[0]);
-        int status;
-        if (waitpid(pid, &status, 0) != pid) {
-            rc = -1;
-            return s.release();
+        // the command may go on after closing its output; the wait can be cancelled
+        int status = 0;
+        int wait_errno = 0;
+        switch (qore_wait_child_process(pid, (use_pgroup && pgroup_ok) ? -pid : pid, status, wait_errno,
+            "BACKQUOTE-ERROR", xsink)) {
+            case QoreChildWaitResult::EXITED:
+                rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+                return s.release();
+            case QoreChildWaitResult::WAIT_FAILED:
+                rc = -1;
+                return s.release();
+            case QoreChildWaitResult::RAISED:
+                break;
         }
-        rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-        return s.release();
+        assert(*xsink);
+        rc = -1;
+        return nullptr;
     }
 #endif
 

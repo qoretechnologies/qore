@@ -4165,6 +4165,12 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed the @ref backquote_operator "backquote operator" and @ref Qore::backquote() "backquote()" waiting for a
+      command that closed its output without reacting to thread cancellation or a
+      @ref Qore::SandboxManager "SandboxManager" interrupt; @ref Qore::system() "system()" and the backquote
+      operator now block until the command exits, and a cancellation or interrupt ends the wait at once and kills
+      the command
+
     - Fixed @ref Qore::system() "system()" returning -1 without an error when the process to execute the command
       could not be started; it now raises a \c SYSTEM-ERROR exception with the reason
 
