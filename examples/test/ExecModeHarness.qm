@@ -1,0 +1,176 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ExecModeHarness.qm runs test scripts in an execution mode and checks that native code ran when it must
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires FsUtil
+
+module ExecModeHarness {
+    version = "1.0";
+    desc = "runs test scripts in an execution mode and checks that native code ran when it must";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage ExecModeHarness Module
+
+    The tests that run a script with each <tt>--exec-mode</tt> run it through this module, so that the script
+    really runs as native code with @ref exec_mode_jit "JIT" execution:
+
+    - native compilation is synchronous and follows the first call of a function (\c QORE_JIT_SYNC_COMPILE=1 and
+      \c QORE_JIT_THRESHOLD=1), so whether code runs as native code does not depend on timing: with
+      <tt>--exec-mode=jit</tt>, top-level code is compiled before it runs and a function before its first call
+      returns; with <tt>--exec-mode=tiered</tt>, a function is compiled once its IR tier has run it
+    - \c QORE_JIT_TIMING traces every native compilation on stderr, and the trace is checked: native code must have
+      been compiled with <tt>--exec-mode=jit</tt> (and with <tt>--exec-mode=tiered</tt> when the caller requires
+      it), and nothing may be compiled with <tt>--exec-mode=ast</tt> or <tt>--exec-mode=ir</tt>
+
+    The trace is removed from the output; any other output on stderr follows the output on stdout.
+*/
+
+#! the namespace of the module
+public namespace ExecModeHarness {
+#! the execution modes, in the order the tests run them
+public const ExecModes = ("ast", "ir", "jit", "tiered");
+
+#! the environment that makes native compilation synchronous and traced
+public const TraceEnv = "QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1";
+
+#! the native compilation that a run must show
+public enum NativeCheck : string {
+    #! no native compilation is required; for scripts that are expected to fail before or instead of running code
+    None = "none",
+    #! code must be compiled to native code with --exec-mode=jit
+    Jit = "jit",
+    #! code must be compiled to native code with --exec-mode=jit and --exec-mode=tiered
+    JitAndTiered = "jit-and-tiered",
+}
+
+#! the result of a command run by run_command()
+public hashdecl ModeRunResult {
+    #! the execution mode given with \c --exec-mode in the command, if any
+    *string mode;
+    #! the output on stdout followed by the output on stderr that is not part of the trace
+    string out;
+    #! the native compilation trace
+    list<string> trace;
+    #! the exit status of the command
+    int rc;
+}
+
+#! returns True if the line is a line of the native compilation trace
+public bool sub is_trace_line(string line) {
+    return line =~ /^\[(BG-)?JIT\] /;
+}
+
+#! returns True if the trace line reports code compiled to native code
+public bool sub is_native_compilation(string line) {
+    return line =~ /^\[BG-JIT\] (compiled '.*' and promoted to JIT tier|batch-promoted callee '.*' to JIT tier)$/
+        || line =~ /^\[JIT\] compiled '.*' synchronously$/;
+}
+
+#! returns the execution mode given with \c --exec-mode in a command, if any
+/** @return the execution mode, or nothing if the command has no \c --exec-mode option, as when it runs a compiled
+    executable or uses the default execution mode
+
+    @throw EXEC-MODE-HARNESS-ERROR the command has more than one \c --exec-mode option
+*/
+public *string sub get_mode(string command) {
+    *list<*string> modes = (command =~ x/--exec-mode[= ]([a-z]+)/g);
+    if (modes.size() > 1) {
+        throw "EXEC-MODE-HARNESS-ERROR", sprintf("expecting at most one --exec-mode option in command %y", command);
+    }
+    return modes ? modes[0] : NOTHING;
+}
+
+#! runs a command that runs qore and returns its output and native compilation trace
+/** @param command the shell command; it must not redirect stderr, which holds the trace
+
+    @return the result of the command; see ModeRunResult
+*/
+public hash<ModeRunResult> sub run_command(string command) {
+    *string mode = get_mode(command);
+    TmpFile err("qore-exec-mode-", ".err");
+    int rc;
+    string out = backquote(sprintf("(export %s; %s) 2>%s", TraceEnv, command, err.path), \rc);
+    list<string> err_lines = (ReadOnlyFile::readTextFile(err.path) ?? "").split("\n");
+    # the text after the last newline is an empty element
+    if (err_lines && err_lines.last() == "") {
+        pop err_lines;
+    }
+    list<string> errors = select err_lines, !is_trace_line($1);
+    list<string> trace = select err_lines, is_trace_line($1);
+    return <ModeRunResult>{
+        "mode": mode,
+        "out": out + (errors ? errors.join("\n") + "\n" : ""),
+        "trace": trace,
+        "rc": rc,
+    };
+}
+
+#! checks that a run compiled native code as its execution mode requires
+/** @param r the result of the run
+    @param check the native compilation required
+
+    @throw EXEC-MODE-HARNESS-ERROR the command that was run gave no execution mode
+    @throw EXEC-MODE-NATIVE-ERROR code was compiled to native code with the AST or IR interpreter, or no code was
+    compiled to native code in a mode that requires it
+*/
+public sub check_native(hash<ModeRunResult> r, NativeCheck check = NativeCheck::Jit) {
+    if (!r.mode) {
+        throw "EXEC-MODE-HARNESS-ERROR", "the command gave no --exec-mode option, so its native compilation cannot "
+            "be checked";
+    }
+    if (r.mode == "ast" || r.mode == "ir") {
+        if (r.trace) {
+            throw "EXEC-MODE-NATIVE-ERROR", sprintf("--exec-mode=%s compiled code to native code:\n%s", r.mode,
+                r.trace.join("\n"));
+        }
+        return;
+    }
+    if (check == NativeCheck::None || (r.mode == "tiered" && check == NativeCheck::Jit)) {
+        return;
+    }
+    if (!(select r.trace, is_native_compilation($1))) {
+        throw "EXEC-MODE-NATIVE-ERROR", sprintf("--exec-mode=%s ran no native code; trace: %y; output: %s", r.mode,
+            r.trace, r.out);
+    }
+}
+
+#! runs a command that runs qore with an execution mode, checks its native compilation, and returns its output
+/** @param command the shell command; it runs qore with \c --exec-mode and must not redirect stderr, which holds
+    the trace
+    @param check the native compilation required
+
+    @return the output on stdout followed by the output on stderr that is not part of the trace
+
+    @throw EXEC-MODE-HARNESS-ERROR the command has no or more than one \c --exec-mode option
+    @throw EXEC-MODE-NATIVE-ERROR see check_native()
+*/
+public string sub run(string command, NativeCheck check = NativeCheck::Jit) {
+    hash<ModeRunResult> r = run_command(command);
+    check_native(r, check);
+    return r.out;
+}
+}

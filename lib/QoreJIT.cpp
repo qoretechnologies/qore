@@ -1069,11 +1069,24 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
         }
     }
 
+    // copied before any LLVM operations; see compileFunctionInternal()
+    const std::string func_name = func.name;
+
     // Serialize the entire compilation pipeline: LLVM's code generation (MCStreamer,
     // DWARF emission, debugger support) is not thread-safe for concurrent compilations.
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
 
-    return compileFunctionInternal(func, error, deopt_counter);
+    bool rc = compileFunctionInternal(func, error, deopt_counter);
+    // synchronous compilations (top-level code with JIT execution) are traced like background ones, so that the
+    // trace shows all native code
+    if (getenv("QORE_JIT_TIMING")) {
+        if (rc) {
+            fprintf(stderr, "[JIT] compiled '%s' synchronously\n", func_name.c_str());
+        } else {
+            fprintf(stderr, "[JIT] failed to compile '%s' synchronously: %s\n", func_name.c_str(), error.c_str());
+        }
+    }
+    return rc;
 }
 
 bool QoreJIT::compileFunctionLocked(const QoreIRFunction& func, std::string& error,

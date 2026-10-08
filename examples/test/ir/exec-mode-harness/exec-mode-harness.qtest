@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ExecModeHarnessTest
+
+#! Tests the ExecModeHarness test module that the execution mode tests run their scripts with
+/** The module runs a script with synchronous, traced native compilation and checks the trace: native code must have
+    been compiled with --exec-mode=jit (and with --exec-mode=tiered when required), and nothing may be compiled with
+    --exec-mode=ast or ir.
+*/
+class ExecModeHarnessTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string env;
+        TmpDir tmp("qore-exec-mode-harness-");
+        #! top-level code only
+        string toplevel;
+        #! a function called through a call reference
+        string function;
+        #! a script with a parse error
+        string parse_error;
+        #! a script that prints on stdout and stderr and exits with status 3
+        string output;
+    }
+
+    constructor() : QUnit::Test("ExecModeHarnessTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        toplevel = write("toplevel.q", "%modern\nint t = 0;\nfor (int i = 0; i < 3; ++i) {\n    t += i;\n}\n"
+            "printf(\"%d\\n\", t);\n");
+        function = write("function.q", "%modern\nint sub f(int i) {\n    return i + 1;\n}\n"
+            "code<int(int)> c = \\f();\nint t = 0;\nfor (int i = 0; i < 3; ++i) {\n    t += c(i);\n}\n"
+            "printf(\"%d\\n\", t);\n");
+        parse_error = write("parse-error.q", "%modern\nint x = ;\n");
+        output = write("output.q", "%modern\nprintf(\"out\\n\");\nstderr.print(\"err\\n\");\nexit(3);\n");
+
+        addTestCase("trace lines", \testTraceLines());
+        addTestCase("execution mode of a command", \testGetMode());
+        addTestCase("top-level code", \testTopLevel());
+        addTestCase("functions", \testFunctions());
+        addTestCase("output and exit status", \testOutput());
+        addTestCase("negative: native compilation checks", \testChecks());
+        set_return_value(main());
+    }
+
+    testTraceLines() {
+        assertTrue(ExecModeHarness::is_trace_line("[BG-JIT] enqueued compilation of 'f@1_0'"));
+        assertTrue(ExecModeHarness::is_trace_line("[JIT] compiled '_toplevel@1_0' synchronously"));
+        assertFalse(ExecModeHarness::is_trace_line("unhandled QORE System exception"));
+        assertTrue(ExecModeHarness::is_native_compilation("[BG-JIT] compiled 'f@1_0' and promoted to JIT tier"));
+        assertTrue(ExecModeHarness::is_native_compilation("[BG-JIT] batch-promoted callee 'g@1_1' to JIT tier"));
+        assertTrue(ExecModeHarness::is_native_compilation("[JIT] compiled '_toplevel@1_0' synchronously"));
+        assertFalse(ExecModeHarness::is_native_compilation("[BG-JIT] enqueued compilation of 'f@1_0'"));
+        assertFalse(ExecModeHarness::is_native_compilation("[BG-JIT] failed to compile 'f@1_0': error"));
+        assertFalse(ExecModeHarness::is_native_compilation("[JIT] failed to compile '_toplevel@1_0' synchronously: "
+            "error"));
+    }
+
+    testGetMode() {
+        assertEq("jit", ExecModeHarness::get_mode("qore -b --exec-mode=jit x.q"));
+        assertEq("tiered", ExecModeHarness::get_mode("A=1 qore --exec-mode tiered x.q; echo $?"));
+        assertEq(NOTHING, ExecModeHarness::get_mode("qore x.q"));
+        assertThrows("EXEC-MODE-HARNESS-ERROR", \ExecModeHarness::get_mode(),
+            "qore --exec-mode=ast a.q; qore --exec-mode=jit b.q");
+        # the native compilation of a command without an execution mode cannot be checked
+        assertThrows("EXEC-MODE-HARNESS-ERROR", \ExecModeHarness::run(), sprintf("%s %s -b %s", env, qore_bin,
+            toplevel));
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b %s", env, qore_bin,
+            toplevel));
+        assertEq(NOTHING, r.mode);
+        assertEq("3\n", r.out);
+    }
+
+    testTopLevel() {
+        # with JIT execution, top-level code is compiled before it runs
+        hash<ExecModeHarness::ModeRunResult> r = runScript("jit", toplevel);
+        assertEq("3\n", r.out);
+        assertEq(1, (select r.trace, $1 =~ /^\[JIT\] compiled '.*' synchronously$/).size(), r.trace.join("\n"));
+        ExecModeHarness::check_native(r);
+        # tiered execution runs top-level code with the IR interpreter
+        r = runScript("tiered", toplevel);
+        assertEq("3\n", r.out);
+        assertEq((), r.trace);
+        ExecModeHarness::check_native(r);
+        assertThrows("EXEC-MODE-NATIVE-ERROR", \ExecModeHarness::check_native(), (r,
+            ExecModeHarness::NativeCheck::JitAndTiered));
+        foreach string mode in (("ast", "ir")) {
+            r = runScript(mode, toplevel);
+            assertEq("3\n", r.out, mode);
+            assertEq((), r.trace, mode);
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::JitAndTiered);
+        }
+    }
+
+    testFunctions() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq("6\n", ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode,
+                function), ExecModeHarness::NativeCheck::JitAndTiered), mode);
+        }
+        hash<ExecModeHarness::ModeRunResult> r = runScript("tiered", function);
+        assertEq(1, (select r.trace, $1 =~ /^\[BG-JIT\] compiled 'f@.*' and promoted to JIT tier$/).size(),
+            r.trace.join("\n"));
+    }
+
+    testOutput() {
+        # the output on stderr that is not part of the trace follows the output on stdout
+        hash<ExecModeHarness::ModeRunResult> r = runScript("jit", output);
+        assertEq("out\nerr\n", r.out);
+        assertEq(3, r.rc);
+        assertEq("jit", r.mode);
+        # a shell command that adds to the output
+        assertEq("out\nexit=3\nerr\n", ExecModeHarness::run(sprintf("%s %s -b --exec-mode=jit %s; echo exit=$?",
+            env, qore_bin, output)));
+    }
+
+    testChecks() {
+        # a script that does not parse runs no code
+        hash<ExecModeHarness::ModeRunResult> r = runScript("jit", parse_error);
+        assertEq((), r.trace);
+        assertRegex("PARSE-EXCEPTION", r.out);
+        assertThrows("EXEC-MODE-NATIVE-ERROR", "--exec-mode=jit ran no native code", \ExecModeHarness::check_native(),
+            (r,));
+        # unless no native code is required
+        ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::None);
+        assertThrows("EXEC-MODE-NATIVE-ERROR", \ExecModeHarness::run(), (sprintf("%s %s -b --exec-mode=jit %s", env,
+            qore_bin, parse_error),));
+        # code compiled with an interpreter
+        r = <ExecModeHarness::ModeRunResult>{
+            "mode": "ir",
+            "out": "",
+            "trace": ("[BG-JIT] compiled 'f@1_0' and promoted to JIT tier",),
+            "rc": 0,
+        };
+        assertThrows("EXEC-MODE-NATIVE-ERROR", "--exec-mode=ir compiled code to native code",
+            \ExecModeHarness::check_native(), (r, ExecModeHarness::NativeCheck::None));
+    }
+
+    private hash<ExecModeHarness::ModeRunResult> runScript(string mode, string script) {
+        return ExecModeHarness::run_command(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, script));
+    }
+
+    private string write(string name, string code) {
+        string path = tmp.path + DirSep + name;
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(code);
+        return path;
+    }
+}

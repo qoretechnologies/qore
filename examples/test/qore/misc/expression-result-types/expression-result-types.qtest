@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../../ExecModeHarness.qm
 
 %include expression-result-types-checks.qi
 
@@ -76,25 +77,23 @@ class ExpressionResultTypesTest inherits QUnit::Test {
     }
 
     #! runs a worker with the given module directory and options and returns its output and compilation trace
-    /** The worker runs the checks twice.  Compilation to native code is synchronous and follows the first call of a
-        function (QORE_JIT_SYNC_COMPILE=1, QORE_JIT_THRESHOLD=1), so with --exec-mode=jit or tiered the first pass
-        runs with the IR interpreter and the second one as native code; QORE_JIT_TIMING traces every compilation on
-        stderr.  Any other output on stderr is added to the output, where it fails the checks.
+    /** The worker runs the checks twice.  ExecModeHarness runs it with synchronous native compilation that follows
+        the first call of a function, so with --exec-mode=jit or tiered the first pass runs with the IR interpreter
+        and the second one as native code, and checks the compilation trace: native code must have been compiled
+        with JIT and tiered execution and none with AST and IR execution.  Any other output on stderr is added to
+        the output, where it fails the checks.
     */
     private hash<WorkerResult> runWorker(string worker_name, string module_dir, string opts = "") {
         string worker = get_script_dir() + DirSep + worker_name;
-        TmpFile err("qore-worker-", ".err");
-        string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1 "
-            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>%s", libqore_dir, libqore_dir,
-            module_dir, qore_bin, opts, worker, err.path));
-        list<string> err_lines = select (ReadOnlyFile::readTextFile(err.path) ?? "").split("
-"), $1.val();
-        list<string> errors = select err_lines, $1 !~ /^\[BG-JIT\]/;
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s", libqore_dir, libqore_dir, module_dir, qore_bin,
+            opts, worker));
+        if (r.mode) {
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::JitAndTiered);
+        }
         return <WorkerResult>{
-            "out": out + (errors ? errors.join("
-") + "
-" : ""),
-            "trace": select err_lines, $1 =~ /^\[BG-JIT\]/,
+            "out": r.out,
+            "trace": r.trace,
         };
     }
 

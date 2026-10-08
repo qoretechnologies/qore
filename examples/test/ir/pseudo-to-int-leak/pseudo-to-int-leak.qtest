@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../ExecModeHarness.qm
 
 %exec-class PseudoToIntLeakTest
 
@@ -17,7 +18,7 @@ hashdecl WorkerResult {
     string out;
     #! the native compilation trace (QORE_JIT_TIMING)
     list<string> trace;
-    #! the other output on stderr, which includes the leak checker's report
+    #! all output other than the trace, which includes the leak checker's report
     string err;
 }
 
@@ -121,23 +122,23 @@ class PseudoToIntLeakTest inherits QUnit::Test {
     }
 
     #! runs a command under the leak checker and returns its output, compilation trace and leak report
-    /** Compilation to native code is synchronous and follows the first call of a function
-        (QORE_JIT_SYNC_COMPILE=1, QORE_JIT_THRESHOLD=1), so with --exec-mode=jit or tiered the functions run as
-        native code from their second call on; QORE_JIT_TIMING traces every compilation on stderr.
+    /** ExecModeHarness runs the command with synchronous native compilation following the first call of a function,
+        so with --exec-mode=jit or tiered the functions run as native code from their second call on, and checks the
+        compilation trace: native code must have been compiled with JIT and tiered execution and none with AST and
+        IR execution.
     */
     private hash<WorkerResult> runWorker(string command) {
-        TmpFile err("qore-pseudo-to-int-leak-", ".err");
-        string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1 %s %s %s "
-            "2>%s", env, leak_checker, command, err.path));
-        list<string> err_lines = (ReadOnlyFile::readTextFile(err.path) ?? "").split("\n");
-        list<string> trace = select err_lines, $1 =~ /^\[BG-JIT\]/;
-        list<string> other_err = select err_lines, $1 !~ /^\[BG-JIT\]/;
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s", env, leak_checker,
+            command));
+        if (r.mode) {
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::JitAndTiered);
+        }
         # the leak checker writes its report on stdout; only the worker's own output is the result
-        list<string> result = select out.split("\n"), $1 =~ /^\[/;
+        list<string> result = select r.out.split("\n"), $1 =~ /^\[/;
         return <WorkerResult>{
             "out": result ? result.join("\n") + "\n" : "",
-            "trace": trace,
-            "err": out + other_err.join("\n"),
+            "trace": r.trace,
+            "err": r.out,
         };
     }
 

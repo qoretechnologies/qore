@@ -8,10 +8,19 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../../ExecModeHarness.qm
 
 %include string-conversion-encoding-checks.qi
 
 %exec-class StringConversionEncodingTest
+
+#! the output and the native compilation trace of a worker
+hashdecl WorkerResult {
+    #! the lines printed on stdout, followed by any error output
+    string out;
+    #! the native compilation trace (QORE_JIT_TIMING)
+    list<string> trace;
+}
 
 #! Tests that strings in encodings that are not ASCII-compatible convert as UTF-8 strings in every execution engine
 /** The checks in string-conversion-encoding-checks.qi run in this program, in each execution mode, and from a
@@ -62,8 +71,10 @@ class StringConversionEncodingTest inherits QUnit::Test {
 
     testExecModes() {
         foreach string mode in (ExecModes) {
-            checkWorkerOutput(mode, runWorker("string-conversion-encoding-worker.q", get_script_dir(),
-                "--exec-mode=" + mode));
+            hash<WorkerResult> r = runWorker("string-conversion-encoding-worker.q", get_script_dir(),
+                "--exec-mode=" + mode);
+            checkWorkerOutput(mode, r.out);
+            checkEngine(mode, r.trace);
         }
     }
 
@@ -76,21 +87,52 @@ class StringConversionEncodingTest inherits QUnit::Test {
         assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
 
         # the directory holds only the compiled module, so the worker cannot load the source instead
-        checkWorkerOutput("aot", runWorker("string-conversion-encoding-module-worker.q", tmp.path));
+        checkWorkerOutput("aot", runWorker("string-conversion-encoding-module-worker.q", tmp.path).out);
     }
 
-    #! runs a worker with the given module directory and options and returns its output
-    private string runWorker(string worker_name, string module_dir, string opts = "") {
+    #! runs a worker with the given module directory and options and returns its output and compilation trace
+    /** The worker runs the checks twice.  ExecModeHarness runs it with synchronous native compilation that follows
+        the first call of a function, so with --exec-mode=jit or tiered the first pass runs with the IR interpreter
+        and the second one as native code, and checks the compilation trace: native code must have been compiled
+        with JIT and tiered execution and none with AST and IR execution.  Any other output on stderr is added to
+        the output, where it fails the checks.
+    */
+    private hash<WorkerResult> runWorker(string worker_name, string module_dir, string opts = "") {
         string worker = get_script_dir() + DirSep + worker_name;
-        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>&1",
-            libqore_dir, libqore_dir, module_dir, qore_bin, opts, worker));
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s", libqore_dir, libqore_dir, module_dir, qore_bin,
+            opts, worker));
+        if (r.mode) {
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::JitAndTiered);
+        }
+        return <WorkerResult>{
+            "out": r.out,
+            "trace": r.trace,
+        };
+    }
+
+    #! checks that a worker ran the checks with the engine named by its execution mode
+    /** No code is compiled to native code with the AST or the IR interpreter; with JIT and tiered execution the
+        functions with the checks are compiled after their first call, so the second pass runs them as native code.
+    */
+    private checkEngine(string mode, list<string> trace) {
+        if (mode == "ast" || mode == "ir") {
+            assertEq((), trace, mode + ": no code is compiled to native code");
+        } else {
+            foreach string fn in (("check_typed", "check_auto")) {
+                list<string> promoted = select trace, $1 =~ /promoted/ && $1.find("'" + fn + "@") >= 0;
+                assertTrue(promoted.size() > 0, sprintf("%s: %s() runs as native code: %s", mode, fn,
+                    trace.join("\n")));
+            }
+        }
     }
 
     #! compares the lines printed by a worker with the results of the checks in this program
     private checkWorkerOutput(string label, string out) {
         list<string> results = select out.split("\n"), $1.val();
         checkResults(label, results);
-        assertEq(expected, results, label + ": the same checks as in this program");
+        # the worker runs the checks twice
+        assertEq(expected + expected, results, label + ": the same checks as in this program, twice");
     }
 
     #! checks that every check passed
