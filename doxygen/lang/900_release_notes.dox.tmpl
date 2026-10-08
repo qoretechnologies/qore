@@ -4553,7 +4553,9 @@ while (*binary chunk = input.read(65536)) {
       storage, and destructor ordering; nonfresh or special slots retain the ordinary path
     - Specialized successful acceptance of an unfiltered required-class value in fresh AOT local
       stores, avoiding generic conversion dispatch while preserving raw generic compatibility,
-      inheritance/private-access checks, diagnostics, and ownership
+      inheritance/private-access checks, diagnostics, and ownership; accepted strong objects
+      additionally avoid generic scalar/enum storage dispatch while retaining the runtime slot's
+      and caller cache's references, real-reference bookkeeping, and destructor ordering
     - Added guarded native scalar AOT method entries on polymorphic cache hits, avoiding parameter TLS
       binding for proven non-throwing <tt>int(int)</tt> bodies while retaining context, stack, ownership,
       receiver, Program, and debugger checks

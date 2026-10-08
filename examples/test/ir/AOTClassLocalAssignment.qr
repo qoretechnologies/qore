@@ -155,6 +155,29 @@ int sub failedReassignment(auto input) {
     return receiver.id;
 }
 
+# After the input owner is removed, the initializer's runtime slot and cache
+# must keep the object alive. A weak observer does not provide an extra owner.
+int sub classLocalOwnedAlias(bool throwing) {
+    int before = destroyed;
+    *ClassLocalValue observer;
+    try {
+        ClassLocalValue source(47);
+        ClassLocalValue receiver = source;
+        observer := receiver;
+        remove source;
+        if (destroyed != before || receiver.id != 47 || observer.id != 47) {
+            throw "CLASS-LOCAL-ASSIGNMENT", "initializer did not retain its own reference";
+        }
+        if (throwing) { throw "CLASS-LOCAL-EXPECTED", "unwind the remaining owner"; }
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "CLASS-LOCAL-EXPECTED") { rethrow; }
+    }
+    if (observer) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "initializer retained its reference after scope exit";
+    }
+    return destroyed - before;
+}
+
 code<int()> sub escapedTarget(ClassLocalValue input) {
     ClassLocalValue receiver = input;
     return int sub () { return receiver.id; };
@@ -183,6 +206,9 @@ for (int round = 0; round < 8; ++round) {
     }
     if (failedReassignment("wrong") != 17 || failedReassignment(NOTHING) != 17) {
         throw "CLASS-LOCAL-ASSIGNMENT", "failed reassignment changed the previous value";
+    }
+    if (classLocalOwnedAlias(False) != 1 || classLocalOwnedAlias(True) != 1) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "initializer changed final-owner destruction";
     }
     printf("%d:%d:%d:%d:%d:%d\n", classLocalPhi(0, left, right),
         classLocalPhi(6, left, right), classLocalInvoke(right),

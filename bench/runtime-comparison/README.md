@@ -108,6 +108,15 @@ single unmapped class constraint with the ordinary raw/parameterized-object and
 inheritance/access validators; misses retain the original diagnostics. No
 compatibility/access result is cached. The compiler and helper ABI are unchanged,
 so runtime-only before/after comparisons can reuse the identical AOT executable.
+`QORE_DISABLE_AOT_CLASS_NODE_STORE=1` at runtime retains generic value storage
+after that positive check. Otherwise an accepted strong object uses the existing
+node-assignment overload, avoiding scalar/enum dispatch and generic value-holder
+handling. Slot guards, two owned references, real-reference accounting, weak
+normalization, and cleanup order remain unchanged. This presence flag is sampled
+once; the helper ABI is unchanged and identical-executable comparisons are valid.
+The measured disabled path has a small adverse cost; see `RESULTS.md` rather
+than assuming the control path is performance-neutral.
+
 The prepared scalar callback v3 entrypoints currently request 64-byte alignment.
 Earlier class-check experiments used 16 bytes and also measured unaligned and
 128-byte alternatives. The dynamic-closure follow-up compares saved executables

@@ -208,6 +208,24 @@ This changes neither slot ownership nor weak normalization or cleanup ordering.
 (presence sampled once). The compiler and versioned helper ABI are unchanged;
 existing AOT artifacts using the fresh-store helper can use the specialization.
 
+Once this same positive check proves a strong object, a non-fixed fresh slot
+uses the existing `assign(AbstractQoreNode*)` overload instead of redispatching
+through all scalar/enum/value cases in `assignAssume(QoreValue&)`. A
+`ReferenceHolder<QoreObject>` transfers one reference to the runtime slot; the
+returned cache value receives a second reference. The node overload preserves
+normal real-reference bookkeeping. No acceptance result is cached, and private
+access, raw generic compatibility, weak normalization, captured/special slot
+fallback and declaration-order cleanup remain unchanged. The input stays
+borrowed and protected by its caller while the non-mutating acceptance check
+runs. `QORE_DISABLE_AOT_CLASS_NODE_STORE=1` retains generic value storage
+(presence sampled once); no compiler or helper ABI change is required.
+
+The first native-purity local-cache proposal needs additional work: statement
+boundary cleanup independently advances the reload epoch and can run destructors.
+Skipping only the increment after a pure call cannot preserve caches across that
+boundary. A future effect-aware boundary must preserve all earlier pending
+generic effects and cleanup effects, not just inspect the last call's purity.
+
 The class-check runtime comparison requested 16-byte alignment on the twelve
 prepared scalar callback v3 entrypoints. The unaligned class-check candidate
 repeatedly regressed wide callbacks; a 128-byte alternative recovered that AOT

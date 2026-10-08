@@ -4619,3 +4619,88 @@ all 300 records. [Integration evidence](results-polymorphic-continuation-merge-m
 retains setup failures and the complete audit. The measurements above describe
 the optimization commit before this merge, not a timed result for the new merge.
 Rebuild and preserve the new merged baseline before the next optimization.
+
+
+## Accepted-object node stores (2026-10-08)
+
+Baseline: merged revision `d8b053c703d037a24fbc09ec3cfb3ec8f3da8d1c`.
+After the existing unfiltered required-class check proves a strong object,
+`LocalVar::tryAssignInitialClassValue()` uses the existing node-assignment
+overload instead of generic scalar/enum/value storage dispatch. The current-thread
+slot guards and class/access/raw-generic checks remain. The runtime slot and
+returned cache each still own one reference; real-reference bookkeeping, weak
+normalization and declaration-order cleanup are unchanged. No compiler, serialized
+format, helper ABI or mutable shared cache is added.
+
+### Measurements
+
+Each run reuses one identical AOT executable against both compatible runtimes.
+Five forks, three warmups, five 500 ms measured windows and three startup samples
+are shuffled/interleaved. All selected modes pass 300 independent reference
+checks. Timing does not overlap builds, tests, profiling, disassembly or evidence
+validation. Values are median fork means in **whole-loop ns/element**, including
+receiver selection/storage/cleanup, arithmetic and checksum, not isolated calls.
+
+|!Run and count|!Before|!After|!Change|!Before / after fork-mean ranges
+|run-iomrh9_x (enabled), 1024|80.00998|73.09252|-8.65%|77.97481–81.50682 / 72.57090–75.48772
+|run-j5013uin (enabled), 4096|77.24882|72.46488|-6.19%|76.37255–77.33420 / 71.46365–72.65602
+|run-y69f3xha (disabled), 4096|77.91831|79.14540|1.57%|76.89749–78.15872 / 78.29887–79.27886
+
+Both enabled target ranges separate favorably. The primary Java value is
+2.55113 ns/element, leaving a **28.65×** whole-workload gap. Qore can inline the
+exact base case while Java retains all three target calls; parity is not achieved.
+
+The disabled run sets `QORE_DISABLE_AOT_CLASS_NODE_STORE=1` at execution for
+both runtimes (the baseline ignores this new flag). Its **1.57% slowdown has
+non-overlapping ranges** and remains part of the result. It supports attribution
+of the enabled improvement to the new path, but does not establish the cause of
+the disabled slowdown or prove zero generic-path/layout overhead. Retaining the
+optimization is based on the repeated enabled benefit with unchanged semantics,
+not on claiming that every path improves.
+
+|!Control|!Primary 1024|!Repeat 4096|!Disabled 4096
+|indirect_wide|-2.22%|1.10%|0.99%
+|indirect_float|-3.31%|-0.63%|-0.63%
+|closure_call|-1.10%|0.58%|-0.13%
+|arithmetic|-0.69%|0.02%|0.12%
+
+All control fork ranges overlap in all three runs. The unfavorable wide-callback
+and closure medians above are retained; overlap does not prove neutrality.
+Startup measurements have uncontrolled filesystem caches and are not isolated
+compiler or loading costs.
+
+[Sanitized evidence](results-class-node-store-macos-arm64.json) retains every
+sample and summary from all three runs: **175 jobs / 875 measured windows**,
+library/source/artifact hashes, the exact runtime diff and the 62-item audit.
+Candidate release/debug library SHA-256 values:
+`494bbd622e791c4d0504c50c63482076acb7500249b485121e7a72babb3e44a8` /
+`7e03241f4df568b8ddede5fc33a65109c660906506caf96520a2f2e8233eda68`.
+The runtime diff SHA-256 is
+`89a26cadfa9cdc500f4b74dd34e21907207a75d01d7c3c9c440aae7203027c4b`.
+Release `__text` grows 13,958,844 → 13,959,236 bytes (+392).
+
+### Validation and remaining costs
+
+Release/debug each pass 24 selected files: 18 QUnit wrappers, 46 cases / 2542
+assertions plus six standalone scripts. The extended assignment wrapper passes
+280 assertions on the baseline and both candidates; it removes the original
+owner and verifies the initialized local's sole-owner lifetime on normal/EH exits
+with a weak observer. The AST/AOT destructor-order wrapper passes 47 assertions
+per build, including disabled-path comparison. Its previously documented JIT
+mixed-local unwind-order issue remains outside this change. Old AOT retains all
+300 checksum records; 11 Python harness tests pass. No full-suite, sanitizer,
+race-detector, Linux or allocation-failure-injection result is claimed.
+
+A separate 5-second/1ms profile records 3791 main-thread samples (excluding 3791
+signal-wait samples). Direct caller branches include assignment 1221, native
+method attempt 592, runtime local clear 386, two stale reload sites 327/314 and
+temporary decref 309. These are inclusive counts, not isolated costs; do not add
+nested children or use the profile's SAMPLE output as timing evidence. Generated
+code confirms the accepted node overload and retained generic fallback.
+
+Next: reduce receiver ownership/reload work with an explicit cleanup-effect and
+lifetime proof, or reduce repeated class compatibility/frame setup work. The
+simple pure-call epoch-skipping proposal is insufficient: statement-boundary
+cleanup also invalidates caches and can run destructors. An effect-aware boundary
+must preserve earlier generic effects even when a later call is pure. The rejected
+native-only local prototype must not be revived without declaration-order cleanup.

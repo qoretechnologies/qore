@@ -936,9 +936,28 @@ public:
         const QoreTypeInfo* ti = getTypeInfoForLValue();
         assert(QoreTypeInfo::getUniqueReturnClass(ti) && !QoreTypeInfo::isComplex(ti)
             && !QoreTypeInfo::isReference(ti));
-        ValueHolder stored(value.refSelf(), xsink);
         static const bool fast_class_accept = !std::getenv("QORE_DISABLE_AOT_CLASS_ACCEPT_FAST_PATH");
-        if (!fast_class_accept || !ti->acceptsRequiredClassValueWithoutFilter(*stored)) {
+        static const bool class_node_store = !std::getenv("QORE_DISABLE_AOT_CLASS_NODE_STORE");
+        bool accepted = fast_class_accept && ti->acceptsRequiredClassValueWithoutFilter(value);
+        if (accepted && class_node_store && !slot->val.fixed_type) {
+            // Acceptance proves a strong object, not just a pointer-tagged value.
+            // Use the existing node assignment overload to avoid scalar/enum
+            // dispatch. It keeps the same real-reference bookkeeping; the slot
+            // and returned cache value still receive one owned reference each.
+            QoreObject* object = value.get<QoreObject>();
+            ReferenceHolder<QoreObject> stored(object->objectRefSelf(), xsink);
+            AbstractQoreNode* removed = slot->val.assign(stored.release());
+            assert(!removed);
+            if (removed) {
+                removed->deref(xsink);
+            }
+            if (!*xsink) {
+                result = QoreValue(object->objectRefSelf());
+            }
+            return true;
+        }
+        ValueHolder stored(value.refSelf(), xsink);
+        if (!accepted) {
             QoreTypeInfo::acceptAssignment(ti, "<lvalue>", *stored, xsink);
         }
         if (*xsink) {
