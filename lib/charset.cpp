@@ -535,7 +535,28 @@ static bool validateEncoding(const char* encoding) {
     return true;
 }
 
+/*  The default character encoding must be compatible with ASCII: program text, hash keys, and the output of the
+    functions that format text are ASCII in it, and strings in the default encoding are parsed as ASCII text.  An
+    encoding that is not (ex: UTF-16, UTF-32, EBCDIC, Shift_JIS) is refused:
+    - given with --charset (\a def) or QORE_CHARSET, which select the encoding for Qore explicitly, the process exits
+      with an error, as for an invalid name given with --charset: running with another encoding than the one
+      requested would silently change the encoding of all output
+    - given by the locale (LANG), which applies to every program and is not a choice made for Qore, an error is
+      printed and UTF-8 is used, as for an encoding name in LANG that iconv does not know, so that Qore still runs in
+      a locale with such an encoding (ex: ja_JP.SJIS)
+*/
 void QoreEncodingManager::init(const char* def) {
+    // returns the encoding for a valid name that is compatible with ASCII, otherwise prints an error
+    auto get_default = [](const char* name, const char* source) -> const QoreEncoding* {
+        const QoreEncoding* enc = findCreate(name);
+        if (!enc->isAsciiCompat()) {
+            fprintf(stderr, "qore: error: character encoding '%s' from %s is not compatible with ASCII and cannot be "
+                "the default character encoding; use an ASCII-compatible encoding such as UTF-8\n", name, source);
+            return nullptr;
+        }
+        return enc;
+    };
+
     // now set default character set
     if (def) {
         // Validate encoding when explicitly provided on command line
@@ -544,42 +565,49 @@ void QoreEncodingManager::init(const char* def) {
             fprintf(stderr, "Use 'qore --show-charsets' to list known encodings\n");
             exit(1);
         }
-        QCS_DEFAULT = findCreate(def);
-    } else {
-        // first see if QORE_CHARSET exists
-        char* estr = getenv("QORE_CHARSET");
-        if (estr) {
-            if (validateEncoding(estr)) {
-                QCS_DEFAULT = findCreate(estr);
-            } else {
-                fprintf(stderr, "qore: warning: invalid encoding '%s' in QORE_CHARSET, using UTF-8\n", estr);
-                QCS_DEFAULT = QCS_UTF8;
-            }
-        } else { // try to get character set name from LANG variable
-            estr = getenv("LANG");
-            char* p;
-            if (estr && ((p = strrchr(estr, '.')))) {
-                char* o = strchr(p + 1, '@');
-                const char* enc_name;
-                if (!o) {
-                    enc_name = p + 1;
-                } else {
-                    *o = '\0';
-                    enc_name = p + 1;
-                }
-                if (validateEncoding(enc_name)) {
-                    QCS_DEFAULT = findCreate(enc_name);
-                } else {
-                    fprintf(stderr, "qore: warning: invalid encoding '%s' from LANG, using UTF-8\n", enc_name);
-                    QCS_DEFAULT = QCS_UTF8;
-                }
-                if (o) {
-                    *o = '@';
-                }
-            } else // otherwise set QCS_DEFAULT to UTF-8
-                QCS_DEFAULT = QCS_UTF8;
+        QCS_DEFAULT = get_default(def, "--charset");
+        if (!QCS_DEFAULT) {
+            exit(1);
         }
+        return;
     }
+    // first see if QORE_CHARSET exists
+    const char* estr = getenv("QORE_CHARSET");
+    if (estr) {
+        if (validateEncoding(estr)) {
+            QCS_DEFAULT = get_default(estr, "QORE_CHARSET");
+            if (!QCS_DEFAULT) {
+                exit(1);
+            }
+        } else {
+            fprintf(stderr, "qore: warning: invalid encoding '%s' in QORE_CHARSET, using UTF-8\n", estr);
+            QCS_DEFAULT = QCS_UTF8;
+        }
+        return;
+    }
+    // try to get character set name from LANG variable; otherwise set QCS_DEFAULT to UTF-8
+    QCS_DEFAULT = QCS_UTF8;
+    estr = getenv("LANG");
+    const char* p;
+    if (!estr || !(p = strrchr(estr, '.'))) {
+        return;
+    }
+    // the encoding name ends at any modifier (ex: "@euro")
+    std::string enc_name(p + 1);
+    size_t at = enc_name.find('@');
+    if (at != std::string::npos) {
+        enc_name.erase(at);
+    }
+    if (!validateEncoding(enc_name.c_str())) {
+        fprintf(stderr, "qore: warning: invalid encoding '%s' from LANG, using UTF-8\n", enc_name.c_str());
+        return;
+    }
+    const QoreEncoding* enc = get_default(enc_name.c_str(), "LANG");
+    if (!enc) {
+        fprintf(stderr, "qore: using UTF-8 as the default character encoding\n");
+        return;
+    }
+    QCS_DEFAULT = enc;
 }
 
 void QoreEncodingManager::addAlias(const QoreEncoding* qcs, const char* alias) {

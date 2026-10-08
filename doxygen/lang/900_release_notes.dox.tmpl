@@ -4271,6 +4271,10 @@ while (*binary chunk = input.read(65536)) {
       and overline in JIS X 0201 with some iconv implementations, and the second bytes of their double-byte
       characters are ASCII characters
 
+    - %Qore now refuses a default character encoding that is not compatible with ASCII (such as UTF-16, UTF-32 or
+      Shift_JIS), which could not work and crashed with UTF-16: given with \c --charset or \c QORE_CHARSET, %Qore
+      exits with an error; given by the locale (\c LANG), %Qore prints an error and uses UTF-8
+
     - Fixed character encodings that %Qore creates from their name, such as \c "UTF-32", \c "UTF-32LE",
       \c "UTF-32BE", \c "UCS-4", \c "UCS-2LE", \c "UCS-2BE" and EBCDIC code pages such as \c "IBM1140", being
       handled as single-byte encodings compatible with ASCII: hash keys in them were cut at their first null byte

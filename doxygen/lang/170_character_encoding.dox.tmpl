@@ -142,6 +142,8 @@
 
     First, the \c QORE_CHARSET environment variable is checked. If it is set, then this character encoding will be the default character encoding for the process. If not, then the \c LANG environment variable is checked. If a character encoding is specified in the \c LANG environment variable, then it will be used as the default character encoding. Otherwise, if no character encoding can be derived from the environment, \c UTF-8 is assumed.
 
+    The default character encoding must be backwards compatible with \c ASCII: an encoding that is not (such as \c UTF-16, \c UTF-32, EBCDIC code pages, or Shift_JIS) is refused.  Given with the \c --charset option or the \c QORE_CHARSET environment variable, %Qore exits with an error; given by the \c LANG environment variable, %Qore prints an error and uses \c UTF-8.
+
     Character encodings are automatically converted by the %Qore language when necessary. Encoding conversion errors will cause a %Qore exception to be thrown. The character encoding conversions supported by %Qore depend on the operating system's \c iconv library function.
 
     @note The get_default_encoding() function will return the default encoding for the %Qore process.
