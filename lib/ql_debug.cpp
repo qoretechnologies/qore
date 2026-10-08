@@ -182,7 +182,7 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
             tref_count = priv->tRefs.reference_count();
             rset = priv->rset.load(std::memory_order_relaxed);
             deferred_scan = priv->deferred_scan;
-            scan_private_data = priv->scan_private_data;
+            scan_private_data = priv->scan_private_data.load(std::memory_order_relaxed);
             status = priv->status;
         }
         s->sprintf("priv: %p elements: %d (cls: %p, type: %s, valid: %s, refs: %d, rrefs: %d, "

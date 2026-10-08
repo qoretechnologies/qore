@@ -206,7 +206,13 @@ public:
 
     mutable VRMutex gate;
 
-    int scan_private_data = 0;
+    //! The number of private data containers whose values the scanner has to report for this object
+    /** Changed under rlck, in the critical section of the container's own lock in which its count changes; read
+        without rlck by the scan (needsScan(), scanMembers(), valuesCanChangeWithoutScan()), which only needs a value
+        that was current at some point, so it is atomic and read with relaxed ordering.  A container that a scan
+        misses because of a stale read has marked the edges it added (qore_dgc_value_stored()).
+    */
+    std::atomic<int> scan_private_data{0};
 
     bool system_object, in_destructor;
     bool recursive_ref_found;
@@ -516,7 +522,7 @@ public:
 
     //! Private data containers hold values that their own methods change without scanning this object
     DLLLOCAL virtual bool valuesCanChangeWithoutScan() const {
-        return scan_private_data != 0;
+        return scan_private_data.load(std::memory_order_relaxed) != 0;
     }
 
     DLLLOCAL virtual bool scanMembersIntern(RSetHelper& rsh, QoreHashNode* odata);
@@ -527,10 +533,10 @@ public:
     DLLLOCAL virtual bool needsScan(bool scan_now) {
         assert(rml.checkRSectionHeld());
         printd(5, "qore_object_private::needsScan() scan_count: %d scan_private_data: %d scan_now: %d\n",
-            getScanCount(), scan_private_data, scan_now);
+            getScanCount(), scan_private_data.load(std::memory_order_relaxed), scan_now);
 
         // the status cannot change while this lock is held
-        if ((!getScanCount() && !scan_private_data) || status != OS_OK) {
+        if ((!getScanCount() && !scan_private_data.load(std::memory_order_relaxed)) || status != OS_OK) {
             return false;
         }
 

@@ -258,16 +258,20 @@ void qore_object_private::cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_
 
 void qore_object_private::incScanPrivateData() {
     AutoLocker lck(rlck);
-    ++scan_private_data;
-    if (scan_private_data && !deferred_scan) {
+    // a plain load and store, as rlck excludes other writers
+    int n = scan_private_data.load(std::memory_order_relaxed) + 1;
+    scan_private_data.store(n, std::memory_order_relaxed);
+    if (n && !deferred_scan) {
         deferred_scan = true;
     }
 }
 
 void qore_object_private::decScanPrivateData() {
     AutoLocker lck(rlck);
-    assert(scan_private_data > 0);
-    --scan_private_data;
+    // a plain load and store, as rlck excludes other writers
+    int n = scan_private_data.load(std::memory_order_relaxed);
+    assert(n > 0);
+    scan_private_data.store(n - 1, std::memory_order_relaxed);
 }
 
 int qore_object_private::copyData(ExceptionSink* xsink, const qore_object_private& old) {
@@ -490,7 +494,7 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
         }
     }
 
-    if (scan_private_data) {
+    if (scan_private_data.load(std::memory_order_relaxed)) {
         // Each probe below looks for private data that most scanned objects do not have, so the lookups must
         // not raise exceptions: see getScanPrivateData().  The sink only receives private data dereferences, and
         // is cleared on every exit, as before, so the scan never reports them.
