@@ -458,6 +458,20 @@ above the dispatch guard's SP throughout an external boundary sweep. The test
 restores the live limit on every exit and the original bound entry before its
 unshared Program is destroyed; production has no test-only guard bypass.
 
+The native method continuation's receiver gate uses `QoreValue::isPointer()` and
+the borrowed node's `NT_OBJECT` type, without general scalar/enum type dispatch.
+Opaque strong references remain admissible; weak wrappers, non-pointer values,
+and non-object nodes return to ordinary dispatch without changing ownership,
+the result slot or exception sink. Object validity and every subsequent access,
+full PIC key, Program, body/readiness and debugger check remain live. No public
+type API, ABI, serialized format or generated caller changes. The native fixture
+warms real required/nullable caller caches and invokes the helper from the
+compiled caller's parse-policy context. It requires actual admission for strong
+and opaque objects, rejects scalar/boxed/string/container/enum/weak values, and
+checks context restoration and successful reuse after misses. The same fixture
+passes on the pre-change runtime, so it checks preserved behavior rather than
+new semantics.
+
 Unresolved name-dispatched calls can also use this continuation after ordinary
 dispatch has populated the full-key PIC. This includes nullable-class and dynamic
 receivers; it does not resolve an AST/IR target or narrow its unknown return type.

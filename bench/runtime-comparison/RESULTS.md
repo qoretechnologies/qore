@@ -5734,3 +5734,116 @@ Next investigate localized strong-object tag admission to avoid generic type
 dispatch on the positive method path, while retaining enum/weak/generic fallback
 and every access/Program/body/debugger guard. This is not general IR improvement
 or Java retained-call parity.
+
+## Local strong-object method admission (2026-10-08)
+
+The native method continuation now checks the borrowed QoreValue pointer tag and
+node type locally instead of calling general type dispatch and a generic object
+accessor. Opaque strong references remain supported. Weak, scalar, enum and
+non-object representations take the same ordinary miss path. Object validity,
+access, the full PIC key, Program/body/readiness/debugger checks, object/class
+context, diagnostic publication and live stack guards remain unchanged.
+There is no compiler, public type API, ABI or serialized-format change.
+
+Baseline is clean merged `29741785c34d49d8b2bdf396e4016f5160d3c441`,
+including method-v3 and `origin/develop` at `4460f705b`. Candidate adds only the
+recorded JITRuntime.cpp production diff. [Full evidence](results-method-receiver-tag-macos-arm64.json)
+contains all samples, identities, assembly, profiling, reproduction and audit.
+Measured precommit identities must not be relabelled as later rebuilds.
+
+Apple M4 Pro, macOS arm64, release SCU, Temurin 25.0.2/JMH 1.37.
+Five randomized forks, three warmups, five 500 ms windows and three startup
+observations per mode. Each before/after pair uses the identical AOT executable
+with the corresponding runtime library; compiler/runtime ABI identity is unchanged.
+All 1,050 windows ran without competing builds, tests, profiling, disassembly or
+evidence validation. Values are median fork means in ns/element for whole kernels,
+not isolated call latency. Fork range overlap is descriptive, not a significance test.
+
+Count 1024, seed 810601, `run-tw567pd_` (450 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|optional_method_call|14.762|13.616|-7.77%|no|1.661|8.20x
+|polymorphic_call|52.217|50.426|-3.43%|no|2.529|19.94x
+|monomorphic_call|7.139|7.078|-0.86%|yes|1.667|4.25x
+|indirect_wide|8.317|8.378|+0.73%|yes|1.684|4.97x
+|indirect_float|10.226|10.216|-0.10%|yes|1.643|6.22x
+|arithmetic|2.414|2.408|-0.25%|yes|0.895|2.69x
+
+Count 4096, seed 810602, `run-i0q7z07s` (300 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|optional_method_call|13.617|12.216|-10.29%|no
+|polymorphic_call|50.554|48.786|-3.50%|no
+|monomorphic_call|5.828|5.779|-0.82%|yes
+|indirect_wide|7.164|7.273|+1.52%|yes
+|indirect_float|9.071|9.064|-0.08%|yes
+|arithmetic|1.345|1.344|-0.07%|yes
+
+Repeat count 1024, seed 810603, `run-pz1zr0nc` (300 windows):
+
+|!Kernel|!Before ns/element|!After ns/element|!Change|!Fork ranges overlap
+|optional_method_call|14.776|13.479|-8.78%|no
+|polymorphic_call|52.004|50.541|-2.81%|no
+|monomorphic_call|7.189|7.138|-0.71%|yes
+|indirect_wide|8.273|8.379|+1.27%|yes
+|indirect_float|10.236|10.258|+0.21%|yes
+|arithmetic|2.394|2.388|-0.27%|yes
+
+Nullable methods improve **7.77%, 10.29% and 8.78%**; polymorphic calls improve
+**3.43%, 3.50% and 2.81%**. All six target comparisons have non-overlapping fork
+ranges. Retain this small runtime-only change on that repeated evidence.
+All other comparisons overlap: do not claim improvement, regression or exact
+neutrality. In particular, wide-callback medians move adversely by 0.73%, 1.52%
+and 1.27%; these overlapping controls are retained, not discarded.
+
+Startup before/after medians are 30.700/29.951 ms, 30.026/29.815 ms and
+30.843/32.605 ms; all ranges overlap. Java startup is 23.867 ms. No startup
+improvement is claimed. AOT compilation observations are 361.365, 360.058 and
+361.242 ms; each artifact is reused for the baseline rather than recompiled.
+These single observations and uncontrolled filesystem caches do not establish
+compilation performance.
+
+### Correctness, code size and remaining work
+
+Release/debug each pass 33 files: 67 cases/4,038 assertions in 25 QUnit files and
+eight standalones. The native driver retains 120 assertions across O0/O3,
+independent method/callback compilation controls and eager/deferred runtime
+context. New native probes warm real required/nullable method caches, require
+actual positive admission for strong/opaque objects, and reject weak wrappers,
+NOTHING, NULL, bool, integer, float, short/long string, boxed integer/float,
+list, hash and enum values. They verify unchanged result/sink/caller context
+on misses and successful reuse afterward, on main and re-registered foreign threads.
+The final fixture passes on both baseline builds before the runtime edit.
+
+An initial host-level probe correctly missed because the compiled cache's source
+parse policy differs from the host policy. The final test enters through a
+compiled caller and builtin callback using the real policy; it does not overwrite
+keys, policy or TLS to force admission. An exported Program lookup accesses the
+documented internal reflection view. No production test bypass was introduced.
+
+Six benchmark modes pass 330 independent references each; baseline/candidate AOT
+share one checked executable. Eleven harness tests pass. Broader ownership,
+weak/generic/foreign-Program/access, source-stripped EH, debugger/readers, module
+context and stack regressions remain covered. Audit-changes: 18 Pass, 44 N/A,
+zero failures. Other architectures and non-SCU performance remain unmeasured.
+
+Runtime `__text` grows 60 bytes (13,974,324 to 13,974,384); total segment size
+is unchanged. The helper grows 743 to 757 AArch64 instructions (2,972 to 3,028
+bytes), while stack reservation stays 352 bytes. Its two generic type/accessor
+calls disappear. These static counts are not dynamic work counts.
+
+A separate five-second/1 ms nullable profile has 3,786 main-thread samples,
+excluding the idle signal thread. Self counts: dispatch helper 2,388, generated
+caller 700, frame unpublish 222, entry checkStack 155 and native-v3 body 106.
+General getType has only ten samples elsewhere, none under the hot continuation.
+Inlined admission/context/frame work remains in the helper; it must not all be
+attributed to TLS or method lookup.
+
+Nullable remains **8.20x Java JIT**, polymorphic **19.94x**, mandatory-class
+monomorphic **4.25x**, wide callback **4.97x** and float callback **6.22x** in
+the primary run. This is targeted progress, not Java parity or general IR speedup.
+Next investigate compile-proven stable nullable receiver/callsite preparation
+within an invocation. Any hoisting must retain weak/opaque/NOTHING semantics,
+local mutation, dispatch epoch, access, Program/debugger, ownership, diagnostic
+publication and live stack protection, with a fresh committed baseline and
+before/after measurements.

@@ -17969,10 +17969,18 @@ extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v1(QoreAOTContext* caller_
     // miss can still publish a fully checked native entry. Admission below
     // belongs to that resolved entry and full dispatch key, not target.method.
     if (!cache || (!target.method && !target.method_name)
-            || target.is_pseudo || base.getType() != NT_OBJECT) {
+            || target.is_pseudo || !base.isPointer()) {
         return 0;
     }
-    QoreObject* object = base.get<QoreObject>();
+    // This ABI only admits a borrowed strong object, including opaque strong
+    // references. Inspect its node type directly instead of generic scalar/enum
+    // type dispatch. Weak wrappers and other representations keep the ordinary
+    // miss path; neither extraction nor rejection changes receiver ownership.
+    AbstractQoreNode* node = base.getPtr();
+    if (!node || node->getType() != NT_OBJECT) {
+        return 0;
+    }
+    QoreObject* object = static_cast<QoreObject*>(node);
     if (!object->isValid()) {
         return 0;
     }

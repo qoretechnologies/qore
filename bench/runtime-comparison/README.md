@@ -226,6 +226,15 @@ the v3 binder absent from old runtimes; do not use `--reuse-aot-for-baseline`.
 For the internal-header `NativeLeafContext.qtest` fixture, provide dependency
 include directories through the compiler's `CPATH` if needed (for example,
 `CPATH=/opt/local/include` with a MacPorts dependency installation).
+The fixture also probes actual warmed native method caches from a compiled
+caller's parse-policy context: strong and opaque objects must be admitted, while
+weak wrappers, scalars, boxed values, strings, containers and enums must reject
+without changing the result, exception sink or caller context. Receiver admission
+uses a local pointer/node-type check; the general QoreValue type API and all
+subsequent method guards are unchanged.
+The [receiver-admission measurements](RESULTS.md#local-strong-object-method-admission-2026-10-08)
+record repeated nullable/polymorphic gains against a merged method-v3 baseline,
+using identical AOT artifacts for this runtime-only change.
 The [measured follow-up](RESULTS.md#deferred-private-context-for-native-methods-2026-10-08)
 records repeated nullable/polymorphic gains, same-runtime eager controls,
 callback variability, stack/code growth and the remaining Java gap.

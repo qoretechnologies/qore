@@ -170,6 +170,97 @@ static QoreValue paddedSweep(const void* ptr, const QoreListNode*, RuntimeConfig
     return QoreValue(result);
 }
 
+// Exercise the receiver gate itself after the ordinary caller has populated its
+// real PIC. Successful strong/opaque calls must actually use the continuation;
+// rejected representations must leave result, exception and context untouched.
+static void checkMethodReceivers(QoreProgram* program, const char* caller_name) {
+    ExceptionSink xsink;
+    ValueHolder object(program->callFunction("makeMethodProbe", nullptr, &xsink), &xsink);
+    assert(!xsink && object->getType() == NT_OBJECT);
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+    args->push(object->refSelf(), &xsink);
+    assert(!xsink);
+    args->push(QoreValue(int64_t{7}), &xsink);
+    assert(!xsink);
+    for (unsigned i = 0; i < 16; ++i) {
+        ValueHolder result(program->callFunction(caller_name, *args, &xsink), &xsink);
+        assert(!xsink && result->getAsBigInt() == 24);
+    }
+    // QoreExternalFunction is the public view of QoreFunction (QoreReflection.cpp).
+    // Use the exported lookup; internal namespace lookups are not exported.
+    const auto* function = reinterpret_cast<const QoreFunction*>(program->findFunction(caller_name));
+    assert(function);
+    const UserVariantBase* uvb = function->first()->getUserVariantBase();
+    assert(uvb && uvb->hasCachedAOT());
+    QoreAOTContext* ctx = uvb->getCachedAOTContext();
+    assert(ctx);
+    int slot = -1;
+    for (int i = 0; i < ctx->num_exprs; ++i) {
+        if (ctx->call_targets[i].method_dispatch_cache.load(std::memory_order_acquire)) {
+            assert(slot == -1);
+            slot = i;
+        }
+        if (!(i % 100)) {
+            assert(!qore_check_cancel(&xsink, "native method receiver slots"));
+        }
+    }
+    assert(slot >= 0);
+    RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    QoreProgram* caller = qore_get_call_program_context();
+    QoreObject* old_object = rc->getObject();
+    const qore_class_private* old_class = rc->getClass();
+    auto check = [&](QoreValue receiver, bool accepted) {
+        int64_t result = -123;
+        assert(qore_rt_try_method_int_unary_v1(ctx, slot, receiver.rawBits(), 7, &result, &xsink, rc)
+            == static_cast<int>(accepted));
+        assert(!xsink && result == (accepted ? 24 : -123));
+        assert(qore_get_call_program_context() == caller);
+        assert(rc->getObject() == old_object && rc->getClass() == old_class);
+    };
+    check(*object, true);
+    ValueHolder opaque(QoreValue::makeOpaqueObject(object->get<QoreObject>()), &xsink);
+    assert(opaque->isOpaqueObject() && opaque->isPointer());
+    check(*opaque, true);
+    uint64_t weak_bits = qore_rt_make_weak_value(object->rawBits(), &xsink);
+    assert(!xsink);
+    QoreValue weak_value;
+    std::memcpy(&weak_value, &weak_bits, sizeof(weak_value));
+    ValueHolder weak(weak_value, &xsink);
+    assert(weak->isPointer() && weak->getType() != NT_OBJECT);
+    check(*weak, false);
+    check(QoreValue(), false);
+    check(QoreValue::makeNull(), false);
+    check(QoreValue(true), false);
+    check(QoreValue(int64_t{7}), false);
+    check(QoreValue(1.25), false);
+    check(QoreValue::makeShortString("short", 5), false);
+    ValueHolder boxed_int(QoreValue(INT64_MAX), &xsink);
+    assert(boxed_int->isPointer());
+    check(*boxed_int, false);
+    ValueHolder boxed_float(QoreValue(-3.0e307), &xsink);
+    assert(boxed_float->isPointer());
+    check(*boxed_float, false);
+    ValueHolder long_string(new QoreStringNode("not a method receiver"), &xsink);
+    check(*long_string, false);
+    ValueHolder list(new QoreListNode(autoTypeInfo), &xsink);
+    check(*list, false);
+    ValueHolder hash(new QoreHashNode(autoTypeInfo), &xsink);
+    check(*hash, false);
+    ValueHolder enumeration(program->callFunction("makeEnumProbe", nullptr, &xsink), &xsink);
+    assert(!xsink && enumeration->isEnum());
+    check(*enumeration, false);
+    check(*object, true);
+}
+
+// Enter through a normal compiled function so probes inherit the same real
+// source parse policy as the warmed callers; the external host's policy differs.
+static QoreValue methodReceiverProbes(const void* ptr, const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
+    const auto& invocation = *static_cast<const LeafInvocation*>(ptr);
+    checkMethodReceivers(invocation.program, "methodProbe");
+    checkMethodReceivers(invocation.program, "optionalMethodProbe");
+    return QoreValue(int64_t{24});
+}
+
 // Exercise a warmed native method PIC through its real compiled caller, including
 // early rejection, published method overflow, and successful reuse afterward.
 static void checkMethod(QoreProgram* program, const char* caller_name, bool inline_method,
@@ -378,6 +469,8 @@ static void check(bool inline_entry, bool inline_method) {
             QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 0);
         program->getRootNS()->addBuiltinVariant(&invocation, "runMethodSweep", paddedMethodSweep,
             QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 0);
+        program->getRootNS()->addBuiltinVariant(&invocation, "runReceiverProbes", methodReceiverProbes,
+            QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 0);
     }
     qore_aot_script_begin_batch(*program);
     init_NATIVE_LEAF_CONTEXT_qo(*program);
@@ -469,7 +562,7 @@ static void check(bool inline_entry, bool inline_method) {
     program->setExecMode(QEM_AST, true);
     // Vary both live locals and captures over a complete marker block, verifying
     // that caller values and both variable stacks survive materialized failures.
-    std::string source = "%modern\n";
+    std::string source = "%modern\ncode<int()> sub makeReceiverProbe() { return \\runReceiverProbes(); }\n";
     for (unsigned padding = 0; padding <= 70; ++padding) {
         source += "int sub padded" + std::to_string(padding) + "(int seed) {\n";
         for (unsigned local = 0; local < padding; ++local) {
@@ -506,6 +599,15 @@ static void check(bool inline_entry, bool inline_method) {
         assert(false && "padded caller source must parse");
     }
     assert(!xsink);
+    {
+        ReferenceHolder<QoreListNode> probe_args(new QoreListNode(autoTypeInfo), &xsink);
+        ValueHolder probe(program->callFunction("makeReceiverProbe", nullptr, &xsink), &xsink);
+        assert(!xsink);
+        probe_args->push(probe.release(), &xsink);
+        assert(!xsink);
+        ValueHolder result(program->callFunction("methodReceiverProbe", *probe_args, &xsink), &xsink);
+        assert(!xsink && result->getAsBigInt() == 24);
+    }
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
     args->push(QoreValue(int64_t(7)), &xsink);
     assert(!xsink);
