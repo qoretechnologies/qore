@@ -925,6 +925,87 @@ void ut_rescan_release_other(ClosureVarValue* cvv, ExceptionSink* xsink) {
 }
 }
 
+namespace {
+//! signaled by ut_deref_wait_hook() when the test's dereference starts waiting
+struct UtDerefWait {
+    std::mutex m;
+    std::condition_variable cond;
+    bool waiting = false;
+};
+UtDerefWait ut_deref_wait;
+
+void ut_deref_wait_hook(const char* name) {
+    std::lock_guard<std::mutex> l(ut_deref_wait.m);
+    ut_deref_wait.waiting = true;
+    ut_deref_wait.cond.notify_all();
+}
+}
+
+//! Tests that a dereference that re-entered an object on its own thread is woken when another thread's completes
+/** RObject::derefDone() makes a deleting dereference wait until only the dereferences of its own thread remain in
+    progress; one that re-entered the object on its own thread waits for the count to fall to the number of its own,
+    not to zero.  The other threads woke waiters only when the count reached zero, so such a waiter was never woken:
+    in examples/test/qore/misc/dgc-handed-out-values/dgc-handed-out-values.qtest, a thread releasing a value taken
+    from a Queue re-entered it through the orphan recheck of a recursive set and waited for ever, and another thread
+    then waited for ever for the first one's dereference of another object.  Here the outer dereference is a
+    registered one of this thread, the inner one waits, and another thread completes its dereference.  If the waiter
+    is not woken within a few seconds, the other thread wakes it with a broadcast of its own and the test fails.
+*/
+static void ut_deref_wait_reentrant_wakeup(UnitTestCounters& c) {
+    static const char* name = "ut_deref_wait_reentrant_wakeup";
+    QoreValue nval;
+    ClosureVarValue* cvv = thread_instantiate_closure_var(name, autoTypeInfo, nval, false);
+    {
+        // the outer dereference of this thread, still in progress
+        robject_dereference_helper outer(cvv, false, true);
+        // another thread's dereference in progress
+        {
+            AutoLocker al(cvv->rlck);
+            ++cvv->ref_inprogress;
+        }
+        // the inner dereference of this thread, which re-entered the object
+        {
+            AutoLocker al(cvv->rlck);
+            ++cvv->ref_inprogress;
+        }
+        {
+            std::lock_guard<std::mutex> l(ut_deref_wait.m);
+            ut_deref_wait.waiting = false;
+        }
+        qore_dbg_deref_wait_hook.store(ut_deref_wait_hook);
+
+        std::atomic<bool> woken{false};
+        bool rescued = false;
+        std::thread other([cvv, &woken, &rescued]() {
+            {
+                std::unique_lock<std::mutex> l(ut_deref_wait.m);
+                ut_deref_wait.cond.wait(l, []() { return ut_deref_wait.waiting; });
+            }
+            // the other thread's dereference completes
+            cvv->derefDone(false);
+            // the waiter must now be woken; it is woken here if it was not, so that the test fails instead of hanging
+            for (int i = 0; i < 500 && !woken.load(); ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            if (!woken.load()) {
+                rescued = true;
+                AutoLocker al(cvv->rlck);
+                cvv->rcond.broadcast();
+            }
+        });
+        // the inner dereference hands its deletion off and waits for the other thread's
+        cvv->derefDone(false, true);
+        woken.store(true);
+        other.join();
+        qore_dbg_deref_wait_hook.store(nullptr);
+        UT_ASSERT(c, !rescued, "a re-entrant waiter is woken when another thread's dereference completes");
+    }
+    UT_ASSERT_EQ(c, 0, cvv->ref_inprogress, "no dereference remains in progress");
+    ExceptionSink xsink;
+    thread_uninstantiate_closure_var(&xsink);
+    UT_ASSERT(c, !xsink, "releasing the variable raises no exception");
+}
+
 //! Tests that the frame's dereference of a closure-bound variable keeps it allocated while it is still using it
 /** The frame's release of its real reference makes a scan deferred while it held the variable.  If the variable's
     other holder - a closure that captured it and ran on a handler thread - releases the last reference meanwhile,
@@ -5160,6 +5241,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_asyncio_stop_clear(c);
 #ifdef DEBUG
     ut_closure_var_deref_rescan_reentry(c);
+    ut_deref_wait_reentrant_wakeup(c);
     ut_asyncio_exec_rejects_io_thread(c);
     ut_asyncio_wait_for_processing_rejects_io_thread(c);
 #endif

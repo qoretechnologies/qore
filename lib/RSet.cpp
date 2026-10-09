@@ -811,12 +811,17 @@ std::atomic<qore_dbg_deref_wait_hook_t> qore_dbg_deref_wait_hook{nullptr};
 
 void RObject::derefDone(bool del, bool wait_only) {
     AutoLocker al(rlck);
-    // decrement the in progress count, if it's the last thread, and there are waiting threads, then wake one up
-    if ((!--ref_inprogress) && ref_waiting) {
+    --ref_inprogress;
+    // a waiting thread waits until only its own dereferences remain in progress, which are more than none when its
+    // dereference re-entered the object on its own thread (see t_deref_inprogress), so any completed dereference can
+    // be the one it waits for: every waiting thread is woken to check.  Waking them only when the count reached zero
+    // left a re-entrant waiter waiting for ever once the last dereference of another thread completed
+    if (ref_waiting) {
         // we have to use broadcast here because the condition variable is shared
         rcond.broadcast();
-        assert(!del);
-    } else if (del || wait_only) {
+        assert(ref_inprogress || !del);
+    }
+    if (del || wait_only) {
         // either we will delete the object ourselves, or we handed off deletion but still need
         // other in-progress derefs to complete before our caller performs its weak-ref release
         // (otherwise that release can trigger deleteObject() while another thread is mid-deref)
