@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -43,6 +43,7 @@
 
 #include "qore/intern/LocalVar.h"
 #include <typeinfo>
+#include "qore/intern/QoreDeferredRelease.h"
 
 // all definitions in this file are private to the library and subject to change
 class BCAList;
@@ -264,8 +265,9 @@ public:
         else
             start = statement_list.begin();
 
-        for (statement_list_t::iterator i = start, e = statement_list.end(); i != e; ++i)
-            delete *i;
+        for (statement_list_t::iterator i = start, e = statement_list.end(); i != e; ++i) {
+            qore_delete_statement(*i);
+        }
 
         statement_list.erase_to_end(hwm);
     }

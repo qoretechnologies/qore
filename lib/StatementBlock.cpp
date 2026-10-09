@@ -55,6 +55,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include "qore/intern/QoreDeferredRelease.h"
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -210,8 +211,9 @@ void StatementBlock::addStatement(AbstractStatement* s) {
 
 void StatementBlock::del() {
     //QORE_TRACE("StatementBlock::del()");
-    for (statement_list_t::iterator i = statement_list.begin(), e = statement_list.end(); i != e; ++i)
-        delete *i;
+    for (statement_list_t::iterator i = statement_list.begin(), e = statement_list.end(); i != e; ++i) {
+        qore_delete_statement(*i);
+    }
 
     statement_list.clear();
 

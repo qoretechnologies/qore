@@ -36,10 +36,11 @@
 #include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreDeferredRelease.h"
 
 CaseNode::~CaseNode() {
     val.discard(nullptr);
-    delete code;
+    qore_delete_statement(code);
 }
 
 bool CaseNode::isCaseNodeImpl() const {

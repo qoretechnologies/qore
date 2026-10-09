@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DeepReleaseTest
+
+#! a link of a chain of objects
+class Link {
+    public {
+        *Link next;
+    }
+}
+
+#! Tests that deeply nested data and code are freed on a thread with a small stack
+/** Releasing the last reference to a container, an object or a parse node releases what it holds, so freeing a
+    structure nested more deeply than the thread's stack allows recursed once per level and overflowed the stack.
+    Releases nested beyond a fixed depth are now deferred and made iteratively by the outermost release.
+*/
+class DeepReleaseTest inherits QUnit::Test {
+    public {
+        #! the stack size of a test thread
+        const StackSize = 128 * 1024;
+        #! the nesting of the data structures
+        const DataDepth = 100000;
+        #! the length of the chain of objects; each link added walks the chain to look for cycles, so it is shorter
+        const ChainLength = 5000;
+        #! the nesting of each kind of code, close to the parser's limit of 1000 nested syntax elements
+        const CodeDepth = {"list": 320, "call": 480, "block": 480};
+    }
+
+    constructor() : QUnit::Test("deep release", "1.0") {
+        addTestCase("a list of lists", \listTest());
+        addTestCase("nested hashes", \hashTest());
+        addTestCase("a chain of objects", \objectTest());
+        addTestCase("deeply nested code", \codeTest());
+        set_return_value(main());
+    }
+
+    listTest() {
+        inThread(sub () {
+            list<auto> l = ();
+            for (int i = 0; i < DataDepth; ++i) {
+                l = (l,);
+            }
+            assertEq(1, l.size());
+            remove l;
+        });
+    }
+
+    hashTest() {
+        inThread(sub () {
+            hash<auto> h = {};
+            for (int i = 0; i < DataDepth; ++i) {
+                h = {"h": h};
+            }
+            assertEq(1, h.size());
+            remove h;
+        });
+    }
+
+    objectTest() {
+        inThread(sub () {
+            Link head();
+            for (int i = 0; i < ChainLength; ++i) {
+                Link l();
+                l.next = head;
+                head = l;
+            }
+            assertEq("Link", head.className());
+            remove head;
+        });
+    }
+
+    #! code nested to the parser's limit is parsed on this thread and freed with its Program on a thread with a small stack
+    codeTest() {
+        *list<Program> programs = ();
+        foreach hash<auto> i in (CodeDepth.pairIterator()) {
+            string kind = i.key;
+            int depth = i.value;
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+            string body;
+            switch (kind) {
+                case "list": body = "return " + strmul("(", depth) + "1," + strmul("),", depth) + ";";
+                    break;
+                case "call": body = "return " + strmul("id(", depth) + "1" + strmul(")", depth) + ";";
+                    break;
+                case "block": body = strmul("{ ", depth) + "return 1;" + strmul(" }", depth); break;
+            }
+            p.parse("auto sub id(auto x) { return x; }\nauto sub run() { " + body + " }\n", kind);
+            assertEq(kind == "list" ? NT_LIST : NT_INT, p.callFunction("run").typeCode(), kind);
+            programs += p;
+        }
+        inThread(sub () {
+            # the Programs and their code are freed here, on the thread's stack
+            remove programs;
+        });
+        assertEq(NOTHING, programs);
+    }
+
+    #! runs the code in a thread with a small stack and rethrows any exception it raises
+    private inThread(code test) {
+        if (!HAVE_MANAGE_STACK) {
+            testSkip("stack management is not available");
+        }
+        int default_size = get_default_thread_stack_size();
+        set_default_thread_stack_size(StackSize);
+        on_exit set_default_thread_stack_size(default_size);
+
+        Counter c(1);
+        *hash<ExceptionInfo> ex;
+        background sub () {
+            on_exit c.dec();
+            try {
+                test();
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+        }();
+        c.waitForZero();
+        if (ex) {
+            throw ex.err, ex.desc, ex.arg;
+        }
+    }
+}

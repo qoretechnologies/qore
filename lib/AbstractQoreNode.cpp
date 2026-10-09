@@ -34,11 +34,14 @@
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/AbstractStatement.h"
+#include "qore/intern/QoreDeferredRelease.h"
 
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 
 #define TRACK_REFS 0
 
@@ -222,7 +225,11 @@ void AbstractQoreNode::deref(ExceptionSink* xsink) {
     // the type is read before the reference is released, after which another thread can free the node
     qore_type_t t = type;
     if (ROdereference()) {
-        if (t < NUM_SIMPLE_TYPES || derefImpl(xsink)) {
+        // code nests with the source and can be released without bound (see qore_release_node()); a runtime value is
+        // released as it always was, so that the objects it holds are destroyed in the same order
+        if (qore_is_code_node_type(t)) {
+            qore_release_node(this, xsink);
+        } else if (t < NUM_SIMPLE_TYPES || derefImpl(xsink)) {
             delete this;
         }
     } else if (qore_dgc_node_watch_count.load(std::memory_order_relaxed) && qore_dgc_watchable_type(t)) {
@@ -700,8 +707,131 @@ void SimpleQoreNode::deref() {
         return;
     }
 
-    if (ROdereference())
-        delete this;
+    if (ROdereference()) {
+        // a parse node is a simple node that holds nested code (see qore_release_simple_node())
+        if (qore_is_code_node_type(type)) {
+            qore_release_simple_node(this);
+        } else {
+            delete this;
+        }
+    }
+}
+
+namespace {
+//! A release deferred to the outermost release of the thread; see QORE_RELEASE_RECURSION_DEPTH
+struct DeferredRelease {
+    enum class Kind : unsigned char {
+        //! a node: derefImpl() is called and the node deleted if it returns true
+        Node,
+        //! a node with no derefImpl() to call: it is deleted
+        SimpleNode,
+        //! a statement: it is deleted
+        Statement,
+    };
+
+    void* ptr;
+    Kind kind;
+};
+
+//! The nested releases of a thread
+struct ReleaseState {
+    //! the number of releases in progress on the thread's stack
+    unsigned depth = 0;
+    //! the releases nested too deeply to make on the stack, made by the outermost release
+    std::vector<DeferredRelease> deferred;
+};
+
+thread_local ReleaseState t_release;
+}
+
+//! Makes releases; a friend of AbstractQoreNode, whose destructor is protected
+class QoreNodeReleaser {
+public:
+    //! Makes a release, which can release nested values and statements in turn
+    DLLLOCAL static void releaseNow(const DeferredRelease& r, ExceptionSink* xsink) {
+        switch (r.kind) {
+            case DeferredRelease::Kind::Node: {
+                AbstractQoreNode* n = static_cast<AbstractQoreNode*>(r.ptr);
+                if (n->derefImpl(xsink)) {
+                    delete n;
+                }
+                break;
+            }
+            case DeferredRelease::Kind::SimpleNode:
+                delete static_cast<AbstractQoreNode*>(r.ptr);
+                break;
+            case DeferredRelease::Kind::Statement:
+                delete static_cast<AbstractStatement*>(r.ptr);
+                break;
+        }
+    }
+};
+
+namespace {
+//! Counts a release in progress on the thread's stack for as long as it exists
+class ReleaseDepthHelper {
+public:
+    DLLLOCAL ReleaseDepthHelper(ReleaseState& state) : state(state) {
+        ++state.depth;
+    }
+
+    DLLLOCAL ~ReleaseDepthHelper() {
+        assert(state.depth);
+        --state.depth;
+    }
+
+    ReleaseDepthHelper(const ReleaseDepthHelper&) = delete;
+    ReleaseDepthHelper& operator=(const ReleaseDepthHelper&) = delete;
+
+private:
+    ReleaseState& state;
+};
+
+//! Makes a release now, or defers it if the thread's stack already holds too many nested releases
+/** The outermost release of the thread makes the deferred releases one at a time, each from a shallow stack, before
+    it returns, so everything a release frees is freed when it returns, as without deferral; only the order changes,
+    and only for what is nested more than QORE_RELEASE_RECURSION_DEPTH levels deep.
+*/
+void release(const DeferredRelease& r, ExceptionSink* xsink) {
+    ReleaseState& state = t_release;
+    if (state.depth >= QORE_RELEASE_RECURSION_DEPTH) {
+        state.deferred.push_back(r);
+        return;
+    }
+    {
+        ReleaseDepthHelper rdh(state);
+        QoreNodeReleaser::releaseNow(r, xsink);
+    }
+    if (state.depth || state.deferred.empty()) {
+        return;
+    }
+    // the outermost release makes the deferred releases; the depth counts one level, so that what each of them
+    // releases in turn nests on the stack up to the same bound and defers the rest to this loop
+    ReleaseDepthHelper rdh(state);
+    // a deferred release can have been requested with an exception sink by a nested release when the outermost
+    // release has none, as a statement's has not: an exception it raises is then handled as an unhandled exception
+    ExceptionSink local_xsink;
+    ExceptionSink* drain_xsink = xsink ? xsink : &local_xsink;
+    while (!state.deferred.empty()) {
+        DeferredRelease next = state.deferred.back();
+        state.deferred.pop_back();
+        QoreNodeReleaser::releaseNow(next, drain_xsink);
+    }
+}
+}
+
+void qore_release_node(AbstractQoreNode* node, ExceptionSink* xsink) {
+    release(DeferredRelease{node, DeferredRelease::Kind::Node}, xsink);
+}
+
+void qore_release_simple_node(AbstractQoreNode* node) {
+    release(DeferredRelease{node, DeferredRelease::Kind::SimpleNode}, nullptr);
+}
+
+void qore_delete_statement(AbstractStatement* statement) {
+    if (statement) {
+        release(DeferredRelease{statement, DeferredRelease::Kind::Statement}, nullptr);
+    }
 }
 
 QoreValue SimpleValueQoreNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {

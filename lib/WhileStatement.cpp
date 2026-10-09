@@ -32,6 +32,7 @@
 #include "qore/intern/WhileStatement.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreDeferredRelease.h"
 
 WhileStatement::WhileStatement(int start_line, int end_line, QoreValue c, StatementBlock* cd)
         : AbstractStatement(start_line, end_line), cond(c), code(cd) {
@@ -39,7 +40,7 @@ WhileStatement::WhileStatement(int start_line, int end_line, QoreValue c, Statem
 
 WhileStatement::~WhileStatement() {
     cond.discard(nullptr);
-    delete code;
+    qore_delete_statement(code);
     delete lvars;
 }
 

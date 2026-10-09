@@ -4209,6 +4209,10 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a crash freeing deeply nested code, such as the code of a @ref Qore::Program "Program" deleted in a thread
+      with a small stack: each level of nesting was freed recursively, so code nested close to the parser's limit
+      exhausted the stack; code nested more than 16 levels deep is now freed iteratively
+
     - Fixed a process hanging instead of terminating when a thread faulted with \c SIGBUS, \c SIGILL, \c SIGFPE or
       \c SIGTRAP, as on a thread stack overflow on macOS: these signals were blocked in all %Qore threads, so they
       could not be delivered and the thread executed the faulting instruction again for ever
