@@ -266,14 +266,16 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
 
     testLimiterBlock() {
         EmbedderRateLimiter limiter(100, NOTHING, 60000);
-        limiter.block(300);
+        # the block runs from the call to block(), so the time is taken before it; taken after it, the wait measured
+        # is shorter than the block by the time between the two calls
         int t0 = clock_get_monotonic_us();
+        limiter.block(300);
         limiter.settle(limiter.admit(1, clock_get_monotonic_us() + 2000000));
         assertGe(300000, clock_get_monotonic_us() - t0, "a block holds admission for its duration");
         # an earlier block does not shorten a later one
+        t0 = clock_get_monotonic_us();
         limiter.block(300);
         limiter.block(10);
-        t0 = clock_get_monotonic_us();
         limiter.settle(limiter.admit(1, clock_get_monotonic_us() + 2000000));
         assertGe(300000, clock_get_monotonic_us() - t0);
     }
