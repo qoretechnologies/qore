@@ -70,8 +70,12 @@ publishing cancellation from `abort()` can mask a timeout or suppress the later 
 RestClientIo request and SSE startup operations follow this rule, translating the controller's `SOCKET-TIMEOUT`
 to their public `HTTPCLIENT-TIMEOUT` error. Explicit Future cancellation still publishes cancellation immediately.
 
-- **I/O thread** — one per controller instance
-  - Blocks in EventLoop::poll() over all registered sockets plus the EventNotifier.
+- **I/O threads** — one or more per controller instance (see [Thread Scaling](#thread-scaling))
+  - Each I/O thread has its own event loop, EventNotifier, command queue, operation cache and socket
+    registrations; no I/O thread reads or changes another thread's state.
+  - Every operation on one pollable I/O object runs on the same I/O thread, whatever its cache key (see
+    [I/O Thread Routing](#io-thread-routing)), so with several I/O threads each socket behaves as it does with one.
+  - Blocks in EventLoop::poll() over its registered sockets plus its EventNotifier.
   - Wakes on socket readiness or EventNotifier activity.
   - Processes commands and drives pure C++ `continuePoll()` work on operations.
   - Qore poll operations and `onComplete()` callbacks are dispatched to callback workers; Queue results are pushed
@@ -196,13 +200,16 @@ Submits an operation to the controller. The `SocketPollOperationInfo` hashdecl:
 | `resultQueue` | `*Queue`                   | Optional shared result Queue.                           |
 | `callback`    | `*code`                    | Optional completion callback (mutually exclusive with `resultQueue`). |
 | `key`         | `*string`                  | Optional custom cache key (default: `sock.uniqueHash()`). |
+| `thread_key`  | `*string`                  | Optional I/O thread route key (default: the I/O identity of `sock`; see [I/O Thread Routing](#io-thread-routing)). |
 
 When `callback` is provided, results are delivered by the callback dispatcher worker pool.
 When `resultQueue` is provided, results are pushed to that Queue. Otherwise a new Queue is
 created and returned.
 
 The `replace` flag allows replacing an existing operation on the same key (used for connection
-re-polling patterns like HTTP/2 persistent connections).
+re-polling patterns like HTTP/2 persistent connections).  Keys are looked up in the cache of the operation's I/O
+thread, so an operation replaces one with the same key on the same I/O object (or `thread_key`); operations with
+the same key on different sockets can coexist on different I/O threads.
 
 ### exec()
 
@@ -261,6 +268,50 @@ immediately (provided `tid != 0`). This is correct — there is nothing to wait 
 ### cancel() / cancelByKey()
 
 Cancel a single operation by socket unique hash or custom key.
+
+An operation's I/O thread follows its socket, not its key, so with several I/O threads `cancelByKey()` sends the
+Cancel to every live I/O thread and waits on a shared completion until all of them have processed it.  Called
+from an I/O thread, it cancels an operation in the calling thread's own cache directly and only queues the Cancel
+for the other threads (see [I/O threads never wait for each other](#io-threads-never-wait-for-each-other)).
+
+### I/O Thread Routing
+
+The I/O thread of an operation is chosen by its route key: the explicit `thread_key` if one was given, otherwise
+the I/O identity hash of its `sock` (`AbstractPollableIoObjectBase::getIoIdentityHash()`), hashed over the I/O
+threads (`AsyncIoControllerPriv::getThreadIndex()`).  Routing by the socket keeps a socket, its TLS state and its
+HTTP/2 or QUIC session on one thread: a connection's long-lived operation and the short operations that synchronous
+Socket calls run on the controller for the same socket (each with its own cache key) all run on that thread, and
+wakes for the socket reach it.  Routing by the cache key would spread them over threads, so that one thread used
+the socket while another one ran a synchronous call on it, and wakes went to the wrong thread.
+
+- **Socket wrappers**: C++ socket methods run controller-backed calls through lightweight wrappers
+  (`QoreSocketControllerPollable`, `Http2SocketControllerPollable`) whose identity is that of the
+  `qore_socket_private`, not that of the Socket object.  A Socket object stores its own identity in
+  `qore_socket_private::async_io_route_key` when it is created, and the wrappers pass it as `thread_key`, so their
+  operations run on the I/O thread of the socket's other operations.  Closes from a wrapper and the HTTP/2 data
+  wake (`qore_socket_wake_async_controller()`) use the same key.
+- **Explicit `thread_key`**: groups operations on different I/O objects on one thread and processing barrier
+  (`Socket::poll()` readiness operations use their owner).  An operation routed by a `thread_key` can run on
+  another thread than other operations on its socket, so a `thread_key` must not be given to an operation on an I/O
+  object that other operations use at the same time.
+- **Results of worker-dispatched `continuePoll()` calls** carry the index of the I/O thread that dispatched them
+  (`AsyncWorkItem::thread_idx`) and return to that thread; the operation key does not identify it.
+- **Submits from an I/O thread** go straight into the cache only when the calling thread is the operation's own I/O
+  thread of the same controller (`ownIoThreadIndex()`); any other thread, including another I/O thread, sends a
+  SubmitOp command.
+- **Controller timers** are spread over the I/O threads by timer ID; `cancelTimer()` finds the same thread, as the
+  thread count cannot change while an I/O thread runs.
+- **Wakes** (`wakeSocket()`) go to the thread recorded in `sock_to_thread` for the socket hash, or without a
+  record to the thread the hash routes to.
+
+### I/O threads never wait for each other
+
+An I/O thread must never block waiting for another I/O thread: two I/O threads waiting for each other would
+deadlock, and every socket on a waiting thread stalls meanwhile.  When `cancelByKey()`, `cancelByOwner()` or
+`cancel()` / `close()` of a socket (`cancelBySocketHash()`) is called on an I/O thread, the calling thread's own
+operations are canceled directly and the other threads get their commands without a waiter, so the returned count
+only includes the calling thread's operations.  A close from an I/O thread is queued to the socket's thread after
+those commands (`closeSocketOnController()`), so it runs after the cancellation on that thread.
 
 ### Periodic work owned by a Qore object
 

@@ -174,6 +174,11 @@ public:
         AsyncIoControllerPriv* controller;   //!< For DT_CONTINUE_POLL: controller (referenced)
         std::string key;                     //!< For DT_CONTINUE_POLL: operation key
         std::string stream_key;              //!< For DT_STREAM_DATA_NOTIFY: stream key
+        //! For DT_CONTINUE_POLL: index of the I/O thread whose cache holds the operation
+        /** The result must go back to this thread: with several I/O threads an operation's thread is chosen by its
+            socket (or explicit \c thread_key), so it cannot be derived from the operation key.
+        */
+        int thread_idx = -1;
         QoreProgram* pgm = nullptr;          //!< Program reference to prevent premature deletion
         std::string owner;                   //!< Owner identifier for per-owner flush (empty if untracked)
         AsyncIoDeferredRelease* release = nullptr; //!< For DT_RELEASE: owned references to release (or nullptr)
@@ -217,10 +222,12 @@ public:
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
         @param controller the AsyncIoControllerPriv to deliver the result to (referenced)
         @param key the operation key for result correlation
+        @param thread_idx the index of the I/O thread whose cache holds the operation; the result is delivered to
+        this thread
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchContinuePollAsync(QoreObject* spop_obj,
-        AsyncIoControllerPriv* controller, const std::string& key,
+        AsyncIoControllerPriv* controller, const std::string& key, int thread_idx,
         const std::string& owner = std::string());
 
     //! Dispatch onStreamData(stream_key) asynchronously (fire-and-forget)
@@ -517,9 +524,13 @@ public:
     //! Close a socket on the controller thread after canceling controller work for it
     /** @param sock the socket to close
         @param xsink for exception handling
+        @param route_key the route key of the socket's operations if different from its I/O identity hash (see
+        qore_socket_private::async_io_route_key); selects the I/O thread that closes the socket when no operation on
+        it is registered
         @return 0 on success, -1 on error
     */
-    DLLLOCAL int close(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink);
+    DLLLOCAL int close(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink,
+        const std::string& route_key = std::string());
 
     //! Cancel an operation by key
     /** @param key the operation key
@@ -527,6 +538,11 @@ public:
         @return true if an operation was found and canceled
     */
     DLLLOCAL bool cancelByKey(const QoreStringNode* key, ExceptionSink* xsink);
+
+    //! Returns the index of the calling thread among this controller's I/O threads, or -1 if it is not one of them
+    /** A thread that is an I/O thread of another controller also gets -1.
+    */
+    DLLLOCAL int ownIoThreadIndex() const;
 
     //! Cancel all operations for an owner
     /** @param owner the owner identifier
@@ -602,7 +618,15 @@ public:
         @return true if all submitted operations have been processed
     */
     DLLLOCAL bool waitForProcessing(int timeout_ms, ExceptionSink* xsink);
-    DLLLOCAL bool waitForProcessing(const std::string& key, int timeout_ms, ExceptionSink* xsink);
+
+    //! Wait until the I/O thread for a route key has processed all operations submitted to it
+    /** @param route_key the route key the operations were submitted with: the explicit \c thread_key or, without
+        one, the socket's I/O identity hash (see @ref getThreadIndex())
+        @param timeout_ms timeout in ms; 0 = wait forever
+        @param xsink for exception handling
+        @return true if all submitted operations have been processed
+    */
+    DLLLOCAL bool waitForProcessing(const std::string& route_key, int timeout_ms, ExceptionSink* xsink);
 
     //! Returns true if the I/O thread is running
     DLLLOCAL bool running() const;
@@ -1157,17 +1181,33 @@ private:
         std::unordered_map<std::string, std::string> pending_abort_cancel_hash;
     };
 
-    //! Get the I/O thread index for a given operation key (hash-based affinity)
-    DLLLOCAL int getThreadIndex(const std::string& key) const {
+    //! Get the I/O thread index for a route key (hash-based affinity)
+    /** The route key of an operation is its socket's I/O identity hash (see @ref getSocketHash()) unless the
+        submitter gave an explicit \c thread_key, so every operation on one socket runs on the same I/O thread, as
+        it would with a single I/O thread: the socket, its TLS state and its HTTP/2 or QUIC session are only ever
+        used by that thread.  Sockets are spread over the threads by this hash.
+
+        @param route_key the route key: a socket's I/O identity hash or an explicit \c thread_key
+    */
+    DLLLOCAL int getThreadIndex(const std::string& route_key) const {
         if (io_threads.size() <= 1) {
             return 0;
         }
-        return std::hash<std::string>{}(key) % io_threads.size();
+        return std::hash<std::string>{}(route_key) % io_threads.size();
     }
 
-    //! Get the I/O thread context for a given operation key
-    DLLLOCAL IoThreadContext& getThreadForKey(const std::string& key) {
-        return *io_threads[getThreadIndex(key)];
+    //! Get the I/O thread context for a route key
+    /** @param route_key the route key: a socket's I/O identity hash or an explicit \c thread_key
+    */
+    DLLLOCAL IoThreadContext& getThreadForKey(const std::string& route_key) {
+        return *io_threads[getThreadIndex(route_key)];
+    }
+
+    //! Get the I/O thread context of a controller timer; timers are spread over the I/O threads by ID
+    /** Caller must hold m.
+    */
+    DLLLOCAL IoThreadContext& getThreadForTimer(int64_t timer_id) {
+        return *io_threads[static_cast<uint64_t>(timer_id) % io_threads.size()];
     }
 
     // --- I/O thread contexts ---
@@ -1209,6 +1249,22 @@ private:
         QoreCondition cond;
         int refs = 0;  //!< protected by AsyncIoControllerPriv::m
     };
+
+    //! cancelByKey() on one of this controller's I/O threads; never waits for another I/O thread
+    /** @param uh the operation key
+        @param own_idx the index of the calling I/O thread
+        @param xsink for exception handling
+        @return true if the operation was found on the calling thread, or a Cancel was queued for another I/O thread
+        (or, during a continuePoll() batch, for the calling thread)
+    */
+    DLLLOCAL bool cancelByKeyOnIoThread(const std::string& uh, int own_idx, ExceptionSink* xsink);
+
+    //! cancelByKey() from a non-I/O thread with several I/O threads: searches every live I/O thread and waits
+    /** @param uh the operation key
+        @param xsink for exception handling
+        @return true if an operation was found and canceled
+    */
+    DLLLOCAL bool cancelByKeyOnAllThreads(const std::string& uh, ExceptionSink* xsink);
 
     //! Remove cancel_cond_map[key] (if present), broadcast its cond, and drop
     //! the map's ref.  Caller must hold m.
@@ -1310,8 +1366,14 @@ private:
     DLLLOCAL int cancelBySocketHash(const std::string& sock_hash, ExceptionSink* xsink);
 
     //! Submit a controller-side close command after socket operations are canceled
+    /** @param sock the socket to close
+        @param sock_hash the socket's I/O identity hash
+        @param xsink for exception handling
+        @param route_key the route key of the socket's operations if different from \a sock_hash; selects the I/O
+        thread that closes the socket when no operation on it is registered
+    */
     DLLLOCAL int closeSocketOnController(AbstractPollableIoObjectBase* sock,
-        const std::string& sock_hash, ExceptionSink* xsink);
+        const std::string& sock_hash, ExceptionSink* xsink, const std::string& route_key = std::string());
 
     //! Wake late submissions after descriptor close removes kernel readiness registration
     /** Called without m held, after closeIo(). The current I/O context is updated
@@ -1453,7 +1515,13 @@ private:
 
     //! Call continuePoll on an AbstractPollOperation object
     //! Enqueue a continuePoll result from a worker thread back to the I/O thread
-    DLLLOCAL void enqueueContinuePollResult(const std::string& key, QoreHashNode* new_poll_info,
+    /** @param key the operation key
+        @param thread_idx the index of the I/O thread that dispatched the continuePoll() and holds the operation
+        @param new_poll_info the new poll info (referenced, ownership transferred) or nullptr
+        @param ex_hash the exception hash (referenced, ownership transferred) or nullptr
+        @param completed true if the operation completed
+    */
+    DLLLOCAL void enqueueContinuePollResult(const std::string& key, int thread_idx, QoreHashNode* new_poll_info,
         QoreHashNode* ex_hash, bool completed);
 
     //! Dispatch a stream-data-ready notification from a worker thread

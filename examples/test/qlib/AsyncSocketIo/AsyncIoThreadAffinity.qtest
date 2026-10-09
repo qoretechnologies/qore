@@ -1,0 +1,250 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class AsyncIoThreadAffinityTest
+
+#! Waits for an EventNotifier; completes on the first continuePoll() after the notifier was signaled
+/** A Qore-language poll operation: every continuePoll() runs on a callback worker and its result is delivered
+    back to the I/O thread that holds the operation.
+*/
+class NotifierWaitPollOperation inherits Qore::AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        bool waiting = False;
+        bool done = False;
+        bool canceled = False;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "notifier-wait";
+    }
+
+    string getState() {
+        return canceled ? "canceled" : (done ? "done" : (waiting ? "waiting" : "pending"));
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (canceled || done) {
+            return NOTHING;
+        }
+        if (waiting) {
+            # the controller only polls again when the notifier is readable; the event is not acknowledged, so
+            # every operation waiting on the notifier sees it
+            done = True;
+            return NOTHING;
+        }
+        waiting = True;
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+    }
+
+    abort() {
+        canceled = True;
+    }
+}
+
+class AsyncIoThreadAffinityTest inherits QUnit::Test {
+    public {
+        const IoThreads = 4;
+        const OpsPerObject = 8;
+    }
+
+    constructor() : Test("AsyncIoThreadAffinityTest", "1.0", ARGV) {
+        # the thread count can only be changed while the controller is stopped; a fixed count keeps the routing
+        # assertions independent of the number of CPUs
+        AsyncIoController::setMaxIoThreads(IoThreads);
+
+        addTestCase("controller reports its I/O threads", \reportsIoThreadsTest());
+        addTestCase("operations on one socket share its I/O thread", \oneSocketOneThreadTest());
+        addTestCase("sockets are spread over the I/O threads", \spreadOverThreadsTest());
+        addTestCase("cancelByKey finds operations routed by thread_key", \cancelByKeyThreadKeyTest());
+        addTestCase("worker continuePoll results return to the operation's thread", \workerResultRoutingTest());
+        addTestCase("timers fire on every I/O thread", \timersTest());
+        addTestCase("cancelByOwner cancels operations on every thread", \cancelByOwnerAllThreadsTest());
+        set_return_value(main());
+    }
+
+    reportsIoThreadsTest() {
+        assertEq(IoThreads, AsyncIoController::getInfo().io_threads);
+    }
+
+    #! Submits the given number of notifier waits on one notifier with distinct cache keys
+    private list<Queue> submitWaits(EventNotifier notifier, string owner, int count, *string thread_key,
+            reference<list<string>> op_keys, *string key_prefix) {
+        list<Queue> queues;
+        for (int i = 0; i < count; ++i) {
+            string key = sprintf("%s:%d", key_prefix ?? owner, i);
+            op_keys += key;
+            hash<SocketPollOperationInfo> info = <SocketPollOperationInfo>{
+                "sock": notifier,
+                "spop": new NotifierWaitPollOperation(notifier),
+                "owner": owner,
+                "key": key,
+                "to": -1,
+            };
+            if (thread_key) {
+                info.thread_key = thread_key;
+            }
+            queues += AsyncIoController::submit(info);
+        }
+        return queues;
+    }
+
+    #! Returns the index of the I/O thread holding each of the given op_keys
+    private hash<string, int> getKeyThreads(list<string> op_keys) {
+        hash<string, bool> wanted = map {$1: True}, op_keys;
+        hash<string, int> rv = {};
+        # the operations are installed asynchronously; waitForProcessing() is the barrier
+        assertTrue(AsyncIoController::waitForProcessing(5s));
+        foreach hash<auto> thread in (AsyncIoController::getInfo().threads) {
+            foreach string key in (thread.cache_keys) {
+                if (wanted{key}) {
+                    rv{key} = thread.index;
+                }
+            }
+        }
+        return rv;
+    }
+
+    oneSocketOneThreadTest() {
+        EventNotifier notifier();
+        list<string> op_keys;
+        list<Queue> queues = submitWaits(notifier, "affinity-one-socket", OpsPerObject, NOTHING, \op_keys);
+        on_exit {
+            AsyncIoController::cancelByOwner("affinity-one-socket");
+        }
+
+        hash<string, int> threads = getKeyThreads(op_keys);
+        assertEq(OpsPerObject, threads.size(), "every operation is in the controller");
+        # with distinct op_keys routed by key, eight operations would be spread over four threads
+        assertEq(1, (map {$1: True}, threads.values()).size(), "all operations on the notifier share one thread");
+
+        # all of them complete when the notifier is signaled
+        notifier.notify();
+        foreach Queue q in (queues) {
+            hash<SocketPollResultInfo> res = q.get(10s);
+            assertFalse(boolean(res.canceled));
+            assertNothing(res.ex);
+        }
+    }
+
+    spreadOverThreadsTest() {
+        list<EventNotifier> notifiers = map new EventNotifier(), xrange(16);
+        list<string> op_keys;
+        list<Queue> queues;
+        foreach EventNotifier notifier in (notifiers) {
+            queues += submitWaits(notifier, "affinity-spread:" + $#, 1, NOTHING, \op_keys);
+        }
+        on_exit {
+            foreach EventNotifier notifier in (notifiers) {
+                AsyncIoController::cancelByOwner("affinity-spread:" + $#);
+            }
+        }
+
+        hash<string, int> threads = getKeyThreads(op_keys);
+        assertEq(16, threads.size());
+        # sixteen sockets hashed over four threads: one thread for all of them has a probability of 4^-15
+        assertGt(1, (map {$1: True}, threads.values()).size(), "the sockets use more than one I/O thread");
+
+        map $1.notify(), notifiers;
+        foreach Queue q in (queues) {
+            hash<SocketPollResultInfo> res = q.get(10s);
+            assertFalse(boolean(res.canceled));
+        }
+    }
+
+    cancelByKeyThreadKeyTest() {
+        EventNotifier notifier();
+        list<string> op_keys;
+        # the thread_key routes the operations independently of their op_keys
+        list<Queue> queues = submitWaits(notifier, "affinity-cancel-key", OpsPerObject, "affinity-route",
+            \op_keys);
+        on_exit {
+            AsyncIoController::cancelByOwner("affinity-cancel-key");
+        }
+        assertEq(OpsPerObject, getKeyThreads(op_keys).size());
+
+        foreach string key in (op_keys) {
+            assertTrue(AsyncIoController::cancelByKey(key), "operation " + key + " is found and canceled");
+        }
+        foreach Queue q in (queues) {
+            hash<SocketPollResultInfo> res = q.get(10s);
+            assertTrue(res.canceled);
+        }
+        assertFalse(AsyncIoController::cancelByKey(op_keys[0]), "a canceled operation is no longer found");
+    }
+
+    workerResultRoutingTest() {
+        EventNotifier notifier();
+        list<string> op_keys;
+        # each continuePoll() of these Qore operations runs on a worker; the operations are routed by the
+        # thread_key and every result must reach the thread holding the operation, whatever its key
+        list<Queue> queues = submitWaits(notifier, "affinity-worker-result", OpsPerObject, "affinity-worker-route",
+            \op_keys);
+        on_exit {
+            AsyncIoController::cancelByOwner("affinity-worker-result");
+        }
+        assertEq(OpsPerObject, getKeyThreads(op_keys).size(), "every operation is waiting after its first result");
+
+        notifier.notify();
+        foreach Queue q in (queues) {
+            hash<SocketPollResultInfo> res = q.get(10s);
+            assertFalse(boolean(res.canceled));
+            assertNothing(res.ex);
+        }
+    }
+
+    timersTest() {
+        int count = IoThreads * 4;
+        Counter fired(count);
+        list<int> ids;
+        for (int i = 0; i < count; ++i) {
+            ids += AsyncIoController::addTimer(now_us() + 10ms, sub () { fired.dec(); });
+        }
+        assertEq(0, fired.waitForZero(10s), "all timers fire");
+
+        # canceled timers do not fire
+        Counter canceled_fired(1);
+        list<int> cancel_ids;
+        for (int i = 0; i < count; ++i) {
+            cancel_ids += AsyncIoController::addTimer(now_us() + 1h, sub () { canceled_fired.dec(); });
+        }
+        foreach int id in (cancel_ids) {
+            assertTrue(AsyncIoController::cancelTimer(id));
+        }
+        assertEq(1, canceled_fired.getCount());
+    }
+
+    cancelByOwnerAllThreadsTest() {
+        list<EventNotifier> notifiers = map new EventNotifier(), xrange(16);
+        list<string> op_keys;
+        list<Queue> queues;
+        foreach EventNotifier notifier in (notifiers) {
+            queues += submitWaits(notifier, "affinity-owner", 1, NOTHING, \op_keys, "affinity-owner:" + $#);
+        }
+        hash<string, int> threads = getKeyThreads(op_keys);
+        assertGt(1, (map {$1: True}, threads.values()).size(), "the operations are on more than one thread");
+
+        assertEq(16, AsyncIoController::cancelByOwner("affinity-owner"));
+        foreach Queue q in (queues) {
+            hash<SocketPollResultInfo> res = q.get(10s);
+            assertTrue(res.canceled);
+        }
+    }
+}

@@ -247,16 +247,23 @@ static QoreHashNode* http2_exec_poll_operation(qore_socket_private* sock, QoreOb
     key += ':';
     key += pollable->getUniqueHash();
     // Multiple blocking session helpers can target the same socket affinity;
-    // keep the cache key unique while thread_key preserves controller routing.
+    // keep the cache key unique while thread_key preserves controller routing:
+    // the key of the Socket object wrapping the socket (if any), so these
+    // operations run on the I/O thread of the socket's other operations (see
+    // qore_socket_private::async_io_route_key).
     key += ':';
     key += std::to_string(++http2_session_sync_exec_seq);
+
+    const std::string& route_key = sock->async_io_route_key.empty()
+        ? pollable->getIoIdentityHash()
+        : sock->async_io_route_key;
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
     info->setKeyValue("sock", sock_obj->objectRefSelf(), xsink);
     info->setKeyValue("spop", op_obj->objectRefSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner), xsink);
     info->setKeyValue("key", new QoreStringNode(key), xsink);
-    info->setKeyValue("thread_key", new QoreStringNode(pollable->getIoIdentityHash()), xsink);
+    info->setKeyValue("thread_key", new QoreStringNode(route_key), xsink);
     info->setKeyValue("to", timeout_ms, xsink);
     if (*xsink) {
         return nullptr;

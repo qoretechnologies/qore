@@ -181,6 +181,16 @@
     An HTTP/3 client request no longer waits until its timeout when its response arrives while the request is
     still being registered with its connection: the response was kept for the request but never delivered to it.
 
+    With more than one async I/O thread (the \c QORE_IO_THREADS environment variable or
+    @ref Qore::AsyncIoController::setMaxIoThreads() "AsyncIoController::setMaxIoThreads()"), every operation on a
+    socket runs on that socket's I/O thread, whatever its key.  Operations were routed by their key, so an HTTP client
+    connection and the socket calls made on it could run on different I/O threads at the same time, and a request on
+    an HTTP/3 connection could wait until its timeout.  @ref Qore::AsyncIoController::cancelByKey()
+    "AsyncIoController::cancelByKey()" finds operations on every I/O thread,
+    @ref Qore::AsyncIoController::getInfo() "AsyncIoController::getInfo()" reports the operations of all I/O threads
+    (it reported only one thread's) with the new \c threads and \c io_threads keys, and controller timers are spread
+    over the I/O threads.
+
     HTTP/3 connections on macOS no longer abort the process when the system clock is set back,
     such as when a virtual machine resynchronizes its clock: QUIC timers use a clock that cannot
     go backwards, and a connection never receives a time earlier than one it has already used.

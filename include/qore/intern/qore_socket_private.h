@@ -1182,6 +1182,19 @@ struct qore_socket_private : public QoreReferenceCounter {
     */
     uint32_t fd_generation = 0;
 
+    //! The async I/O controller route key of the Socket object wrapping this socket, or empty if there is none
+    /** The controller runs every operation on a socket on one I/O thread, chosen by the route key (see
+        AsyncIoControllerPriv::getThreadIndex()): normally the I/O identity hash of the operation's socket.  A Socket
+        object and the lightweight wrappers that C++ socket methods create for controller-backed calls have different
+        identity hashes, so the wrappers route with this key instead, keeping all operations on the socket on the
+        same I/O thread.
+
+        Set once by the QoreSocketObject constructor, before the socket is used, and never changed.
+
+        @since %Qore 3.0
+    */
+    std::string async_io_route_key;
+
     //! Directional ownership for controller-backed raw socket I/O sections.
     /** Bare QoreSocket instances do not have the QoreSocketObject mutex and
         non-blocking flags, but synchronous raw socket methods now delegate to

@@ -4595,6 +4595,7 @@ static int qore_socket_object_exec_check_idle_data(QoreSocketObject* s, Exceptio
 
 QoreSocketObject::QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert, QoreSSLPrivateKey* pk)
         : priv(new my_socket_priv(s, cert, pk)) {
+    priv->socket->priv->async_io_route_key = getIoIdentityHash();
 }
 
 QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
@@ -4621,9 +4622,11 @@ QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
     }
     dst->ssl_ca_file = src->ssl_ca_file;
     dst->ssl_ca_path = src->ssl_ca_path;
+    dst->async_io_route_key = getIoIdentityHash();
 }
 
 QoreSocketObject::QoreSocketObject() : priv(new my_socket_priv) {
+    priv->socket->priv->async_io_route_key = getIoIdentityHash();
 }
 
 QoreSocketObject::~QoreSocketObject() {
