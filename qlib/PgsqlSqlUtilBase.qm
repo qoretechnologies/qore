@@ -26,7 +26,7 @@
 %requires qore >= 1.14
 
 # requires the SqlUtil module
-%requires SqlUtil >= 3.3
+%requires SqlUtil >= 3.4
 %requires json
 
 # don't use "$" signs for variables and class members, assume local variable scope
@@ -37,7 +37,7 @@
 # enable all warnings
 
 module PgsqlSqlUtilBase {
-    version = "1.12";
+    version = "1.13";
     desc = "base user module for working with PostgreSQL SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -213,6 +213,12 @@ $function$
     @ref SqlUtil::AbstractDatabase::getAlignFunctionSql() "AbstractDatabase::getAlignFunctionSql()" for example.
 
     @section pgsql_relnotes Release Notes
+
+    @subsection pgsqlsqlutilbasev113 PgsqlSqlUtilBase v1.13
+    - supports SqlUtil physical-placement updates with a context scoped to the exact live table and
+      transaction, including partition movement's source DELETE and destination INSERT trigger calls
+    - successful statements clear the context before ordinary writes resume; failed statements preserve
+      their original error and require the owning transaction to roll back
 
     @subsection pgsqlsqlutilbasev112 PgsqlSqlUtilBase v1.12
     - added explicit non-key update row locking through the SqlUtil @c forupdate_no_key select option;
@@ -4552,6 +4558,34 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private AbstractTrigger addTriggerImpl(string tname, string src, *hash opt) {
         return new PgsqlTrigger(tname, src);
+    }
+
+    private int updatePhysicalPlacementImpl(hash<auto> set, hash<auto> cond) {
+        # Pin the transaction/connection before reading or setting connection-local state.
+        ds.beginTransaction();
+        *string active = ds.selectRow("select pg_catalog.current_setting('qore.physical_placement', true) as value").value;
+        if (active) {
+            throw "PHYSICAL-PLACEMENT-ERROR", "nested physical-placement context is not allowed";
+        }
+        hash<auto> identity = ds.selectRow("select n.nspname as schema, c.relname as table "
+            "from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+            "where c.oid = %v::regclass", getSqlName());
+        # Resolve the exact live relation, including quoted names and non-default schemas.
+        string placement_context = make_json(identity);
+        try {
+            ds.selectRow("select pg_catalog.set_config('qore.physical_placement', %v, true) as value", placement_context);
+            int count = update(set, cond);
+            ds.selectRow("select pg_catalog.set_config('qore.physical_placement', '', true) as value");
+            return count;
+        } catch (hash<ExceptionInfo> ex) {
+            # A database error can leave the transaction aborted. Preserve the original error and let
+            # the owning transaction roll back; an exception before SQL execution can still be cleared.
+            try {
+                ds.selectRow("select pg_catalog.set_config('qore.physical_placement', '', true) as value");
+            } catch (hash<ExceptionInfo> cleanup_ex) {
+            }
+            rethrow;
+        }
     }
 
     private bool tryInsertImpl(string sql, hash<auto> row) {

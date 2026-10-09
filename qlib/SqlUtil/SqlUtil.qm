@@ -42,7 +42,7 @@
 # enable all warnings
 
 module SqlUtil {
-    version = "3.3.0";
+    version = "3.4.0";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -119,6 +119,14 @@ module SqlUtil {
       bodies
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
+
+    @subsection sqlutilv3_4_0 SqlUtil v3.4.0
+    - fixed trigger removal when a driver returns its SQL as a statement list
+    - added AbstractTable::updatePhysicalPlacement() and cooperative trigger guards for relocating
+      admitted rows without changing business timestamps or emitting duplicate business statistics;
+      foreign-key constraints remain enforced and normal writes retain their trigger behavior
+    - physical placement uses a table-scoped, transaction-local context; failed statements require
+      rollback, and unsupported database drivers reject the operation without changing data
 
     @subsection sqlutilv3_3_0 SqlUtil v3.3.0
     - added explicit capability-checked non-key update row locks: status writers can permit independent
