@@ -7355,51 +7355,51 @@ void AsyncIoControllerPriv::waitCancel(const std::string& key) {
 }
 
 void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
+    va_list args;
+    va_start(args, fmt);
+    bool logged = logOwnV(level, fmt, args);
+    va_end(args);
+    if (!logged) {
+        // No per-controller logger — delegate to global async I/O logger (outside lock)
+        va_start(args, fmt);
+        qore_async_io_log_v(level, fmt, args);
+        va_end(args);
+    }
+}
+
+bool AsyncIoControllerPriv::logOwnV(int level, const char* fmt, va_list args) const {
     // Snapshot and ref the logger under lock, then release the lock before calling
     // any user-provided methods (isEnabledFor, logArgs) to avoid deadlock if the
     // logger re-enters the controller.
     QoreLoggerBridge* lgr;
-    bool use_global = false;
     {
         AutoLocker al(m);
         if (!logger) {
-            use_global = true;
-        } else {
-            lgr = logger;
-            lgr->ref();
+            return false;
         }
-    }
-
-    if (use_global) {
-        // No per-controller logger — delegate to global async I/O logger (outside lock)
-        va_list args;
-        va_start(args, fmt);
-        qore_async_io_log_v(level, fmt, args);
-        va_end(args);
-        return;
+        lgr = logger;
+        lgr->ref();
     }
 
     if (!lgr->isEnabledFor(level)) {
         ExceptionSink xsink;
         lgr->deref(&xsink);
-        return;
+        return true;
     }
 
     // QoreString::vsprintf returns -1 (no retry) when the buffer is too small;
-    // re-start va_list and retry until it fits, mirroring the established
+    // re-copy the va_list and retry until it fits, mirroring the established
     // pattern in support.cpp printe()/print_debug().  Without the loop, large
     // owner / key strings (e.g. socket-sync owners) silently render as empty
     // log messages.
     QoreStringNode* msg = new QoreStringNode();
-    {
-        va_list args;
-        while (true) {
-            va_start(args, fmt);
-            int rc = msg->vsprintf(fmt, args);
-            va_end(args);
-            if (!rc) {
-                break;
-            }
+    while (true) {
+        va_list iter_args;
+        va_copy(iter_args, args);
+        int rc = msg->vsprintf(fmt, iter_args);
+        va_end(iter_args);
+        if (!rc) {
+            break;
         }
     }
 
@@ -7410,6 +7410,24 @@ void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
     if (xsink) {
         xsink.clear();
     }
+    return true;
+}
+
+bool qore_async_io_controller_log_v(int level, const char* fmt, va_list args) {
+    AsyncIoControllerPriv* ctrl;
+    {
+        AutoLocker al(aio_singleton_lock);
+        ctrl = aio_singleton;
+        if (!ctrl) {
+            return false;
+        }
+        ctrl->ref();
+    }
+    bool rv = ctrl->logOwnV(level, fmt, args);
+    ExceptionSink xsink;
+    ctrl->deref(&xsink);
+    xsink.clear();
+    return rv;
 }
 
 std::string AsyncIoControllerPriv::getSocketHash(AbstractPollableIoObjectBase* sock) {

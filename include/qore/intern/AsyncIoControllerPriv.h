@@ -1436,6 +1436,14 @@ private:
     //! Log a message (acquires lock to snapshot logger — must NOT be called with lock held)
     DLLLOCAL void log(int level, const char* fmt, ...) const;
 
+public:
+    //! Logs a message with this controller's own logger only (acquires lock — must NOT be called with lock held)
+    /** @return false if the controller has no logger; the message is then not logged
+    */
+    DLLLOCAL bool logOwnV(int level, const char* fmt, va_list args) const;
+
+private:
+
     //! Get the unique hash from a pollable I/O object
     DLLLOCAL static std::string getSocketHash(AbstractPollableIoObjectBase* sock);
 

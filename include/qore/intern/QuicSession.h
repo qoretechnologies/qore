@@ -80,6 +80,12 @@ struct QuicStreamInfo {
     int64_t stream_id = -1;
     //! When the stream was opened (QuicSession::timestamp()); reported when an unanswered request is cancelled
     uint64_t opened_ts = 0;
+    //! Client: bytes of the request written into QUIC packets; reported when an unanswered request is cancelled
+    uint64_t tx_bytes = 0;
+    //! Client: bytes of the request acknowledged by the peer
+    uint64_t acked_bytes = 0;
+    //! Client: true once the request's FIN was handed to ngtcp2
+    bool fin_written = false;
     QuicStreamState state = QuicStreamState::Idle;
     std::string method;
     std::string path;
@@ -704,6 +710,13 @@ public:
 
     //! Check if the connection is closed or closing
     DLLLOCAL bool isClosed() const;
+
+    //! Records request bytes written for a client stream (see QuicStreamInfo::tx_bytes); caller holds mtx_
+    DLLLOCAL void accountStreamWrite(int64_t stream_id, ngtcp2_ssize ndatalen, int fin, const nghttp3_vec* vec,
+        nghttp3_ssize sveccnt);
+
+    //! ngtcp2 log_printf callback that appends to the connection's stall trace ring
+    DLLLOCAL static void traceRingPrintf(void* user_data, const char* fmt, ...);
 
     //! Returns true if ngtcp2 asked this server connection to be dropped silently (see @ref dropped_)
     DLLLOCAL bool isDropped() const {
@@ -1562,6 +1575,20 @@ private:
     std::atomic<bool> retry_requested_{false};
     //! When the last packet was received (timestamp()); reported when an unanswered request is cancelled
     uint64_t last_rx_ts_ = 0;
+    //! When a packet was last produced for sending (timestamp())
+    uint64_t last_tx_ts_ = 0;
+    //! When the I/O thread last ran timers and writes for the connection (timestamp())
+    uint64_t last_write_attempt_ts_ = 0;
+    //! Client stall trace: the last ngtcp2 log lines of the connection (see QORE_QUIC_STALL_TRACE)
+    /** Empty unless the QORE_QUIC_STALL_TRACE environment variable gives a positive line count when the
+        connection is created; then ngtcp2's frame log is kept in this ring, under mtx_, and logged with the
+        unanswered-request diagnostic.
+    */
+    std::vector<std::string> trace_ring_;
+    //! Next write position in @ref trace_ring_
+    size_t trace_pos_ = 0;
+    //! Number of lines written to @ref trace_ring_ so far
+    uint64_t trace_count_ = 0;
     ngtcp2_duration local_idle_timeout_ns_ = QUIC_IDLE_TIMEOUT_NS; //!< advertised idle timeout for this session
     int64_t max_request_body_size_ = 0;             //!< maximum request body size (0 = unlimited); consistent with Http2Session
     //! Maximum size of a client response body received into memory; <= 0 = no limit

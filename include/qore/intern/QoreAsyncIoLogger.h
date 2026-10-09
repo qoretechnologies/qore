@@ -41,12 +41,24 @@ DLLLOCAL void qore_set_async_io_logger(QoreObject* logger_obj, ExceptionSink* xs
 //! Returns the wrapped logger object (referenced), or nullptr
 DLLLOCAL QoreObject* qore_get_async_io_logger_object();
 
-//! Logs a message via the global async I/O logger (no-op if not set)
+//! Logs a message via the global async I/O logger, or the global controller's logger if it is not set
 /** Uses snapshot+ref pattern: briefly locks to ref the logger, releases lock,
     then calls Qore methods (isEnabledFor, logArgs) outside the lock.
     Safe to call while holding other locks.
+
+    When no global async I/O logger is set (see set_async_io_logger()), the message goes to the logger of the
+    global @ref Qore::AsyncIoController "AsyncIoController" (AsyncIoController::setLogger(), which HttpServer
+    sets), so QUIC and HTTP/3 diagnostics reach an application that only configured the controller; it is
+    dropped only when neither is set.
 */
 DLLLOCAL void qore_async_io_log(int level, const char* fmt, ...);
+
+//! Logs a message via the global async I/O controller's own logger, if it has one
+/** Does not fall back to the global async I/O logger, so the two fallbacks cannot recurse.
+
+    @return true if the message was handed to the controller's logger
+*/
+DLLLOCAL bool qore_async_io_controller_log_v(int level, const char* fmt, va_list args);
 
 //! va_list variant for forwarding from other variadic functions
 DLLLOCAL void qore_async_io_log_v(int level, const char* fmt, va_list args);

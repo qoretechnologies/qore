@@ -156,6 +156,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("every datagram of a request is delivered after a lost first datagram", \testBody());
         addTestCase("a cancelled unanswered request logs its transport state without the query",
             \testStallDiagnostic());
+        addTestCase("without a global async I/O logger the diagnostic goes to the controller's logger",
+            \testStallDiagnosticControllerLogger());
+        addTestCase("QORE_QUIC_STALL_TRACE logs the connection's last ngtcp2 events with the diagnostic",
+            \testStallTrace());
         set_return_value(main());
     }
 
@@ -252,6 +256,36 @@ l50Xb2GWQesIt9k5jF5IOw==
         logger.addAppender(capture);
         set_async_io_logger(logger);
         on_exit set_async_io_logger();
+        checkStallDiagnostic(capture);
+    }
+
+    #! An application that only sets the controller's logger (as HttpServer and Qorus do) gets the diagnostic
+    testStallDiagnosticControllerLogger() {
+        Logger logger("h3-diag-ctrl", LoggerLevel::getLevelWarn());
+        CaptureAppender capture();
+        logger.addAppender(capture);
+        set_async_io_logger();
+        AsyncIoController::setLogger(logger);
+        on_exit AsyncIoController::setLogger();
+        checkStallDiagnostic(capture);
+    }
+
+    testStallTrace() {
+        Logger logger("h3-trace", LoggerLevel::getLevelWarn());
+        CaptureAppender capture();
+        logger.addAppender(capture);
+        set_async_io_logger(logger);
+        on_exit set_async_io_logger();
+        setenv("QORE_QUIC_STALL_TRACE", "40");
+        on_exit unsetenv("QORE_QUIC_STALL_TRACE");
+        list<string> lines = checkStallDiagnostic(capture);
+        *string trace = (select lines, $1 =~ /^QUIC: last [0-9]+ ngtcp2 events of session/)[0];
+        assertTrue(exists trace, sprintf("trace logged: %y", lines));
+        assertRegex("^QUIC: last 40 ngtcp2 events", trace, "the ring keeps the configured number of lines");
+        assertRegex("pkt (tx|rx)", trace);
+    }
+
+    private list<string> checkStallDiagnostic(CaptureAppender capture) {
         RestClientIo rc({"url": mUrl, "protocol": "h3", "ssl_verify_cert": False, "data": "json",
             "timeout": 1s});
         assertThrows("HTTPCLIENT-TIMEOUT", \rc.restGet(), ("/stall?apikey=secret-value",));
@@ -266,6 +300,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertRegex("\\(GET /stall\\)", line);
         assertRegex("handshake_complete=1", line);
         assertRegex("pkt_recv=[0-9]+", line);
+        # the request left and the peer acknowledged it: the server, not the transport, did not answer
+        assertRegex("req_tx=[1-9][0-9]* req_acked=[1-9][0-9]* fin_written=1", line);
+        assertRegex("last_write=[0-9]+ ms ago", line);
         assertFalse(line =~ /secret-value/, "the query string is not logged");
+        return lines;
     }
 }
