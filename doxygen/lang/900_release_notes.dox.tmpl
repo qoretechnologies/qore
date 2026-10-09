@@ -191,6 +191,11 @@
     (it reported only one thread's) with the new \c threads and \c io_threads keys, and controller timers are spread
     over the I/O threads.
 
+    An object that several threads use at the same time is deleted when its last reference is released, also when
+    two of its method calls return at the same moment: the second release could find the reference count at zero
+    without deleting the object, so its destructor never ran and its memory was not freed (debug builds aborted with
+    an assertion in <tt>RObject::tryFastDeref()</tt>).
+
     HTTP/3 connections on macOS no longer abort the process when the system clock is set back,
     such as when a virtual machine resynchronizes its clock: QUIC timers use a clock that cannot
     go backwards, and a connection never receives a time earlier than one it has already used.

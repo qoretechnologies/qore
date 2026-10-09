@@ -699,6 +699,10 @@ void RObject::derefRealIntern() {
     }
 }
 
+#ifdef DEBUG
+std::atomic<RObject::dbg_after_fast_real_release_t> RObject::dbg_after_fast_real_release{nullptr};
+#endif
+
 int RObject::tryFastDeref(bool real) {
     // an object in a recursive set has a collection decision to make
     if (rset.load(std::memory_order_acquire)) {
@@ -712,12 +716,18 @@ int RObject::tryFastDeref(bool real) {
                 return -1;
             }
         } while (!rrefs.compare_exchange_weak(r, r - 1, std::memory_order_acq_rel, std::memory_order_relaxed));
-        // Real references remain, and each of them is a reference too, so this is never the last one; and while
-        // they remain, a deferred scan is left to the dereference that releases the last of them.
-        int refs = references.fetch_sub(1, std::memory_order_acq_rel) - 1;
-        assert(refs > 0);
-        (void)refs;
-        return 1;
+#ifdef DEBUG
+        if (dbg_after_fast_real_release_t hook = dbg_after_fast_real_release.load(std::memory_order_acquire)) {
+            hook(this);
+        }
+#endif
+        // Real references remained when this one was taken from rrefs, and while they remain, a deferred scan is
+        // left to the dereference that releases the last of them.  But their holders can release them before the
+        // reference itself is released below: another thread's dereference finds no other real reference left,
+        // takes the last one in the locking path (derefRealIntern(), which waits for rset invalidations) and releases
+        // its reference there.  This one is then the last reference, and the caller continues as the object's
+        // deleter, as for a weak reference.
+        return (references.fetch_sub(1, std::memory_order_acq_rel) - 1) ? 1 : 0;
     }
     // a deferred scan is made by the dereference that finds no real reference left
     if (deferred_scan.load(std::memory_order_acquire) && !rrefs.load(std::memory_order_acquire)) {
@@ -1379,10 +1389,10 @@ robject_dereference_helper::robject_dereference_helper(RObject* obj, bool real, 
     ++deref_locked_count;
 #endif
     if (released_last) {
-        // a real reference is only released there while others remain, so it is never the last one
-        assert(!real);
-        // RObject::tryFastDeref() released the last reference; register the dereference in progress so that
-        // derefDone() makes the deletion wait for the dereferences of other threads that still use the object.
+        // RObject::tryFastDeref() released the last reference: a weak one, or a real one whose other real references
+        // were released in the locking path meanwhile (rrefs can be non-zero again here in either case, when a method
+        // call has taken a reference since).  Register the dereference in progress so that derefDone() makes the
+        // deletion wait for the dereferences of other threads that still use the object.
         // They registered in the same critical section in which they released their references, and they
         // released them before this one reached zero, so taking rlck here orders this after them.
         AutoLocker al(obj->rlck);

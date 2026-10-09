@@ -1035,6 +1035,61 @@ static void ut_closure_var_deref_rescan_reentry(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "releasing the variable raises no exception");
     ut_rescan_other_holder = nullptr;
 }
+
+namespace {
+//! the object whose other real reference is released in ut_fast_real_deref_releases_last()
+QoreObject* ut_fast_real_other_holder = nullptr;
+bool ut_fast_real_hook_ran = false;
+
+void ut_fast_real_release_other(RObject* o) {
+    if (!ut_fast_real_other_holder || o != qore_object_private::get(*ut_fast_real_other_holder)) {
+        return;
+    }
+    QoreObject* obj = ut_fast_real_other_holder;
+    ut_fast_real_other_holder = nullptr;
+    RObject::dbg_after_fast_real_release.store(nullptr);
+    ut_fast_real_hook_ran = true;
+    // the other holder finds no other real reference left and releases the last one in the locking path, while
+    // the lock-free dereference has released its real reference but not yet its reference
+    ExceptionSink xsink;
+    obj->realDeref(&xsink);
+    xsink.clear();
+}
+}
+
+//! Tests that a lock-free release of a real reference can be the release of the last reference
+/** Two method calls on a shared object that return at the same time release the real reference each call holds on
+    the object.  The first takes its real reference from the count while the other one remains, with no lock; the
+    second then finds no other real reference, takes the last one in the locking path and releases its reference;
+    and the first releases its reference after that, which is the last one.  The lock-free path asserted that it
+    never released the last reference, which aborted WebSocketPerfTest.qtest in debug builds, and did not delete the
+    object in release builds.  The hook releases the other reference at exactly that point.
+*/
+static void ut_fast_real_deref_releases_last(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreObject* obj = new QoreObject(QC_COUNTER, getProgram(), new Counter(0));
+    // a weak reference keeps the object allocated, so the test can see that it was deleted
+    obj->tRef();
+    // the real references of two method calls in progress
+    obj->realRef();
+    obj->realRef();
+    // the reference returned by the constructor
+    obj->deref(&xsink);
+    UT_ASSERT(c, obj->isValid(), "the object is alive while method calls hold it");
+
+    ut_fast_real_hook_ran = false;
+    ut_fast_real_other_holder = obj;
+    RObject::dbg_after_fast_real_release.store(ut_fast_real_release_other);
+    obj->realDeref(&xsink);
+    RObject::dbg_after_fast_real_release.store(nullptr);
+    ut_fast_real_other_holder = nullptr;
+
+    UT_ASSERT(c, ut_fast_real_hook_ran, "the other real reference is released between the two lock-free releases");
+    UT_ASSERT(c, !obj->isValid(), "the object is deleted when the lock-free release is the last one");
+    UT_ASSERT(c, !xsink, "releasing the object raises no exception");
+    xsink.clear();
+    obj->tDeref();
+}
 #endif
 
 //! Fills in a socket address for the network policy tests and returns its size
@@ -5357,6 +5412,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoCloseTest::run(c);
     ut_cond_wait_cancel_in_window(c);
     Http3ClientResponseRegistrationTest::run(c);
+    ut_fast_real_deref_releases_last(c);
 #endif
     ut_asyncio_autostop(c);
     ut_asyncio_start_stop(c);
