@@ -4258,6 +4258,11 @@ while (*binary chunk = input.read(65536)) {
     - Fixed UTC offsets such as \c "+01:00" or \c "-0530" given as a time zone name to a DBI driver's \c timezone
       option or in an Arrow timestamp type: they were looked up as zoneinfo regions and failed
 
+    - Fixed a connection leak when a connection option fails while a @ref Qore::SQL::Datasource "Datasource" or
+      @ref Qore::SQL::DatasourcePool "DatasourcePool" opens: the driver's connection stayed attached to a
+      datasource that was not open, so the next open or the datasource's destruction left it behind; the
+      connection is now closed with the error
+
     - Fixed a crash evaluating a deeply nested expression with the AST interpreter on a thread with a small stack, or
       near the end of a thread's stack, such as nested arguments of function, method, static method and closure
       calls, chained assignments and long arithmetic expressions: evaluation recursed once for each level of
