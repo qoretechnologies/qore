@@ -1624,8 +1624,9 @@ const AbstractQoreZoneInfo* find_create_timezone(const char* name, ExceptionSink
     assert(name);
     // see if it's a UTC offset
     if ((name[0] == '+' || name[0] == '-')
-            && isdigit(name[1] && isdigit(name[2])))
+            && isdigit(static_cast<unsigned char>(name[1])) && isdigit(static_cast<unsigned char>(name[2]))) {
         return QTZM.findCreateOffsetZone(name, xsink);
+    }
 
     return QTZM.findLoadRegion(name, xsink);
 }

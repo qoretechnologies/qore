@@ -533,4 +533,31 @@ list<int> cpp_api_blocked_fault_signals() [flags=RET_VALUE_ONLY] {
     return rv.release();
 }
 
+//! finds or creates a time zone from a region name or a UTC offset with the public find_create_timezone() API
+/** Lets tests check the time zone a driver gets from a \c timezone option, as DBI drivers and Arrow imports call it
+
+    @param name a region name (ex: \c "Europe/Prague") or a UTC offset (\c "+DD[[:]DD[[:]DD]]" or \c "-DD...")
+    @param epoch the time, in seconds since the epoch, for which the UTC offset is returned
+
+    @return a hash with \c region: the name of the zone (\c "UTC" for UTC itself) and \c utc_offset: its UTC
+    offset in seconds east at \a epoch
+
+    @throw PARSE-SET-TIME-ZONE-ERROR \a name is not a valid UTC offset
+    @throw FILE-OPEN2-ERROR the zoneinfo file for the region cannot be opened
+    @throw TZINFO-ERROR the zoneinfo file for the region cannot be read
+*/
+hash<auto> cpp_api_find_create_timezone(string name, int epoch = 0) [flags=RET_VALUE_ONLY] {
+    const AbstractQoreZoneInfo* zone = find_create_timezone(name->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    bool is_dst;
+    const char* zone_name;
+    int utc_offset = tz_get_utc_offset(zone, epoch, is_dst, zone_name);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("region", new QoreStringNode(tz_get_region_name(zone)), xsink);
+    rv->setKeyValue("utc_offset", utc_offset, xsink);
+    return rv.release();
+}
+
 ///@}
