@@ -1894,6 +1894,11 @@ private:
     //! the window, recvmsg() returns data and we never check this deadline.
     int64_t econnrefused_deadline_ns_ = 0;
 
+#ifdef DEBUG
+    //! Number of datagrams this operation produced; see QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS
+    int test_datagram_seq_ = 0;
+#endif
+
     //! Absolute ngtcp2 timestamp (ns) before which no UDP datagrams may be
     //! emitted; 0 means disabled.  Enforced in sendPendingPackets(): while
     //! now < not_before_ns_, the send path is a no-op and returns the deadline

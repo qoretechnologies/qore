@@ -8,6 +8,20 @@
 
 %exec-class Test
 
+hash<string, *int> sub argumentValueType(hash<auto> input) {
+    return {"string": input.value.type() == "string" ? 1 : 0};
+}
+
+class ArgumentTypeProbe {
+    hash<string, *int> inspect(hash<auto> input) {
+        return argumentValueType(input);
+    }
+
+    static hash<string, *int> inspectStatic(hash<auto> input) {
+        return argumentValueType(input);
+    }
+}
+
 class Test inherits QUnit::Test {
     constructor() : QUnit::Test("parser lvalue-type hint narrowing", "1.0") {
         addTestCase("map operator narrows to typed-hash lvalue",  \mapNarrowing());
@@ -19,7 +33,32 @@ class Test inherits QUnit::Test {
         addTestCase("hint ignored when lvalue is not hash<K,V>",  \hintIgnoredForAutoHash());
         addTestCase("hash.iterator() yields typed $1 in map body", \hashIteratorElementType());
         addTestCase("list.iterator() yields typed $1 + fold safety",  \listIteratorElementType());
+        addTestCase("call result hints do not narrow argument hashes", \callArgumentIsolation());
+        addTestCase("soft result hints do not coerce argument values", \callArgumentSoftening());
         set_return_value(main());
+    }
+
+    callArgumentIsolation() {
+        hash<auto> source = {"value": "test"};
+        ArgumentTypeProbe probe();
+        hash<string, *int> result = probe.inspect({"value": source.value});
+        assertEq(1, result.string);
+        result = ArgumentTypeProbe::inspectStatic({"value": source.value});
+        assertEq(1, result.string);
+        result = argumentValueType({"value": source.value});
+        assertEq(1, result.string);
+        code<hash<string, *int>(hash<auto>)> ref = \argumentValueType();
+        result = ref({"value": source.value});
+        assertEq(1, result.string);
+        result = (hash<string, *int> sub (hash<auto> input) { return argumentValueType(input); })({"value": source.value});
+        assertEq(1, result.string);
+    }
+
+    callArgumentSoftening() {
+        hash<auto> source = {"value": "42"};
+        # A leaked softint hint silently converts this argument to integer.
+        hash<string, softint> result = argumentValueType({"value": source.value});
+        assertEq(1, result.string);
     }
 
     # Primary regression: the Workflow.qc pattern that previously

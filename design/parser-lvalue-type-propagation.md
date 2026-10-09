@@ -55,8 +55,9 @@ The contract, which every producer and consumer must preserve:
   authoritative compatibility gate. The hint can only tighten inference, never
   admit an incompatible type.
 
-That last point is what makes the whole mechanism low-risk: the worst a buggy
-consumer can do is leave inference exactly as it was.
+The compatibility gate does not make hint propagation harmless: a hint leaked
+into an unrelated expression can reject valid input or silently coerce values.
+The expression boundaries below are therefore part of the contract.
 
 **Producers** — sites that set a hint:
 
@@ -81,6 +82,15 @@ sub-expressions, so a leaked hint would narrow an unrelated expression. Likewise
 consumers explicitly set the field to `nullptr` before parsing sub-expressions
 the hint must not reach — key expressions, iterator sources — instead of relying
 on those nodes to ignore it.
+
+`QoreParseListNode::initArgs()` clears the surrounding hint while parsing call
+arguments and restores it afterwards for result/receiver inference. A result
+such as `hash<string, *int>` must not constrain a dynamic argument hash holding
+string identifiers; a soft result type must not silently coerce those strings.
+This boundary covers function, method, static-method and call-reference argument
+lists, including calls whose implementation comes from an AOT module. The
+regression tests use dynamic values because constant-folded literals can conceal
+the leak.
 
 No runtime work was needed for the softening case: once the parser narrows the
 map's return type to `hash<string, softint>`, the existing `QoreHashNode` store

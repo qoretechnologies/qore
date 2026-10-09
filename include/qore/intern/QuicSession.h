@@ -78,6 +78,8 @@ enum class QuicStreamState {
 //! Per-stream state (parallel to Http2StreamInfo)
 struct QuicStreamInfo {
     int64_t stream_id = -1;
+    //! When the stream was opened (QuicSession::timestamp()); reported when an unanswered request is cancelled
+    uint64_t opened_ts = 0;
     QuicStreamState state = QuicStreamState::Idle;
     std::string method;
     std::string path;
@@ -335,7 +337,44 @@ public:
         QoreDatagramDispatcher* dispatcher = nullptr,
         SSL_CTX* shared_ssl_ctx = nullptr,
         int ssl_verify_mode = SSL_VERIFY_NONE,
-        bool ssl_accept_all_certs = false);
+        bool ssl_accept_all_certs = false,
+        const ngtcp2_cid* retry_odcid = nullptr);
+
+    //! Writes a Retry packet answering a client Initial (RFC 9000 section 8.1.2)
+    /** The Retry carries an address-validation token bound to the client address and the client's
+        original DCID; the client's next Initial returns it, and the server then accepts that Initial
+        even when its CRYPTO data does not start the ClientHello (see @ref dropped_).
+
+        @param buf the output buffer
+        @param buflen the size of @a buf (at least NGTCP2_MAX_UDP_PAYLOAD_SIZE is enough)
+        @param hd the client Initial's header
+        @param remote_addr the client address
+        @param remote_addrlen the size of @a remote_addr
+
+        @return the length of the Retry packet, or -1 on error
+    */
+    DLLLOCAL static ssize_t writeRetry(uint8_t* buf, size_t buflen, const ngtcp2_pkt_hd& hd,
+        const struct sockaddr* remote_addr, socklen_t remote_addrlen);
+
+    //! Verifies the Retry token of a client Initial
+    /** @param hd the client Initial's header, with a token starting with NGTCP2_CRYPTO_TOKEN_MAGIC_RETRY2
+        @param remote_addr the client address
+        @param remote_addrlen the size of @a remote_addr
+        @param odcid set to the client's original DCID when the token is valid
+
+        @return true if the token is valid, was issued by this process, and is less than
+            @ref RETRY_TOKEN_TIMEOUT_NS old
+    */
+    DLLLOCAL static bool verifyRetryToken(const ngtcp2_pkt_hd& hd, const struct sockaddr* remote_addr,
+        socklen_t remote_addrlen, ngtcp2_cid& odcid);
+
+    //! Lifetime of a Retry token
+    static constexpr uint64_t RETRY_TOKEN_TIMEOUT_NS = 10ULL * 1000000000ULL;
+
+    //! Returns true if ngtcp2 asked for a Retry rather than a silent drop (see @ref dropped_)
+    DLLLOCAL bool isRetryRequested() const {
+        return retry_requested_.load(std::memory_order_acquire);
+    }
 
     ~QuicSession();
 
@@ -665,6 +704,11 @@ public:
 
     //! Check if the connection is closed or closing
     DLLLOCAL bool isClosed() const;
+
+    //! Returns true if ngtcp2 asked this server connection to be dropped silently (see @ref dropped_)
+    DLLLOCAL bool isDropped() const {
+        return dropped_.load(std::memory_order_acquire);
+    }
 
     //! Reason for which @ref isClosed() returns true.
     /** Distinguishes the three QUIC close paths so callers can surface
@@ -1200,7 +1244,8 @@ private:
                    QoreDatagramDispatcher* dispatcher,
                    SSL_CTX* shared_ssl_ctx = nullptr,
                    int ssl_verify_mode = SSL_VERIFY_NONE,
-                   bool ssl_accept_all_certs = false);
+                   bool ssl_accept_all_certs = false,
+                   const ngtcp2_cid* retry_odcid = nullptr);
 
     //! Set up SSL_CTX for client
     /** @param host remote hostname for TLS SNI
@@ -1506,6 +1551,17 @@ private:
     ngtcp2_crypto_conn_ref conn_ref_{};              //!< TLS<->ngtcp2 connection reference
     qore_socket_private* sock_ = nullptr;           //!< associated socket
     bool is_server_ = false;                        //!< true if server-side session
+    //! True once ngtcp2 asked a server to drop this connection (NGTCP2_ERR_RETRY / NGTCP2_ERR_DROP_CONN)
+    /** Set when the first client Initial does not start the ClientHello (the client's first
+        datagram was lost or reordered).  The connection is dropped without CONNECTION_CLOSE, reports
+        itself closed, and processes no further packets, so the client's retransmitted Initial is
+        accepted as a new connection.
+    */
+    std::atomic<bool> dropped_{false};
+    //! True when ngtcp2 asked for a Retry (NGTCP2_ERR_RETRY) on the dropped connection
+    std::atomic<bool> retry_requested_{false};
+    //! When the last packet was received (timestamp()); reported when an unanswered request is cancelled
+    uint64_t last_rx_ts_ = 0;
     ngtcp2_duration local_idle_timeout_ns_ = QUIC_IDLE_TIMEOUT_NS; //!< advertised idle timeout for this session
     int64_t max_request_body_size_ = 0;             //!< maximum request body size (0 = unlimited); consistent with Http2Session
     //! Maximum size of a client response body received into memory; <= 0 = no limit
