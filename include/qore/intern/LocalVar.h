@@ -929,12 +929,14 @@ public:
         root requiring lvalue cleanup. Type/access validation and real-reference
         bookkeeping are identical to the normal assignment path.
         @param value borrowed, already weak-normalized input
-        @param result holder containing NOTHING, receiving the owned stored value
+        @param result holder containing NOTHING, receiving the owned stored value;
+        nullptr requests a borrowed result and admits only unchanged strong-object
+        storage without filtering (the caller must independently pin the value)
         @param xsink exception sink
         @return true if handled (including a type error), false for ordinary fallback
     */
-    DLLLOCAL bool tryAssignInitialClassValue(QoreValue value, ValueHolder& result, ExceptionSink* xsink) const {
-        assert(!*xsink && result->isNothing());
+    DLLLOCAL bool tryAssignInitialClassValue(QoreValue value, ValueHolder* result, ExceptionSink* xsink) const {
+        assert(!*xsink && (!result || (*result)->isNothing()));
         if (closure_use || is_self || name == "self"
                 || type_info_needs_substitution || ref_type_info_needs_substitution) {
             return false;
@@ -953,7 +955,7 @@ public:
             // Acceptance proves a strong object, not just a pointer-tagged value.
             // Use the existing node assignment overload to avoid scalar/enum
             // dispatch. It keeps the same real-reference bookkeeping; the slot
-            // and returned cache value still receive one owned reference each.
+            // receives its owner, and an optional result receives a second one.
             QoreObject* object = value.get<QoreObject>();
             ReferenceHolder<QoreObject> stored(object->objectRefSelf(), xsink);
             AbstractQoreNode* removed = slot->val.assign(stored.release());
@@ -961,13 +963,18 @@ public:
             if (removed) {
                 removed->deref(xsink);
             }
-            if (!*xsink) {
+            if (!*xsink && result) {
                 // This is initialization, not replacement: the result holder
                 // contains NOTHING. Keep its RAII ownership without discarding
                 // an empty value through ValueHolder::operator=().
-                *result = QoreValue(object->objectRefSelf());
+                **result = QoreValue(object->objectRefSelf());
             }
             return true;
+        }
+        // A borrowed cache must contain precisely the already-pinned input.
+        // Filters, fixed storage and unadmitted types keep the owned-result path.
+        if (!result) {
+            return false;
         }
         ValueHolder stored(value.refSelf(), xsink);
         if (!accepted) {
@@ -984,7 +991,7 @@ public:
             removed->deref(xsink);
         }
         if (!*xsink) {
-            *result = slot->val.getReferencedValue();
+            **result = slot->val.getReferencedValue();
         }
         return true;
     }

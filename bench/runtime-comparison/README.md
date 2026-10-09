@@ -93,6 +93,18 @@ snapshot; nonfresh/captured slots reload after cleanup. Type/access checks and
 weak normalization remain. Compile separate before/after artifacts: the new
 helper symbols are absent from older runtimes.
 
+`QORE_DISABLE_AOT_PINNED_CLASS_LOCAL=1` at compilation disables guarded borrowing
+of an existing entry owner for the cache of an initial required-class local.
+The enabled path admits only bounded PHIs/loads of unmodified entry-owned
+parameters and checks the actual value against those retained entry values.
+Reflection replacing a source takes ordinary owned caching. The runtime still
+checks the slot, strong-object representation and class/access acceptance, and
+keeps its normal slot reference, real-reference accounting and cleanup order.
+Only the additional cache reference is omitted. Body-local sources, filters,
+fixed storage and other unadmitted values keep the owned path. Setting this
+presence flag only at execution exercises that fallback. Compile separate
+before/after artifacts: the versioned borrowing helpers are new runtime symbols.
+
 `QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE=1` at runtime disables the fresh-slot
 specialization inside that versioned helper. The enabled path skips generic
 lvalue setup only for an unassigned, ordinary required-class local, keeping

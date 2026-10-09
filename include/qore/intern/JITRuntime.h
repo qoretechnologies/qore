@@ -1466,6 +1466,23 @@ uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTContext* ctx, int32_t i
 uint64_t qore_rt_assign_class_local_result_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx,
     uint64_t val, ExceptionSink* xsink);
 
+//! Attempts a checked class initializer whose cache borrows an existing entry owner.
+/** @param ctx current AOT function context
+    @param idx compiler-proven initial ordinary required-class local slot
+    @param value strong receiver independently pinned by an existing caller entry
+    owner until every cached/SSA use ends, including after reflective slot changes
+    @param xsink exception sink
+    @return 1 if handled (check xsink), 0 without changing the slot for normal fallback
+    @note No cache reference is returned. Successful storage preserves the input
+    bits and acquires the ordinary runtime-slot reference. Type/access checks,
+    real-reference bookkeeping and runtime-local cleanup remain unchanged.
+*/
+int qore_rt_try_assign_pinned_class_local_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, ExceptionSink* xsink);
+//! Throwing counterpart for native AOT exception handling.
+int qore_rt_try_assign_pinned_class_local_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, ExceptionSink* xsink);
+
 //! Assign to a local variable via AOT context slot without type coercion.
 //! Used when coercion has already been applied.
 void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);

@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class PinnedClassLocalTest
+
+class PinnedClassLocalTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("pinned class-local cache", "1.0", \ARGV) {
+        addTestCase("guarded cache borrowing preserves local lifetime and reflection", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTPinnedClassLocal.qr";
+        string expected = "12:1190:1290:7\n40:40\n32,31,30\n32,31,30\n72:50:1\npinned-class-local: ok\n";
+        assertEq(expected, run((qore, "--exec-mode=ast", source)), "AST reference");
+        # Reflective access to these uncaptured locals is supported by AOT, not
+        # the baseline IR/JIT frame lookup. Keep an explicit AST reference.
+        TmpDir dir("qore-pinned-class-local-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_PINNED_CLASS_LOCAL=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool pinned = !prefix.startsWith("QORE_DISABLE_AOT_PINNED_CLASS_LOCAL");
+                foreach string name in (("pinnedPhi", "pinnedReflect", "pinnedReflectReplaced",
+                        "pinnedChanging", "pinnedCycle")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " LLVM definition");
+                    assertEq(pinned, regex(body[0] ?? "", "class_source_is_pinned"),
+                        name + " live identity guard " + prefix + level);
+                    assertEq(pinned, regex(body[0] ?? "",
+                        "(?:call|invoke) i32 @qore_rt_try_assign_pinned_class_local_aot"),
+                        name + " checked borrowed initializer " + prefix + level);
+                }
+                *list<*string> body = regex_extract(ir,
+                    "(?s)define [^\n]*@notPinned_[^\n]*\n(.*?)\n\\}");
+                assertTrue(!!body, "unowned-source definition");
+                assertFalse(regex(body[0] ?? "", "qore_rt_try_assign_pinned_class_local_aot"),
+                    "body-local sources keep the ordinary cache owner");
+                assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_PINNED_CLASS_LOCAL=1 "),
+                    "runtime owned-cache fallback " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_IR_CONTEXT_ELISION=1 "),
+                    "full runtime context " + prefix + level);
+            }
+        }
+    }
+}

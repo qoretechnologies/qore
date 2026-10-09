@@ -387,6 +387,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_assign_class_local_result_aot_v1) },
     { "qore_rt_assign_class_local_result_aot_throwing_v1",
         reinterpret_cast<void*>(&qore_rt_assign_class_local_result_aot_throwing_v1) },
+    { "qore_rt_try_assign_pinned_class_local_aot_v1",
+        reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_v1) },
+    { "qore_rt_try_assign_pinned_class_local_aot_throwing_v1",
+        reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_throwing_v1) },
     { "qore_rt_assign_local_no_coerce_aot", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot) },
     { "qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing) },
     { "qore_rt_assign_local_no_coerce_aot_throwing",
@@ -12486,7 +12490,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTCo
     // admission, type/access checks and runtime-slot ownership, and only bypass
     // the empty weak-holder cleanup on a handled strong-object initializer.
     if (fresh_store && strong_store && qore_rt_get_strong_object(val)
-            && var->tryAssignInitialClassValue(val, result, xsink)) {
+            && var->tryAssignInitialClassValue(val, &result, xsink)) {
         return *xsink ? toBits(QoreValue()) : toBits(result.release());
     }
     bool fresh = false;
@@ -12496,7 +12500,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTCo
         if (*xsink) {
             return toBits(QoreValue());
         }
-        if (fresh_store && var->tryAssignInitialClassValue(val, result, xsink)) {
+        if (fresh_store && var->tryAssignInitialClassValue(val, &result, xsink)) {
             fresh = true;
         } else {
             LValueHelper helper(xsink);
@@ -12527,6 +12531,30 @@ extern "C" DLLEXPORT uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTCo
 extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_assign_local_no_coerce(ctx->locals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_assign_pinned_class_local_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, ExceptionSink* xsink) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_PINNED_CLASS_LOCAL")
+        && !std::getenv("QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE")
+        && !std::getenv("QORE_DISABLE_AOT_CLASS_STRONG_STORE");
+    assert(ctx && idx >= 0 && idx < ctx->num_locals && xsink);
+    LocalVar* var = ctx->locals[idx];
+    QoreValue val = fromBits(value);
+    // The compiler's identity guard supplies the independent entry owner. Keep
+    // all slot, type/access and real-reference checks; only the cache owner is
+    // omitted on an admitted unchanged strong-object initializer.
+    return enabled && var && !*xsink && qore_rt_get_strong_object(val)
+        && var->tryAssignInitialClassValue(val, nullptr, xsink);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_assign_pinned_class_local_aot_throwing_v1(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, ExceptionSink* xsink) {
+    int handled = qore_rt_try_assign_pinned_class_local_aot_v1(ctx, idx, value, xsink);
+    if (*xsink) {
+        throw QoreJITException();
+    }
+    return handled;
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_eval_weak_aot(QoreAOTContext* ctx,

@@ -314,6 +314,8 @@ private:
     std::unordered_map<int32_t, std::unordered_map<const LocalVar*, AotExactClassGuard>>
         aot_exact_class_guards;
     std::unordered_map<uint32_t, const LocalVar*> stable_exact_receiver_loads;
+    // Snapshots backed by existing unmodified entry owners, never new references.
+    std::unordered_map<const LocalVar*, llvm::Value*> aot_pinned_entry_values;
     std::unordered_map<uint32_t, const LocalVar*> stable_scalar_loads;
 
     // Read-only class parameters retain their ordinary runtime slots and entry
@@ -1487,6 +1489,11 @@ private:
     // compound operations (+=, -=, etc.) so that the container's refcount drops to 1,
     // enabling copy-on-write to skip the copy (in-place modification).
     void clearLocalReloadTracker(const void* key, llvm::Module& module, llvm::Function* llvm_func);
+
+    // Guard a class-local cache borrow with identity against persistent source
+    // entry owners. Unknown/large source graphs retain ordinary owned caching.
+    llvm::Value* emitPinnedClassLocalBorrowGuard(uint32_t value_id, llvm::Value* value,
+        llvm::Function* llvm_func);
 
     enum class LocalCacheClearMode {
         DuplicateRefsOnly,

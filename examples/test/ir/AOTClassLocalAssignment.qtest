@@ -41,6 +41,7 @@ class ClassLocalAssignmentTest inherits QUnit::Test {
         foreach string prefix in (("", "QORE_AOT_EH=1 ",
                 "QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE=1 ",
                 "QORE_DISABLE_AOT_CLASS_STORE_RESULT=1 ",
+                "QORE_DISABLE_AOT_PINNED_CLASS_LOCAL=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             bool separate_coercion = prefix.startsWith("QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE");
             bool stored_result = !separate_coercion && !prefix.startsWith("QORE_DISABLE_AOT_CLASS_STORE_RESULT");
@@ -65,6 +66,11 @@ class ClassLocalAssignmentTest inherits QUnit::Test {
                     assertEq(stored_result,
                         regex(body[0] ?? "", "qore_rt_assign_class_local_result_aot" + slot_pattern),
                         name + " owned stored result " + prefix + level);
+                    if (name != "rawClassSource") {
+                        assertEq(stored_result && !prefix.startsWith("QORE_DISABLE_AOT_PINNED_CLASS_LOCAL"),
+                            regex(body[0] ?? "", "(?:call|invoke) i32 @qore_rt_try_assign_pinned_class_local_aot"),
+                            name + " entry-pinned cache borrow " + prefix + level);
+                    }
                 }
                 *list<*string> captured_body = regex_extract(ir,
                     "(?s)define [^\n]*@escapedTarget_[^\n]*\n(.*?)\n\\}");
@@ -87,6 +93,8 @@ class ClassLocalAssignmentTest inherits QUnit::Test {
                     "generic value-store control " + prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLASS_STRONG_STORE=1 "),
                     "weak-normalization path control " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_PINNED_CLASS_LOCAL=1 "),
+                    "owned-cache control " + prefix + level);
             }
         }
     }

@@ -6631,3 +6631,119 @@ from 614 to 616 static instructions. These are static counts, not dynamic costs.
 Next: optimize receiver-local setup/ownership while preserving reflective
 visibility and declaration-order destruction, and profile retained polymorphic
 native dispatch separately from that local-handling cost.
+
+## Entry-pinned class-local cache borrowing (2026-10-09)
+
+This optimization removes one duplicate cache reference, not the runtime local.
+A bounded compiler analysis follows loads/PHIs back to existing unmodified
+entry owners. At each eligible initial class-local assignment, actual identity
+must match one of those retained values. A versioned runtime helper checks the
+ordinary slot, strong representation and class/access acceptance and acquires
+the normal runtime-slot reference. The cache then borrows the independently
+pinned value. Reflection replacing a source, weak/opaque values, filtering,
+fixed storage, captured locals and unknown sources keep ordinary owned caching.
+Real-reference accounting, declaration-order cleanup, runtime visibility,
+exception handling and call/context/observer guards remain intact.
+
+The existing entry owner, not the mutable runtime slot, protects the borrowed
+cache and SSA uses. No extra entry owner is added. This is not the previously
+rejected native-only body-local lowering. The compile/runtime presence control
+is `QORE_DISABLE_AOT_PINNED_CLASS_LOCAL=1`; the new helper ABI requires separately
+compiled baseline/candidate artifacts for the enabled optimization.
+
+Baseline is committed `5bcdad02e`, rebuilt before edits; release SHA256
+`c7acc35efad5e1807c264f2ce4ab7ac1ee887b4fa7f0e6ffbf1376f37c46db2c`.
+Candidate release SHA256 is
+`bcc506c9bc8db0913f3c6029a6c976b8a1d7862b68cdbcadad1626da6ec5a23f`.
+The complete production patch, identities, reference validation, raw-window
+normalization, summaries and profile metadata are in
+[the evidence](results-pinned-class-local-macos-arm64.json).
+
+Each main run uses five forks, three warmups, five 500 ms windows, five startup
+samples and a randomized baseline/candidate/Java schedule. Whole-kernel
+ns/element, median of fork means, excludes startup. No task builds, tests,
+profiling, disassembly or evidence computation overlapped timing; only progress
+reads. Host background activity and filesystem caches remain uncontrolled.
+
+Count 4096, seed 810831, `run-v2vmnig2`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|polymorphic_call|44.136|38.525|-12.71%|no|2.594|14.85x
+|polymorphic_expression_call|10.405|10.783|+3.62%|no|2.587|4.17x
+|monomorphic_call|3.347|3.413|+1.96%|yes|1.698|2.01x
+|optional_method_call|11.036|10.938|-0.88%|yes|1.696|6.45x
+|indirect_wide|7.337|7.325|-0.16%|yes|1.696|4.32x
+|indirect_float|9.189|9.187|-0.02%|yes|1.687|5.44x
+|arithmetic|1.393|1.393|-0.02%|yes|0.983|1.42x
+|dispatch_control|1.451|1.435|-1.09%|yes|1.009|1.42x
+
+Count 1024, seed 810832, `run-hn6bvcid`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|polymorphic_call|45.947|40.461|-11.94%|no|2.559|15.81x
+|polymorphic_expression_call|11.848|12.180|+2.81%|yes|2.558|4.76x
+|monomorphic_call|4.710|4.721|+0.23%|yes|1.693|2.79x
+|optional_method_call|12.282|12.380|+0.79%|yes|1.689|7.33x
+|indirect_wide|8.576|8.443|-1.55%|yes|1.692|4.99x
+|indirect_float|10.324|10.399|+0.73%|yes|1.686|6.17x
+|arithmetic|2.485|2.481|-0.15%|yes|0.978|2.54x
+|dispatch_control|2.624|2.645|+0.80%|yes|1.010|2.62x
+
+The target saves about 5.5 ns/element in both runs, with disjoint fork ranges.
+There is also a consistent expression-control regression; do not describe this
+as a universally faster call implementation. Other control ranges overlap.
+Range overlap is descriptive, not a significance test. Retain the targeted
+12% local-reference saving with the roughly 3% expression regression explicitly
+recorded for follow-up. No startup, isolated call-latency or Java-parity gain is
+claimed. Java retains DONT_INLINE targets, while Qore may inline its exact-base
+branch; the ratios are whole-kernel comparisons, not equal-inlining-policy
+retained-call latency.
+
+The expression and monomorphic functions have identical normalized instruction
+sequences, respectively 982 and 616 static instructions, after resolving
+relocations; their placement changes. The typed-local function grows from 1217
+to 1241 instructions. To test whether executable layout alone explained the
+regression, `run-3x8qoz_f` uses the same executable on both runtimes, with borrowing
+disabled at compilation and execution. It imports no new borrowing helper, so
+this diagnostic can safely reuse the artifact. At count 4096, five forks and the
+same window settings, seed 810833:
+
+|!Kernel|!Old runtime|!New runtime|!Change|!Fork ranges overlap
+|polymorphic_call|43.883|44.568|+1.56%|yes
+|polymorphic_expression_call|10.438|10.726|+2.76%|yes
+|monomorphic_call|3.299|3.277|-0.66%|yes
+
+The expression difference persists with identical generated code and layout;
+the runtime/library effect needs further investigation. A library-layout cause
+is plausible but unproven. This disabled-path diagnostic is not the enabled
+optimization comparison. All three runs total 270 jobs/1350 windows, independently
+checked against raw Qore/JMH output, reference checks and binary/source hashes.
+
+Validation: release/debug each pass 38 files: 30 QUnit files, 77 cases, 4745
+assertions and eight standalones. The new fixture passes 194 assertions per build
+and the expanded assignment fixture 406. Cases include bounded PHIs, reflective
+source/receiver replacement, repeated borrowed/owned transitions, self-cycles,
+returned values, on_exit use, mixed-local destruction and exception cleanup.
+O0/O3, native EH, parallel compilation, full contexts and compile/runtime
+fallback controls pass. The frozen baseline also matches AST output for the
+new fixture. Six reference modes pass 345 checks each; 11 harness tests pass.
+QUnit/FsUtil/Util qmods were rebuilt sequentially before tests. No full-repository,
+sanitizer or cross-architecture qualification is claimed.
+
+Post-timing profiles (10 seconds at 1 ms after warmup, sampled separately):
+
+|!Kernel|!Main samples|!Checked initializer|!Runtime-local clear|!Native continuation|!Exact-class guard
+|polymorphic_call|8287|3359|1606|1177|403
+|polymorphic_expression_call|8494|N/A|N/A|4119|1283
+
+These are disjoint callsite-inclusive sample counts, not timings; nested
+descendants must not be added again. The expression trace also has 380 inlined
+native-continuation sibling samples outside the 4119 callsite samples. Runtime
+local setup/cleanup still dominates the typed-local case; native dispatch and
+class checks remain central in the expression case.
+
+Next: investigate the runtime/library expression regression, then test moving
+repeated class-admission work to guarded entry-time proofs and reducing native
+dispatch checks where Program, receiver identity, access and observability
+invariants genuinely permit it. Keep the runtime slot and destruction semantics;
+do not replace dynamic checks with unguarded parse-time assumptions.

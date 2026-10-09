@@ -5495,6 +5495,75 @@ void QoreIRToLLVM::clearLocalReloadTracker(const void* key, llvm::Module& module
     }
 }
 
+llvm::Value* QoreIRToLLVM::emitPinnedClassLocalBorrowGuard(uint32_t value_id, llvm::Value* value,
+        llvm::Function* llvm_func) {
+    if (!aot_mode || !current_ir_func || current_ir_func->blocks.empty()
+            || std::getenv("QORE_DISABLE_AOT_PINNED_CLASS_LOCAL")) {
+        return nullptr;
+    }
+    // Bounded source analysis, not a general escape proof. Every admitted load
+    // already has an entry owner that source/lvalue writes cannot clear. A PHI
+    // may select among at most four such owners; runtime identity still guards
+    // reflection replacing any source. No additional reference is acquired.
+    std::vector<uint32_t> pending{value_id};
+    std::unordered_set<uint32_t> visited;
+    std::vector<const LocalVar*> owners;
+    size_t remaining = 16;
+    while (!pending.empty()) {
+        if (!remaining--) {
+            return nullptr;
+        }
+        uint32_t id = pending.back();
+        pending.pop_back();
+        if (!visited.insert(id).second) {
+            continue;
+        }
+        auto definition = value_definitions.find(id);
+        if (definition == value_definitions.end()) {
+            return nullptr;
+        }
+        if (definition->second->opcode == QoreIROpcode::Phi) {
+            const auto* phi = static_cast<const QoreIRPhiInstruction*>(definition->second);
+            if (phi->incoming.size() + pending.size() > remaining) {
+                return nullptr;
+            }
+            for (const auto& incoming : phi->incoming) {
+                pending.push_back(incoming.value.id);
+            }
+            continue;
+        }
+        auto stable = stable_exact_receiver_loads.find(id);
+        if (definition->second->opcode != QoreIROpcode::LoadLocal
+                || stable == stable_exact_receiver_loads.end()
+                || !preinstantiated_entry_cleanup_by_local.count(stable->second)) {
+            return nullptr;
+        }
+        if (std::find(owners.begin(), owners.end(), stable->second) == owners.end()) {
+            if (owners.size() == 4) {
+                return nullptr;
+            }
+            owners.push_back(stable->second);
+        }
+    }
+    auto entry = block_map.find(current_ir_func->blocks.front().get());
+    if (owners.empty() || entry == block_map.end() || entry->second->getParent() != llvm_func) {
+        return nullptr;
+    }
+    llvm::Value* pinned = llvm::ConstantInt::getFalse(ctx);
+    for (const LocalVar* owner : owners) {
+        auto snapshot = aot_pinned_entry_values.find(owner);
+        if (snapshot == aot_pinned_entry_values.end()) {
+            llvm::IRBuilder<> eb(entry->second, entry->second->getFirstInsertionPt());
+            llvm::Value* original = eb.CreateLoad(i64_type,
+                preinstantiated_entry_cleanup_by_local.at(owner), "pinned_class_source");
+            snapshot = aot_pinned_entry_values.emplace(owner, original).first;
+        }
+        pinned = builder->CreateOr(pinned,
+            builder->CreateICmpEQ(value, snapshot->second), "class_source_is_pinned");
+    }
+    return pinned;
+}
+
 void QoreIRToLLVM::clearLocalCachedValue(const void* key, llvm::Module& module,
         llvm::Function* llvm_func, LocalCacheClearMode mode) {
     const LocalVar* var_ptr = reinterpret_cast<const LocalVar*>(key);
@@ -11434,6 +11503,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     loop_program_interrupts = nullptr;
     aot_exact_class_guards.clear();
     stable_exact_receiver_loads.clear();
+    aot_pinned_entry_values.clear();
     stable_scalar_loads.clear();
     aot_class_param_cache_candidates.clear();
     aot_class_param_caches.clear();
@@ -15912,7 +15982,38 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             : "qore_rt_assign_local_eval_weak_throwing");
 
                 llvm::Value* stored_result = nullptr;
+                llvm::BasicBlock* pinned_store_done = nullptr;
                 if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    llvm::Value* pinned = return_class_store_result
+                        ? emitPinnedClassLocalBorrowGuard(inst->operands[0].id, boxed, llvm_func) : nullptr;
+                    if (pinned) {
+                        auto* probe_bb = llvm::BasicBlock::Create(ctx, "pinned_class_store_probe", llvm_func);
+                        auto* borrowed_bb = llvm::BasicBlock::Create(ctx, "pinned_class_store_borrowed", llvm_func);
+                        auto* owned_bb = llvm::BasicBlock::Create(ctx, "pinned_class_store_owned", llvm_func);
+                        pinned_store_done = llvm::BasicBlock::Create(ctx, "pinned_class_store_done", llvm_func);
+                        builder->CreateCondBr(pinned, probe_bb, owned_bb);
+                        builder->SetInsertPoint(probe_bb);
+                        auto probe_ft = llvm::FunctionType::get(i32_type,
+                            {ptr_type, i32_type, i64_type, ptr_type}, false);
+                        llvm::Value* handled = emitMaybeInvoke(
+                            module.getOrInsertFunction("qore_rt_try_assign_pinned_class_local_aot_v1", probe_ft),
+                            module.getOrInsertFunction("qore_rt_try_assign_pinned_class_local_aot_throwing_v1",
+                                probe_ft),
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), boxed, xsink_arg},
+                            module, llvm_func, inst);
+                        emitExceptionCheck(module, llvm_func, inst);
+                        builder->CreateCondBr(builder->CreateICmpNE(handled,
+                            llvm::ConstantInt::get(i32_type, 0)), borrowed_bb, owned_bb);
+                        builder->SetInsertPoint(borrowed_bb);
+                        // Trackers were cleared before the assignment. The
+                        // unchanged entry owner, not this mutable runtime slot,
+                        // pins the borrowed cache across reflective writes.
+                        builder->CreateStore(boxed, it->second);
+                        markLocalCacheFresh(key, llvm_func);
+                        builder->CreateBr(pinned_store_done);
+                        builder->SetInsertPoint(owned_bb);
+                    }
                     if (return_class_store_result) {
                         aot_helper_name = "qore_rt_assign_class_local_result_aot_v1";
                         aot_helper_throwing_name = "qore_rt_assign_class_local_result_aot_throwing_v1";
@@ -15922,7 +16023,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto assign_helper = module.getOrInsertFunction(aot_helper_name, aot_ft);
                     auto assign_helper_throwing = module.getOrInsertFunction(
                             aot_helper_throwing_name, aot_ft);
-                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
                     llvm::Value* assigned = emitMaybeInvoke(assign_helper, assign_helper_throwing,
                             {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
                              boxed, xsink_arg},
@@ -15967,6 +16067,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     retainLocalCacheValue(key, boxed, module, llvm_func, false);
                 } else {
                     reloadLocalFromRuntime(key, module, llvm_func, false);
+                }
+                if (pinned_store_done) {
+                    builder->CreateBr(pinned_store_done);
+                    builder->SetInsertPoint(pinned_store_done);
                 }
                 if (linst->mode == AssignmentMode::Normal) {
                     clear_cleanup_alloca(consumed_cleanup);
