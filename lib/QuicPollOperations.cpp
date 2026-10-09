@@ -40,6 +40,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <cerrno>
+#include <set>
 #include <cstring>
 #include <fcntl.h>
 #include <unistd.h>
@@ -715,6 +716,37 @@ int SocketQuicClientPollOperation::sendPendingPackets(
         ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets EMPTY (no packets to send)\n");
         return 0;
     }
+
+#ifdef DEBUG
+    // Test hook: QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS=i[,j...] silently drops the listed datagrams of each
+    // connection attempt (0-based), modelling datagrams lost on the path.  Read on every call because tests
+    // scope the variable to one case in a shared test process.
+    if (const char* drop = getenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS")) {
+        std::set<int> dropped;
+        for (const char* p = drop; *p; ) {
+            char* end;
+            long v = strtol(p, &end, 10);
+            if (end == p) {
+                break;
+            }
+            dropped.insert(static_cast<int>(v));
+            p = *end == ',' ? end + 1 : end;
+        }
+        QuicPacketBatch kept;
+        for (int i = 0; i < pkt_batch_.size(); ++i) {
+            if (!dropped.count(test_datagram_seq_++)) {
+                kept.addPacket(pkt_batch_.packetData(i), pkt_batch_.packetLen(i));
+            }
+        }
+        pkt_batch_.clear();
+        for (int i = 0; i < kept.size(); ++i) {
+            pkt_batch_.addPacket(kept.packetData(i), kept.packetLen(i));
+        }
+        if (pkt_batch_.empty()) {
+            return 0;
+        }
+    }
+#endif
 
     int fd = sock->priv->socket->getSocket();
 
@@ -1803,6 +1835,11 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     // Pin the target session for the whole packet-processing call
     std::shared_ptr<QuicSession> pinned;
     QuicSession* target_session = nullptr;
+    // header of the Initial that created a new session, and whether that Initial returned a valid Retry
+    // token; used to answer an NGTCP2_ERR_RETRY with a Retry packet (see QuicSession::dropped_)
+    ngtcp2_pkt_hd new_hdr;
+    bool new_session_created = false;
+    bool new_session_validated = false;
     if (target_sid >= 0) {
         auto sit = sessions_.find(target_sid);
         if (sit == sessions_.end()) {
@@ -1850,6 +1887,14 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
             return 0;
         }
 
+        // A client that returns a Retry token this process issued has a validated address; its
+        // session is created with the original DCID recorded in the token.  An unverifiable token
+        // (expired, from another process, or forged) is ignored: the Initial is treated as a new
+        // connection without address validation.
+        ngtcp2_cid retry_odcid;
+        bool retry_validated = hdr.tokenlen && QuicSession::verifyRetryToken(hdr,
+            reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen, retry_odcid);
+
         // Create a new session with dispatcher for CID registration and shared SSL_CTX.
         // Pass through the socket's ssl_verify_mode to enable mTLS when configured.
         auto new_session = QuicSession::createServer(
@@ -1859,7 +1904,8 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
             reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen,
             &dispatcher, shared_ctx,
             sock->priv->socket->priv->ssl_verify_mode,
-            sock->priv->socket->priv->ssl_accept_all_certs);
+            sock->priv->socket->priv->ssl_accept_all_certs,
+            retry_validated ? &retry_odcid : nullptr);
         if (*xsink || !new_session) {
             // Log and continue — a single client's failed handshake should not
             // abort the server for all other clients
@@ -1886,6 +1932,11 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         }
 
         target_session = new_session.get();
+        // keep the new session pinned for this call: a dropped session is removed from the maps below
+        pinned = new_session;
+        new_hdr = hdr;
+        new_session_created = true;
+        new_session_validated = retry_validated;
     }
 
     // Return the target session to the caller for targeted stream checking
@@ -1902,6 +1953,38 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     path.remote.addrlen = src_addrlen;
 
     int rv = target_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
+    if (*xsink && target_session->isDropped()) {
+        // The client's first Initial datagram was lost or reordered (see QuicSession::dropped_):
+        // drop the session silently — no CONNECTION_CLOSE, which the client would take as a failed
+        // handshake — and unregister its CIDs now, so the client's retransmitted Initial, which
+        // carries the same DCID, is accepted as a new connection instead of being routed here.
+        printd(1, "SocketQuicServerPollOperation::recvAndProcessPacket(): dropping session %lld: %s\n",
+            (long long)target_session->getSessionId(), "first client Initial does not start the ClientHello");
+        xsink->clear();
+        int64_t sid = target_session->getSessionId();
+        target_session->unregisterFromDispatcher();
+        sock->priv->socket->priv->removeQuicSession(sid);
+        sessions_.erase(sid);
+        // ngtcp2 asks for a Retry when the second part of the ClientHello arrived first: the Retry
+        // validates the client's address, so the client's next Initial is accepted even if its first
+        // datagram is lost again; without one, both datagrams must arrive in the same PTO round.
+        // Never answer an Initial that already returned a valid token: the client does not
+        // accept a second Retry (RFC 9000 section 17.2.5.2).
+        if (new_session_created && !new_session_validated && target_session->isRetryRequested()) {
+            uint8_t retry_buf[NGTCP2_MAX_UDP_PAYLOAD_SIZE];
+            ssize_t retry_len = QuicSession::writeRetry(retry_buf, sizeof(retry_buf), new_hdr,
+                reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen);
+            if (retry_len > 0) {
+                int fd = sock->priv->socket->getSocket();
+                (void)sendto(fd, retry_buf, static_cast<size_t>(retry_len), 0,
+                    reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen);
+            }
+        }
+        if (target_out) {
+            *target_out = nullptr;
+        }
+        return 0;
+    }
     if (*xsink) {
         // A single session's packet read failure (e.g., TLS handshake error when
         // client cert is required but not provided) should not abort the entire

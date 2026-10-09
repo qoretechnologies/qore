@@ -1,0 +1,212 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP/3 server handling of a lost or reordered first client datagram.
+
+    A ClientHello with a post-quantum key share does not fit one datagram, so a
+    client's first flight is two Initial datagrams.  When the first is lost (or
+    arrives after the second), the server's first Initial does not start the
+    ClientHello; ngtcp2 then asks the server for a Retry (NGTCP2_ERR_RETRY) or a
+    silent drop.  The server used to answer with CONNECTION_CLOSE, so the client
+    failed with "connection closed by peer" at once, or - when that close was
+    lost as well - stalled until its connect timeout.
+
+    The client-side datagram loss is modelled with the DEBUG-build test hook
+    QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS; the cases skip in other builds.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires RestClientIo
+%requires json
+
+%exec-class Http3LostFirstInitialTest
+
+class PingHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, make_json({"ok": True}), {"Content-Type": MimeTypeJson});
+    }
+}
+
+class Http3LostFirstInitialTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        string mUrl;
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+        #! The client's initial PTO: a recovery faster than this did not wait for a retransmission
+        const ClientInitialPtoMs = 900;
+    }
+
+    #! True when running under valgrind, which makes the client's timers too slow for latency assertions
+    private bool underValgrind() {
+        return is_file("/proc/self/maps") && ReadOnlyFile::readTextFile("/proc/self/maps") =~ /valgrind|vgpreload/;
+    }
+
+    constructor() : Test("Http3LostFirstInitialTest", "1.0") {
+        addTestCase("lost first datagram: the server answers with Retry", \testLostFirst());
+        addTestCase("lost first datagram after the Retry: the validated client is buffered", \testLostAfterRetry());
+        addTestCase("every datagram of a request is delivered after a lost first datagram", \testBody());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("h3-lost-initial", LoggerLevel::getLevelWarn());
+        mServer = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "debug": False});
+        mServer.setHandler("ping", "/ping", NOTHING, new PingHandler());
+        mServer.waitForAsyncIo();
+        hash<auto> info = mServer.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        mServer.waitForAsyncIo();
+        mUrl = sprintf("https://127.0.0.1:%d", info.port);
+    }
+
+    globalTearDown() {
+        if (mServer) {
+            mServer.stop();
+        }
+    }
+
+    #! A new HTTP/3 client, so each request opens a new QUIC connection
+    private RestClientIo client(timeout connect_timeout = 5s) {
+        return new RestClientIo({"url": mUrl, "protocol": "h3", "ssl_verify_cert": False, "data": "json",
+            "timeout": 10s, "connect_timeout": connect_timeout});
+    }
+
+    #! Skips unless the build drops datagrams for QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS (DEBUG builds)
+    private checkDropHook() {
+        setenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS", (foldl $1 + "," + $2, (map string($1), xrange(64))));
+        on_exit unsetenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
+        try {
+            client(500ms).restGet("/ping");
+        } catch (hash<ExceptionInfo> ex) {
+            # every client datagram was dropped: the hook is active
+            return;
+        }
+        testSkip("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS needs a DEBUG build");
+    }
+
+    #! Returns the time in ms for one request on a new connection
+    private int timedRequest() {
+        int t0 = clock_get_monotonic_us();
+        hash<auto> resp = client().restGet("/ping");
+        assertEq(200, resp.status_code);
+        assertTrue(resp.body.ok);
+        return (clock_get_monotonic_us() - t0) / 1000;
+    }
+
+    testLostFirst() {
+        checkDropHook();
+        setenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS", "0");
+        on_exit unsetenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
+        for (int i = 0; i < 3; ++i) {
+            # the Retry answers the second datagram at once; a silent drop would cost a PTO and a
+            # CONNECTION_CLOSE fails the request
+            int ms = timedRequest();
+            if (!underValgrind()) {
+                assertLt(ClientInitialPtoMs, ms, "recovered by the Retry, not a retransmission");
+            }
+        }
+    }
+
+    testLostAfterRetry() {
+        checkDropHook();
+        # 0: the first datagram of the first flight; 2: the first datagram of the flight answering the Retry
+        setenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS", "0,2");
+        on_exit unsetenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
+        # the server buffers the validated client's out-of-order ClientHello; the client's PTO resends the
+        # lost part
+        assertLt(5000, timedRequest());
+    }
+
+    testBody() {
+        checkDropHook();
+        setenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS", "0");
+        on_exit unsetenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
+        RestClientIo rc = client();
+        for (int i = 0; i < 5; ++i) {
+            hash<auto> resp = rc.restPost("/ping", {"n": i, "pad": strmul("x", 3000)});
+            assertEq(200, resp.status_code);
+        }
+    }
+}

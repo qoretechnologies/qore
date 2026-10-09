@@ -513,6 +513,54 @@ std::shared_ptr<QuicSession> QuicSession::createClient(
     return session;
 }
 
+//! Process-wide secret for Retry tokens; tokens are only valid in the process that issued them
+static const uint8_t* quic_retry_secret(size_t& len) {
+    static uint8_t secret[32];
+    static std::once_flag once;
+    static bool ok = false;
+    std::call_once(once, [] {
+        ok = RAND_bytes(secret, sizeof(secret)) == 1;
+    });
+    len = sizeof(secret);
+    return ok ? secret : nullptr;
+}
+
+ssize_t QuicSession::writeRetry(uint8_t* buf, size_t buflen, const ngtcp2_pkt_hd& hd,
+        const struct sockaddr* remote_addr, socklen_t remote_addrlen) {
+    size_t secretlen;
+    const uint8_t* secret = quic_retry_secret(secretlen);
+    if (!secret) {
+        return -1;
+    }
+    ngtcp2_cid scid;
+    scid.datalen = NGTCP2_MAX_CIDLEN;
+    if (RAND_bytes(scid.data, static_cast<int>(scid.datalen)) != 1) {
+        return -1;
+    }
+    uint8_t token[NGTCP2_CRYPTO_MAX_RETRY_TOKENLEN2];
+    ngtcp2_ssize tokenlen = ngtcp2_crypto_generate_retry_token2(token, secret, secretlen, hd.version,
+        reinterpret_cast<const ngtcp2_sockaddr*>(remote_addr), static_cast<ngtcp2_socklen>(remote_addrlen),
+        &scid, &hd.dcid, timestamp());
+    if (tokenlen < 0) {
+        return -1;
+    }
+    ngtcp2_ssize nwrite = ngtcp2_crypto_write_retry(buf, buflen, hd.version, &hd.scid, &scid, &hd.dcid,
+        token, static_cast<size_t>(tokenlen));
+    return nwrite < 0 ? -1 : static_cast<ssize_t>(nwrite);
+}
+
+bool QuicSession::verifyRetryToken(const ngtcp2_pkt_hd& hd, const struct sockaddr* remote_addr,
+        socklen_t remote_addrlen, ngtcp2_cid& odcid) {
+    size_t secretlen;
+    const uint8_t* secret = quic_retry_secret(secretlen);
+    if (!secret || !hd.tokenlen || hd.token[0] != NGTCP2_CRYPTO_TOKEN_MAGIC_RETRY2) {
+        return false;
+    }
+    return ngtcp2_crypto_verify_retry_token2(&odcid, hd.token, hd.tokenlen, secret, secretlen, hd.version,
+        reinterpret_cast<const ngtcp2_sockaddr*>(remote_addr), static_cast<ngtcp2_socklen>(remote_addrlen),
+        &hd.dcid, RETRY_TOKEN_TIMEOUT_NS, timestamp()) == 0;
+}
+
 std::shared_ptr<QuicSession> QuicSession::createServer(
     qore_socket_private* sock, ExceptionSink* xsink,
     const ngtcp2_pkt_hd* initial_hdr,
@@ -522,7 +570,8 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
     QoreDatagramDispatcher* dispatcher,
     SSL_CTX* shared_ssl_ctx,
     int ssl_verify_mode,
-    bool ssl_accept_all_certs) {
+    bool ssl_accept_all_certs,
+    const ngtcp2_cid* retry_odcid) {
     assert(cert);
     assert(pk);
     assert(local_addr);
@@ -535,7 +584,7 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
                             local_addr, local_addrlen,
                             remote_addr, remote_addrlen,
                             dispatcher, shared_ssl_ctx,
-                            ssl_verify_mode, ssl_accept_all_certs) != 0) {
+                            ssl_verify_mode, ssl_accept_all_certs, retry_odcid) != 0) {
         return nullptr;
     }
     // Clear the temporary socket pointer; it was only needed during init
@@ -992,7 +1041,8 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
                             QoreDatagramDispatcher* dispatcher,
                             SSL_CTX* shared_ssl_ctx,
                             int ssl_verify_mode,
-                            bool ssl_accept_all_certs) {
+                            bool ssl_accept_all_certs,
+                            const ngtcp2_cid* retry_odcid) {
     local_idle_timeout_ns_ = get_configured_quic_idle_timeout_ns();
 
     sock_ = sock;
@@ -1083,6 +1133,17 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
 #ifdef DEBUG
     settings.initial_ts += quic_test_clock_step_back_ns();
 #endif
+    if (quic_ngtcp2_log_enabled()) {
+        settings.log_printf = quic_ngtcp2_log_printf;
+    }
+    // A client returning a valid Retry token has a validated address: ngtcp2 then buffers an Initial
+    // whose CRYPTO data does not start the ClientHello instead of asking for another Retry
+    // (ngtcp2_conn.c conn_recv_handshake_cpkt); ngtcp2 copies the token
+    if (retry_odcid) {
+        settings.token = initial_hdr->token;
+        settings.tokenlen = initial_hdr->tokenlen;
+        settings.token_type = NGTCP2_TOKEN_TYPE_RETRY;
+    }
 
     // Transport parameters
     ngtcp2_transport_params params;
@@ -1099,7 +1160,16 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     params.active_connection_id_limit = QUIC_ACTIVE_CONNECTION_ID_LIMIT;
     // RFC 9221: Advertise willingness to receive QUIC DATAGRAM frames
     params.max_datagram_frame_size = QUIC_MAX_DATAGRAM_FRAME_SIZE;
-    params.original_dcid = initial_hdr->dcid;
+    if (retry_odcid) {
+        // RFC 9000 section 7.3: after a Retry, original_destination_connection_id is the client's
+        // first DCID and retry_source_connection_id the SCID of the Retry, which the client now uses
+        // as its DCID
+        params.original_dcid = *retry_odcid;
+        params.retry_scid = initial_hdr->dcid;
+        params.retry_scid_present = 1;
+    } else {
+        params.original_dcid = initial_hdr->dcid;
+    }
     params.original_dcid_present = 1;
 
     // Generate stateless reset token using a random secret
@@ -1364,6 +1434,10 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
         xsink->raiseException("QUIC-ERROR", "QUIC connection not initialized");
         return -1;
     }
+    // a dropped connection must not process further packets (see dropped_)
+    if (dropped_.load(std::memory_order_acquire)) {
+        return 0;
+    }
 
     ngtcp2_pkt_info pi{};
 
@@ -1371,11 +1445,28 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     if (len > 0 && sock_) {
         sock_->markDataReceived();
     }
-    int rv = ngtcp2_conn_read_pkt(conn_, &path, &pi, data, len, nowLocked());
+    last_rx_ts_ = nowLocked();
+    int rv = ngtcp2_conn_read_pkt(conn_, &path, &pi, data, len, last_rx_ts_);
     if (rv != 0) {
         // Handle specific error codes
         if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
             return 0;  // connection closing gracefully
+        }
+        // A server receives these for a client Initial whose CRYPTO data does not start the
+        // ClientHello: the client's first datagram was lost or reordered, which is routine because
+        // a ClientHello with a post-quantum key share spans two datagrams (ngtcp2_conn.c
+        // conn_recv_handshake_cpkt: "Client Hello might not fit into single Initial packet").
+        // ngtcp2 asks the server to validate the address with a Retry (ERR_RETRY) or to drop the
+        // connection silently (ERR_DROP_CONN); either way the connection must not be closed with a
+        // CONNECTION_CLOSE, which the client takes as a failed handshake.  The caller drops the
+        // session, and the client's retransmitted Initial starts a new one.
+        if (is_server_ && (rv == NGTCP2_ERR_RETRY || rv == NGTCP2_ERR_DROP_CONN)) {
+            retry_requested_.store(rv == NGTCP2_ERR_RETRY, std::memory_order_release);
+            dropped_.store(true, std::memory_order_release);
+            xsink->raiseException("QUIC-DROP-CONN", "the client Initial does not start the ClientHello "
+                "(%s); dropping the connection without CONNECTION_CLOSE so the client retransmits",
+                ngtcp2_strerror(rv));
+            return -1;
         }
         // Get more detailed error info from ngtcp2 and OpenSSL
         const ngtcp2_ccerr* ccerr = ngtcp2_conn_get_ccerr(conn_);
@@ -1424,11 +1515,22 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
     for (int i = 0; i < count; ++i) {
         ngtcp2_pkt_info pi{};
 
+        if (dropped_.load(std::memory_order_acquire)) {
+            break;  // a dropped connection processes no further packets (see dropped_)
+        }
+        last_rx_ts_ = nowLocked();
         int rv = ngtcp2_conn_read_pkt(conn_, &packets[i].path, &pi,
-                                       packets[i].data, packets[i].len, nowLocked());
+                                       packets[i].data, packets[i].len, last_rx_ts_);
         if (rv != 0) {
             if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
                 break;  // connection shutting down — no more packets can be processed
+            }
+            // see readPacketLocked(): drop silently so the client's retransmitted Initial starts
+            // a new connection; the session is reaped as closed
+            if (is_server_ && (rv == NGTCP2_ERR_RETRY || rv == NGTCP2_ERR_DROP_CONN)) {
+                retry_requested_.store(rv == NGTCP2_ERR_RETRY, std::memory_order_release);
+                dropped_.store(true, std::memory_order_release);
+                break;
             }
             // Log per-packet errors and continue (matching existing batch error handling)
             printd(1, "QuicSession::readPacketBatch(): packet %d/%d failed: %s (rv=%d)\n",
@@ -2952,6 +3054,7 @@ QuicStreamInfo* QuicSession::getOrCreateStream(int64_t stream_id) {
     auto stream = std::make_unique<QuicStreamInfo>();
     stream->stream_id = stream_id;
     stream->state = QuicStreamState::Open;
+    stream->opened_ts = nowLocked();
     auto* ptr = stream.get();
     streams_[stream_id] = std::move(stream);
     // Stream count went from 0 to nonzero — re-enable keepalive while in use.
@@ -3404,6 +3507,10 @@ QuicSession::CloseReason QuicSession::getCloseReason() const {
     if (idle_closed_.load(std::memory_order_acquire)) {
         return CloseReason::Idle;
     }
+    // a server connection dropped without CONNECTION_CLOSE (see dropped_) is a local teardown
+    if (dropped_.load(std::memory_order_acquire)) {
+        return CloseReason::LocalClose;
+    }
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (!conn_) {
         // No conn — treat as a local-side teardown for caller error-code purposes.
@@ -3488,6 +3595,32 @@ int QuicSession::cancelStream(int64_t stream_id, uint64_t app_error_code, Except
     if (!conn_) {
         xsink->raiseException("QUIC-ERROR", "cancelStream() called on closed QUIC connection");
         return -1;
+    }
+
+    // A client request cancelled before any response header (typically by its deadline) is the symptom
+    // of a stalled connection; record the transport state so the stall can be diagnosed from the log
+    if (!is_server_) {
+        auto it = streams_.find(stream_id);
+        if (it != streams_.end() && !it->second->headers_complete) {
+            ngtcp2_conn_info cinfo;
+            ngtcp2_conn_get_conn_info(conn_, &cinfo);
+            uint64_t now = nowLocked();
+            const QuicStreamInfo& si = *it->second;
+            qore_async_io_log(QORE_LOG_LEVEL_WARN, "QUIC: cancelling unanswered client stream %lld "
+                "(%s %s) on session %lld after %lld ms: handshake_complete=%d last_rx=%lld ms ago "
+                "pkt_sent=%llu pkt_recv=%llu pkt_lost=%llu bytes_in_flight=%llu cwnd=%llu smoothed_rtt=%lld ms "
+                "loss_timer_in=%lld ms streams=%zu",
+                (long long)stream_id, si.method.c_str(), si.path.c_str(), (long long)session_id_,
+                si.opened_ts ? (long long)((now - si.opened_ts) / 1000000) : -1LL,
+                (int)isHandshakeComplete(),
+                last_rx_ts_ ? (long long)((now - last_rx_ts_) / 1000000) : -1LL,
+                (unsigned long long)cinfo.pkt_sent, (unsigned long long)cinfo.pkt_recv,
+                (unsigned long long)cinfo.pkt_lost, (unsigned long long)cinfo.bytes_in_flight,
+                (unsigned long long)cinfo.cwnd, (long long)(cinfo.smoothed_rtt / 1000000),
+                ngtcp2_conn_get_expiry(conn_) == UINT64_MAX ? -1LL
+                    : (long long)(((int64_t)ngtcp2_conn_get_expiry(conn_) - (int64_t)now) / 1000000),
+                streams_.size());
+        }
     }
 
     // Notify HTTP/3 layer first (must happen before ngtcp2 shutdown)
