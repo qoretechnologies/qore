@@ -128,6 +128,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "having": Type::Hash,
             "superquery": Type::Hash,
             "forupdate": Type::Boolean,
+            "forupdate_no_key": Type::Boolean,
             "partition": Type::String,
         };
 
@@ -662,6 +663,24 @@ table.create();
     #! begins a transaction on the underlying @ref Qore::SQL::AbstractDatasource
     beginTransaction() {
         ds.beginTransaction();
+    }
+
+    #! Returns whether row writers can preserve concurrent foreign-key checks
+    /** @return True if the driver supports the explicit @c forupdate_no_key select option
+        @throw DBI-ERROR if server capability discovery fails
+        @note This lock still excludes other row writers, deletes and key changes. It permits concurrent
+            key-share locks, such as foreign-key checks, and is not a reservation for a later key change.
+            The ordinary @c forupdate option retains its existing stronger behavior.
+        @par Example
+        A status writer can allow an independently committed audit to reference its existing parent row.
+        @since SqlUtil 3.3.0
+    */
+    bool supportsNonKeyUpdateLocks() {
+        return supportsNonKeyUpdateLocksImpl();
+    }
+
+    private bool supportsNonKeyUpdateLocksImpl() {
+        return False;
     }
 
     #! Returns whether the driver supports database-enforced transaction, statement and lock deadlines
@@ -5533,6 +5552,16 @@ string sql = table.getSelectSql(sh, \args);
         };
         on_success args = info.args;
 
+        if (info.query_hash.forupdate_no_key) {
+            if (!info.query_hash.forupdate || info.query_hash.superquery) {
+                throw "OPTION-ERROR", "forupdate_no_key requires forupdate and does not support superquery";
+            }
+            if (!supportsNonKeyUpdateLocks()) {
+                throw "NONKEY-UPDATE-LOCK-NOT-SUPPORTED",
+                    sprintf("%s: database driver %y does not support non-key update locks", getDesc(), ds.getDriverName());
+            }
+        }
+
         if (exists info.query_hash.offset) {
             if (!info.query_hash.orderby) {
                 # use primary key by default
@@ -5865,7 +5894,11 @@ string sql = table.getSelectSql(sh, \args);
         #printf("SQL: %s\nargs: %y\n", sql, args);
 
         if (info.query_hash.forupdate && !info.query_hash.superquery) {
-            doForUpdate(\sql);
+            if (info.query_hash.forupdate_no_key) {
+                doForNonKeyUpdate(\sql);
+            } else {
+                doForUpdate(\sql);
+            }
         }
 
         # issue #4206: splice comments and hints into the SQL query string last
@@ -6053,6 +6086,10 @@ string sql = table.getSelectSql(sh, \args);
 
     private doForUpdate(reference<string> sql) {
         sql += " for update";
+    }
+
+    private doForNonKeyUpdate(reference<string> sql) {
+        throw "NONKEY-UPDATE-LOCK-NOT-SUPPORTED", "non-key update locks are not implemented by this driver";
     }
 
     private string getSelectSqlName(*hash<auto> qh) {
