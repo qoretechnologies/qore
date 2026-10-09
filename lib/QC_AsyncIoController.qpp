@@ -516,8 +516,9 @@ static bool AsyncIoController::getAutostop() {
     - \c cache_size: the number of operations in the controller
     - \c cache_keys: the keys of all operations in the controller
     - \c threads: a list with one hash per running I/O thread, ordered by index, with the keys \c index (the
-      thread's index), \c tid (its thread ID) and \c cache_keys (the keys of the operations on that thread);
-      called from an I/O thread, only that thread is listed
+      thread's index), \c tid (its thread ID), \c cache_keys (the keys of the operations on that thread) and
+      \c timeouts (the number of entries in the thread's timeout heap); called from an I/O thread, only that thread
+      is listed
     - \c io_threads: the number of I/O threads the controller runs (see @ref setMaxIoThreads())
 
     @since %Qore 3.0

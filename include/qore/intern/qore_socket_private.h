@@ -2589,13 +2589,15 @@ struct qore_socket_private : public QoreReferenceCounter {
                 "flag", xsink);
         }
 
-        if (non_blocking) { // set non-blocking
-            arg |= O_NONBLOCK;
-        } else { // set blocking
-            arg &= ~O_NONBLOCK;
+        int new_arg = non_blocking
+            ? (arg | O_NONBLOCK)    // set non-blocking
+            : (arg & ~O_NONBLOCK);  // set blocking
+        // a socket on the async I/O thread is already non-blocking at every I/O call; skip the second syscall
+        if (new_arg == arg) {
+            return 0;
         }
 
-        if (fcntl(sock, F_SETFL, arg) < 0) {
+        if (fcntl(sock, F_SETFL, new_arg) < 0) {
             return sock_errno_err("SOCKET-CONNECT-ERROR", "error in fcntl() setting socket descriptor status "
                 "flag", xsink);
         }

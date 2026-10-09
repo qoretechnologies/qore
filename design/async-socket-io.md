@@ -304,6 +304,24 @@ the socket while another one ran a synchronous call on it, and wakes went to the
 - **Wakes** (`wakeSocket()`) go to the thread recorded in `sock_to_thread` for the socket hash, or without a
   record to the thread the hash routes to.
 
+### Timeout Heap
+
+Each I/O thread keeps the deadlines of its operations in a min-heap (`IoThreadContext::timeout_heap`) of
+`{deadline, key}` entries: the operation timeout (`PollInfo::timeout_date_us`, armed when the operation is first
+polled) and the protocol-level poll timeout (`PollInfo::poll_timeout_deadline_us`, from a `poll_timeout_ms` in the
+poll info, used by QUIC timers and heartbeats).  Phase 1 Step C pops the entries that are due and decides from the
+operation's current deadlines whether it timed out, its protocol timer fired, or the entry is stale.
+
+- **One entry per operation**: `armTimeoutHeap()` pushes an entry only for a deadline earlier than the operation's
+  earliest entry already in the heap (`PollInfo::heap_deadline_us`); an entry popped before the operation's current
+  deadline re-arms that deadline.  Every continuePoll() result re-arms the deadlines, which used to push an entry
+  - with a copy of the key - each time, so an operation with a 30 s timeout added one entry per I/O event.
+- **Compaction**: entries are removed lazily, so a finished operation leaves its entry until it reaches the top.
+  When the heap holds more than `2 * cache.size() + TIMEOUT_HEAP_COMPACT_SLACK` entries, it is rebuilt from the cache
+  with the entry of each operation that has a deadline armed.  An operation queued for continuePoll() at that point
+  has none and is re-armed with its result, so no deadline is lost.
+- `getInfo()` reports each thread's heap size (`threads[].timeouts`).
+
 ### I/O threads never wait for each other
 
 An I/O thread must never block waiting for another I/O thread: two I/O threads waiting for each other would

@@ -195,7 +195,9 @@
     Linux), at most 8; it ran a single I/O thread unless \c QORE_IO_THREADS was set, so all network I/O of a process
     was limited to one CPU.  Sockets are spread over the threads; \c QORE_IO_THREADS and
     @ref Qore::AsyncIoController::setMaxIoThreads() "AsyncIoController::setMaxIoThreads()" still set any count, and
-    <tt>setMaxIoThreads(0)</tt> restores the default.
+    <tt>setMaxIoThreads(0)</tt> restores the default.  An I/O thread also does less work per I/O event: the
+    deadlines of its operations take one entry per operation instead of one per event, and a socket that is already
+    non-blocking is not set again on every read or write.
 
     An object that several threads use at the same time is deleted when its last reference is released, also when
     two of its method calls return at the same moment: the second release could find the reference count at zero

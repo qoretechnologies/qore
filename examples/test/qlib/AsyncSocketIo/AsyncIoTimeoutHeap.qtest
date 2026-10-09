@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+
+%exec-class AsyncIoTimeoutHeapTest
+
+#! Waits for an EventNotifier repeatedly, with a protocol-level poll timeout on every wait
+/** A Qore-language poll operation: each continuePoll() result is delivered back to the I/O thread as a
+    ContinuePollResult command.
+*/
+class RepeatedWaitPollOperation inherits Qore::AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        Queue polled;
+        int waits;
+        int count = 0;
+        bool done = False;
+        bool canceled = False;
+    }
+
+    constructor(EventNotifier notifier, Queue polled, int waits) {
+        self.notifier = notifier;
+        self.polled = polled;
+        self.waits = waits;
+    }
+
+    string getGoal() {
+        return "repeated-wait";
+    }
+
+    string getState() {
+        return canceled ? "canceled" : (done ? "done" : "waiting");
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (canceled) {
+            return NOTHING;
+        }
+        if (count) {
+            notifier.acknowledge();
+        }
+        if (++count > waits) {
+            done = True;
+            polled.push(count);
+            return NOTHING;
+        }
+        polled.push(count);
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+            # a protocol-level timer far in the future: the operation is woken by the notifier
+            "poll_timeout_ms": 60000,
+        };
+    }
+
+    abort() {
+        canceled = True;
+    }
+}
+
+class AsyncIoTimeoutHeapTest inherits QUnit::Test {
+    public {
+        const Waits = 50;
+        const Requests = 100;
+        #! the entries the heap can hold beyond twice the number of operations before it is compacted
+        const CompactSlack = 64;
+    }
+
+    constructor() : Test("AsyncIoTimeoutHeapTest", "1.0", ARGV) {
+        addTestCase("worker continuePoll results do not grow the timeout heap", \workerResultHeapTest());
+        addTestCase("native continuePoll results do not grow the timeout heap", \nativeResultHeapTest());
+        set_return_value(main());
+    }
+
+    #! Returns the number of timeout heap entries over all I/O threads
+    private int getTimeoutEntries() {
+        assertTrue(AsyncIoController::waitForProcessing(5s));
+        int rv = 0;
+        map rv += $1.timeouts, AsyncIoController::getInfo().threads;
+        return rv;
+    }
+
+    #! Returns the largest timeout heap and that thread's number of operations
+    private hash<auto> getLargestHeap() {
+        assertTrue(AsyncIoController::waitForProcessing(5s));
+        hash<auto> rv = {"timeouts": 0, "ops": 0};
+        foreach hash<auto> thread in (AsyncIoController::getInfo().threads) {
+            if (thread.timeouts > rv.timeouts) {
+                rv = {"timeouts": thread.timeouts, "ops": thread.cache_keys.size()};
+            }
+        }
+        return rv;
+    }
+
+    workerResultHeapTest() {
+        EventNotifier notifier();
+        Queue polled();
+        Queue result_queue = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new RepeatedWaitPollOperation(notifier, polled, Waits),
+            "owner": "timeout-heap-worker",
+            # the operation timeout is armed as well
+            "to": 60s,
+        });
+        on_exit {
+            AsyncIoController::cancelByOwner("timeout-heap-worker");
+        }
+
+        assertEq(1, polled.get(10s), "first wait");
+        int before = getTimeoutEntries();
+        for (int i = 2; i <= Waits; ++i) {
+            notifier.notify();
+            assertEq(i, polled.get(10s));
+        }
+        int after = getTimeoutEntries();
+        # one entry per continuePoll() result used to be pushed: Waits more entries
+        assertLe(before + 2, after, sprintf("%d waits keep the heap bounded (%d -> %d entries)", Waits, before,
+            after));
+
+        notifier.notify();
+        assertEq(Waits + 1, polled.get(10s));
+        hash<SocketPollResultInfo> res = result_queue.get(10s);
+        assertFalse(boolean(res.canceled));
+        assertNothing(res.ex);
+    }
+
+    nativeResultHeapTest() {
+        Logger logger("timeout-heap", LoggerLevel::getLevelWarn());
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit {
+            server.stop();
+        }
+        server.setDefaultHandler("ok", new OkHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        server.waitForAsyncIo();
+
+        # every request on the keep-alive connection takes several continuePoll() calls of the server's native
+        # connection operation, whose operation timeout used to be pushed to the heap on each one
+        HTTPClient client({"url": "http://127.0.0.1:" + port});
+        for (int i = 0; i < Requests; ++i) {
+            assertEq("ok", client.get("/"));
+        }
+        # an entry per continuePoll() call of each operation, and one per finished operation, used to stay in the
+        # heap for the operation timeout; the heap is compacted when it exceeds the bound, and an iteration after
+        # the last compaction can add a few entries
+        hash<auto> largest = getLargestHeap();
+        assertLe(2 * largest.ops + CompactSlack + 32, largest.timeouts,
+            sprintf("%d requests keep the heap bounded (%d entries for %d operations)", Requests, largest.timeouts,
+                largest.ops));
+    }
+}
+
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok");
+    }
+}

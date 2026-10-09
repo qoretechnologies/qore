@@ -583,6 +583,59 @@ bool AsyncIoControllerPriv::hasSocketWaitGenerationChanged(PollInfo& pinfo, Qore
     return changed;
 }
 
+bool AsyncIoControllerPriv::refreshSocketWaitGeneration(PollInfo& pinfo, QoreHashNode* poll_info) {
+    bool was_valid = pinfo.socket_wait_generation_valid;
+    int old_fd = pinfo.socket_wait_fd;
+    uint32_t old_generation = pinfo.socket_wait_fd_generation;
+    pinfo.socket_wait_generation_valid = false;
+    pinfo.socket_wait_fd = -1;
+    pinfo.socket_wait_fd_generation = 0;
+    if (!poll_info) {
+        return false;
+    }
+
+    QoreValue v = poll_info->getKeyValue("socket");
+    QoreObject* obj = v.getType() == NT_OBJECT ? v.get<QoreObject>() : nullptr;
+    if (!obj) {
+        return false;
+    }
+
+    ExceptionSink local_xsink;
+    QoreSocketObject* sock = static_cast<QoreSocketObject*>(
+        obj->getReferencedPrivateData(CID_SOCKET, &local_xsink));
+    if (!sock) {
+        if (local_xsink) {
+            local_xsink.clear();
+        }
+        return false;
+    }
+
+    bool changed = false;
+    {
+        AutoLocker al(sock->priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
+        changed = was_valid && (sp->fd_generation != old_generation || sp->sock != old_fd);
+        if (sp->sock != QORE_INVALID_SOCKET) {
+            pinfo.socket_wait_fd = sp->sock;
+            pinfo.socket_wait_fd_generation = sp->fd_generation;
+            pinfo.socket_wait_generation_valid = true;
+#ifdef DEBUG
+            // Simulate an fd swap inside the controller wait window.
+            if (sp->debug_force_fd_swap_next_wait) {
+                sp->debug_force_fd_swap_next_wait = false;
+                ++sp->fd_generation;
+            }
+#endif
+        }
+    }
+
+    sock->deref(&local_xsink);
+    if (local_xsink) {
+        local_xsink.clear();
+    }
+    return changed;
+}
+
 void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink* xsink) {
     // Release refs and signal waiters for a command drained from cmdq that
     // will not be processed (because the I/O thread received Quit or is
@@ -3987,6 +4040,7 @@ QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) {
             entry->setKeyValue("index", (int64)own_idx, xsink);
             entry->setKeyValue("tid", (int64)t.tid, xsink);
             entry->setKeyValue("cache_keys", keys->listRefSelf(), xsink);
+            entry->setKeyValue("timeouts", (int64)t.timeout_heap.size(), xsink);
             threads->push(entry.release(), xsink);
         }
         rv->setKeyValue("cache_keys", keys.release(), xsink);
@@ -4523,7 +4577,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 // Initialize timeout and push to heap
                 if (pinfo.timeout_date_us == 0 && pinfo.timeout_us >= 0) {
                     pinfo.timeout_date_us = now_us + pinfo.timeout_us;
-                    t.timeout_heap.push({pinfo.timeout_date_us, key});
+                    armTimeoutHeap(t, pinfo, key);
                 }
                 try_queue(key, false);
             }
@@ -4649,10 +4703,16 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     continue;  // canceled — stale heap entry
                 }
                 PollInfo& pinfo = it->second;
+                // the operation's earliest entry has been consumed; see armTimeoutHeap()
+                if (te.deadline_us == pinfo.heap_deadline_us) {
+                    pinfo.heap_deadline_us = 0;
+                }
 
                 // Operation-level timeout
                 if (pinfo.timeout_us >= 0 && pinfo.timeout_date_us > 0
                         && pinfo.timeout_date_us <= now_us) {
+                    // a queued operation re-arms its deadlines in Phase 3; one that cannot be queued (its
+                    // continuePoll() is in flight) gets them back with its result
                     try_queue(te.key, true);
                     continue;
                 }
@@ -4664,16 +4724,21 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         pinfo.poll_timeout_deadline_us = 0;
                     } else {
                         // Could not queue (continuePoll in flight or already queued).
-                        // Re-push with short delay so we retry on the next iteration
+                        // Re-arm with short delay so we retry on the next iteration
                         // instead of losing the timeout permanently.
                         int64 retry_us = now_us + 10000;  // 10ms retry
                         pinfo.poll_timeout_deadline_us = retry_us;
-                        t.timeout_heap.push({retry_us, te.key});
+                        armTimeoutHeap(t, pinfo, te.key);
                     }
                     continue;
                 }
 
-                // Stale entry (deadline was updated) — discard
+                // An entry for a deadline that has since moved later: re-arm the operation's current deadline, which
+                // armTimeoutHeap() only pushed when it was earlier than this entry
+                int64 next = armTimeoutHeap(t, pinfo, te.key);
+                if (next && (poll_deadline_us == 0 || next < poll_deadline_us)) {
+                    poll_deadline_us = next;
+                }
             }
 
             // Update this thread's processed counter (lock for condition
@@ -4690,6 +4755,31 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     processed_cond.broadcast();
                 }
             }
+        }
+
+        // --- timeout_heap compaction ---
+        // Entries are removed lazily: an operation that completes or is
+        // canceled leaves its entries in the heap until they reach the top,
+        // which for a 30 s operation timeout takes 30 s, so a busy thread
+        // collects one stale entry - with a copy of the key - per operation.
+        // Once the heap holds more than twice as many entries as there are
+        // operations, rebuild it from the cache with one entry per operation
+        // that has a deadline armed (PollInfo::heap_deadline_us; see
+        // armTimeoutHeap()).  An operation queued for continuePoll() in this
+        // iteration has none and is re-armed with its result, so the rebuild
+        // loses no deadline.  Amortized over the pushes since the last
+        // rebuild, this costs O(log n) per push.
+        if (t.timeout_heap.size() > 2 * t.cache.size() + TIMEOUT_HEAP_COMPACT_SLACK) {
+            using TE = std::decay_t<decltype(t.timeout_heap.top())>;
+            std::vector<TE> live;
+            live.reserve(t.cache.size());
+            for (auto& [key, pinfo] : t.cache) {
+                if (pinfo.heap_deadline_us) {
+                    live.push_back({pinfo.heap_deadline_us, key});
+                }
+            }
+            t.timeout_heap = std::priority_queue<TE, std::vector<TE>, std::greater<TE>>(
+                std::greater<TE>(), std::move(live));
         }
 
         // --- timeout_heap capacity repack ---
@@ -5155,7 +5245,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         bool needs_full_update = pinfo.cached_sock_hash.empty()
                             || events != pinfo.cached_events
                             || new_sock_obj != pinfo.cached_sock_obj;
-                        bool force_fd_reregister = hasSocketWaitGenerationChanged(pinfo,
+                        // also takes the fd snapshot for the next wait; nothing below changes the socket's fd
+                        bool force_fd_reregister = refreshSocketWaitGeneration(pinfo,
                             result.new_poll_info);
                         if (force_fd_reregister) {
                             needs_full_update = true;
@@ -5252,7 +5343,6 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 }
                             }
                         }
-                        snapshotSocketWaitGeneration(pinfo, result.new_poll_info);
 
                         // Defer SSL pending check to next iteration (nginx pattern).
                         // We always re-defer when hasPendingData() is true — the
@@ -5275,9 +5365,9 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                             ssl_deferred_hashes.insert(sock_hash);
                         }
 
-                        // Push operation timeout to heap for Phase 1 Step C
+                        // Arm the operation timeout in the heap for Phase 1 Step C
                         if (pinfo.timeout_us >= 0 && pinfo.timeout_date_us > 0) {
-                            t.timeout_heap.push({pinfo.timeout_date_us, result.key});
+                            armTimeoutHeap(t, pinfo, result.key);
                             // Ensure poll wakes in time for this deadline.
                             // Phase 1 Step C computed poll_deadline_us BEFORE this
                             // re-push.  For a timeout=0 op (or any already-expired
@@ -5308,7 +5398,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 } else {
                                     int64 deadline = get_epoch_us() + pt_ms * 1000;
                                     pinfo.poll_timeout_deadline_us = deadline;
-                                    t.timeout_heap.push({deadline, result.key});
+                                    armTimeoutHeap(t, pinfo, result.key);
                                     // Ensure the event loop wakes in time for this
                                     // deadline — poll_deadline_us was computed in
                                     // Phase 1 before this entry existed.
@@ -5955,6 +6045,21 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     }
 }
 
+int64 AsyncIoControllerPriv::armTimeoutHeap(IoThreadContext& t, PollInfo& pinfo, const std::string& key) {
+    int64 next = 0;
+    if (pinfo.timeout_us >= 0 && pinfo.timeout_date_us > 0) {
+        next = pinfo.timeout_date_us;
+    }
+    if (pinfo.poll_timeout_deadline_us > 0 && (!next || pinfo.poll_timeout_deadline_us < next)) {
+        next = pinfo.poll_timeout_deadline_us;
+    }
+    if (next && (!pinfo.heap_deadline_us || next < pinfo.heap_deadline_us)) {
+        t.timeout_heap.push({next, key});
+        pinfo.heap_deadline_us = next;
+    }
+    return next;
+}
+
 bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* xsink) {
     // Batch drain all pending commands from the MPSC queue.
     // The outer loop handles commands that arrive during acknowledge.
@@ -6321,6 +6426,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             entry->setKeyValue("index", (int64)t.thread_idx, &info_xsink);
                             entry->setKeyValue("tid", (int64)t.tid, &info_xsink);
                             entry->setKeyValue("cache_keys", keys.release(), &info_xsink);
+                            entry->setKeyValue("timeouts", (int64)t.timeout_heap.size(), &info_xsink);
                             QoreValue tv = cmd.completion->info_result->getKeyValue("threads");
                             assert(tv.getType() == NT_LIST);
                             tv.get<QoreListNode>()->push(entry.release(), &info_xsink);
@@ -6754,13 +6860,14 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                     if (pt_ms <= 0) {
                                         pinfo.poll_timeout_deadline_us = 0;
                                     } else {
-                                        int64 deadline = get_epoch_us() + pt_ms * 1000;
-                                        pinfo.poll_timeout_deadline_us = deadline;
-                                        t.timeout_heap.push({deadline, cmd.key});
+                                        pinfo.poll_timeout_deadline_us = get_epoch_us() + pt_ms * 1000;
                                     }
                                 } else {
                                     pinfo.poll_timeout_deadline_us = 0;
                                 }
+                                // re-arms the operation timeout as well, whose heap entry can have been
+                                // consumed while the continuePoll() was in flight
+                                armTimeoutHeap(t, pinfo, cmd.key);
                             }
                         }
                     }

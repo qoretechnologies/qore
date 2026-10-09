@@ -485,6 +485,14 @@ public:
     */
     DLLLOCAL static int getDefaultIoThreadCount();
 
+    //! Entries the timeout heap can hold beyond twice the number of operations before it is compacted
+    /** See the timeout heap compaction in ioThread(): stale entries of finished operations are only removed
+        lazily, so the heap is rebuilt from the cache when it grows beyond this bound.
+
+        @since %Qore 3.0
+    */
+    static constexpr size_t TIMEOUT_HEAP_COMPACT_SLACK = 64;
+
     //! Autostop grace period (2 seconds)
     /** When the cache empties and autostop is enabled, the I/O thread waits
         this long before exiting.  This avoids unnecessary stop/restart cycles
@@ -888,6 +896,11 @@ private:
         bool continue_poll_in_flight;   //!< True when continuePoll() dispatched to worker
         bool socket_async_io;           //!< True if this operation owns a Socket async I/O claim
         int64 poll_timeout_deadline_us; //!< Absolute deadline for protocol-level poll timeout (QUIC)
+        //! The earliest deadline of this operation's entries in the timeout heap; 0 if it has none
+        /** See armTimeoutHeap(): an entry is only pushed for a deadline earlier than this one, so the heap holds one
+            or two entries per operation instead of one per continuePoll() call.
+        */
+        int64 heap_deadline_us = 0;
         std::string cached_sock_hash;   //!< Cached socket hash for O(1) Phase 1 readiness check
         int cached_events = 0;          //!< Cached poll events for Phase 3 fast path
         uint32_t cached_fd_gen = 0;     //!< Cached fd generation for QUIC migration detection
@@ -1269,6 +1282,22 @@ private:
         int refs = 0;  //!< protected by AsyncIoControllerPriv::m
     };
 
+    //! Makes sure the timeout heap holds an entry for an operation's next deadline
+    /** The next deadline is the earlier of the operation timeout (if armed) and the protocol-level poll timeout (if
+        set).  An entry is pushed only if that deadline is earlier than the operation's earliest entry already in the
+        heap (@ref PollInfo::heap_deadline_us): a later deadline is re-armed when the earlier entry is popped (Phase 1
+        Step C), so the heap holds one or two entries per operation instead of one - with a copy of the key - per
+        continuePoll() call.
+
+        I/O-thread-only.
+
+        @param t the I/O thread context holding the operation
+        @param pinfo the operation
+        @param key the operation key
+        @return the operation's next deadline, or 0 if it has none
+    */
+    DLLLOCAL int64 armTimeoutHeap(IoThreadContext& t, PollInfo& pinfo, const std::string& key);
+
     //! cancelByKey() on one of this controller's I/O threads; never waits for another I/O thread
     /** @param uh the operation key
         @param own_idx the index of the calling I/O thread
@@ -1412,6 +1441,12 @@ private:
 
     //! Returns true if the poll-info socket fd changed since the last wait snapshot
     DLLLOCAL static bool hasSocketWaitGenerationChanged(PollInfo& pinfo, QoreHashNode* poll_info);
+
+    //! Combines hasSocketWaitGenerationChanged() and snapshotSocketWaitGeneration() with one socket lookup
+    /** @return true if the poll-info socket fd changed since the last wait snapshot; the snapshot is then replaced
+        with the socket's current fd and generation for the next controller wait
+    */
+    DLLLOCAL static bool refreshSocketWaitGeneration(PollInfo& pinfo, QoreHashNode* poll_info);
 
     //! Update EventLoop registration for an operation
     DLLLOCAL void updateEventLoopRegistration(IoThreadContext& t, const std::string& key,
