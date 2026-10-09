@@ -97,6 +97,7 @@ module QoreRagTypes {
       and per call, with RAG retry telemetry (issue 5475)
     - EmbedderConfig::attempt_timeout bounds one HTTP attempt so a stalled attempt is retried within the
       budget; embedders that size their own requests derive it with AbstractEmbedder::defaultAttemptTimeoutMs()
+      (a third of the budget for a small request, half for a large one, at most 10 s and never below 3 s)
     - added @ref QoreRagUtils::EmbedderRateLimiter "EmbedderRateLimiter", a process-wide requests- and
       tokens-per-minute limiter for provider requests, and the \c requests_per_minute,
       \c tokens_per_minute, \c rate_limit_max_retries, and \c rate_limit_timeout
@@ -1101,6 +1102,9 @@ public class AbstractEmbedder {
     public {
         #! The most inputs of a request treated as small by @ref defaultAttemptTimeoutMs()
         const SmallRequestInputs = 32;
+
+        #! The shortest attempt limit derived by @ref defaultAttemptTimeoutMs()
+        const MinAttemptTimeoutMs = 3000;
     }
 
     private {
@@ -1132,20 +1136,20 @@ public class AbstractEmbedder {
 
     #! Returns the default attempt limit of a request whose size is known
     /** A request is retried after a stall only if its first attempt cannot take the whole budget: a small
-        request (at most @ref SmallRequestInputs inputs, such as a query) gets the smaller of 10 seconds and a
-        third of the budget, so up to three attempts fit; a larger one gets half the budget, so one retry fits
-        while a slow but progressing batch keeps most of the budget.
+        request (at most @ref SmallRequestInputs inputs, such as a query) gets a third of the budget, at most 10
+        seconds, so up to three attempts fit; a larger one gets half the budget, so one retry fits while a slow
+        but progressing batch keeps most of the budget.  An attempt is never limited below
+        @ref MinAttemptTimeoutMs, so a short budget is not split into attempts too short for a remote
+        provider: such a request keeps its whole budget for one attempt.
 
         @param budget_ms the request's total budget in milliseconds
         @param input_count the number of inputs in the request
 
-        @return the attempt limit in milliseconds
+        @return the attempt limit in milliseconds; at least the budget when the budget is too short to split
     */
     static int defaultAttemptTimeoutMs(int budget_ms, int input_count) {
-        if (input_count <= SmallRequestInputs) {
-            return max(1, min(10000, budget_ms / 3));
-        }
-        return max(1, budget_ms / 2);
+        int rv = input_count <= SmallRequestInputs ? min(10000, budget_ms / 3) : budget_ms / 2;
+        return rv < MinAttemptTimeoutMs ? max(budget_ms, 1) : rv;
     }
 
     #! Creates a shared REST retry budget for all HTTP requests in one encodeBatch() call

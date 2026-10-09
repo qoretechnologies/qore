@@ -822,23 +822,23 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
     }
 
     testStalledAttempt() {
-        # retry_timeout 3s: a query attempt is limited to 1s, so the stalled first attempt leaves time for two
+        # retry_timeout 9s: a query attempt is limited to 3s, so the stalled first attempt leaves time for two
         # more
-        handler.setScript(({"stall": 10s},));
+        handler.setScript(({"stall": 20s},));
         on_exit {
             handler.release.send(True);
             handler.setScript(());
         }
-        VoyageEmbedder emb(config({"retry_timeout": 3s}));
+        VoyageEmbedder emb(config({"retry_timeout": 9s}));
         int t0 = clock_get_monotonic_us();
         assertOrdered(emb.encodeBatch(inputs(1)), 1);
         int ms = (clock_get_monotonic_us() - t0) / 1000;
-        assertGe(1000, ms, "the first attempt was given its limit");
-        assertLt(3000, ms, "answered before the budget expired");
+        assertGe(3000, ms, "the first attempt was given its limit");
+        assertLt(9000, ms, "answered before the budget expired");
         assertEq(2, handler.getRequests().size(), "the stalled attempt was retried");
 
         # an explicit attempt limit equal to the budget leaves no time to retry a stall
-        handler.setScript(({"stall": 10s},));
+        handler.setScript(({"stall": 20s},));
         VoyageEmbedder whole(config({"retry_timeout": 2s, "attempt_timeout": 2s}));
         assertThrows("HTTPCLIENT-TIMEOUT", \whole.encodeBatch(), (inputs(1),));
         assertEq(1, handler.getRequests().size());
@@ -846,8 +846,10 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
 
     testAttemptDefaults() {
         assertEq(10000, AbstractEmbedder::defaultAttemptTimeoutMs(60000, 1));
-        assertEq(1000, AbstractEmbedder::defaultAttemptTimeoutMs(3000, 32));
+        assertEq(3000, AbstractEmbedder::defaultAttemptTimeoutMs(9000, 32));
         assertEq(15000, AbstractEmbedder::defaultAttemptTimeoutMs(30000, 33), "a large batch gets half");
+        assertEq(3000, AbstractEmbedder::defaultAttemptTimeoutMs(3000, 1), "a short budget is not split");
+        assertEq(200, AbstractEmbedder::defaultAttemptTimeoutMs(200, 1));
         RestClientIo::RestRetryPolicy p(<RestClientIo::RestRetryOptions>{"retry_timeout": 5s, "attempt_timeout": 1s});
         list<int> given = ();
         try {
