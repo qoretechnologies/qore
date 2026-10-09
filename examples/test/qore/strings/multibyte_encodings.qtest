@@ -208,6 +208,10 @@ class MultiByteEncodingTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex) {
                 continue;
             }
+            # an iconv can decode an encoding that it cannot encode (ex: musl and BIG5)
+            if (!supported(i.enc, c)) {
+                continue;
+            }
             list<string> lines = (c + "x", "y" + c, c);
             binary data = binary(convert_encoding(lines.join("|") + "|", i.enc));
             StreamReader sr(new BinaryInputStream(data), i.enc);
