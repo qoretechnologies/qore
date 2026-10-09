@@ -4194,6 +4194,10 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed deleting a @ref Qore::Program "Program" that shared a module's classes with other Programs: it released
+      the Program the classes came from for all of them, while the other Programs, possibly in other threads, still
+      ran the classes
+
     - Fixed a race condition when a @ref Qore::Program "Program" parsed code that used classes of a module that other
       threads were running at the same time: the parse wrote the classes' internal state while the other threads used
       them

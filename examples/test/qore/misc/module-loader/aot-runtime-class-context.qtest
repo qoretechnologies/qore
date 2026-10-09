@@ -17,7 +17,9 @@
       calling class the first time it is asked
     - a Program that parses a subclass of the module's class resolves the hierarchy of the class it inherits
 
-    Either way the class's parse state was written while other threads ran its methods.  ThreadSanitizer builds
+    Either way the class's parse state was written while other threads ran its methods.  And a Program that shares the
+    module's classes released the class's source Program when it was deleted, while the other Programs still used
+    the class.  ThreadSanitizer builds
     report the data race in the child; every build checks that the calls in all threads return the expected values.
 
     The test compiles the module with qcc and runs child processes that load it with \c load_module() and call the
@@ -62,11 +64,13 @@ public class HierTarget {
 ";
 
         #! the child: loads the module at runtime and calls the method in several threads at once; with a second
-        #! argument, the main thread parses subclasses of the module's class in new Programs meanwhile
+        #! argument, the main thread parses subclasses of the module's class in new Programs meanwhile, and with a
+        #! third argument, deletes each of those Programs at once
         const ChildSource = "%modern
 load_module(\"HierCtx\");
 int threads = ARGV[0].toInt();
 int programs = ARGV[1] ? ARGV[1].toInt() : 0;
+bool delete_programs = ARGV[2] == \"delete\";
 Counter start(1);
 Counter running(threads);
 Queue<int> results();
@@ -92,7 +96,9 @@ for (int i = 0; i < programs; ++i) {
     p.loadModule(\"HierCtx\");
     p.parse(\"class Sub inherits HierCaller { private int priv() { return 3; } int f(HierCaller o) { return o.value() \"
         \"+ priv(); } }\", \"sub\");
-    pgms += p;
+    if (!delete_programs) {
+        pgms += p;
+    }
 }
 running.waitForZero();
 list<int> sums;
@@ -117,6 +123,7 @@ printf(\"sums: %y\\n\", sums);
 
         addTestCase("calls from a class of a module loaded at runtime", \runtimeClassContextTest());
         addTestCase("subclasses parsed while the class runs", \subclassParseTest());
+        addTestCase("Programs sharing the class deleted while it runs", \programDeleteTest());
         set_return_value(main());
     }
 
@@ -128,11 +135,16 @@ printf(\"sums: %y\\n\", sums);
         runChildren(Programs);
     }
 
+    programDeleteTest() {
+        runChildren(Programs, True);
+    }
+
     #! compiles the module and runs the child process in each round
     /** @param programs the number of Programs in which the child's main thread parses a subclass of the module's
         class while the threads run
+        @param delete_programs if each of those Programs is deleted at once
     */
-    private runChildren(int programs) {
+    private runChildren(int programs, bool delete_programs = False) {
         TmpDir tmp("qore-aot-runtime-class-context-");
         string src = tmp.path + DirSep + "HierCtx.qm";
         string qmod = tmp.path + DirSep + "HierCtx.qmod";
@@ -156,8 +168,8 @@ printf(\"sums: %y\\n\", sums);
         # each call returns 2
         list<int> expected = map 4000, xrange(Threads);
         for (int round = 1; round <= Rounds; ++round) {
-            out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s %d %d 2>&1; echo \"rc=$?\"",
-                libqore_dir, tmp.path, qore_bin, child, Threads, programs));
+            out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s %d %d %s 2>&1; echo \"rc=$?\"",
+                libqore_dir, tmp.path, qore_bin, child, Threads, programs, delete_programs ? "delete" : ""));
             *list<*string> rc = (out =~ x/rc=([0-9]+)\s*$/);
             assertEq("0", rc[0], sprintf("round %d: the child exits normally: %s", round, out));
             assertTrue(out.find(sprintf("sums: %y", expected)) >= 0,
