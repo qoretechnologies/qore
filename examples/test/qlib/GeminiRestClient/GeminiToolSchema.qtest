@@ -1,0 +1,514 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/GeminiBodyShape.qm
+%requires ../../../../qlib/GeminiRestClient.qm
+%requires ../../../../qlib/VertexAiRestClient.qm
+%requires ../../../../qlib/QoreLlmUtils
+%requires json
+%exec-class GeminiToolSchemaTest
+
+#! Captures generateContent requests and answers them with a canned response
+class CaptureToolRest inherits RestClientIo::RestClientIo {
+    public {
+        list<hash<auto>> bodies = ();
+        hash<auto> response;
+    }
+    constructor(hash<auto> response) : RestClientIo({"url": "http://localhost", "data": "json"}) {
+        self.response = response;
+    }
+    hash<RestClient::RestResponseInfo> restPostWithTimeout(string path, auto body, *hash<auto> hdr, int timeout_ms) {
+        push bodies, body;
+        return <RestClient::RestResponseInfo>{"status_code": 200, "body": response};
+    }
+}
+
+class CaptureToolGeminiProvider inherits GeminiRestClient::GeminiLlmProvider {
+    private {
+        CaptureToolRest rest;
+    }
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config, CaptureToolRest rest) : GeminiLlmProvider(config) {
+        self.rest = rest;
+    }
+    RestClientIo::RestClientIo createRestClient() {
+        return rest;
+    }
+}
+
+class CaptureToolVertexProvider inherits VertexAiRestClient::VertexAiLlmProvider {
+    private {
+        CaptureToolRest rest;
+    }
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config, CaptureToolRest rest) : VertexAiLlmProvider(config) {
+        self.rest = rest;
+    }
+    RestClientIo::RestClientIo createRestClient() {
+        return rest;
+    }
+    *hash<auto> getRequestHeaders(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return NOTHING;
+    }
+}
+
+#! Serves one streamed Gemini response
+class FakeGeminiStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> chunks;
+        list<hash<auto>> requests = ();
+    }
+    constructor(list<hash<auto>> chunks) {
+        self.chunks = chunks;
+    }
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        push requests, {"path": cx.raw_path, "body": body.val() ? parse_json(body) : {}};
+        list<string> frames = map "data: " + make_json($1), chunks;
+        return makeResponse(200, frames.join("\n\n") + "\n\n", {"Content-Type": "text/event-stream"});
+    }
+}
+
+class GeminiToolSchemaTest inherits QUnit::Test {
+    private {
+        #! a choice dialog: an array of objects
+        const PresentChoices = {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "the question to ask"},
+                "options": {
+                    "type": "array",
+                    "description": "the choices offered",
+                    "minItems": 2,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "label": {"type": "string", "maxLength": 80},
+                            "value": {"type": "string"},
+                            "description": {"type": "string"},
+                        },
+                        "required": ("label", "value"),
+                    },
+                },
+            },
+            "required": ("question", "options"),
+        };
+
+        #! nested objects
+        const CreateCustomer = {
+            "type": "object",
+            "properties": {
+                "customer": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "address": {
+                            "type": "object",
+                            "properties": {
+                                "street": {"type": "string"},
+                                "city": {"type": "string"},
+                                "geo": {
+                                    "type": "object",
+                                    "properties": {
+                                        "lat": {"type": "number"},
+                                        "lng": {"type": "number"},
+                                    },
+                                    "required": ("lat", "lng"),
+                                },
+                            },
+                            "required": ("city",),
+                        },
+                    },
+                    "required": ("name", "address"),
+                },
+            },
+            "required": ("customer",),
+        };
+
+        #! an OpenAPI operation: path and query parameters plus a request body with referenced schemas
+        const CreateOrder = {
+            "type": "object",
+            "$defs": {
+                "Line": {
+                    "type": "object",
+                    "properties": {
+                        "sku": {"type": "string", "pattern": "^[A-Z0-9-]+$"},
+                        "quantity": {"type": "integer", "minimum": 1},
+                        "product": {"$ref": "#/$defs/Product"},
+                    },
+                    "required": ("sku", "quantity"),
+                },
+                "Product": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "price": {"type": "number"},
+                    },
+                },
+            },
+            "properties": {
+                "storeId": {"type": "string", "description": "path parameter"},
+                "dryRun": {"type": "boolean", "description": "query parameter"},
+                "body": {
+                    "type": "object",
+                    "description": "request body",
+                    "properties": {
+                        "customer": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string", "format": "uuid"},
+                                "email": {"type": "string", "format": "email"},
+                            },
+                        },
+                        "lines": {
+                            "type": "array",
+                            "items": {"$ref": "#/$defs/Line"},
+                        },
+                        "note": {
+                            "anyOf": ({"type": "string"}, {"type": "null"}),
+                        },
+                        "priority": {"type": ("string", "null"), "enum": ("low", "high", NOTHING)},
+                    },
+                    "required": ("customer", "lines"),
+                },
+            },
+            "required": ("storeId", "body"),
+        };
+
+        #! objects nested seven deep
+        const DeepTree = {
+            "type": "object",
+            "properties": {
+                "l2": {"type": "object", "properties": {
+                    "l3": {"type": "object", "properties": {
+                        "l4": {"type": "object", "properties": {
+                            "l5": {"type": "object", "properties": {
+                                "name": {"type": "string"},
+                                "l6": {"type": "object", "description": "deep detail", "properties": {
+                                    "l7": {"type": "object", "properties": {
+                                        "leaf": {"type": "string"},
+                                    }},
+                                    "count": {"type": "integer"},
+                                }, "required": ("l7",)},
+                            }},
+                        }},
+                    }},
+                }},
+            },
+        };
+
+        #! schemas that Gemini cannot declare as structure
+        const Unsupported = {
+            "type": "object",
+            "$defs": {
+                "Node": {
+                    "type": "object",
+                    "properties": {
+                        "label": {"type": "string"},
+                        "children": {"type": "array", "items": {"$ref": "#/$defs/Node"}},
+                    },
+                },
+            },
+            "properties": {
+                "labels": {"type": "object", "additionalProperties": {"type": "string"},
+                    "description": "label map"},
+                "settings": {"type": "object"},
+                "empty": {"type": "object", "properties": {}, "additionalProperties": False},
+                "value": {"anyOf": ({"type": "string"}, {"type": "object", "properties": {"x": {"type": "integer"}}})},
+                "anything": {"description": "any value"},
+                "mode": {"const": "fast"},
+                "tree": {"$ref": "#/$defs/Node"},
+                "missing": {"$ref": "#/$defs/Missing"},
+            },
+        };
+    }
+
+    constructor() : Test("Gemini tool schemas", "1.0", \ARGV) {
+        addTestCase("nested objects keep every member", \nestedObjects());
+        addTestCase("arrays of objects keep their item members", \arrayOfObjects());
+        addTestCase("OpenAPI request bodies resolve references", \openApiBody());
+        addTestCase("nesting beyond the limit is sent as JSON text", \deepNesting());
+        addTestCase("unsupported schemas are sent as JSON text", \unsupported());
+        addTestCase("providers return tool calls with their declared types", \providerRoundTrip());
+        addTestCase("replayed tool calls take their declared shape", \replay());
+        addTestCase("streamed tool calls are decoded", \streaming());
+        addTestCase("decoding keeps what is not JSON text", \decodingEdges());
+        set_return_value(main());
+    }
+
+    nestedObjects() {
+        hash<auto> params = declaredParameters("create_customer", CreateCustomer);
+        assertEq((), lostMembers(CreateCustomer, params));
+        assertEq(("lat", "lng"), params.properties.customer.properties.address.properties.geo.required);
+        assertEq("number", params.properties.customer.properties.address.properties.geo.properties.lat.type);
+        assertEq((), GeminiBodyShape::shapeToolParameters(CreateCustomer).stringified, "nothing is stringified");
+    }
+
+    arrayOfObjects() {
+        hash<auto> params = declaredParameters("present_choices", PresentChoices);
+        assertEq((), lostMembers(PresentChoices, params));
+        hash<auto> item = params.properties.options.items;
+        assertEq("object", item.type);
+        assertEq(("label", "value"), item.required);
+        assertFalse(item.hasKey("additionalProperties"));
+        assertFalse(item.properties.label.hasKey("maxLength"));
+        assertFalse(params.properties.options.hasKey("minItems"));
+    }
+
+    openApiBody() {
+        hash<auto> params = declaredParameters("create_order", CreateOrder);
+        assertEq((), lostMembers(CreateOrder, params));
+        assertFalse(params.hasKey("$defs"));
+        hash<auto> line = params.properties.body.properties.lines.items;
+        assertEq("object", line.type);
+        assertEq(("sku", "quantity"), line.required);
+        assertEq("number", line.properties.product.properties.price.type, "a nested reference is resolved");
+        assertEq({"type": "string", "nullable": True}, params.properties.body.properties.note,
+            "a null alternative makes the value nullable");
+        assertEq({"type": "string", "nullable": True}, params.properties.body.properties.priority,
+            "a null type makes the value nullable");
+        assertEq("request body", params.properties.body.description);
+        assertEq((), GeminiBodyShape::shapeToolParameters(CreateOrder).stringified);
+    }
+
+    deepNesting() {
+        hash<GeminiToolParameterSchema> shaped = GeminiBodyShape::shapeToolParameters(DeepTree);
+        assertEq((("l2", "l3", "l4", "l5", "l6"),), shaped.stringified);
+        hash<auto> l5 = shaped.parameters.properties.l2.properties.l3.properties.l4.properties.l5;
+        assertEq("object", l5.type, "depth 5 is structured");
+        assertEq("string", l5.properties.name.type);
+        assertEq("string", l5.properties.l6.type, "depth 6 is JSON text");
+        assertTrue(l5.properties.l6.description.find("deep detail") == 0, "the original description is kept");
+        assertTrue(l5.properties.l6.description =~ /"leaf"/, "the description holds the original schema");
+        assertTrue(l5.properties.l6.description =~ /"count"/);
+        assertEq((), lostMembers(DeepTree, declaredParameters("deep", DeepTree)));
+
+        hash<auto> l6 = {"l7": {"leaf": "green"}, "count": 3};
+        hash<auto> args = {"l2": {"l3": {"l4": {"l5": {"name": "n", "l6": l6}}}}};
+        hash<auto> wire = GeminiBodyShape::encodeToolArguments(args, shaped.stringified);
+        assertEq(make_json(l6), wire.l2.l3.l4.l5.l6);
+        assertEq(args, callTool("deep", DeepTree, wire), "the provider decodes the deep value");
+    }
+
+    unsupported() {
+        hash<GeminiToolParameterSchema> shaped = GeminiBodyShape::shapeToolParameters(Unsupported);
+        hash<auto> props = shaped.parameters.properties;
+        assertEq((("labels",), ("settings",), ("value",), ("anything",), ("tree", "children", NOTHING),
+            ("missing",)), shaped.stringified);
+        foreach string name in (("labels", "settings", "value", "anything", "missing")) {
+            assertEq("string", props{name}.type, name);
+        }
+        assertTrue(props.labels.description.find("label map") == 0);
+        assertTrue(props.value.description =~ /anyOf/, "the alternatives are described");
+        assertEq({"type": "object", "properties": {}}, props.empty, "a closed empty object needs no text");
+        assertEq({"type": "string"}, props.mode, "a constant is a string; its value is a constraint");
+        hash<auto> tree = props.tree;
+        assertEq("object", tree.type, "the first level of a recursive schema is structured");
+        assertEq("string", tree.properties.label.type);
+        assertEq("string", tree.properties.children.items.type, "the recursion is JSON text");
+        assertTrue(tree.properties.children.items.description =~ /#\/\$defs\/Node/,
+            "the description holds the referenced schema");
+        assertEq((), lostMembers(Unsupported, declaredParameters("unsupported", Unsupported)));
+
+        hash<auto> args = {
+            "labels": {"env": "prod", "team": "ops"},
+            "settings": {"retries": 3, "verbose": True},
+            "empty": {},
+            "value": {"x": 2},
+            "anything": (1, "two"),
+            "mode": "fast",
+            "tree": {"label": "root", "children": ({"label": "a", "children": ({"label": "a1"},)}, {"label": "b"})},
+            "missing": {"free": "form"},
+        };
+        assertEq(args, callTool("unsupported", Unsupported,
+            GeminiBodyShape::encodeToolArguments(args, shaped.stringified)));
+    }
+
+    providerRoundTrip() {
+        hash<auto> args = {
+            "question": "Which database?",
+            "options": (
+                {"label": "PostgreSQL", "value": "pgsql", "description": "relational"},
+                {"label": "Oracle", "value": "oracle"},
+            ),
+        };
+        foreach string mode in (("gemini", "vertex")) {
+            CaptureToolRest rest(functionCallResponse("present_choices", args));
+            hash<QoreLlmUtils::ChatResponse> rv = makeProvider(mode, rest).chat(
+                (<QoreLlmUtils::ChatMessage>{"role": "user", "content": "ask"},),
+                (<QoreLlmUtils::ToolDefinition>{"name": "present_choices", "parameters": PresentChoices},));
+            assertEq(args, rv.tool_calls[0].arguments, mode);
+            assertEq((), lostMembers(PresentChoices,
+                rest.bodies[0].tools[0].functionDeclarations[0].parameters), mode);
+        }
+    }
+
+    replay() {
+        hash<GeminiToolParameterSchema> shaped = GeminiBodyShape::shapeToolParameters(Unsupported);
+        hash<auto> args = {"settings": {"retries": 3}, "tree": {"label": "root",
+            "children": ({"label": "a"},)}};
+        hash<auto> body = GeminiBodyShape::shapeChatBody((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "configure"},
+            <QoreLlmUtils::ChatMessage>{"role": "assistant", "tool_calls": (<QoreLlmUtils::ChatToolCall>{
+                "id": "call-1", "name": "unsupported", "arguments": args},)},
+            <QoreLlmUtils::ChatMessage>{"role": "tool", "tool_call_id": "call-1", "content": "{\"ok\":true}"},
+        ), (<QoreLlmUtils::ToolDefinition>{"name": "unsupported", "parameters": Unsupported},), NOTHING, {});
+        hash<auto> replayed = body.contents[1].parts[0].functionCall.args;
+        assertEq("{\"retries\":3}", replayed.settings);
+        assertEq("{\"label\":\"a\"}", replayed.tree.children[0]);
+        assertEq("root", replayed.tree.label);
+        assertEq(args, GeminiBodyShape::decodeToolArguments(replayed, shaped.stringified));
+
+        hash<GeminiChatRequest> request = GeminiBodyShape::shapeChatRequest((), (
+            <QoreLlmUtils::ToolDefinition>{"name": "unsupported", "parameters": Unsupported},
+            <QoreLlmUtils::ToolDefinition>{"name": "create_customer", "parameters": CreateCustomer},
+        ), NOTHING, {"cached_content": "cachedContents/abc"});
+        assertFalse(request.body.hasKey("tools"), "the tools of a cached request are in the cache");
+        assertEq({"unsupported": shaped.stringified}, request.stringified_arguments,
+            "the arguments of a cached request's tools are still decoded");
+    }
+
+    streaming() {
+        hash<auto> args = {"labels": {"env": "prod"}, "tree": {"label": "root", "children": ({"label": "a"},)}};
+        hash<auto> wire = GeminiBodyShape::encodeToolArguments(args,
+            GeminiBodyShape::shapeToolParameters(Unsupported).stringified);
+        Logger logger("test", LoggerLevel::getLevelWarn());
+        HttpServer http(<HttpServerOptionInfo>{"logger": logger, "debug": False});
+        on_exit delete http;
+        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeGeminiStreamHandler handler(({
+            "candidates": ({
+                "content": {"parts": ({"functionCall": {"name": "unsupported", "args": wire}},)},
+                "finishReason": "STOP",
+            },),
+        },));
+        http.setHandler("gemini", "/", MimeTypeJson, handler);
+        QoreLlmUtils::LlmBackend llm(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "gemini", "url": "http://localhost:" + port, "model": "gemini-2.5-flash",
+            "api_key": "test-only-key", "max_retries": 0,
+        });
+        list<hash<QoreLlmUtils::ChatStreamEvent>> events = ();
+        hash<QoreLlmUtils::ChatResponse> rv = llm.chatStreamCollect(
+            (<QoreLlmUtils::ChatMessage>{"role": "user", "content": "configure"},),
+            sub (hash<QoreLlmUtils::ChatStreamEvent> event) { push events, event; },
+            (<QoreLlmUtils::ToolDefinition>{"name": "unsupported", "parameters": Unsupported},));
+        assertEq(args, rv.tool_calls[0].arguments);
+        assertEq(args, events[0].raw.candidates[0].content.parts[0].functionCall.args,
+            "the streamed chunk carries the decoded arguments");
+        assertEq("string", handler.requests[0].body.tools[0].functionDeclarations[0].parameters.properties.labels.type);
+    }
+
+    decodingEdges() {
+        list<list<*string>> paths = (("a",), ("list", NOTHING), ("missing", "x"));
+        assertEq({"a": {"x": 1}, "list": ({"y": 2}, "not json", 3)},
+            GeminiBodyShape::decodeToolArguments({"a": "{\"x\":1}", "list": ("{\"y\":2}", "not json", 3)}, paths),
+            "invalid JSON text and values that are already structured are kept");
+        assertEq({"a": {"x": 1}}, GeminiBodyShape::decodeToolArguments({"a": {"x": 1}}, paths));
+        assertEq({"b": "{\"x\":1}"}, GeminiBodyShape::decodeToolArguments({"b": "{\"x\":1}"}, paths),
+            "only the recorded paths are decoded");
+        assertEq({}, GeminiBodyShape::decodeToolArguments({}, NOTHING));
+        hash<auto> body = {"candidates": ({"content": {"parts": ({"text": "hi"},
+            {"functionCall": {"name": "other", "args": {"a": "{\"x\":1}"}}})}},)};
+        assertEq(body, GeminiBodyShape::decodeResponseToolArguments(body, {"tool": paths}),
+            "the arguments of other tools are unchanged");
+    }
+
+    #! Returns the parameters of a tool as the provider sends them
+    private hash<auto> declaredParameters(string name, hash<auto> schema) {
+        CaptureToolRest rest(functionCallResponse(name, {}));
+        makeProvider("gemini", rest).chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},),
+            (<QoreLlmUtils::ToolDefinition>{"name": name, "parameters": schema},));
+        return rest.bodies[0].tools[0].functionDeclarations[0].parameters;
+    }
+
+    #! Calls a tool through the provider with a response carrying the given wire arguments
+    private hash<auto> callTool(string name, hash<auto> schema, hash<auto> wire_args) {
+        CaptureToolRest rest(functionCallResponse(name, wire_args));
+        hash<QoreLlmUtils::ChatResponse> rv = makeProvider("gemini", rest).chat(
+            (<QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},),
+            (<QoreLlmUtils::ToolDefinition>{"name": name, "parameters": schema},));
+        assertEq(wire_args, rv.raw.candidates[0].content.parts[0].functionCall.args, "raw keeps the wire form");
+        return rv.tool_calls[0].arguments;
+    }
+
+    private GeminiBodyShape::AbstractGeminiModelProvider makeProvider(string mode, CaptureToolRest rest) {
+        hash<QoreLlmUtils::LlmBackendConfig> config = <QoreLlmUtils::LlmBackendConfig>{
+            "model": "gemini-2.5-flash", "api_key": "test-only-key", "max_retries": 0,
+            "provider_options": {"gcp_project_id": "test-project"},
+        };
+        return mode == "gemini"
+            ? new CaptureToolGeminiProvider(config, rest)
+            : new CaptureToolVertexProvider(config, rest);
+    }
+
+    private static hash<auto> functionCallResponse(string name, hash<auto> args) {
+        return {
+            "candidates": ({
+                "content": {"parts": ({"functionCall": {"name": name, "args": args}},)},
+                "finishReason": "STOP",
+            },),
+        };
+    }
+
+    #! Returns the member paths of a schema that the provider form neither declares nor describes as JSON text
+    private list<string> lostMembers(hash<auto> original, hash<auto> provider_form) {
+        return lostMembersIntern(original, original, provider_form, "", {});
+    }
+
+    private list<string> lostMembersIntern(hash<auto> root, hash<auto> original, *hash<auto> provider_form,
+            string path, hash<string, bool> seen) {
+        if (original."$ref".typeCode() == NT_STRING) {
+            if (seen{original."$ref"}) {
+                return ();
+            }
+            seen{original."$ref"} = True;
+            original = resolve(root, original."$ref") + (original - "$ref");
+        }
+        list<string> rv = ();
+        hash<auto> members = original.properties.typeCode() == NT_HASH ? original.properties : {};
+        foreach string key in (("anyOf", "oneOf", "allOf")) {
+            foreach auto variant in (original{key}) {
+                if (variant.properties.typeCode() == NT_HASH) {
+                    members += variant.properties;
+                }
+            }
+        }
+        foreach hash<auto> member in (members.pairIterator()) {
+            string member_path = path + "." + member.key;
+            auto provided = provider_form.properties{member.key};
+            if (provided.typeCode() != NT_HASH) {
+                rv += member_path;
+                continue;
+            }
+            if (provided.type == "string" && provided.description =~ /holding JSON text/) {
+                # the value is JSON text described by the whole original schema
+                continue;
+            }
+            if (member.value.typeCode() == NT_HASH) {
+                rv += lostMembersIntern(root, member.value, provided, member_path, seen);
+            }
+        }
+        if (original.items.typeCode() == NT_HASH) {
+            auto provided = provider_form.items;
+            if (provided.typeCode() != NT_HASH) {
+                rv += path + "[]";
+            } else if (provided.type != "string" || provided.description !~ /holding JSON text/) {
+                rv += lostMembersIntern(root, original.items, provided, path + "[]", seen);
+            }
+        }
+        return rv;
+    }
+
+    private static hash<auto> resolve(hash<auto> root, string ref) {
+        auto cur = root;
+        foreach string seg in (ref.substr(2).split("/")) {
+            cur = cur{seg};
+        }
+        return cur ?? {};
+    }
+}

@@ -102,6 +102,8 @@ stream.close();
     @section GeminiRestClientRelnotes Release Notes
 
     @subsection GeminiRestClientv1_0 GeminiRestClient v1.0
+    - tool calls keep the nested members of their parameters: values that Gemini's schema cannot declare are sent
+      as JSON text and returned with their original types (see @ref geminibodyshapetoolschemas)
     - Gemini 3.x generation requests omit deprecated sampling parameters and numeric thinking budgets; use
       thinking levels instead. Gemini 2.5 behavior is preserved; see @ref geminibodyshapegeneration.
     - initial release
