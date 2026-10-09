@@ -673,3 +673,11 @@ Useful source references:
 - [HotSpot optimization overview](https://docs.oracle.com/en/java/javase/25/vm/java-hotspot-virtual-machine-performance-enhancements.html)
 
 See [RESULTS.md](RESULTS.md) for the initial measurements and follow-up targets.
+
+The [object-admission follow-up](RESULTS.md#object-admission-specialization-2026-10-09)
+specializes strong/opaque node checks without changing caller code. Its identical-
+executable before/after measurements show a repeated polymorphic-kernel benefit,
+not Java parity or an isolated virtual-call cost. Receiver-local ownership and
+cleanup remain included. Raw normalized samples, exact binary identities and
+separate profile observations are in
+[the evidence](results-object-admission-macos-arm64.json).

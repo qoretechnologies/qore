@@ -6362,3 +6362,83 @@ Both builds pass seven targeted files, 15 cases and 824 assertions, including
 the unchanged native-leaf sweep that rejected the second candidate. Four
 benchmark modes pass 330 references each. The retained changes pass all 62
 audit-changes checks (14 Pass, 48 N/A); no runtime speedup is claimed.
+
+## Object-admission specialization (2026-10-09)
+
+Retain direct node-tag admission at the profiled class-initializer and exact-class
+dispatch sites. The merged baseline runtime is `688d20bb18a1ced15dee6ce262cb918d115d26ca`;
+the experiment starts at `9be31eb9d`, whose extra changes are tests/docs only.
+The runtime checks ordinary and opaque pointer nodes directly, retaining generic
+dispatch for non-pointer representations. Weak normalization, raw/parameterized
+class compatibility, private-inheritance access, slot ownership, reflective
+mutation and live deletion behavior are unchanged. No compiler or ABI change.
+
+[Full evidence](results-object-admission-macos-arm64.json) records the exact
+precommit release/debug libraries, production patch, raw normalized samples,
+fork statistics and checks. Five randomized forks, three warmups, five 500 ms
+samples per fork and five startup observations; identical AOT executable within
+each before/after pair. All 1,050 windows ran without concurrent task builds,
+tests, profiles, disassembly or evidence calculations. Host background activity
+and filesystem caches remain uncontrolled. Values are median fork means in
+ns/element for whole kernels, not isolated calls.
+
+Count 1024, seed 810816, `run-6j96ghza`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|polymorphic_call|50.044|45.946|-8.19%|no|2.594|17.71x
+|optional_method_call|12.167|12.244|+0.64%|yes|1.702|7.19x
+|monomorphic_call|5.443|5.417|-0.49%|yes|1.685|3.21x
+|indirect_wide|8.348|8.554|+2.47%|yes|1.721|4.97x
+|indirect_float|10.469|10.346|-1.17%|yes|1.668|6.20x
+|arithmetic|2.426|2.437|+0.44%|yes|0.956|2.55x
+|dispatch_control|2.604|2.616|+0.44%|yes|1.006|2.60x
+
+Count 4096, seed 810817, `run-jv2imezr`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|polymorphic_call|48.597|45.038|-7.32%|no|2.570|17.52x
+|optional_method_call|10.834|10.896|+0.57%|yes|1.697|6.42x
+|monomorphic_call|4.049|4.066|+0.42%|yes|1.694|2.40x
+|indirect_wide|7.252|7.250|-0.03%|yes|1.708|4.24x
+|indirect_float|9.197|9.143|-0.59%|yes|1.674|5.46x
+|arithmetic|1.396|1.376|-1.38%|yes|1.007|1.37x
+|dispatch_control|1.452|1.440|-0.82%|yes|1.015|1.42x
+
+Polymorphic execution improves **8.19%** at 1024 and **7.32%** at 4096, with
+nonoverlapping before/after fork ranges in both runs. All six control kernels'
+ranges overlap at both sizes. The first wide-callback median increases 2.47%,
+but the repeat is flat (-0.03%); do not hide that unfavorable first result.
+Nullable medians increase about 0.6% in both runs within overlapping ranges.
+Range overlap is descriptive, not a significance test. No broad speedup,
+startup improvement or Java parity is claimed.
+
+At 4096 elements the remaining Qore/Java ratios are about 2.4x monomorphic,
+6.4x nullable, 4.2x wide callback, 5.5x float callback and 17.5x polymorphic.
+Java's DynamicStep methods are DONT_INLINE; Qore can inline the exact-base
+branch, so this is not an equal-inlining-policy call-latency comparison.
+The polymorphic kernel additionally selects and initializes a runtime-backed
+receiver local on every iteration.
+
+Validation: release/debug each pass 35 selected files (27 QUnit files, 72 cases,
+4,073 assertions plus eight standalones); six reference modes pass 330 checks
+each; all 11 harness tests pass. Expanded class-assignment and native receiver
+fixtures also pass the unchanged release baseline. The native fixture temporarily
+installs a fixed class only in an unshared test Program for the non-calling
+predicates, restoring it before real dispatch. This covers positive and negative
+exact-class checks even when the original name-method slot has no fixed class.
+Scalar/enum/weak/opaque values, deleted receivers, class access, scope/unwind
+ownership, reflective mutation and ordinary fallback paths are covered.
+
+Separate 10-second steady-state profiles (not performance timing) show
+`QoreValue::getType()` top samples falling from 689/8,332 to 13/8,300.
+The candidate's receiver-local initialization branch has 3,441 inclusive samples,
+local cleanup 1,380, cache release 766 and native method dispatch 966. These are
+sibling kernel branches; do not add nested inclusive counts. Runtime text grows
+by 516 bytes. The exact-class helper's frame grows from 48 to 64 bytes, but its
+strong-object path avoids generic calls; the repeated kernel benefit determines
+retention, not static instruction count.
+
+Next: reduce repeated class compatibility/local setup and owned-value cleanup,
+using live explicit RuntimeConfig or valid compiler proofs. Preserve runtime
+local visibility and declaration-order destruction. Do not revive the rejected
+native-only local lowering without its required unified cleanup proof.

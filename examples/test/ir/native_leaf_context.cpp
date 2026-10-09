@@ -238,11 +238,32 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     QoreProgram* caller = qore_get_call_program_context();
     QoreObject* old_object = rc->getObject();
     const qore_class_private* old_class = rc->getClass();
+    auto check_exact = [&](QoreValue receiver) {
+        const QoreObject* obj = receiver.getType() == NT_OBJECT ? receiver.get<const QoreObject>() : nullptr;
+        // Name-method sites need not carry a fixed class. This thread owns the
+        // unshared Program: install a test target only for these non-calling
+        // predicates, then restore it before invoking the real continuation.
+        const QoreClass* saved = ctx->call_targets[slot].qc;
+        for (const QoreClass* target : {saved, object->get<QoreObject>()->getClass()}) {
+            ctx->call_targets[slot].qc = target;
+            bool exact = obj && target && obj->getClass() == target;
+            assert(qore_rt_object_has_exact_aot_target_class_only(ctx, slot, receiver.rawBits())
+                == static_cast<int>(exact));
+            assert(qore_rt_object_has_exact_aot_target_class(ctx, slot, receiver.rawBits())
+                == static_cast<int>(exact && obj->isValid()));
+        }
+        ctx->call_targets[slot].qc = saved;
+        assert(!qore_rt_object_has_exact_aot_target_class(nullptr, slot, receiver.rawBits()));
+        assert(!qore_rt_object_has_exact_aot_target_class_only(nullptr, slot, receiver.rawBits()));
+        assert(!qore_rt_object_has_exact_aot_target_class(ctx, -1, receiver.rawBits()));
+        assert(!qore_rt_object_has_exact_aot_target_class_only(ctx, ctx->num_exprs, receiver.rawBits()));
+    };
     auto check = [&](QoreValue receiver, bool accepted) {
         // The exact-class caller's independent validity guard must agree with
         // generic value dispatch, including opaque objects and weak wrappers.
         bool valid = receiver.getType() == NT_OBJECT && receiver.get<QoreObject>()->isValid();
         assert(qore_rt_object_is_valid(receiver.rawBits()) == static_cast<int>(valid));
+        check_exact(receiver);
         int64_t result = -123;
         assert(qore_rt_try_method_int_unary_v1(ctx, slot, receiver.rawBits(), 7, &result, &xsink, rc)
             == static_cast<int>(accepted));
@@ -266,6 +287,7 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     check(QoreValue(true), false);
     check(QoreValue(int64_t{7}), false);
     check(QoreValue(1.25), false);
+    check(QoreValue::makeChar('x'), false);
     check(QoreValue::makeShortString("short", 5), false);
     ValueHolder boxed_int(QoreValue(INT64_MAX), &xsink);
     assert(boxed_int->isPointer());
@@ -287,6 +309,9 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     // subsequent calls still select the original receiver's override.
     ValueHolder replacement(program->callFunction("makeBaseMethodProbe", nullptr, &xsink), &xsink);
     assert(!xsink && replacement->getType() == NT_OBJECT);
+    check_exact(*replacement);
+    ValueHolder opaque_replacement(QoreValue::makeOpaqueObject(replacement->get<QoreObject>()), &xsink);
+    check_exact(*opaque_replacement);
     ReferenceHolder<QoreListNode> replacement_args(new QoreListNode(autoTypeInfo), &xsink);
     replacement_args->push(replacement->refSelf(), &xsink);
     assert(!xsink);
@@ -331,6 +356,10 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     check(*object, false);
     check(*opaque, false);
     check(*weak, false);
+    replacement->get<QoreObject>()->doDelete(&xsink);
+    assert(!xsink);
+    check_exact(*replacement);
+    check_exact(*opaque_replacement);
 }
 
 // An int-backed enum can resolve to the same int(int) method, but its dispatch

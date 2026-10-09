@@ -3,6 +3,9 @@
 # SPDX-License-Identifier: MIT
 %modern
 %allow-weak-references
+%allow-opaque-references
+
+enum ClassLocalScalar : int { Sample = 7 }
 
 thread_local int destroyed = 0;
 class ClassLocalValue {
@@ -134,6 +137,21 @@ string sub weakSource(bool expire) {
     }
 }
 
+int sub opaqueSource() {
+    int before = destroyed;
+    {
+        ClassLocalValue owner(53);
+        ClassLocalValue source @= owner;
+        remove owner;
+        ClassLocalValue receiver = source;
+        remove source;
+        if (receiver.id != 53 || destroyed != before) {
+            throw "CLASS-LOCAL-ASSIGNMENT", "opaque initializer lost its owned value";
+        }
+    }
+    return destroyed - before;
+}
+
 int sub classLocalLifetime(bool throwing) {
     int before = destroyed;
     try {
@@ -188,6 +206,15 @@ code<int()> sub escapedTarget(ClassLocalValue input) {
 ClassLocalValue left(3);
 ClassLocalDerived right(5);
 for (int round = 0; round < 8; ++round) {
+    foreach auto rejected in ((NULL, True, 7, 1.25, 9223372036854775807, -3.0e307,
+            "short", "not a class-local object", (1, 2), {"key": 1}, ClassLocalScalar::Sample)) {
+        if (checkedSource(rejected) != "RUNTIME-TYPE-ERROR") {
+            throw "CLASS-LOCAL-ASSIGNMENT", "non-object initializer was accepted";
+        }
+    }
+    if (opaqueSource() != 1) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "opaque initializer retained its reference after scope exit";
+    }
     if (rawClassSource(new ClassLocalRawAccept<int>(29)) != 29
             || rawClassSource(new ClassLocalRawAccept<string>("31")) != 31
             || checkedSource(new ClassLocalGenericDerived<int>(37)) != "37"

@@ -237,6 +237,18 @@ Skipping only the increment after a pure call cannot preserve caches across that
 boundary. A future effect-aware boundary must preserve all earlier pending
 generic effects and cleanup effects, not just inspect the last call's purity.
 
+Object-only admission in the fresh-store helper, its required-class positive
+validator and both exact-AOT-target predicates uses direct node tags for ordinary
+and opaque pointers. Non-pointer values retain generic dispatch; weak wrappers
+remain outside strong-object admission. No class compatibility/access result is
+cached, and the live exact-class predicate still checks deletion on every call.
+The class-only predicate retains its existing caller-provided validity contract.
+This runtime-only specialization changes no ABI or ownership. Five-fork paired
+measurements at 1024/4096 elements improve the mixed polymorphic kernel by
+8.19%/7.32%; Java remains about 17.5x faster at 4096. Receiver-local setup and
+cleanup remain the dominant follow-up targets; see
+[object-admission results](../bench/runtime-comparison/RESULTS.md#object-admission-specialization-2026-10-09).
+
 The class-check runtime comparison requested 16-byte alignment on the twelve
 prepared scalar callback v3 entrypoints. The unaligned class-check candidate
 repeatedly regressed wide callbacks; a 128-byte alternative recovered that AOT

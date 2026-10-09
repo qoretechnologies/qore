@@ -3034,11 +3034,25 @@ bool QoreTypeInfo::acceptsRequiredClassValueWithoutFilter(const QoreValue& n) co
     // object may still be parameterized if the ordinary raw-class gate allows it.
     // Failure falls back to acceptAssignment(), preserving its exact diagnostic.
     if (accept_vec.size() != 1 || accept_vec[0].map
-            || accept_vec[0].spec.getTypeSpec() != QTS_CLASS || n.getType() != NT_OBJECT) {
+            || accept_vec[0].spec.getTypeSpec() != QTS_CLASS) {
         return false;
     }
+    const QoreObject* object;
+    if (n.isPointer()) {
+        const AbstractQoreNode* node = n.getPtr();
+        if (!node || node->getType() != NT_OBJECT) {
+            return false;
+        }
+        object = static_cast<const QoreObject*>(node);
+    } else {
+        // Preserve generic dispatch for indirect scalar representations.
+        if (n.getType() != NT_OBJECT) {
+            return false;
+        }
+        object = n.get<const QoreObject>();
+    }
     bool priv_error = false;
-    return type_spec_accept_class_object(*accept_vec[0].spec.getClass(), *n.get<const QoreObject>(), priv_error);
+    return type_spec_accept_class_object(*accept_vec[0].spec.getClass(), *object, priv_error);
 }
 
 // Decides whether a container element type that the target element type does not already accept may

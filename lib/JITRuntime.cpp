@@ -773,6 +773,17 @@ static_assert(sizeof(QoreValue) == sizeof(uint64_t), "QoreValue must be 64 bits 
 
 // toBits/fromBits are defined in QoreJITIncludes.h (shared with QoreIRInterpreter.cpp)
 
+// Object-only admission sites can inspect the node tag directly for ordinary
+// and opaque pointers. Keep generic dispatch for non-pointer representations;
+// weak wrappers are not strong objects and must take their normal fallback.
+static inline const QoreObject* qore_rt_get_strong_object(const QoreValue& value) {
+    if (value.isPointer()) {
+        const AbstractQoreNode* node = value.getPtr();
+        return node && node->getType() == NT_OBJECT ? static_cast<const QoreObject*>(node) : nullptr;
+    }
+    return value.getType() == NT_OBJECT ? value.get<const QoreObject>() : nullptr;
+}
+
 // --- Reference counting helpers ---
 
 // Increments reference count if value is a pointer (node), returns value unchanged
@@ -12464,7 +12475,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTCo
     // A strong object needs no weak-input owner or normalization. Keep the same
     // admission, type/access checks and runtime-slot ownership, and only bypass
     // the empty weak-holder cleanup on a handled strong-object initializer.
-    if (fresh_store && strong_store && val.getType() == NT_OBJECT
+    if (fresh_store && strong_store && qore_rt_get_strong_object(val)
             && var->tryAssignInitialClassValue(val, result, xsink)) {
         return *xsink ? toBits(QoreValue()) : toBits(result.release());
     }
@@ -15692,12 +15703,11 @@ extern "C" DLLEXPORT int qore_rt_object_has_exact_aot_target_class(
     if (!ctx || slot < 0 || slot >= ctx->num_exprs || !ctx->call_targets) {
         return 0;
     }
-    QoreValue receiver = fromBits(value);
-    if (receiver.getType() != NT_OBJECT) {
+    const QoreObject* object = qore_rt_get_strong_object(fromBits(value));
+    if (!object) {
         return 0;
     }
     const QoreClass* target_class = ctx->call_targets[slot].qc;
-    const QoreObject* object = receiver.get<QoreObject>();
     return target_class && object->isValid() && object->getClass() == target_class;
 }
 
@@ -15706,12 +15716,12 @@ extern "C" DLLEXPORT int qore_rt_object_has_exact_aot_target_class_only(
     if (!ctx || slot < 0 || slot >= ctx->num_exprs || !ctx->call_targets) {
         return 0;
     }
-    QoreValue receiver = fromBits(value);
-    if (receiver.getType() != NT_OBJECT) {
+    const QoreObject* object = qore_rt_get_strong_object(fromBits(value));
+    if (!object) {
         return 0;
     }
     const QoreClass* target_class = ctx->call_targets[slot].qc;
-    return target_class && receiver.get<QoreObject>()->getClass() == target_class;
+    return target_class && object->getClass() == target_class;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx,
