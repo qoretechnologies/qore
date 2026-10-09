@@ -4,6 +4,11 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Assigning a function or method result to a typed hash no longer changes the types of values in
+    hash arguments passed to that call. Previously, dynamically supplied strings could be rejected
+    as incompatible with the result's value type or silently converted to numbers. Recompile existing
+    AOT artifacts to apply this compiler fix.
+
     Optimized execution now preserves large integer and floating-point values across
     statement and loop boundaries. Repeated arithmetic involving those values could
     previously use zero after an earlier temporary value had been released.
