@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -145,16 +146,16 @@ combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
 combined_file.write(provider_code + consumer_code + "\nmain();\n");
 combined_file.close();
 
-string expected = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+string expected = ExecModeHarness::run(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s",
     libqore_dir, qore_bin, combined_path));
 if (expected != "15:15:15:5.75:5.75:5.75:16:105:6:4:1\n") {
     printf("unexpected AST output:\n%s", expected);
     exit(2);
 }
 foreach string mode in (("ir", "tiered", "jit")) {
-    string actual = backquote(sprintf(
-        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+    string actual = ExecModeHarness::run(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
         libqore_dir, qore_bin, mode, combined_path));
     if (actual != expected) {
         printf("%s mismatch:\nexpected:\n%sactual:\n%s",

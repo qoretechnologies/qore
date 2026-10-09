@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AcceptClosedTest
+
+#! Tests that accepting on a listening socket that another thread closes raises an exception
+/** Socket::accept() is declared to return a Socket; Socket::accept(timeout) returns @ref nothing only when the timeout
+    expires.  When another thread closed the listening socket while the call was waiting for a connection, the
+    accept operation was canceled by the I/O controller and the call returned @ref nothing without an exception.
+
+    Each case closes the listener as soon as the accepting thread has started, so the close lands at every stage of
+    the call: before the operation is started (SOCKET-NOT-OPEN) or while it waits (SOCKET-CLOSED); every iteration
+    must end with one of these exceptions.  Before the fix, about 5% of the iterations returned @ref nothing.
+*/
+class AcceptClosedTest inherits QUnit::Test {
+    public {
+        #! the number of times each case closes the listener
+        const Iterations = 300;
+    }
+
+    constructor() : QUnit::Test("AcceptClosedTest", "1.0", \ARGV) {
+        addTestCase("accept() on a listener closed by another thread", \testAccept());
+        addTestCase("accept(timeout) on a listener closed by another thread", \testAcceptTimeout());
+        addTestCase("acceptSSL() on a listener closed by another thread", \testAcceptSsl());
+        addTestCase("positive control: accept() returns the connection", \testAcceptConnection());
+        set_return_value(main());
+    }
+
+    testAccept() {
+        checkClosed(auto sub (Socket l) { return l.accept(); });
+    }
+
+    testAcceptTimeout() {
+        checkClosed(auto sub (Socket l) { return l.accept(60s); });
+    }
+
+    testAcceptSsl() {
+        checkClosed(auto sub (Socket l) { return l.acceptSSL(); });
+    }
+
+    testAcceptConnection() {
+        Socket l();
+        l.bindINET("127.0.0.1", "0", True);
+        l.listen();
+        on_exit l.close();
+        Socket c();
+        c.connectINET("127.0.0.1", l.getSocketInfo().port, 10s);
+        on_exit c.close();
+        Socket s = l.accept();
+        on_exit s.close();
+        assertTrue(s.isOpen());
+    }
+
+    private checkClosed(code accept) {
+        hash<string, int> results;
+        for (int i = 0; i < Iterations; ++i) {
+            Socket l();
+            l.bindINET("127.0.0.1", "0", True);
+            l.listen();
+            Counter started(1);
+            Counter done(1);
+            string result;
+            background sub () {
+                on_exit done.dec();
+                started.dec();
+                try {
+                    auto v = accept(l);
+                    result = sprintf("returned %s", v.fullType());
+                } catch (hash<ExceptionInfo> ex) {
+                    result = ex.err;
+                }
+            }();
+            started.waitForZero();
+            l.close();
+            done.waitForZero();
+            ++results{result};
+        }
+        foreach string result in (keys results) {
+            assertTrue(result == "SOCKET-NOT-OPEN" || result == "SOCKET-CLOSED",
+                sprintf("%s in %d of %d iterations", result, results{result}, Iterations));
+        }
+    }
+}

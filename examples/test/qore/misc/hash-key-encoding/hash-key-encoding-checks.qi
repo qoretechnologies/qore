@@ -23,11 +23,14 @@
 */
 
 /** Hash keys and object member names are stored in the default character encoding (UTF-8).  Each check uses a key
-    given as a string in another encoding (ISO-8859-2, WINDOWS-1250, UTF-16LE, UTF-16BE) and verifies that it names
+    given as a string in another encoding (ISO-8859-2, WINDOWS-1250, UTF-16LE, UTF-16BE, and the encodings created
+    on the fly UTF-32LE, UTF-32BE, UTF-32, UCS-2LE, and the EBCDIC code page IBM1140 if iconv supports it) and verifies
+    that it names
     the same key as the UTF-8 string with the same characters, for every operation that takes a key: lookup,
     assignment, compound assignment, exists, remove, delete, slices, literals, the minus operators, hash methods,
-    object members, hashdecl members, map and select, references and closures.  The UTF-16 key \c "PO" checks that
-    no key is cut at the first null byte of its UTF-16 representation.
+    object members, hashdecl members, map and select, references and closures.  The UTF-16 and UTF-32 keys \c "PO"
+    check that no key is cut at the first null byte of its representation, and the EBCDIC keys that an encoding in
+    which ASCII characters are not ASCII bytes is converted.
 
     Each execution engine has its own key code, so the checks are run in each execution mode by
     hash-key-encoding-worker.q, which includes this file in its main program (code in a user module loaded from
@@ -381,6 +384,15 @@ sub check_errors(KeyChecker c, string bad) {
     c.chk("unchanged after errors", h, {"a": 1});
 }
 
+#! returns True if iconv on this platform supports the EBCDIC code page used in the checks
+public bool sub has_ebcdic() {
+    try {
+        return convert_encoding("A", "IBM1140").toBinary() == <c1>;
+    } catch (hash<ExceptionInfo> ex) {
+        return False;
+    }
+}
+
 #! runs every check and returns the results
 public list<string> sub get_results() {
     KeyChecker c();
@@ -390,6 +402,14 @@ public list<string> sub get_results() {
     c.setPrefix("WINDOWS-1250/UTF-16BE: ");
     check_values(c, convert_encoding("Bestätigung", "WINDOWS-1250"), convert_encoding("Plzeň", "WINDOWS-1250"),
         convert_encoding("PO", "UTF-16BE"), "Bestätigung", "Plzeň", "PO");
+    c.setPrefix("UTF-32LE/UTF-32: ");
+    check_values(c, convert_encoding("Bestätigung", "UTF-32LE"), convert_encoding("Plzeň", "UTF-32BE"),
+        convert_encoding("PO", "UTF-32"), "Bestätigung", "Plzeň", "PO");
+    if (has_ebcdic()) {
+        c.setPrefix("IBM1140/UCS-2LE: ");
+        check_values(c, convert_encoding("Bestätigung", "IBM1140"), convert_encoding("Grüße 3€", "IBM1140"),
+            convert_encoding("PO", "UCS-2LE"), "Bestätigung", "Grüße 3€", "PO");
+    }
     c.setPrefix("UTF-8: ");
     check_values(c, "Bestätigung", "Plzeň", "PO", "Bestätigung", "Plzeň", "PO");
     c.setPrefix("constants: ");
@@ -397,6 +417,9 @@ public list<string> sub get_results() {
     c.setPrefix("errors: ");
     # an odd number of bytes is not valid UTF-16
     check_errors(c, binary_to_string(<410042>, "UTF-16LE"));
+    c.setPrefix("errors UTF-32: ");
+    # a number of bytes that is not a multiple of four is not valid UTF-32
+    check_errors(c, binary_to_string(<41000000420000>, "UTF-32LE"));
     return c.getResults();
 }
 }

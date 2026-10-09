@@ -111,6 +111,7 @@ static void cppapiuser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xs
     init_cppapiuser_functions(CppApiTestNs);
     CppApiTestNs.addSystemClass(initProgramContextProbeClass(CppApiTestNs));
     CppApiTestNs.addSystemClass(initSerializationIndexProbeClass(CppApiTestNs));
+    CppApiTestNs.addSystemClass(initExceptionResultProbeClass(CppApiTestNs));
 }
 
 static void cppapiuser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {

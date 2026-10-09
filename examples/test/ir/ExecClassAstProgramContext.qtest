@@ -18,6 +18,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../ExecModeHarness.qm
 
 %exec-class ExecClassAstProgramContextTest
 
@@ -37,9 +38,9 @@ class ExecClassAstProgramContextTest inherits QUnit::Test {
 
     private testAllExecModes() {
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
-            string cmd = sprintf("%s --enable-debug --exec-mode=%s %s 2>&1",
+            string cmd = sprintf("%s --enable-debug --exec-mode=%s %s",
                 qore_bin, mode, scenario);
-            string out = backquote(cmd);
+            string out = ExecModeHarness::run(cmd);
             on_error printf("scenario (%s mode) output:\n%s\n", mode, out);
             # The core regression: the inherited main() call must not leave
             # set_return_value() targeting the wrong (non-%exec-class) Program.

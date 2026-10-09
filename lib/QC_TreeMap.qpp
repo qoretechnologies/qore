@@ -167,8 +167,6 @@ void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreVal
         return;
     }
 
-    bool inc_obj = false;
-    bool dec_obj = false;
     bool new_needs_scan = needs_scan(value);
 
     {
@@ -181,6 +179,11 @@ void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreVal
         // Check if old value needs scan and discard it
         if (it != data.end()) {
             old_needs_scan = needs_scan(it->second);
+            if (old_needs_scan) {
+                // the value is released under the lock, which can take a reference that the object's recursive set
+                // counts as internal (see RObject::remove_gen)
+                qore_object_private::get(*self)->edgesRemoved();
+            }
             it->second.discard(xsink);
             // Reuse the existing map entry
             it->second = value.refSelf();
@@ -189,28 +192,19 @@ void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreVal
             data[keyStr->c_str()] = value.refSelf();
         }
 
-        // Update scan_count based on net change
+        // Update scan_count based on net change; the object's count follows the map's under the lock (see
+        // scan_count)
         if (old_needs_scan && !new_needs_scan) {
-            --scan_count;
-            if (!scan_count) {
-                dec_obj = true;
+            assert(scan_count > 0);
+            if (!--scan_count) {
+                qore_object_private::get(*self)->decScanPrivateData();
             }
         } else if (!old_needs_scan && new_needs_scan) {
-            if (!scan_count) {
-                inc_obj = true;
+            if (!scan_count++) {
+                qore_object_private::get(*self)->incScanPrivateData();
             }
-            ++scan_count;
         }
         // If both old and new need scan (or neither does), scan_count doesn't change
-    }
-
-    // Update object's scan_private_data outside the lock
-    // Note: inc before dec to avoid window where scan_private_data is incorrectly 0
-    if (inc_obj) {
-        qore_object_private::get(*self)->incScanPrivateData();
-    }
-    if (dec_obj) {
-        qore_object_private::get(*self)->decScanPrivateData();
     }
     // no scan follows the new edge; the object's recursive set, and those of the objects the value reaches, must
     // not trust their reference counts until one has (Pattern B in design/dgc.md)
@@ -225,7 +219,6 @@ QoreValue TreeMapData::take(QoreObject* self, const QoreStringNode* key, Excepti
         return QoreValue();
     }
 
-    bool dec_obj = false;
     QoreValue rv{};
 
     {
@@ -237,16 +230,16 @@ QoreValue TreeMapData::take(QoreObject* self, const QoreStringNode* key, Excepti
 
         rv = i->second;
         if (needs_scan(rv)) {
-            --scan_count;
-            if (!scan_count) {
-                dec_obj = true;
+            // the value is handed to the caller with the map's reference, which the object's recursive set may count
+            // as internal: marked under the lock, before the caller can release it (see RObject::remove_gen)
+            qore_object_private::get(*self)->edgesRemoved();
+            // the object's count follows the map's under the lock (see scan_count)
+            assert(scan_count > 0);
+            if (!--scan_count) {
+                qore_object_private::get(*self)->decScanPrivateData();
             }
         }
         data.erase(i);
-    }
-
-    if (dec_obj) {
-        qore_object_private::get(*self)->decScanPrivateData();
     }
 
     return rv;

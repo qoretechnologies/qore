@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires mongodb
+
+%exec-class MongoCancelTest
+
+#! A MongoDB call blocked on the server ends as soon as its thread is cancelled
+/** The server is a listening socket that reads the client's handshake and never answers, so no MongoDB server is
+    needed: the client blocks reading the handshake reply until the request is made.  The connection's waits use
+    qore_cancellable_poll(), so the call ends at once; before, they checked for a request every 500 ms.
+*/
+public class MongoCancelTest inherits QUnit::Test {
+    public {
+        #! the most a woken wait may take to end after the request, in microseconds
+        const MaxLatencyUs = 100000;
+    }
+
+    constructor() : Test("MongoCancelTest", "1.0") {
+        addTestCase("a cancellation ends a blocked call", \cancelBlocked());
+        addTestCase("a timeout still ends a blocked call", \timeoutBlocked());
+        set_return_value(main());
+    }
+
+    #! three trials; the longest must be well under the old 500 ms polling interval
+    cancelBlocked() {
+        for (int i = 0; i < 3; ++i) {
+            SilentServer server();
+            on_exit server.close();
+            MongoClient client(server.uri(60000));
+            Queue done();
+            int tid = background sub () {
+                hash<auto> rv;
+                try {
+                    client.ping();
+                    rv.err = "NONE";
+                } catch (hash<ExceptionInfo> ex) {
+                    rv.err = ex.err;
+                }
+                rv.cancelled = thread_cancelled();
+                rv.end = clock_get_monotonic_us();
+                done.push(rv);
+            }();
+            # the client has sent its handshake and is waiting for the reply
+            server.waitHandshake();
+            int start = clock_get_monotonic_us();
+            cancel_thread(tid, "mongodb cancel test");
+            hash<auto> rv = done.get();
+            int us = rv.end - start;
+            assertNeq("NONE", rv.err, "the call fails");
+            assertTrue(rv.cancelled, "the call ended with the request pending");
+            assertTrue(us < MaxLatencyUs, sprintf("woken %d us after the request (limit %d us)", us,
+                MaxLatencyUs));
+        }
+    }
+
+    #! without a request, the connection's timeouts still end the wait
+    timeoutBlocked() {
+        SilentServer server();
+        on_exit server.close();
+        MongoClient client(server.uri(300));
+        int start = clock_get_monotonic_us();
+        assertThrows("MONGODB-CLIENT-ERROR", \client.ping());
+        int us = clock_get_monotonic_us() - start;
+        assertGe(300000, us, sprintf("the call waited for the timeout (%d us)", us));
+    }
+}
+
+#! a server that reads a client's first message and never answers
+class SilentServer {
+    private {
+        Socket listener();
+        Queue handshake();
+        Counter running(1);
+        Socket conn;
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0", True);
+        listener.listen();
+        background sub () {
+            on_exit running.dec();
+            try {
+                conn = listener.accept(30s);
+                # the handshake is at least a message header
+                conn.recvBinary(16, 30s);
+                handshake.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                handshake.push(ex);
+            }
+        }();
+    }
+
+    string uri(int timeout_ms) {
+        return sprintf("mongodb://127.0.0.1:%d/?connectTimeoutMS=%d&socketTimeoutMS=%d&serverSelectionTimeoutMS=%d",
+            listener.getSocketInfo().port, timeout_ms, timeout_ms, timeout_ms);
+    }
+
+    waitHandshake() {
+        auto v = handshake.get(30s);
+        if (v.typeCode() == NT_HASH) {
+            throw v.err, v.desc;
+        }
+    }
+
+    close() {
+        listener.close();
+        running.waitForZero();
+        if (conn) {
+            conn.close();
+        }
+    }
+}

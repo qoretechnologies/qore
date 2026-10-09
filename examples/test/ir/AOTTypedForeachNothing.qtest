@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../../../qlib/QUnit.qm
 %requires ../../../qlib/FsUtil.qm
+%requires ../ExecModeHarness.qm
 
 %exec-class AOTTypedForeachNothingTest
 
@@ -99,11 +100,13 @@ class AOTTypedForeachNothingTest inherits QUnit::Test {
     }
 
     private string run(string command) {
-        int status;
-        string output = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1",
-            libqore_dir, libqore_dir, command), \status);
-        assertEq(0, status, "child process exit status: " + command + "\n" + output);
-        return output;
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+            "QORE_LIBDIR=%s %s", libqore_dir, libqore_dir, command));
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, "child process exit status: " + command + "\n" + r.out);
+        return r.out;
     }
 
     testTiers() {

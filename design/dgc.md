@@ -456,6 +456,21 @@ a memo for the rest of the scan: the cost is the regions reached, not the object
 A **removed** edge never ends currency: it cannot make a node reach a root it could not reach before. An object that
 is destroyed releases its reference to the region without ending it.
 
+**Deciding currency once.** Every event that can make a current region stop being current increments the global
+count `RRegion::invalidations` after it is made: a region's `invalid` flag set for the first time
+(`RRegion::invalidate()`), an object of a closed set losing its `rclosed` flag (`RRegion::closedSetLeft()`, from
+`RObject::setRSet()`, `RSet::clearClosed()` and `RSet::invalidateIntern()`), and an untracked edge. `regionCurrent()`
+reads the count before it decides anything and stores it in the region's `current_at` when it finds the region
+current. A region whose `current_at` is the count read by a later scan, whose flag is clear and whose epoch is current
+is current without its `deps` being walked: nothing that could change that has happened since. Without this, a chain
+of objects built head first (`n.next = head; head = n;`) adds a region per object, depending on the previous one, and
+the scan made when the previous head is released walked the whole chain of regions every time, so building a chain of
+n objects took O(n^2) time (20000 objects: 14.8 s; 100000 objects now take about 0.2 s).
+`examples/test/qore/misc/dgc-region-chains.qtest` counts the regions walked (`dbg_get_region_walk_count()`, debug
+builds) and checks that changes inside such a chain are still seen. The count is a single global atomic, incremented
+at most once per region, closed-set change or untracked edge; any event anywhere makes every region be decided by
+walking again, which is the cost every scan paid before.
+
 **Skipping.** `RSetHelper::checkNode(RObject&)` does not enter an object whose region is current, unless the object
 is in the root's own component of the root's region: the root's region can be current when the scan is a rescan
 rather than a write, and the root's component has to be walked to find its cycles. An object of another component was
@@ -840,13 +855,48 @@ if (scan_private_data) {
 the recursive sets the new edge changes do not count it, and without the mark a verdict of "cannot delete" made
 with those counts can stand for the life of the process; see "Knowing that a set's counts are current". Call it
 after the value is in the container and while the value is still referenced: `Queue::push()` calls it under the
-queue's lock, since another thread can take the value as soon as the lock is released. Removing a value needs no
-call. `TreeMapData::put()`, `qore_queue_private::push()` / `insert()` and
+queue's lock, since another thread can take the value as soon as the lock is released. **Giving a value up - releasing
+it or handing it out to the caller - must call `RObject::edgesRemoved()` on the holder under the container's lock**;
+see "Values handed out by a container" below. `TreeMapData::put()`, `qore_queue_private::push()` / `insert()` and
 `Http2ClientPollOperationBase::registerStreamQueue()` are the current callers.
 
 **Look the private data up with `getScanPrivateData()`, never with a raising lookup such as `getReferencedPrivateData(key, xsink)`.** Most scanned objects do not have the data being probed for, so a raising lookup creates and discards an exception for nearly every object. Creating an exception captures the call stack, and call stack capture calls external language stack location helpers: the Python helper acquires the GIL. The scan holds r-sections at that point, so a thread that holds the GIL and waits for one of those objects (for example a Python thread whose Qore thread initialization dereferences an object) deadlocks with the scan. Nothing in a scan may raise an exception or call into user or foreign-language code.
 
 Failing to do this produces exactly the symptom that motivated this document: a cycle with an "invisible" edge through a C++ container; DGC sees `rcount < references` on some member, calls `canDelete` → returns 0, and the cycle leaks forever.
+
+### Values handed out by a container
+
+A Pattern B container gives a value up in one of two ways. It can release it (`Queue::clear()`, a `TreeMap::put()`
+that replaces a value, the HTTP/2 and delegating poll operations' cleanup): the value loses the reference that the
+holder's recursive set counted as internal, its count drops below the set's `rcount`, and `RSet::canDelete()` reads
+that as a stale set and rescans. Or it can hand the value to the caller with the container's own reference
+(`Queue::get()` / `pop()`, `TreeMap::take()`, and the same through the C++ API): the count does not change, but the
+reference is now held from outside the set. The set's counts still look exact, so without a further rule a
+dereference that finds every other reference internal collects the set while the caller still holds the value. With
+a queue `q` holding a value `v` whose member refers back to `q`, `v2 = q.get(); remove q;` deleted `q` while `v2.q`
+still referred to it. The same hand-out also races the scan itself: a scan reports the container's values under the
+container's lock and follows them after releasing it, so another thread can take a value and release it before the
+scan commits, and the scan then records an `rcount` above the value's references.
+
+Each object therefore carries a removal generation besides its edge generation:
+
+- `RObject::edgesRemoved()` advances `RObject::remove_gen`; a container calls it on the holder under its lock for
+  every value it gives up that needs a scan, before the value can be released: a value released under the
+  container's lock needs the mark as much as one handed out, for the scan race above.
+- A scan reads each object's removal generation before it follows the object's edges (`RSetHelper::startNode()`), and
+  the commit records it as `scan_remove_gen` whether it assigns a new set or confirms the one in place.
+- `RSet::canDelete()` collects a set only when `RSet::removalsUnchangedSinceScan()` is true; otherwise it asks for
+  a rescan, which records the current generations. Unlike an added edge, a value handed out is never trusted after
+  a rescan: a verdict of "cannot delete" made with stale counts only delays a collection, but one of "can delete"
+  deletes objects that are still in use.
+- The debug check that a committed set has no `rcount` above an object's references allows the excess only when a
+  member has given up a value since the scan: the count is read first, and the mark is made before the value can
+  be released, so a released value is always seen with its mark.
+
+A queue reports its values only while it counts values pushed through its object (`qore_queue_private::scan_count`)
+and keeps that object (`scan_holder`, with a weak reference) for as long, so a value taken through the C++ API,
+which has the queue and not its object, still marks it. `examples/test/qore/misc/dgc-handed-out-values` covers the
+hand-outs, single-threaded and with scans running concurrently with them.
 
 ### Raw pointers across cycles: acceptable cases
 
@@ -860,11 +910,31 @@ If you rely on Pattern A's invariant, verify that the internal-member slot is ac
 
 ## Deleting long chains
 
-Deleting an object releases the objects it references, and deleting those would recurse for each object in a chain.
-`qore_object_private::deleteOrDefer()` deletes objects recursively up to a nesting depth of 16 in a thread and defers
-deeper deletions to a loop with an explicit stack. The loop deletes the objects deferred while deleting an object
-before the remaining objects deferred earlier, so destructors run in the same depth-first order as with recursion, and
-the members retained by a collected recursive set are released after the deferred object's deletion.
+Deleting an object releases the objects and closures it references, and deleting a closure-bound variable releases
+its value, so deleting those would recurse for each link in a chain of objects and closures. `RObject::deleteOrDefer()`
+deletes objects and closure-bound variables recursively up to a combined nesting depth of 16 in a thread and defers
+deeper deletions to a loop with an explicit stack; each `RObject` makes its deletion in `deleteNow()`: an object runs
+its destructor and releases its data, and a closure-bound variable releases its value. The loop deletes the objects
+and variables deferred while deleting one before the remaining ones deferred earlier, so destructors run in the same
+depth-first order as with recursion, and the members retained by a collected recursive set are released after the
+deferred deletion. A deferred object stays allocated while its destructor is in progress; a closure-bound variable
+holds a weak reference from its dereference until its deletion is made (the initial weak reference when its last
+reference was released, or one taken for the deletion when it is collected with its recursive set). The deletion loop
+is per thread, so no lock is involved. A queue that is empty when the loop takes a deletion from it receives the
+deletions deferred by that one, so a chain uses one queue however long it is.
+
+The loop does not change where a recursion through destructors stops. Each deferred deletion records the stack that
+the user code recursion it replaces would have used: the stack recorded for the deletion the loop was making when it
+was deferred, plus, when a destructor that started during that deletion was still running (counted by
+`RObject::DestructorRunHelper` around the destructor call), the stack used between the loop's frame and the point
+where it was deferred. A deletion deferred while releasing the data of an object whose destructor has returned adds
+nothing: that recursion is the one the loop makes iterative, so a chain of any length is deleted, destructors
+included. While the loop makes the deletion, `QoreElidedStackHelper`
+moves the thread's stack limit towards the current position by that amount, so every stack check, such as the one made
+when a destructor is called, raises `STACK-LIMIT-EXCEEDED` at the depth where the recursion would have raised it. A
+destructor that deletes a new object of its own class therefore raises the exception, as it did before deletions were
+deferred, instead of making the loop iterate and allocate without end
+(`examples/test/qore/misc/destructor-recursion/destructor-recursion.qtest`).
 
 ## `rrefs` / `realRef()`: when to use it
 

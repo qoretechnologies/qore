@@ -164,6 +164,17 @@ module McpServerHandler {
     http.addListener({"service": 8080});
     @endcode
 
+    @subsection McpServer_intro_allowed_values Allowed Values
+    A tool parameter's fixed allowed values are listed as the \c "enum" of its JSON schema, up to
+    @ref McpServerHandler::McpServerHandler::MaxInlineEnumValues "MaxInlineEnumValues" values; a parameter with more
+    is described by their number.  Values that are reference data of the connected system (a field's \c ref_data
+    attribute: customers, orders, repositories and other records) are never listed and never read to build a tool
+    schema; the parameter's description says where its value comes from instead.  A subclass can name its own
+    lookup there by reimplementing
+    @ref McpServerHandler::McpServerHandler::getReferenceDataDescription() "getReferenceDataDescription()", and can
+    read the values on demand with
+    @ref McpServerHandler::McpServerHandler::getAllowedValues() "getAllowedValues()".
+
     @subsection McpServer_intro_notifications Notifications
     The handler supports MCP notifications over SSE. Clients can open a GET request with an
     \c Accept: \c text/event-stream header to receive notifications and streamed responses.

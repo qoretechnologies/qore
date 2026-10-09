@@ -3643,17 +3643,18 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
     if (do_del) {
         // first invalidate any rset
         removeInvalidateRSet();
+        // the deletion releases a weak reference that keeps the variable allocated until it is made, as it can be
+        // deferred: when this was the last reference, the initial weak reference, after whose release the variable
+        // is deleted when no other weak reference remains (one held by an LValueHelper or by the watch of a
+        // recursive set, for example), as for objects; otherwise, for a variable collected with its recursive set,
+        // a weak reference taken here
+        if (ref_copy) {
+            tRef();
+        } else {
+            printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p deleting\n", this);
+        }
         // now delete the value which should cause the entire chain to be destroyed
-        del(xsink);
-    }
-
-    if (!ref_copy) {
-        printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p deleting\n", this);
-        // release the initial weak reference; the variable is deleted when no other weak reference remains, as a
-        // weak reference (held by an LValueHelper or by the watch of a recursive set, for example) keeps it
-        // allocated after its last reference is released, as for objects
-        tDeref();
-        return;
+        deleteOrDefer(xsink, cycle_cleanup);
     }
 }
 

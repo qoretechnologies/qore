@@ -99,6 +99,9 @@ hash<RestResponseInfo> resp2 = f2.get(30s);
     and capped at 8s. A policy has a 30s total budget; a positive caller timeout further limits it.
     Retry-After seconds and HTTP dates are honored even when longer than the backoff cap, provided the
     remaining budget permits another request. Setting max_retries to zero disables retries.
+    By default an attempt may use the whole remaining budget; @ref RestClientIo::RestRetryOptions::attempt_timeout
+    "attempt_timeout" bounds one attempt, so an attempt whose connection delivers nothing times out and is
+    retried within the budget.
 
     Only explicitly transient HTTP and transport errors are retried. Cancellation interrupts backoff
     and pending response waits; final request exceptions retain their original error and add an
@@ -174,7 +177,10 @@ resp = rc.restGet("/api/data");
     @subsection restclientio_v1_0 Version 1.0
     - added reusable opt-in RestRetryPolicy and inherited request methods, with Retry-After, bounded
       jittered backoff, cancellation, and safe retry observers (issue 5475)
+    - RestRetryOptions::attempt_timeout bounds one attempt, so a stalled attempt is retried within the budget
     - call-local timeout requests now cancel unfinished I/O when their deadline expires
+    - a call-local request timeout (restDoRequestWithTimeout(), restPostWithTimeout()) is also the request's transport
+      deadline, so it may exceed the client's request timeout; such requests previously failed at the client's timeout
     - preserve fractional milliseconds in response waits so nested retry budgets do not send an extra request
     - async request and SSE startup timeouts retain their completion error when the controller aborts I/O
     - initial release
@@ -220,6 +226,13 @@ public namespace RestClientIo {
         timeout retry_timeout = 30s;
         #! An optional positive caller timeout further limits the total budget
         *timeout timeout;
+        #! Optional longest time of one attempt; a value below the budget lets a stalled attempt be retried
+        /** Without it, the first attempt may take the whole remaining budget, so a request whose connection
+            stalls (no response at all) fails at the budget instead of being retried.  An attempt that reaches
+            this limit fails with \c HTTPCLIENT-TIMEOUT, which is retried while the budget allows.  Only set
+            it for requests that are expected to finish well within it.
+        */
+        *timeout attempt_timeout;
         #! Best-effort observer called before each retry, without request/response content
         *code<nothing(hash<RestRetryEvent>)> retry_callback;
     }
@@ -274,9 +287,10 @@ public namespace RestClientIo {
         constructor(*hash<RestRetryOptions> options) {
             self.options = options ?? <RestRetryOptions>{};
             if (self.options.max_retries < 0 || self.options.retry_max_delay < 0
-                    || self.options.retry_timeout <= 0) {
+                    || self.options.retry_timeout <= 0 || self.options.attempt_timeout < 0) {
                 throw "REST-RETRY-OPTION-ERROR",
-                    "max_retries and retry_max_delay must be nonnegative and retry_timeout must be positive";
+                    "max_retries, retry_max_delay and attempt_timeout must be nonnegative and retry_timeout must "
+                    "be positive";
             }
             int budget = self.options.retry_timeout;
             if (self.options.timeout > 0) {
@@ -291,8 +305,9 @@ public namespace RestClientIo {
         }
 
         #! Executes a request with the remaining budget and bounded retries
-        /** @param request callback accepting a positive remaining timeout in milliseconds; it must bound
-                the entire request and cancel unfinished I/O before throwing
+        /** @param request callback accepting a positive timeout in milliseconds - the remaining budget, or the
+                \c attempt_timeout when that is smaller; it must bound the entire request and cancel unfinished
+                I/O before throwing
             @return the successful response
             @throw HTTPCLIENT-TIMEOUT the shared deadline expired before a request could start
             @throw THREAD-CANCELLED the thread was cancelled
@@ -310,8 +325,13 @@ public namespace RestClientIo {
                     throw "HTTPCLIENT-TIMEOUT", "REST retry budget exhausted", {"attempts": attempts};
                 }
                 ++attempts;
+                # a stalled attempt ends at the attempt limit, leaving budget for another attempt
+                int attempt_ms = remaining;
+                if (options.attempt_timeout > 0 && options.attempt_timeout < attempt_ms) {
+                    attempt_ms = options.attempt_timeout;
+                }
                 try {
-                    return request(remaining);
+                    return request(attempt_ms);
                 } catch (hash<ExceptionInfo> ex) {
                     if (inlist(ex.err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED"))) {
                         rethrow;
@@ -2299,7 +2319,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     "timeout_ms must be positive and fit a monotonic deadline";
             }
             int deadline = started + timeout_ms * 1000;
-            RestFuture future = restDoRequestAsync(method, path, body, hdr);
+            RestFuture future = restDoRequestAsyncWithTimeout(method, path, body, hdr, timeout_ms);
             try {
                 int remaining_us = deadline - requestNow();
                 if (remaining_us <= 0) {
@@ -2315,6 +2335,32 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 }
                 rethrow;
             }
+        }
+
+        #! Sends an async generic REST request whose transport deadline is the given timeout
+        /** Like @ref restDoRequestAsync(), but \a timeout_ms replaces the client's request timeout for this
+            request, so a request may take longer than the client's default as well as less
+
+            @param method HTTP method
+            @param path request path
+            @param body request body
+            @param hdr optional request headers
+            @param timeout_ms the positive timeout of this request in milliseconds
+
+            @return a @ref RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
+        */
+        private RestFuture restDoRequestAsyncWithTimeout(string method, string path, auto body, *hash<auto> hdr,
+                int timeout_ms) {
+            log(LoggerLevel::DEBUG, "restDoRequestAsyncWithTimeout() %s %s%s (timeout: %dms)", method, url, path,
+                timeout_ms);
+            hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr, False, False, NOTHING,
+                NOTHING, NOTHING, timeout_ms);
+            RestClientIoAsyncRequestOperation op = async_info.operation;
+            return new RestFuture(async_info.future, bool sub () {
+                return op.cancel();
+            }, hash<RestClient::RestResponseInfo> sub (hash<auto> raw) {
+                return buildAsyncOperationResponse(raw, op);
+            });
         }
 
         #! Monotonic request clock, overridable for deterministic deadline tests
@@ -2708,9 +2754,13 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         }
 
         #! Starts an async raw HTTP request operation with event-driven Negotiate retry support
+        /** @param request_timeout_ms a positive timeout for this request only, in milliseconds, replacing the
+                client's request timeout as the operation's transport deadline; when not set, the client's
+                request timeout applies
+        */
         private hash<auto> startAsyncRequestOperation(string method, string path, auto body,
                 *hash<auto> hdr, bool raw, *bool skip_ensure_token,
-                *EventNotifier completion_notifier, *string shdr, *code signer) {
+                *EventNotifier completion_notifier, *string shdr, *code signer, *int request_timeout_ms) {
             if (!skip_ensure_token) {
                 ensureToken();
             }
@@ -2718,7 +2768,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             Promise p();
             Future f = p.getFuture();
             RestClientIoAsyncRequestOperation op(self, p, method, path, body, hdr,
-                raw, completion_notifier, shdr, signer);
+                raw, completion_notifier, shdr, signer, request_timeout_ms);
             op.start();
             return {
                 "future": f,
@@ -5348,6 +5398,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         #! Lock for completion and cancellation
         Mutex m();
 
+        #! A positive timeout for this request only, in milliseconds; when not set, the client's applies
+        *int request_timeout_ms;
+
         #! True when the caller drives continuePoll() itself rather than the async I/O controller
         /** Set by @ref startCallerDriven().  Two things differ in this mode, and both exist because there is
             no controller watching the operation:
@@ -5370,8 +5423,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     #! Creates a new async request operation
     constructor(RestClientIo rcio, Promise promise, string method, string path, auto body,
             *hash<auto> hdr, bool raw, *EventNotifier completion_notifier,
-            *string signer_header, *code signer) {
+            *string signer_header, *code signer, *int request_timeout_ms) {
         self.rcio = rcio;
+        self.request_timeout_ms = request_timeout_ms > 0 ? request_timeout_ms : NOTHING;
         self.promise = promise;
         self.method = method;
         self.path = path;
@@ -5396,11 +5450,13 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         }
 
         auto controller = rcio.getConnectionManager().getController();
+        # a request's own timeout replaces the client's
+        int to_ms = request_timeout_ms ?? rcio.getTimeout();
         controller.submit(<SocketPollOperationInfo>{
             "sock": poll_info.socket,
             "spop": self,
             # a request timeout of 0 means no deadline; a negative controller timeout means none
-            "to": rcio.getTimeout() > 0 ? milliseconds(rcio.getTimeout()) : -1,
+            "to": to_ms > 0 ? milliseconds(to_ms) : -1,
             "owner": "restclientio-async:" + self.uniqueHash(),
             "has_on_complete": True,
         });

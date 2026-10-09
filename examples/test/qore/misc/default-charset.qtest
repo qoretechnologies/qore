@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The default character encoding must be compatible with ASCII: program text, hash keys, and the output of every
+# function that formats text are ASCII in it.  An encoding that is not (UTF-16, UTF-32, EBCDIC, Shift_JIS) is
+# refused at startup: given with --charset or QORE_CHARSET, Qore exits with an error (status 1); given by the locale
+# (LANG), which is not specific to Qore, Qore prints an error and uses UTF-8, as for an encoding that iconv does not
+# know.  Each of the three sources is tested.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DefaultCharsetTest
+
+#! the result of a qore subprocess
+hashdecl RunResult {
+    #! the exit status
+    int rc;
+    #! stdout followed by stderr
+    string out;
+}
+
+class DefaultCharsetTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : Test("DefaultCharsetTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("--charset", \testOption());
+        addTestCase("QORE_CHARSET", \testEnv());
+        addTestCase("LANG", \testLang());
+        set_return_value(main());
+    }
+
+    #! runs qore with the given environment and options and prints the default encoding
+    private hash<RunResult> run(string env, string opts = "") {
+        string cmd = sprintf("env -u QORE_CHARSET -u LC_ALL -u LC_CTYPE %s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+            "-b %s -e 'print(get_default_encoding());' 2>&1; echo \" rc=$?\"", env, libqore_dir, libqore_dir,
+            qore_bin, opts);
+        string out = backquote(cmd);
+        *list<string> m = (out =~ x/^(.*) rc=([0-9]+)\n$/s);
+        assertTrue(exists m, "exit status: " + out);
+        return <RunResult>{"rc": int(m[1]), "out": m[0]};
+    }
+
+    testOption() {
+        foreach string enc in ("UTF-16", "UTF-16LE", "UTF-32", "UTF-32LE", "UCS-2") {
+            hash<RunResult> r = run("", "--charset=" + enc);
+            assertEq(1, r.rc, enc + ": " + r.out);
+            assertRegex("not compatible with ASCII", r.out, enc);
+            assertRegex(enc, r.out, enc);
+        }
+        hash<RunResult> r = run("", "--charset=ISO-8859-2");
+        assertEq(0, r.rc, r.out);
+        assertEq("ISO-8859-2", r.out);
+    }
+
+    testEnv() {
+        foreach string enc in ("UTF-16", "UTF-32BE", "UCS-2LE", "SHIFT_JIS") {
+            hash<RunResult> r = run("QORE_CHARSET=" + enc);
+            assertEq(1, r.rc, enc + ": " + r.out);
+            assertRegex("not compatible with ASCII", r.out, enc);
+            assertRegex("QORE_CHARSET", r.out, enc);
+        }
+        hash<RunResult> r = run("QORE_CHARSET=WINDOWS-1250");
+        assertEq(0, r.rc, r.out);
+        assertEq("WINDOWS-1250", r.out);
+        # --charset takes precedence over QORE_CHARSET
+        r = run("QORE_CHARSET=UTF-32", "--charset=UTF-8");
+        assertEq(0, r.rc, r.out);
+        assertEq("UTF-8", r.out);
+    }
+
+    testLang() {
+        # an encoding from the locale that is not compatible with ASCII gives an error, and UTF-8 is used
+        foreach string lang in ("en_US.UTF-32", "en_US.UTF-16", "ja_JP.SJIS", "ja_JP.SJIS@modifier") {
+            hash<RunResult> r = run("LANG=" + lang);
+            assertEq(0, r.rc, lang + ": " + r.out);
+            assertRegex("^qore: error: character encoding '[^']+' from LANG is not compatible with ASCII", r.out,
+                lang);
+            # the modifier is not part of the encoding name
+            assertRegex("'(UTF-32|UTF-16|SJIS)'", r.out, lang);
+            assertRegex("\nUTF-8$", r.out, lang);
+        }
+        hash<RunResult> r = run("LANG=de_DE.ISO-8859-1");
+        assertEq(0, r.rc, r.out);
+        assertEq("ISO-8859-1", r.out);
+        r = run("LANG=de_DE.ISO-8859-15@euro");
+        assertEq(0, r.rc, r.out);
+        assertEq("ISO-8859-15", r.out);
+        # QORE_CHARSET takes precedence over LANG
+        r = run("LANG=ja_JP.SJIS QORE_CHARSET=ISO-8859-2");
+        assertEq(0, r.rc, r.out);
+        assertEq("ISO-8859-2", r.out);
+    }
+}

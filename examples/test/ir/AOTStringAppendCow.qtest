@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -148,7 +149,7 @@ script.write(code);
 script.close();
 
 string sub runMode(string mode) {
-    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+    return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
         libqore_dir, qore_bin, mode, script_path));
 }
 
@@ -175,15 +176,15 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     }
 }
 
-string ir_dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s 2>&1",
+string ir_dump = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s",
     libqore_dir, qore_bin, script_path));
 if (ir_dump !~ /string\.append\.cow/) {
     printf("copy-on-write string append opcode missing from IR dump:\n%s", ir_dump);
     exit(2);
 }
 
-string opt_stats = backquote(sprintf(
-    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+string opt_stats = ExecModeHarness::run(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s",
     libqore_dir, qore_bin, script_path));
 if (opt_stats !~ /IR-OPT: makeBuilder:.*inplace-string=1/) {
     printf("in-place string append optimization missing:\n%s", opt_stats);
@@ -195,8 +196,8 @@ if (opt_stats !~ /IR-OPT: makeBuilder:.*inplace-string=1/) {
 # output must be identical (and debug builds must not trip the string
 # mutation-uniqueness assertion)
 foreach string mode in (("ir", "tiered")) {
-    string actual = backquote(sprintf(
-        "QORE_DISABLE_IR_BORROWED_STRING_LOAD=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+    string actual = ExecModeHarness::run(sprintf(
+        "QORE_DISABLE_IR_BORROWED_STRING_LOAD=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
         libqore_dir, qore_bin, mode, script_path));
     if (actual != expected) {
         printf("mismatch in %s with borrowed string loads disabled\nexpected:\n%sactual:\n%s",
@@ -209,9 +210,9 @@ if (opt_stats =~ /IR-OPT: aliasBuilder:.*inplace-string=[1-9][0-9]*/) {
         opt_stats);
     exit(2);
 }
-string fallback_stats = backquote(sprintf(
+string fallback_stats = ExecModeHarness::run(sprintf(
     "QORE_DISABLE_IR_IN_PLACE_STRING_APPEND=1 QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s "
-        + "%s -b --exec-mode=ir %s 2>&1",
+        + "%s -b --exec-mode=ir %s",
     libqore_dir, qore_bin, script_path));
 if (fallback_stats =~ /inplace-string=[1-9][0-9]*/) {
     printf("in-place string append fallback did not disable the optimization:\n%s",

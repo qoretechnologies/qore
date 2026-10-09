@@ -739,8 +739,13 @@ QoreValue QoreHashNode::evalImpl(bool &needs_deref, ExceptionSink* xsink) const 
 // does a "soft" compare (values of different types are converted if necessary and then compared)
 // 0 = equal, 1 = not equal
 bool QoreHashNode::compareSoft(const QoreHashNode* h, ExceptionSink* xsink) const {
-    if (h->priv->size() != priv->size())
+    if (h->priv->size() != priv->size()) {
         return 1;
+    }
+    // comparing recurses with the nesting of the hashes, which is unbounded
+    if (xsink && q_check_stack(xsink)) {
+        return 1;
+    }
 
     ConstHashIterator hi(this);
     while (hi.next()) {
@@ -748,7 +753,7 @@ bool QoreHashNode::compareSoft(const QoreHashNode* h, ExceptionSink* xsink) cons
         if (j == h->priv->hm.end())
             return 1;
 
-        if (!hi.get().isEqualSoft((*j->second)->val, xsink)) {
+        if (!hi.get().isEqualSoft((*j->second)->val, xsink) || (xsink && *xsink)) {
             return 1;
         }
     }
@@ -758,8 +763,13 @@ bool QoreHashNode::compareSoft(const QoreHashNode* h, ExceptionSink* xsink) cons
 // does a "hard" compare (types must be exactly the same)
 // 0 = equal, 1 = not equal
 bool QoreHashNode::compareHard(const QoreHashNode* h, ExceptionSink* xsink) const {
-    if (h->priv->size() != priv->size())
+    if (h->priv->size() != priv->size()) {
         return 1;
+    }
+    // comparing recurses with the nesting of the hashes, which is unbounded
+    if (xsink && q_check_stack(xsink)) {
+        return 1;
+    }
 
     ConstHashIterator hi(this);
     while (hi.next()) {
@@ -767,7 +777,12 @@ bool QoreHashNode::compareHard(const QoreHashNode* h, ExceptionSink* xsink) cons
         if (j == h->priv->hm.end())
             return 1;
 
-        if (!hi.get().isEqualHard((*j->second)->val)) {
+        // the sink is optional in this API: without one, an exception means that the hashes are not equal
+        if (xsink) {
+            if (!hi.get().isEqualHard((*j->second)->val, xsink) || *xsink) {
+                return 1;
+            }
+        } else if (!hi.get().isEqualHard((*j->second)->val)) {
             return 1;
         }
     }
@@ -815,6 +830,11 @@ bool QoreHashNode::existsKeyValue(const char* key) const {
 }
 
 int QoreHashNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
+    // formatting recurses with the nesting of the value, which is unbounded
+    if (xsink && q_check_stack(xsink)) {
+        return -1;
+    }
+
     // applies any format bounds active in this thread; when bounds are active, a recursive reference is rendered
     // as an alias to the anchor rendered with the container, so this check is made before the recursion check
     QoreFormatBoundsHelper fbh(str, this, empty() ? "{}" : "{...}");

@@ -30,6 +30,43 @@
     including when extracted inside another repository. Revision updates reject corrupt
     metadata, and standalone compiler-fingerprint generation sets its list policy explicitly.
 
+    Binary modules can now wait deterministically for cancellation: the C++ API function
+    <tt>qore_cancellable_poll()</tt> waits like <tt>poll(2)</tt> and ends as soon as the thread is cancelled or its
+    @ref Qore::Program "Program" is interrupted, and <tt>qore_cancel_wakeup_register()</tt>,
+    <tt>qore_cancel_wakeup_check()</tt> and <tt>qore_cancel_wakeup_unregister()</tt> (or the
+    <tt>QoreCancelWakeupHelper</tt> class) give a library's own event loop a descriptor that becomes readable when
+    cancellation is requested.  Modules no longer need to poll in <tt>QORE_IO_POLL_INTERVAL_MS</tt> slices, which is
+    deprecated; <tt>_QORE_HAS_CANCELLABLE_POLL</tt> is defined when the API is available.
+
+    A thread cancelled with @ref Qore::cancel_thread() "cancel_thread()", or whose @ref Qore::Program "Program" was
+    interrupted, just as it started to wait on a condition — for example in
+    @ref Qore::Thread::Semaphore::acquire() "Semaphore::acquire()" — could miss the request and wait until the
+    condition was signalled for another reason, possibly forever; the request now always ends the wait.
+
+    Blocked waits now end as soon as the thread is cancelled with @ref Qore::cancel_thread() "cancel_thread()" or
+    its @ref Qore::Program "Program" is interrupted with
+    @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()", instead of at a periodic
+    check up to 500 ms later: reads of backquote and @ref Qore::backquote() "backquote()" output, reads from
+    pipes, FIFOs and terminals with @ref Qore::File "File" and @ref Qore::ReadOnlyFile "ReadOnlyFile",
+    @ref Qore::ReadOnlyFile::isDataAvailable() "ReadOnlyFile::isDataAvailable()", and blocked writes to the standard output and error
+    streams.
+
+    @ref Qore::sleep() "sleep()" and @ref Qore::usleep() "usleep()" now end as soon as the thread is cancelled or its
+    @ref Qore::Program "Program" is interrupted, instead of within 100 ms, as do the retries of
+    @ref Qore::File::lockBlocking() "File::lockBlocking()".
+
+    @ref Qore::StreamPipe "StreamPipe" reads, writes and closes, waits for a @ref Qore::SQL::Datasource "Datasource"
+    transaction lock, and @ref Qore::channel_select() "channel_select()" now end as soon as the thread is
+    cancelled or its @ref Qore::Program "Program" is interrupted; \c channel_select() with a timeout previously
+    noticed the request only when the timeout expired.
+
+    @ref Qore::Thread::Mutex::lock() "Mutex::lock()", @ref Qore::Thread::RWLock "RWLock" read and write locks,
+    @ref Qore::Thread::Gate::enter() "Gate::enter()", @ref Qore::Thread::Condition::wait() "Condition::wait()" and
+    the @ref Qore::Thread::AutoLock "AutoLock", @ref Qore::Thread::AutoReadLock "AutoReadLock",
+    @ref Qore::Thread::AutoWriteLock "AutoWriteLock" and @ref Qore::Thread::AutoGate "AutoGate" constructors now end
+    as soon as the thread is cancelled or its @ref Qore::Program "Program" is interrupted, instead of within
+    500 ms.  @ref Qore::Thread::Condition::wait() "Condition::wait()" still returns with its lock held.
+
     ASCII scans of hash keys in other ASCII-compatible encodings now check for thread
     cancellation and program interruption at most every 100 bytes. Cleanup cancellation
     deferral remains effective, and interrupted existence lookups set their output to false.
@@ -127,6 +164,14 @@
     A \c number smaller than <tt>1e-17</tt> in magnitude converts to a string with its value, such as
     <tt>0.000000000000000000000000000001</tt> for <tt>1e-30n</tt>; the zeros that place its first
     significant digit used to be taken for conversion noise and the value converted to \c "0".
+
+    An HTTP/3 server accepts a client whose first datagram is lost or arrives after the second: a
+    ClientHello with a post-quantum key share spans two datagrams, and the server used to close such a
+    connection, so the client failed with "connection closed by peer" or waited for its connect timeout.
+    The server now answers with a QUIC Retry (<a href="https://datatracker.ietf.org/doc/html/rfc9000#section-8.1.2">RFC 9000
+    section 8.1.2</a>) and accepts the client's next Initial even if its first datagram is lost again.  A
+    client HTTP/3 request cancelled before any response header (for example by its timeout) logs the
+    connection's transport state at warning level to the async I/O logger, to diagnose stalled connections.
 
     HTTP/3 connections on macOS no longer abort the process when the system clock is set back,
     such as when a virtual machine resynchronizes its clock: QUIC timers use a clock that cannot
@@ -404,6 +449,13 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+
+    @par Fault Signals Cannot Have Qore Signal Handlers
+    @parblock
+    \c SIGBUS, \c SIGILL, \c SIGFPE and \c SIGTRAP, like \c SIGSEGV, are no longer masked in %Qore threads and
+    can no longer have %Qore-language @ref signal_handling "signal handlers": they are raised by faults in the
+    faulting thread and are left to the operating system and to native handlers in the process.
+    @endparblock
 
     @par An Empty String Is Found in Every String
     @parblock
@@ -962,6 +1014,17 @@ val = "string";      # OK
       <tt>ReferenceHolder&lt;QoreHttpClientObject&gt; client(new QoreHttpClientObject, xsink);</tt>
     @endparblock
 
+    @par C++ API: No Value Is Returned With an Exception Raised by Builtin Code
+    @parblock
+    Builtin functions and methods may still raise an exception and return a value, but the value is now released
+    when the builtin returns: a C++ caller that calls a builtin through the API, for example with
+    \c QoreProgram::callFunction() or \c QoreObject::evalMethod(), receives no value with an exception raised by the
+    call, as %Qore code never did.  See the signature types \c q_func_t and \c q_method_t for the contract.
+
+    <b>Workarounds:</b>
+    - None needed: a value returned with an exception was never meant to be used; use the exception
+    @endparblock
+
     @par qget Command-Line Changes
     @parblock
     \c qget was rewritten (see the new features); its options follow \c wget for download options and \c curl for
@@ -985,6 +1048,32 @@ val = "string";      # OK
     HTTP proxy.  Before, the request was sent to the proxy over TLS, and the proxy made the TLS connection to the
     server, so the proxy saw the request.  The client certificate is sent only to the server, not to the proxy, and
     the proxy's certificate is verified against the proxy's host name.
+    @endparblock
+
+    @par A Default Character Encoding That Is Not Compatible With ASCII Is Refused
+    @parblock
+    The @ref default_encoding "default character encoding" must be compatible with ASCII.  An encoding that is not
+    (such as UTF-16, UTF-32, EBCDIC code pages, or Shift_JIS) given with the \c --charset option or the
+    \c QORE_CHARSET environment variable now makes %Qore exit with an error at startup; given by the locale
+    (\c LANG), %Qore prints an error and uses UTF-8 instead.  Such an encoding could not work as the default
+    encoding (UTF-16 crashed).
+    @endparblock
+
+    @par The Generic "UTF-32" Encoding Is Big-Endian With No Byte Order Mark
+    @parblock
+    A string converted to the generic \c "UTF-32" encoding is now big-endian and no longer starts with a byte order
+    mark, as for the generic \c "UTF-16" encoding, so that strings in it have no extra character; data that starts
+    with a byte order mark still gives its byte order when it is read or converted.  Use \c "UTF-32LE" or
+    \c "UTF-32BE" for a specific byte order, and write a byte order mark explicitly where one is required.
+    @endparblock
+
+    @par Shift_JIS Is Not Compatible With ASCII
+    @parblock
+    Shift_JIS and its variants (\c "SJIS", \c "MS_KANJI", \c "CP932", \c "WINDOWS-31J") are now handled as
+    encodings that are not compatible with ASCII: in Shift_JIS, the bytes 0x5c and 0x7e are the yen sign and the
+    overline of JIS X 0201, not the backslash and tilde, and \c iconv implementations and variants map them
+    differently, so their handling depended on the platform.  Strings in these encodings are now converted wherever
+    text is parsed or used as a hash key, as for UTF-16, and they cannot be used as the default encoding.
     @endparblock
 
     @subsection qore_3_0_0_new_features New Features in Qore
@@ -4128,6 +4217,186 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a data race when a binary module loaded at runtime with @ref Qore::load_module() "load_module()" registered
+      classes that other threads used while a @ref Qore::Program "Program" parsed a subclass of one of them: the
+      parse resolved the shared builtin class's hierarchy and initialized it then; builtin classes are now resolved
+      and initialized when they are registered
+
+    - Fixed a crash parsing deeply nested code in a thread with a small stack: the parser accepts up to 1000 nested
+      syntax elements whatever the thread's stack size, and parse initialization overflowed a small stack before
+      reaching that limit; it now raises a parse exception while enough stack remains
+
+    - Fixed a crash releasing a long chain of closures, each capturing a variable that holds the next one: each
+      closure was released recursively, so a chain of a few thousand closures exhausted a thread's stack; closures
+      are now released iteratively beyond a depth of 16, together with objects, in the same order as before
+
+    - Fixed a crash freeing deeply nested code, such as the code of a @ref Qore::Program "Program" deleted in a thread
+      with a small stack: each level of nesting was freed recursively, so code nested close to the parser's limit
+      exhausted the stack; code nested more than 16 levels deep is now freed iteratively
+
+    - Fixed a process hanging instead of terminating when a thread faulted with \c SIGBUS, \c SIGILL, \c SIGFPE or
+      \c SIGTRAP, as on a thread stack overflow on macOS: these signals were blocked in all %Qore threads, so they
+      could not be delivered and the thread executed the faulting instruction again for ever
+
+    - Fixed deleting a @ref Qore::Program "Program" that shared a module's classes with other Programs: it released
+      the Program the classes came from for all of them, while the other Programs, possibly in other threads, still
+      ran the classes
+
+    - Fixed a race condition when a @ref Qore::Program "Program" parsed code that used classes of a module that other
+      threads were running at the same time: the parse wrote the classes' internal state while the other threads used
+      them
+
+    - Fixed @ref Qore::Socket::accept() "Socket::accept()" and
+      @ref Qore::Socket::acceptSSL() "Socket::acceptSSL()" sometimes returning @ref nothing without an exception
+      when another thread closed the listening socket while the call was waiting for a connection; a
+      \c SOCKET-CLOSED exception is now raised, and the variants with a timeout return @ref nothing only when the
+      timeout expires
+
+    - Fixed the @ref backquote_operator "backquote operator" and @ref Qore::backquote() "backquote()" waiting for a
+      command that closed its output without reacting to thread cancellation or a
+      @ref Qore::SandboxManager "SandboxManager" interrupt; @ref Qore::system() "system()" and the backquote
+      operator now block until the command exits, and a cancellation or interrupt ends the wait at once and kills
+      the command
+
+    - Fixed a crash compiling deeply nested code for IR or native execution on a thread with a small stack, as when a
+      function with nested call arguments is first run in a background thread with a 128KB stack: the analyses that
+      IR lowering and IR optimization make of the code recursed with its nesting without checking the stack; they
+      now stop while enough stack remains, and the function runs on the AST tier, which checks the stack itself
+
+    - Fixed UTC offsets such as \c "+01:00" or \c "-0530" given as a time zone name to a DBI driver's \c timezone
+      option or in an Arrow timestamp type: they were looked up as zoneinfo regions and failed
+
+    - Fixed a connection leak when a connection option fails while a @ref Qore::SQL::Datasource "Datasource" or
+      @ref Qore::SQL::DatasourcePool "DatasourcePool" opens: the driver's connection stayed attached to a
+      datasource that was not open, so the next open or the datasource's destruction left it behind; the
+      connection is now closed with the error
+
+    - Fixed a crash evaluating a deeply nested expression with the AST interpreter on a thread with a small stack, or
+      near the end of a thread's stack, such as nested arguments of function, method, static method and closure
+      calls, chained assignments and long arithmetic expressions: evaluation recursed once for each level of
+      nesting, which the parser accepts up to 1000 levels deep whatever the stack of the thread that runs the code,
+      and the stack was only checked by statements and calls; parse initialization now marks every 16th level of
+      nesting, whose evaluation checks the stack and raises \c STACK-LIMIT-EXCEEDED.  IR and native code evaluate
+      expressions without recursing and were not affected
+
+    - Fixed @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()" accepting a stack size no
+      larger than the stack reserved at the end of each thread's stack for the stack guard (80KB on x86_64 and
+      aarch64): every thread then raised \c STACK-LIMIT-EXCEEDED as soon as it ran any code, reporting a limit of
+      nearly 2^64 bytes; such a size now raises a \c SET-DEFAULT-THREAD-STACK-SIZE-ERROR exception, and a thread
+      started by other code with such a small stack reports a limit of 0 bytes
+
+    - Fixed a crash serializing or deserializing deeply nested data with
+      @ref Qore::Serializable "Serializable": serialization and deserialization recursed once for each level of
+      nesting without checking the stack, so a value nested more deeply than the thread's stack allows, or
+      untrusted serialized data nested that deeply, overflowed it; a \c STACK-LIMIT-EXCEEDED exception is now
+      raised instead
+
+    - Fixed a crash comparing deeply nested lists or hashes with the @ref logical_equality_operator "==",
+      @ref logical_inequality_operator "!=", @ref logical_absolute_equality_operator "===" and
+      @ref logical_absolute_inequality_operator "!==" operators, @ref Qore::inlist() "inlist()" and
+      @ref Qore::inlist_hard() "inlist_hard()": comparing recursed once for each level of nesting without checking
+      the stack; a \c STACK-LIMIT-EXCEEDED exception is now raised instead.  Hard comparisons in the C++ API can
+      receive the exception with the new <tt>QoreValue::isEqualHard(const QoreValue&, ExceptionSink*)</tt>;
+      <tt>QoreValue::isEqualHard(const QoreValue&)</tt> discards it, and the values compare as not equal
+
+    - Fixed a crash formatting a deeply nested list, hash or object as a string, as with
+      @ref Qore::sprintf() "sprintf()" and the \c "%y", \c "%N" and \c "%n" format specifiers: formatting recursed
+      once for each level of nesting without checking the stack, so a value nested more deeply than the thread's
+      stack allows overflowed it; a \c STACK-LIMIT-EXCEEDED exception is now raised instead
+
+    - Fixed @ref Qore::system() "system()" returning -1 without an error when the process to execute the command
+      could not be started; it now raises a \c SYSTEM-ERROR exception with the reason
+
+    - Fixed a memory leak in the C++ API: each \c QoreQueueHelper leaked a reference to the
+      @ref Qore::Thread::Queue "Queue" it was created for, so the queue was never freed
+
+    - Fixed reference cycles through a copy of a @ref Qore::Thread::Queue "Queue" never being collected: the copy
+      made by @ref Qore::Thread::Queue::copy() "Queue::copy()" did not register the objects it copied for garbage
+      collection scanning
+
+    - Fixed the garbage collector deleting objects that were still in use after a value was taken from a
+      @ref Qore::Thread::Queue "Queue" (@ref Qore::Thread::Queue::get() "Queue::get()",
+      @ref Qore::Thread::Queue::pop() "Queue::pop()" and their variants) or a @ref Qore::TreeMap "TreeMap"
+      (@ref Qore::TreeMap::take() "TreeMap::take()") that was part of a reference cycle with the value: when the
+      container's last other reference was released, the container and the objects in its cycle could be collected
+      while the value taken still referred to them, so using them raised \c OBJECT-ALREADY-DELETED
+
+    - Fixed a crash when C++ code cleared a @ref Qore::Thread::Queue "Queue" object through the public C++ API
+      (\c QoreQueueHelper::clear()) while the queue held objects added with its methods; values taken through the
+      C++ API are also no longer left counted for garbage collection scanning
+
+    - Fixed @ref Qore::HTTPClient "HTTPClient" requests through a proxy to an HTTPS server that selects HTTP/2
+      sometimes failing with \c HTTP1-UNEXPECTED-DATA or \c SOCKET-NOT-OPEN: when the server's first HTTP/2 frame
+      arrived before the connection was switched to HTTP/2, it was taken for unexpected data and the connection was
+      closed
+
+    - Fixed the @ref backquote_operator "backquote operator", @ref Qore::backquote() "backquote()" and
+      @ref Qore::system() "system()" starting their commands with \c fork() on platforms other than Linux, such as
+      macOS: in the multithreaded %Qore process, the child could be blocked or killed before it ran the command
+      when another thread held a lock that the child needed, so a command occasionally produced no output; commands
+      are now started with \c posix_spawn() wherever it is available
+
+    - Fixed a closure created in a method raising \c OBJECT-ALREADY-DELETED with IR, JIT and tiered execution, once it
+      had been called often, when it was called after its object was destroyed although it did not use the object;
+      as with AST execution, the exception is now only raised when the closure uses the object
+
+    - Fixed a closure created in a static method losing access to its class's private members with IR and tiered
+      execution once it had been called often: a call of a private constructor or private static method in the
+      closure raised \c RUNTIME-OVERLOAD-ERROR
+
+    - Fixed @ref exec_mode_tiered "tiered execution" never compiling small functions and methods to native code when
+      they were called directly, for example from top-level code: the IR interpreter runs such calls in the caller
+      and did not count them, so a function called thousands of times stayed on the IR tier
+
+    - Fixed conversions from malformed UTF-8 succeeding on macOS with the system iconv library, which accepts some
+      malformed sequences (for example a sequence above U+10FFFF); @ref Qore::convert_encoding() "convert_encoding()",
+      encoding conversion streams, and everything built on them, such as the CSV profiler's detection of non-UTF-8
+      files, now raise \c ENCODING-CONVERSION-ERROR for malformed UTF-8 input on every platform
+
+    - Fixed a @ref Qore::Thread::Queue "Queue" that once held an object, list or hash that could be part of a
+      reference cycle being scanned for cycles by the garbage collector for the rest of its life, even when it no
+      longer held any such value; values taken from the queue, for example with
+      @ref Qore::Thread::Queue::get() "Queue::get()" or @ref Qore::Thread::Queue::pop() "Queue::pop()", were never
+      removed from the count of values to scan
+
+    - Fixed a data race in @ref Qore::Thread::Queue::size() "Queue::size()",
+      @ref Qore::Thread::Queue::empty() "Queue::empty()",
+      @ref Qore::Thread::Queue::getReadWaiting() "Queue::getReadWaiting()",
+      @ref Qore::Thread::Queue::getWaiting() "Queue::getWaiting()" and
+      @ref Qore::Thread::Queue::getWriteWaiting() "Queue::getWriteWaiting()", which read the queue's state without
+      its lock while other threads changed it; they still do not block, and now always return a value the queue
+      actually had
+
+    - Fixed code executed with @ref exec_mode_ast "AST execution" (<tt>--exec-mode=ast</tt>) resolving names in
+      the wrong @ref Qore::Program "Program" after calling code in another Program, such as a method that its class
+      inherits from a module: later statements in the same block that resolve a name at runtime, for example
+      the \c TypedHash constructor of the \c reflection module with a typed hash name, looked it
+      up in the Program that was called last, so they raised \c UNKNOWN-TYPED-HASH for the caller's own declarations
+      or found declarations that are not visible to the caller
+
+    - Fixed a crash with JIT execution when a recursive function with a local variable captured by a closure was
+      compiled to native code together with a function that called it: the recursive call used its caller's
+      variable and released it on return, leaving the caller's closure with a dangling capture
+
+    - Fixed native code compiled with JIT execution not checking a typed local variable for \c NOTHING after its
+      value could have been removed through a reference: for example, after
+      <tt>clear(\\value)</tt> removed a \c string parameter's value, <tt>index(value, ".")</tt> returned -1 instead of
+      raising \c RUNTIME-OVERLOAD-ERROR as the interpreters do; \c rindex(), \c substr() and
+      <tt><string>::find()</tt> were affected as well
+
+    - Fixed closures never running as native code with JIT and tiered execution when they were called often by
+      builtin code, such as \c map, @ref Qore::call_function() "call_function()" or @ref Qore::sort() "sort()":
+      a closure already compiled with the function that creates it was compiled again, which failed, and it stayed
+      on the IR tier
+
+    - Fixed a memory leak with JIT and tiered execution and in compiled (AOT) code when
+      @ref Qore::zzz8stringzzz9::toInt() "<string>::toInt()" converted a string to an integer outside the range
+      -140737488355328 to 140737488355327, such as \c "9223372036854775807"
+
+    - Fixed a memory leak with IR, tiered and JIT execution when a builtin function or method raised an exception
+      and also returned a value, as @ref Qore::strtoint() "strtoint()" does for a number out of range: the value was
+      never released, which leaked objects and kept them from being destroyed
+
     - Fixed a function being compiled to native code with JIT and tiered execution while other threads called it,
       which could make those threads read the function's information on its use of \c argv and \c self and of its
       local variables while it was being changed, with possible wrong local variable handling or a crash
@@ -4203,6 +4472,47 @@ while (*binary chunk = input.read(65536)) {
       before, with no additional cost
       - For example, \c "int", \c "float", \c "number", \c "bool" and \c "date" fields read by the
         @ref csvutilintro "CsvUtil" module from UTF-16 data were converted incorrectly
+
+    - Fixed conversions to stateful character encodings such as \c "UTF-7" and \c "ISO-2022-JP" omitting the bytes
+      that return the encoding to its initial state at the end of the output, so the last characters could not be
+      decoded (ex: \c "é" converted to UTF-7 gave \c "+AO" instead of \c "+AOk-"); this affected
+      @ref Qore::convert_encoding() "convert_encoding()", every other string conversion, and
+      @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" and
+      @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream"; also, with the system iconv on macOS,
+      UTF-7 data that ends with an encoded character (ex: \c "+AOk-") is no longer decoded with an extra \c "-"
+      character at the end
+
+    - Fixed strings in multi-byte character encodings such as \c "EUC-JP", \c "SHIFT_JIS", \c "CP932",
+      \c "GB18030", \c "GBK", \c "WINDOWS-936", \c "BIG5", \c "EUC-KR" and \c "CP949" being handled one byte per
+      character: lengths, offsets, @ref Qore::zzz8stringzzz9::substr() "<string>::substr()", character access,
+      @ref Qore::zzz8stringzzz9::getUnicode() "<string>::getUnicode()", searches and splitting counted and cut bytes,
+      and searches, splits, and lines read with an end-of-line marker by
+      @ref Qore::StreamReader::readLine() "StreamReader::readLine()" and
+      @ref Qore::InputStreamLineIterator "InputStreamLineIterator" could match the second byte of a double-byte
+      character (ex: \c "|" in the Shift_JIS character \c "ポ", 0x83 0x7c).  Such strings now have the same
+      characters as the same text in UTF-8.  Shift_JIS and its variants (\c "SJIS", \c "MS_KANJI", \c "CP932",
+      \c "WINDOWS-31J") are now handled as encodings that are not compatible with ASCII on every platform (see
+      @ref qore_3_0_0_compatibility)
+
+    - %Qore now refuses a default character encoding that is not compatible with ASCII (such as UTF-16, UTF-32 or
+      Shift_JIS), which could not work and crashed with UTF-16: given with \c --charset or \c QORE_CHARSET, %Qore
+      exits with an error; given by the locale (\c LANG), %Qore prints an error and uses UTF-8
+
+    - Fixed character encodings that %Qore creates from their name, such as \c "UTF-32", \c "UTF-32LE",
+      \c "UTF-32BE", \c "UCS-4", \c "UCS-2LE", \c "UCS-2BE" and EBCDIC code pages such as \c "IBM1140", being
+      handled as single-byte encodings compatible with ASCII: hash keys in them were cut at their first null byte
+      or used as raw bytes, they converted to wrong numbers (\c "12" in UTF-32LE converted to \c 1), string lengths,
+      offsets and searches counted bytes, and @ref Qore::StreamReader "StreamReader",
+      @ref Qore::InputStreamLineIterator "InputStreamLineIterator", @ref Qore::FileLineIterator "FileLineIterator",
+      @ref Qore::DataLineIterator "DataLineIterator" and the @ref csvutilintro "CsvUtil" iterators could not split
+      their lines.  The properties of such an encoding are now taken from the encoding itself: UTF-32, UCS-4 and
+      UCS-2 strings have the characters of their Unicode encoding form, and an encoding that is not compatible with
+      ASCII (such as EBCDIC) is converted wherever text is parsed or split.  A string converted to the generic
+      \c "UTF-32" encoding is big-endian and no longer starts with a byte order mark, and a byte order mark at the
+      start of data in it gives the byte order, as for the generic \c "UTF-16" encoding.  The end-of-line marker of a
+      line read from a stream in an encoding with characters of more than one byte now only ends a line at a
+      character boundary, so a UTF-32 or UTF-16 line is no longer cut where the bytes of the marker span two
+      characters.  Encodings that iconv does not support are handled as before
 
     - Fixed a string of up to 6 bytes stored inline in a value, such as an element of a constant list in a
       compiled (AOT) module, converting to \c 1970-01-01 instead of the date it represents (ex: \c "P1DT2H") when

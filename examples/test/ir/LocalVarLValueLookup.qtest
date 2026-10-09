@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class LocalVarLValueLookupTest
 
@@ -126,7 +127,9 @@ printf("%y\n", drop("present", "x", "i", "a"));
         TmpDir tmp("qore-lvalue-lookup-");
         string src = writeFile(tmp.path + DirSep + "closure.qr", ClosureSrc);
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
-            hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src));
+            # the closure is called once, so tiered execution does not compile it
+            hash<auto> rv = run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src),
+                ExecModeHarness::NativeCheck::Jit);
             assertEq(0, rv.rc, mode + ": " + rv.err);
             assertEq(ClosureOut, rv.out, mode);
         }
@@ -137,12 +140,12 @@ printf("%y\n", drop("present", "x", "i", "a"));
         TmpDir tmp("qore-lvalue-lookup-");
         string src = writeFile(tmp.path + DirSep + "closure.qr", ClosureSrc);
         string exe = tmp.path + DirSep + "closure";
-        hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
+        hash<auto> rv = run(sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
         assertEq(0, rv.rc, rv.err);
         # native closures, and closure bodies run by the IR interpreter
         foreach string opts in (("", "QORE_DISABLE_AOT_NATIVE_CLOSURES=1",
                 "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_DISABLE_AOT_LAZY_CLOSURE_IR=1")) {
-            rv = run(tmp.path, sprintf("%s %s %s", env, opts, exe));
+            rv = run(sprintf("%s %s %s", env, opts, exe));
             assertEq(0, rv.rc, opts + ": " + rv.err);
             assertEq(ClosureOut, rv.out, opts);
         }
@@ -158,19 +161,19 @@ printf("%y\n", drop("present", "x", "i", "a"));
         # a custom host is not affected by qcc's link-time check for this case; it registers the object itself
         string src = writeFile(tmp.path + DirSep + "toplevel_local.qr", TopLevelLocalSrc);
         string obj = tmp.path + DirSep + "toplevel_local.qo";
-        hash<auto> rv = run(tmp.path, sprintf("%s %s -c -o %s %s", env, qcc_bin, obj, src));
+        hash<auto> rv = run(sprintf("%s %s -c -o %s %s", env, qcc_bin, obj, src));
         assertEq(0, rv.rc, rv.err);
         string root = realpath(get_script_dir() + "/../../..");
         string host = tmp.path + DirSep + "host";
         *list<*string> target = Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/;
         string flags = target ? target[0] : "-ldl";
-        rv = run(tmp.path, sprintf("%s -std=c++17 -I%s/include -I%s/include %s/examples/test/ir/"
+        rv = run(sprintf("%s -std=c++17 -I%s/include -I%s/include %s/examples/test/ir/"
             "aot_top_level_local_host.cpp %s -L%s -Wl,-rpath,%s -lqore %s -o %s", cxx, root, libqore_dir, root, obj,
             libqore_dir, libqore_dir, flags, host));
         assertEq(0, rv.rc, rv.err);
 
         list<string> fns = ("bump", "assignIt", "addIt", "appendIt", "readIt", "removeIt", "deleteIt");
-        rv = run(tmp.path, sprintf("%s %s %s", env, host, fns.join(" ")));
+        rv = run(sprintf("%s %s %s", env, host, fns.join(" ")));
         assertEq(0, rv.rc, rv.err);
         # each access raises the exception instead of a write being silently discarded or a read returning no value
         foreach string fn in (fns) {
@@ -187,7 +190,7 @@ printf("%y\n", drop("present", "x", "i", "a"));
         TmpDir tmp("qore-lvalue-lookup-");
         string src = writeFile(tmp.path + DirSep + "remove_ref.qr", RemoveThroughRefSrc);
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
-            hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src));
+            hash<auto> rv = run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src));
             assertEq(0, rv.rc, mode + ": " + rv.err);
             assertEq(RemoveThroughRefOut, rv.out, mode);
         }
@@ -195,9 +198,9 @@ printf("%y\n", drop("present", "x", "i", "a"));
             return;
         }
         string exe = tmp.path + DirSep + "remove_ref";
-        hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
+        hash<auto> rv = run(sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
         assertEq(0, rv.rc, rv.err);
-        rv = run(tmp.path, sprintf("%s %s", env, exe));
+        rv = run(sprintf("%s %s", env, exe));
         assertEq(0, rv.rc, "aot: " + rv.err);
         assertEq(RemoveThroughRefOut, rv.out, "aot");
     }
@@ -218,12 +221,14 @@ printf("%y\n", drop("present", "x", "i", "a"));
     }
 
     #! runs @a cmd; returns its exit code, its standard output, and its standard error output
-    private hash<auto> run(string dir, string cmd) {
-        string err_file = dir + DirSep + "stderr.txt";
-        int rc;
-        string out = backquote(sprintf("%s 2>%s", cmd, err_file), \rc);
-        string err = File::readTextFile(err_file);
-        unlink(err_file);
-        return {"rc": rc, "out": out, "err": err};
+    /** a command that runs qore with an execution mode runs through ExecModeHarness, which checks its native
+        compilation
+    */
+    private hash<auto> run(string cmd, *ExecModeHarness::NativeCheck check) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd);
+        if (r.mode) {
+            ExecModeHarness::check_native(r, check);
+        }
+        return {"rc": r.rc, "out": r.stdout, "err": r.stderr};
     }
 }

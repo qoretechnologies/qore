@@ -38,6 +38,7 @@
 #include "qore/vector_map"
 
 #include <atomic>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -45,6 +46,7 @@
 
 class RSet;
 class RSetHelper;
+class RSetDerefHelper;
 
 #ifdef DEBUG
 //! Returns the number of recursive sets that scans in the current thread have created
@@ -57,6 +59,12 @@ DLLLOCAL int64 q_get_rset_create_count();
     of the scans a thread has made; see dbg_get_scan_object_count().
 */
 DLLLOCAL int64 q_get_scan_object_count();
+
+//! Returns the number of regions whose dependencies scans in the current thread have walked
+/** RSetHelper::regionCurrent() walks the regions a region depends on unless the region was found current since the
+    last event that could have changed that; see RRegion::invalidations and dbg_get_region_walk_count().
+*/
+DLLLOCAL int64 q_get_region_walk_count();
 
 //! Returns the number of times a scan in the current thread gave up a pass and waited to start over
 /** A pass is given up when the scan cannot take the r-section of an object it has to enter; it registers a
@@ -114,7 +122,34 @@ public:
     */
     std::vector<RObject*> closed_deps;
 
+    //! RRegion::invalidations as read by the RSetHelper::regionCurrent() call that last found the region current, or 0
+    std::atomic<uint64_t> current_at{0};
+
+    //! Counts the events that can make a current region no longer current
+    /** A region is current while it is not invalid, its epoch is RSet::untracked_edge_epoch, each of its closed
+        dependencies is in a closed set and each region it depends on is current.  Each event that can change one of
+        these increments the count after it is made: a region marked invalid (invalidate()), an object of a closed
+        set leaving it (closedSetLeft()) and an untracked edge.  A region found current when the count was N stays
+        current while the count is N, so RSetHelper::regionCurrent() decides it without walking the regions it
+        depends on again; a chain of objects built head first adds a region per object depending on the previous
+        one, and walking them in every scan made building the chain quadratic.  Starts at 1, so a region never
+        found current never matches.
+    */
+    DLLLOCAL static std::atomic<uint64_t> invalidations;
+
     DLLLOCAL explicit RRegion(unsigned epoch) : epoch(epoch) {
+    }
+
+    //! Marks the region invalid
+    DLLLOCAL void invalidate() {
+        if (!invalid.exchange(true, std::memory_order_seq_cst)) {
+            invalidations.fetch_add(1, std::memory_order_seq_cst);
+        }
+    }
+
+    //! Records that an object left a closed recursive set, after its flag is cleared; see invalidations
+    DLLLOCAL static void closedSetLeft() {
+        invalidations.fetch_add(1, std::memory_order_seq_cst);
     }
 
     DLLLOCAL void ref() {
@@ -172,8 +207,9 @@ public:
         by RSetHelper for the object a scan starts at, and RSet::edgesUnchangedSinceScan() compares the count with
         scan_edge_gen.  See design/dgc.md, "Knowing that a set's counts are current".
 
-        Removing an edge needs no mark: it only lowers the number of references from inside the set, so it cannot
-        make a verdict of "cannot delete" wrong.
+        Removing an edge needs no mark here: it only lowers the number of references from inside the set, so it
+        cannot make a verdict of "cannot delete" wrong.  A value that a container gives up without a scan can make a
+        verdict of "can delete" wrong, which remove_gen covers.
     */
     std::atomic<unsigned> edge_gen{0};
 
@@ -182,6 +218,25 @@ public:
         different.  Atomic because RSet::canDelete() reads it with no lock of the object.
     */
     std::atomic<unsigned> scan_edge_gen{0};
+
+    //! Advanced every time a value is taken out of a container of this object and handed to the caller
+    /** Containers whose values the object scanner reports through private data (Pattern B in design/dgc.md) hand
+        a value they give up to the caller with the container's reference, under the container's own lock and with
+        no scan of the object.  A recursive set that counted the container's reference as internal then reads the
+        same number of references as before, now held from outside the set, so its counts look exact and the set can
+        be collected while the caller still holds the value.  A value that is released instead lowers the count
+        below the one recorded, which RSet::canDelete() already treats as stale.  edgesRemoved() is called for every
+        value handed over, and RSet::canDelete() collects a set only while every member's generation is the one
+        recorded by the scan that assigned or confirmed it (scan_remove_gen).  See design/dgc.md, "Values handed
+        out by a container".
+    */
+    std::atomic<unsigned> remove_gen{0};
+
+    //! remove_gen as read by the scan that last assigned or confirmed the object's recursive set
+    /** Read before the scan follows the object's edges, so a value handed out while the scan runs leaves the two
+        different.  Atomic because RSet::canDelete() reads it with no lock of the object.
+    */
+    std::atomic<unsigned> scan_remove_gen{0};
 
     // The scan generation: incremented every time a committed scan assigns this object's recursive set,
     // so a thread that sampled an older value knows that another thread has scanned this object since.
@@ -321,13 +376,28 @@ public:
         @param rcnt the number of references to the object from members of the set
         @param closed whether the set is closed
         @param seen_edge_gen edge_gen as read by the scan before it followed the object's edges
+        @param seen_remove_gen remove_gen as read by the scan before it followed the object's edges
     */
-    DLLLOCAL void setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen);
+    DLLLOCAL void setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen, unsigned seen_remove_gen);
 
     //! Records that an edge from this object may have been added without a scan of it following
     DLLLOCAL void edgesAdded() {
         // sequentially consistent, so that a scan that reads edge_gen after this cannot miss the new edge
         edge_gen.fetch_add(1, std::memory_order_seq_cst);
+        // the object's closed region no longer describes what it reaches
+        if (region_word.load(std::memory_order_seq_cst)) {
+            invalidateRegion();
+        }
+    }
+
+    //! Records that a container of this object handed a value it held to the caller without a scan
+    /** Called under the container's lock, before the lock is released and the caller can release the value; see
+        remove_gen.
+    */
+    DLLLOCAL void edgesRemoved() {
+        // sequentially consistent, so that a dereference that reads remove_gen after the value was released cannot
+        // miss the mark
+        remove_gen.fetch_add(1, std::memory_order_seq_cst);
         // the object's closed region no longer describes what it reaches
         if (region_word.load(std::memory_order_seq_cst)) {
             invalidateRegion();
@@ -367,8 +437,16 @@ public:
         return edge_gen.load(std::memory_order_seq_cst) == scan_edge_gen.load(std::memory_order_relaxed);
     }
 
+    //! Returns true if no value was handed out of a container of this object since the scan that assigned or
+    //! confirmed its set; see remove_gen
+    DLLLOCAL bool removalsUnchangedSinceScan() const {
+        return remove_gen.load(std::memory_order_seq_cst) == scan_remove_gen.load(std::memory_order_relaxed);
+    }
+
     //! Records that a scan found the recursive set that is already in place, without changing it
     /** @param advance_generation whether to advance the scan generation as a committed scan does
+        @param seen_edge_gen edge_gen as read by the scan before it followed the object's edges
+        @param seen_remove_gen remove_gen as read by the scan before it followed the object's edges
 
         The set itself and rcount are left alone, so a scan of an unchanged graph does not replace a set with
         an identical one.
@@ -385,13 +463,17 @@ public:
         RSet::canDelete() trusts the set's counts only while every member's generation is the recorded one; see
         RObject::edgesAdded().
     */
-    DLLLOCAL void confirmRSet(bool advance_generation, unsigned seen_edge_gen) {
+    DLLLOCAL void confirmRSet(bool advance_generation, unsigned seen_edge_gen, unsigned seen_remove_gen) {
         // a scan that changes nothing holds the rsection in shared mode
         assert(rml.checkRSectionHeld());
         if (rset.load(std::memory_order_relaxed)) {
             // the scan counted every edge that existed when it read the generation
             if (scan_edge_gen.load(std::memory_order_relaxed) != seen_edge_gen) {
                 scan_edge_gen.store(seen_edge_gen, std::memory_order_relaxed);
+            }
+            // and none of the values handed out before it read the removal generation
+            if (scan_remove_gen.load(std::memory_order_relaxed) != seen_remove_gen) {
+                scan_remove_gen.store(seen_remove_gen, std::memory_order_relaxed);
             }
         }
         if (advance_generation) {
@@ -474,6 +556,37 @@ public:
 
     // deletes the object itself
     DLLLOCAL virtual void deleteObject() = 0;
+
+    //! Deletes an object whose last reference has been released, or defers its deletion to a deletion loop
+    /** Deleting an object or a closure-bound variable releases what it holds, whose deletion would otherwise recurse
+        for each link in a chain of objects and closures.  Deletions nested more than 16 deep on the thread's stack are
+        deferred to a loop run by the deletion that is 16 levels up, which makes them in the depth-first order of the
+        recursion; see design/dgc.md, "Deleting long chains".
+
+        @param xsink for exceptions raised by destructors
+        @param cleanup the other members of the object's collected recursive set, which are released after the
+        object's deletion
+    */
+    DLLLOCAL void deleteOrDefer(ExceptionSink* xsink, RSetDerefHelper& cleanup);
+
+    //! Counts a destructor running on this thread while it exists; see deleteOrDefer()
+    /** A deletion deferred while a destructor that started during the deletion the loop is making is still running
+        replaces recursion through user code, which the stack must still bound; see design/dgc.md, "Deleting long
+        chains".
+    */
+    class DestructorRunHelper {
+    public:
+        DLLLOCAL DestructorRunHelper();
+        DLLLOCAL ~DestructorRunHelper();
+
+        DestructorRunHelper(const DestructorRunHelper&) = delete;
+        DestructorRunHelper& operator=(const DestructorRunHelper&) = delete;
+    };
+
+    //! Makes the deletion that deleteOrDefer() makes now or defers
+    /** The object must stay allocated until this is called.
+    */
+    DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) = 0;
 
     //! Releases a temporary strong reference retained while a collectable recursive set is torn down
     DLLLOCAL virtual void releaseCycleReference(ExceptionSink* xsink) = 0;
@@ -605,9 +718,16 @@ public:
     /** Called with rwl held.  True when no member has had an edge added since the scan that assigned or confirmed
         the set (RObject::edgesUnchangedSinceScan()), and no edge whose target could not be marked has been added
         anywhere since then (untracked_edge_epoch).  Removed edges are not considered: they cannot make a verdict
-        of "cannot delete" wrong.
+        of "cannot delete" wrong (see removalsUnchangedSinceScan() for "can delete").
     */
     DLLLOCAL bool edgesUnchangedSinceScan() const;
+
+    //! Returns true if no member has handed out a value of a container since the set was last scanned
+    /** Called with rwl held.  A value that a container of a member hands out keeps its references, now held from
+        outside the set, so the counts of a set that counted the container's reference as internal look exact; see
+        RObject::remove_gen.
+    */
+    DLLLOCAL bool removalsUnchangedSinceScan() const;
 
     //! Records the untracked edge epoch that a scan read before it followed any edge
     DLLLOCAL void setScanEpoch(unsigned epoch) {
@@ -741,10 +861,17 @@ protected:
         assert(valid);
         valid = false;
         // remove the weak references to all contained objects
+        bool was_closed = false;
         for (rset_t::iterator i = begin(), e = end(); i != e; ++i) {
             // the set is gone, so scans must enter its objects again
-            (*i)->rclosed.store(nullptr, std::memory_order_relaxed);
+            if ((*i)->rclosed.exchange(nullptr, std::memory_order_relaxed)) {
+                was_closed = true;
+            }
             (*i)->tDeref();
+        }
+        // the regions that depend on the set being closed are no longer current
+        if (was_closed) {
+            RRegion::closedSetLeft();
         }
         clear();
         releaseNodes();
@@ -860,6 +987,8 @@ private:
         int internal = 0;
         // for an object, RObject::edge_gen as read before the scan followed its edges
         unsigned edge_gen = 0;
+        // for an object, RObject::remove_gen as read before the scan followed its edges
+        unsigned remove_gen = 0;
         // true if the node references an object the scan did not enter because it is in a closed set or a current
         // closed region: its component is not closed, but can be part of a new region
         bool refs_skipped = false;

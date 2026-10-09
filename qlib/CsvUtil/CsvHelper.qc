@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore CsvHelper class definition
 
-/*  CsvHelper.qm Copyright 2012 - 2024 Qore Technologies, s.r.o.
+/*  CsvHelper.qm Copyright 2012 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -45,6 +45,13 @@ class CsvHelper {
             "*date": True,
         };
 
+        #! field types (without the optional \c "*" prefix) that take a number format in the \c "format" attribute
+        const NumberFormatTypes = {
+            "int": True,
+            "float": True,
+            "number": True,
+        };
+
         #! supported field description attribute codes
         const list<string> FieldAttrs = ("type", "format", "timezone", "code", "header");
 
@@ -84,6 +91,34 @@ class CsvHelper {
     #! returns True if specification hash defines more types
     private bool isMultiType() {
         return m_specs && m_specs.size() > 1;
+    }
+
+    #! Checks a number format
+    /** A number format, as for @ref Qore::format_number() "format_number()" and @ref Qore::parse_number()
+        "parse_number()", is the thousands separator (\c "?" for none), optionally followed by the decimal separator,
+        optionally followed by one or more digits giving the number of decimals for output (ex: \c ".", \c ".,",
+        \c ".,2").  The separators are different characters that are not digits or signs.
+
+        @param fmt the number format
+        @param what a description of where the format was given, for the error message
+
+        @throw <errname> the number format is invalid
+    */
+    private checkNumberFormat(string fmt, string what) {
+        string err;
+        if (!fmt.length()) {
+            err = "it is empty";
+        } else if (fmt[0] =~ /^[0-9+-]$/ || (fmt.length() > 1 && fmt[1] =~ /^[0-9+-]$/)) {
+            err = "a separator cannot be a digit or a sign";
+        } else if (fmt.length() > 1 && fmt[0] == fmt[1]) {
+            err = "the thousands and decimal separators are the same";
+        } else if (fmt.length() > 2 && fmt.substr(2) !~ /^[0-9]+$/) {
+            err = "the number of decimals after the separators must be digits";
+        }
+        if (err) {
+            throw errname, sprintf("invalid number format %y in %s: %s; expecting the thousands separator, optionally "
+                "followed by the decimal separator and the number of decimals (ex: \".,2\")", fmt, what, err);
+        }
     }
 
     #! validate field type
@@ -175,10 +210,21 @@ class CsvHelper {
                         }
                         if (!h.type)
                             h.type = "*string";
-                        if (h.type != "date" && h.type != "*date") {
-                            foreach string f in ("timezone", "format") {
-                                if (h{f})
-                                    throw errname, sprintf("%s: field %y is type %y, but the %y attribute was also given, which is only valid for \"date\" fields", fld_errs, hi.key, h.type, f);
+                        # the type without the optional "*" prefix
+                        string base_type = h.type[0] == "*" ? h.type.substr(1) : h.type;
+                        if (h.timezone && base_type != "date") {
+                            throw errname, sprintf("%s: field %y is type %y, but the \"timezone\" attribute was also "
+                                "given, which is only valid for \"date\" fields", fld_errs, hi.key, h.type);
+                        }
+                        # "format" is a date mask for dates and a number format for numbers
+                        if (exists h.format) {
+                            if (NumberFormatTypes{base_type}) {
+                                checkNumberFormat(h.format, sprintf("%s: the \"format\" attribute of field %y",
+                                    fld_errs, hi.key));
+                            } else if (base_type != "date") {
+                                throw errname, sprintf("%s: field %y is type %y, but the \"format\" attribute was "
+                                    "also given, which is only valid for \"date\", \"int\", \"float\", and "
+                                    "\"number\" fields", fld_errs, hi.key, h.type);
                             }
                         }
                         break;

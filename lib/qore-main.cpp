@@ -430,6 +430,8 @@ void qore_cleanup() {
     // module TLS callbacks. Use the internal, non-interruptible counter wait.
     tp_thread_counter.waitForZero();
     qore_stop_external_thread_reaper();
+    // no thread can be waiting any more
+    qore_stop_cond_waker();
 
 #ifdef _Q_WINDOWS
     // do windows socket cleanup

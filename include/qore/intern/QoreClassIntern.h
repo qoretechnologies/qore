@@ -619,7 +619,9 @@ public:
     DLLLOCAL virtual QoreValue evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
         CodeContextHelper cch(xsink, CT_BUILTIN, qmethod->getName(), 0, getClassPriv());
 
-        return static_method(ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+        return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
+            return static_method(ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+        });
     }
 };
 
@@ -635,7 +637,9 @@ public:
     DLLLOCAL virtual QoreValue evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
         CodeContextHelper cch(xsink, CT_BUILTIN, qmethod->getName(), 0, getClassPriv());
 
-        return static_method(*qmethod, ptr, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+        return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
+            return static_method(*qmethod, ptr, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+        });
     }
 };
 
@@ -3256,8 +3260,19 @@ public:
         }
     }
 
-    DLLLOCAL void deleteClassData(bool deref_vars, ExceptionSink* xsink) {
+    //! Releases the class data that a Program sharing the class holds, when the Program is deleted
+    /** @param deref_vars whether the Program releases its reference to the static variables
+        @param pgm the Program whose namespace is deleted, if any
+        @param xsink for exceptions raised by destructors
+
+        The source Program is released by the Program itself, or by the last Program sharing the class; another
+        Program that shares the class is deleted while the class runs in the others, which still use it.
+    */
+    DLLLOCAL void deleteClassData(bool deref_vars, const QoreProgram* pgm, ExceptionSink* xsink) {
+        // true if no other Program shares the class's data
+        bool last = false;
         if (deref_vars && var_refs.ROdereference()) {
+            last = true;
             vars.clear(xsink);
             vars.del(xsink);
             // delete key-value data when the last program sharing this class is cleaned up
@@ -3266,6 +3281,7 @@ public:
             }
             kvmap.clear();
         } else if (!var_refs.reference_count()) {
+            last = true;
             // delete vars again if possible
             vars.del(xsink);
         }
@@ -3276,7 +3292,7 @@ public:
             constlist.deleteAll(xsink);
         }
         */
-        if (spgm) {
+        if (spgm && (last || spgm == pgm)) {
             if (deref_source_program) {
                 spgm->deref(xsink);
             }

@@ -34,6 +34,7 @@
 #include "qore/intern/AbstractIteratorHelper.h"
 
 #include <memory>
+#include "qore/intern/QoreDeferredRelease.h"
 
 ForEachStatement::ForEachStatement(int start_line, int end_line, QoreValue v, QoreValue l, StatementBlock* cd) : AbstractStatement(start_line, end_line), var(v), list(l), code(cd) {
 }
@@ -41,7 +42,7 @@ ForEachStatement::ForEachStatement(int start_line, int end_line, QoreValue v, Qo
 ForEachStatement::~ForEachStatement() {
     var.discard(nullptr);
     list.discard(nullptr);
-    delete code;
+    qore_delete_statement(code);
     delete lvars;
 }
 

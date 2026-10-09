@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class AOTDeserializedStaticVarJITTierTest
 
@@ -130,7 +131,7 @@ main();
 
     #! Returns the command's combined output with its exit status appended
     private string run(string cmd) {
-        return backquote(sprintf("%s 2>&1; echo \"exit=$?\"", cmd));
+        return ExecModeHarness::run_any(sprintf("%s; echo \"exit=$?\"", cmd));
     }
 
     private static writeSource(string path, string contents) {

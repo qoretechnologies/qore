@@ -294,7 +294,8 @@ static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(QoreIRIntri
         case QoreIRIntrinsic::StringUpper:
             return {"qore_rt_pseudo_string_upr_noguard", true, true};
         case QoreIRIntrinsic::StringToInt:
-            return {"qore_rt_pseudo_string_to_int_noguard", false, true};
+            // the result is a boxed integer that is a new QoreBigIntNode when it is out of the inline range
+            return {"qore_rt_pseudo_string_to_int_noguard", true, true};
         default:
             return {};
     }

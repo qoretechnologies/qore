@@ -719,7 +719,14 @@ private:
     DLLLOCAL void startSslUpgrade(ExceptionSink* xsink);
     DLLLOCAL void startProxySslUpgrade(ExceptionSink* xsink);
     DLLLOCAL void startProxyConnect(ExceptionSink* xsink);
-    DLLLOCAL void startReady(ExceptionSink* xsink);
+    //! Ends the connect phase and signals that the connection is ready
+    /** @param protocol_switched if true, the operation enters PROTOCOL_SWITCHED (HTTP/2 negotiated with ALPN, the
+        socket is taken by an HTTP/2 connection), otherwise READING with no request in progress
+
+        The state is set before readiness is signaled, so a waiter woken by the ready callback never sees the
+        connect-phase or HTTP/1.1 states.
+    */
+    DLLLOCAL void startReady(bool protocol_switched, ExceptionSink* xsink);
 
     // Request sub-state handlers
     DLLLOCAL QoreHashNode* handleIdle(ExceptionSink* xsink);

@@ -175,6 +175,12 @@ struct qore_dbi_private {
             ConstHashIterator hi(ds->getConnectOptions());
             while (hi.next()) {
                 f.opt.set(ds, hi.getKey(), hi.get(), xsink);
+                if (*xsink) {
+                    // the connection cannot be used as configured, and the datasource stays closed: the driver
+                    // closes it here, otherwise the next open or the datasource's destruction would leave it behind
+                    f.close(ds);
+                    return -1;
+                }
             }
         }
         return rc;

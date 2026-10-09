@@ -31,9 +31,15 @@
 #include <cerrno>
 #include <cstring>
 #include <cstdlib>
+#include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <poll.h>
 #include <sys/socket.h>
+#include <unistd.h>
+#include <new>
+#include <vector>
 
 static bool qore_mongoc_verbose_enabled() {
     const char* env = getenv("QORE_MONGODB_VERBOSE");
@@ -60,245 +66,348 @@ void qore_mongo_set_log_handler() {
     mongoc_log_set_handler(qore_mongoc_log_handler, nullptr);
 }
 
-//! Interruptible stream structure
-/** This structure wraps the default MongoDB socket stream and adds
-    interrupt checking capability.
+//! the stream type of the module's socket stream; libmongoc's own types are small numbers
+static constexpr int QORE_MONGO_SOCKET_STREAM_TYPE = 100;
+
+//! A libmongoc stream on a socket of the module's own whose waits end as soon as the thread is cancelled
+/** libmongoc's own socket stream waits inside libmongoc on a descriptor that its public API does not expose, so a
+    wait could only notice a cancellation request at a periodic timeout.  This stream owns its (non-blocking)
+    descriptor and waits with qore_cancellable_poll(), which a cancellation request or program interrupt ends at
+    once.  libmongoc's TLS stream is stacked on it for TLS connections, and libmongoc's mongoc_stream_poll() calls
+    the poll function of the root stream, which is this one, also for TLS streams.
 */
 typedef struct {
-    mongoc_stream_t vtable;     //!< Must be first - stream vtable
-    mongoc_stream_t* base;      //!< Wrapped base stream
-} qore_interruptible_stream_t;
+    mongoc_stream_t vtable;     //!< must be first: the stream vtable
+    int fd;                     //!< the socket, or -1 once closed
+    int last_errno;             //!< the errno of the last failed I/O, for timed_out() and should_retry()
+} qore_socket_stream_t;
 
-// Forward declarations for stream methods
-static void qore_stream_destroy(mongoc_stream_t* stream);
-static int qore_stream_close(mongoc_stream_t* stream);
-static int qore_stream_flush(mongoc_stream_t* stream);
-static ssize_t qore_stream_writev(mongoc_stream_t* stream, mongoc_iovec_t* iov, size_t iovcnt, int32_t timeout_msec);
-static ssize_t qore_stream_readv(mongoc_stream_t* stream, mongoc_iovec_t* iov, size_t iovcnt, size_t min_bytes, int32_t timeout_msec);
-static int qore_stream_setsockopt(mongoc_stream_t* stream, int level, int optname, void* optval, mongoc_socklen_t optlen);
-static mongoc_stream_t* qore_stream_get_base_stream(mongoc_stream_t* stream);
-static bool qore_stream_check_closed(mongoc_stream_t* stream);
-static ssize_t qore_stream_poll(mongoc_stream_poll_t* streams, size_t nstreams, int32_t timeout);
-static bool qore_stream_timed_out(mongoc_stream_t* stream);
-static bool qore_stream_should_retry(mongoc_stream_t* stream);
-
-//! Check if an interrupt or thread cancel has been requested
-/** @return true if interrupted/cancelled, false otherwise
-*/
-static bool check_interrupt() {
-    if (qore_check_cancel(nullptr, "MongoDB I/O")) {
-        errno = EINTR;
-        return true;
+//! returns the absolute deadline in microseconds for a libmongoc timeout: -1 for none, 0 for "do not wait"
+static int64 qore_mongo_expiration(int32_t timeout_msec) {
+    if (timeout_msec < 0) {
+        return -1;
     }
-    return false;
+    if (!timeout_msec) {
+        return 0;
+    }
+    return q_get_monotonic_us() + static_cast<int64>(timeout_msec) * 1000;
 }
 
-//! Destroy the interruptible stream
-static void qore_stream_destroy(mongoc_stream_t* stream) {
-    qore_interruptible_stream_t* s = (qore_interruptible_stream_t*)stream;
-    if (s->base) {
-        mongoc_stream_destroy(s->base);
+//! returns the milliseconds remaining until a deadline from qore_mongo_expiration() for poll()
+static int qore_mongo_remaining_ms(int64 expire_at) {
+    if (expire_at < 0) {
+        return -1;
     }
+    if (!expire_at) {
+        return 0;
+    }
+    int64 remaining_us = expire_at - q_get_monotonic_us();
+    return remaining_us <= 0 ? 0 : static_cast<int>((remaining_us + 999) / 1000);
+}
+
+//! Waits for a descriptor; the wait ends at once when the thread is cancelled or its Program is interrupted
+/** @return 0 if the descriptor is ready, -1 with errno set otherwise: \c ETIMEDOUT on timeout, \c EINTR if the
+    thread was cancelled or interrupted (the request stays pending and is raised at the next cancellation point)
+*/
+static int qore_mongo_wait(int fd, short events, int64 expire_at, const char* operation) {
+    struct pollfd pfd = {fd, events, 0};
+    ExceptionSink xsink;
+    int rc = qore_cancellable_poll(&pfd, 1, qore_mongo_remaining_ms(expire_at), &xsink, operation);
+    if (rc == QORE_POLL_CANCELLED) {
+        // libmongoc reports errors through errno; the request itself remains pending
+        xsink.clear();
+        errno = EINTR;
+        return -1;
+    }
+    if (!rc) {
+        errno = ETIMEDOUT;
+        return -1;
+    }
+    return rc < 0 ? -1 : 0;
+}
+
+static void qore_socket_stream_close_fd(qore_socket_stream_t* s) {
+    if (s->fd != -1) {
+        close(s->fd);
+        s->fd = -1;
+    }
+}
+
+static void qore_socket_stream_destroy(mongoc_stream_t* stream) {
+    qore_socket_stream_t* s = reinterpret_cast<qore_socket_stream_t*>(stream);
+    qore_socket_stream_close_fd(s);
     bson_free(s);
 }
 
-//! Close the interruptible stream
-static int qore_stream_close(mongoc_stream_t* stream) {
-    qore_interruptible_stream_t* s = (qore_interruptible_stream_t*)stream;
-    return s->base ? mongoc_stream_close(s->base) : 0;
+static int qore_socket_stream_close(mongoc_stream_t* stream) {
+    qore_socket_stream_close_fd(reinterpret_cast<qore_socket_stream_t*>(stream));
+    return 0;
 }
 
-//! Flush the interruptible stream
-static int qore_stream_flush(mongoc_stream_t* stream) {
-    qore_interruptible_stream_t* s = (qore_interruptible_stream_t*)stream;
-    return s->base ? mongoc_stream_flush(s->base) : 0;
+static int qore_socket_stream_flush(mongoc_stream_t* stream) {
+    return 0;
 }
 
-//! Write to the interruptible stream with interrupt checking
-static ssize_t qore_stream_writev(mongoc_stream_t* stream, mongoc_iovec_t* iov, size_t iovcnt, int32_t timeout_msec) {
-    qore_interruptible_stream_t* s = (qore_interruptible_stream_t*)stream;
-
-    // Check for interrupt before writing
-    if (check_interrupt()) {
+//! Writes all of the data, or fails; like libmongoc's socket stream
+static ssize_t qore_socket_stream_writev(mongoc_stream_t* stream, mongoc_iovec_t* iov, size_t iovcnt,
+        int32_t timeout_msec) {
+    qore_socket_stream_t* s = reinterpret_cast<qore_socket_stream_t*>(stream);
+    if (s->fd == -1) {
+        errno = s->last_errno = EBADF;
         return -1;
     }
+    int64 expire_at = qore_mongo_expiration(timeout_msec);
+    ssize_t total = 0;
+    for (size_t i = 0; i < iovcnt; ++i) {
+        const char* buf = static_cast<const char*>(iov[i].iov_base);
+        size_t off = 0;
+        while (off < iov[i].iov_len) {
+#ifdef MSG_NOSIGNAL
+            ssize_t n = send(s->fd, buf + off, iov[i].iov_len - off, MSG_NOSIGNAL);
+#else
+            ssize_t n = send(s->fd, buf + off, iov[i].iov_len - off, 0);
+#endif
+            if (n >= 0) {
+                off += n;
+                total += n;
+                continue;
+            }
+            if (errno == EINTR) {
+                continue;
+            }
+            if ((errno == EAGAIN || errno == EWOULDBLOCK) && expire_at
+                && !qore_mongo_wait(s->fd, POLLOUT, expire_at, "MongoDB write")) {
+                continue;
+            }
+            s->last_errno = errno;
+            return -1;
+        }
+    }
+    s->last_errno = 0;
+    return total;
+}
 
-    if (!s->base) {
+//! Reads until at least \a min_bytes have been read; like libmongoc's socket stream
+static ssize_t qore_socket_stream_readv(mongoc_stream_t* stream, mongoc_iovec_t* iov, size_t iovcnt,
+        size_t min_bytes, int32_t timeout_msec) {
+    qore_socket_stream_t* s = reinterpret_cast<qore_socket_stream_t*>(stream);
+    if (s->fd == -1) {
+        errno = s->last_errno = EBADF;
+        return -1;
+    }
+    int64 expire_at = qore_mongo_expiration(timeout_msec);
+    ssize_t total = 0;
+    for (size_t i = 0; i < iovcnt; ++i) {
+        char* buf = static_cast<char*>(iov[i].iov_base);
+        size_t off = 0;
+        while (off < iov[i].iov_len) {
+            ssize_t n = recv(s->fd, buf + off, iov[i].iov_len - off, 0);
+            if (n > 0) {
+                off += n;
+                total += n;
+                if (static_cast<size_t>(total) >= min_bytes) {
+                    s->last_errno = 0;
+                    return total;
+                }
+                continue;
+            }
+            if (!n) {
+                // the peer closed the connection
+                if (static_cast<size_t>(total) >= min_bytes) {
+                    return total;
+                }
+                errno = s->last_errno = ECONNRESET;
+                return -1;
+            }
+            if (errno == EINTR) {
+                continue;
+            }
+            if ((errno == EAGAIN || errno == EWOULDBLOCK) && expire_at
+                && !qore_mongo_wait(s->fd, POLLIN, expire_at, "MongoDB read")) {
+                continue;
+            }
+            s->last_errno = errno;
+            if (static_cast<size_t>(total) >= min_bytes && total) {
+                return total;
+            }
+            return -1;
+        }
+    }
+    s->last_errno = 0;
+    return total;
+}
+
+static int qore_socket_stream_setsockopt(mongoc_stream_t* stream, int level, int optname, void* optval,
+        mongoc_socklen_t optlen) {
+    qore_socket_stream_t* s = reinterpret_cast<qore_socket_stream_t*>(stream);
+    if (s->fd == -1) {
         errno = EBADF;
         return -1;
     }
+    return setsockopt(s->fd, level, optname, optval, optlen);
+}
 
-    // For short timeouts, use direct call
-    if (timeout_msec <= QORE_IO_POLL_INTERVAL_MS) {
-        return mongoc_stream_writev(s->base, iov, iovcnt, timeout_msec);
+//! Returns true if the connection has been closed by the peer or has failed
+static bool qore_socket_stream_check_closed(mongoc_stream_t* stream) {
+    qore_socket_stream_t* s = reinterpret_cast<qore_socket_stream_t*>(stream);
+    if (s->fd == -1) {
+        return true;
     }
+    struct pollfd pfd = {s->fd, POLLIN, 0};
+    int rc;
+    while ((rc = poll(&pfd, 1, 0)) < 0 && errno == EINTR) {
+    }
+    if (rc < 0) {
+        return true;
+    }
+    if (!rc) {
+        return false;
+    }
+    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+        return true;
+    }
+    char c;
+    ssize_t n;
+    while ((n = recv(s->fd, &c, 1, MSG_PEEK)) < 0 && errno == EINTR) {
+    }
+    if (!n) {
+        return true;
+    }
+    return n < 0 && errno != EAGAIN && errno != EWOULDBLOCK;
+}
 
-    // Always poll with interrupt/cancel checking for long timeouts
-    int32_t remaining = timeout_msec;
-    while (remaining > 0) {
-        if (check_interrupt()) {
+//! Polls the module's socket streams; called by mongoc_stream_poll() with the root streams
+static ssize_t qore_socket_stream_poll(mongoc_stream_poll_t* streams, size_t nstreams, int32_t timeout) {
+    struct pollfd local_pfds[4];
+    std::vector<struct pollfd> heap_pfds;
+    struct pollfd* pfds = local_pfds;
+    if (nstreams > sizeof local_pfds / sizeof local_pfds[0]) {
+        try {
+            heap_pfds.resize(nstreams);
+        } catch (std::bad_alloc&) {
+            errno = ENOMEM;
             return -1;
         }
-
-        int32_t chunk_timeout = remaining > QORE_IO_POLL_INTERVAL_MS ? QORE_IO_POLL_INTERVAL_MS : remaining;
-        ssize_t rv = mongoc_stream_writev(s->base, iov, iovcnt, chunk_timeout);
-
-        if (rv >= 0) {
-            return rv;
-        }
-
-        // Check if it was a timeout
-        if (errno != ETIMEDOUT && errno != EAGAIN && errno != EWOULDBLOCK) {
-            return rv;
-        }
-
-        remaining -= chunk_timeout;
+        pfds = heap_pfds.data();
     }
-
-    errno = ETIMEDOUT;
-    return -1;
+    for (size_t i = 0; i < nstreams; ++i) {
+        assert(streams[i].stream->type == QORE_MONGO_SOCKET_STREAM_TYPE);
+        pfds[i].fd = reinterpret_cast<qore_socket_stream_t*>(streams[i].stream)->fd;
+        pfds[i].events = static_cast<short>(streams[i].events);
+        pfds[i].revents = 0;
+    }
+    ExceptionSink xsink;
+    int rc = qore_cancellable_poll(pfds, static_cast<unsigned>(nstreams), timeout < 0 ? -1 : timeout, &xsink,
+        "MongoDB poll");
+    if (rc == QORE_POLL_CANCELLED) {
+        // libmongoc's async loop (the topology scanner, which runs the connection handshake) treats a failed poll
+        // as nothing ready and polls again until the command's own timeout, so failing here would spin until
+        // then; reporting every stream as failed ends its commands at once, and their I/O then fails with EINTR
+        // (the request stays pending and is raised at the next cancellation point)
+        xsink.clear();
+        for (size_t i = 0; i < nstreams; ++i) {
+            streams[i].revents = POLLERR | POLLHUP;
+        }
+        return static_cast<ssize_t>(nstreams);
+    }
+    if (rc > 0) {
+        for (size_t i = 0; i < nstreams; ++i) {
+            streams[i].revents = pfds[i].revents;
+        }
+    }
+    return rc;
 }
 
-//! Read from the interruptible stream with interrupt checking
-static ssize_t qore_stream_readv(mongoc_stream_t* stream, mongoc_iovec_t* iov, size_t iovcnt, size_t min_bytes, int32_t timeout_msec) {
-    qore_interruptible_stream_t* s = (qore_interruptible_stream_t*)stream;
-
-    // Check for interrupt before reading
-    if (check_interrupt()) {
-        return -1;
-    }
-
-    if (!s->base) {
-        errno = EBADF;
-        return -1;
-    }
-
-    // For short timeouts, use direct call
-    if (timeout_msec <= QORE_IO_POLL_INTERVAL_MS) {
-        return mongoc_stream_readv(s->base, iov, iovcnt, min_bytes, timeout_msec);
-    }
-
-    // Always poll with interrupt/cancel checking for long timeouts
-    int32_t remaining = timeout_msec;
-    while (remaining > 0) {
-        if (check_interrupt()) {
-            return -1;
-        }
-
-        int32_t chunk_timeout = remaining > QORE_IO_POLL_INTERVAL_MS ? QORE_IO_POLL_INTERVAL_MS : remaining;
-        ssize_t rv = mongoc_stream_readv(s->base, iov, iovcnt, min_bytes, chunk_timeout);
-
-        if (rv >= 0) {
-            return rv;
-        }
-
-        // Check if it was a timeout
-        if (errno != ETIMEDOUT && errno != EAGAIN && errno != EWOULDBLOCK) {
-            return rv;
-        }
-
-        remaining -= chunk_timeout;
-    }
-
-    errno = ETIMEDOUT;
-    return -1;
-}
-
-//! Set socket option on the interruptible stream
-static int qore_stream_setsockopt(mongoc_stream_t* stream, int level, int optname, void* optval, mongoc_socklen_t optlen) {
-    qore_interruptible_stream_t* s = (qore_interruptible_stream_t*)stream;
-    return s->base ? mongoc_stream_setsockopt(s->base, level, optname, optval, optlen) : -1;
-}
-
-//! Get the base stream
-static mongoc_stream_t* qore_stream_get_base_stream(mongoc_stream_t* stream) {
-    qore_interruptible_stream_t* s = (qore_interruptible_stream_t*)stream;
-    return s->base;
-}
-
-//! Check if stream is closed
-static bool qore_stream_check_closed(mongoc_stream_t* stream) {
-    qore_interruptible_stream_t* s = (qore_interruptible_stream_t*)stream;
-    return s->base ? mongoc_stream_check_closed(s->base) : true;
-}
-
-//! Poll multiple streams with interrupt checking
-static ssize_t qore_stream_poll(mongoc_stream_poll_t* streams, size_t nstreams, int32_t timeout) {
-    // Check for interrupt before polling
-    if (check_interrupt()) {
-        return -1;
-    }
-
-    // For short timeouts, use direct call
-    if (timeout <= QORE_IO_POLL_INTERVAL_MS) {
-        return mongoc_stream_poll(streams, nstreams, timeout);
-    }
-
-    // Always poll with interrupt/cancel checking
-    int32_t remaining = timeout;
-    while (remaining > 0) {
-        if (check_interrupt()) {
-            return -1;
-        }
-
-        int32_t chunk_timeout = remaining > QORE_IO_POLL_INTERVAL_MS ? QORE_IO_POLL_INTERVAL_MS : remaining;
-        ssize_t rv = mongoc_stream_poll(streams, nstreams, chunk_timeout);
-
-        if (rv != 0) {
-            return rv;
-        }
-
-        remaining -= chunk_timeout;
-    }
-
-    return 0;  // Timeout
-}
-
-//! Check if stream timed out
-/** Returns false if cancel/interrupt is pending since the operation was
-    interrupted, not timed out.
-*/
-static bool qore_stream_timed_out(mongoc_stream_t* stream) {
-    // Not a timeout if cancel/interrupt is pending
+//! A wait that ended because of a cancellation request is not a timeout
+static bool qore_socket_stream_timed_out(mongoc_stream_t* stream) {
     if (qore_check_cancel(nullptr, "MongoDB I/O")) {
         return false;
     }
-    qore_interruptible_stream_t* s = (qore_interruptible_stream_t*)stream;
-    return s->base ? mongoc_stream_timed_out(s->base) : false;
+    return reinterpret_cast<qore_socket_stream_t*>(stream)->last_errno == ETIMEDOUT;
 }
 
-//! Check if stream should retry
-/** Returns false if cancel/interrupt is pending to prevent mongoc from
-    retrying an operation that was intentionally interrupted.
-*/
-static bool qore_stream_should_retry(mongoc_stream_t* stream) {
-    // Never retry if cancel/interrupt is pending
+//! An operation that was cancelled is never retried
+static bool qore_socket_stream_should_retry(mongoc_stream_t* stream) {
     if (qore_check_cancel(nullptr, "MongoDB I/O")) {
         return false;
     }
-    qore_interruptible_stream_t* s = (qore_interruptible_stream_t*)stream;
-    return s->base ? mongoc_stream_should_retry(s->base) : false;
+    int e = reinterpret_cast<qore_socket_stream_t*>(stream)->last_errno;
+    return e == EAGAIN || e == EWOULDBLOCK;
 }
 
-//! Create a new interruptible stream wrapping a base stream
-static mongoc_stream_t* qore_stream_new(mongoc_stream_t* base) {
-    qore_interruptible_stream_t* stream = (qore_interruptible_stream_t*)bson_malloc0(sizeof(qore_interruptible_stream_t));
+//! Creates a stream that takes ownership of a connected non-blocking socket
+static mongoc_stream_t* qore_socket_stream_new(int fd) {
+    qore_socket_stream_t* s = static_cast<qore_socket_stream_t*>(bson_malloc0(sizeof(qore_socket_stream_t)));
+    s->vtable.type = QORE_MONGO_SOCKET_STREAM_TYPE;
+    s->vtable.destroy = qore_socket_stream_destroy;
+    s->vtable.close = qore_socket_stream_close;
+    s->vtable.flush = qore_socket_stream_flush;
+    s->vtable.writev = qore_socket_stream_writev;
+    s->vtable.readv = qore_socket_stream_readv;
+    s->vtable.setsockopt = qore_socket_stream_setsockopt;
+    // no get_base_stream function: this is the root stream (mongoc_stream_get_root_stream() stops at a stream
+    // without one)
+    s->vtable.check_closed = qore_socket_stream_check_closed;
+    s->vtable.poll = qore_socket_stream_poll;
+    s->vtable.timed_out = qore_socket_stream_timed_out;
+    s->vtable.should_retry = qore_socket_stream_should_retry;
+    s->fd = fd;
+    return reinterpret_cast<mongoc_stream_t*>(s);
+}
 
-    stream->vtable.type = 100;  // Custom type
-    stream->vtable.destroy = qore_stream_destroy;
-    stream->vtable.close = qore_stream_close;
-    stream->vtable.flush = qore_stream_flush;
-    stream->vtable.writev = qore_stream_writev;
-    stream->vtable.readv = qore_stream_readv;
-    stream->vtable.setsockopt = qore_stream_setsockopt;
-    stream->vtable.get_base_stream = qore_stream_get_base_stream;
-    stream->vtable.check_closed = qore_stream_check_closed;
-    stream->vtable.poll = qore_stream_poll;
-    stream->vtable.timed_out = qore_stream_timed_out;
-    stream->vtable.should_retry = qore_stream_should_retry;
-    stream->base = base;
+//! Connects a new non-blocking, close-on-exec socket; the wait ends at once on cancellation
+/** @return the connected socket, or -1 with errno set (\c EINTR if the thread was cancelled or interrupted)
+*/
+static int qore_mongo_connect(const struct sockaddr* sa, mongoc_socklen_t addrlen, int32_t timeout_msec) {
+    int fd = socket(sa->sa_family, SOCK_STREAM, IPPROTO_TCP);
+    if (fd < 0) {
+        return -1;
+    }
+    // closes the socket unless it is released
+    struct FdHolder {
+        int fd;
+        ~FdHolder() {
+            if (fd != -1) {
+                int err = errno;
+                close(fd);
+                errno = err;
+            }
+        }
+    } holder{fd};
 
-    return (mongoc_stream_t*)stream;
+    int fdflags = fcntl(fd, F_GETFD);
+    int flflags = fdflags < 0 ? -1 : fcntl(fd, F_GETFL);
+    if (flflags < 0 || fcntl(fd, F_SETFD, fdflags | FD_CLOEXEC) < 0
+        || fcntl(fd, F_SETFL, flflags | O_NONBLOCK) < 0) {
+        return -1;
+    }
+    int one = 1;
+    // the same options as libmongoc's own sockets; failures are not fatal, as there
+    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
+    setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &one, sizeof one);
+#ifdef SO_NOSIGPIPE
+    setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof one);
+#endif
+
+    if (connect(fd, sa, addrlen)) {
+        if (errno != EINPROGRESS && errno != EINTR) {
+            return -1;
+        }
+        if (qore_mongo_wait(fd, POLLOUT, qore_mongo_expiration(timeout_msec), "MongoDB connection")) {
+            return -1;
+        }
+        int so_error = 0;
+        socklen_t len = sizeof so_error;
+        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &so_error, &len)) {
+            return -1;
+        }
+        if (so_error) {
+            errno = so_error;
+            return -1;
+        }
+    }
+    holder.fd = -1;
+    return fd;
 }
 
 static const QoreHashNode* qore_mongo_get_hash(const QoreValue& v) {
@@ -424,8 +533,11 @@ mongoc_stream_t* qore_mongo_stream_initiator(
         return nullptr;
     }
 
+    // Get connect timeout from URI (default 10 seconds)
+    int32_t connecttimeoutms = mongoc_uri_get_option_as_int32(uri, MONGOC_URI_CONNECTTIMEOUTMS, 10000);
+
     // Try each address until we successfully connect
-    mongoc_socket_t* sock = nullptr;
+    int fd = -1;
     ConstListIterator ai(*addrs);
 
     while (ai.next()) {
@@ -463,37 +575,25 @@ mongoc_stream_t* qore_mongo_stream_initiator(
             }
         }
 
-        sock = mongoc_socket_new(sa->sa_family, SOCK_STREAM, IPPROTO_TCP);
-        if (!sock) {
-            continue;
-        }
-
-        // Get connect timeout from URI (default 10 seconds)
-        int32_t connecttimeoutms = mongoc_uri_get_option_as_int32(uri, MONGOC_URI_CONNECTTIMEOUTMS, 10000);
-        int64_t expire_at = bson_get_monotonic_time() + (connecttimeoutms * 1000);
-
-        if (mongoc_socket_connect(sock, sa, addrlen, expire_at) == 0) {
+        fd = qore_mongo_connect(sa, addrlen, connecttimeoutms);
+        if (fd != -1) {
             break;  // Success
         }
-
-        mongoc_socket_destroy(sock);
-        sock = nullptr;
+        if (errno == EINTR) {
+            bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
+                "MongoDB connection interrupted");
+            return nullptr;
+        }
     }
 
-    if (!sock) {
+    if (fd == -1) {
         bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
             "Failed to connect to '%s:%u'", host->host, host->port);
         return nullptr;
     }
 
-    // Create socket stream
-    mongoc_stream_t* base = mongoc_stream_socket_new(sock);
-    if (!base) {
-        mongoc_socket_destroy(sock);
-        bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_SOCKET,
-            "Failed to create stream for '%s:%u'", host->host, host->port);
-        return nullptr;
-    }
+    // the stream owns the socket from here on
+    mongoc_stream_t* base = qore_socket_stream_new(fd);
 
     // Check if SSL/TLS is required
     if (mongoc_uri_get_tls(uri)) {
@@ -539,8 +639,7 @@ mongoc_stream_t* qore_mongo_stream_initiator(
         base = tls_stream;
     }
 
-    // Wrap it with our interruptible stream
-    return qore_stream_new(base);
+    return base;
 }
 
 void qore_mongo_setup_interruptible_streams(mongoc_client_t* client) {

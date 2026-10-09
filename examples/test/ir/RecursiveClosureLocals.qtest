@@ -5,6 +5,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../../../qlib/QUnit.qm
 %requires ../../../qlib/FsUtil.qm
+%requires ../ExecModeHarness.qm
 %exec-class RecursiveClosureLocalsTest
 
 class RecursiveClosureLocalsTest inherits QUnit::Test {
@@ -105,50 +106,52 @@ class RecursiveClosureLocalsTest inherits QUnit::Test {
             "llvm-config matching the LLVM this qore was built against";
     }
 
-    private string run(string dir, list<string> args) {
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
         string command = "LD_LIBRARY_PATH=" + quote(lib_dir)
             + " " + (map quote($1), args).join(" ");
-        string log = dir + "/run.log";
-        int status = system(command + " > " + quote(log) + " 2>&1");
-        string output = File::readTextFile(log);
-        assertEq(0, status, output);
-        assertFalse(output.regex("(?i)warning:"), output);
-        return output;
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        assertFalse(r.out.regex("(?i)warning:"), r.out);
+        return r.out;
     }
 
     private modes() {
         TmpDir dir("qore-recursive-locals-modes-");
         foreach string mode in ("ast", "ir", "jit", "tiered") {
             assertEq("recursive-closure-locals: ok\n",
-                run(dir.path, (qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, source)));
+                run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, source)));
         }
     }
 
     private nativeCalls() {
         TmpDir dir("qore-recursive-locals-native-");
         string llvm_config = llvmConfigPath();
-        string llvm_include = trim(run(dir.path, (llvm_config, "--includedir")));
-        string llvm_lib = trim(run(dir.path, (llvm_config, "--libdir")));
-        list<string> llvm_link = split(" ", trim(run(dir.path, (llvm_config, "--libs"))));
+        string llvm_include = trim(run((llvm_config, "--includedir")));
+        string llvm_lib = trim(run((llvm_config, "--libdir")));
+        list<string> llvm_link = split(" ", trim(run((llvm_config, "--libs"))));
         string root = get_script_dir() + "/../../..";
         string executable = dir.path + "/recursive-locals";
         # -Wl,-rpath is what lets the driver find libqore (and a shared LLVM): LD_LIBRARY_PATH
         # is a Linux-only mechanism, and libqore's macOS install name is
         # @rpath/libqore.<ver>.dylib, so a binary linked with -L/-l alone has nowhere to look
         # and dies in dyld before main()
-        run(dir.path, (ENV.CXX ?? "c++", "-std=c++20", "-g", "-I" + root + "/include",
+        run((ENV.CXX ?? "c++", "-std=c++20", "-g", "-I" + root + "/include",
             "-I" + lib_dir + "/include", "-I" + llvm_include,
             get_script_dir() + "/recursive_closure_locals.cpp", "-L" + lib_dir,
             "-L" + llvm_lib, "-Wl,-rpath," + lib_dir, "-Wl,-rpath," + llvm_lib,
             "-lqore") + llvm_link + ("-o", executable) + libqoreTargetFlags());
-        assertEq("recursive-closure-locals: ok\n", run(dir.path, (executable, source)));
+        assertEq("recursive-closure-locals: ok\n", run((executable, source)));
     }
 
     private compiled() {
         TmpDir dir("qore-recursive-locals-aot-");
         string executable = dir.path + "/recursive-locals";
-        run(dir.path, (ENV.QCC ?? lib_dir + "/qcc", "-O3", "--strip-source",
+        run((ENV.QCC ?? lib_dir + "/qcc", "-O3", "--strip-source",
             "--parse-option=PO_ENABLE_DEBUG", "-o", executable, source));
-        assertEq("recursive-closure-locals: ok\n", run(dir.path, (executable,)));
+        assertEq("recursive-closure-locals: ok\n", run((executable,)));
     }
 }

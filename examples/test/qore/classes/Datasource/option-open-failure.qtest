@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DatasourceOptionOpenFailureTest
+
+#! A connection option that fails as a datasource opens leaves no driver connection behind
+/** The driver opens its connection, then the datasource sets each connection option on it.  When an option failed,
+    the exception was raised but the driver's connection stayed attached to a datasource that was not open: the next
+    open replaced it, and the destruction of the datasource or pool did not close it, so it leaked (and a driver that
+    asserts that a datasource has no connection when opened aborted in a debug build).
+
+    The "dbitest" mock driver's "reject" option fails when set to True on an open connection, and its
+    "live-connections" option reports the number of its connections in the process.
+*/
+class DatasourceOptionOpenFailureTest inherits QUnit::Test {
+    public {
+        const ConnStr = "dbitest:u/p@db";
+        const RejectConnStr = "dbitest:u/p@db{reject=true}";
+    }
+
+    private {
+        #! an open datasource that reports the number of the driver's connections in the process
+        Datasource monitor(ConnStr);
+    }
+
+    constructor() : QUnit::Test("DatasourceOptionOpenFailureTest", "1.0", \ARGV) {
+        addTestCase("an option from the connection string", \testConnStrOption());
+        addTestCase("an option set before the open", \testSetOptionBeforeOpen());
+        addTestCase("a pool", \testPool());
+        addTestCase("an option set on an open connection", \testSetOptionOpen());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        monitor.open();
+    }
+
+    int liveConnections() {
+        return monitor.getOption("live-connections");
+    }
+
+    testConnStrOption() {
+        int base = liveConnections();
+        {
+            Datasource ds(RejectConnStr);
+            for (int i = 0; i < 3; ++i) {
+                assertThrows("DBI-TEST-OPTION-ERROR", \ds.open());
+                assertEq(base, liveConnections(), "attempt " + i + ": no connection is left behind");
+            }
+        }
+        assertEq(base, liveConnections(), "after the datasource is destroyed");
+    }
+
+    testSetOptionBeforeOpen() {
+        int base = liveConnections();
+        Datasource ds(ConnStr);
+        ds.setOption("reject", True);
+        assertThrows("DBI-TEST-OPTION-ERROR", \ds.open());
+        assertEq(base, liveConnections(), "no connection is left behind");
+
+        # once the option is corrected, the datasource opens with exactly one connection
+        ds.setOption("reject", False);
+        ds.open();
+        assertEq(base + 1, liveConnections(), "open");
+        ds.close();
+        assertEq(base, liveConnections(), "closed");
+    }
+
+    testPool() {
+        int base = liveConnections();
+        assertThrows("DBI-TEST-OPTION-ERROR", sub () { DatasourcePool dsp("dbitest:u/p@db{reject=true,min=2,max=4}"); });
+        assertEq(base, liveConnections(), "no connection is left behind");
+
+        {
+            DatasourcePool dsp("dbitest:u/p@db{min=2,max=4}");
+            assertEq(base + 2, liveConnections(), "the pool's minimum connections");
+        }
+        assertEq(base, liveConnections(), "after the pool is destroyed");
+    }
+
+    testSetOptionOpen() {
+        int base = liveConnections();
+        Datasource ds(ConnStr);
+        ds.open();
+        # an option that fails on an open connection leaves it open
+        assertThrows("DBI-TEST-OPTION-ERROR", \ds.setOption(), ("reject", True));
+        assertEq(base + 1, liveConnections());
+        ds.close();
+        assertEq(base, liveConnections());
+    }
+}

@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this); the child inherits it
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class BuiltinClassRuntimeTest
+
+#! Tests builtin classes of a binary module loaded at runtime while other threads run their methods
+/** A builtin class is shared by every Program.  A binary module loaded with \c load_module() registers its classes
+    while other threads run, and the first parse that reached such a class - a Program parsing a subclass of it -
+    resolved its class hierarchy then, writing the class's parse state while other threads ran its methods.
+    ThreadSanitizer builds report the data race in the child; every build checks that the child completes.
+*/
+class BuiltinClassRuntimeTest inherits QUnit::Test {
+    public {
+        #! the number of threads calling the method
+        const Threads = 4;
+        #! the number of Programs parsing a subclass of the builtin class while the threads run
+        const Programs = 10;
+        #! the number of times the child is run, each in a new process
+        const Rounds = 3;
+
+        #! the child: loads the module at runtime and runs a method of its builtin class in several threads, while
+        #! its main thread parses subclasses of the class in new Programs
+        const ChildSource = "%modern
+load_module(\"cppapiuser\");
+int threads = ARGV[0].toInt();
+int programs = ARGV[1].toInt();
+Counter start(1);
+Counter running(threads);
+code run = sub () {
+    on_exit running.dec();
+    object o = create_object(\"Qore::CppApiTest::ProgramContextProbe\");
+    start.waitForZero();
+    for (int i = 0; i < 2000; ++i) {
+        call_object_method(o, \"getParseOptions\");
+    }
+};
+for (int i = 0; i < threads; ++i) {
+    background run();
+}
+start.dec();
+# the Programs are kept until the threads are done
+list<Program> pgms;
+for (int i = 0; i < programs; ++i) {
+    Program p(PO_NEW_STYLE);
+    p.loadModule(\"cppapiuser\");
+    p.parse(\"class Sub inherits Qore::CppApiTest::ProgramContextProbe { int f() { return getParseOptions(); } }\",
+        \"sub\");
+    pgms += p;
+}
+running.waitForZero();
+printf(\"done\\n\");
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("builtin classes of a module loaded at runtime", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("subclasses parsed while the class runs", \subclassParseTest());
+        set_return_value(main());
+    }
+
+    subclassParseTest() {
+        TmpDir tmp("qore-builtin-class-runtime-");
+        string child = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(child, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ChildSource);
+        f.close();
+
+        for (int round = 1; round <= Rounds; ++round) {
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s %d %d 2>&1; echo \"rc=$?\"",
+                libqore_dir, libqore_dir, qore_bin, child, Threads, Programs));
+            *list<*string> rc = (out =~ x/rc=([0-9]+)\s*$/);
+            assertEq("0", rc[0], sprintf("round %d: the child exits normally: %s", round, out));
+            assertTrue(out.find("done") >= 0, sprintf("round %d: the child completes: %s", round, out));
+            # a ThreadSanitizer build reports any data race in the child
+            assertEq(-1, out.find("WARNING: ThreadSanitizer"), sprintf("round %d: no data race: %s", round, out));
+        }
+    }
+}

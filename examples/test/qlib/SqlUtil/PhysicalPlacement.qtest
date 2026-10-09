@@ -46,6 +46,11 @@ class PhysicalPlacementTest inherits Test {
 %endif
         if (!ENV.QORE_PHYSICAL_PLACEMENT_TEST_CONNSTR) { testSkip("live disposable database required"); }
         PlacementFaultDatasource ds(ENV.QORE_PHYSICAL_PLACEMENT_TEST_CONNSTR); ds.setOption("timezone", "UTC");
+        # Dates bind as timestamptz and the server stores them in plain timestamp columns in the session's zone,
+        # which the driver reads back in the declared zone: both must be UTC, whatever the server's zone is.
+        # The setting is committed so that the fixture's rollbacks keep it.
+        ds.exec("set time zone 'UTC'"); ds.commit();
+        assertEq("UTC", ds.selectRow("select pg_catalog.current_setting('TimeZone') as value").value); ds.commit();
         string suffix = digest("sha256", sprintf("%d:%d:%s", getpid(), ++serial, now_us().toString())).toHex().substr(0, 16);
         string name = "placement_" + suffix + (quoted ? "'\\quote" : "");
         string function_name = "placement_fn_" + suffix + "()";

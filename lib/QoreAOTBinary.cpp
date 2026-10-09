@@ -19436,6 +19436,11 @@ bool QoreAOTBinaryDeserializer::commitClassesPrepare(std::string& error) {
                 priv->parseAddStaticAncestors(mi.second);
             }
         }
+        // The hierarchy is resolved above, as initializeHierarchy() resolves it in source parsing, so the class is
+        // marked as resolved like a parsed one; otherwise the first later parse that resolves it - a Program
+        // parsing a subclass while other threads run the class - repeats the resolution and writes the class's
+        // parse state while it is in use.
+        priv->parse_resolve_hierarchy = true;
     }
 
     return true;
@@ -19466,6 +19471,11 @@ bool QoreAOTBinaryDeserializer::commitClassesDoCommit(std::string& error) {
         qore_class_private* priv = qore_class_private::get(*qc);
         // Commits all pending method variants (hm, shm maps); handles base-class recursion
         priv->parseCommit();
+        // The class's constants and static variables are initialized by the module's compiled init functions
+        // (AOTCompiledInitFunc::CLASS_CONSTANT and STATIC_VAR), not by parseCommitRuntimeInit(); marked as done, as a
+        // source parse marks it, so that a later parse commit in another Program sharing the class does not run it
+        // on a class that other threads are running
+        priv->parseCommitRuntimeInitDone = true;
         if (i < class_signature_hashes.size() && class_signature_hashes[i].size() == SH_SIZE) {
             priv->hash.setRawHash(class_signature_hashes[i].data());
         }

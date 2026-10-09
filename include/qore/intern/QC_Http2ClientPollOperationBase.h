@@ -438,6 +438,18 @@ public:
     */
     DLLLOCAL void drainStreamQueues(ExceptionSink* xsink);
 
+    //! The part of drainStreamQueues() made with stream_queues_lock held
+    /** @param released receives the registrations given up, which the caller releases after the lock
+        @param xsink exception sink
+    */
+    DLLLOCAL void drainStreamQueuesLocked(std::vector<StreamQueueInfo>& released, ExceptionSink* xsink);
+
+    //! Releases the references of registrations taken out of stream_queues; called without stream_queues_lock
+    DLLLOCAL static void releaseStreamQueueInfos(std::vector<StreamQueueInfo>& infos, ExceptionSink* xsink);
+
+    //! Marks this object for registrations given up with stream_queues_lock held; see RObject::edgesRemoved()
+    DLLLOCAL void markStreamQueuesRemoved();
+
     //! Clears all stream queue registrations (called in abort/cleanup)
     /** Pushes NOTHING sentinels to all queues, notifies all EventNotifiers,
         and derefs all queue/notifier objects.
@@ -454,7 +466,7 @@ public:
     //! data/cdmap scan.
     /** Walks @ref stream_queues and @ref pending_stream_registrations
         and reports each ref'd @c queue_obj / @c notifier_obj via
-        @c RObject::scanCheck().  Uses @c trylock on both @c stream_lock
+        @c RObject::scanCheck().  Uses @c trylock on both @c stream_queues_lock
         and @c sq_lock and returns false on contention — mirrors the
         non-blocking pattern of @ref qore_queue_private::scanMembers (a
         deadlock or a blocking wait here would freeze cycle detection).
@@ -554,10 +566,19 @@ private:
     */
     std::vector<std::pair<int32_t, StreamQueueInfo>> pending_stream_registrations;
 
-    // --- I/O-thread-only data (no lock needed) ---
+    //! Guards stream_queues
+    /** The I/O thread changes stream_queues, but other threads read it: the collector's scanner (scanMembers())
+        from any thread that scans this object, and clearStreamQueues() from abort() and cleanup().  The I/O thread
+        holds the lock while it changes or iterates the map, and the scanner only tries it.  Taken before sq_lock
+        and before the locks of the queues the I/O thread pushes to and of the HTTP/2 session it reads; no code
+        takes it while holding one of those.
+    */
+    mutable QoreThreadLock stream_queues_lock;
 
-    //! Registered stream queues — I/O-thread-only
+    //! Registered stream queues (under stream_queues_lock)
     std::unordered_map<int32_t, StreamQueueInfo> stream_queues;
+
+    // --- I/O-thread-only data (no lock needed) ---
 
     //! Stream IDs that had data drained — I/O-thread-only
     std::vector<int32_t> data_ready_streams;

@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class AOTCollectionNothingTest
 
@@ -281,7 +282,7 @@ public string sub verifyConstants() {
     }
 
     private string runScript(string mode, string script_path) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
             libqore_dir, qore_bin, mode, script_path));
     }
 

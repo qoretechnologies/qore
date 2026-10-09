@@ -147,6 +147,13 @@ private:
     mutable QoreRWLock rwl;
 
     // issue #5028: maintain a count of all scanable objects in the treemap for DGC
+    /* While the count is not zero, the TreeMap object's private data scan count includes the map.  The object's
+       count is changed under the map's write lock, in the same critical section as the transition of this count
+       that requires it: changed after the lock is released, a take could decrement it before the put that made
+       this count non-zero has incremented it.  This orders the map's lock before the object's rlck, which is safe
+       because rlck is a leaf lock: no code acquires a TreeMap lock while holding it, and the collector only ever
+       tries the map's lock (see scanMembers()).
+    */
     int scan_count = 0;
 };
 

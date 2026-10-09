@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../ExecModeHarness.qm
 
 %exec-class ConcurrentPromotionTest
 
@@ -38,8 +39,8 @@ class ConcurrentPromotionTest inherits QUnit::Test {
     testExecModes() {
         foreach string mode in (ExecModes) {
             # functions are compiled after a few calls, in the background, while the threads keep calling them
-            string out = backquote(sprintf("QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b "
-                "--exec-mode=%s %s 2>&1", libqore_dir, libqore_dir, qore_bin, mode,
+            string out = ExecModeHarness::run(sprintf("QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+                "%s -b --exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode,
                 get_script_dir() + DirSep + "concurrent-promotion-worker.q"));
             assertEq("wrong: 0\n", out, mode);
         }

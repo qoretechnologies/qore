@@ -443,6 +443,39 @@ DLLLOCAL void delete_thread_local_data();
 */
 DLLLOCAL void end_thread_cancellation(bool terminating = false);
 
+
+//! Waits on a condition variable until it is signalled, the timeout expires, or the thread is cancelled or interrupted
+/** The implementation of QoreCondition::waitWithInterrupt(); a cancellation request
+    (@ref qore_cancel_thread()) or program interrupt (@ref QoreSandboxManager::requestInterrupt()) wakes the wait at
+    once, also when it is made just before the thread blocks.
+
+    @param cond the condition to wait on
+    @param m the mutex, held by the caller; it is held again when this returns
+    @param timeout_ms the timeout in milliseconds; negative for no timeout
+    @param xsink for the cancellation exception; may be nullptr
+    @param operation the operation named in the cancellation exception
+
+    @return QORE_COND_RESULT_SUCCESS if woken, QORE_COND_RESULT_TIMEOUT on timeout, or QORE_COND_RESULT_INTERRUPTED
+    if the thread was cancelled or interrupted (or the condition waker thread could not be started), in which case
+    an exception has been raised on \a xsink if it is not nullptr
+*/
+DLLLOCAL int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms,
+        ExceptionSink* xsink, const char* operation);
+
+//! Stops the condition waker thread; called when no thread can be waiting any more
+DLLLOCAL void qore_stop_cond_waker();
+
+#ifdef DEBUG
+//! Test hook called by qore_cond_wait_cancellable() after its final check for a request and before it blocks
+DLLLOCAL extern std::atomic<void (*)()> qore_cond_wait_window_hook;
+#endif
+
+//! Sleeps for the given number of microseconds or until the current thread is cancelled or interrupted
+/** @return 0 if the time elapsed, -1 if an exception was raised on \a xsink, or the result of qore_usleep() when
+    cancellation is deferred
+*/
+DLLLOCAL int qore_cancellable_sleep(int64 usecs, ExceptionSink* xsink, const char* operation);
+
 //! Clears all Qore program-level thread-local data on the calling thread without
 //! destroying thread registration
 /** Called by worker pool threads (ThreadPool, AsyncIoController) between tasks to
@@ -1269,6 +1302,46 @@ DLLLOCAL extern QorePThreadAttr ta_default;
 #ifdef QORE_MANAGE_STACK
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 #endif
+
+//! Returns true if less than the given number of bytes remain above the current thread's stack limit
+/** For native code that recurses without an exception sink to report check_stack()'s exception, such as IR
+    lowering: it stops before the next recursion step could exhaust the stack.  Always false for a thread with no
+    stack limit, and where the stack is not managed.
+
+    @param reserve the stack, in bytes, that the caller needs before it reaches its next check
+*/
+DLLLOCAL bool q_thread_stack_reserve_exceeded(size_t reserve);
+
+//! Accounts for the stack that the recursion replaced by a deferred deletion would have used
+/** A deletion nested too deeply is deferred to a loop that makes it from a shallower frame (see
+    RObject::deleteOrDefer()), so the frames of the recursion it replaces are not on the stack.  While this helper
+    exists, the current thread's stack limit is moved towards the current position by the size of those frames, so
+    that every stack check, such as the one made when a destructor is called, raises \c STACK-LIMIT-EXCEEDED at the
+    same logical depth as the recursion would have: a destructor that recurses without end raises an exception
+    instead of iterating without end.  Has no effect on a thread with no stack limit or where the stack is not
+    managed.
+*/
+class QoreElidedStackHelper {
+public:
+    //! Moves the stack limit by the given number of bytes
+    DLLLOCAL explicit QoreElidedStackHelper(size_t elided);
+
+    //! Restores the stack limit
+    DLLLOCAL ~QoreElidedStackHelper();
+
+    //! Returns the current stack position, or 0 where the stack is not managed
+    DLLLOCAL static size_t getStackPos();
+
+    //! Returns the number of stack bytes used since the given stack position, which getStackPos() returned
+    DLLLOCAL static size_t getStackUsedSince(size_t outer_pos);
+
+    QoreElidedStackHelper(const QoreElidedStackHelper&) = delete;
+    QoreElidedStackHelper& operator=(const QoreElidedStackHelper&) = delete;
+
+private:
+    size_t old_limit = 0;
+    bool shifted = false;
+};
 
 class ParseCodeInfoHelper {
 private:

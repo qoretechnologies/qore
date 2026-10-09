@@ -99,12 +99,21 @@ printf("%Y\n", ans.body);
       have their own limits, configurable with the \c rerank-requests-per-minute and
       \c rerank-tokens-per-minute connection options); pings never wait long and report
       \c VOYAGE-RATE-LIMITED instead of blocking the connection monitor
+    - embedders and rerankers of one Voyage account share one REST client and its connections
+      (VoyageRestClientBase::getSharedClient()) instead of opening a connection per embedder
 */
 
 #! the VoyageRestClient namespace contains all the objects in the VoyageRestClient module
 public namespace VoyageRestClient {
 #! Common base class for VoyageRestClient functionality
 public class VoyageRestClientBase {
+    private:internal {
+        #! Serializes the shared clients
+        static Mutex shared_client_lock();
+        #! Key -> {client, last_used_us}; see getSharedClient()
+        static hash<string, hash<auto>> shared_clients = {};
+    }
+
     public {
         #! Default Voyage AI REST API URL
         const DefaultUrl = "https://api.voyageai.com";
@@ -165,6 +174,9 @@ public class VoyageRestClientBase {
         #! Percentage of the published limits used when no limit is configured
         /** Leaves room for requests that reach Voyage later than they were sent */
         const DefaultRateLimitPercent = 95;
+
+        #! Idle time after which a shared client is released (see @ref getSharedClient())
+        const SharedClientIdleMs = 600000;
 
         #! Rate-limit kind of embedding requests (\c /embeddings)
         const RateLimitEmbed = "embed";
@@ -233,6 +245,62 @@ public class VoyageRestClientBase {
                 getRateLimitAccount(url, api_key), model),
             requests_per_minute ?? defaults.requests_per_minute, tokens_per_minute ?? defaults.tokens_per_minute,
             exists requests_per_minute || exists tokens_per_minute);
+    }
+
+    #! Returns the process-wide REST client of a Voyage account
+    /** Every embedder and reranker of the same account (endpoint host, port and API key), endpoint URL and
+        default request and connection timeouts uses one
+        @ref VoyageRestClient::VoyageRestClientIo "VoyageRestClientIo", whose connection manager multiplexes
+        their concurrent requests over shared HTTP/2 or HTTP/3 connections and opens a new connection when one
+        fails, instead of opening a connection (and a TLS or QUIC handshake) per embedder; Qorus, for example,
+        creates an embedder per query.
+
+        A client unused for @ref SharedClientIdleMs is released on a later call, closing its connections; a
+        changed API key is a different account and gets its own client.  Clients are safe to share between
+        threads.
+
+        @param url the endpoint URL; NOTHING for @ref DefaultUrl
+        @param api_key the API key
+        @param req_timeout the default request timeout of the client, if any
+        @param connect_timeout the connection timeout of the client, if any
+
+        @return the shared client
+    */
+    static VoyageRestClientIo getSharedClient(*string url, string api_key, *timeout req_timeout,
+            *timeout connect_timeout) {
+        string key = sprintf("%s|%s|%y|%y", getRateLimitAccount(url ?? DefaultUrl, api_key), url ?? "",
+            req_timeout, connect_timeout);
+        int now = clock_get_monotonic_us();
+        AutoLock al(shared_client_lock);
+        # release clients unused for the idle period
+        foreach string k in (keys shared_clients) {
+            if (k != key && now - shared_clients{k}.last_used_us > SharedClientIdleMs * 1000) {
+                remove shared_clients{k};
+            }
+        }
+        if (*hash<auto> entry = shared_clients{key}) {
+            shared_clients{key}.last_used_us = now;
+            return entry.client;
+        }
+        hash<auto!> opts = {"apikey": api_key};
+        if (url.val()) {
+            opts.url = url;
+        }
+        if (exists req_timeout) {
+            opts.timeout = req_timeout;
+        }
+        if (exists connect_timeout) {
+            opts.connect_timeout = connect_timeout;
+        }
+        VoyageRestClientIo client(opts);
+        shared_clients{key} = {"client": client, "last_used_us": now};
+        return client;
+    }
+
+    #! Returns the number of shared clients (see @ref getSharedClient())
+    static int getSharedClientCount() {
+        AutoLock al(shared_client_lock);
+        return shared_clients.size();
     }
 
     #! Returns the non-secret account identity used in limiter keys
@@ -921,7 +989,7 @@ public class VoyageEmbedder inherits AbstractEmbedder {
                 },
             }, hash<auto> sub () {
                 # a fresh transient-failure budget for each request admitted
-                hash<auto> req_opts = embedderRequestOptions(config, opts, Backend);
+                hash<auto> req_opts = embedderRequestOptions(config, opts, Backend, slice.count);
                 return client.restPostWithRetry("/embeddings", request, NOTHING,
                     req_opts._embedder_retry_policy);
             }, *int sub (hash<auto> resp) {
@@ -1093,8 +1161,12 @@ public class VoyageEmbedder inherits AbstractEmbedder {
         }
     }
 
+    #! Returns the client for a call: the account's shared client, unless the call sets its own connection timeout
+    /** A per-call \c timeout needs no client of its own: the retry policy bounds every attempt by it.  A
+        per-call \c connect_timeout applies only to new connections, so such a call uses a client of its own.
+    */
     private VoyageRestClient::VoyageRestClientIo pickRestClient(*hash<auto> opts) {
-        if (exists opts.timeout || exists opts.connect_timeout) {
+        if (exists opts.connect_timeout) {
             return new VoyageRestClient::VoyageRestClientIo(
                 buildRestOptions(opts.timeout, opts.connect_timeout));
         }
@@ -1125,7 +1197,8 @@ public class VoyageEmbedder inherits AbstractEmbedder {
             init_mutex.lock();
             on_exit init_mutex.unlock();
             if (!rest_client) {
-                rest_client = new VoyageRestClient::VoyageRestClientIo(buildRestOptions());
+                rest_client = VoyageRestClient::VoyageRestClientBase::getSharedClient(config.url, config.api_key,
+                    config.timeout, config.connect_timeout);
             }
         }
     }
@@ -1273,7 +1346,12 @@ public class VoyageReranker inherits AbstractReranker {
                 notifyRateLimitEvent(opts ?? {}, event, documents.size());
             },
         }, hash<auto> sub () {
-            return rest_client.restPost("/rerank", body);
+            # a fresh transient-failure budget for each request admitted; a stalled attempt is retried
+            # within it (see AbstractEmbedder::defaultAttemptTimeoutMs())
+            hash<RestClientIo::RestRetryOptions> retry_opts();
+            retry_opts.attempt_timeout = AbstractEmbedder::defaultAttemptTimeoutMs(retry_opts.retry_timeout, 1);
+            return rest_client.restPostWithRetry("/rerank", body, NOTHING,
+                new VoyageTransientRetryPolicy(retry_opts));
         }, *int sub (hash<auto> resp) {
             auto used = resp.body.usage.total_tokens;
             return used.typeCode() == NT_INT ? used : NOTHING;
@@ -1393,13 +1471,7 @@ public class VoyageReranker inherits AbstractReranker {
             init_mutex.lock();
             on_exit init_mutex.unlock();
             if (!rest_client) {
-                hash<auto> opts = {
-                    "apikey": config.api_key,
-                };
-                if (config.url.val()) {
-                    opts.url = config.url;
-                }
-                rest_client = new VoyageRestClient::VoyageRestClientIo(opts);
+                rest_client = VoyageRestClient::VoyageRestClientBase::getSharedClient(config.url, config.api_key);
             }
         }
     }

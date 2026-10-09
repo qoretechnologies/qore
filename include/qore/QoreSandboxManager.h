@@ -877,9 +877,12 @@ private:
 };
 
 //! Polling interval for blocking I/O operations in milliseconds
-/** This constant defines how frequently blocking I/O operations check for
-    interrupt requests. It matches the polling interval used for threading
-    primitives (500ms).
+/** The interval at which a blocking wait that cannot be woken directly checks for a cancellation request or program
+    interrupt, for example a wait inside a third-party library that exposes neither its descriptors nor an event loop.
+
+    @deprecated a wait on descriptors should use qore_cancellable_poll(), and a library event loop should watch the
+    descriptor from qore_cancel_wakeup_register(); both end as soon as cancellation is requested, without polling.
+    %Qore itself no longer uses this constant.
 */
 #define QORE_IO_POLL_INTERVAL_MS 500
 

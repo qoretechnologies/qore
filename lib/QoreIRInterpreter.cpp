@@ -554,10 +554,14 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
                 return qore_buffer_binary_op(left, right, QoreBufferBinaryOperation::NotEqual, xsink);
             }
             return QoreValue(!QoreLogicalEqualsOperatorNode::softEqual(left, right, xsink));
-        case QoreIROpcode::EqHard:
-            return QoreValue(left.isEqualHard(right));
-        case QoreIROpcode::NeHard:
-            return QoreValue(!left.isEqualHard(right));
+        case QoreIROpcode::EqHard: {
+            bool eq = left.isEqualHard(right, xsink);
+            return *xsink ? QoreValue() : QoreValue(eq);
+        }
+        case QoreIROpcode::NeHard: {
+            bool eq = left.isEqualHard(right, xsink);
+            return *xsink ? QoreValue() : QoreValue(!eq);
+        }
         case QoreIROpcode::LtInt:
             return QoreValue(left.getAsBigInt() < right.getAsBigInt());
         case QoreIROpcode::LtFloat:
@@ -3726,6 +3730,10 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
+    // the callee runs in this interpreter instead of being called, so the call is counted here for its promotion
+    // to native code, as qore_rt_call_fast() counts the calls it makes; once the callee is native, this inline
+    // path is no longer taken (see hasCachedFunction() above)
+    uvb->recordFastCallExecution();
     ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
     if (xsink && *xsink) {
         result = QoreValue();
@@ -3799,6 +3807,9 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
+    // the method runs in this interpreter instead of being called, so the call is counted here for its promotion
+    // to native code; once it is native, this inline path is no longer taken
+    uvb->recordFastCallExecution();
 
     QoreProgram* exec_pgm = qore_ir_method_execution_program(method, uvb);
     if (!exec_pgm) {
@@ -3955,7 +3966,8 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     }
 
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*object_class, class_ctx)) {
+    // checked against the committed hierarchy, as in MethodCallNode::exec()
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*object_class, class_ctx)) {
         class_ctx = nullptr;
     }
 
@@ -4232,13 +4244,15 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     std::optional<QoreClosureSelfContextHelper> closure_self_ctx;
     std::optional<ObjectSubstitutionHelper> object_ctx;
     if (self) {
+        // the captured object is checked where the closure uses it (self, its members and its methods), as with
+        // AST and JIT execution: a closure that does not use the object can be called after it was destroyed
         closure_self_ctx.emplace(self);
-        if (qore_ir_check_closure_self_valid(self, xsink)) {
-            result = QoreValue();
-            return true;
-        }
         object_ctx.emplace(self, cb->getClassCtx());
     }
+    // A closure created in a static method has no captured object, but it keeps the lexical class context of the
+    // method, which gives it access to the class's private members (such as a private constructor), as with AST and
+    // JIT execution (see execClosureDirect() in JITRuntime.cpp)
+    OptionalClassOnlySubstitutionHelper class_ctx(self ? nullptr : cb->getClassCtx());
 
     const LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocalForInterpreter(callee_ir);
     SelfInstantiationHelper self_helper(selfid, self);
@@ -6522,7 +6536,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 fprintf(stderr, " refs=%d rrefs=%d rcount=%d rset=%p deferred=%d recursive_found=%d status=%d",
                     priv->references.load(), priv->rrefs.load(), priv->rcount,
                     static_cast<void*>(priv->rset.load(std::memory_order_relaxed)),
-                    priv->deferred_scan ? 1 : 0, priv->recursive_ref_found ? 1 : 0, priv->status);
+                    priv->deferred_scan ? 1 : 0, priv->recursive_ref_found ? 1 : 0, priv->status.load());
             }
         }
         fputc('\n', stderr);
@@ -14251,6 +14265,9 @@ load_local_done:
                             && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs) > 0
                             && !direct_inst->cached_uvb->hasCachedFunction()
                             && qore_ir_try_execute_native_leaf(direct_inst, nanboxed_args, nargs, res)) {
+                        // the call is evaluated without entering the callee, so it is counted here for its
+                        // promotion to native code, as qore_rt_call_fast() counts the calls it makes
+                        direct_inst->cached_uvb->recordFastCallExecution();
                         inline_may_invalidate_external_caches = false;
                         used_inline_ir = true;
                     } else {

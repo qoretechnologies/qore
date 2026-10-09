@@ -348,6 +348,10 @@ bool QoreListNode::is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink
     if (!l || l->size() != size()) {
         return false;
     }
+    // comparing recurses with the nesting of the lists, which is unbounded
+    if (xsink && q_check_stack(xsink)) {
+        return false;
+    }
 
     for (size_t i = 0; i < l->size(); ++i) {
         if (!l->retrieveEntry(i).isEqualSoft(retrieveEntry(i), xsink) || *xsink) {
@@ -363,8 +367,18 @@ bool QoreListNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink
         return false;
     }
 
+    // comparing recurses with the nesting of the lists, which is unbounded
+    if (xsink && q_check_stack(xsink)) {
+        return false;
+    }
+
     for (size_t i = 0; i < l->size(); i++) {
-        if (!l->retrieveEntry(i).isEqualHard(retrieveEntry(i))) {
+        // the sink is optional in this API: without one, an exception means that the lists are not equal
+        if (xsink) {
+            if (!l->retrieveEntry(i).isEqualHard(retrieveEntry(i), xsink) || *xsink) {
+                return false;
+            }
+        } else if (!l->retrieveEntry(i).isEqualHard(retrieveEntry(i))) {
             return false;
         }
     }
@@ -1131,6 +1145,11 @@ QoreListNode* QoreListNode::reverse() const {
 }
 
 int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) const {
+    // formatting recurses with the nesting of the value, which is unbounded
+    if (xsink && q_check_stack(xsink)) {
+        return -1;
+    }
+
     // applies any format bounds active in this thread; when bounds are active, a recursive reference is rendered
     // as an alias to the anchor rendered with the container, so this check is made before the recursion check
     QoreFormatBoundsHelper fbh(str, this, empty() ? "[]" : "[...]");

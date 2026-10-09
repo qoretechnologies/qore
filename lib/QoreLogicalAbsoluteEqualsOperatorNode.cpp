@@ -129,5 +129,6 @@ bool QoreLogicalAbsoluteEqualsOperatorNode::hardEqual(const QoreValue& left, con
         return false;
     }
 
-    return left.isEqualHard(right);
+    // constant folding at parse time has no sink: an exception there means that the values are not equal
+    return xsink ? left.isEqualHard(right, xsink) : left.isEqualHard(right);
 }

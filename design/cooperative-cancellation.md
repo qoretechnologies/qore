@@ -70,6 +70,50 @@ class QoreCancelDeferralHelper;
 See [Cleanup Critical Sections](#cleanup-critical-sections) for what this is for and what it
 guarantees.
 
+### Cancellable Waits
+
+A blocking wait in a module must end as soon as cancellation is requested, without a periodic
+timeout.  Two exported APIs (since Qore 3.0; `#ifdef _QORE_HAS_CANCELLABLE_POLL`) let a module wait
+on the thread's cancellation wakeup channel (see [Wakeup descriptor](#wakeup-descriptor)):
+
+```cpp
+// Waits like poll(2) with the thread's wakeup channel added; EINTR is retried internally.
+// Returns > 0 (descriptors with events), 0 (timeout), -1 (poll() failed, errno set, no exception),
+// or QORE_POLL_CANCELLED (-2: THREAD-CANCELLED, PROGRAM-INTERRUPTED or THREAD-ERROR raised).
+DLLEXPORT int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms,
+    ExceptionSink* xsink, const char* operation = "poll");
+
+// For a library's own event loop: the descriptor to watch for readability, QORE_CANCEL_WAKEUP_NONE
+// (-2: nothing to watch), or -1 (exception raised: a request made before the call).
+DLLEXPORT int qore_cancel_wakeup_register(ExceptionSink* xsink, const char* operation = "wait");
+// When the descriptor is readable: -1 if the request was raised (end the wait), 0 to continue.
+DLLEXPORT int qore_cancel_wakeup_check(ExceptionSink* xsink, const char* operation = "wait");
+// After the wait, whatever ended it; once per successful register.
+DLLEXPORT void qore_cancel_wakeup_unregister();
+
+// RAII wrapper (header-inline) for register/unregister.
+class QoreCancelWakeupHelper;
+```
+
+The register protocol has no race window:
+
+- **Register, then check.**  `qore_cancel_wakeup_register()` stores the registration (seq_cst) and then
+  checks for a request: a request made before the registration is raised by the call, and one made after
+  it signals the channel, which stays readable until it is drained.
+- **Check drains first.**  `qore_cancel_wakeup_check()` drains the channel and then checks: a requester
+  stores the request before it signals, so a drained signal's request is seen by the check, and a
+  signal made after the drain makes the descriptor readable again.  A wakeup that delivers nothing (an
+  out-of-scope request that was dropped, a cleared program interrupt, or a request while cancellation
+  is deferred) therefore leaves the descriptor unreadable, and the loop does not spin.
+- **Unregister drains last.**  The outermost `qore_cancel_wakeup_unregister()` clears the registration
+  under `thread_list.lck` and then drains, so the next wait starts unsignalled.
+- **Nesting.**  Registrations nest (the depth is kept in `ThreadEntry::wake_reg_depth`, used only by the
+  thread itself); a nested registration returns the same descriptor, and `qore_cancellable_poll()`
+  called inside one neither registers nor unregisters the channel, and drains it only after a wakeup.
+- The descriptor is only watched for readability (`POLLIN`, `EPOLLIN`, `EVFILT_READ` — a macOS kqueue
+  can itself be watched by another kqueue, `poll()` and `select()`); the caller never reads, writes
+  or closes it.
+
 ### Lower-Level APIs
 
 These are used internally and by `QoreCondition::waitWithInterrupt()`. Module authors
@@ -91,9 +135,14 @@ if (smh) {
 ### Constants
 
 ```cpp
-// Recommended polling interval for blocking operations (500ms)
+// Recommended polling interval for blocking operations in modules (500ms)
 #define QORE_IO_POLL_INTERVAL_MS 500
 ```
+
+Deprecated.  Neither `libqore` nor the in-tree modules poll any more: every blocking wait is woken
+directly when cancellation is requested (see [Waking Blocked Threads](#waking-blocked-threads)).  The constant
+remains for modules that still poll, until they are converted to
+[Cancellable Waits](#cancellable-waits).
 
 ## Implementation Patterns for Modules
 
@@ -111,46 +160,26 @@ int myBlockingOperation(ExceptionSink* xsink) {
 }
 ```
 
-### Pattern 2: Polling During Long Operations
+### Pattern 2: Waiting on Descriptors
 
-For operations that may block for extended periods, use polling with timeouts:
+For a wait on descriptors the module owns, use `qore_cancellable_poll()`; never poll in slices:
 
 ```cpp
-ssize_t myLongRead(void* buf, size_t len, int timeout_ms, ExceptionSink* xsink) {
-    // Check before starting
-    if (qore_check_cancel(xsink, "reading data")) {
+ssize_t myRead(int fd, void* buf, size_t len, int timeout_ms, ExceptionSink* xsink) {
+    struct pollfd pfd = {fd, POLLIN, 0};
+    int rc = qore_cancellable_poll(&pfd, 1, timeout_ms, xsink, "reading data");
+    if (rc == QORE_POLL_CANCELLED) {
+        return -1;  // exception raised
+    }
+    if (rc < 0) {
+        xsink->raiseErrnoException("MY-READ-ERROR", errno, "poll() failed");
         return -1;
     }
-
-    // Poll with short timeouts
-    int remaining = timeout_ms;
-    while (remaining > 0 || timeout_ms < 0) {  // timeout_ms < 0 means infinite
-        if (qore_check_cancel(xsink, "reading data")) {
-            return -1;
-        }
-
-        // Use chunk timeout (don't exceed remaining time)
-        int chunk = QORE_IO_POLL_INTERVAL_MS;
-        if (timeout_ms >= 0 && remaining < chunk) {
-            chunk = remaining;
-        }
-
-        ssize_t rv = do_nonblocking_read_with_timeout(buf, len, chunk);
-
-        if (rv > 0) {
-            return rv;  // Success
-        }
-        if (rv < 0 && errno != ETIMEDOUT && errno != EAGAIN) {
-            return rv;  // Real error
-        }
-
-        if (timeout_ms >= 0) {
-            remaining -= chunk;
-        }
+    if (!rc) {
+        xsink->raiseException("MY-TIMEOUT", "timed out after %d ms", timeout_ms);
+        return -1;
     }
-
-    errno = ETIMEDOUT;
-    return -1;
+    return read(fd, buf, len);
 }
 ```
 
@@ -227,45 +256,36 @@ int executeQuery(const char* sql, ExceptionSink* xsink) {
 }
 ```
 
-### Pattern 4: Custom Stream/Socket Wrapper
+### Pattern 4: A Library's Own Event Loop or Stream Hooks
 
-For libraries that support custom I/O callbacks (e.g., MongoDB), wrap the stream:
+If a library waits in an event loop of its own, add the wakeup descriptor from
+`qore_cancel_wakeup_register()` to the loop (see [Cancellable Waits](#cancellable-waits)).  If it
+lets the module supply the transport (custom stream or I/O callbacks), let the module own the
+descriptors and wait with `qore_cancellable_poll()` in the callbacks; a callback that can only report
+`errno` clears the exception and reports `EINTR`.  The in-tree `mongodb` module is the reference: it
+connects its own non-blocking socket in its `mongoc_client_set_stream_initiator()` initiator and
+implements a `mongoc_stream_t` on it (libmongoc stacks its TLS stream on top, and
+`mongoc_stream_poll()` calls the root stream's poll function, which reports every stream as failed on
+cancellation so that libmongoc's topology scanner ends the command at once):
 
 ```cpp
-static ssize_t interruptible_read(library_stream_t* stream, void* buf,
-                                   size_t len, int timeout_ms) {
-    interruptible_stream_t* s = (interruptible_stream_t*)stream;
-
-    if (qore_check_cancel(/* no xsink in callback — use errno */)) {
+static ssize_t my_stream_read(my_stream_t* s, void* buf, size_t len, int timeout_ms) {
+    // recv() on the non-blocking socket; on EAGAIN:
+    struct pollfd pfd = {s->fd, POLLIN, 0};
+    ExceptionSink xsink;
+    int rc = qore_cancellable_poll(&pfd, 1, remaining_ms, &xsink, "stream read");
+    if (rc == QORE_POLL_CANCELLED) {
+        xsink.clear();  // the library reports errors through errno; the request stays pending
         errno = EINTR;
         return -1;
     }
-
-    // Polling read with cancel checking
-    int remaining = timeout_ms;
-    while (remaining > 0 || timeout_ms < 0) {
-        if (qore_is_cancel_requested()) {
-            errno = EINTR;
-            return -1;
-        }
-
-        int chunk = (remaining > QORE_IO_POLL_INTERVAL_MS || timeout_ms < 0)
-                    ? QORE_IO_POLL_INTERVAL_MS : remaining;
-
-        ssize_t rv = library_stream_read(s->base, buf, len, chunk);
-        if (rv >= 0 || (errno != ETIMEDOUT && errno != EAGAIN)) {
-            return rv;
-        }
-
-        if (timeout_ms >= 0) {
-            remaining -= chunk;
-        }
-    }
-
-    errno = ETIMEDOUT;
-    return -1;
+    ...
 }
 ```
+
+Only a library that waits internally on descriptors it exposes neither directly nor through hooks
+still needs a periodic check (with `QORE_IO_POLL_INTERVAL_MS`) or, better, a cancel callback that
+aborts the library's operation (Pattern 3).
 
 ### Pattern 5: Periodic Check in Fetch Loops
 
@@ -312,7 +332,7 @@ while (db_fetch_row(stmt)) {
 **Type C: Custom I/O Callbacks**
 - Wrap socket/stream operations with cancel-aware I/O
 - Check cancel during read/write
-- Examples: MongoDB (libmongoc custom streams)
+- Examples: MongoDB (libmongoc custom streams on the module's own socket)
 
 **Type D: Cross-Connection Cancel**
 - Execute query on one connection
@@ -337,7 +357,7 @@ while (db_fetch_row(stmt)) {
 | module-jni | — | **TODO**: `Statement.cancel()` | Minimal | — |
 | module-python | — | **TODO**: `PyErr_SetInterrupt()` | GIL-level | — |
 | module-v8 | — | **TODO**: `TerminateExecution()` | **TODO** | **TODO** |
-| mongodb (in-tree) | N/A (stream wrapper) | N/A | Yes | Yes (stream I/O) |
+| mongodb (in-tree) | N/A (own socket stream, `qore_cancellable_poll()`) | N/A | Yes | Woken directly |
 
 All modules with existing `qore_check_io_interrupt()` calls need a mechanical replacement to `qore_check_cancel()`.
 The old symbol must remain exported until compatible module rebuilds are no longer required.
@@ -424,21 +444,21 @@ public:
     // Optional cancellation reason
     QoreStringNode* cancel_reason = nullptr;
 
-    // Condition the thread is currently blocked on, or nullptr if not blocked.
-    // Set by QoreCondition::waitWithInterrupt() and read by cancelThread() /
-    // SandboxManager::requestInterrupt() to wake the thread directly via broadcast()
-    // instead of relying on periodic polling.  See "Broadcast-on-Cancel" below.
-    std::atomic<QoreCondition*> waiting_on{nullptr};
+    // The condition and mutex the thread is blocked on in a cancellable condition wait, and the
+    // state of a wakeup handed to the condition waker thread; guarded by the wait registry lock.
+    // See "Condition waits" below.
+    QoreCondition* waiting_on = nullptr;
+    pthread_mutex_t* waiting_mutex = nullptr;
+    QoreCondition* wake_cond = nullptr;
+    pthread_mutex_t* wake_mutex = nullptr;
+    int wake_next = -1;
+    bool wake_queued = false, wake_busy = false;
 
-    DLLLOCAL void cleanup() {
-        // ... existing cleanup ...
-        cancel_requested.store(false, std::memory_order_relaxed);
-        if (cancel_reason) {
-            cancel_reason->deref();
-            cancel_reason = nullptr;
-        }
-        waiting_on.store(nullptr, std::memory_order_relaxed);
-    }
+    // The thread's wakeup channel while it is blocked in a descriptor wait, and the channel
+    // itself.  See "Wakeup descriptor" below.
+    std::atomic<int> waiting_fd{-1};
+    int wake_fd = -1;
+    pid_t wake_pid = 0;
 };
 ```
 
@@ -447,45 +467,139 @@ public:
 - Already used for cross-thread operations (`cancelAllActiveThreads`)
 - Cleaned up when the TID slot is released
 
-### Broadcast-on-Cancel
+### Waking Blocked Threads
 
-`QoreCondition::waitWithInterrupt()` registers `waiting_on` before sleeping, so any cancellation
-source (`cancel_thread()` or `SandboxManager::requestInterrupt()`) can wake the thread directly
-via `broadcast()`.  This replaces the per-waiter 500ms polling loop and eliminates O(N) wakeup
-contention when N threads share one `QoreCondition` (e.g., many waiters on a single `Counter`).
+A cancellation request (`cancelThread()`) or program interrupt (`SandboxManager::requestInterrupt()`)
+wakes a blocked thread directly; no core wait has a periodic timeout for cancellation.  There are two
+mechanisms, one per kind of wait, and both use the same lost-wakeup protocol (see "Race avoidance"
+below):
 
-#### Race avoidance (Dekker pattern)
+| Wait | Mechanism | Registered in |
+|---|---|---|
+| condition variable (`QoreCondition`) | broadcast the condition after holding its mutex | `ThreadEntry::waiting_on` / `waiting_mutex` |
+| descriptor (`poll()`) | signal the thread's wakeup channel, which is polled with the caller's descriptors | `ThreadEntry::waiting_fd` |
 
-The lost-wakeup race — canceller broadcasts before waiter sleeps; waiter never wakes — is
-defeated by sequential consistency on the four key operations:
+Converted waits:
+
+| Wait | How it waits now |
+|---|---|
+| backquote / `backquote()` output read | `qore_cancellable_poll()` |
+| `File` reads and `File::isDataAvailable()` on pipes, FIFOs and terminals | `qore_cancellable_poll()` |
+| blocked writes to stdout / stderr streams | `qore_cancellable_poll()` |
+| `sleep()`, `usleep()`, `File` read backoff, `File::lock()` retry interval | `qore_cancellable_sleep()` |
+| `StreamPipe` reads, writes and close | `QoreCondition::waitWithInterrupt()` |
+| `Datasource` transaction lock wait | `QoreCondition::waitWithInterrupt()` |
+| `channel_select()` (with and without a timeout) | `QoreCondition::waitWithInterrupt()` |
+| `Mutex`, `RWLock`, `Gate`, `AutoLock`, `AutoReadLock`, `AutoWriteLock`, `AutoGate`, `Condition::wait()` | `VLockCancellationPoint` |
+| `Queue`, `Counter`, `AutoSemaphore` | `QoreCondition::waitWithInterrupt()` (the redundant outer poll loops were removed) |
+| socket, TLS, HTTP/1, HTTP/2 and HTTP/3 synchronous operations | the caller waits for the async I/O controller's result on a `Queue` (`QoreCondition::waitWithInterrupt()`) |
+| process waits (`system()`, backquote child exit) | `QoreChildWait` on a `QoreCondition` |
+
+#### Wakeup descriptor
+
+`qore_cancellable_poll()` (internal, `qore_thread_intern.h`) waits like `poll(2)` for the caller's
+descriptors plus the thread's **wakeup channel**:
+
+- **One channel per thread**, created lazily on the thread's first descriptor wait and stored in
+  `ThreadEntry::wake_fd`: an `EVFILT_USER` kqueue on macOS, an `eventfd` on Linux, a non-blocking pipe
+  elsewhere.  The polled descriptor is readable while the channel is signalled.
+- **Signal-before-wait.**  The waiter stores `waiting_fd = wake_fd` (seq_cst), then checks for
+  cancellation, then polls; the canceller stores the request flag (seq_cst), then — under
+  `thread_list.lck` — loads `waiting_fd` and signals it.  Either the waiter sees the request or the
+  canceller sees the registration; unlike a condition broadcast, the signal is not lost if it is
+  made before the waiter blocks, because the channel stays readable until it is drained.
+- **Drain after delivery.**  After the poll, the waiter clears `waiting_fd` under `thread_list.lck`
+  and then drains the channel.  Cancellers only signal under that lock while the registration is set,
+  so after the clear nothing can signal the channel any more and the drain always leaves it empty: the
+  next wait starts unsignalled, whether the request was delivered, dropped as out of scope, or cleared
+  with `clear_thread_cancel()`.  A wakeup without a deliverable request (an out-of-scope request that
+  the check dropped, or a cleared program interrupt) resumes the poll for the rest of the timeout.
+- **Deferral.**  While cancellation is deferred (`defer_thread_cancel()`), nothing can be delivered, so
+  the wait is a plain `poll()` and the channel is not registered; the pending request is raised at the
+  first cancellation point after the deferral ends.
+- **Lifetime.**  The channel is closed when the TID is released (`ThreadEntry::cleanup()`) or when a
+  foreign thread leaves a reserved TID (`QoreThreadList::deleteData()`), under `thread_list.lck`, so a
+  canceller can never signal a closed descriptor.
+- **fork and exec.**  Every channel descriptor is close-on-exec.  The creating process ID is recorded:
+  a forked child that waits replaces the inherited channel with its own, so a cancellation in either
+  process can never wake the other.  On macOS a kqueue is not inherited at all, and the child only
+  forgets the descriptor number.
+- **Failure.**  If the channel cannot be created (descriptor exhaustion), the wait raises
+  `THREAD-ERROR` instead of waiting uninterruptibly.
+
+`qore_cancellable_sleep()` sleeps in a timed `QoreCondition::waitWithInterrupt()` on a condition of
+its own, which the request broadcasts; a remainder below one millisecond is slept with `qore_usleep()`.
+
+#### Lock waits
+
+The smart locks (`SmartMutex`, `RWLock`, `VRMutex`) are also used internally, for example for
+`synchronized` methods, where a wait must not end with a cancellation exception.  A lock wait is
+therefore a cancellation point only inside a `VLockCancellationPoint` (`VLock.h`), which the Qore-level
+lock APIs set on the thread's `VLock` around their single wait.  `VLock::condWait()` then waits with
+`QoreCondition::waitWithInterrupt()` on the lock's internal condition (or, for `Condition::wait()`, on
+the user's condition).  A condition wait reacquires its lock under a `VLockCancellationSuspend` before
+it raises the cancellation, so `Condition::wait()` always returns with the lock held, as before.
+
+### Condition waits
+
+`QoreCondition::waitWithInterrupt()` (implemented by the internal `qore_cond_wait_cancellable()`)
+registers the condition **and its mutex** in the thread's `ThreadEntry` before it checks for a
+request and blocks, so any cancellation source (`cancel_thread()` or
+`SandboxManager::requestInterrupt()`) can wake the thread directly.  This replaced the per-waiter
+500ms polling loop and eliminates O(N) wakeup contention when N threads share one `QoreCondition`.
+
+#### Race avoidance
+
+The waiter holds its mutex from its last check for a request until `pthread_cond_wait()` releases
+it.  A broadcast made in that window without the mutex is lost, and the waiter sleeps until
+something else signals its condition — for an uncontended `Semaphore` or `Counter`, forever.  (The
+first version of this design broadcast without the mutex and relied on a seq_cst flag/pointer
+pairing; the pairing only guarantees that the canceller *sees* the registration, not that the
+waiter is asleep when it broadcasts.  The 500ms poll loops around most callers masked the lost
+wakeup; removing them exposed it as a hang.)
+
+A canceller therefore broadcasts only after it has held the waiter's mutex: holding it means that
+the waiter has either not yet checked (and will see the request, which was stored before) or has
+blocked (and the broadcast wakes it).
 
 ```
-waiter:                                 canceller (cancelThread):
-  store waiting_on = self  (seq_cst)     store cancel_requested = true (seq_cst)
-  load cancel_requested    (seq_cst)     load waiting_on              (seq_cst)
-  if set → bail (no sleep)               if set → broadcast(*waiting_on)
-  pthread_cond_wait                      [ entry under thread_list.lck ]
+waiter (holds m):                          canceller:
+  [registry lock] waiting_on = cond, m       store cancel_requested = true
+  check cancel_requested → bail if set       [registry lock]
+  pthread_cond_wait(cond, m)                   if waiting_on:
+  [registry lock] clear registration;            trylock(m) ok → unlock(m), broadcast
+    wait out a queued/running wakeup             busy        → queue to the waker thread
+    with m released                          [waker thread]
+                                               lock(m), unlock(m), broadcast(cond)
 ```
 
-SC total order guarantees that at least one of "waiter sees flag" or "canceller sees pointer"
-holds — so the waiter either bails before sleeping or is broadcast out of its sleep.
-
-#### Lifetime of the cond pointer
-
-The waiter clears `waiting_on` under `thread_list.lck` before returning from `waitWithInterrupt`.
-The canceller reads and broadcasts under the same lock.  Since the canceller's read sees a
-non-null pointer iff the waiter has not yet cleared, and the waiter cannot return from
-`waitWithInterrupt` until it acquires `lck`, the cond's owning object cannot be torn down
-between the canceller's read and the canceller's broadcast.  (The owning object is alive while
-the call is in progress because the caller holds a reference for the duration of the call.)
+- **The canceller never blocks on the waiter's mutex.**  If `trylock()` fails — the waiter is in
+  the window, or another thread holds the mutex, or the canceller holds it itself (a host thread
+  can call `qore_cancel_thread()` while holding a mutex that the target waits with) — the wakeup is
+  queued for the **condition waker thread** (`qore-cond-waker`), which blocks on the mutex until it
+  is released and then broadcasts.  The thread is started on a thread's first cancellable
+  condition wait, so a canceller can always hand a wakeup to it; it is stopped by `qore_cleanup()`
+  and restarted after `fork()` in a child that waits.  If it cannot be started, a wait with an
+  exception sink raises `THREAD-CREATION-FAILURE`; without one, the wait is not a cancellation
+  point.
+- **Lifetime.**  The registration is read and the mutex tried under the registry lock, which the
+  waiter needs to clear its registration, so the condition and mutex are alive.  A queued or
+  running wakeup keeps the waiter from returning: it releases its mutex (so that the waker can take
+  it), waits until the wakeup has completed, and reacquires the mutex — never while holding the
+  registry lock.  A condition wait may return after another thread has held its mutex in between,
+  which callers already allow for.
+- **Lock order:** waiter's mutex → registry lock; `thread_list.lck` → registry lock; the waker
+  thread never blocks on a waiter's mutex while holding the registry lock.
+- **Test.** `ut_cond_wait_cancel_in_window()` (debug builds, `run_unit_tests()`) holds a
+  waiter in exactly that window with a test hook while the request is made.
 
 #### `SandboxManager::requestInterrupt()`
 
-Walks `thread_list` and broadcasts every thread's `waiting_on`, in addition to invoking
-registered cancel callbacks.  The walk is unfiltered (no per-program filter) because
-`SandboxManager` does not currently track its owning Program — spurious wakeups for threads
-in other programs are harmless: those threads recheck their own program's interrupt state,
-find it not set, and resume waiting.
+Walks `thread_list` and wakes every thread's registered condition wait and descriptor wait, in
+addition to invoking registered cancel callbacks.  The walk is unfiltered (no per-program filter)
+because `SandboxManager` does not currently track its owning Program — spurious wakeups for threads
+in other programs are harmless: those threads recheck their own program's interrupt state, find it
+not set, and resume waiting.
 
 ### `qore_check_cancel()` Implementation
 
@@ -535,12 +649,10 @@ int QoreThreadList::cancelThread(int tid, const char* reason, unsigned scope_pgm
     }
     // publish the scope before the flag; the target reads it only after observing the flag
     entry[tid].cancel_scope_pgm_id.store(scope_pgm_id, std::memory_order_release);
-    // seq_cst pairs with seq_cst on the waiter side (see Broadcast-on-Cancel)
     entry[tid].cancel_requested.store(true, std::memory_order_seq_cst);
-    QoreCondition* cond = entry[tid].waiting_on.load(std::memory_order_seq_cst);
-    if (cond) {
-        cond->broadcast();
-    }
+    // wake a condition wait (see "Condition waits") and a descriptor wait (see "Wakeup descriptor")
+    wakeCondWaiter(tid);
+    signalWaitingFd(tid);
     return 0;
 }
 ```
@@ -560,48 +672,16 @@ if (qore_check_cancel(xsink, "while loop")) {
 
 #### Blocking Primitives
 
-`QoreCondition::waitWithInterrupt()` registers itself in `ThreadEntry::waiting_on` and does a
-single `pthread_cond_wait` / `pthread_cond_timedwait`.  Cancellation sources broadcast directly
-(see "Broadcast-on-Cancel"), so no polling is required.  This is used by user-facing primitives
-(`Condition`, `Queue`, `Counter`, `Gate`, etc.):
-
-```cpp
-int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms,
-                                      ExceptionSink* xsink) {
-    // pre-wait check: cancel set before we tried to wait
-    if (qore_check_cancel(xsink, "condition wait")) {
-        return QORE_COND_RESULT_INTERRUPTED;
-    }
-
-    // register so cancel sources can wake us via broadcast()
-    thread_list.setCurrentWaitingOn(this);
-
-    // re-check after registration to close the lost-wakeup race
-    if (qore_check_cancel(xsink, "condition wait")) {
-        thread_list.clearCurrentWaitingOn();  // under lck
-        return QORE_COND_RESULT_INTERRUPTED;
-    }
-
-    int rc = wait2(m, timeout_ms);
-
-    thread_list.clearCurrentWaitingOn();      // under lck
-
-    // if we were woken by a cancel-induced broadcast, report INTERRUPTED
-    if (qore_check_cancel(xsink, "condition wait")) {
-        return QORE_COND_RESULT_INTERRUPTED;
-    }
-
-    return rc == 0 ? QORE_COND_RESULT_SUCCESS : QORE_COND_RESULT_TIMEOUT;
-}
-```
+`QoreCondition::waitWithInterrupt()` registers its condition and mutex (see "Condition waits") and
+does a single `pthread_cond_wait` / `pthread_cond_timedwait`; no polling is required.  It is used by
+the user-facing primitives (`Condition`, `Queue`, `Counter`, `Gate`, etc.).
 
 **Note**: Internal infrastructure (parser locks, `QoreThreadList::lck`, etc.) uses plain
 `wait()` / `lock()` and is NOT a cancellation point.
 
-**Note**: SmartMutex and RWLock use plain `wait()` / `wait2()` with their own signal-generation
-tracking and are NOT cancellation points (see Open Questions).  They could be made cancellation
-points by adopting the `setCurrentWaitingOn()` / `clearCurrentWaitingOn()` pattern around their
-internal waits, since broadcast-on-cancel does not require timed waits.
+**Note**: SmartMutex, RWLock and VRMutex waits are cancellation points only when made through the
+Qore-level APIs, which mark them with a `VLockCancellationPoint` (see "Lock waits" above); internal
+uses of the same locks are not cancellation points.
 
 #### Other Check Points
 
@@ -809,20 +889,25 @@ does it construct the `QoreSandboxManagerHelper` RAII helper for the program int
 For the common case (not cancelled), the cost is one TLS read + one atomic load.
 
 **Blocking waits**: `waitWithInterrupt()` does a single `pthread_cond_wait` /
-`pthread_cond_timedwait`, no polling.  Per-wait overhead is one extra atomic store/load on
-entry (`waiting_on` register) and one `thread_list.lck` acquisition on exit (clear).  This
+`pthread_cond_timedwait`, no polling.  Per-wait overhead is two acquisitions of the wait registry
+lock (register, clear).  This
 scales well with N waiters on a shared cond — a major improvement over the previous polling
 design, which had O(N) periodic mutex contention on the cond's underlying user-mutex (each
 waiter waking every 500ms).
 
-**Cancel/interrupt cost**: `cancel_thread()` is O(1) — one extra atomic load and at most one
-`broadcast()` under `thread_list.lck`.  `SandboxManager::requestInterrupt()` walks
-`MAX_QORE_THREADS` (8192) entries under `lck` and broadcasts each non-null `waiting_on`; the
-walk is bounded by the number of currently-waiting threads, not the maximum.  Acceptable for
+**Cancel/interrupt cost**: `cancel_thread()` is O(1) — a `trylock()` and at most one
+`broadcast()`, or a queued wakeup.  `SandboxManager::requestInterrupt()` walks
+`MAX_QORE_THREADS` (8192) entries under `lck` and wakes each registered wait.  Acceptable for
 an event that fires rarely.
 
-**Polling interval**: `QORE_IO_POLL_INTERVAL_MS` (500ms) is still used by other I/O paths
-(file locking via `F_SETLK`, kernel-state polling) where broadcast wakeup is not possible.
+**Polling interval**: no core wait polls for cancellation.  `File::lock()` still retries `F_SETLK`
+every 50ms, because a record lock offers nothing that could be waited on, but the wait between
+attempts ends at once on cancellation.  `QORE_IO_POLL_INTERVAL_MS` (500ms) is only used by external
+binary modules that have not been converted to [Cancellable Waits](#cancellable-waits) yet.
+
+**Descriptor waits**: the first descriptor wait of a thread creates its wakeup channel (one kqueue,
+eventfd or pipe); each wait adds one entry to the poll set, one seq_cst store, one
+`thread_list.lck` acquisition and one non-blocking drain call.
 
 **Periodic fetch checks**: Check every 100 rows/iterations in tight loops to amortize overhead.
 
@@ -853,14 +938,14 @@ cancel_thread(tid, "test");
 int tid = background sub() { sleep(60s); }();
 sleep(100ms);
 cancel_thread(tid, "test");
-# Thread should wake within ~500ms
+# Thread wakes at once
 
 # Cancel a thread blocked in Queue::get()
 Queue q();
 int tid = background sub() { q.get(); }();
 sleep(100ms);
 cancel_thread(tid);
-# Thread should unblock within ~500ms
+# Thread unblocks at once
 
 # clear_thread_cancel() allows continued execution
 int tid = background sub() {
@@ -905,7 +990,7 @@ pgm.callFunction("do_io_operation");
 background sub() { do_long_blocking_operation(); }();
 sleep(100ms);
 sm.requestInterrupt();
-# All program threads interrupted within ~500ms
+# All program threads interrupted at once
 
 # No sandbox (zero overhead path)
 do_io_operation();  # Works normally, no overhead
@@ -916,7 +1001,7 @@ do_io_operation();  # Works normally, no overhead
 - [ ] Replace `qore_check_io_interrupt()` with `qore_check_cancel()` in all check points
 - [ ] Replace inline `QoreSandboxManagerHelper` + `isInterruptRequested()` patterns with `qore_check_cancel()`
 - [ ] Use `qore_check_cancel()` for pre-operation checks
-- [ ] Implement polling for long operations using `QORE_IO_POLL_INTERVAL_MS`
+- [ ] Wait on descriptors with `qore_cancellable_poll()`, or add the descriptor from `qore_cancel_wakeup_register()` to a library's own event loop; never poll with `QORE_IO_POLL_INTERVAL_MS` slices
 - [ ] Register cancel callback via `QoreSandboxManagerHelper` if library has a cancel API
 - [ ] Check every ~100 rows in fetch loops
 - [ ] Ensure zero overhead when no cancellation is active
@@ -928,7 +1013,8 @@ do_io_operation();  # Works normally, no overhead
 - **Cancel callback (RAII)**: `module-oracle/src/oracle.h` — `QoreOracleCancelHelper`
 - **Cancel callback (atomic handle)**: `module-pgsql/src/QorePGConnection.h` — `QorePGCancelHelper`
 - **Non-blocking polling**: `module-ssh2/src/SSH2Client.h` — `waitSocketUnlocked()`
-- **Custom stream wrapper**: `modules/mongodb/src/QoreMongoStream.cpp`
+- **Custom stream on the module's own socket**: `modules/mongodb/src/QoreMongoStream.cpp`
+- **Cancellable waits from a module**: `examples/test/module-cpp-api/ql_cppapiuser.qpp` (`cpp_api_cancellable_poll()`, `cpp_api_wakeup_loop()`)
 - **ZMQ poll loop**: `module-zmq/src/QoreZSock.cpp`
 
 ## Implementation Phases
@@ -960,7 +1046,7 @@ do_io_operation();  # Works normally, no overhead
 - Performance regression test
 
 ### Phase 5: Documentation
-- Remove `interruptible-io-module-guide.md` and `safe-thread-cancellation.md` (replaced by this document)
+- Remove `safe-thread-cancellation.md` (replaced by this document); the module author's guide is the `interruptible_io_module_guide` page (`doxygen/lang/228_interruptible_io_module_guide.dox.tmpl`), and this document holds the design
 - Update module developer guide
 - Release notes for Qore 3.0
 
@@ -968,7 +1054,10 @@ do_io_operation();  # Works normally, no overhead
 
 1. **Naming**: `cancel_thread()` vs `interrupt_thread()`? Using "cancel" is clearer than "interrupt" (avoids confusion with OS signals) and matches `pthread_cancel` terminology while being safe/cooperative.
 
-2. **Mutex/RWLock cancellation**: Should `cancel_thread()` wake threads blocked in `Mutex::lock()`? With broadcast-on-cancel (Qore 3.0), this no longer requires timed waits — SmartMutex/RWLock can register `waiting_on` around their internal `wait()` calls and be woken by broadcast.  Deferred to a future phase; until then these primitives detect cancellation within one 500ms poll interval.  (Inside a cleanup deferral they already wait without polling, since no cancellation can be delivered there.)
+2. **Mutex/RWLock cancellation**: resolved — Qore-level lock waits are woken by the request (see "Lock waits").
+
+6. **A public cancellable wait for modules**: resolved — see [Cancellable Waits](#cancellable-waits).
+   External modules that still poll are converted in their own repositories.
 
 3. **`join_thread(tid)`**: Currently there's no way to wait for a background thread to finish. `cancel_thread()` is more useful when paired with a join. Could be implemented separately using a per-thread condition variable signaled at thread exit.
 
@@ -982,4 +1071,4 @@ do_io_operation();  # Works normally, no overhead
 - **Qore 2.1**: Added `QoreSandboxManagerHelper` RAII class for safe access; removed raw `QoreSandboxManager*` from public API to prevent use-after-free; modules audited and updated for interruptible I/O and sandboxing
 - **Qore 3.0**: Unified cancellation API (`qore_check_cancel`); added cleanup critical sections
   (`defer_thread_cancel()` / `qore_push_cancel_deferral()`) and made thread teardown and pooled
-  worker recycling end the request rather than run under it; added per-thread cancellation (`cancel_thread`, `thread_cancelled`, `clear_thread_cancel`); replaced 500ms polling in `QoreCondition::waitWithInterrupt` with broadcast-on-cancel (`ThreadEntry::waiting_on`), eliminating O(N) wakeup contention when many threads share a single condition variable; replaced the same-program restriction on `cancel_thread()` with the target-evaluated program scope rule (see [Program Scope](#program-scope-who-can-cancel-whom)), making a thread blocked inside a child program cancellable by the program that called into it
+  worker recycling end the request rather than run under it; added per-thread cancellation (`cancel_thread`, `thread_cancelled`, `clear_thread_cancel`); replaced 500ms polling in `QoreCondition::waitWithInterrupt` with broadcast-on-cancel (`ThreadEntry::waiting_on`), eliminating O(N) wakeup contention when many threads share a single condition variable; made condition waits broadcast only after holding the waiter's mutex (directly or through the condition waker thread), fixing a lost wakeup when a request was made just before the waiter blocked; replaced every remaining periodic cancellation check in blocking waits (descriptor waits via a per-thread wakeup channel, `sleep()`/`usleep()`, `StreamPipe`, `Datasource` lock, `channel_select()`, `Mutex`/`RWLock`/`Gate`/`Condition` and their `Auto*` helpers) with a direct wakeup; replaced the same-program restriction on `cancel_thread()` with the target-evaluated program scope rule (see [Program Scope](#program-scope-who-can-cancel-whom)), making a thread blocked inside a child program cancellable by the program that called into it

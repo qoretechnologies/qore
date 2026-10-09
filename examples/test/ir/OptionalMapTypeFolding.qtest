@@ -5,6 +5,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../../../qlib/QUnit.qm
 %requires ../../../qlib/FsUtil.qm
+%requires ../ExecModeHarness.qm
 %exec-class OptionalMapTypeFoldingTest
 
 class OptionalMapTypeFoldingTest inherits QUnit::Test {
@@ -43,16 +44,18 @@ class OptionalMapTypeFoldingTest inherits QUnit::Test {
         }
         throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
     }
-    private string run(string dir, list<string> args, bool checked_append = False) {
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args, bool checked_append = False) {
         string command = (checked_append ? "QORE_DISABLE_IR_MAP_RESULT_FAST_APPEND=1 " : "")
             + "LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir)
             + " " + (map quote($1), args).join(" ");
-        string log = dir + "/run.log";
-        int status = system(command + " > " + quote(log) + " 2>&1");
-        string output = File::readTextFile(log);
-        assertEq(0, status, output);
-        assertFalse(output.regex("(?i)warning:"), output);
-        return output;
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        assertFalse(r.out.regex("(?i)warning:"), r.out);
+        return r.out;
     }
     private string fixture(string dir) {
         string source = dir + "/optional-map.qr";
@@ -67,18 +70,18 @@ class OptionalMapTypeFoldingTest inherits QUnit::Test {
         string source = fixture(dir.path);
         foreach string mode in ("ast", "ir", "jit") {
             assertEq("optional-map-type-folding: ok\n",
-                run(dir.path, (qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, source)));
+                run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, source)));
         }
         assertEq("optional-map-type-folding: ok\n",
-            run(dir.path, (qore_bin, "-b", "--enable-debug", "--exec-mode=jit", source), True));
+            run((qore_bin, "-b", "--enable-debug", "--exec-mode=jit", source), True));
     }
     private compiled() {
         TmpDir dir("qore-optional-map-aot-");
         string source = fixture(dir.path);
         string executable = dir.path + "/optional-map";
-        run(dir.path, (qcc_bin, "-O3", "--strip-source", "-o", executable, source));
-        assertEq("optional-map-type-folding: ok\n", run(dir.path, (executable,)));
-        assertEq("optional-map-type-folding: ok\n", run(dir.path, (executable,), True));
+        run((qcc_bin, "-O3", "--strip-source", "-o", executable, source));
+        assertEq("optional-map-type-folding: ok\n", run((executable,)));
+        assertEq("optional-map-type-folding: ok\n", run((executable,), True));
     }
     private cancelled() {
         TmpDir dir("qore-map-cancel-");
@@ -87,10 +90,10 @@ class OptionalMapTypeFoldingTest inherits QUnit::Test {
         # -Wl,-rpath is what lets the driver find libqore: LD_LIBRARY_PATH is a Linux-only
         # mechanism, and libqore's macOS install name is @rpath/libqore.<ver>.dylib, so a
         # binary linked with -L/-l alone has nowhere to look and dies in dyld before main()
-        run(dir.path, (ENV.CXX ?? "c++", "-std=c++17", "-g", "-I" + root + "/include",
+        run((ENV.CXX ?? "c++", "-std=c++17", "-g", "-I" + root + "/include",
             "-I" + lib_dir + "/include", get_script_dir() + "/optional_map_cancellation.cpp",
             "-L" + lib_dir, "-Wl,-rpath," + lib_dir, "-lqore", "-o", executable) + libqoreTargetFlags());
-        assertEq("optional-map-cancellation: ok\n", run(dir.path, (executable,)));
-        assertEq("optional-map-cancellation: ok\n", run(dir.path, (executable,), True));
+        assertEq("optional-map-cancellation: ok\n", run((executable,)));
+        assertEq("optional-map-cancellation: ok\n", run((executable,), True));
     }
 }

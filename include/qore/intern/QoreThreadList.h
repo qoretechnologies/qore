@@ -36,6 +36,8 @@
 #include <qore/QoreRWLock.h>
 
 #include <atomic>
+#include <pthread.h>
+#include <sys/types.h>
 
 //! Thread creation flags (bitfield)
 /** @since %Qore 3.0
@@ -116,21 +118,55 @@ public:
     */
     std::atomic<unsigned> cancel_scope_pgm_id{0};
 
-    //! the condition the thread is currently blocked on, or nullptr if not blocked
-    /** Set by QoreCondition::waitWithInterrupt() before sleeping and cleared after waking,
-        so that cancelThread() / SandboxManager::requestInterrupt() can wake the thread directly
-        via QoreCondition::broadcast() instead of relying on periodic polling.
-
-        Lifetime: the pointer is only read by code that has either set the per-thread cancel flag
-        (paired with the waiter's flag-recheck after the seq_cst register) or holds thread_list.lck
-        with the entry active.  The Qore object owning the QoreCondition cannot be freed while a
-        thread is in waitWithInterrupt() (the caller holds a reference for the duration of the call),
-        so a non-null pointer observed under those conditions is always live for at least a brief
-        broadcast() call.
+    //! the condition the thread is blocked on in a cancellable wait, or nullptr; guarded by the wait registry lock
+    /** Registered by qore_cond_wait_cancellable() (QoreCondition::waitWithInterrupt()) before the thread checks
+        for a cancellation request and blocks; cleared after it wakes.  See "Condition waits" in
+        design/cooperative-cancellation.md.
     */
-    std::atomic<QoreCondition*> waiting_on{nullptr};
+    QoreCondition* waiting_on = nullptr;
+    //! the mutex the thread waits with on waiting_on; guarded by the wait registry lock
+    pthread_mutex_t* waiting_mutex = nullptr;
+    //! the condition and mutex of a wakeup handed to the condition waker thread; guarded by the wait registry lock
+    /** Set while wake_queued or wake_busy is set; the waiter cannot return from its wait (and so the condition and
+        mutex stay alive) until both are clear.
+    */
+    QoreCondition* wake_cond = nullptr;
+    pthread_mutex_t* wake_mutex = nullptr;
+    //! the next entry in the condition waker's queue, or -1; guarded by the wait registry lock
+    int wake_next = -1;
+    //! true while the entry is in the condition waker's queue; guarded by the wait registry lock
+    bool wake_queued = false;
+    //! true while the condition waker is waking the entry's waiter; guarded by the wait registry lock
+    bool wake_busy = false;
+
+    //! the thread's wakeup channel (wake_fd) while it is blocked in qore_cancellable_poll(), or -1
+    /** Set by the thread itself before it blocks and cleared under thread_list.lck after it wakes;
+        cancelThread() / SandboxManager::requestInterrupt() signal it under thread_list.lck.  The same
+        seq_cst pairing with the request flag defeats the lost-wakeup race (see
+        design/cooperative-cancellation.md, "Wakeup descriptor").
+    */
+    std::atomic<int> waiting_fd{-1};
+
+    //! the thread's cancellation wakeup channel, or -1 if it has not been created
+    /** Created on the thread's first qore_cancellable_poll() and closed when its TID is released or the thread
+        leaves a reserved TID; only changed under thread_list.lck.  The descriptor is polled for readability; how
+        it is signalled depends on the platform (an EVFILT_USER kqueue on macOS, an eventfd on Linux, a pipe
+        elsewhere).
+    */
+    int wake_fd = -1;
+    //! the process that created the wakeup channel; a forked child creates its own instead of sharing it
+    pid_t wake_pid = 0;
+    //! the nesting depth of qore_cancel_wakeup_register() registrations; only used by the thread itself
+    int wake_reg_depth = 0;
 
     DLLLOCAL void cleanup();
+
+    //! Closes the cancellation wakeup channel, if any; must be called with thread_list.lck held
+    /** The thread must not be blocked in qore_cancellable_poll(); a thread clears waiting_fd before it returns
+        from the wait, so the descriptors cannot be in use by any canceller (cancellers only write while
+        holding the lock).
+    */
+    DLLLOCAL void closeCancelWakeup();
 
     //! Clears any pending cancellation request and its reason; must be called with thread_list.lck held
     /** The lock serializes the reason string against a concurrent cancelThread() call, which would
@@ -165,6 +201,11 @@ friend class QoreThreadDataHelper;
 friend class tid_node;
 public:
     DLLLOCAL QoreThreadList() {
+    }
+
+    //! Returns the thread entry array; for the condition waker thread, which accesses the wait registry fields only
+    DLLLOCAL ThreadEntry* getEntryArray() {
+        return entry;
     }
 
     DLLLOCAL ThreadData* getThreadData(int tid) {
@@ -305,42 +346,76 @@ public:
 
     //! Check if the given thread has cancellation requested (lock-free, atomic read)
     /** seq_cst pairs with seq_cst on the cancel side and is required for the Dekker-style
-        lost-wakeup race in QoreCondition::waitWithInterrupt (where the waiter's store of
-        waiting_on and load of cancel_requested must be in the same total order as the
-        canceller's store of cancel_requested and load of waiting_on).  On x86 this is free;
-        on weak-memory architectures it adds a fence per check, which is negligible at the
-        rate cancellation points are traversed.
+        lost-wakeup race in qore_cancellable_poll() (where the waiter's store of waiting_fd and load of
+        cancel_requested must be in the same total order as the canceller's store of cancel_requested and load of
+        waiting_fd).  On x86 this is free; on weak-memory architectures it adds a fence per check, which is
+        negligible at the rate cancellation points are traversed.
     */
     DLLLOCAL bool isCancelRequested(int tid) const {
         return tid >= 0 && tid < MAX_QORE_THREADS && entry[tid].cancel_requested.load(std::memory_order_seq_cst);
     }
 
-    //! Register the QoreCondition the current thread is about to block on (for waitWithInterrupt)
-    /** seq_cst pairs with seq_cst on the cancel side; see clearCurrentWaitingOn() for the lock-free
-        rationale.  This store is lock-free — registration races against cancellation are resolved
-        by the post-store re-check in QoreCondition::waitWithInterrupt.  See
-        design/cooperative-cancellation.md.
-    */
-    DLLLOCAL void setCurrentWaitingOn(QoreCondition* cond) {
-        int tid = q_gettid();
-        if (tid >= 0 && tid < MAX_QORE_THREADS) {
-            entry[tid].waiting_on.store(cond, std::memory_order_seq_cst);
-        }
-    }
+    //! Registers the condition and mutex the current thread is about to block on in a cancellable wait
+    /** The caller holds \a m and must check for a cancellation request after this returns and before it blocks,
+        with \a m still held.
 
-    //! Clear the current thread's waiting_on slot under lck (for QoreCondition::waitWithInterrupt)
-    /** Serializes against cancelThread() / wakeAllWaiters() so that any cond pointer those
-        observed is still in use by us at the time of broadcast (and therefore the cond's
-        owning object is still alive).  See design/cooperative-cancellation.md.
+        @return 0 for success, -1 if the condition waker thread could not be started (errno is set)
     */
-    DLLLOCAL void clearCurrentWaitingOn();
+    DLLLOCAL int registerCondWait(int tid, QoreCondition* cond, pthread_mutex_t* m);
 
-    //! Broadcast to every QoreCondition that any active thread is currently waiting on
-    /** Used by SandboxManager::requestInterrupt() to wake waiters out of waitWithInterrupt().
-        Spurious wakeups for threads in other programs are harmless (they re-check their own
-        program's interrupt state and resume waiting).
+    //! Clears the current thread's registration after its wait has ended; the caller holds \a m
+    /** If a wakeup for the thread is still with the condition waker thread, \a m is released while it completes and
+        then reacquired, so that the condition and mutex are no longer used by any other thread when this returns.
+    */
+    DLLLOCAL void unregisterCondWait(int tid, pthread_mutex_t* m);
+
+    //! Wakes the thread if it is blocked, or about to block, in a cancellable condition wait
+    /** Called after the request flag has been set.  If the thread's mutex can be taken at once, the thread is not
+        between its check for the request and its wait, so a broadcast cannot be lost; otherwise the condition waker
+        thread acquires the mutex (which the waiter releases when it blocks) and then broadcasts.  Never blocks.
+    */
+    DLLLOCAL void wakeCondWaiter(int tid);
+
+    //! Wakes every thread blocked in a cancellable wait (condition or descriptor)
+    /** Used by SandboxManager::requestInterrupt().  Spurious wakeups for threads in other programs are harmless
+        (they re-check their own program's interrupt state and resume waiting).
     */
     DLLLOCAL void wakeAllWaiters();
+
+    //! Returns the current thread's cancellation wakeup channel, creating it if necessary
+    /** @param tid the current thread's TID
+
+        @return the descriptor to poll for readability, or -1 if the channel could not be created (errno is set)
+
+        A channel inherited from the parent process over fork() is abandoned and replaced, so that a child never
+        shares its wakeup channel with its parent.  The descriptor is close-on-exec.
+    */
+    DLLLOCAL int getCancelWakeupFd(int tid);
+
+    //! Signals the wakeup channel of a thread blocked in qore_cancellable_poll(), if any; lck must be held
+    DLLLOCAL void signalWaitingFd(int tid);
+
+    //! Registers the current thread's wakeup channel before it blocks in a poll
+    /** seq_cst pairs with the seq_cst store of the cancellation flag on the cancel side; the waiter must check
+        for cancellation after this store and before it blocks.
+    */
+    DLLLOCAL void setCurrentWaitingFd(int tid, int fd) {
+        assert(tid >= 0 && tid < MAX_QORE_THREADS);
+        assert(fd == entry[tid].wake_fd);
+        entry[tid].waiting_fd.store(fd, std::memory_order_seq_cst);
+    }
+
+    //! Clears the current thread's registered wakeup descriptor under lck
+    /** After this returns, no canceller can write to the channel any more, so draining it afterwards leaves it
+        empty for the next wait.
+    */
+    DLLLOCAL void clearCurrentWaitingFd(int tid);
+
+    //! Returns the thread's entry; for the thread's own wakeup registration state
+    DLLLOCAL ThreadEntry& getEntry(int tid) {
+        assert(tid >= 0 && tid < MAX_QORE_THREADS);
+        return entry[tid];
+    }
 
     //! Get a reference to the cancel reason for the given thread, or nullptr if there is none
     /** The reference is acquired under the lock, so the string cannot be replaced and freed by a

@@ -1068,7 +1068,7 @@ public class LinkedInDataProviderTest inherits QUnit::Test {
         # here is what keeps this test fast rather than sleeping through the backoff
         rest.reset();
         int retries = LinkedInDataProvider::LinkedInDataProviderBase::MaxIoRetries;
-        foreach int i in (xrange(0, retries)) {
+        for (int i = 0; i < retries; ++i) {
             rest.push_response({"throw_status": 429, "headers": {"retry-after": "0"}});
         }
         assertThrows("REST-RESPONSE-ERROR", \dp.doRequest(), {"post": PostUrn});
@@ -1151,7 +1151,7 @@ public class LinkedInDataProviderTest inherits QUnit::Test {
 
         # a transport failure that never clears stops at the limit rather than looping
         rest.reset();
-        foreach int i in (xrange(0, LinkedInDataProvider::LinkedInDataProviderBase::MaxIoRetries)) {
+        for (int i = 0; i < LinkedInDataProvider::LinkedInDataProviderBase::MaxIoRetries; ++i) {
             rest.push_response({"throw_err": "SOCKET-CLOSED"});
         }
         assertThrows("SOCKET-CLOSED", \dp.doRequest(), {"post": PostUrn});

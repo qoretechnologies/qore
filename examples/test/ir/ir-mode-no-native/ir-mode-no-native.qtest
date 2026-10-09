@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../ExecModeHarness.qm
 
 %exec-class IRModeNoNativeTest
 
@@ -63,17 +64,17 @@ class IRModeNoNativeTest inherits QUnit::Test {
     const Expected = "7798982\n";
 
     #! runs the worker in the given execution mode and returns its output and its native compilation trace
+    /** ExecModeHarness runs the worker with synchronous native compilation following the first call of a function
+        and checks that IR execution compiles nothing and that JIT and tiered execution compile native code.
+    */
     private hash<WorkerResult> runWorker(string mode) {
-        TmpFile err("qore-ir-mode-no-native-", ".err");
-        string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1 "
-            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>%s", libqore_dir, libqore_dir,
-            qore_bin, mode, get_script_dir() + DirSep + "ir-mode-no-native-worker.q", err.path));
-        list<string> err_lines = select (ReadOnlyFile::readTextFile(err.path) ?? "").split("\n"), $1.val();
-        # any output on stderr other than the compilation trace is an error
-        assertEq((), (select err_lines, $1 !~ /^\[BG-JIT\]/), mode + ": no errors");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode,
+            get_script_dir() + DirSep + "ir-mode-no-native-worker.q"));
+        ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::JitAndTiered);
         return <WorkerResult>{
-            "out": out,
-            "trace": select err_lines, $1 =~ /^\[BG-JIT\]/,
+            "out": r.out,
+            "trace": r.trace,
         };
     }
 }

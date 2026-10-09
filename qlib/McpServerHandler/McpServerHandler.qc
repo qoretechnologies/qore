@@ -531,6 +531,13 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
         #! Default session timeout in seconds (1 hour)
         const DefaultSessionTimeoutSecs = 3600;
+
+        #! The most fixed allowed values a parameter's JSON schema lists as its \c "enum"
+        /** A parameter with more fixed values is described by their number instead; its value is still validated
+            when the tool is called.  Values that come from the connected system (reference data) are never listed,
+            see @ref getReferenceDataDescription().
+        */
+        const MaxInlineEnumValues = 256;
     }
 
     private {
@@ -2619,9 +2626,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             if (field.isMandatory()) {
                 required += name;
             }
-            if (*list<hash<AllowedValueInfo>> av = getAllowedValues(field, prov)) {
-                info."enum" = map $1.value, av;
-            }
+            info = addAllowedValues(name, info, field.getAllowedValues(), field.getAttributes().ref_data, prov);
             if (exists (auto v = field.getDefaultValue())) {
                 info."default" = v;
             }
@@ -2633,6 +2638,18 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         return rv;
     }
 
+    #! Returns a field's allowed values: its fixed values, or else the reference data the provider reads for it
+    /** Tool schemas do not call this method: they list only fixed values (see @ref addAllowedValues()).  A
+        subclass can use it to look up the values of a reference-data parameter on demand, for example in a tool
+        that searches them.
+
+        @param field the field
+        @param prov the data provider that reads the field's reference data, if any
+
+        @return the field's allowed values, if any
+
+        @note reading reference data calls the connected system and can return every record of a kind
+    */
     private *list<hash<AllowedValueInfo>> getAllowedValues(AbstractDataField field,
             *AbstractDataProvider prov) {
         if ((*list<hash<AllowedValueInfo>> rv = field.getAllowedValues()) || !prov) {
@@ -2642,6 +2659,66 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         if (attr.ref_data.val()) {
             return prov.getReferenceDataSafe(attr.ref_data);
         }
+    }
+
+    #! Adds a parameter's allowed values to its JSON schema
+    /** Fixed allowed values are part of the parameter's definition and are listed as the schema's \c "enum", up
+        to @ref MaxInlineEnumValues values; a parameter with more is described by their number.
+
+        Reference data is read from the connected system: customers, orders, repositories and other records whose
+        number has no bound and which change at any time.  They are never listed and never read to build a schema;
+        the parameter's description says where its value comes from instead, see
+        @ref getReferenceDataDescription().
+
+        @param name the name of the parameter
+        @param info the JSON schema of the parameter
+        @param fixed the parameter's fixed allowed values, if any
+        @param ref_data the name of the reference data that gives the parameter's values, if any
+        @param prov the data provider of the tool, if any
+
+        @return the JSON schema with the allowed values or their description
+    */
+    private hash<auto> addAllowedValues(string name, hash<auto> info, *list<auto> fixed, *string ref_data,
+            *AbstractDataProvider prov) {
+        if (fixed) {
+            if (fixed.size() <= MaxInlineEnumValues) {
+                info."enum" = map $1.value, fixed;
+                return info;
+            }
+            return McpServerHandler::addDescription(info, sprintf("The value is one of %d fixed values; a value "
+                "that is not one of them is rejected when the tool is called.", fixed.size()));
+        }
+        if (ref_data.val()) {
+            return McpServerHandler::addDescription(info, getReferenceDataDescription(name, ref_data, prov));
+        }
+        return info;
+    }
+
+    #! Returns the description of a parameter whose values are reference data of the connected system
+    /** The values are not listed in the tool's schema, so the description tells the caller where a value comes
+        from.  A subclass that offers a way to look the values up names it here.
+
+        @param name the name of the parameter
+        @param ref_data the name of the reference data that gives the parameter's values
+        @param prov the data provider of the tool, if any
+
+        @return the sentence added to the parameter's description
+    */
+    private string getReferenceDataDescription(string name, string ref_data, *AbstractDataProvider prov) {
+        return sprintf("The value identifies an existing record of the connected system (reference data %y); "
+            "the values are not listed here: use a value given by the user or returned by another tool.",
+            ref_data);
+    }
+
+    #! Appends a sentence to the description of a JSON schema
+    /** @param info the JSON schema
+        @param text the sentence to append
+
+        @return the JSON schema with the sentence appended to its description
+    */
+    private static hash<auto> addDescription(hash<auto> info, string text) {
+        info.description = info.description.val() ? info.description + " " + text : text;
+        return info;
     }
 
     private *hash<auto> getTypeDescription(string name, *string desc, AbstractDataProviderType t,
@@ -2796,7 +2873,13 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                 }.pairIterator(), exists constraints{$1.key};
                 # enumerated values are compared as strings, so they describe string values only
                 if (constraints.enum_values && !info."enum") {
-                    info."enum" = constraints.enum_values;
+                    if (constraints.enum_values.size() <= MaxInlineEnumValues) {
+                        info."enum" = constraints.enum_values;
+                    } else {
+                        info = McpServerHandler::addDescription(info, sprintf("The value is one of %d fixed "
+                            "values; a value that is not one of them is rejected when the tool is called.",
+                            constraints.enum_values.size()));
+                    }
                 }
                 break;
             case "array":
@@ -2937,13 +3020,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             if (field.type.mandatory) {
                 required += field.name;
             }
-            *list<auto> av = field.allowed_values;
-            if (!av && prov && field.attr.ref_data.val()) {
-                av = prov.getReferenceDataSafe(field.attr.ref_data);
-            }
-            if (av) {
-                info."enum" = map $1.value, av;
-            }
+            info = addAllowedValues(field.name, info, field.allowed_values, field.attr.ref_data, prov);
             if (exists field.default_value) {
                 info."default" = field.default_value;
             }

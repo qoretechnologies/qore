@@ -4,6 +4,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/FsUtil.qm
+%requires ../../ExecModeHarness.qm
 %exec-class RecursiveCapturedScopesTest
 
 class RecursiveCapturedScopesTest inherits QUnit::Test {
@@ -23,13 +24,14 @@ class RecursiveCapturedScopesTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private checkFixture(string module_path, string mode, bool restored_closures = False) {
-        # Compilation must finish before the short test proceeds; otherwise a
-        # native regression can falsely pass while running only the IR tier.
+    private checkFixture(string module_path, string mode, bool restored_closures = False,
+            *ExecModeHarness::NativeCheck check) {
+        # Compilation must finish before the short test proceeds; otherwise a native regression can falsely pass while
+        # running only the IR tier: ExecModeHarness compiles synchronously and checks that native code ran.
         string environment = restored_closures ? "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 " : "";
-        string output = backquote(environment + sprintf("QORE_JIT_SYNC_COMPILE=1 %s -b --enable-debug --exec-mode=%s "
-            "-l %s -ne %s 2>&1", shellQuote(qore_bin), shellQuote(mode), shellQuote(module_path),
-            shellQuote("printf(\"%d\\n\", RecursiveCapturedScopes::ScopeChecks::run());")));
+        string output = ExecModeHarness::run(environment + sprintf("%s -b --enable-debug --exec-mode=%s -l %s -ne %s",
+            shellQuote(qore_bin), shellQuote(mode), shellQuote(module_path),
+            shellQuote("printf(\"%d\\n\", RecursiveCapturedScopes::ScopeChecks::run());")), check);
         assertEq("6000\n", output, "all captured values survived their lexical and recursive scope exits");
     }
 
@@ -45,7 +47,8 @@ class RecursiveCapturedScopesTest inherits QUnit::Test {
             shellQuote(module_path), shellQuote(fixture)));
         assertTrue(is_file(module_path) && hstat(module_path).size > 0,
             "the captured-scope fixture compiled: " + output);
-        checkFixture(module_path, "tiered");
+        # the module's code is compiled ahead of time, so tiered execution compiles nothing
+        checkFixture(module_path, "tiered", False, ExecModeHarness::NativeCheck::Jit);
         checkFixture(module_path, "jit", True);
     }
 

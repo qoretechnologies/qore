@@ -2114,11 +2114,13 @@ static QoreStringNode* getNoopError(const QoreFunction* func, const QoreFunction
             ExceptionSink xsink;
             RuntimeConfig& rc = rc_get_current_ref();
             CodeEvaluationHelper ceh(&xsink, rc, func, variant, "noop-dummy");
-            ValueHolder v(variant->evalFunction(nullptr, ceh), nullptr);
-            //ReferenceHolder<AbstractQoreNode> v(variant->evalFunction(func->getName(), ceh, 0), 0);
-            if (v->isNothing())
+            // builtin code takes a valid exception sink: a RUNTIME_NOOP variant raises nothing, but the runtime
+            // checks the sink when the builtin returns (see qore_eval_builtin_call())
+            ValueHolder v(variant->evalFunction(&xsink, ceh), &xsink);
+            assert(!xsink);
+            if (v->isNothing()) {
                 desc->concat("NOTHING");
-            else {
+            } else {
                 QoreNodeAsStringHelper vs(*v, FMT_NONE, 0);
                 desc->sprintf("the following value: %s (", vs->c_str());
                 QoreTypeInfo::getThisType(rti, *desc);
@@ -5635,7 +5637,9 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         if (pgm) {
             pgm->recordIRFallback((std::string("lowering: ") + error).c_str());
         }
-        if (raise_on_failure) {
+        // a stack too small for the nesting of the code is not a gap in IR lowering: the function runs on the AST
+        // tier, which checks the stack as it executes
+        if (raise_on_failure && !lowering.stackLimitReached()) {
             parseException(*signature.getParseLocation(), "IR-COMPILATION-ERROR",
                 "IR lowering of '%s' failed: %s (silent AST fallback disabled)",
                 name ? name : "<fn>", error.c_str());
@@ -6521,6 +6525,11 @@ void UserVariantBase::recordFastCallExecution() const {
     // reached only as a callee never accrues exec_count there and would never be
     // promoted by the threshold mechanism.  Mirror evalTiered()'s IR-tier
     // promotion tail here so hot tiered-mode functions still reach the JIT tier.
+    // --exec-mode=ir never compiles code to native code (see attemptJITCompilation()), so its calls, which include
+    // every call that the IR interpreter runs inline, are not counted
+    if (pgm && pgm->getExecMode() == QEM_IR) {
+        return;
+    }
     QoreIRFunction* ir = cached_ir.load(std::memory_order_acquire);
     if (jit_compile_failed.load(std::memory_order_acquire) || !ir) {
         return;

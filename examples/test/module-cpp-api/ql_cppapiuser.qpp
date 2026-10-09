@@ -26,6 +26,81 @@
 
 #include "cppapiuser-module.h"
 
+#include <atomic>
+#include <cerrno>
+#include <fcntl.h>
+#include <mutex>
+#include <poll.h>
+#include <pthread.h>
+#include <signal.h>
+#include <sys/resource.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+namespace {
+// a pipe whose descriptors are closed when it goes out of scope
+class TestPipe {
+public:
+    DLLLOCAL TestPipe(ExceptionSink* xsink) {
+        if (pipe(fds)) {
+            fds[0] = fds[1] = -1;
+            xsink->raiseErrnoException("PIPE-ERROR", errno, "pipe() failed");
+        }
+    }
+
+    DLLLOCAL ~TestPipe() {
+        if (fds[0] != -1) {
+            close(fds[0]);
+            close(fds[1]);
+        }
+    }
+
+    // makes the read end readable; returns 0 for success
+    DLLLOCAL int fill(ExceptionSink* xsink) {
+        char c = 'x';
+        if (write(fds[1], &c, 1) != 1) {
+            xsink->raiseErrnoException("PIPE-ERROR", errno, "write() failed");
+            return -1;
+        }
+        return 0;
+    }
+
+    DLLLOCAL int readFd() const {
+        return fds[0];
+    }
+
+    TestPipe(const TestPipe&) = delete;
+    TestPipe& operator=(const TestPipe&) = delete;
+
+private:
+    int fds[2];
+};
+
+// returns the time remaining until a deadline for poll(): -1 for no timeout, 0 if it has passed
+int remaining_ms(int timeout_ms, int64 deadline_us) {
+    if (timeout_ms < 0) {
+        return -1;
+    }
+    int64 us = deadline_us - q_get_monotonic_us();
+    return us <= 0 ? 0 : static_cast<int>((us + 999) / 1000);
+}
+
+// the file that records the children created with fork(); -1 until cpp_api_record_fork_children() is called
+std::atomic<int> fork_child_fd(-1);
+
+// appends one byte to the record file in each child created with fork() (write() is async-signal-safe)
+void record_fork_child() {
+    int fd = fork_child_fd.load(std::memory_order_relaxed);
+    if (fd >= 0) {
+        char c = 'f';
+        // nothing can be reported in a forked child; a short write only loses a record
+        ssize_t rc = write(fd, &c, 1);
+        (void)rc;
+    }
+}
+}
+
 /** @defgroup cppapiuser_functions cppapiuser Test Module Functions
     Drivers that let examples/test/module-cpp-api/module-cpp-api.qtest exercise
     q_get_module_cpp_api() and a resolved C++ API struct from Qore-language code.
@@ -125,4 +200,364 @@ int cpp_api_counter_live_count() [flags=RET_VALUE_ONLY] {
     }
     return api->counter_live_count();
 }
+
+//! records each child process that this process creates with fork() in a file
+/** A pthread_atfork() child handler appends one byte to the file in every child created with fork(); a child created
+    with posix_spawn() runs no handler, so it is not recorded.  The handler is registered once; the file is opened by
+    the first call and kept open for the life of the process.
+
+    @param path the file to append to; created if it does not exist
+
+    @throw FORK-RECORD-ERROR the file cannot be opened, the handler cannot be registered, or another file is already
+    used
+*/
+nothing cpp_api_record_fork_children(string path) [dom=FILESYSTEM,PROCESS] {
+    static std::mutex m;
+    static std::string record_path;
+    std::lock_guard<std::mutex> lock(m);
+    if (fork_child_fd.load() >= 0) {
+        if (record_path != path->c_str()) {
+            xsink->raiseException("FORK-RECORD-ERROR", "fork children are already recorded in %s",
+                record_path.c_str());
+        }
+        return QoreValue();
+    }
+    int fd = open(path->c_str(), O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0600);
+    if (fd < 0) {
+        xsink->raiseErrnoException("FORK-RECORD-ERROR", errno, "cannot open %s", path->c_str());
+        return QoreValue();
+    }
+    int rc = pthread_atfork(nullptr, nullptr, record_fork_child);
+    if (rc) {
+        close(fd);
+        xsink->raiseErrnoException("FORK-RECORD-ERROR", rc, "pthread_atfork() failed");
+        return QoreValue();
+    }
+    record_path = path->c_str();
+    fork_child_fd.store(fd);
+    return QoreValue();
+}
+
+//! creates a child process with fork() that exits at once, and waits for it
+/** The positive control for cpp_api_record_fork_children(): the child is recorded before fork() returns in it
+
+    @return the exit status of the child
+
+    @throw FORK-RECORD-ERROR fork() or waitpid() failed
+*/
+int cpp_api_fork_and_wait() [dom=PROCESS] {
+    pid_t pid = fork();
+    if (!pid) {
+        _exit(0);
+    }
+    if (pid < 0) {
+        xsink->raiseErrnoException("FORK-RECORD-ERROR", errno, "fork() failed");
+        return QoreValue();
+    }
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            xsink->raiseErrnoException("FORK-RECORD-ERROR", errno, "waitpid() failed");
+            return QoreValue();
+        }
+    }
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+//! sets the soft limit on the number of processes of this process's real user (RLIMIT_NPROC)
+/** With a soft limit below the number of processes that the user already has, this process cannot create any process
+    (unless the user is privileged), so a failure to start a process can be tested.
+
+    @param limit the new soft limit; -1 means no limit
+
+    @return the previous soft limit; -1 means no limit
+
+    @throw PROCESS-LIMIT-ERROR the argument is invalid, or getrlimit() or setrlimit() failed
+*/
+int cpp_api_set_process_limit(int limit) [dom=PROCESS] {
+    if (limit < -1) {
+        xsink->raiseException("PROCESS-LIMIT-ERROR", "invalid process limit " QLLD, limit);
+        return QoreValue();
+    }
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_NPROC, &rl)) {
+        xsink->raiseErrnoException("PROCESS-LIMIT-ERROR", errno, "getrlimit() failed");
+        return QoreValue();
+    }
+    int64 old_limit = rl.rlim_cur == RLIM_INFINITY ? -1 : static_cast<int64>(rl.rlim_cur);
+    rl.rlim_cur = limit == -1 ? RLIM_INFINITY : static_cast<rlim_t>(limit);
+    if (setrlimit(RLIMIT_NPROC, &rl)) {
+        xsink->raiseErrnoException("PROCESS-LIMIT-ERROR", errno, "setrlimit() failed");
+        return QoreValue();
+    }
+    return old_limit;
+}
+
+//! raises an exception and returns a new reference to the argument
+/** Builtin code can raise an exception and still return a value, but no caller may receive the value; see
+    ExceptionResultProbe
+
+    @param value the value to return
+    @param err the exception code to raise
+
+    @return a new reference to \a value, which the caller never receives because of the exception
+
+    @throw err always
+*/
+auto cpp_api_return_with_exception(auto value, string err) {
+    xsink->raiseException(err->c_str(), "the function returned a value with this exception");
+    return value.refSelf();
+}
+
+//! takes the first value of a Queue through the public C++ API, which has no access to the Queue object
+/** @param queue an object of a class that inherits Queue; must not be empty
+
+    @return the value taken
+
+    @throw QUEUE-ERROR the object is not a Queue, or the queue is empty
+*/
+auto cpp_api_queue_shift(object queue) {
+    QoreQueueHelper qh(queue, xsink);
+    // the helper raises an exception if the object has no Queue
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!qh.size()) {
+        xsink->raiseException("QUEUE-ERROR", "the queue is empty");
+        return QoreValue();
+    }
+    return qh.shift(xsink);
+}
+
+//! takes the last value of a Queue through the public C++ API, which has no access to the Queue object
+/** @param queue an object of a class that inherits Queue; must not be empty
+
+    @return the value taken
+
+    @throw QUEUE-ERROR the object is not a Queue, or the queue is empty
+*/
+auto cpp_api_queue_pop(object queue) {
+    QoreQueueHelper qh(queue, xsink);
+    // the helper raises an exception if the object has no Queue
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!qh.size()) {
+        xsink->raiseException("QUEUE-ERROR", "the queue is empty");
+        return QoreValue();
+    }
+    return qh.pop(xsink);
+}
+
+//! clears a Queue through the public C++ API, which has no access to the Queue object
+/** @param queue an object of a class that inherits Queue
+
+    @throw QUEUE-ERROR the object is not a Queue
+*/
+nothing cpp_api_queue_clear(object queue) {
+    QoreQueueHelper qh(queue, xsink);
+    // the helper raises an exception if the object has no Queue
+    if (*xsink) {
+        return QoreValue();
+    }
+    qh.clear(xsink);
+    return QoreValue();
+}
+//! returns the number of references to the Queue private data of an object, other than the one this call holds
+/** Lets tests check that the C++ API releases the references it takes to a Queue
+
+    @param queue an object of a class that inherits Queue
+
+    @return the number of references to the object's Queue private data before this call
+
+    @throw QUEUE-ERROR the object is not a Queue
+*/
+int cpp_api_queue_private_refs(object queue) [flags=RET_VALUE_ONLY] {
+    AbstractPrivateData* pd = queue->getReferencedPrivateData(CID_QUEUE, xsink);
+    if (!pd) {
+        if (!*xsink) {
+            xsink->raiseException("QUEUE-ERROR", "expecting an object derived from Queue; got class '%s' instead",
+                queue->getClassName());
+        }
+        return QoreValue();
+    }
+    int refs = pd->reference_count() - 1;
+    pd->deref(xsink);
+    return refs;
+}
+
+//! waits for a new pipe to become readable with qore_cancellable_poll()
+/** Lets tests check the exported cancellable poll: its results without a cancellation request and how soon a
+    request ends it.
+
+    @param fill if @ref True, the pipe is made readable before the wait
+    @param timeout_ms the timeout for the wait; negative for none
+
+    @return a hash with \c rc: the return value (the number of descriptors with events or 0 on timeout) and
+    \c readable: @ref True if the pipe was reported readable
+
+    @throw THREAD-CANCELLED the thread was cancelled during the wait
+    @throw PROGRAM-INTERRUPTED the thread's Program was interrupted during the wait
+*/
+hash<auto> cpp_api_cancellable_poll(bool fill, int timeout_ms) {
+    TestPipe p(xsink);
+    if (*xsink || (fill && p.fill(xsink))) {
+        return QoreValue();
+    }
+    struct pollfd pfd = {p.readFd(), POLLIN, 0};
+    int rc = qore_cancellable_poll(&pfd, 1, static_cast<int>(timeout_ms), xsink, "cpp api poll");
+    if (rc == QORE_POLL_CANCELLED) {
+        assert(*xsink);
+        return QoreValue();
+    }
+    if (rc < 0) {
+        return xsink->raiseErrnoException("POLL-ERROR", errno, "qore_cancellable_poll() failed");
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("rc", rc, xsink);
+    rv->setKeyValue("readable", (pfd.revents & POLLIN) ? true : false, xsink);
+    return rv.release();
+}
+
+//! waits for a new pipe to become readable in a loop of the module's own that watches the wakeup descriptor
+/** Lets tests check qore_cancel_wakeup_register(), qore_cancel_wakeup_check() and qore_cancel_wakeup_unregister()
+    (through QoreCancelWakeupHelper) as a library with its own event loop uses them.
+
+    @param fill if @ref True, the pipe is made readable before the wait
+    @param timeout_ms the timeout for the wait; negative for none
+    @param nested if @ref True, a nested registration and a nested qore_cancellable_poll() are made inside the loop
+
+    @return a hash with \c rc: 1 if the pipe became readable, 0 on timeout, and \c wake_fd: @ref True if there was
+    a wakeup descriptor to watch
+
+    @throw THREAD-CANCELLED the thread was cancelled during the wait
+    @throw PROGRAM-INTERRUPTED the thread's Program was interrupted during the wait
+*/
+hash<auto> cpp_api_wakeup_loop(bool fill, int timeout_ms, bool nested = False) {
+    TestPipe p(xsink);
+    if (*xsink || (fill && p.fill(xsink))) {
+        return QoreValue();
+    }
+    QoreCancelWakeupHelper cwh(xsink, "cpp api loop");
+    if (*xsink) {
+        return QoreValue();
+    }
+    int64 deadline_us = timeout_ms > 0 ? q_get_monotonic_us() + timeout_ms * 1000 : 0;
+    int rc = 0;
+    while (true) {
+        if (nested) {
+            // a nested registration and a nested cancellable poll leave the outer registration in effect
+            QoreCancelWakeupHelper inner(xsink, "cpp api nested");
+            if (*xsink) {
+                return QoreValue();
+            }
+            if (inner.fd() != cwh.fd()) {
+                return xsink->raiseException("NESTED-ERROR", "a nested registration returned descriptor %d; "
+                    "expecting %d", inner.fd(), cwh.fd());
+            }
+            struct pollfd npfd = {p.readFd(), POLLIN, 0};
+            int nrc = qore_cancellable_poll(&npfd, 1, 0, xsink, "cpp api nested poll");
+            if (nrc == QORE_POLL_CANCELLED) {
+                return QoreValue();
+            }
+            if (nrc > 0) {
+                rc = 1;
+                break;
+            }
+        }
+        struct pollfd pfds[2] = {{p.readFd(), POLLIN, 0}, {cwh.fd(), POLLIN, 0}};
+        int nfds = cwh.fd() >= 0 ? 2 : 1;
+        int prc = poll(pfds, nfds, remaining_ms(static_cast<int>(timeout_ms), deadline_us));
+        if (prc < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return xsink->raiseErrnoException("POLL-ERROR", errno, "poll() failed");
+        }
+        if (nfds == 2 && pfds[1].revents) {
+            if (qore_cancel_wakeup_check(xsink, "cpp api loop")) {
+                return QoreValue();
+            }
+        }
+        if (pfds[0].revents & POLLIN) {
+            rc = 1;
+            break;
+        }
+        if (!prc) {
+            break;
+        }
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("rc", rc, xsink);
+    rv->setKeyValue("wake_fd", cwh.fd() >= 0, xsink);
+    return rv.release();
+}
+
+//! returns @ref True if the current thread's wakeup descriptor is readable right after it has been registered
+/** A request that has been delivered or cleared must not leave the descriptor readable for the next wait.
+
+    @throw THREAD-CANCELLED a request is pending
+*/
+bool cpp_api_wakeup_fd_readable() {
+    QoreCancelWakeupHelper cwh(xsink, "cpp api readiness");
+    if (*xsink || cwh.fd() < 0) {
+        return false;
+    }
+    struct pollfd pfd = {cwh.fd(), POLLIN, 0};
+    int rc = poll(&pfd, 1, 0);
+    if (rc < 0) {
+        return xsink->raiseErrnoException("POLL-ERROR", errno, "poll() failed");
+    }
+    return rc > 0;
+}
+
+//! returns the signals raised by a fault in the executing thread that are blocked in the calling thread
+/** A blocked fault signal cannot be delivered: the thread executes the faulting instruction again for ever.
+
+    @return the numbers of the blocked signals among \c SIGSEGV, \c SIGBUS, \c SIGILL, \c SIGFPE and \c SIGTRAP
+*/
+list<int> cpp_api_blocked_fault_signals() [flags=RET_VALUE_ONLY] {
+    sigset_t mask;
+    sigemptyset(&mask);
+    int rc = pthread_sigmask(SIG_BLOCK, nullptr, &mask);
+    if (rc) {
+        xsink->raiseErrnoException("SIGNAL-MASK-ERROR", rc, "pthread_sigmask() failed");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(bigIntTypeInfo), xsink);
+    for (int sig : {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTRAP}) {
+        if (sigismember(&mask, sig) == 1) {
+            rv->push(sig, xsink);
+        }
+    }
+    return rv.release();
+}
+
+//! finds or creates a time zone from a region name or a UTC offset with the public find_create_timezone() API
+/** Lets tests check the time zone a driver gets from a \c timezone option, as DBI drivers and Arrow imports call it
+
+    @param name a region name (ex: \c "Europe/Prague") or a UTC offset (\c "+DD[[:]DD[[:]DD]]" or \c "-DD...")
+    @param epoch the time, in seconds since the epoch, for which the UTC offset is returned
+
+    @return a hash with \c region: the name of the zone (\c "UTC" for UTC itself) and \c utc_offset: its UTC
+    offset in seconds east at \a epoch
+
+    @throw PARSE-SET-TIME-ZONE-ERROR \a name is not a valid UTC offset
+    @throw FILE-OPEN2-ERROR the zoneinfo file for the region cannot be opened
+    @throw TZINFO-ERROR the zoneinfo file for the region cannot be read
+*/
+hash<auto> cpp_api_find_create_timezone(string name, int epoch = 0) [flags=RET_VALUE_ONLY] {
+    const AbstractQoreZoneInfo* zone = find_create_timezone(name->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    bool is_dst;
+    const char* zone_name;
+    int utc_offset = tz_get_utc_offset(zone, epoch, is_dst, zone_name);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("region", new QoreStringNode(tz_get_region_name(zone)), xsink);
+    rv->setKeyValue("utc_offset", utc_offset, xsink);
+    return rv.release();
+}
+
 ///@}

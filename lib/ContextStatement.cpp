@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/ContextStatement.h"
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreDeferredRelease.h"
 
 ContextModList::ContextModList(ContextMod *cm) {
     push_back(cm);
@@ -100,7 +101,7 @@ ContextStatement::~ContextStatement() {
         free(name);
     }
     exp.discard(nullptr);
-    delete code;
+    qore_delete_statement(code);
     delete lvars;
     where_exp.discard(nullptr);
     sort_ascending.discard(nullptr);

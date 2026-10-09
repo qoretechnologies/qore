@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class IRStaticTypedHashThreadTest
 
@@ -28,7 +29,7 @@ class IRStaticTypedHashThreadTest inherits QUnit::Test {
     }
 
     private string run(string cmd) {
-        return backquote(cmd + " 2>&1");
+        return ExecModeHarness::run_any(cmd);
     }
 
     private write(string path, string body) {

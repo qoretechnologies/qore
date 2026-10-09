@@ -40,6 +40,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <deque>
 #include <map>
 #include <mutex>
 
@@ -367,6 +368,13 @@ int64 q_get_scan_object_count() {
     return scan_object_count;
 }
 
+//! the number of regions whose dependencies scans in the current thread have walked
+static thread_local int64 region_walk_count = 0;
+
+int64 q_get_region_walk_count() {
+    return region_walk_count;
+}
+
 //! the number of recursive sets that scans in the current thread have created
 static thread_local int64 rset_create_count = 0;
 
@@ -452,7 +460,7 @@ static void region_unlock(std::atomic<uintptr_t>& word, RRegion* r) {
 void RObject::invalidateRegion() {
     RRegion* r = region_lock(region_word);
     if (r) {
-        r->invalid.store(true, std::memory_order_seq_cst);
+        r->invalidate();
     }
     region_unlock(region_word, r);
 }
@@ -476,7 +484,7 @@ void RObject::setRegion(RRegion* r, int comp) {
     region_unlock(region_word, r);
     if (old && old != r) {
         // the region's other objects can still reach this one, whose edges it no longer tracks
-        old->invalid.store(true, std::memory_order_seq_cst);
+        old->invalidate();
     }
     if (old) {
         RRegion::deref(old);
@@ -492,11 +500,148 @@ RSetDerefHelper::~RSetDerefHelper() {
     }
 }
 
+namespace {
+// the nesting depth of the deletions of objects and closure-bound variables that are made recursively; a deeper
+// deletion is deferred
+constexpr unsigned QORE_OBJECT_DELETE_RECURSION_DEPTH = 16;
+
+// the nesting depth of the deletions in progress in this thread since the innermost deletion loop, if any
+thread_local unsigned object_delete_depth = 0;
+
+// the number of destructors running in this thread; see RObject::DestructorRunHelper
+thread_local unsigned object_destructor_depth = 0;
+
+//! An object or closure-bound variable whose deletion is deferred to a deletion loop
+struct DeferredObjectDelete {
+    RObject* obj;
+    // the stack that the recursion replaced by the deferral would have used; see QoreElidedStackHelper
+    size_t elided;
+    // the other members of the object's collected recursive set, which are released after the object's deletion
+    std::vector<RObject*> retained;
+};
+
+typedef std::vector<std::deque<DeferredObjectDelete>> deferred_delete_stack_t;
+
+//! The deletion loop of a thread
+struct ObjectDeleteLoop {
+    // the last queue holds the objects and variables deferred while deleting the one that the loop is deleting,
+    // which are deleted before the remaining ones of the previous queues, in the depth-first order of the recursion
+    deferred_delete_stack_t stack;
+    // the stack elided for the deletion that the loop is making
+    size_t elided = 0;
+    // the stack position from which the loop makes the deletion
+    size_t pos = 0;
+    // the number of destructors running in the thread when the loop started the deletion
+    unsigned destructor_depth = 0;
+};
+
+// the deletion loop of this thread, if any
+thread_local ObjectDeleteLoop* object_delete_loop = nullptr;
+
+class ObjectDeleteDepthHelper {
+public:
+    ObjectDeleteDepthHelper() {
+        ++object_delete_depth;
+    }
+
+    ~ObjectDeleteDepthHelper() {
+        --object_delete_depth;
+    }
+};
+
+class ObjectDeleteLoopHelper {
+public:
+    explicit ObjectDeleteLoopHelper(ObjectDeleteLoop* loop) : old_loop(object_delete_loop),
+            old_depth(object_delete_depth) {
+        object_delete_loop = loop;
+        object_delete_depth = 0;
+    }
+
+    ~ObjectDeleteLoopHelper() {
+        object_delete_loop = old_loop;
+        object_delete_depth = old_depth;
+    }
+
+private:
+    ObjectDeleteLoop* old_loop;
+    unsigned old_depth;
+};
+}
+
+RObject::DestructorRunHelper::DestructorRunHelper() {
+    ++object_destructor_depth;
+}
+
+RObject::DestructorRunHelper::~DestructorRunHelper() {
+    assert(object_destructor_depth);
+    --object_destructor_depth;
+}
+
+void RObject::deleteOrDefer(ExceptionSink* xsink, RSetDerefHelper& cleanup) {
+    if (object_delete_depth < QORE_OBJECT_DELETE_RECURSION_DEPTH) {
+        ObjectDeleteDepthHelper dh;
+        deleteNow(xsink);
+        return;
+    }
+
+    if (object_delete_loop) {
+        // the enclosing deletion loop deletes the object after the one that it is deleting.  When a destructor that
+        // started during that deletion is still running, the recursion from the loop to here runs through user code,
+        // which the stack bounds: the stack it uses is accounted for.  Otherwise it releases data, which is what the
+        // deferral makes iterative: the object is deleted as deep as the one the loop is deleting
+        size_t elided = object_delete_loop->elided;
+        if (object_destructor_depth > object_delete_loop->destructor_depth) {
+            elided += QoreElidedStackHelper::getStackUsedSince(object_delete_loop->pos);
+        }
+        object_delete_loop->stack.back().push_back(DeferredObjectDelete{this, elided, {}});
+        cleanup.take(object_delete_loop->stack.back().back().retained);
+        return;
+    }
+
+    // a thread's stack may be much smaller than a chain of objects and closures, so this deletion starts a loop that
+    // deletes more deeply nested ones without recursion; it makes the first deletion from this frame, so nothing is
+    // elided for it
+    ObjectDeleteLoop loop;
+    deferred_delete_stack_t& stack = loop.stack;
+    stack.emplace_back();
+    stack.back().push_back(DeferredObjectDelete{this, 0, {}});
+    cleanup.take(stack.back().back().retained);
+
+    ObjectDeleteLoopHelper lh(&loop);
+    while (!stack.empty()) {
+        if (stack.back().empty()) {
+            stack.pop_back();
+            continue;
+        }
+        DeferredObjectDelete d = std::move(stack.back().front());
+        stack.back().pop_front();
+        // the objects and variables deferred while deleting this one are deleted next; an empty last queue is
+        // reused, so that a chain takes one queue however long it is
+        if (!stack.back().empty()) {
+            stack.emplace_back();
+        }
+        // stack checks account for the frames of the recursion that the deferral replaced, so that a destructor
+        // recursing without end raises STACK-LIMIT-EXCEEDED as it would have without the deferral
+        QoreElidedStackHelper esh(d.elided);
+        loop.elided = d.elided;
+        loop.pos = QoreElidedStackHelper::getStackPos();
+        loop.destructor_depth = object_destructor_depth;
+        {
+            ObjectDeleteDepthHelper dh;
+            d.obj->deleteNow(xsink);
+        }
+        // as RSetDerefHelper does, the retained members are released after the deletion
+        for (RObject* obj : d.retained) {
+            obj->releaseCycleReference(xsink);
+        }
+    }
+}
+
 bool RObject::scanCheck(RSetHelper& rsh, AbstractQoreNode* n) {
     return rsh.checkNode(n);
 }
 
-void RObject::setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen) {
+void RObject::setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen, unsigned seen_remove_gen) {
     assert(rml.checkRSectionExclusive());
     // the lock-free dereference path reads rset alone and infers rcount from it; see RObject::rset
     assert(rs || !rcnt);
@@ -509,16 +654,14 @@ void RObject::setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen) {
     }
     rcount = rcnt;
     // set after the old set is invalidated, which clears this flag for every object of that set
-    rclosed.store(closed ? rs : nullptr, std::memory_order_relaxed);
+    if (rclosed.exchange(closed ? rs : nullptr, std::memory_order_relaxed) && !closed) {
+        // the regions that depend on the object's set being closed are no longer current
+        RRegion::closedSetLeft();
+    }
     // record the edge generation the scan read before following the object's edges; see edgesUnchangedSinceScan()
     scan_edge_gen.store(seen_edge_gen, std::memory_order_relaxed);
-#ifdef DEBUG
-    if (rcount > references) {
-        printd(0, "RObject::setRSet() this: %p '%s' cannot set rcount %d > references %d\n", this, getName(), rcount,
-            references.load());
-    }
-    assert(rcount <= references);
-#endif
+    // and the removal generation; see RSet::removalsUnchangedSinceScan()
+    scan_remove_gen.store(seen_remove_gen, std::memory_order_relaxed);
     if (rs) {
         rs->ref();
         // we make a weak reference from the rset to the object to ensure that it does not disappear while the rset is
@@ -1009,8 +1152,15 @@ void RSet::clearClosed() {
     if (!valid) {
         return;
     }
+    bool was_closed = false;
     for (rset_t::iterator i = begin(), e = end(); i != e; ++i) {
-        (*i)->rclosed.store(nullptr, std::memory_order_relaxed);
+        if ((*i)->rclosed.exchange(nullptr, std::memory_order_relaxed)) {
+            was_closed = true;
+        }
+    }
+    // the regions that depend on the set being closed are no longer current
+    if (was_closed) {
+        RRegion::closedSetLeft();
     }
 }
 
@@ -1040,12 +1190,22 @@ void RSet::dbg() {
 #endif
 
 std::atomic<unsigned> RSet::untracked_edge_epoch{0};
+std::atomic<uint64_t> RRegion::invalidations{1};
 
 bool RSet::keepNeedsRescan(bool rescanned) const {
     // A dereference that has already rescanned the set once trusts it: an edge added by another thread since
     // then leaves the set marked for the next dereference, and rescanning here until other threads stop adding
     // edges would not terminate while they do not.
     return !rescanned && !edgesUnchangedSinceScan();
+}
+
+bool RSet::removalsUnchangedSinceScan() const {
+    for (rset_t::const_iterator i = set.begin(), e = set.end(); i != e; ++i) {
+        if (!(*i)->removalsUnchangedSinceScan()) {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool RSet::edgesUnchangedSinceScan() const {
@@ -1159,6 +1319,15 @@ int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator
                         break;
                     }
                 }
+            }
+            // Every reference is one the scan counted as internal, but a container of a member may have handed a
+            // value out since the scan: the caller holds the reference the container held, so the count is the
+            // same while the reference is now from outside the set.  Collecting the set would delete objects that
+            // the caller still uses; the rescan finds the graph as it is.  See RObject::remove_gen.
+            if (!need_rescan && !removalsUnchangedSinceScan()) {
+                printd(QRO_LVL, "RSet::canDelete() this: %p a member handed out a value since the scan; "
+                    "rescanning\n", this);
+                need_rescan = true;
             }
         }
     }
@@ -1414,6 +1583,8 @@ void RSetHelper::startNode(int id) {
             // read before the edges are followed: an edge added after this leaves the generation different from
             // the one the set records, whether or not this scan sees the edge
             nodes[id].edge_gen = static_cast<RObject*>(n.ptr)->edge_gen.load(std::memory_order_seq_cst);
+            // and so is the removal generation: a value handed out after this is one the scan may have counted
+            nodes[id].remove_gen = static_cast<RObject*>(n.ptr)->remove_gen.load(std::memory_order_seq_cst);
             if (!n.leaf) {
                 static_cast<RObject*>(n.ptr)->scanMembers(*this);
             }
@@ -1935,11 +2106,17 @@ bool RSetHelper::regionCurrent(RRegion* r) {
     if (mi != region_memo.end()) {
         return mi->second;
     }
+    // read before anything that decides whether a region is current, so that an event made after this cannot be
+    // missed by a region recorded as current below; see RRegion::invalidations
+    uint64_t gen = RRegion::invalidations.load(std::memory_order_seq_cst);
     unsigned epoch = RSet::untracked_edge_epoch.load(std::memory_order_seq_cst);
     // records a decision; the memo takes its own reference
     auto decide = [&](RRegion* x, bool current) {
         x->ref();
         region_memo.emplace(x, current ? 1 : 0);
+        if (current) {
+            x->current_at.store(gen, std::memory_order_release);
+        }
         return current;
     };
     // decides the regions that need no traversal; -1 if the region's dependencies have to be checked
@@ -1950,6 +2127,10 @@ bool RSetHelper::regionCurrent(RRegion* r) {
         }
         if (x->invalid.load(std::memory_order_seq_cst) || x->epoch != epoch) {
             return decide(x, false) ? 1 : 0;
+        }
+        // found current since the last event that could have changed it: its dependencies are current too
+        if (x->current_at.load(std::memory_order_acquire) == gen) {
+            return decide(x, true) ? 1 : 0;
         }
         // a closed set the region reaches that is no longer closed can now reach anything
         for (RObject* o : x->closed_deps) {
@@ -1972,6 +2153,9 @@ bool RSetHelper::regionCurrent(RRegion* r) {
         size_t next;
     };
     std::vector<Frame> frames;
+#ifdef DEBUG
+    ++region_walk_count;
+#endif
     frames.push_back(Frame{r, 0});
     int child = -1;
     while (!frames.empty()) {
@@ -1992,6 +2176,9 @@ bool RSetHelper::regionCurrent(RRegion* r) {
         RRegion* d = f.x->deps[f.next++];
         int drc = shallow(d);
         if (drc < 0) {
+#ifdef DEBUG
+            ++region_walk_count;
+#endif
             frames.push_back(Frame{d, 0});
         } else {
             child = drc;
@@ -2162,7 +2349,7 @@ void RSetHelper::commit() {
             }
             RObject* obj = static_cast<RObject*>(n.ptr);
             assert(qore_var_rwlock_priv::get(obj->rml)->write_tid >= -1);
-            obj->confirmRSet(obj == root_obj, n.edge_gen);
+            obj->confirmRSet(obj == root_obj, n.edge_gen, n.remove_gen);
             RSet* rs = obj->rset.load(std::memory_order_relaxed);
             if (rs) {
                 rs->setScanEpoch(scan_epoch);
@@ -2247,7 +2434,7 @@ void RSetHelper::commit() {
             // scan changed another component and holds the rsection exclusively
             printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p unchanged\n", obj, obj->getName(),
                 obj->rset.load(std::memory_order_relaxed));
-            obj->confirmRSet(true, n.edge_gen);
+            obj->confirmRSet(true, n.edge_gen, n.remove_gen);
             RSet* rs = obj->rset.load(std::memory_order_relaxed);
             if (rs) {
                 rs->setScanEpoch(scan_epoch);
@@ -2258,7 +2445,7 @@ void RSetHelper::commit() {
         RSet* rs = rsets[n.component];
         printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p rcount: %d\n", obj, obj->getName(), rs,
             n.internal);
-        obj->setRSet(rs, rs ? n.internal : 0, rs && component_closed[n.component], n.edge_gen);
+        obj->setRSet(rs, rs ? n.internal : 0, rs && component_closed[n.component], n.edge_gen, n.remove_gen);
     }
 
 #ifdef DEBUG
@@ -2268,7 +2455,20 @@ void RSetHelper::commit() {
         }
         assert(rs->size() == rs->getCount());
         for (rset_t::iterator ri = rs->begin(), re = rs->end(); ri != re; ++ri) {
-            assert((*ri)->rset.load(std::memory_order_relaxed) == rs);
+            RObject* obj = *ri;
+            assert(obj->rset.load(std::memory_order_relaxed) == rs);
+            // Every reference counted as internal is held by a member whose rsection this scan holds, so it cannot
+            // be released - except one held by a container of a member, which can give the value up under its own
+            // lock after the scan read it: releasing it, or handing it to a caller that can release it before this.
+            // Such a container marks its object (RObject::edgesRemoved()) before the value can be released, so the
+            // mark is visible once the release is: the count is read first.
+            int refs = obj->refs();
+            bool unchanged = obj->rcount > refs && rs->removalsUnchangedSinceScan();
+            if (unchanged) {
+                printd(0, "RSetHelper::commit() obj %p '%s' rcount %d > references %d with no value handed out\n",
+                    obj, obj->getName(), obj->rcount, refs);
+            }
+            assert(!unchanged);
         }
     }
 #endif
@@ -2393,6 +2593,8 @@ void qore_dgc_value_stored(RObject& holder, const QoreValue& v) {
                 // a reference: the variable or object it refers to is only found by evaluating it, so every set
                 // stops trusting its counts until it is scanned again
                 RSet::untracked_edge_epoch.fetch_add(1, std::memory_order_seq_cst);
+                // no region recorded before is current any more
+                RRegion::invalidations.fetch_add(1, std::memory_order_seq_cst);
                 break;
         }
     }

@@ -68,6 +68,11 @@ QoreSignalManager::QoreSignalManager() : is_enabled(false), tid(-1), block(false
     }
 }
 
+namespace {
+//! the signals raised synchronously in the thread that executes a faulting instruction
+const int sync_fault_signals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTRAP};
+}
+
 void QoreSignalManager::setMask(sigset_t& mask) {
     // block all signals
     sigfillset(&mask);
@@ -81,16 +86,25 @@ void QoreSignalManager::setMask(sigset_t& mask) {
     // do not block SIGALRM or SIGCHLD on UNIX platforms (any platform that supports signals)
     sigdelset(&mask, SIGALRM);
     sigdelset(&mask, SIGCHLD);
-    // SIGSEGV must never be blocked or caught by the library: it is delivered synchronously to the faulting
-    // thread, and other components in the process rely on handling it themselves (the JVM uses it for implicit
-    // null checks, for example), so it is left entirely to the OS and to any handler installed in the process
-    sigdelset(&mask, SIGSEGV);
+    // Signals raised synchronously by a fault in the thread that executes the faulting instruction must never be
+    // blocked or caught by the library: a blocked fault signal cannot be delivered, so the thread executes the
+    // faulting instruction again and again for ever - a stack overflow onto a guard page (SIGBUS on macOS), a
+    // trap instruction or an arithmetic fault hangs the process instead of terminating it.  Other components in the
+    // process also rely on handling them themselves (the JVM uses SIGSEGV for implicit null checks, for example), so
+    // they are left entirely to the OS and to any handler installed in the process.
+    for (int sig : sync_fault_signals) {
+        sigdelset(&mask, sig);
+    }
     if (!is_enabled) {
         // here we set signal that cannot be managed by Qore code
         fmap[QORE_STATUS_SIGNAL] = "QORE (SIGSYS for internal use)";
         fmap[SIGALRM] = "QORE (SIGALRM for sleep()/usleep())";
         fmap[SIGCHLD] = "QORE (SIGCHLD for system())";
         fmap[SIGSEGV] = "OS (SIGSEGV cannot be handled by Qore code)";
+        fmap[SIGBUS] = "OS (SIGBUS cannot be handled by Qore code)";
+        fmap[SIGILL] = "OS (SIGILL cannot be handled by Qore code)";
+        fmap[SIGFPE] = "OS (SIGFPE cannot be handled by Qore code)";
+        fmap[SIGTRAP] = "OS (SIGTRAP cannot be handled by Qore code)";
     }
 }
 

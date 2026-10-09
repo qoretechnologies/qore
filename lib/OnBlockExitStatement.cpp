@@ -3,7 +3,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -31,13 +31,14 @@
 #include <qore/Qore.h>
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreDeferredRelease.h"
 
 OnBlockExitStatement::OnBlockExitStatement(int start_line, int end_line, StatementBlock* n_code,
         enum obe_type_e n_type) : AbstractStatement(start_line, end_line), code(n_code), type(n_type) {
 }
 
 OnBlockExitStatement::~OnBlockExitStatement() {
-    delete code;
+    qore_delete_statement(code);
 }
 
 int OnBlockExitStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {

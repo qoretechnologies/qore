@@ -5,6 +5,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../../../qlib/QUnit.qm
 %requires ../../../qlib/FsUtil.qm
+%requires ../ExecModeHarness.qm
 %exec-class AOTConstructorClassContextTest
 
 class AOTConstructorClassContextTest inherits QUnit::Test {
@@ -57,15 +58,17 @@ class AOTConstructorClassContextTest inherits QUnit::Test {
         on_exit file.close();
         file.write(value);
     }
-    private string run(string dir, list<string> args) {
-        string log = dir + "/run.log";
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
         string command = timeout_prefix + "env LD_LIBRARY_PATH=" + quote(lib_dir)
             + " QORE_LIBDIR=" + quote(lib_dir) + " " + (map quote($1), args).join(" ");
-        int status = system(command + " > " + quote(log) + " 2>&1");
-        string output = File::readTextFile(log);
-        assertEq(0, status, output);
-        assertFalse(output.regex("(?i)warning[: ]"), output);
-        return output;
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        assertFalse(r.out.regex("(?i)warning[: ]"), r.out);
+        return r.out;
     }
     private static fixture(string dir, string suffix) {
         write(dir + "/ConstructorContextFixture.qm", Module);
@@ -75,7 +78,7 @@ class AOTConstructorClassContextTest inherits QUnit::Test {
         TmpDir dir("qore-ctor-context-source-");
         fixture(dir.path, "qm");
         foreach string mode in ("ast", "ir", "jit", "tiered") {
-            assertEq(Expected, run(dir.path, (qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode,
+            assertEq(Expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode,
                 dir.path + "/run.qr")));
         }
     }
@@ -83,9 +86,9 @@ class AOTConstructorClassContextTest inherits QUnit::Test {
         foreach string level in ("-O0", "-O3") {
             TmpDir dir("qore-ctor-context-aot-");
             fixture(dir.path, "qmod");
-            run(dir.path, (qcc_bin, level, "--strip-source", "-m", dir.path + "/ConstructorContextFixture.qm",
+            run((qcc_bin, level, "--strip-source", "-m", dir.path + "/ConstructorContextFixture.qm",
                 "-o", dir.path + "/ConstructorContextFixture.qmod"));
-            assertEq(Expected, run(dir.path, (qore_bin, "-b", "--enable-debug", dir.path + "/run.qr")));
+            assertEq(Expected, run((qore_bin, "-b", "--enable-debug", dir.path + "/run.qr")));
         }
     }
     private {

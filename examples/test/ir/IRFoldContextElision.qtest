@@ -3,6 +3,11 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
+
+# the script runs its code too few times for tiered execution to compile it, so native code is only required with JIT
+# execution
+ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -42,8 +47,8 @@ source.close();
 
 string expected = "10:10:10:10:-10:-3.25:NOTHING:NOTHING\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
-    string actual = backquote(sprintf(
-        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+    string actual = ExecModeHarness::run(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
         libqore_dir, qore_bin, mode, src));
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
@@ -52,8 +57,8 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     }
 }
 
-string ir_dump = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s 2>&1",
+string ir_dump = ExecModeHarness::run(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s",
     libqore_dir, qore_bin, src));
 Regex set_argv("set\\.implicit\\.argv");
 if (set_argv.count(ir_dump) != 2) {

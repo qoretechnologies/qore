@@ -14,6 +14,8 @@ print_usage () {
   echo
   echo "Environment variables:"
   echo "  QORE_TEST_OPTS           Additional options to pass to qore (e.g., '-penable-debug')."
+  echo "  QORE_TEST_DIRS           Space-separated test directories (as found in $BASE_TEST_PATH) to run when no"
+  echo "                           -d option is given (e.g., 'qore/misc qore/vars'); default: all tests."
   echo "  TEST_TIMEOUT             Seconds a single test may run before it is killed (default: 300); a test"
   echo "                           declares its own budget with a '# test-timeout: <seconds>' comment."
   echo "  CI_NODE_INDEX            Shard index (1-based) for parallel test execution."
@@ -93,6 +95,17 @@ done
 if [ $PERF_EXCLUDE -eq 1 ] && [ $PERF_ONLY -eq 1 ]; then
     echo "Cannot use -E and -P together." >&2
     exit 1
+fi
+
+# Test dirs can also be given in the environment, for CI jobs that run a subset of the tests
+if [ -z "$TEST_DIRS" ] && [ -n "$QORE_TEST_DIRS" ]; then
+    for dir in $QORE_TEST_DIRS; do
+        if [ ! -d "$BASE_TEST_PATH/$dir" ]; then
+            echo "ERROR: QORE_TEST_DIRS entry '$dir' is not a directory in $BASE_TEST_PATH" >&2
+            exit 1
+        fi
+        TEST_DIRS="$TEST_DIRS $BASE_TEST_PATH/$dir"
+    done
 fi
 
 # If no test dirs were specified, run all the tests
@@ -387,11 +400,25 @@ echo "QORE_INCLUDE_DIR=$QORE_INCLUDE_DIR"
 echo "QORE_MODULE_DIR=$QORE_MODULE_DIR"
 echo "LD_PRELOAD=$LD_PRELOAD"
 echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
-echo "QORE_DB_CONNSTR: ${QORE_DB_CONNSTR}"
-echo "QORE_DB_CONNSTR_FREETDS: ${QORE_DB_CONNSTR_FREETDS}"
-echo "QORE_DB_CONNSTR_MYSQL: ${QORE_DB_CONNSTR_MYSQL}"
-echo "QORE_DB_CONNSTR_PGSQL: ${QORE_DB_CONNSTR_PGSQL}"
-echo "QORE_DB_CONNSTR_ORACLE: ${QORE_DB_CONNSTR_ORACLE}"
+# Prints a datasource string with its password replaced by "****", for logs that others can read (CI job logs)
+# The string is split as parseDatasource() splits it: an option string ("{...}") at the end is kept as is, the
+# driver name ends at the first ':', the user name at the first '/' and the password at the last '@'
+mask_connstr() {
+    _cs=$1
+    _opts=""
+    case "$_cs" in
+        *\{*\})
+            _opts="{${_cs##*\{}"
+            _cs=${_cs%\{*}
+            ;;
+    esac
+    printf '%s%s\n' "$(printf '%s\n' "$_cs" | sed -e 's|^\(\([^:/@%]*:\)\{0,1\}[^/]*\)/.*@|\1/****@|')" "$_opts"
+}
+echo "QORE_DB_CONNSTR: $(mask_connstr "${QORE_DB_CONNSTR}")"
+echo "QORE_DB_CONNSTR_FREETDS: $(mask_connstr "${QORE_DB_CONNSTR_FREETDS}")"
+echo "QORE_DB_CONNSTR_MYSQL: $(mask_connstr "${QORE_DB_CONNSTR_MYSQL}")"
+echo "QORE_DB_CONNSTR_PGSQL: $(mask_connstr "${QORE_DB_CONNSTR_PGSQL}")"
+echo "QORE_DB_CONNSTR_ORACLE: $(mask_connstr "${QORE_DB_CONNSTR_ORACLE}")"
 # Mask credentials in REDIS_URL (replace user:pass@ with ***@)
 echo "REDIS_URL: $(echo "${REDIS_URL}" | sed 's|://[^@]*@|://***@|')"
 

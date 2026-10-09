@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class IRSelectHashKeyPositiveIntTest
 
@@ -157,13 +158,13 @@ printf(\"after\\n\");
     }
 
     private string runScript(string mode, string script_path, *string env) {
-        return backquote(sprintf("%s LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        return ExecModeHarness::run(sprintf("%s LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
             env ?? "", libqore_dir, qore_bin, mode, script_path));
     }
 
     #! normalizes an aborting run to a comparable summary (the raw output carries timestamps)
     private string raiseSummary(string mode, string script_path) {
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1; echo rc=$?",
+        string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s; echo rc=$?",
             libqore_dir, qore_bin, mode, script_path));
         return sprintf("before=%d after=%d err=%s rc=%s",
             out =~ /before/ ? 1 : 0,
@@ -217,7 +218,7 @@ try {
 ");
         script.file.close();
 
-        string dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=jit --ir-dump %s 2>&1",
+        string dump = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=jit --ir-dump %s",
             libqore_dir, qore_bin, script.path));
         assertTrue(dump =~ /select\.hashkey\.positive\.int/,
             "specialized select opcode is still used inside a try block");

@@ -2291,16 +2291,39 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         hash<auto> item = steps.items;
         assertFalse(item.hasKey("anyOf"),
             "Gemini tool schema flattens anyOf alternatives");
-        assertFalse(item.hasKey("properties"),
-            "Gemini compact tool schema flattens nested array item "
-            "object detail");
+        assertEq("object", item.type,
+            "merged alternatives keep their common object type");
+        assertFalse(item.hasKey("required"),
+            "Gemini compact tool schema strips required constraints of "
+            "merged alternatives");
+        assertFalse(item.properties.operation.hasKey("enum"),
+            "Gemini compact tool schema strips enum constraints");
+        assertEq("string", item.properties.payload.properties.business
+                .properties.business_category.type,
+            "nested set_business payload members are kept");
+        assertEq("string", item.properties.payload.properties.interface
+                .properties.key.type,
+            "nested add_interface payload members are kept");
+        assertFalse(item.properties.payload.properties.business
+                .hasKey("additionalProperties"),
+            "nested additionalProperties are stripped");
 
         hash<auto> turn_params = gemini_handler.requests[0].body.tools[0]
             .functionDeclarations[1].parameters;
         assertTrue(turn_params.properties.hasKey("payload"),
             "single-dispatch payload argument name is preserved");
-        assertFalse(turn_params.properties.payload.hasKey("properties"),
-            "single-dispatch payload detail is flattened");
+        hash<auto> interface = turn_params.properties.payload.properties
+            .interface;
+        assertEq("string", interface.properties.key.type,
+            "single-dispatch payload members are kept");
+        assertEq(("key",), interface.required,
+            "nested required members are kept");
+        hash<auto> tables = interface.properties.config.properties.definition
+            .properties.tables;
+        assertEq("string", tables.type,
+            "a free-form object is declared as JSON text");
+        assertEq("object", turn_params.properties.payload.properties.test
+            .type, "every payload wrapper is kept");
         assertEq("operation payload",
             turn_params.properties.payload.description,
             "Gemini compact tool schema preserves payload guidance");

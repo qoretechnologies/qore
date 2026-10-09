@@ -100,6 +100,18 @@
 #include <string>
 #include <sys/time.h>
 #include <vector>
+#include <climits>
+#include <cstdint>
+
+#ifdef HAVE_POLL
+#include <fcntl.h>
+#include <poll.h>
+#ifdef DARWIN
+#include <sys/event.h>
+#elif defined(__linux__)
+#include <sys/eventfd.h>
+#endif
+#endif
 
 #if defined(__ia64) && defined(__LP64__)
 #define IA64_64
@@ -607,7 +619,9 @@ public:
                 stack_size = get_stack_size();
             }
             stack_start = get_stack_pos();
-            size_t stack_adjusted_size = stack_size - stack_guard;
+            // a stack no larger than the guard leaves no usable stack: every stack check then fails, instead of the
+            // limit wrapping around and never being reached
+            size_t stack_adjusted_size = stack_size > stack_guard ? stack_size - stack_guard : 0;
             printd(5, "ThreadData::ThreadData() stack_adjusted_size: %lld qore_thread_stack_limit: %lld\n",
                 stack_adjusted_size, qore_thread_stack_limit);
 #ifdef STACK_DIRECTION_DOWN
@@ -656,6 +670,13 @@ public:
         }
 #endif // #ifdef QORE_MANAGE_STACK
     }
+
+#ifdef QORE_MANAGE_STACK
+    //! Returns the stack size of the thread less the stack guard, or 0 if the stack is no larger than the guard
+    DLLLOCAL size_t getUsableStackSize() const {
+        return stack_size > QORE_STACK_GUARD ? stack_size - QORE_STACK_GUARD : 0;
+    }
+#endif
 
     DLLLOCAL ~ThreadData() {
         // delete all user TLD
@@ -762,10 +783,12 @@ public:
     DLLLOCAL void setStackSize(size_t new_stack_size) {
         if (stack_size != new_stack_size) {
             stack_size = new_stack_size;
+            // a stack no larger than the guard leaves no usable stack; see the constructor
+            size_t usable = getUsableStackSize();
 #ifdef STACK_DIRECTION_DOWN
-            stack_limit = stack_start - new_stack_size + QORE_STACK_GUARD;
+            stack_limit = stack_start - usable;
 #else
-            stack_limit = stack_start + new_stack_size - QORE_STACK_GUARD;
+            stack_limit = stack_start + usable;
 #endif
             printd(5, "ThreadData::setStackSize() set stack size to: %lld\n", new_stack_size);
         }
@@ -820,11 +843,152 @@ void ThreadEntry::cleanup() {
 
     // clear per-thread cancellation state
     clearCancelState();
-    // a thread in waitWithInterrupt clears waiting_on before returning, so it must be null here,
-    // but be defensive against any future code path that exits without clearing
-    waiting_on.store(nullptr, std::memory_order_relaxed);
+    // a thread in a cancellable condition wait unregisters before it returns
+    assert(!waiting_on && !waiting_mutex && !wake_queued && !wake_busy);
+    // release the thread's cancellation wakeup channel with its TID
+    closeCancelWakeup();
 
     status = QTS_AVAIL;
+}
+
+#ifdef HAVE_POLL
+// the cancellation wakeup channel: an EVFILT_USER kqueue on macOS, an eventfd on Linux, and a pipe elsewhere; on
+// macOS and Linux one descriptor is both the end that is polled and the end that is signalled
+#ifdef DARWIN
+//! the EVFILT_USER identifier used in each thread's own kqueue
+static constexpr uintptr_t QORE_CANCEL_WAKEUP_IDENT = 1;
+#elif !defined(__linux__)
+//! the write end of each pipe in use as a wakeup channel, indexed by its read end; changed under thread_list.lck
+static std::map<int, int> qore_cancel_wakeup_pipe_map;
+#endif
+
+static int qore_set_cloexec_nonblock(int fd, bool nonblock) {
+    int fdflags = fcntl(fd, F_GETFD);
+    if (fdflags < 0 || fcntl(fd, F_SETFD, fdflags | FD_CLOEXEC) < 0) {
+        return -1;
+    }
+    if (nonblock) {
+        int flflags = fcntl(fd, F_GETFL);
+        if (flflags < 0 || fcntl(fd, F_SETFL, flflags | O_NONBLOCK) < 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+//! creates a wakeup channel and returns the descriptor to poll, or -1 with errno set; thread_list.lck is held
+static int qore_cancel_wakeup_create() {
+#ifdef DARWIN
+    // a kqueue is never inherited over fork(); close-on-exec covers exec()
+    int kq = kqueue();
+    if (kq < 0) {
+        return -1;
+    }
+    struct kevent ev;
+    EV_SET(&ev, QORE_CANCEL_WAKEUP_IDENT, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr);
+    if (qore_set_cloexec_nonblock(kq, false) || kevent(kq, &ev, 1, nullptr, 0, nullptr) < 0) {
+        int err = errno;
+        close(kq);
+        errno = err;
+        return -1;
+    }
+    return kq;
+#elif defined(__linux__)
+    return eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+#else
+    int fds[2];
+    if (pipe(fds)) {
+        return -1;
+    }
+    if (qore_set_cloexec_nonblock(fds[0], true) || qore_set_cloexec_nonblock(fds[1], true)) {
+        int err = errno;
+        close(fds[0]);
+        close(fds[1]);
+        errno = err;
+        return -1;
+    }
+    try {
+        qore_cancel_wakeup_pipe_map[fds[0]] = fds[1];
+    } catch (...) {
+        close(fds[0]);
+        close(fds[1]);
+        errno = ENOMEM;
+        return -1;
+    }
+    return fds[0];
+#endif
+}
+
+//! signals a wakeup channel; thread_list.lck is held, so the channel cannot be closed concurrently
+static void qore_cancel_wakeup_signal(int fd) {
+#ifdef DARWIN
+    struct kevent ev;
+    EV_SET(&ev, QORE_CANCEL_WAKEUP_IDENT, EVFILT_USER, 0, NOTE_TRIGGER, 0, nullptr);
+    while (kevent(fd, &ev, 1, nullptr, 0, nullptr) < 0 && errno == EINTR) {
+    }
+#else
+#ifdef __linux__
+    uint64_t one = 1;
+    int wfd = fd;
+#else
+    char one = 1;
+    std::map<int, int>::const_iterator i = qore_cancel_wakeup_pipe_map.find(fd);
+    assert(i != qore_cancel_wakeup_pipe_map.end());
+    int wfd = i->second;
+#endif
+    // EAGAIN means that the channel is already readable, so the waiter wakes up in any case
+    while (write(wfd, &one, sizeof one) < 0 && errno == EINTR) {
+    }
+#endif
+}
+
+//! empties a wakeup channel after its thread has cleared waiting_fd, so that the next wait starts unsignalled
+static void qore_cancel_wakeup_drain(int fd) {
+#ifdef DARWIN
+    // EV_CLEAR resets the event when it is retrieved
+    struct kevent ev;
+    struct timespec ts = {0, 0};
+    while (kevent(fd, nullptr, 0, &ev, 1, &ts) < 0 && errno == EINTR) {
+    }
+#else
+    // the descriptor is non-blocking: read until EAGAIN
+    char buf[64];
+    while (true) {
+        ssize_t rc = read(fd, buf, sizeof buf);
+        if (rc > 0 || (rc < 0 && errno == EINTR)) {
+            continue;
+        }
+        break;
+    }
+#endif
+}
+#endif
+
+void ThreadEntry::closeCancelWakeup() {
+#ifdef HAVE_POLL
+    // a thread clears waiting_fd before it returns from a wait, and only the thread itself waits on its channel
+    assert(waiting_fd.load(std::memory_order_relaxed) == -1);
+    if (wake_fd == -1) {
+        return;
+    }
+#ifdef DARWIN
+    // a kqueue is not inherited over fork(): in a child the descriptor number is not ours to close
+    if (wake_pid == getpid()) {
+        close(wake_fd);
+    }
+#else
+    // an inherited eventfd or pipe is this process's own copy: closing it leaves the parent's channel intact
+    close(wake_fd);
+#ifndef __linux__
+    std::map<int, int>::iterator i = qore_cancel_wakeup_pipe_map.find(wake_fd);
+    assert(i != qore_cancel_wakeup_pipe_map.end());
+    close(i->second);
+    qore_cancel_wakeup_pipe_map.erase(i);
+#endif
+#endif
+    wake_fd = -1;
+    wake_pid = 0;
+#endif
 }
 
 void ThreadProgramData::delProgram(QoreProgram* pgm) {
@@ -1203,7 +1367,7 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
     //printd(5, "check_stack() bsp current: %p limit: %p\n", get_rse_bsp(), td->rse_limit);
     if (td->rse_limit < get_rse_bsp()) {
         xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the IA-64 RSE (Register " \
-            "Stack Engine) stack size limit (%ld bytes)", td->stack_size - QORE_STACK_GUARD);
+            "Stack Engine) stack size limit (%ld bytes)", td->getUsableStackSize());
         return -1;
     }
 #endif
@@ -1223,7 +1387,7 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
     if (td->stack_limit < pos) {
 #endif
         xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the stack size limit " \
-            "(%lu bytes)", td->stack_size - QORE_STACK_GUARD);
+            "(%lu bytes)", td->getUsableStackSize());
         return -1;
     }
 
@@ -1235,6 +1399,75 @@ int check_stack(ExceptionSink* xsink) {
     return check_stack_intern(xsink, td);
 }
 #endif
+
+bool q_thread_stack_reserve_exceeded(size_t reserve) {
+#ifdef QORE_MANAGE_STACK
+    ThreadData* td = thread_data.get();
+    // a thread with no stack guard has no limit (see QTF_NO_STACK_GUARD)
+    if (!td || !td->stack_limit) {
+        return false;
+    }
+    size_t pos = get_stack_pos();
+#ifdef STACK_DIRECTION_DOWN
+    return pos < td->stack_limit + reserve;
+#else
+    return pos + reserve > td->stack_limit;
+#endif
+#else
+    return false;
+#endif
+}
+
+QoreElidedStackHelper::QoreElidedStackHelper(size_t elided) {
+#ifdef QORE_MANAGE_STACK
+    ThreadData* td = thread_data.get();
+    // a thread with no stack guard has no limit (see QTF_NO_STACK_GUARD)
+    if (!elided || !td || !td->stack_limit) {
+        return;
+    }
+    old_limit = td->stack_limit;
+#ifdef STACK_DIRECTION_DOWN
+    // a limit beyond the stack's start makes every check fail, as the recursion would have
+    td->stack_limit = elided > SIZE_MAX - old_limit ? SIZE_MAX : old_limit + elided;
+#else
+    td->stack_limit = elided > old_limit ? 0 : old_limit - elided;
+    // a limit of zero means no limit: the recursion would have exceeded the limit anywhere
+    if (!td->stack_limit) {
+        td->stack_limit = 1;
+    }
+#endif
+    shifted = true;
+#endif
+}
+
+QoreElidedStackHelper::~QoreElidedStackHelper() {
+#ifdef QORE_MANAGE_STACK
+    if (shifted) {
+        thread_data.get()->stack_limit = old_limit;
+    }
+#endif
+}
+
+size_t QoreElidedStackHelper::getStackPos() {
+#ifdef QORE_MANAGE_STACK
+    return get_stack_pos();
+#else
+    return 0;
+#endif
+}
+
+size_t QoreElidedStackHelper::getStackUsedSince(size_t outer_pos) {
+#ifdef QORE_MANAGE_STACK
+    size_t pos = get_stack_pos();
+#ifdef STACK_DIRECTION_DOWN
+    return outer_pos > pos ? outer_pos - pos : 0;
+#else
+    return pos > outer_pos ? pos - outer_pos : 0;
+#endif
+#else
+    return 0;
+#endif
+}
 
 int q_check_stack(ExceptionSink* xsink) {
 #ifdef QORE_MANAGE_STACK
@@ -2123,6 +2356,8 @@ ThreadLocalProgramData* get_thread_local_program_data() {
    return td->tlpd;
 }
 
+static void sync_runtime_config_program(const ThreadData* td);
+
 void thread_ensure_local_program_data() {
     ThreadData* td = thread_data.get();
     assert(td);
@@ -2134,6 +2369,9 @@ void thread_ensure_local_program_data() {
     // operations (e.g. object construction in AOT init functions) can
     // instantiate local variables on the thread's lvstack.
     qore_program_private::setThreadVarData(td->current_pgm, td->tpd, td->tlpd, false);
+    // the thread's RuntimeConfig carries the thread-local data with the Program (see
+    // sync_runtime_config_program())
+    sync_runtime_config_program(td);
     printd(5, "thread_ensure_local_program_data() set tlpd=%p for pgm=%p\n",
         td->tlpd, td->current_pgm);
 }
@@ -2296,6 +2534,17 @@ LVarStackBreakHelper::~LVarStackBreakHelper() {
     }
 }
 
+// The thread's RuntimeConfig carries the current Program and its thread-local data for the code that holds a
+// reference to it across nested calls (ex: a statement block evaluating its statements); every helper that changes
+// the thread's current Program must therefore also update the RuntimeConfig, and restore it when the helper exits,
+// in the same way as the object and class context helpers below; otherwise the caller keeps seeing the Program of
+// the last cross-Program call it made
+static void sync_runtime_config_program(const ThreadData* td) {
+    RuntimeConfig& rc = rc_get_tls_ref();
+    rc.setProgram(td->current_pgm);
+    rc.setThreadLocalProgramData(td->tlpd);
+}
+
 ProgramCallContextHelper::ProgramCallContextHelper(QoreProgram* new_pgm) {
     if (new_pgm) {
         ThreadData* td = thread_data.get();
@@ -2322,6 +2571,7 @@ QoreProgramContextHelper::QoreProgramContextHelper(QoreProgram* pgm) {
     ThreadData* td  = thread_data.get();
     old_pgm = td->current_pgm;
     td->current_pgm = pgm;
+    sync_runtime_config_program(td);
 }
 
 QoreProgramContextHelper::~QoreProgramContextHelper() {
@@ -2330,6 +2580,7 @@ QoreProgramContextHelper::~QoreProgramContextHelper() {
     }
     ThreadData* td  = thread_data.get();
     td->current_pgm = old_pgm;
+    sync_runtime_config_program(td);
 }
 
 ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c) {
@@ -2644,6 +2895,7 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     td->current_pgm = old_pgm;
     td->tlpd = old_tlpd;
     td->current_pgm_ctx = old_ctx;
+    sync_runtime_config_program(td);
 
     if (thread_count_incremented) {
         qore_program_private::decThreadCount(*pgm, td->tid);
@@ -2694,6 +2946,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     td->current_pgm = pgm;
     init_tlpd = td->tpd->saveProgram(runtime, xsink); // set new td->tlpd
     td->current_pgm_ctx = this;
+    sync_runtime_config_program(td);
     save_frameCount = td->tlpd->lvstack.getFrameCount();
 
     printd(5, "ProgramThreadCountContextHelper::set() this:%p tlpd:%p savefc:%d oldfc:%d "
@@ -2947,6 +3200,7 @@ ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(E
         old_tlpd = td->tlpd;
         td->current_pgm = pgm;
         td->tpd->saveProgram(false, 0);
+        sync_runtime_config_program(td);
     } else {
         assert(qore_program_private::get(*pgm)->parsingLocked());
     }
@@ -2964,6 +3218,7 @@ ProgramRuntimeParseCommitContextHelper::~ProgramRuntimeParseCommitContextHelper(
         "restoring old pgm: %p old tlpd: %p\n", td->current_pgm, old_pgm, old_tlpd);
     td->current_pgm = old_pgm;
     td->tlpd        = old_tlpd;
+    sync_runtime_config_program(td);
 
     qore_program_private::unlockParsing(*pgm);
 }
@@ -2982,6 +3237,7 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
     ThreadData* td = thread_data.get();
     old_pgm = td->current_pgm;
     td->current_pgm = pgm;
+    sync_runtime_config_program(td);
 }
 
 ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
@@ -2991,6 +3247,7 @@ ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
     ThreadData* td = thread_data.get();
     qore_program_private::unlockParsing(*td->current_pgm);
     td->current_pgm = old_pgm;
+    sync_runtime_config_program(td);
 }
 
 CurrentProgramRuntimeParseContextHelper::CurrentProgramRuntimeParseContextHelper() {
@@ -3056,6 +3313,7 @@ ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* 
         restore = true;
         old_pgm = td->current_pgm;
         td->current_pgm = pgm;
+        sync_runtime_config_program(td);
     }
 }
 
@@ -3066,6 +3324,7 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
     ThreadData* td = thread_data.get();
     qore_program_private::decThreadCount(*td->current_pgm, td->tid);
     td->current_pgm = old_pgm;
+    sync_runtime_config_program(td);
 }
 
 QoreProgram* getProgram() {
@@ -3256,6 +3515,8 @@ void qore_exit_process(int rc) {
         // The reaper has no Qore TID either. With all external workers joined,
         // stop it before static destruction reaches its condition variable.
         qore_stop_external_thread_reaper();
+        // as is the condition waker; no other thread can be waiting any more
+        qore_stop_cond_waker();
         exit(rc);
     }
     // do not call exit here since it will try to execute cleanup, which will cause crashes
@@ -3966,6 +4227,17 @@ size_t q_thread_get_this_stack_size() {
 
 // returns the default thread stack size set for new threads
 size_t q_thread_set_stack_size(size_t size, ExceptionSink* xsink) {
+#ifdef QORE_MANAGE_STACK
+    // the stack guard is reserved at the end of every thread's stack, so a thread whose stack is no larger than the
+    // guard could not run any code: every stack check would fail
+    if (size <= QORE_STACK_GUARD) {
+        xsink->raiseException("SET-DEFAULT-THREAD-STACK-SIZE-ERROR", "cannot set the default thread stack size to "
+            "%lu bytes; it must be larger than the %lu bytes reserved at the end of each thread's stack for the stack "
+            "guard", size, (size_t)QORE_STACK_GUARD);
+        return 0;
+    }
+#endif
+
     // make sure accesses to stack info are made locked
     AutoLocker al(stack_lck);
 
@@ -4423,6 +4695,8 @@ void QoreThreadList::deleteData(int tid) {
     {
         AutoLocker al(lck);
         entry[tid].thread_data = nullptr;
+        // the thread is leaving while its TID stays reserved; its wakeup channel goes with it
+        entry[tid].closeCancelWakeup();
     }
 
     delete thread_data.get();
@@ -4568,33 +4842,310 @@ int QoreThreadList::cancelThread(int tid, const char* reason, unsigned scope_pgm
     // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check flag) to
     // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt
     entry[tid].cancel_requested.store(true, std::memory_order_seq_cst);
-    // wake the target if it's blocked in waitWithInterrupt — the waiter clears waiting_on under
-    // lck before returning, so a non-null pointer observed here (under lck, with the entry still
-    // active) is in use by a still-alive cond
-    QoreCondition* cond = entry[tid].waiting_on.load(std::memory_order_seq_cst);
-    if (cond) {
-        cond->broadcast();
-    }
+    // wake the target if it's blocked (or about to block) in a cancellable condition wait
+    wakeCondWaiter(tid);
+    // wake the target if it's blocked in qore_cancellable_poll(); the waiter clears waiting_fd under
+    // lck before it drains or closes the channel
+    signalWaitingFd(tid);
     return 0;
 }
 
-void QoreThreadList::clearCurrentWaitingOn() {
-    AutoLocker al(lck);
-    int tid = q_gettid();
-    if (tid >= 0 && tid < MAX_QORE_THREADS) {
-        entry[tid].waiting_on.store(nullptr, std::memory_order_seq_cst);
+void QoreThreadList::signalWaitingFd(int tid) {
+#ifdef HAVE_POLL
+    int fd = entry[tid].waiting_fd.load(std::memory_order_seq_cst);
+    if (fd >= 0) {
+        qore_cancel_wakeup_signal(fd);
     }
+#endif
+}
+
+int QoreThreadList::getCancelWakeupFd(int tid) {
+#ifdef HAVE_POLL
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    assert(entry[tid].waiting_fd.load(std::memory_order_relaxed) == -1);
+    pid_t pid = getpid();
+    AutoLocker al(lck);
+    ThreadEntry& te = entry[tid];
+    if (te.wake_fd != -1) {
+        if (te.wake_pid == pid) {
+            return te.wake_fd;
+        }
+        // inherited from the parent process over fork(): a child must never share its channel with
+        // its parent, so that a cancellation in either process cannot wake the other
+        te.closeCancelWakeup();
+    }
+    int fd = qore_cancel_wakeup_create();
+    if (fd < 0) {
+        return -1;
+    }
+    te.wake_fd = fd;
+    te.wake_pid = pid;
+    return fd;
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
+void QoreThreadList::clearCurrentWaitingFd(int tid) {
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    AutoLocker al(lck);
+    entry[tid].waiting_fd.store(-1, std::memory_order_seq_cst);
 }
 
 void QoreThreadList::wakeAllWaiters() {
     AutoLocker al(lck);
     for (int t = 0; t < MAX_QORE_THREADS; ++t) {
-        QoreCondition* cond = entry[t].waiting_on.load(std::memory_order_seq_cst);
-        if (cond) {
-            cond->broadcast();
-        }
+        wakeCondWaiter(t);
+        signalWaitingFd(t);
     }
 }
+
+// --- cancellable condition waits ---
+//
+// A waiter holds its mutex from its check for a cancellation request until pthread_cond_wait() releases it, so a
+// broadcast made in that window without the mutex would be lost.  A canceller therefore only broadcasts after it
+// has held the mutex: at once if it can take the mutex without blocking, otherwise through the condition waker
+// thread, which blocks on the mutex until the waiter releases it.  The canceller itself never blocks on a waiter's
+// mutex, so a canceller holding that mutex (or anything its holder waits for) cannot deadlock.
+//
+// Lock order: a waiter's mutex -> the wait registry lock (cond_waker.lck); thread_list.lck -> the wait registry
+// lock; the waker thread never blocks on a waiter's mutex while holding the wait registry lock.
+namespace {
+class QoreCondWaker {
+public:
+    ~QoreCondWaker() {
+        // qore_cleanup() stops the thread; this covers a host that reaches static destruction without it
+        stop();
+    }
+
+    //! the lock guarding the wait registry fields of every ThreadEntry and the waker's queue
+    QoreThreadLock lck;
+    //! signalled when a wakeup handed to the waker has completed
+    QoreCondition done;
+
+    //! Starts the waker thread in this process if it is not running; lck must be held
+    int ensureStarted() {
+        pid_t pid = getpid();
+        if (started && started_pid == pid) {
+            return 0;
+        }
+        if (started) {
+            // forked: the thread does not exist in this process, and nothing in the child can be queued, since
+            // the only thread that exists here was running fork() and not waiting
+            started = false;
+            head = tail = -1;
+        }
+        int rc = pthread_create(&native_id, nullptr, entry, this);
+        if (rc) {
+            errno = rc;
+            return -1;
+        }
+        started = true;
+        started_pid = pid;
+        return 0;
+    }
+
+    //! Queues a wakeup of the given entry's waiter; lck must be held and the waker started
+    void queue(ThreadEntry* entries, int tid, QoreCondition* cond, pthread_mutex_t* m) {
+        assert(started && started_pid == getpid());
+        ThreadEntry& te = entries[tid];
+        if (te.wake_queued) {
+            // the queued wakeup has not taken the mutex yet, so it covers this request too
+            return;
+        }
+        te.wake_cond = cond;
+        te.wake_mutex = m;
+        te.wake_queued = true;
+        te.wake_next = -1;
+        if (tail == -1) {
+            head = tid;
+        } else {
+            entries[tail].wake_next = tid;
+        }
+        tail = tid;
+        cond_ready.signal();
+    }
+
+    void stop() {
+        {
+            AutoLocker al(lck);
+            if (!started || started_pid != getpid()) {
+                return;
+            }
+            stopping = true;
+            cond_ready.signal();
+        }
+        int rc = pthread_join(native_id, nullptr);
+        if (rc) {
+            fprintf(stderr, "qore: cannot join the condition waker thread: %s\n", strerror(rc));
+            abort();
+        }
+        AutoLocker al(lck);
+        started = stopping = false;
+    }
+
+private:
+    QoreCondition cond_ready;
+    pthread_t native_id{};
+    pid_t started_pid = 0;
+    int head = -1;
+    int tail = -1;
+    bool started = false;
+    bool stopping = false;
+
+    static void* entry(void* arg) {
+        static_cast<QoreCondWaker*>(arg)->run();
+        return nullptr;
+    }
+
+    void run();
+};
+}
+
+static QoreCondWaker cond_waker;
+
+void QoreCondWaker::run() {
+#ifdef QORE_HAVE_THREAD_NAME
+    q_set_thread_name("qore-cond-waker");
+#endif
+    ThreadEntry* entries = thread_list.getEntryArray();
+    SafeLocker sl(lck);
+    while (true) {
+        while (head == -1 && !stopping) {
+            cond_ready.wait(lck);
+        }
+        if (head == -1) {
+            return;
+        }
+        int tid = head;
+        ThreadEntry& te = entries[tid];
+        head = te.wake_next;
+        if (head == -1) {
+            tail = -1;
+        }
+        te.wake_next = -1;
+        te.wake_queued = false;
+        te.wake_busy = true;
+        QoreCondition* cond = te.wake_cond;
+        pthread_mutex_t* m = te.wake_mutex;
+        sl.unlock();
+        // the waiter cannot return from its wait while wake_busy is set, so the condition and mutex are alive;
+        // holding the mutex means that the waiter has either blocked (and the broadcast wakes it) or not yet
+        // checked for the request (and will see it)
+        pthread_mutex_lock(m);
+        pthread_mutex_unlock(m);
+        cond->broadcast();
+        sl.lock();
+        te.wake_busy = false;
+        if (!te.wake_queued) {
+            te.wake_cond = nullptr;
+            te.wake_mutex = nullptr;
+        }
+        done.broadcast();
+    }
+}
+
+void qore_stop_cond_waker() {
+    cond_waker.stop();
+}
+
+int QoreThreadList::registerCondWait(int tid, QoreCondition* cond, pthread_mutex_t* m) {
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    AutoLocker al(cond_waker.lck);
+    // the waker must be available before the thread can be woken through it
+    if (cond_waker.ensureStarted()) {
+        return -1;
+    }
+    ThreadEntry& te = entry[tid];
+    assert(!te.waiting_on && !te.wake_queued && !te.wake_busy);
+    te.waiting_on = cond;
+    te.waiting_mutex = m;
+    return 0;
+}
+
+void QoreThreadList::unregisterCondWait(int tid, pthread_mutex_t* m) {
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    SafeLocker sl(cond_waker.lck);
+    ThreadEntry& te = entry[tid];
+    assert(te.waiting_mutex == m);
+    te.waiting_on = nullptr;
+    te.waiting_mutex = nullptr;
+    if (!te.wake_queued && !te.wake_busy) {
+        return;
+    }
+    // a wakeup with the waker thread uses the condition and mutex: release the mutex so that it can complete,
+    // wait for it, and then reacquire the mutex (never while holding the registry lock)
+    pthread_mutex_unlock(m);
+    while (te.wake_queued || te.wake_busy) {
+        cond_waker.done.wait(cond_waker.lck);
+    }
+    sl.unlock();
+    pthread_mutex_lock(m);
+}
+
+void QoreThreadList::wakeCondWaiter(int tid) {
+    AutoLocker al(cond_waker.lck);
+    ThreadEntry& te = entry[tid];
+    if (!te.waiting_on) {
+        return;
+    }
+    // the registration cannot be cleared while the registry lock is held, so the condition and mutex are alive
+    if (!pthread_mutex_trylock(te.waiting_mutex)) {
+        // the waiter is not between its check for the request and its wait
+        pthread_mutex_unlock(te.waiting_mutex);
+        te.waiting_on->broadcast();
+        return;
+    }
+    // the mutex is held - possibly by the waiter about to block, or by the caller: hand the wakeup to the waker
+    // thread, which was started when the waiter registered
+    cond_waker.queue(entry, tid, te.waiting_on, te.waiting_mutex);
+}
+
+int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink,
+        const char* operation) {
+    // a request made before the wait
+    if (qore_check_cancel(xsink, operation)) {
+        return QORE_COND_RESULT_INTERRUPTED;
+    }
+    int tid = q_gettid();
+    // a thread unknown to Qore cannot be cancelled, and nothing can be delivered while cancellation is deferred
+    if (tid < 0 || tid >= MAX_QORE_THREADS || qore_is_cancel_deferred()) {
+        return cond.wait2(m, timeout_ms) ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
+    }
+    if (thread_list.registerCondWait(tid, &cond, m)) {
+        if (xsink) {
+            xsink->raiseErrnoException("THREAD-CREATION-FAILURE", errno, "%s: cannot start the condition waker "
+                "thread that wakes cancelled threads", operation);
+            return QORE_COND_RESULT_INTERRUPTED;
+        }
+        // without an exception sink the failure cannot be reported: the wait is not a cancellation point
+        return cond.wait2(m, timeout_ms) ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
+    }
+    // a request made after the registration: either this check sees it, or the canceller sees the registration and
+    // wakes the wait once it has held the mutex, which this thread holds until it blocks
+    if (qore_check_cancel(xsink, operation)) {
+        thread_list.unregisterCondWait(tid, m);
+        return QORE_COND_RESULT_INTERRUPTED;
+    }
+#ifdef DEBUG
+    void (*hook)() = qore_cond_wait_window_hook.load();
+    if (hook) {
+        hook();
+    }
+#endif
+    int rc = cond.wait2(m, timeout_ms);
+    thread_list.unregisterCondWait(tid, m);
+    // woken by a request, or a request made while waking up
+    if (qore_check_cancel(xsink, operation)) {
+        return QORE_COND_RESULT_INTERRUPTED;
+    }
+    return rc ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
+}
+
+#ifdef DEBUG
+std::atomic<void (*)()> qore_cond_wait_window_hook{nullptr};
+#endif
 
 void QoreThreadList::clearCancel(int tid) {
     // the lock serializes cancel_reason handling against a concurrent cancelThread() call, which
@@ -4768,6 +5319,261 @@ void qore_pop_cancel_deferral() {
 bool qore_is_cancel_deferred() {
     ThreadData* td = thread_data.get();
     return td && td->cancel_defer_count;
+}
+
+#ifdef HAVE_POLL
+//! the remaining part of a poll timeout in milliseconds: -1 for none, 0 if the deadline has passed
+static int qore_poll_remaining_ms(int timeout_ms, int64 deadline_us) {
+    if (timeout_ms <= 0) {
+        return timeout_ms;
+    }
+    int64 remaining_us = deadline_us - q_get_monotonic_us();
+    if (remaining_us <= 0) {
+        return 0;
+    }
+    int64 remaining_ms = (remaining_us + 999) / 1000;
+    return remaining_ms > INT_MAX ? INT_MAX : static_cast<int>(remaining_ms);
+}
+
+int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, ExceptionSink* xsink,
+        const char* operation) {
+    assert(xsink);
+    assert(fds || !nfds);
+    if (qore_check_cancel(xsink, operation)) {
+        return QORE_POLL_CANCELLED;
+    }
+
+    int64 deadline_us = timeout_ms > 0 ? q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000 : 0;
+
+    // no cancellation can be delivered while it is deferred, and a thread unknown to Qore cannot be cancelled,
+    // so the wait is a plain poll(); EINTR resumes it for the rest of the timeout
+    int tid = q_gettid();
+    if (tid < 0 || tid >= MAX_QORE_THREADS || qore_is_cancel_deferred()) {
+        while (true) {
+            int rc = poll(fds, nfds, qore_poll_remaining_ms(timeout_ms, deadline_us));
+            if (rc >= 0 || errno != EINTR) {
+                return rc;
+            }
+            if (timeout_ms > 0 && !qore_poll_remaining_ms(timeout_ms, deadline_us)) {
+                return 0;
+            }
+        }
+    }
+
+    // a registration made with qore_cancel_wakeup_register() is already active on this thread: the channel is
+    // registered for the whole of it, so this wait neither registers nor unregisters it, and drains it only to
+    // continue after a wakeup that delivers nothing (see qore_cancel_wakeup_check())
+    ThreadEntry& te = thread_list.getEntry(tid);
+    bool nested = te.wake_reg_depth > 0;
+    int wake_fd = nested ? te.wake_fd : thread_list.getCancelWakeupFd(tid);
+    if (wake_fd < 0) {
+        xsink->raiseErrnoException("THREAD-ERROR", errno, "%s: cannot create the cancellation wakeup channel for "
+            "thread %d", operation, tid);
+        return QORE_POLL_CANCELLED;
+    }
+
+    // the caller's descriptors and the wakeup channel, which is always the last entry
+    pollfd local_pfds[4];
+    std::vector<pollfd> heap_pfds;
+    pollfd* pfds = local_pfds;
+    if (nfds + 1 > sizeof local_pfds / sizeof local_pfds[0]) {
+        try {
+            heap_pfds.resize(nfds + 1);
+        } catch (std::bad_alloc&) {
+            xsink->outOfMemory();
+            return QORE_POLL_CANCELLED;
+        }
+        pfds = heap_pfds.data();
+    }
+
+    while (true) {
+        for (unsigned i = 0; i < nfds; ++i) {
+            pfds[i] = fds[i];
+            pfds[i].revents = 0;
+        }
+        pfds[nfds].fd = wake_fd;
+        pfds[nfds].events = POLLIN;
+        pfds[nfds].revents = 0;
+
+        // register, then check: either this check sees a request delivered before the registration, or the
+        // canceller sees the registration and signals the channel (seq_cst on both sides)
+        if (!nested) {
+            thread_list.setCurrentWaitingFd(tid, wake_fd);
+        }
+        int rc = 0;
+        int poll_errno = 0;
+        bool cancelled = qore_check_cancel(xsink, operation);
+        if (!cancelled) {
+            rc = poll(pfds, nfds + 1, qore_poll_remaining_ms(timeout_ms, deadline_us));
+            poll_errno = errno;
+        }
+        if (!nested) {
+            // once this returns, nothing can signal the channel any more, so draining it leaves it empty for the
+            // next wait, whether or not it was signalled
+            thread_list.clearCurrentWaitingFd(tid);
+            qore_cancel_wakeup_drain(wake_fd);
+        } else if (rc > 0 && pfds[nfds].revents) {
+            // drain before the check below: a request made after the drain signals the channel again
+            qore_cancel_wakeup_drain(wake_fd);
+        }
+
+        if (cancelled || qore_check_cancel(xsink, operation)) {
+            return QORE_POLL_CANCELLED;
+        }
+        if (rc < 0) {
+            if (poll_errno == EINTR) {
+                if (timeout_ms > 0 && !qore_poll_remaining_ms(timeout_ms, deadline_us)) {
+                    return 0;
+                }
+                continue;
+            }
+            errno = poll_errno;
+            return -1;
+        }
+
+        int ready = rc;
+        if (rc && pfds[nfds].revents) {
+            --ready;
+        }
+        if (ready || !rc) {
+            for (unsigned i = 0; i < nfds; ++i) {
+                fds[i].revents = pfds[i].revents;
+            }
+            return ready;
+        }
+        // woken with no request to deliver (a request out of this thread's scope, which has now been dropped, or
+        // a cleared program interrupt): wait again for the rest of the timeout
+        if (!timeout_ms || (timeout_ms > 0 && !qore_poll_remaining_ms(timeout_ms, deadline_us))) {
+            for (unsigned i = 0; i < nfds; ++i) {
+                fds[i].revents = 0;
+            }
+            return 0;
+        }
+    }
+}
+
+int qore_cancel_wakeup_register(ExceptionSink* xsink, const char* operation) {
+    assert(xsink);
+    if (qore_check_cancel(xsink, operation)) {
+        return -1;
+    }
+    int tid = q_gettid();
+    if (tid < 0 || tid >= MAX_QORE_THREADS) {
+        // a thread unknown to Qore cannot be cancelled
+        return QORE_CANCEL_WAKEUP_NONE;
+    }
+    ThreadEntry& te = thread_list.getEntry(tid);
+    if (te.wake_reg_depth) {
+        // nested: the outer registration is in effect
+        ++te.wake_reg_depth;
+        return te.wake_fd;
+    }
+    int wake_fd = thread_list.getCancelWakeupFd(tid);
+    if (wake_fd < 0) {
+        xsink->raiseErrnoException("THREAD-ERROR", errno, "%s: cannot create the cancellation wakeup channel for "
+            "thread %d", operation, tid);
+        return -1;
+    }
+    // register, then check: either the check sees a request made before the registration, or the canceller sees the
+    // registration and signals the channel
+    thread_list.setCurrentWaitingFd(tid, wake_fd);
+    if (qore_check_cancel(xsink, operation)) {
+        thread_list.clearCurrentWaitingFd(tid);
+        qore_cancel_wakeup_drain(wake_fd);
+        return -1;
+    }
+    te.wake_reg_depth = 1;
+    return wake_fd;
+}
+
+int qore_cancel_wakeup_check(ExceptionSink* xsink, const char* operation) {
+    assert(xsink);
+    int tid = q_gettid();
+    if (tid >= 0 && tid < MAX_QORE_THREADS) {
+        ThreadEntry& te = thread_list.getEntry(tid);
+        assert(te.wake_reg_depth > 0);
+        if (te.wake_reg_depth > 0) {
+            // the requester stores the request before it signals the channel: a signal drained here is followed by
+            // the check below, and one made after the drain makes the descriptor readable again
+            qore_cancel_wakeup_drain(te.wake_fd);
+        }
+    }
+    return qore_check_cancel(xsink, operation) ? -1 : 0;
+}
+
+void qore_cancel_wakeup_unregister() {
+    int tid = q_gettid();
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    if (tid < 0 || tid >= MAX_QORE_THREADS) {
+        return;
+    }
+    ThreadEntry& te = thread_list.getEntry(tid);
+    assert(te.wake_reg_depth > 0);
+    if (te.wake_reg_depth <= 0 || --te.wake_reg_depth) {
+        return;
+    }
+    // nothing can signal the channel after this, so draining it leaves it empty for the next wait
+    thread_list.clearCurrentWaitingFd(tid);
+    qore_cancel_wakeup_drain(te.wake_fd);
+}
+#else
+int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, ExceptionSink* xsink,
+        const char* operation) {
+    (void)fds;
+    (void)nfds;
+    (void)timeout_ms;
+    if (qore_check_cancel(xsink, operation)) {
+        return QORE_POLL_CANCELLED;
+    }
+    errno = ENOSYS;
+    return -1;
+}
+
+int qore_cancel_wakeup_register(ExceptionSink* xsink, const char* operation) {
+    return qore_check_cancel(xsink, operation) ? -1 : QORE_CANCEL_WAKEUP_NONE;
+}
+
+int qore_cancel_wakeup_check(ExceptionSink* xsink, const char* operation) {
+    return qore_check_cancel(xsink, operation) ? -1 : 0;
+}
+
+void qore_cancel_wakeup_unregister() {
+}
+#endif
+
+int qore_cancellable_sleep(int64 usecs, ExceptionSink* xsink, const char* operation) {
+    assert(xsink);
+    if (qore_check_cancel(xsink, operation)) {
+        return -1;
+    }
+    if (usecs <= 0) {
+        return 0;
+    }
+    // no cancellation can be delivered while it is deferred
+    if (qore_is_cancel_deferred()) {
+        return qore_usleep(usecs);
+    }
+
+    // the whole milliseconds are slept in a condition wait, which cancellation interrupts at once (see
+    // QoreCondition::waitWithInterrupt()); a remainder of less than a millisecond is slept as it is
+    int64 deadline_us = q_get_monotonic_us() + usecs;
+    QoreThreadLock lck;
+    QoreCondition cond;
+    AutoLocker al(lck);
+    while (true) {
+        int64 remaining_us = deadline_us - q_get_monotonic_us();
+        if (remaining_us <= 0) {
+            return 0;
+        }
+        if (remaining_us < 1000) {
+            return qore_usleep(remaining_us);
+        }
+        // the exception is raised here so that it names the operation
+        if (cond.waitWithInterrupt(&lck, remaining_us / 1000) == QORE_COND_RESULT_INTERRUPTED
+            && qore_check_cancel(xsink, operation)) {
+            return -1;
+        }
+    }
 }
 
 bool qore_is_thread_cancel_requested() {

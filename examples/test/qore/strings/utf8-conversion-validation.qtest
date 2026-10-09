@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class Utf8ConversionValidationTest
+
+#! Malformed UTF-8 input is rejected by every conversion on every platform
+/** Some versions of Apple's system libiconv convert malformed UTF-8, such as a lead byte followed by an ASCII
+    character, without an error; Qore then validates UTF-8 input itself, so that a conversion from malformed UTF-8
+    fails everywhere as it does with glibc and GNU libiconv.
+*/
+class Utf8ConversionValidationTest inherits QUnit::Test {
+    public {
+        #! lone continuations, truncated sequences, overlong forms, surrogates, values above U+10FFFF and bytes that
+        #! never appear in UTF-8, each followed by ASCII text, as they appear in a file
+        const Malformed = (<80>, <bf>, <c2>, <e0a0>, <f09080>, <c080>, <c1bf>, <e08080>, <f0808080>, <eda080>,
+            <edbfbf>, <f4908080>, <f5808080>, <ff>, <fe>, <c220>, <e028a1>, <f0288cbc>, <e0a020>);
+
+        #! well-formed sequences at the boundaries of each length
+        const WellFormed = (<00>, <7f>, <c280>, <dfbf>, <e0a080>, <ed9fbf>, <ee8080>, <efbfbf>, <f0908080>,
+            <f48fbfbf>);
+
+        #! the targets converted to
+        const Targets = ("UTF-16LE", "UTF-16BE", "UTF-16", "ISO-8859-1", "UTF-32LE");
+    }
+
+    constructor() : Test("Utf8ConversionValidationTest", "1.0") {
+        addTestCase("malformed UTF-8 is rejected", \malformed());
+        addTestCase("well-formed UTF-8 is converted", \wellFormed());
+        addTestCase("streams reject malformed UTF-8", \streams());
+        addTestCase("the validator", \native());
+        set_return_value(main());
+    }
+
+    malformed() {
+        foreach binary payload in (Malformed) {
+            binary data = binary("value,count\n\"") + payload + binary("\",1\n");
+            foreach string target in (Targets) {
+                assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(),
+                    (binary_to_string(data, "UTF-8"), target), sprintf("%s -> %s", payload.toHex(), target));
+            }
+            # at the end of the input
+            assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(),
+                (binary_to_string(binary("abc") + payload, "UTF-8"), "UTF-16LE"), payload.toHex() + " at the end");
+        }
+    }
+
+    wellFormed() {
+        foreach binary payload in (WellFormed) {
+            string s = binary_to_string(binary("a") + payload + binary(" b"), "UTF-8");
+            foreach string target in (Targets) {
+                # ISO-8859-1 represents U+0000 - U+00FF only
+                if (target == "ISO-8859-1" && payload.size() > 1 && payload != <c280>) {
+                    continue;
+                }
+                string c = convert_encoding(s, target);
+                assertEq(s, convert_encoding(c, "UTF-8"), sprintf("%s -> %s", payload.toHex(), target));
+            }
+        }
+    }
+
+    streams() {
+        foreach binary payload in (Malformed) {
+            binary data = binary("value,count\n\"") + payload + binary("\",1\n");
+            InputStream is = new EncodingConversionInputStream(new BinaryInputStream(data), "UTF-8", "UTF-16LE");
+            assertThrows("ENCODING-CONVERSION-ERROR", sub () {
+                while (is.read(64)) {
+                }
+            }, NOTHING, payload.toHex());
+        }
+        # a sequence split across reads is converted
+        binary data = binary("aé€😀b");
+        for (int chunk = 1; chunk <= 4; ++chunk) {
+            InputStream is = new EncodingConversionInputStream(new ChunkInputStream(data, chunk), "UTF-8",
+                "UTF-16LE");
+            binary out = binary();
+            while (*binary b = is.read(64)) {
+                out += b;
+            }
+            assertEq("aé€😀b", convert_encoding(binary_to_string(out, "UTF-16LE"), "UTF-8"), "chunk " + chunk);
+        }
+    }
+
+    native() {
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string native = ENV.QORE_UTF8_VALIDATION_TEST ?? dirname(qore) + "/qore-utf8-validation-test";
+        if (!is_file(native)) {
+            testSkip("the native UTF-8 validation test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertEq("PASS: UTF-8 validation\n", output);
+    }
+}
+
+#! Returns the data a fixed number of bytes at a time
+class ChunkInputStream inherits InputStream {
+    private {
+        binary data;
+        int pos = 0;
+        int chunk;
+    }
+
+    constructor(binary data, int chunk) {
+        self.data = data;
+        self.chunk = chunk;
+    }
+
+    int peek() {
+        return pos < data.size() ? data[pos] : -1;
+    }
+
+    *binary read(int limit) {
+        if (limit <= 0 || pos >= data.size()) {
+            return;
+        }
+        int size = min(limit, chunk, data.size() - pos);
+        binary rv = data.substr(pos, size);
+        pos += size;
+        return rv;
+    }
+}

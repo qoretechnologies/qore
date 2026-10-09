@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ProcessSpawnTest
+
+#! Tests that the backquote operator and system() start commands without fork()
+/** A %Qore process is multithreaded, and after fork() in a multithreaded process the child may only call
+    async-signal-safe functions until it executes the command: any lock that another thread held at the time of the
+    fork stays locked in the child.  On macOS, the backquote operator and system() started their commands with
+    fork(), whose child runs the C library's fork handlers, which allocate memory; with AddressSanitizer, a child
+    created while another thread held the allocator's lock was killed before it ran the command, so the command
+    silently produced no output.  The commands are now started with posix_spawn() on every platform that has it,
+    which runs no code in the child before the command.
+
+    The cppapiuser test module records every child created with fork() through a pthread_atfork() child handler;
+    commands run with the backquote operator and system() must not be recorded, while a child created with fork()
+    by the module is (the positive control).
+*/
+class ProcessSpawnTest inherits QUnit::Test {
+    private {
+        TmpDir tmp("qore-process-spawn-");
+        string record;
+    }
+
+    constructor() : QUnit::Test("ProcessSpawnTest", "1.0", \ARGV) {
+        record = tmp.path + DirSep + "fork-children";
+        cpp_api_record_fork_children(record);
+
+        addTestCase("backquote and system() do not fork", \testNoFork());
+        addTestCase("positive control: fork() children are recorded", \testForkRecorded());
+        addTestCase("negative: another record file", \testRecordFileError());
+        addTestCase("negative: a command that cannot be started", \testStartFailure());
+        addTestCase("negative: functional domains", \testDomains());
+        set_return_value(main());
+    }
+
+    testNoFork() {
+        int before = getRecorded();
+        assertEq("spawned\n", backquote("echo spawned"));
+        int rc;
+        assertEq("status\n", backquote("echo status; exit 3", \rc));
+        assertEq(3, rc);
+        assertEq("operator\n", `echo operator`);
+        assertEq(5, system("exit 5"));
+        assertEq(before, getRecorded(), "no child was created with fork()");
+    }
+
+    testForkRecorded() {
+        int before = getRecorded();
+        assertEq(0, cpp_api_fork_and_wait());
+        assertEq(before + 1, getRecorded(), "the child created with fork() was recorded");
+    }
+
+    testRecordFileError() {
+        assertThrows("FORK-RECORD-ERROR", \cpp_api_record_fork_children(), record + ".other");
+    }
+
+    #! a command that cannot be started is reported with an exception, and no fork() child is attempted
+    /** With the soft limit on the user's processes below the number of processes that the user has, no process can
+        be created: posix_spawn() fails.  system() went on with the fork() path in this case and returned -1 without
+        an error.
+    */
+    testStartFailure() {
+        int old_limit = cpp_api_set_process_limit(1);
+        on_exit cpp_api_set_process_limit(old_limit);
+
+        # the precondition: a privileged user is not limited
+        bool forked;
+        try {
+            cpp_api_fork_and_wait();
+            forked = True;
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FORK-RECORD-ERROR", ex.err);
+        }
+        if (forked) {
+            testSkip("the process limit does not apply to this user");
+        }
+
+        int before = getRecorded();
+        assertThrows("SYSTEM-ERROR", \system(), "exit 0");
+        assertThrows("BACKQUOTE-ERROR", \backquote(), "echo not started");
+        assertThrows("BACKQUOTE-ERROR", string sub () { return `echo not started`; });
+        assertEq(before, getRecorded(), "no child was created with fork()");
+    }
+
+    #! the test functions that create processes or files cannot be used where their functional domain is restricted
+    testDomains() {
+        list<hash<auto>> cases = (
+            {"po": PO_NO_PROCESS_CONTROL, "call": "cpp_api_fork_and_wait()"},
+            {"po": PO_NO_PROCESS_CONTROL, "call": "cpp_api_record_fork_children(\"x\")"},
+            {"po": PO_NO_FILESYSTEM, "call": "cpp_api_record_fork_children(\"x\")"},
+            {"po": PO_NO_PROCESS_CONTROL, "call": "cpp_api_set_process_limit(-1)"},
+        );
+        foreach hash<auto> c in (cases) {
+            Program p(PO_NEW_STYLE | c.po);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("%requires cppapiuser\nsub f() { " + c.call + "; }",
+                "domain-test"), c.call);
+        }
+        # positive control: without the restriction, the code parses
+        Program p(PO_NEW_STYLE);
+        p.parse("%requires cppapiuser\nsub f() { cpp_api_fork_and_wait(); }", "domain-test");
+        assertTrue(p.existsFunction("f"));
+    }
+
+    #! returns the number of children created with fork() so far
+    private int getRecorded() {
+        return is_file(record) ? hstat(record).size : 0;
+    }
+}

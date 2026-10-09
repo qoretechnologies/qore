@@ -1,0 +1,36 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../ExecModeHarness.qm
+
+%exec-class WatchPollCancelTest
+
+#! A watch data provider's polling thread ends cleanly when it is cancelled because polling is stopped
+/** Stopping polling wakes the polling thread and cancels it; the cancellation is raised at the next cancellation
+    point, which can be in the polling loop itself, between its statements.  Each start and stop cycle hits that point
+    with a high probability (before the fix, 263 of 500 cycles with AST execution and over 480 with IR, JIT and tiered
+    execution), so the worker's 500 cycles are certain to hit it; no polling thread may die with an unhandled
+    exception.
+*/
+class WatchPollCancelTest inherits QUnit::Test {
+    constructor() : Test("WatchPollCancelTest", "1.0") {
+        addTestCase("polling stopped repeatedly", \stopRepeatedly());
+        set_return_value(main());
+    }
+
+    stopRepeatedly() {
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string worker = get_script_dir() + "/watch-poll-cancel-worker.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("'%s' --exec-mode=%s '%s' 500", qore, mode, worker),
+                ExecModeHarness::NativeCheck::Jit);
+            assertEq("done 500\n", out, mode);
+        }
+    }
+}

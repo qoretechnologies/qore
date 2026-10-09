@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 #! Regression test: a local or parameter declared "auto" can hold a reference at runtime.
 /** Reference capability was established from the *declared* type, which reports "not a
@@ -173,8 +174,8 @@ string expected = "[9]/[9]|[1, 2]/[1, 2]|[1, 5]/[1, 5]|{a: 1, b: 2}/{a: 1, b: 2}
     + "1/5|999000|7,[1, 2]\n";
 
 foreach string mode in ("ast", "ir", "tiered", "jit") {
-    string actual = backquote(sprintf(
-        "LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s 2>&1",
+    string actual = ExecModeHarness::run(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
         libqore_dir, qore_bin, mode, script_path));
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);

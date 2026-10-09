@@ -405,6 +405,9 @@ private:
         return reinterpret_cast<AbstractQoreNode*>(payload());
     }
 
+    //! Hard comparison; an exception raised comparing nodes is discarded if xsink is nullptr (internal use only)
+    DLLLOCAL bool isEqualHardIntern(const QoreValue& other, ExceptionSink* xsink) const;
+
     //! Returns the node owned by this value, whether held as a pointer or as an opaque reference
     /** Returns nullptr for every other representation.  This is the single place that knows an
         opaque reference owns its payload, so that all of QoreValue's reference-counting paths
@@ -954,7 +957,23 @@ public:
     // ========================================================================
 
     //! Hard comparison (no type conversion)
+    /** An exception raised while comparing (for example \c STACK-LIMIT-EXCEEDED when comparing deeply nested
+        containers) is discarded, and the values compare as not equal; use isEqualHard(const QoreValue&,
+        ExceptionSink*) const to receive it
+    */
     DLLEXPORT bool isEqualHard(const QoreValue& other) const;
+
+    //! Hard comparison (no type conversion)
+    /** @param other the value to compare
+        @param xsink if an error occurs while comparing, the Qore-language exception info is added to this object;
+        comparing containers recurses with their nesting, so \c STACK-LIMIT-EXCEEDED is raised if they are nested
+        more deeply than the thread's stack allows
+
+        @return true if the values are equal; false if they are not or if an exception was raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool isEqualHard(const QoreValue& other, ExceptionSink* xsink) const;
 
     //! Soft comparison (with type conversion)
     DLLEXPORT bool isEqualSoft(const QoreValue& other, ExceptionSink* xsink) const;

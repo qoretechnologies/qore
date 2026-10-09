@@ -34,6 +34,8 @@
 #ifndef QORE_QORE_STRING_PRIVATE_H
 #define QORE_QORE_STRING_PRIVATE_H
 
+#include "qore/intern/qore_encoding_private.h"
+
 #include <vector>
 
 class QoreRegexBase;
@@ -53,6 +55,25 @@ class QoreStringNode;
 #define QUS_FRAGMENT 2
 
 typedef std::vector<int> intvec_t;
+
+//! describes where characters start in the bytes of a string, for byte-oriented substring searches
+/** A byte-oriented search can find a match that starts in the middle of a character in an encoding that is not
+    self-synchronizing: in UTF-16, the low byte of one code unit and the high byte of the next can form another
+    character, and in multi-byte encodings such as Shift_JIS, GBK, or Big5, the second byte of a double-byte character
+    can be an ASCII character (ex: 0x5c, the backslash, in Shift_JIS "表").  UTF-8 and single-byte encodings cannot
+    produce such a match.
+*/
+struct qore_char_boundary {
+    //! the byte alignment of character boundaries; 1 if any byte offset can be a character boundary
+    unsigned align;
+    //! the character length function of a variable-width encoding whose characters can contain bytes that are
+    //! other characters; a match is only taken at a character boundary found by walking the characters
+    mbcs_charlen_t charlen;
+
+    DLLLOCAL qore_char_boundary(unsigned align = 1, mbcs_charlen_t charlen = nullptr) : align(align),
+            charlen(charlen) {
+    }
+};
 
 struct qore_string_private {
 public:
@@ -251,26 +272,28 @@ public:
         return -1;
     }
 
-    //! returns the byte alignment of character boundaries in the given encoding
-    /** UTF-16 is not self-synchronizing: the low byte of one code unit and the high byte of the next
-        can form the byte sequence of a different character, so a byte-oriented substring search can
-        match at a position that is not a character boundary.  UTF-8 and single-byte encodings cannot
-        produce such a match, so 1 (no constraint) is returned for them.
+    //! returns the character boundaries of the given encoding for byte-oriented searches
+    /** See qore_char_boundary.
 
         @param enc the encoding to check; may be nullptr for binary data
 
-        @return the alignment in bytes; 1 means that any byte offset is a valid character boundary
+        @return the character boundaries; the default value means that any byte offset is a valid character boundary
      */
-    DLLLOCAL static unsigned get_char_alignment(const QoreEncoding* enc) {
+    DLLLOCAL static qore_char_boundary get_char_alignment(const QoreEncoding* enc) {
         if (!enc) {
-            return 1;
+            return qore_char_boundary();
         }
-        unsigned w = enc->getMinCharWidth();
-        return w > 1 ? w : 1;
+        const qore_encoding_private* ep = qore_encoding_private::get(*enc);
+        if (ep->needs_boundary_check) {
+            assert(ep->fcharlen);
+            return qore_char_boundary(1, ep->fcharlen);
+        }
+        unsigned w = ep->getMinCharWidth();
+        return qore_char_boundary(w > 1 ? w : 1);
     }
 
-    //! returns the byte alignment of character boundaries in this string's encoding
-    DLLLOCAL unsigned getCharAlignment() const {
+    //! returns the character boundaries of this string's encoding for byte-oriented searches
+    DLLLOCAL qore_char_boundary getCharAlignment() const {
         return get_char_alignment(getEncoding());
     }
 
@@ -279,14 +302,20 @@ public:
         @param hlen the length of \a haystack in bytes
         @param needle the data to find
         @param nlen the length of \a needle in bytes
-        @param align the byte alignment of character boundaries; see get_char_alignment()
+        @param b the character boundaries; see get_char_alignment()
         @param base the byte offset of \a haystack within the string, used for the alignment check
 
         @return a pointer to the first match starting at a character boundary or nullptr if there is
         none
+
+        @note \a haystack must start at a character boundary
      */
     DLLLOCAL static const char* memmem_aligned(const char* haystack, size_t hlen, const char* needle,
-            size_t nlen, unsigned align = 1, size_t base = 0) {
+            size_t nlen, const qore_char_boundary& b = qore_char_boundary(), size_t base = 0) {
+        if (b.charlen && nlen) {
+            return memmem_boundary(haystack, hlen, needle, nlen, b.charlen);
+        }
+        const unsigned align = b.align;
         if (align < 2 || !nlen) {
             return static_cast<const char*>(q_memmem(haystack, hlen, needle, nlen));
         }
@@ -312,13 +341,28 @@ public:
         @param hlen the length of \a haystack in bytes
         @param needle the data to find
         @param nlen the length of \a needle in bytes
-        @param align the byte alignment of character boundaries; see get_char_alignment()
+        @param b the character boundaries; see get_char_alignment()
 
         @return a pointer to the last match starting at a character boundary or nullptr if there is
         none
+
+        @note \a haystack must start at a character boundary
      */
     DLLLOCAL static const char* memrmem_aligned(const char* haystack, size_t hlen, const char* needle,
-            size_t nlen, unsigned align = 1) {
+            size_t nlen, const qore_char_boundary& b = qore_char_boundary()) {
+        if (b.charlen && nlen) {
+            // the characters can only be found from the start; the last match found searching forwards is taken
+            const char* last = nullptr;
+            const char* p = haystack;
+            const char* end = haystack + hlen;
+            while (const char* m = memmem_boundary(p, end - p, needle, nlen, b.charlen)) {
+                last = m;
+                qore_offset_t l = b.charlen(m, end - m);
+                p = m + (l > 0 ? l : 1);
+            }
+            return last;
+        }
+        const unsigned align = b.align;
         if (align < 2 || !nlen) {
             return static_cast<const char*>(q_memrmem(haystack, hlen, needle, nlen));
         }
@@ -337,8 +381,43 @@ public:
         return nullptr;
     }
 
+    //! finds the first occurrence of the needle that starts at a character boundary in a variable-width encoding
+    /** @param haystack the data to search; must start at a character boundary
+        @param hlen the length of \a haystack in bytes
+        @param needle the data to find
+        @param nlen the length of \a needle in bytes; must not be 0
+        @param charlen the character length function of the encoding
+
+        @return a pointer to the first match starting at a character boundary or nullptr if there is none
+     */
+    DLLLOCAL static const char* memmem_boundary(const char* haystack, size_t hlen, const char* needle, size_t nlen,
+            mbcs_charlen_t charlen) {
+        assert(nlen);
+        const char* end = haystack + hlen;
+        // the next character boundary
+        const char* c = haystack;
+        const char* p = haystack;
+        while (static_cast<size_t>(end - p) >= nlen) {
+            const char* m = static_cast<const char*>(q_memmem(p, end - p, needle, nlen));
+            if (!m) {
+                return nullptr;
+            }
+            while (c < m) {
+                qore_offset_t l = charlen(c, end - c);
+                // an invalid or incomplete character is skipped one byte at a time
+                c += l > 0 ? l : 1;
+            }
+            if (c == m) {
+                return m;
+            }
+            // the match starts inside a character; search again from the next character
+            p = c;
+        }
+        return nullptr;
+    }
+
     DLLLOCAL static qore_offset_t index_simple(const char* haystack, size_t hlen, const char* needle, size_t nlen,
-        qore_offset_t pos = 0, unsigned align = 1, size_t base = 0) {
+        qore_offset_t pos = 0, const qore_char_boundary& align = qore_char_boundary(), size_t base = 0) {
         const char* start = haystack + pos;
         const char* ptr = memmem_aligned(start, hlen - pos, needle, nlen, align, base + pos);
         if (!ptr) {
@@ -486,7 +565,7 @@ public:
     // finds the last occurrence of needle in haystack at or before position pos
     // pos must be a non-negative valid byte offset in haystack
     DLLLOCAL static qore_offset_t rindex_simple(const char* haystack, size_t hlen, const char* needle,
-            size_t nlen, qore_offset_t pos = -1, unsigned align = 1) {
+            size_t nlen, qore_offset_t pos = -1, const qore_char_boundary& align = qore_char_boundary()) {
         if (pos < 0) {
             pos = hlen + pos;
             if (pos < 0) {

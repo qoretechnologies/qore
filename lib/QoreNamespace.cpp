@@ -3066,7 +3066,7 @@ void qore_ns_private::deleteData(bool deref_vars, ExceptionSink* xsink) {
     // clear all constants
     constant.deleteAll(xsink);
     // clear all constants and static class vars
-    classList.deleteClassData(deref_vars, xsink);
+    classList.deleteClassData(deref_vars, getProgram(), xsink);
     // clear all user functions
     func_list.del();
     // delete all global variables
@@ -3446,7 +3446,7 @@ void qore_ns_private::parseRollback(ExceptionSink* xsink, bool atomic_rollback) 
         constant.deleteAll(xsink);
         classList.clearConstants(xsink);
         // clear all static class vars
-        classList.deleteClassData(true, xsink);
+        classList.deleteClassData(true, getProgram(), xsink);
 
         // delete pending constant list
         constant.reset();

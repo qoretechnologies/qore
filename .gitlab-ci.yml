@@ -242,6 +242,48 @@ test-alpine-arm64:
       - crash-dumps/
     expire_in: 7 days
 
+test-ast-ubuntu-amd64:
+  stage: test
+  parallel: 2
+  timeout: 90 minutes
+  needs: [build-ubuntu-amd64]
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  variables:
+    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    # %modern code runs in tiered mode by default, so no other job runs it with the AST interpreter; this job runs
+    # the core language tests with it, which cover the AST engine's own code paths without repeating the module,
+    # I/O and network tests, which do not depend on the execution mode
+    QORE_TEST_OPTS: '-penable-debug --exec-mode=ast'
+    QORE_TEST_DIRS: 'qore/classes qore/closures qore/enums qore/functions qore/misc qore/namespaces qore/operators qore/stack qore/statements qore/strings qore/values qore/vars'
+    TEST_TIMEOUT: "600"
+  before_script:
+    - |
+        curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+        -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+        -d "{\"state\": \"pending\", \"context\": \"${REPO_NAME}-ast\", \"description\": \"Gitlab CI AST Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+    - set +e
+  script:
+    - |
+        if test/docker_test/test-ubuntu.sh; then
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}-ast\", \"description\": \"Gitlab CI AST Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 0
+        else
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-ast\", \"description\": \"Gitlab CI AST Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 1
+        fi
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+    expire_in: 7 days
+
 test-ir-ubuntu-amd64:
   stage: test
   parallel: 2
