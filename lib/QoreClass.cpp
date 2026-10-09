@@ -1106,7 +1106,8 @@ int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
 }
 
 int qore_class_private::initializeMembers() {
-    if (!parse_resolve_class_members) {
+    // nothing is resolved again for a committed user class (see parseInitPartial())
+    if (!parse_resolve_class_members && !(committed && !sys)) {
         parse_resolve_class_members = true;
 
         if (scl) {
@@ -4980,7 +4981,11 @@ QoreListNode* QoreClass::getStaticMethodList() const {
 }
 
 int qore_class_private::parseInitPartial() {
-    if (parse_init_partial_called || sys) {
+    // A committed class cannot be changed, so it has nothing to initialize; it can be shared with other Programs and
+    // run by their threads, and a later parse in another Program that reaches it - one that imports it, or parses a
+    // subclass of it - must not write its parse state.  The same holds for parseInit(), parseResolveHierarchy(),
+    // initializeMembers() and parseResolveAbstract().
+    if (parse_init_partial_called || sys || committed) {
         return 0;
     }
 
@@ -5080,6 +5085,12 @@ int qore_class_private::parseInitConstants() {
 }
 
 int qore_class_private::parseInit() {
+    // a committed class has nothing to initialize, and a parse in another Program sharing it must not write its parse
+    // state while other threads run it (see parseInitPartial())
+    if (committed) {
+        return 0;
+    }
+
     // make sure initialize() is called first
     int err = initialize();
 
@@ -5433,7 +5444,9 @@ void qore_class_private::parseWarnAmbiguousOverloads() {
 }
 
 int qore_class_private::parseResolveHierarchy() {
-    if (!parse_resolve_hierarchy) {
+    // nothing is resolved again for a committed user class (see parseInitPartial()); builtin classes are resolved
+    // here when a parse first reaches them
+    if (!parse_resolve_hierarchy && !(committed && !sys)) {
         parse_resolve_hierarchy = true;
 
         if (!scl) {
@@ -5449,7 +5462,8 @@ int qore_class_private::parseResolveHierarchy() {
 }
 
 void qore_class_private::parseResolveAbstract() {
-    if (!parse_resolve_abstract) {
+    // nothing is resolved again for a committed user class (see parseInitPartial())
+    if (!parse_resolve_abstract && !(committed && !sys)) {
         parse_resolve_abstract = true;
 
         if (!scl)

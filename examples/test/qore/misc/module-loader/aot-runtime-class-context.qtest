@@ -10,15 +10,17 @@
 
 %exec-class AotRuntimeClassContextTest
 
-#! Tests method calls made at runtime from a class of a module loaded at runtime, in several threads at once
-/** A method call on an object whose class is only known at runtime checks whether the calling class may use the
-    object's private methods.  Runtime code used the parse-time check, which resolves the class hierarchy of the
-    calling class the first time it is asked: a class of a compiled module loaded with \c load_module() had not been
-    resolved, so the first calls in each thread resolved it again, writing the class's parse state while other
-    threads ran its methods.  ThreadSanitizer builds report the data race in the child; every build checks that the
-    calls in all threads return the expected values.
+#! Tests classes of a compiled module loaded at runtime while several threads run their methods
+/** The class hierarchy of a class of a compiled module was not marked as resolved, and runtime code resolved it:
+    - a method call on an object whose class is only known at runtime checks whether the calling class may use the
+      object's private methods, and runtime code used the parse-time check, which resolves the hierarchy of the
+      calling class the first time it is asked
+    - a Program that parses a subclass of the module's class resolves the hierarchy of the class it inherits
 
-    The test compiles the module with qcc and runs a child process that loads it with \c load_module() and calls the
+    Either way the class's parse state was written while other threads ran its methods.  ThreadSanitizer builds
+    report the data race in the child; every build checks that the calls in all threads return the expected values.
+
+    The test compiles the module with qcc and runs child processes that load it with \c load_module() and call the
     method in several threads, all released together by a Counter.
 */
 class AotRuntimeClassContextTest inherits QUnit::Test {
@@ -27,6 +29,8 @@ class AotRuntimeClassContextTest inherits QUnit::Test {
         const Threads = 4;
         #! the number of times the child is run, each in a new process
         const Rounds = 3;
+        #! the number of Programs in which a subclass of the module's class is parsed while the threads run
+        const Programs = 10;
 
         #! the module: a class that calls a method of an object of another class known only at runtime
         const ModuleSource = "%modern
@@ -57,10 +61,12 @@ public class HierTarget {
 }
 ";
 
-        #! the child: loads the module at runtime and calls the method in several threads at once
+        #! the child: loads the module at runtime and calls the method in several threads at once; with a second
+        #! argument, the main thread parses subclasses of the module's class in new Programs meanwhile
         const ChildSource = "%modern
 load_module(\"HierCtx\");
 int threads = ARGV[0].toInt();
+int programs = ARGV[1] ? ARGV[1].toInt() : 0;
 Counter start(1);
 Counter running(threads);
 Queue<int> results();
@@ -70,7 +76,7 @@ code run = sub () {
     object t = create_object(\"HierTarget\");
     start.waitForZero();
     int sum = 0;
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < 2000; ++i) {
         sum += call_object_method(c, \"call\", t);
     }
     results.push(sum);
@@ -79,6 +85,15 @@ for (int i = 0; i < threads; ++i) {
     background run();
 }
 start.dec();
+# the Programs are kept until the threads are done
+list<Program> pgms;
+for (int i = 0; i < programs; ++i) {
+    Program p(PO_NEW_STYLE);
+    p.loadModule(\"HierCtx\");
+    p.parse(\"class Sub inherits HierCaller { private int priv() { return 3; } int f(HierCaller o) { return o.value() \"
+        \"+ priv(); } }\", \"sub\");
+    pgms += p;
+}
 running.waitForZero();
 list<int> sums;
 while (*hash<QueueTryResult<int>> r = results.tryGet()) {
@@ -101,10 +116,23 @@ printf(\"sums: %y\\n\", sums);
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 
         addTestCase("calls from a class of a module loaded at runtime", \runtimeClassContextTest());
+        addTestCase("subclasses parsed while the class runs", \subclassParseTest());
         set_return_value(main());
     }
 
     runtimeClassContextTest() {
+        runChildren(0);
+    }
+
+    subclassParseTest() {
+        runChildren(Programs);
+    }
+
+    #! compiles the module and runs the child process in each round
+    /** @param programs the number of Programs in which the child's main thread parses a subclass of the module's
+        class while the threads run
+    */
+    private runChildren(int programs) {
         TmpDir tmp("qore-aot-runtime-class-context-");
         string src = tmp.path + DirSep + "HierCtx.qm";
         string qmod = tmp.path + DirSep + "HierCtx.qmod";
@@ -125,10 +153,11 @@ printf(\"sums: %y\\n\", sums);
         f.write(ChildSource);
         f.close();
 
-        list<int> expected = map 200, xrange(Threads);
+        # each call returns 2
+        list<int> expected = map 4000, xrange(Threads);
         for (int round = 1; round <= Rounds; ++round) {
-            out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s %d 2>&1; echo \"rc=$?\"",
-                libqore_dir, tmp.path, qore_bin, child, Threads));
+            out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s %d %d 2>&1; echo \"rc=$?\"",
+                libqore_dir, tmp.path, qore_bin, child, Threads, programs));
             *list<*string> rc = (out =~ x/rc=([0-9]+)\s*$/);
             assertEq("0", rc[0], sprintf("round %d: the child exits normally: %s", round, out));
             assertTrue(out.find(sprintf("sums: %y", expected)) >= 0,

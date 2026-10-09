@@ -4194,6 +4194,10 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a race condition when a @ref Qore::Program "Program" parsed code that used classes of a module that other
+      threads were running at the same time: the parse wrote the classes' internal state while the other threads used
+      them
+
     - Fixed @ref Qore::Socket::accept() "Socket::accept()" and
       @ref Qore::Socket::acceptSSL() "Socket::acceptSSL()" sometimes returning @ref nothing without an exception
       when another thread closed the listening socket while the call was waiting for a connection; a
