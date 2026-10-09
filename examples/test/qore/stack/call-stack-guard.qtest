@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%include StackGuardCaseTest.qc
+
+%exec-class CallStackGuardTest
+
+#! checks that code that recurses without bound raises STACK-LIMIT-EXCEEDED on every recursion path
+/** Each script recurses through one kind of call or evaluation on a thread with a small stack; see
+    StackGuardCaseTest
+*/
+class CallStackGuardTest inherits StackGuardCaseTest {
+    public {
+        #! the cases, by name
+        const Cases = {
+            "function": <StackCase>{
+                "setup": "sub r() { r(); }",
+                "op": "r()",
+            },
+            "method": <StackCase>{
+                "setup": "class C { m() { m(); } }",
+                "op": "(new C()).m()",
+            },
+            "static method": <StackCase>{
+                "setup": "class C { static m() { C::m(); } }",
+                "op": "C::m()",
+            },
+            "closure": <StackCase>{
+                "setup": "our code c = sub () { c(); };",
+                "op": "c()",
+            },
+            "call reference": <StackCase>{
+                "setup": "sub r() { code c = \\r(); c(); }",
+                "op": "r()",
+            },
+            "constructor": <StackCase>{
+                "setup": "class C { constructor() { C c(); } }",
+                "op": "new C()",
+            },
+            "base class constructor": <StackCase>{
+                "setup": "class B { constructor() { new D(); } } class D inherits B {}",
+                "op": "new D()",
+            },
+            "copy method": <StackCase>{
+                "setup": "class C { copy() { C c(); c.copy(); } }",
+                "op": "(new C()).copy()",
+            },
+            "memberGate()": <StackCase>{
+                # memberGate() is not called again for the object whose memberGate() is running
+                "setup": "class C { auto memberGate(string m) { return get(new C(), m); } }
+auto sub get(C c, string m) { return c.(m); }",
+                "op": "(new C()).a",
+            },
+            "methodGate()": <StackCase>{
+                "setup": "class C { auto methodGate(string m) { return call_object_method(self, m + \"x\"); } }",
+                "op": "(new C()).a()",
+            },
+            "member initializer": <StackCase>{
+                "setup": "class C { public { int a = f(); } } int sub f() { C c(); return 1; }",
+                "op": "new C()",
+            },
+            "hashdecl initializer": <StackCase>{
+                "setup": "hashdecl H { int a = f(); } int sub f() { hash<H> h(); return 1; }",
+                "op": "f()",
+            },
+            "map": <StackCase>{
+                "setup": "list sub r(list l) { return map r(l), l; }",
+                "op": "r((1,))",
+            },
+            "foldl": <StackCase>{
+                "setup": "auto sub r(list l) { return foldl r(l), l; }",
+                "op": "r((1, 2))",
+            },
+            "select": <StackCase>{
+                "setup": "list sub r(list l) { return select l, r(l); }",
+                "op": "r((1,))",
+            },
+            "sort callback": <StackCase>{
+                "setup": "int sub cmp(int a, int b) { sort((1, 2), \\cmp()); return a <=> b; }",
+                "op": "sort((1, 2), \\cmp())",
+            },
+            "call_function()": <StackCase>{
+                "setup": "sub r() { call_function(\\r()); }",
+                "op": "r()",
+            },
+            "call_function_args()": <StackCase>{
+                "setup": "sub r() { call_function_args(\"r\"); }",
+                "op": "r()",
+            },
+            "iterator": <StackCase>{
+                "setup": "class I inherits AbstractIterator {
+    bool next() { iterate(); return False; }
+    auto getValue() {}
+    bool valid() { return False; }
+}
+sub iterate() { foreach auto x in (new I()) {} }",
+                "op": "iterate()",
+            },
+            "try/catch": <StackCase>{
+                "setup": "sub r() { try { r(); } catch (hash<ExceptionInfo> ex) { rethrow; } }",
+                "op": "r()",
+            },
+            "on_exit": <StackCase>{
+                "setup": "sub r() { on_exit {} r(); }",
+                "op": "r()",
+            },
+            "Program::callFunction()": <StackCase>{
+                "setup": "our Program p(PO_NEW_STYLE); p.parse(\"sub r() { r(); }\", \"child\");",
+                "op": "p.callFunction(\"r\")",
+            },
+            "callback across Programs": <StackCase>{
+                "setup": "our Program p(PO_NEW_STYLE); p.parse(\"sub r(code c) { c(); }\", \"child\");
+our code cb = sub () { p.callFunction(\"r\", cb); };",
+                "op": "cb()",
+            },
+            "nested Programs": <StackCase>{
+                "setup": "sub r() {
+    Program p(PO_NEW_STYLE);
+    p.parse(\"sub f(code c) { c(); }\", \"child\");
+    p.callFunction(\"f\", \\r());
+}",
+                "op": "r()",
+            },
+            "destructor": <StackCase>{
+                "setup": "class C { destructor() { C c(); } } sub del() { C c(); delete c; }",
+                "op": "del()",
+                "skip": "deleting objects beyond a depth of 16 is deferred to a loop, which turns the recursion into "
+                    "unbounded iteration and memory growth; enable this case with the fix that bounds it",
+            },
+            "function on a 96KB stack": <StackCase>{
+                "setup": "sub r() { r(); }",
+                "op": "r()",
+                "stack_size": 96 * 1024,
+            },
+        };
+    }
+
+    constructor() : StackGuardCaseTest("CallStackGuardTest", Cases) {
+        set_return_value(main());
+    }
+}
