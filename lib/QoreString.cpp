@@ -592,9 +592,26 @@ void QoreAsciiCompatStringHelper::setupSlow(const qore_string_private& str) {
     enc = QCS_UTF8;
 }
 
+// skips a byte order mark at the start of text in a generic Unicode encoding created on the fly (ex: "UTF-32") and
+// sets the encoding to the one of the byte order found (ex: "UTF-32LE"); text without one is big-endian
+static void q_skip_generic_bom(const char*& p, size_t& size, const QoreEncoding*& enc) {
+    const qore_encoding_private* ep = qore_encoding_private::get(*enc);
+    if (ep->iconv_source_code.empty()) {
+        return;
+    }
+    size_t bom_len;
+    const QoreEncoding* bom_enc = ep->getBomEncoding(enc, p, size, bom_len);
+    if (bom_enc) {
+        p += bom_len;
+        size -= bom_len;
+        enc = bom_enc;
+    }
+}
+
 // decodes text with iconv; for an encoding with no character decoding functions (ex: EBCDIC), or one whose text can
 // start with a byte order mark in either byte order (ex: "UTF-32"), which iconv resolves
 static void decode_to_utf8_iconv(const QoreEncoding* enc, const char* p, size_t size, QoreString& out) {
+    q_skip_generic_bom(p, size, enc);
     qore_string_private* op = qore_string_private::get(out);
     IconvHelper c(QCS_UTF8, enc, nullptr);
     if (!c.isValid()) {
@@ -894,6 +911,10 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
     assert(targ.empty());
 
     //printd(5, "qore_string_private::convert_getEncoding()_intern() %s -> %s len: " QSD " src='%s'\n", from->getCode(), nccs->getCode(), src_len, src);
+
+    // text in a generic Unicode encoding (ex: "UTF-32") can start with a byte order mark in either byte order, which
+    // gives its byte order; iconv converts it with the explicit name of the byte order (see IconvHelper::getIconvCode())
+    q_skip_generic_bom(src, src_len, from);
 
     IconvHelper c(nccs, from, xsink);
     if (xsink && *xsink)

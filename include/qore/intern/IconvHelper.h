@@ -326,15 +326,16 @@ private:
        \c QCS_UTF16LE according to the BOM found.
     */
    DLLLOCAL static const char* getIconvCode(const QoreEncoding* enc) {
-      return enc == QCS_UTF16 ? "UTF-16BE" : enc->getCode();
+      return enc == QCS_UTF16 ? "UTF-16BE" : qore_encoding_private::get(*enc)->getIconvSourceCode();
    }
 
    //! Returns the encoding name to pass to iconv_open() to convert text to the given %Qore encoding
    /** As getIconvCode(), and for an encoding created on the fly whose iconv conversion writes a byte order mark
        (ex: \c "UTF-32"), the name of the encoding in the byte order of the characters without one (ex:
        \c "UTF-32BE"), which is what the character functions of the encoding expect; see
-       qore_encoding_private::probe().  Text converted from such an encoding is converted with its own name, so a
-       byte order mark at the start of the input gives its byte order.
+       qore_encoding_private::probe().  Text converted from a generic Unicode encoding (ex: \c "UTF-32") is converted
+       with the explicit big-endian name (see getIconvCode()); a byte order mark at the start of the input is found
+       by the caller with qore_encoding_private::getBomEncoding().
    */
    DLLLOCAL static const char* getIconvTargetCode(const QoreEncoding* enc) {
       return enc == QCS_UTF16 ? "UTF-16BE" : qore_encoding_private::get(*enc)->getIconvTargetCode();

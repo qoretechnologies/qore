@@ -1068,8 +1068,12 @@ val = "string";      # OK
     @parblock
     A string converted to the generic \c "UTF-32" encoding is now big-endian and no longer starts with a byte order
     mark, as for the generic \c "UTF-16" encoding, so that strings in it have no extra character; data that starts
-    with a byte order mark still gives its byte order when it is read or converted.  Use \c "UTF-32LE" or
-    \c "UTF-32BE" for a specific byte order, and write a byte order mark explicitly where one is required.
+    with a byte order mark in either byte order still gives its byte order when it is read or converted, and data
+    without one is read as big-endian.  This is the same on every platform: before, the byte order followed the
+    platform's iconv, so on Linux with glibc, text converted to \c "UTF-32" was little-endian (with a byte order mark)
+    and \c "UTF-32" data without a byte order mark was read as little-endian.  Use \c "UTF-32LE" to keep writing and
+    reading little-endian text, or \c "UTF-32BE" for big-endian, and write a byte order mark explicitly where one is
+    required.
     @endparblock
 
     @par Shift_JIS Is Not Compatible With ASCII

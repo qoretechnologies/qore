@@ -208,7 +208,7 @@ public:
                 return i.second;
             }
         }
-        iconv_t cd = iconv_open("UTF-8", enc->getCode());
+        iconv_t cd = iconv_open("UTF-8", qore_encoding_private::get(*enc)->getIconvSourceCode());
         if (cd != invalid()) {
             // encodings are never deleted while threads run, so the pointer identifies the encoding
             decoders.emplace_back(enc, cd);
@@ -1542,6 +1542,8 @@ void qore_encoding_private::probe() {
     // get the byte sequence of each sample character and any constant prefix (a byte order mark)
     // the code point and the bytes of each sample character that can be represented
     std::vector<std::pair<unsigned, std::string>> units;
+    // the UTF-8 text of each sample character in units
+    std::vector<std::string> units_utf8;
     std::string prefix;
     bool bmp_complete = true;
     bool non_bmp = false;
@@ -1567,6 +1569,7 @@ void qore_encoding_private::probe() {
         }
         prefix = p;
         units.emplace_back(pc.code, unit);
+        units_utf8.emplace_back(pc.utf8);
         if (pc.code > 0xffff) {
             non_bmp = true;
         }
@@ -1596,7 +1599,54 @@ void qore_encoding_private::probe() {
 
         bool utf32 = (form == UnicodeForm::UTF32BE || form == UnicodeForm::UTF32LE);
         bool be = (form == UnicodeForm::UTF32BE || form == UnicodeForm::UTF16BE);
-        if (!prefix.empty()) {
+        UnicodeForm be_form = utf32 ? UnicodeForm::UTF32BE : UnicodeForm::UTF16BE;
+        UnicodeForm le_form = utf32 ? UnicodeForm::UTF32LE : UnicodeForm::UTF16LE;
+
+        // a generic Unicode encoding (ex: "UTF-32", "UTF-16"): iconv takes the byte order of text from a byte order
+        // mark in either byte order; without one, iconv implementations disagree (glibc writes and reads its native
+        // byte order, while GNU libiconv and musl use big-endian), so text in the encoding without a byte order mark
+        // is big-endian, as in the Unicode standard, on every platform: it is converted in both directions with the
+        // explicit big-endian name, and a byte order mark in either byte order is found by Qore itself (see
+        // getBomEncoding()).  An encoding whose iconv conversion writes a little-endian form without a byte order
+        // mark (ex: "UCS-2" with glibc) keeps the byte order it is written in.
+        // each sample character is decoded on its own after the byte order mark, as ProbeConverter converts short
+        // texts only, and with a new conversion each time: glibc keeps the byte order of the first byte order mark
+        // that a conversion reads, even after it is reset
+        const std::string& enc_code = code;
+        auto decodes_with_bom = [&enc_code, &units, &units_utf8](UnicodeForm f) -> bool {
+            for (size_t i = 0; i < units.size(); ++i) {
+                ProbeConverter dec("UTF-8", enc_code.c_str());
+                std::string back;
+                if (!dec.valid() || !dec.convert(encode_unicode(f, 0xfeff) + encode_unicode(f, units[i].first), back)
+                        || back != units_utf8[i]) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        bool generic = decodes_with_bom(be_form) && decodes_with_bom(le_form);
+        if (generic && (be || !prefix.empty())) {
+            const char* be_code = utf32 ? "UTF-32BE" : (non_bmp ? "UTF-16BE" : "UCS-2BE");
+            ProbeConverter tc(be_code, "UTF-8");
+            if (!tc.valid()) {
+                return;
+            }
+            for (const probe_char& pc : probe_chars) {
+                if (pc.code > 0xffff && !non_bmp) {
+                    continue;
+                }
+                std::string tout;
+                if (!tc.convert(pc.utf8, tout) || tout != encode_unicode(be_form, pc.code)) {
+                    return;
+                }
+            }
+            be = true;
+            form = be_form;
+            iconv_target_code = be_code;
+            iconv_source_code = be_code;
+            swapped_bom = encode_unicode(le_form, 0xfeff);
+            swapped_code = utf32 ? "UTF-32LE" : (non_bmp ? "UTF-16LE" : "UCS-2LE");
+        } else if (!prefix.empty()) {
             // iconv writes a byte order mark; text is converted to the encoding in its byte order explicitly
             const char* target = utf32
                 ? (be ? "UTF-32BE" : "UTF-32LE")

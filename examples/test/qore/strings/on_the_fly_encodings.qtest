@@ -36,6 +36,7 @@ class OnTheFlyEncodingTest inherits QUnit::Test {
     constructor() : Test("OnTheFlyEncodingTest", "1.0", \ARGV) {
         addTestCase("character operations", \testCharacters());
         addTestCase("byte order marks", \testByteOrderMarks());
+        addTestCase("generic encodings are big-endian", \testGenericByteOrder());
         addTestCase("EBCDIC", \testEbcdic());
         addTestCase("stream lines", \testStreamLines());
         addTestCase("stream strings", \testStreamStrings());
@@ -115,6 +116,37 @@ class OnTheFlyEncodingTest inherits QUnit::Test {
         string lele = binary_to_string(<fffe0000> + binary(convert_encoding("ab", "UTF-32LE")), "UTF-32LE");
         assertEq("UTF-32LE", lele.encoding());
         assertEq("ab", convert_encoding(lele, "UTF-8"));
+    }
+
+    #! without a byte order mark, text in the generic encodings is big-endian on every platform
+    /** whatever byte order the platform's iconv uses for them: glibc writes and reads its native byte order, while
+        GNU libiconv and musl use big-endian
+    */
+    testGenericByteOrder() {
+        string text = "AB€😀";
+        foreach string enc in ("UTF-32", "UTF-16") {
+            binary be = binary(convert_encoding(text, enc + "BE"));
+            binary le = binary(convert_encoding(text, enc + "LE"));
+            binary bom_be = (enc == "UTF-32" ? <0000feff> : <feff>);
+            binary bom_le = (enc == "UTF-32" ? <fffe0000> : <fffe>);
+            # written big-endian, without a byte order mark
+            assertEq(be, binary(convert_encoding(text, enc)), enc + ": written big-endian");
+            # read big-endian without a byte order mark, as a string and from a stream
+            assertEq(text, convert_encoding(binary_to_string(be, enc), "UTF-8"), enc + ": read big-endian");
+            assertEq(text, (new StreamReader(new BinaryInputStream(be), enc)).readString(), enc
+                + ": stream big-endian");
+            # a byte order mark in either byte order gives the byte order, as a string and from a stream
+            foreach list<auto> l in ((bom_be + be, "BE"), (bom_le + le, "LE")) {
+                string label = sprintf("%s: %s byte order mark", enc, l[1]);
+                assertEq(text, convert_encoding(binary_to_string(l[0], enc), "UTF-8"), label);
+                assertEq(text, (new StreamReader(new BinaryInputStream(l[0]), enc)).readString(), label + " (stream)");
+            }
+        }
+        # little-endian text without a byte order mark is not read as little-endian: in UTF-16 it is other characters,
+        # and in UTF-32 it has no valid characters
+        assertEq("䄀䈀", convert_encoding(binary_to_string(<41004200>, "UTF-16"), "UTF-8"));
+        assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), (binary_to_string(<4100000042000000>,
+            "UTF-32"), "UTF-8"));
     }
 
     testEbcdic() {
