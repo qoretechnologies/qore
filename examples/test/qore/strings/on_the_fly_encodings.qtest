@@ -37,6 +37,7 @@ class OnTheFlyEncodingTest inherits QUnit::Test {
         addTestCase("character operations", \testCharacters());
         addTestCase("byte order marks", \testByteOrderMarks());
         addTestCase("generic encodings are big-endian", \testGenericByteOrder());
+        addTestCase("invalid Unicode input", \testInvalidUnicodeInput());
         addTestCase("EBCDIC", \testEbcdic());
         addTestCase("stream lines", \testStreamLines());
         addTestCase("stream strings", \testStreamStrings());
@@ -147,6 +148,24 @@ class OnTheFlyEncodingTest inherits QUnit::Test {
         assertEq("䄀䈀", convert_encoding(binary_to_string(<41004200>, "UTF-16"), "UTF-8"));
         assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), (binary_to_string(<4100000042000000>,
             "UTF-32"), "UTF-8"));
+    }
+
+    #! a value above U+10FFFF or an unpaired surrogate is rejected on every platform, in strings and streams
+    /** Apple's system iconv converted a UTF-32 value above U+10FFFF to malformed UTF-8 without an error
+    */
+    testInvalidUnicodeInput() {
+        foreach list<auto> l in ((<00110000>, "UTF-32BE"), (<00001100>, "UTF-32LE"), (<0000004100110000>, "UTF-32"),
+                (<d8000041>, "UTF-16BE"), (<00dc4100>, "UTF-16LE"), (<0041dc00>, "UTF-16")) {
+            string label = sprintf("%s %s", l[1], l[0].toHex());
+            assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), (binary_to_string(l[0], l[1]), "UTF-8"),
+                label);
+            InputStream is = new EncodingConversionInputStream(new BinaryInputStream(l[0]), l[1], "UTF-8");
+            assertThrows("ENCODING-CONVERSION-ERROR", sub () { while (is.read(64)) {} }, NOTHING, label
+                + " (stream)");
+        }
+        # valid input around the invalid values converts
+        assertEq("A😀", convert_encoding(binary_to_string(<000000410001f600>, "UTF-32BE"), "UTF-8"));
+        assertEq("A😀", convert_encoding(binary_to_string(<0041d83dde00>, "UTF-16BE"), "UTF-8"));
     }
 
     testEbcdic() {

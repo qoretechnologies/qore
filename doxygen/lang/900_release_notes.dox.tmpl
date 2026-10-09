@@ -4296,6 +4296,10 @@ while (*binary chunk = input.read(65536)) {
       where a \c "?" was substituted for it; such input now raises \c ENCODING-CONVERSION-ERROR as on other
       platforms and in string conversions
 
+    - Fixed UTF-32 text with a value above U+10FFFF, and UTF-16 text with an unpaired surrogate, being converted to
+      malformed UTF-8 without an error on macOS with the system's iconv; such input now raises
+      \c ENCODING-CONVERSION-ERROR on every platform, in string and stream conversions
+
     - Fixed a crash evaluating a deeply nested expression with the AST interpreter on a thread with a small stack, or
       near the end of a thread's stack, such as nested arguments of function, method, static method and closure
       calls, chained assignments and long arithmetic expressions: evaluation recursed once for each level of
