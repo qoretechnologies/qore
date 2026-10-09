@@ -4250,6 +4250,12 @@ while (*binary chunk = input.read(65536)) {
       operator now block until the command exits, and a cancellation or interrupt ends the wait at once and kills
       the command
 
+    - Fixed a crash serializing or deserializing deeply nested data with
+      @ref Qore::Serializable "Serializable": serialization and deserialization recursed once for each level of
+      nesting without checking the stack, so a value nested more deeply than the thread's stack allows, or
+      untrusted serialized data nested that deeply, overflowed it; a \c STACK-LIMIT-EXCEEDED exception is now
+      raised instead
+
     - Fixed a crash comparing deeply nested lists or hashes with the @ref logical_equality_operator "==",
       @ref logical_inequality_operator "!=", @ref logical_absolute_equality_operator "===" and
       @ref logical_absolute_inequality_operator "!==" operators, @ref Qore::inlist() "inlist()" and

@@ -140,6 +140,39 @@ Link sub deep_object(int n) {
                 "setup": "auto v = (deep_list(Depth), deep_list(Depth));",
                 "op": "inlist_hard(v[0], (v[1],))",
             },
+            "Serializable::serialize() list": <StackCase>{
+                "setup": "auto v = deep_list(Depth);",
+                "op": "Serializable::serialize(v)",
+            },
+            "Serializable::serialize() hash": <StackCase>{
+                "setup": "auto v = deep_hash(Depth);",
+                "op": "Serializable::serialize(v)",
+            },
+            "Serializable::serializeToData() hash": <StackCase>{
+                "setup": "auto v = deep_hash(Depth);",
+                "op": "Serializable::serializeToData(v)",
+            },
+            "Serializable::deserialize() stream": <StackCase>{
+                # a serialization stream with hashes nested Depth levels deep, as untrusted input can be: the header,
+                # then for each level a hash (code 0) with one member (int code 7, size 1) with key "a" (string code
+                # 3, int code 7, length 1, "a"), then the innermost value 0 (int code 7, 0)
+                "setup": "binary v = parse_hex_string(\"515300312e3200\");
+binary level = parse_hex_string(\"00070103070161\");
+for (int i = 0; i < Depth; ++i) {
+    v += level;
+}
+v += parse_hex_string(\"0700\");",
+                "op": "Serializable::deserialize(v)",
+            },
+            "Serializable::deserialize() data": <StackCase>{
+                # serialization data with hashes nested Depth levels deep, as untrusted input can be
+                "setup": "hash<auto> data = {\"_hash\": \"^auto\", \"_members\": {}};
+for (int i = 0; i < Depth; ++i) {
+    data = {\"_hash\": \"^auto\", \"_members\": {\"a\": data}};
+}
+auto v = <SerializationInfo>{\"_data\": data};",
+                "op": "Serializable::deserialize(v)",
+            },
         };
     }
 

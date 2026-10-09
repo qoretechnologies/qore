@@ -342,6 +342,10 @@ static QoreHashNode* serialization_get_index(imap_t::iterator i, bool weak) {
 
 QoreValue QoreSerializable::serializeValue(const QoreValue val, QoreInternalSerializationContext& context,
         ExceptionSink* xsink) {
+    // serialization recurses with the nesting of the data, which is unbounded
+    if (q_check_stack(xsink)) {
+        return QoreValue();
+    }
     if (val.isEnum()) {
         const QoreEnumMember* member = val.getEnumMember();
         const QoreEnumDecl* ed = member->getEnumDecl();
@@ -1322,6 +1326,10 @@ QoreValue QoreSerializable::deserializeEnumData(const QoreStringNode& enum_path,
 
 QoreValue QoreSerializable::deserializeData(const QoreValue val, QoreInternalDeserializationContext& context,
         ExceptionSink* xsink) {
+    // deserialization recurses with the nesting of the data, which is unbounded and can come from untrusted input
+    if (q_check_stack(xsink)) {
+        return QoreValue();
+    }
     if (val.getType() == NT_HASH) {
         const QoreHashNode* h = val.get<const QoreHashNode>();
         // Check for enum type marker; require both _enum and _member to avoid
@@ -1625,6 +1633,10 @@ int QoreSerializable::serializeValueToStream(const QoreValue val, OutputStream& 
 }
 
 int QoreSerializable::serializeValueToStream(const QoreValue val, StreamWriter& writer, ExceptionSink* xsink) {
+    // writing recurses with the nesting of the data, which is unbounded
+    if (q_check_stack(xsink)) {
+        return -1;
+    }
     if (val.isEnum()) {
         const QoreEnumMember* member = val.getEnumMember();
         const QoreEnumDecl* ed = member->getEnumDecl();
@@ -2070,6 +2082,11 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, InputStream& strea
 }
 
 QoreValue QoreSerializable::deserializeValueFromStream(ExceptionSink* xsink, StreamReader& reader, int64 flags) {
+    // reading recurses with the nesting of the data in the stream, which is unbounded and can come from untrusted
+    // input
+    if (q_check_stack(xsink)) {
+        return QoreValue();
+    }
     // read data type code
     qore_stream_type code = static_cast<qore_stream_type>(reader.readi1(xsink));
     if (*xsink) {
