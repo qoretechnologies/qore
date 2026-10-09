@@ -466,6 +466,25 @@ public:
     //! Default I/O operation timeout (30 seconds)
     static constexpr int64 DEFAULT_IO_TIMEOUT_US = 30000000LL;
 
+    //! The maximum number of I/O threads a controller runs by default
+    /** By default a controller runs one I/O thread per CPU available to the process, up to this number; the
+        \c QORE_IO_THREADS environment variable and @ref setMaxIoThreads() set any positive count.  Beyond a few
+        threads the gain for one process is small, while operations that involve every I/O thread (such as
+        cancelByOwner()) cost more with each thread, and a host often runs several %Qore processes, each with its
+        own controller.
+
+        @since %Qore 3.0
+    */
+    static constexpr int DEFAULT_MAX_IO_THREADS = 8;
+
+    //! Returns the default number of I/O threads
+    /** One per CPU available to the process (its CPU affinity mask where supported, otherwise
+        std::thread::hardware_concurrency()), at most @ref DEFAULT_MAX_IO_THREADS, and at least 1.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL static int getDefaultIoThreadCount();
+
     //! Autostop grace period (2 seconds)
     /** When the cache empties and autostop is enabled, the I/O thread waits
         this long before exiting.  This avoids unnecessary stop/restart cycles
@@ -1211,7 +1230,7 @@ private:
     }
 
     // --- I/O thread contexts ---
-    std::vector<std::unique_ptr<IoThreadContext>> io_threads;  //!< One per I/O thread (default: 1)
+    std::vector<std::unique_ptr<IoThreadContext>> io_threads;  //!< One per I/O thread (default: getDefaultIoThreadCount())
     int num_io_threads;                       //!< Configured thread count
 
     //! Maps socket hash → thread index for wakeSocket routing

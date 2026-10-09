@@ -687,12 +687,18 @@ static nothing AsyncIoController::setMaxCallbackWorkers(int max_workers = 0)
 }
 
 //! Sets the number of I/O threads for the global async I/O controller
-/** @param max_threads the maximum number of I/O threads (0 = auto-detect from hardware_concurrency)
+/** @param max_threads the number of I/O threads; 0 = the default: one per CPU available to the process, at most 8
 
-    Multiple I/O threads enable nginx-style per-thread connection isolation,
-    scaling throughput near-linearly with core count for high connection counts.
+    Each I/O thread runs its own event loop for its share of the sockets: every operation on one socket runs on
+    the same I/O thread, so throughput scales with the number of threads for many concurrent connections, while
+    each connection is handled as with a single I/O thread.
 
-    Must be called before the first submit() or from Qore startup code.
+    By default the controller runs one I/O thread per CPU available to the process (its CPU affinity mask on
+    Linux), at most 8; the \c QORE_IO_THREADS environment variable, read when the controller is created, sets
+    another count.
+
+    @throw ASYNC-IO-ERROR the controller is running; the thread count can only be changed while the controller is
+    stopped, for example before its first operation is submitted
 
     @since %Qore 3.0
 */

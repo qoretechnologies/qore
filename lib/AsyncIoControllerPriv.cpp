@@ -47,6 +47,9 @@
 
 #include <cstdarg>
 #include <cstdint>
+#if defined(__linux__)
+#include <sched.h>
+#endif
 #include <limits>
 #include <memory>
 
@@ -1772,12 +1775,31 @@ AsyncIoControllerPriv::IoThreadContext::~IoThreadContext() {
     }
 }
 
+int AsyncIoControllerPriv::getDefaultIoThreadCount() {
+    int cpus = 0;
+#if defined(__linux__) && defined(CPU_COUNT)
+    // the CPUs this process may run on: a taskset or cpuset limit counts, not only the CPUs of the host
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    if (!sched_getaffinity(0, sizeof(set), &set)) {
+        cpus = CPU_COUNT(&set);
+    }
+#endif
+    if (cpus <= 0) {
+        cpus = (int)std::thread::hardware_concurrency();
+    }
+    if (cpus <= 0) {
+        return 1;
+    }
+    return std::min(cpus, DEFAULT_MAX_IO_THREADS);
+}
+
 AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink)
-    : num_io_threads(1), autostop_flag(autostop), shutting_down(false),
+    : num_io_threads(getDefaultIoThreadCount()), autostop_flag(autostop), shutting_down(false),
       io_waiting(false), io_exiting(false), ready_flag(false),
       submit_seq(0),
       logger(nullptr), timer_callback(nullptr) {
-    // Check env var for I/O thread count override
+    // The QORE_IO_THREADS environment variable sets any positive I/O thread count
     const char* env_threads = getenv("QORE_IO_THREADS");
     if (env_threads) {
         int n = atoi(env_threads);
@@ -4207,11 +4229,7 @@ void AsyncIoControllerPriv::setMaxIoThreads(int num_threads, ExceptionSink* xsin
         }
     }
     if (num_threads <= 0) {
-        int hw = std::thread::hardware_concurrency();
-        num_threads = hw > 0 ? hw : 1;
-        if (num_threads <= 0) {
-            num_threads = 1;
-        }
+        num_threads = getDefaultIoThreadCount();
     }
     if (num_threads == num_io_threads) {
         return;

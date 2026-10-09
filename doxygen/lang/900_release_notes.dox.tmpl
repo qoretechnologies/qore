@@ -191,6 +191,12 @@
     (it reported only one thread's) with the new \c threads and \c io_threads keys, and controller timers are spread
     over the I/O threads.
 
+    The async I/O controller runs one I/O thread per CPU available to the process by default (its CPU affinity mask on
+    Linux), at most 8; it ran a single I/O thread unless \c QORE_IO_THREADS was set, so all network I/O of a process
+    was limited to one CPU.  Sockets are spread over the threads; \c QORE_IO_THREADS and
+    @ref Qore::AsyncIoController::setMaxIoThreads() "AsyncIoController::setMaxIoThreads()" still set any count, and
+    <tt>setMaxIoThreads(0)</tt> restores the default.
+
     An object that several threads use at the same time is deleted when its last reference is released, also when
     two of its method calls return at the same moment: the second release could find the reference count at zero
     without deleting the object, so its destructor never ran and its memory was not freed (debug builds aborted with

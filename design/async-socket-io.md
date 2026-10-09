@@ -1375,10 +1375,20 @@ per-program state must maintain this ordering contract.
 
 ### Thread Scaling
 
-I/O thread and callback worker thread counts are capped at `hardware_concurrency()` (the number of
-logical CPUs), not a fixed constant.  I/O threads are CPU-bound (epoll/kqueue + continuePoll), so
-more threads than CPUs adds context switching overhead without benefit.  The `QORE_IO_THREADS` env
-var accepts any positive integer; `setMaxIoThreads(0)` auto-detects from `hardware_concurrency()`.
+A controller runs one I/O thread per CPU available to the process by default, at most
+`AsyncIoControllerPriv::DEFAULT_MAX_IO_THREADS` (8): `getDefaultIoThreadCount()` counts the CPUs in the process's
+CPU affinity mask on Linux (so a `taskset` or cpuset limit counts) and uses `std::thread::hardware_concurrency()`
+elsewhere.  I/O threads are CPU-bound (epoll/kqueue + continuePoll), so more threads than CPUs adds context
+switching overhead without benefit; beyond a few threads the gain for one process is small, while operations that
+involve every I/O thread (`cancelByOwner()`, `cancelByProgram()`, `cancelBySocketHash()`, `cancelByKey()`,
+`getInfo()`, the global `waitForProcessing()`, `Quit`) cost more with each thread, and a host often runs several
+%Qore processes, each with its own controller.
+
+The `QORE_IO_THREADS` environment variable, read when the controller is created, sets any positive count, and
+`AsyncIoController::setMaxIoThreads(n)` does so while the controller is stopped (`n = 0` restores the default).
+Sockets are spread over the threads by the hash of their route key (see [I/O Thread Routing](#io-thread-routing)),
+so the load of one busy connection stays on one thread.  The callback worker pool is sized separately
+(`setMaxCallbackWorkers()`).
 
 Any changes to queue or EventNotifier handling must preserve the acknowledge-and-recheck loop in `processCommands()` and the post-processCommands re-check protocol described
 above. Any changes to HTTP/2 frame processing must preserve the flush-after-receive pattern and the extended
