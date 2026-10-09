@@ -53,6 +53,12 @@ class FakeVoyageRestClientIo inherits RestClientIo::RestClientIo {
             "body": response_body,
         };
     }
+
+    #! The data provider sends its requests with the transient-failure retry policy
+    hash<RestClient::RestResponseInfo> restDoRequestWithRetry(string method, string path, auto body,
+            *hash<auto> hdr, *RestClientIo::RestRetryPolicy policy) {
+        return restPost(path, body, hdr);
+    }
 }
 
 public class VoyageDataProviderTest inherits QUnit::Test {

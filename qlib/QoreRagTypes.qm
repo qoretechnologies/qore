@@ -79,6 +79,7 @@ module QoreRagTypes {
     - @ref QoreRagUtils::AbstractReranker — re-orders candidates by relevance
     - @ref QoreRagUtils::AbstractChunker — splits documents into chunks
     - @ref QoreRagUtils::AbstractEmbeddingCache — query embedding cache
+    - @ref QoreRagUtils::EmbedderRateLimiter — process-wide requests/tokens-per-minute limiter
 
     Provider factory abstractions:
 
@@ -94,6 +95,10 @@ module QoreRagTypes {
     - initial release
     - HTTP embedders share RestClientIo's bounded transient-failure retries, configurable per embedder
       and per call, with RAG retry telemetry (issue 5475)
+    - added @ref QoreRagUtils::EmbedderRateLimiter "EmbedderRateLimiter", a process-wide requests- and
+      tokens-per-minute limiter for provider requests, and the \c requests_per_minute,
+      \c tokens_per_minute, \c rate_limit_max_retries, and \c rate_limit_timeout
+      @ref QoreRagUtils::EmbedderConfig "EmbedderConfig" fields honored by embedders that pace their requests
 */
 
 #! Provider-neutral RAG types and abstract classes (shared with QoreRagUtils)
@@ -136,7 +141,7 @@ public hashdecl RagUsageMetrics {
     chunk, and embedding content is intentionally excluded by default.
 */
 public hashdecl RagTelemetryEvent {
-    #! Event type: "start", "end", or "error"
+    #! Event type: "start", "end", "error", or "wait" (a long client-side rate-limit admission wait)
     string type;
     #! Operation: "ingest", "retrieve", "rerank", "embed", "chunk", etc.
     string operation;
@@ -240,12 +245,526 @@ public hashdecl EmbedderConfig {
         Per-call options can override all three retry settings.
     */
     timeout retry_timeout = 30s;
+    #! Client-side requests-per-minute limit for embedders that pace their requests
+    /** Honored by embedders with a client-side rate limiter (currently
+        @ref QoreRagUtils::VoyageEmbedder "VoyageEmbedder"); when unset, the backend's default for the model
+        applies.  The limit is enforced per process for every embedder sharing the same endpoint, API key,
+        and model; processes that share one provider limit must each be given their share.
+    */
+    *int requests_per_minute;
+    #! Client-side tokens-per-minute limit for embedders that pace their requests
+    /** See @ref requests_per_minute.
+    */
+    *int tokens_per_minute;
+    #! Maximum retries of one request rejected by the provider's rate limit (HTTP 429); default 8
+    /** Honored by embedders with a client-side rate limiter.  Zero disables rate-limit retries.
+    */
+    int rate_limit_max_retries = 8;
+    #! Longest time one request may wait for rate-limit admission and rate-limit retries (default 60s)
+    /** Honored by embedders with a client-side rate limiter.  A positive configured or per-call
+        \c timeout further limits it.
+    */
+    timeout rate_limit_timeout = 60s;
     #! Free-form backend-specific options
     *hash<auto> options;
     #! Optional observer for direct embedder usage
     *hash<RagTelemetryObserver> telemetry_observer;
     #! Optional caller-owned telemetry correlation context
     *hash<auto> telemetry_context;
+}
+
+#! A request admitted by an @ref QoreRagUtils::EmbedderRateLimiter "EmbedderRateLimiter"
+public hashdecl EmbedderRateLimitTicket {
+    #! The ticket identifier
+    int id;
+    #! When the request was admitted, in monotonic microseconds
+    int admitted_us;
+    #! The request's estimated tokens, replaced by its actual usage when it is settled
+    int tokens;
+    #! True once the request has finished
+    bool settled = False;
+}
+
+#! One rate-limit event reported by @ref QoreRagUtils::EmbedderRateLimiter::call() "EmbedderRateLimiter::call()"
+public hashdecl RateLimitEventInfo {
+    #! \c "retry" after a provider rejection (HTTP 429), \c "wait" after a long admission wait
+    string type;
+    #! The number of the attempt the event follows (one-based); 0 for a wait before the first attempt
+    int attempt;
+    #! The delay before the next attempt (\c "retry"), or the time waited for admission (\c "wait"), in ms
+    int delay_ms;
+    #! HTTP status of the rejection, for \c "retry"
+    *int status_code;
+    #! The provider's \c Retry-After in milliseconds, when it sent one
+    *int retry_after_ms;
+    #! Exception code of the rejection, for \c "retry"
+    *string err;
+}
+
+#! Options for @ref QoreRagUtils::EmbedderRateLimiter::call() "EmbedderRateLimiter::call()"
+public hashdecl RateLimitedCallInfo {
+    #! The request's estimated tokens
+    int tokens = 0;
+    #! The latest monotonic time at which the request may be admitted or retried after a rejection
+    int deadline_us;
+    #! Maximum retries after HTTP 429 rejections; zero disables them
+    int max_retries = 8;
+    #! The exception code raised when the request cannot be admitted or its rate-limit retries are exhausted
+    string error_code = "EMBEDDER-RATE-LIMIT-ERROR";
+    #! A prefix for the exception description, such as the provider and model
+    *string error_prefix;
+    #! Members added to the exception argument
+    *hash<auto> error_arg;
+    #! Called for each 429 retry and for each admission wait of at least \c wait_report_ms; must not throw
+    *code<nothing(hash<RateLimitEventInfo>)> observer;
+    #! The shortest admission wait reported to \c observer
+    int wait_report_ms = 1000;
+}
+
+#! Paces provider requests against requests-per-minute and tokens-per-minute limits
+/** Keeps a trailing window of admitted requests and holds a new request until it fits under both limits,
+    so the provider is never asked for more than the limits allow in any trailing window.  A request is
+    admitted with its estimated tokens; @ref settle() replaces the estimate with the provider's reported
+    usage.  @ref block() stops all admissions for a time, as after an HTTP 429 from the provider, so every
+    caller sharing the limiter backs off together.
+
+    Waiting uses a condition variable: settling a request or a block change wakes waiters, and a wait
+    otherwise ends exactly when the oldest window entry expires.  Condition waits are cooperative
+    cancellation check points, so a cancelled thread leaves its wait with \c THREAD-CANCELLED.
+
+    A request with more tokens than the token limit is admitted alone, once the window is empty.
+
+    @ref getShared() returns one process-wide limiter per key, so independently constructed clients for the
+    same provider account (for example, a new embedder per request) share one window.
+
+    @par Example
+    @code{.py}
+EmbedderRateLimiter limiter = EmbedderRateLimiter::getShared("provider|key-digest|model", 2000, 3000000);
+int ticket = limiter.admit(estimated_tokens, clock_get_monotonic_us() + 60000000);
+try {
+    hash<auto> resp = send();
+    limiter.settle(ticket, resp.usage.total_tokens);
+} catch (hash<ExceptionInfo> ex) {
+    limiter.settle(ticket);
+    rethrow;
+}
+    @endcode
+*/
+public class EmbedderRateLimiter {
+    public {
+        #! Default window length: one minute
+        const DefaultWindowMs = 60000;
+
+        #! Initial rate-limit backoff in @ref call() when the provider sends no \c Retry-After
+        const InitialRateLimitBackoffMs = 1000;
+
+        #! Maximum rate-limit backoff in @ref call() when the provider sends no \c Retry-After
+        const MaxRateLimitBackoffMs = 16000;
+    }
+
+    private {
+        #! Window length in microseconds
+        int window_us;
+        #! Requests admitted per window; NOTHING = not limited
+        *int requests_per_window;
+        #! Tokens admitted per window; NOTHING = not limited
+        *int tokens_per_window;
+        #! Serializes window state
+        Mutex m();
+        #! Signalled when a request is settled, limits change, or a block changes
+        Condition cond();
+        #! Admitted requests in the trailing window, oldest first
+        list<hash<EmbedderRateLimitTicket>> window = ();
+        #! Monotonic time before which nothing is admitted
+        int blocked_until_us = 0;
+        #! Last issued ticket identifier
+        int last_id = 0;
+    }
+
+    private:internal {
+        #! Serializes the shared limiter registry
+        static Mutex registry_lock();
+        #! Key -> process-wide limiter
+        static hash<string, EmbedderRateLimiter> registry = {};
+    }
+
+    #! Creates a limiter
+    /** @param requests_per_window the requests admitted per window; NOTHING or 0 means no request limit
+        @param tokens_per_window the tokens admitted per window; NOTHING or 0 means no token limit
+        @param window_ms the trailing window in milliseconds (default one minute)
+
+        @throw EMBEDDER-RATE-LIMIT-CONFIG-ERROR a limit is negative or the window is not positive
+    */
+    constructor(*int requests_per_window, *int tokens_per_window, int window_ms = DefaultWindowMs) {
+        if (window_ms <= 0) {
+            throw "EMBEDDER-RATE-LIMIT-CONFIG-ERROR", sprintf("window must be positive; got %d ms",
+                window_ms);
+        }
+        window_us = window_ms * 1000;
+        setLimitsIntern(requests_per_window, tokens_per_window);
+    }
+
+    #! Returns the process-wide limiter for a key, creating it with the given limits when needed
+    /** With \a replace, an existing limiter takes the given limits, so a changed configuration applies to every
+        client sharing the key; a client without a configuration of its own passes default limits with
+        \a replace @ref False, so it never overrides limits another client configured.
+
+        @param key identifies one provider account and model; must not contain secrets in clear text
+        @param requests_per_minute the requests admitted per minute; NOTHING or 0 means no request limit
+        @param tokens_per_minute the tokens admitted per minute; NOTHING or 0 means no token limit
+        @param replace apply the limits to an existing limiter
+
+        @return the shared limiter
+
+        @throw EMBEDDER-RATE-LIMIT-CONFIG-ERROR a limit is negative
+    */
+    static EmbedderRateLimiter getShared(string key, *int requests_per_minute, *int tokens_per_minute,
+            bool replace = True) {
+        AutoLock al(registry_lock);
+        *EmbedderRateLimiter limiter = registry{key};
+        if (limiter) {
+            if (replace) {
+                limiter.setLimits(requests_per_minute, tokens_per_minute);
+            }
+            return limiter;
+        }
+        limiter = new EmbedderRateLimiter(requests_per_minute, tokens_per_minute);
+        registry{key} = limiter;
+        return limiter;
+    }
+
+    #! Changes the limits and wakes waiters
+    /** @param requests_per_window the requests admitted per window; NOTHING or 0 means no request limit
+        @param tokens_per_window the tokens admitted per window; NOTHING or 0 means no token limit
+
+        @throw EMBEDDER-RATE-LIMIT-CONFIG-ERROR a limit is negative
+    */
+    setLimits(*int requests_per_window, *int tokens_per_window) {
+        AutoLock al(m);
+        setLimitsIntern(requests_per_window, tokens_per_window);
+        cond.broadcast();
+    }
+
+    #! Returns the current limits as a hash with \c requests and \c tokens (NOTHING = not limited)
+    hash<auto> getLimits() {
+        AutoLock al(m);
+        return {"requests": requests_per_window, "tokens": tokens_per_window};
+    }
+
+    #! Admits one request, waiting until it fits in the window
+    /** @param tokens the request's estimated tokens
+        @param deadline_us the latest monotonic time (see @ref Qore::clock_get_monotonic_us()
+            "clock_get_monotonic_us()") at which the request may be admitted
+
+        @return the ticket identifier to pass to @ref settle()
+
+        @throw EMBEDDER-RATE-LIMIT-ERROR the request cannot be admitted before the deadline; raised at once
+            when nothing in flight can free capacity sooner; the argument has \c reason_code
+            \c "rate_limit_wait_deadline", \c retryable @ref True, and \c wait_ms
+        @throw THREAD-CANCELLED the waiting thread was cancelled
+    */
+    int admit(int tokens, int deadline_us) {
+        tokens = max(tokens, 0);
+        AutoLock al(m);
+        while (True) {
+            int now = nowUs();
+            prune(now);
+            int ready = max(now, blocked_until_us);
+            *int fits = earliestFit(tokens);
+            if (exists fits && fits > ready) {
+                ready = fits;
+            }
+            if (ready <= now) {
+                hash<EmbedderRateLimitTicket> ticket = <EmbedderRateLimitTicket>{
+                    "id": ++last_id,
+                    "admitted_us": now,
+                    "tokens": tokens,
+                };
+                push window, ticket;
+                return ticket.id;
+            }
+            if (ready > deadline_us) {
+                # settling an in-flight request can replace its estimate with lower usage and free capacity
+                # before the window does, so wait for that until the deadline
+                bool in_flight = False;
+                foreach hash<EmbedderRateLimitTicket> entry in (window) {
+                    if (!entry.settled) {
+                        in_flight = True;
+                        break;
+                    }
+                }
+                if (!in_flight || ready <= blocked_until_us || now >= deadline_us) {
+                    throw "EMBEDDER-RATE-LIMIT-ERROR", sprintf("the request cannot be admitted under the "
+                        "client-side rate limit within its deadline (needs %d ms more)",
+                        (ready - now) / 1000), {
+                        "reason_code": "rate_limit_wait_deadline",
+                        "retryable": True,
+                        "wait_ms": (ready - now) / 1000,
+                    };
+                }
+                ready = deadline_us;
+            }
+            # round up so a wait never ends before the time it waits for
+            cond.wait(m, max(1, (ready - now + 999) / 1000));
+        }
+    }
+
+    #! Marks an admitted request as finished and wakes waiters
+    /** @param id the ticket from @ref admit()
+        @param tokens the actual tokens; NOTHING keeps the estimate (a failed request, or a response
+            without usage)
+    */
+    settle(int id, *int tokens) {
+        AutoLock al(m);
+        for (int i = 0; i < window.size(); ++i) {
+            if (window[i].id == id) {
+                if (exists tokens) {
+                    window[i].tokens = max(tokens, 0);
+                }
+                window[i].settled = True;
+                break;
+            }
+        }
+        cond.broadcast();
+    }
+
+    #! Blocks all admissions for the given time, as after an HTTP 429; an existing later block is kept
+    /** @param ms the time to block in milliseconds
+    */
+    block(int ms) {
+        AutoLock al(m);
+        int until = nowUs() + max(ms, 0) * 1000;
+        if (until > blocked_until_us) {
+            blocked_until_us = until;
+        }
+        cond.broadcast();
+    }
+
+    #! Returns the requests and tokens currently in the window
+    /** @return a hash with \c requests and \c tokens
+    */
+    hash<auto> usage() {
+        AutoLock al(m);
+        prune(nowUs());
+        int tokens = 0;
+        foreach hash<EmbedderRateLimitTicket> entry in (window) {
+            tokens += entry.tokens;
+        }
+        return {"requests": window.size(), "tokens": tokens};
+    }
+
+    #! Sends one provider request under the limits, retrying HTTP 429 rejections
+    /** Each attempt is admitted first (see @ref admit()).  A rejection with HTTP 429 (a \c REST-RESPONSE-ERROR
+        whose argument has \c status_code 429) blocks every caller sharing this limiter (see @ref block()) for
+        the provider's \c Retry-After (seconds or HTTP date) plus up to 10% jitter, or, without one, for an
+        exponential backoff from @ref InitialRateLimitBackoffMs to @ref MaxRateLimitBackoffMs with equal jitter;
+        the request is then admitted and sent again.  Any other exception propagates unchanged.  A rejected or
+        failed attempt keeps its estimated tokens in the window, since the provider may have counted it.
+
+        @param info the request's estimate, deadline, retry limit, error identity and observer
+        @param send sends one attempt and returns its response; it must bound its own I/O
+        @param usage optional; returns the provider-reported tokens of a response, which replace the estimate
+
+        @return the response of the successful attempt
+
+        @throw <info.error_code> the request could not be admitted before the deadline (\c reason_code
+            \c "rate_limit_wait_deadline") or was still rejected with HTTP 429 after \c max_retries retries or
+            when the next wait would pass the deadline (\c reason_code \c "provider_rate_limited", with
+            \c status_code, \c attempts, \c retry_after_ms and the provider's \c body); the argument is
+            extended with \c error_arg
+        @throw THREAD-CANCELLED the waiting thread was cancelled
+
+        @par Example
+        @code{.py}
+hash<auto> resp = limiter.call(<RateLimitedCallInfo>{
+    "tokens": 1200,
+    "deadline_us": clock_get_monotonic_us() + 60000000,
+    "error_code": "RERANKER-RATE-LIMIT-ERROR",
+}, auto sub () { return client.restPost("/rerank", body); },
+    *int sub (auto resp) { return resp.body.usage.total_tokens; });
+        @endcode
+    */
+    auto call(hash<RateLimitedCallInfo> info, code<auto()> send, *code<*int(auto)> usage) {
+        int attempts = 0;
+        int own_delay_ms = 0;
+        int backoff_ms = InitialRateLimitBackoffMs;
+        string prefix = info.error_prefix ? info.error_prefix + ": " : "";
+        while (True) {
+            int ticket;
+            int wait_started = nowUs();
+            try {
+                ticket = admit(info.tokens, info.deadline_us);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "EMBEDDER-RATE-LIMIT-ERROR") {
+                    rethrow;
+                }
+                throw info.error_code, prefix + ex.desc,
+                    ex.arg + {"attempts": attempts} + (info.error_arg ?? {});
+            }
+            # the wait for this call's own retry delay was already reported with the retry
+            int waited_ms = (nowUs() - wait_started) / 1000;
+            if (waited_ms - own_delay_ms >= info.wait_report_ms) {
+                report(info, <RateLimitEventInfo>{"type": "wait", "attempt": attempts, "delay_ms": waited_ms});
+            }
+            ++attempts;
+            auto response;
+            try {
+                response = send();
+            } catch (hash<ExceptionInfo> ex) {
+                settle(ticket);
+                if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.typeCode() != NT_HASH || ex.arg.status_code != 429) {
+                    rethrow;
+                }
+                *int advised_ms = retryAfterMs(ex.arg.headers);
+                int delay_ms;
+                if (exists advised_ms) {
+                    int advised = advised_ms;
+                    delay_ms = advised + jitter(advised / 10);
+                } else {
+                    delay_ms = backoff_ms / 2 + jitter(backoff_ms / 2);
+                }
+                # every caller sharing this limit waits, so the provider is not asked again early
+                block(delay_ms);
+                if (attempts > info.max_retries || nowUs() + delay_ms * 1000 > info.deadline_us) {
+                    throw info.error_code, sprintf("%sthe provider rejected the request with HTTP 429 after %d "
+                        "attempt(s): %s", prefix, attempts, ex.desc), {
+                        "reason_code": "provider_rate_limited",
+                        "retryable": True,
+                        "status_code": 429,
+                        "attempts": attempts,
+                        "retry_after_ms": advised_ms,
+                        "body": ex.arg.body,
+                    } + (info.error_arg ?? {});
+                }
+                report(info, <RateLimitEventInfo>{"type": "retry", "attempt": attempts, "delay_ms": delay_ms,
+                    "status_code": 429, "retry_after_ms": advised_ms, "err": ex.err});
+                own_delay_ms = delay_ms;
+                backoff_ms = min(MaxRateLimitBackoffMs, backoff_ms * 2);
+                continue;
+            }
+            *int used;
+            if (usage) {
+                try {
+                    used = usage(response);
+                } catch (hash<ExceptionInfo> ex) {
+                    settle(ticket);
+                    rethrow;
+                }
+            }
+            settle(ticket, used);
+            return response;
+        }
+    }
+
+    #! Reads Retry-After (seconds or HTTP date) from response headers in milliseconds
+    /** @param headers the response headers; header names are matched without regard to case
+        @return the delay, or NOTHING when the header is absent or malformed
+    */
+    static *int retryAfterMs(auto headers) {
+        if (headers.typeCode() != NT_HASH) {
+            return NOTHING;
+        }
+        foreach string key in (keys headers) {
+            if (tolower(key) != "retry-after") {
+                continue;
+            }
+            auto value = headers{key};
+            if (value.typeCode() != NT_STRING) {
+                return NOTHING;
+            }
+            string header = trim(value);
+            if (header =~ /^[0-9]+$/) {
+                # saturate an untrusted value before converting it
+                return int(min(number(header), 9223372036854n)) * 1000;
+            }
+            try {
+                return max(0, (date(header) - now_us()).durationMilliseconds());
+            } catch () {
+                return NOTHING;
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Returns a random delay between 0 and the limit; overridable for deterministic tests
+    private int jitter(int limit_ms) {
+        return limit_ms > 0 ? rand() % (limit_ms + 1) : 0;
+    }
+
+    #! Passes an event to the observer without letting it change the request
+    private report(hash<RateLimitedCallInfo> info, hash<RateLimitEventInfo> event) {
+        if (!info.observer) {
+            return;
+        }
+        try {
+            info.observer(event);
+        } catch (hash<ExceptionInfo> ex) {
+            if (inlist(ex.err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED"))) {
+                rethrow;
+            }
+        }
+    }
+
+    #! Monotonic clock; overridable for deterministic tests
+    private int nowUs() {
+        return clock_get_monotonic_us();
+    }
+
+    #! Validates and sets limits; the lock must be held or the object not yet shared
+    private:internal setLimitsIntern(*int requests_per_window, *int tokens_per_window) {
+        if (requests_per_window < 0 || tokens_per_window < 0) {
+            throw "EMBEDDER-RATE-LIMIT-CONFIG-ERROR", sprintf("rate limits must not be negative; got "
+                "requests %y, tokens %y", requests_per_window, tokens_per_window);
+        }
+        self.requests_per_window = requests_per_window ? requests_per_window : NOTHING;
+        self.tokens_per_window = tokens_per_window ? tokens_per_window : NOTHING;
+    }
+
+    #! Removes entries older than the window; the lock must be held
+    private:internal prune(int now) {
+        int window_start = now - window_us;
+        int i = 0;
+        while (i < window.size() && window[i].admitted_us <= window_start) {
+            ++i;
+        }
+        if (i) {
+            splice window, 0, i;
+        }
+    }
+
+    #! Returns when a request fits in the window, or NOTHING if it fits now; the lock must be held
+    private:internal *int earliestFit(int tokens) {
+        if (!window) {
+            return NOTHING;
+        }
+        *int rv;
+        if (requests_per_window && window.size() >= requests_per_window) {
+            # the request fits once enough of the oldest requests have left the window
+            rv = window[window.size() - requests_per_window].admitted_us + window_us;
+        }
+        if (tokens_per_window) {
+            int used = 0;
+            foreach hash<EmbedderRateLimitTicket> entry in (window) {
+                used += entry.tokens;
+            }
+            if (used + tokens > tokens_per_window) {
+                # an oversized request waits for an empty window
+                int excess = min(used + tokens - tokens_per_window, used);
+                int freed = 0;
+                foreach hash<EmbedderRateLimitTicket> entry in (window) {
+                    freed += entry.tokens;
+                    if (freed >= excess) {
+                        int fits = entry.admitted_us + window_us;
+                        if (!exists rv || fits > rv) {
+                            rv = fits;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        return rv;
+    }
 }
 
 #! Declares whether an embedder needs a client-side tokenizer, and which one
@@ -330,6 +849,18 @@ public hashdecl RerankerConfig {
     int batch_size = 50;
     #! API key
     *string api_key;
+    #! Client-side requests-per-minute limit for rerankers that pace their requests
+    /** Honored by rerankers with a client-side rate limiter (currently
+        @ref QoreRagUtils::VoyageReranker "VoyageReranker"); when unset, the backend's default for the model
+        applies; see @ref EmbedderConfig::requests_per_minute.
+    */
+    *int requests_per_minute;
+    #! Client-side tokens-per-minute limit for rerankers that pace their requests
+    *int tokens_per_minute;
+    #! Maximum retries of one request rejected by the provider's rate limit (HTTP 429); default 8
+    int rate_limit_max_retries = 8;
+    #! Longest time one request may wait for rate-limit admission and rate-limit retries (default 60s)
+    timeout rate_limit_timeout = 60s;
     #! Free-form backend-specific options
     *hash<auto> options;
     #! Optional observer for direct reranker usage
@@ -595,8 +1126,20 @@ public class AbstractEmbedder {
                 notifyEmbedderRetry(config, opts ?? {}, backend, event);
             },
         };
-        rv._embedder_retry_policy = new RestClientIo::RestRetryPolicy(policy);
+        rv._embedder_retry_policy = newEmbedderRetryPolicy(policy);
         return rv;
+    }
+
+    #! Creates the transient-failure retry policy used by @ref embedderRequestOptions()
+    /** Backends that handle some failures themselves (for example, rate-limit rejections paced by a
+        client-side limiter) override this to return a policy that does not retry those failures.
+
+        @param options the effective retry options
+
+        @return a new retry policy whose total budget starts now
+    */
+    private RestClientIo::RestRetryPolicy newEmbedderRetryPolicy(hash<RestClientIo::RestRetryOptions> options) {
+        return new RestClientIo::RestRetryPolicy(options);
     }
 
     #! Reports safe retry metadata through the existing observer contract
@@ -644,6 +1187,17 @@ public class AbstractEmbedder {
     */
     int getPreferredBatchSize() {
         return 10;
+    }
+
+    #! Returns True if @ref encodeBatch() splits its inputs into provider requests by the provider's limits
+    /** An embedder that packs and paces its own requests (for example
+        @ref QoreRagUtils::VoyageEmbedder "VoyageEmbedder") can be given a whole corpus step, up to
+        @ref getPreferredBatchSize() inputs, so callers need not choose a request size for it.
+
+        @return False by default
+    */
+    bool packsRequests() {
+        return False;
     }
 
     #! Returns the embedding dimension produced by this backend

@@ -30,6 +30,7 @@
 %requires(reexport) DataProvider
 %requires(reexport) VoyageRestClient
 %requires RestClientIo
+%requires QoreRagTypes
 
 module VoyageDataProvider {
     version = "1.0";
@@ -154,6 +155,8 @@ module VoyageDataProvider {
 
     @subsection VoyageDataProviderv1_0 VoyageDataProvider v1.0
     - initial release
+    - embeddings and rerank requests share the Voyage clients' process-wide rate limiter and HTTP 429 policy,
+      and transient failures use the shared bounded retry policy, instead of a separate fixed retry loop
 */
 
 #! App logo loaded from file

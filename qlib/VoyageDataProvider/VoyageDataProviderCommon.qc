@@ -72,14 +72,8 @@ public class VoyageDataProviderCommon inherits DataProvider::AbstractDataProvide
             },
         };
 
-        #! IO errors for REST retries
-        const RetrySet = {
-            "SOCKET-SSL-ERROR": True,
-            "SOCKET-CLOSED": True,
-        };
-
-        #! Max retries
-        const MaxIoRetries = 5;
+        #! Longest one request waits for rate-limit admission and rate-limit retries
+        const RateLimitTimeoutMs = 60000;
     }
 
     private {
@@ -112,57 +106,89 @@ public class VoyageDataProviderCommon inherits DataProvider::AbstractDataProvide
         }
     }
 
-    #! Makes a REST call and returns the response; handles rate limit and I/O errors
+    #! Makes a REST call and returns the response
+    /** Embeddings and rerank requests follow the same rate-limit behaviour as the Voyage embedder and
+        reranker: they pass the process-wide limiter of their Voyage account, request kind and model (see
+        @ref VoyageRestClient::VoyageRestClientBase::getRateLimiter() "getRateLimiter()"), so they share it with
+        every other Voyage client in the process; HTTP 429 is retried through it with a shared, bounded backoff
+        (see @ref QoreRagUtils::EmbedderRateLimiter::call() "EmbedderRateLimiter::call()"), and transient HTTP
+        and transport failures through @ref QoreRagUtils::VoyageTransientRetryPolicy "VoyageTransientRetryPolicy".
+
+        @throw EMBEDDER-RATE-LIMIT-ERROR an embeddings request stayed rate limited
+        @throw RERANKER-RATE-LIMIT-ERROR a rerank request stayed rate limited
+    */
     private hash<auto> doRestCommand(string method, string path, auto body, *hash<auto> hdr) {
-        int retries = 0;
-        while (True) {
-            try {
-                debug("REST %y %y body: %y", method, path, body);
-                switch (method.upr()) {
-                    case "GET":
-                        return rest.restGet(path, hdr);
-                    case "POST":
-                        return rest.restPost(path, body, hdr);
-                    case "DELETE":
-                        return rest.restDel(path, body, hdr);
-                    default:
-                        return rest.restDoRequest(method, path, body, hdr);
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                if (retry(ex, \retries)) {
-                    continue;
-                }
-                rethrow ex.err, sprintf("%s (request path: %y)", ex.desc,
-                    ex.arg.request_path ?? path), ex.arg;
+        try {
+            debug("REST %y %y body: %y", method, path, body);
+            if (method.upr() != "POST") {
+                return rest.restDoRequestWithRetry(method, path, body, hdr, new QoreRagUtils::VoyageTransientRetryPolicy());
             }
+            *hash<auto> limited = getRateLimitedRequest(path, body);
+            if (!limited) {
+                return rest.restPostWithRetry(path, body, hdr, new QoreRagUtils::VoyageTransientRetryPolicy());
+            }
+            return limited.limiter.call(<QoreRagUtils::RateLimitedCallInfo>{
+                "tokens": limited.tokens,
+                "deadline_us": clock_get_monotonic_us() + RateLimitTimeoutMs * 1000,
+                "error_code": limited.error_code,
+                "error_prefix": sprintf("voyage: %s model %y", path, limited.model),
+                "error_arg": {"backend": "voyage", "model": limited.model},
+                "observer": sub (hash<QoreRagUtils::RateLimitEventInfo> event) {
+                    warn("rate limit: %s model %y: %s after attempt %d: %d ms", path, limited.model,
+                        event.type == "retry" ? "HTTP 429; retrying" : "waited for admission",
+                        event.attempt, event.delay_ms);
+                },
+            }, hash<auto> sub () {
+                # a fresh transient-failure budget for each request admitted
+                return rest.restPostWithRetry(path, body, hdr, new QoreRagUtils::VoyageTransientRetryPolicy());
+            }, *int sub (hash<auto> resp) {
+                auto used = resp.body.usage.total_tokens;
+                return used.typeCode() == NT_INT ? used : NOTHING;
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (inlist(ex.err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED"))) {
+                rethrow;
+            }
+            rethrow ex.err, sprintf("%s (request path: %y)", ex.desc, ex.arg.request_path ?? path), ex.arg;
         }
     }
 
-    #! Returns True if the error indicates that the operation should be retried
-    private bool retry(hash<ExceptionInfo> ex, reference<int> retries) {
-        # retry on I/O errors
-        if (RetrySet{ex.err}) {
-            if (++retries == MaxIoRetries) {
-                LoggerWrapper::error(sprintf("Maximum retries exceeded (%d)", retries));
-                return False;
-            }
-            warn("Technical error making REST call: %s: %s; retrying", ex.err, ex.desc);
-            return True;
+    #! Returns the limiter, estimate and error code of a rate-limited request, or NOTHING
+    /** Only embeddings and rerank requests with a model are limited, and only when the client authenticates
+        with a bearer API key, which identifies the account.
+    */
+    private *hash<auto> getRateLimitedRequest(string path, auto body) {
+        string op = path.substr(path.rfind("/") + 1);
+        if ((op != "embeddings" && op != "rerank") || body.typeCode() != NT_HASH
+                || body.model.typeCode() != NT_STRING) {
+            return NOTHING;
         }
-        # retry on rate limit (429)
-        if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 429) {
-            if (++retries == MaxIoRetries) {
-                LoggerWrapper::error(sprintf("Maximum retries exceeded (%d)", retries));
-                return False;
-            }
-            # use retry-after header if available
-            *string retry_after = ex.arg.headers."retry-after";
-            int wait_secs = retry_after.val() ? retry_after.toInt() : (1 << retries);
-            warn("Rate limited (429); waiting %d second(s) before retry %d", wait_secs, retries);
-            sleep(wait_secs);
-            return True;
+        *string key = VoyageRestClient::VoyageRestClientBase::getBearerKey(rest.getDefaultHeaders());
+        if (!key) {
+            return NOTHING;
         }
-        return False;
+        bool rerank = op == "rerank";
+        int tokens = 0;
+        if (rerank) {
+            list<string> docs = map $1, body.documents, $1.typeCode() == NT_STRING;
+            tokens = VoyageRestClient::VoyageRestClientBase::estimateRerankTokens(
+                body.query.typeCode() == NT_STRING ? body.query : "", docs);
+        } else {
+            foreach auto input in (body.input) {
+                if (input.typeCode() == NT_STRING) {
+                    tokens += VoyageRestClient::VoyageRestClientBase::estimateTokens(input);
+                }
+            }
+        }
+        return {
+            "model": body.model,
+            "tokens": tokens,
+            "error_code": rerank ? "RERANKER-RATE-LIMIT-ERROR" : "EMBEDDER-RATE-LIMIT-ERROR",
+            "limiter": VoyageRestClient::VoyageRestClientBase::getRateLimiter(rerank
+                    ? VoyageRestClient::VoyageRestClientBase::RateLimitRerank
+                    : VoyageRestClient::VoyageRestClientBase::RateLimitEmbed,
+                rest.getUrl(), key, body.model),
+        };
     }
 }
 }

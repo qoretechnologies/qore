@@ -143,8 +143,8 @@ class VoyageEmbedderTest inherits QUnit::Test {
 
     testPreferredBatchSize() {
         VoyageEmbedder emb = makeEmbedder();
-        assertEq(128, emb.getPreferredBatchSize(),
-            "Voyage advertises its documented conservative batch size");
+        assertEq(1000, emb.getPreferredBatchSize(),
+            "Voyage advertises its per-request input limit; requests are split by tokens as well");
     }
 
     testPerCallTimeout() {

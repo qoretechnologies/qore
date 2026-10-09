@@ -1,0 +1,131 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires SqlUtil >= 3.5
+%requires PgsqlSqlUtilBase >= 1.14
+%requires QUnit
+%requires json
+%try-module pgsql
+%define NoPgsql
+%endtry
+%exec-class ColumnByteSizesTest
+
+class ColumnByteSizesTest inherits Test {
+    private { int serial; }
+    constructor() : Test("payload-free column byte sizes", "1.0", \ARGV) {
+        addTestCase("binary, multibyte text, empty, null and missing rows", \values());
+        addTestCase("compressed and external large payloads return only sizes", \large());
+        addTestCase("literal identifiers and bound conditions", \identifiers());
+        addTestCase("ambiguous selection and invalid inputs reject", \validation());
+        addTestCase("measurement leaves pending writes in the caller transaction", \transaction());
+        set_return_value(main());
+    }
+    private hash<auto> fixture() {
+%ifdef NoPgsql
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) { testSkip("live disposable database required"); }
+        Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
+        string name = sprintf("column_bytes_%d_%d", getpid(), ++serial);
+        AbstractTable table = AbstractTable::getTable(ds, name);
+        if (table.checkExistence()) { throw "TEST-OWNERSHIP-ERROR", "fixture already exists"; }
+        ds.rollback();
+        table.setupTable({"columns": {
+            "id": {"qore_type": "integer", "notnull": True},
+            "payload": {"qore_type": "binary"}, "description": {"qore_type": "string"},
+            "order": {"qore_type": "string", "size": 80},
+        }, "primary_key": {"name": name + "_pk", "columns": ("id",)}});
+        table.createCommit();
+        return {"ds": ds, "table": table, "name": name};
+    }
+    private cleanup(hash<auto> f) {
+        f.ds.rollback(); f.table.dropCommit();
+        assertFalse(f.table.checkExistence()); f.ds.rollback(); f.ds.close();
+    }
+    private values() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        string text_value = "žluťoučký 🐈";
+        binary bytes = binary("a\0b\0c");
+        f.table.insert({"id": 1, "payload": bytes, "description": text_value});
+        f.table.insert({"id": 2, "payload": binary(""), "description": ""});
+        f.table.insert({"id": 3}); f.ds.commit();
+        assertTrue(f.table.supportsColumnByteSizes());
+        assertEq({"payload": bytes.size(), "description": binary(text_value).size()},
+            f.table.getColumnByteSizes(("payload", "description"), {"id": 1}));
+        assertEq({"payload": 0, "description": 0},
+            f.table.getColumnByteSizes(("payload", "description"), {"id": 2}));
+        hash<string, *int> sizes = f.table.getColumnByteSizes(("payload", "description"), {"id": 3});
+        assertEq(("description", "payload"), sort(sizes.keys()));
+        assertEq(NOTHING, sizes.payload); assertEq(NOTHING, sizes.description);
+        assertEq(NOTHING, f.table.getColumnByteSizes(("payload",), {"id": 4}));
+    }
+    private large() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        # Controlled driver fixture: construct payloads in PostgreSQL, then prohibit compression for
+        # the second row. Application-side measurement never receives the 32 MiB values.
+        f.ds.exec("insert into " + f.table.getSqlName()
+            + " (id,payload,description) values (1,decode(repeat('ab',16777216),'hex'),repeat('x',16777216))");
+        f.ds.exec("alter table " + f.table.getSqlName() + " alter payload set storage external");
+        f.ds.exec("alter table " + f.table.getSqlName() + " alter description set storage external");
+        f.ds.exec("insert into " + f.table.getSqlName()
+            + " (id,payload,description) values (2,decode(repeat('cd',16777216),'hex'),repeat('y',16777216))");
+        f.ds.commit();
+        foreach int id in ((1, 2)) {
+            hash<string, *int> sizes = f.table.getColumnByteSizes(("payload", "description"), {"id": id});
+            assertEq({"payload": 16777216, "description": 16777216}, sizes);
+            assertTrue(make_json(sizes).size() < 100);
+        }
+        # The compressed datum's stored size is not an acceptable admission size.
+        assertTrue(f.ds.selectRow("select pg_column_size(payload) as n from "
+            + f.table.getSqlName() + " where id=1").n < 16777216);
+    }
+    private identifiers() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        f.ds.exec("alter table " + f.table.getSqlName() + " add column \"odd\"\"column\" text");
+        f.table.insert({"id": 1, "order": "x' OR true --"});
+        f.ds.exec("update " + f.table.getSqlName() + " set \"odd\"\"column\"='abc' where id=1");
+        f.ds.commit();
+        assertEq({"order": 13, "odd\"column": 3},
+            f.table.getColumnByteSizes(("order", "odd\"column"), {"order": "x' OR true --"}));
+        assertEq(NOTHING, f.table.getColumnByteSizes(("payload",), {"order": "' OR true --"}));
+        assertThrows("DBI:PGSQL:ERROR", \f.table.getColumnByteSizes(), (("payload); drop table x; --",), {"id": 1}));
+        f.ds.rollback(); assertTrue(f.table.checkExistence());
+    }
+    private validation() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        f.table.insert({"id": 1}); f.table.insert({"id": 2}); f.ds.commit();
+        assertThrows("COLUMN-BYTE-SIZE-ERROR", \f.table.getColumnByteSizes(), (("payload",), {"id": op_ge(1)}));
+        foreach list<string> cols in (((), ("payload", "payload"), ("",), ("bad\0name",))) {
+            assertThrows("COLUMN-BYTE-SIZE-ERROR", \f.table.getColumnByteSizes(), (cols, {"id": 1}));
+        }
+        assertThrows("COLUMN-BYTE-SIZE-ERROR", \f.table.getColumnByteSizes(), (("payload",), {}));
+        assertThrows("COLUMN-BYTE-SIZE-ERROR", \f.table.getColumnByteSizes(), ((sprintf("%64s", "x"),), {"id": 1}));
+        list<string> too_many = ();
+        for (int i = 0; i < 257; ++i) { too_many += sprintf("column_%d", i); }
+        assertThrows("COLUMN-BYTE-SIZE-ERROR", \f.table.getColumnByteSizes(), (too_many, {"id": 1}));
+        assertThrows("DBI:PGSQL:ERROR", \f.table.getColumnByteSizes(), (("id",), {"id": 1}));
+        f.ds.rollback();
+        string domain_name = f.name + "_domain";
+        f.ds.exec("create domain " + domain_name + " as text");
+        f.ds.exec("alter table " + f.table.getSqlName() + " add column custom_payload " + domain_name);
+        f.ds.exec("update " + f.table.getSqlName() + " set custom_payload='abc'"); f.ds.commit();
+        on_exit {
+            f.ds.rollback();
+            f.ds.exec("alter table " + f.table.getSqlName() + " drop column custom_payload");
+            f.ds.exec("drop domain " + domain_name); f.ds.commit();
+        }
+        assertThrows("COLUMN-BYTE-SIZE-ERROR", \f.table.getColumnByteSizes(), (("custom_payload",), {"id": 1}));
+    }
+    private transaction() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        f.table.insert({"id": 1, "payload": binary("abc")});
+        assertEq({"payload": 3}, f.table.getColumnByteSizes(("payload",), {"id": 1}));
+        assertTrue(f.ds.currentThreadInTransaction());
+        Datasource observer(ENV.QORE_DB_CONNSTR_PGSQL);
+        AbstractTable other = AbstractTable::getTable(observer, f.name);
+        assertEq(NOTHING, other.getColumnByteSizes(("payload",), {"id": 1}));
+        observer.rollback(); observer.close(); f.ds.rollback();
+        assertEq(NOTHING, f.table.getColumnByteSizes(("payload",), {"id": 1}));
+    }
+}

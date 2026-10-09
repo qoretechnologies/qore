@@ -732,6 +732,53 @@ table.commit();
     */
     hash<string, int> beginBoundedTransaction(int lock_timeout_ms, int statement_timeout_ms,
             int transaction_timeout_ms) {
+        return beginBoundedTransactionIntern(lock_timeout_ms, statement_timeout_ms, transaction_timeout_ms, False);
+    }
+
+    #! Returns whether bounded maintenance transactions can establish fresh, complete read snapshots
+    /** @return True if @ref beginBoundedMaintenanceTransaction() is supported
+        @throw DBI-ERROR if capability discovery fails
+        @note Unsupported drivers must not silently substitute their default isolation or visibility.
+        @par Example
+        A retention coordinator checks support before requesting its temporary-space reservation.
+        @since SqlUtil 3.6.0
+    */
+    bool supportsBoundedMaintenanceTransactions() {
+        return supportsBoundedMaintenanceTransactionsImpl();
+    }
+
+    #! Begins bounded maintenance with fresh statement snapshots and complete-row visibility
+    /** Establishes READ COMMITTED, read/write operation and a driver guard against silently hidden
+        rows before the first query. PostgreSQL sets transaction-local \c row_security=off, which raises
+        an error instead of applying an otherwise applicable row policy; it does not bypass that policy.
+        Commit and rollback restore the session's isolation, access and visibility defaults.
+
+        @param lock_timeout_ms maximum database lock wait, in milliseconds
+        @param statement_timeout_ms maximum database statement duration, in milliseconds
+        @param transaction_timeout_ms maximum database transaction duration, in milliseconds
+        @return effective limits with the same keys as @ref beginBoundedTransaction()
+        @throw OPTION-ERROR for invalid or unordered limits
+        @throw TRANSACTION-ERROR if a transaction already exists
+        @throw AUTOCOMMIT-ERROR if the datasource has autocommit enabled
+        @throw TRANSACTION-LIMIT-NOT-SUPPORTED if the complete maintenance capability is unavailable
+        @throw TRANSACTION-LIMIT-EXCEEDED if the budget expires during setup
+        @throw DBI-ERROR if isolation, visibility or deadline setup fails
+        @note The caller must obtain real resource admission first and own commit, rollback and retry.
+            All deadline and commit/WAL limitations of @ref beginBoundedTransaction() still apply.
+            Later code must not disable the installed transaction settings. This API does not authorize
+            writes, prove an ownership closure, reserve physical resources or reconcile a lost commit.
+        @par Example
+        A reserved tree mover begins maintenance, locks every owner/member and then re-reads the
+        closure, observing children committed while it waited for those locks.
+        @since SqlUtil 3.6.0
+    */
+    hash<string, int> beginBoundedMaintenanceTransaction(int lock_timeout_ms, int statement_timeout_ms,
+            int transaction_timeout_ms) {
+        return beginBoundedTransactionIntern(lock_timeout_ms, statement_timeout_ms, transaction_timeout_ms, True);
+    }
+
+    private hash<string, int> beginBoundedTransactionIntern(int lock_timeout_ms, int statement_timeout_ms,
+            int transaction_timeout_ms, bool maintenance) {
         if (lock_timeout_ms < 1 || statement_timeout_ms < lock_timeout_ms
                 || transaction_timeout_ms < statement_timeout_ms || transaction_timeout_ms > 60000) {
             throw "OPTION-ERROR", "transaction limits require 1 <= lock <= statement <= transaction <= 60000 ms";
@@ -739,12 +786,21 @@ table.commit();
         if (ds.currentThreadInTransaction()) {
             throw "TRANSACTION-ERROR", "bounded transaction requires an idle datasource";
         }
-        if (!supportsBoundedTransactions()) {
+        if (!supportsBoundedTransactions() || (maintenance && !supportsBoundedMaintenanceTransactions())) {
             throw "TRANSACTION-LIMIT-NOT-SUPPORTED", "the database driver does not support bounded transactions";
         }
         ds.beginTransaction();
         on_error ds.rollback();
+        if (maintenance) { prepareBoundedMaintenanceTransactionImpl(); }
         return beginBoundedTransactionImpl(lock_timeout_ms, statement_timeout_ms, transaction_timeout_ms);
+    }
+
+    private bool supportsBoundedMaintenanceTransactionsImpl() {
+        return False;
+    }
+
+    private prepareBoundedMaintenanceTransactionImpl() {
+        throw "TRANSACTION-LIMIT-NOT-SUPPORTED", "the database driver does not support bounded maintenance";
     }
 
     private bool supportsBoundedTransactionsImpl() {
@@ -3296,7 +3352,10 @@ table.dropTrigger("trig_mytable");
             throw "TRIGGER-ERROR", sprintf("%s: has no trigger %y; valid triggers: %y", getDesc(), tname, triggers.keys());
 
         # drop trigger from table if the table already exists in the DB
-        execSql(sql = triggers{tname}.getDropSql(getSqlName()));
+        softlist<string> statements = triggers{tname}.getDropSql(getSqlName());
+        execSql(statements);
+        # Preserve the public string receipt while drivers return one or more SQL statements.
+        sql = statements.join(";\n");
 
         # remove from trigger structure and return removed trigger
         return triggers.take(tname);
@@ -7092,6 +7151,108 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         hash<SqlResultInfo> rv();
         rv.result = updateIntern(set, cond, \rv.sql, opt, \rv.args);
         return rv;
+    }
+
+    #! Returns whether the driver can measure text and binary values without returning their payloads
+    /** @return True when getColumnByteSizes() is available
+        @since SqlUtil 3.5
+    */
+    bool supportsColumnByteSizes() {
+        return supportsColumnByteSizesImpl();
+    }
+
+    private bool supportsColumnByteSizesImpl() {
+        return False;
+    }
+
+    #! Reads the uncompressed byte lengths of selected text or binary columns from at most one row
+    /** No payload is returned to the caller. The driver must avoid decompressing or materializing
+        large values merely to measure them. This measures values in the database encoding, not
+        physical relation, index, transaction-log or allocator overhead.
+
+        @param columns 1 to 256 distinct, literal database column names; not SQL expressions
+        @param cond nonempty SqlUtil selection expected to identify at most one row
+        @return a hash keyed by the supplied names, with NOTHING for SQL NULL, or NOTHING if no row matches
+        @throw COLUMN-BYTE-SIZE-ERROR for invalid arguments, unsupported native types or ambiguous selection
+        @throw UNSUPPORTED-OPERATION if the driver cannot supply bounded payload-free measurement
+        @throw DBI-ERROR for missing columns or unsupported column types
+        @note This method does not commit, lock rows, or impose a query deadline. The caller owns
+        indexed selection, transaction deadlines and revalidation under its mutation locks. Empty
+        values have size zero, distinct from SQL NULL. Returned lengths are not a resource reservation.
+        @par Example
+        Measure a history payload before requesting a bounded maintenance reservation:
+        @code{.py}
+        *hash<string, *int> sizes = table.getColumnByteSizes(("payload", "description"), {"id": 42});
+        @endcode
+        @since SqlUtil 3.5
+    */
+    *hash<string, *int> getColumnByteSizes(list<string> columns, hash<auto> cond) {
+        if (!columns || columns.size() > 256 || !cond) {
+            throw "COLUMN-BYTE-SIZE-ERROR", "expected bounded columns and nonempty row selection";
+        }
+        hash<string, bool> seen;
+        foreach string column in (columns) {
+            if (!column || column.size() > 128 || column.find("\0") >= 0 || seen{column}) {
+                throw "COLUMN-BYTE-SIZE-ERROR", "invalid or duplicate literal column name";
+            }
+            seen{column} = True;
+        }
+        return getColumnByteSizesImpl(columns, cond);
+    }
+
+    private *hash<string, *int> getColumnByteSizesImpl(list<string> columns, hash<auto> cond) {
+        throw "UNSUPPORTED-OPERATION", "payload-free column byte measurement is not supported by this driver";
+    }
+
+    #! Updates declared physical routing columns with a table-scoped cooperative trigger context
+    /** Business triggers must explicitly recognize the context generated by
+        get_physical_placement_trigger_guard(); other triggers and all constraints remain active.
+        This API does not authorize movement, discover tree ownership, bound the number of matched rows,
+        or commit. The caller must hold its ownership locks and enforce its row/byte/time budget.
+
+        @param set constant physical routing values; expressions and update operators are rejected
+        @param cond nonempty row selection using ordinary SqlUtil conditions
+        @param placement_columns application-declared routing columns; at most 16 distinct column names
+        @return the number of rows updated
+        @throw PHYSICAL-PLACEMENT-ERROR invalid routing columns, values, selection or nested context
+        @throw UNSUPPORTED-OPERATION the driver does not support cooperative physical placement
+        @note The caller must roll back after any exception. Context is transaction-local and is cleared
+        before successful return; rollback also clears it after an aborted statement or lost connection.
+
+        @par Example
+        After admitting and locking a bounded history tree, relocate one selected member without
+        changing the business timestamps maintained by cooperating triggers:
+        @code{.py}
+        table.updatePhysicalPlacement({"part_period": target}, {"id": id}, ("part_period",));
+        @endcode
+        @since SqlUtil 3.4
+    */
+    int updatePhysicalPlacement(hash<auto> set, hash<auto> cond, list<string> placement_columns) {
+        if (!set || !cond || !placement_columns || placement_columns.size() > 16) {
+            throw "PHYSICAL-PLACEMENT-ERROR", "expected nonempty values, selection and bounded routing columns";
+        }
+        if (ds instanceof Datasource && cast<Datasource>(ds).getAutoCommit()) {
+            throw "PHYSICAL-PLACEMENT-ERROR", "physical placement requires explicit transaction management";
+        }
+        hash<string, bool> allowed;
+        foreach string column in (placement_columns) {
+            if (!column || column.size() > 128 || allowed{column}) {
+                throw "PHYSICAL-PLACEMENT-ERROR", "invalid or duplicate routing column";
+            }
+            allowed{column} = True;
+        }
+        foreach hash<auto> field in (set.pairIterator()) {
+            if (!allowed{field.key} || !inlist(field.value.typeCode(), (NT_DATE, NT_INT, NT_STRING))
+                    || (field.value.typeCode() == NT_STRING && field.value.size() > 256)) {
+                throw "PHYSICAL-PLACEMENT-ERROR", "only declared, bounded constant routing values are accepted";
+            }
+        }
+        return updatePhysicalPlacementImpl(set, cond);
+    }
+
+    #! Driver implementation of updatePhysicalPlacement(); unsupported drivers fail before changing data
+    private int updatePhysicalPlacementImpl(hash<auto> set, hash<auto> cond) {
+        throw "UNSUPPORTED-OPERATION", "cooperative physical placement is not supported by this driver";
     }
 
     #! updates rows in the table using DPQL assignment expressions and a DPQL search expression; the transaction is committed if successful, if an error occurs then it is rolled back

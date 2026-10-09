@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires SqlUtil >= 3.4
+%requires PgsqlSqlUtilBase >= 1.13
+%requires QUnit
+%requires json
+%try-module pgsql
+%define NoPgsql
+%endtry
+%exec-class PhysicalPlacementTest
+
+# Real statements execute on PostgreSQL; only the selected reply boundary is interrupted.
+class PlacementFaultDatasource inherits Datasource {
+    public { string fault = ""; int remaining = 0; }
+    constructor(string connection) : Datasource(connection) {}
+    auto selectRow(string sql, ...) {
+        bool setup = sql.find("set_config('qore.physical_placement', %v") >= 0;
+        bool clear = sql.find("set_config('qore.physical_placement', ''") >= 0;
+        bool selected = remaining > 0 && ((setup && fault.startsWith("setup"))
+            || (clear && fault.startsWith("clear")));
+        bool after = fault.endsWith("after");
+        if (selected) { --remaining; }
+        if (selected && !after) { throw "TEST-PHYSICAL-BOUNDARY", "interrupted before statement"; }
+        auto result = Datasource::vselectRow(sql, argv);
+        if (selected && after) { throw "TEST-PHYSICAL-BOUNDARY", "lost statement reply"; }
+        return result;
+    }
+}
+
+class PhysicalPlacementTest inherits Test {
+    private { const Stamp = 2026-01-01T00:00:00Z; int serial; }
+    constructor() : Test("SqlUtil physical placement", "1.0", \ARGV) {
+        addTestCase("quoted table identity and ordinary timestamp updates", \quoted());
+        addTestCase("transaction rollback and failed SQL clear cooperative context", \rollback());
+        addTestCase("declared routing columns and explicit transactions are required", \validation());
+        addTestCase("nested contexts reject before changing rows", \nested());
+        addTestCase("contexts for another table or schema preserve ordinary triggers", \scope());
+        addTestCase("setup and cleanup reply failures require rollback and do not leak", \boundaryFailures());
+        set_return_value(main());
+    }
+    private hash<auto> fixture(bool quoted = False) {
+%ifdef NoPgsql
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_PHYSICAL_PLACEMENT_TEST_CONNSTR) { testSkip("live disposable database required"); }
+        PlacementFaultDatasource ds(ENV.QORE_PHYSICAL_PLACEMENT_TEST_CONNSTR); ds.setOption("timezone", "UTC");
+        string suffix = digest("sha256", sprintf("%d:%d:%s", getpid(), ++serial, now_us().toString())).toHex().substr(0, 16);
+        string name = "placement_" + suffix + (quoted ? "'\\quote" : "");
+        string function_name = "placement_fn_" + suffix + "()";
+        string trigger_name = "placement_tr_" + suffix;
+        AbstractTable t = AbstractTable::getTable(ds, quoted ? "\"" + name + "\"" : name);
+        if (t.checkExistence()) { throw "TEST-OWNERSHIP-ERROR", "owned fixture name already exists"; }
+        hash<auto> desc = {
+            "columns": {"id": {"qore_type": "integer", "notnull": True},
+                "bucket": {"qore_type": "integer", "notnull": True},
+                "value": {"qore_type": "string", "size": 40}, "modified": {"qore_type": "date"}},
+            "primary_key": {"name": "placement_pk_" + suffix, "columns": ("id", "bucket")},
+            "partition_strategy": {"method": "range", "columns": ("bucket",)},
+            "partitions": {"placement_a_" + suffix: {"bound_from": 0, "bound_to": 10},
+                "placement_b_" + suffix: {"bound_from": 10, "bound_to": 20}},
+            "driver": {"pgsql": {"functions": {function_name:
+                "returns trigger language plpgsql as $function$\nbegin\n"
+                    + get_physical_placement_trigger_guard("pgsql", name)
+                    + "  if new.modified is null or TG_OP = 'UPDATE' then new.modified := current_timestamp; end if;\n"
+                    + "  return new;\nend;\n$function$"}}},
+            "triggers": {"driver": {"pgsql": {trigger_name:
+                "before insert or update on " + t.getSqlName() + " for each row execute procedure " + function_name}}},
+        };
+        t.setupTable(desc); t.createCommit();
+        on_error { ds.rollback(); t.dropCommit(); ds.close(); }
+        t.insert({"id": 1, "bucket": 1, "value": "original", "modified": Stamp}); ds.commit();
+        return {"ds": ds, "table": t, "trigger_name": trigger_name};
+    }
+    private cleanup(hash<auto> f) {
+        f.ds.remaining = 0; f.ds.rollback(); f.ds.setAutoCommit(False); f.table.dropCommit();
+        assertFalse(f.table.checkExistence()); f.ds.rollback(); f.ds.close();
+    }
+    private string active(hash<auto> f) {
+        return f.ds.selectRow("select pg_catalog.current_setting('qore.physical_placement', true) as value").value ?? "";
+    }
+    private quoted() {
+        hash<auto> f = fixture(True); on_exit cleanup(f);
+        assertEq(1, f.table.updatePhysicalPlacement({"bucket": 11}, {"id": 1}, ("bucket",)));
+        assertEq("", active(f)); assertEq(Stamp, f.table.selectRow().modified);
+        f.table.update({"value": "business"}, {"id": 1}); f.ds.commit();
+        hash<auto> row = f.table.selectRow(); assertEq(11, row.bucket); assertTrue(row.modified != Stamp); f.ds.commit();
+        # Driver SQL is a soft list; dropTrigger must execute it and keep its public string receipt.
+        string sql;
+        AbstractTrigger removed = f.table.dropTrigger(f.trigger_name, \sql); f.ds.commit();
+        assertTrue(sql.startsWith("drop trigger ")); assertEq(f.trigger_name, removed.name);
+        f.table.update({"value": "without trigger"}, {"id": 1}); f.ds.commit();
+        assertEq(row.modified, f.table.selectRow().modified);
+    }
+    private rollback() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        f.table.updatePhysicalPlacement({"bucket": 11}, {"id": 1}, ("bucket",)); f.ds.rollback();
+        assertEq(1, f.table.selectRow().bucket); assertEq("", active(f)); f.ds.commit();
+        bool failed = False;
+        try { f.table.updatePhysicalPlacement({"bucket": 99}, {"id": 1}, ("bucket",)); }
+        catch (hash<ExceptionInfo> ex) { failed = True; assertEq("23514", ex.arg.alterr); }
+        assertTrue(failed); f.ds.rollback(); assertEq("", active(f));
+        assertEq(1, f.table.selectRow().bucket); assertEq(Stamp, f.table.selectRow().modified);
+        f.table.update({"value": "normal after rollback"}, {"id": 1}); f.ds.commit();
+        assertTrue(f.table.selectRow().modified != Stamp);
+    }
+    private validation() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        foreach hash<auto> bad in (({"value": "business"}, {"bucket": NULL}, {"bucket": binary("bad")}, {"bucket": {"uop": "+", "arg": 1}})) {
+            assertThrows("PHYSICAL-PLACEMENT-ERROR", \f.table.updatePhysicalPlacement(), (bad, {"id": 1}, ("bucket",)));
+        }
+        assertThrows("PHYSICAL-PLACEMENT-ERROR", \f.table.updatePhysicalPlacement(), ({"bucket": 11}, {}, ("bucket",)));
+        assertThrows("PHYSICAL-PLACEMENT-ERROR", \f.table.updatePhysicalPlacement(), ({"bucket": 11}, {"id": 1}, ("bucket", "bucket")));
+        assertEq(1, f.table.selectRow().bucket); f.ds.commit(); f.ds.setAutoCommit(True);
+        assertThrows("PHYSICAL-PLACEMENT-ERROR", \f.table.updatePhysicalPlacement(), ({"bucket": 11}, {"id": 1}, ("bucket",)));
+        f.ds.setAutoCommit(False);
+        assertThrows("AUTO-TRIGGER-ERROR", \get_physical_placement_trigger_guard(), ("oracle", "example"));
+        assertThrows("AUTO-TRIGGER-ERROR", \get_physical_placement_trigger_guard(), ("pgsql", ""));
+    }
+    private boundaryFailures() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        foreach string mode in (("setup-before", "setup-after", "clear-before", "clear-after", "clear-twice-before")) {
+            f.ds.fault = mode; f.ds.remaining = mode == "clear-twice-before" ? 2 : 1;
+            assertThrows("TEST-PHYSICAL-BOUNDARY", \f.table.updatePhysicalPlacement(), ({"bucket": 11}, {"id": 1}, ("bucket",)));
+            f.ds.remaining = 0; f.ds.rollback();
+            assertEq("", active(f)); assertEq(1, f.table.selectRow().bucket); assertEq(Stamp, f.table.selectRow().modified);
+            f.ds.commit();
+        }
+        assertEq(1, f.table.updatePhysicalPlacement({"bucket": 11}, {"id": 1}, ("bucket",))); f.ds.commit();
+        f.table.update({"value": "ordinary after faults"}, {"id": 1}); f.ds.commit();
+        assertTrue(f.table.selectRow().modified != Stamp);
+    }
+    private scope() {
+        foreach string mismatch in (("table", "schema")) {
+            hash<auto> f = fixture(); on_exit cleanup(f);
+            hash<auto> identity = f.ds.selectRow("select n.nspname as schema, c.relname as table "
+                "from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+                "where c.oid = %v::regclass", f.table.getSqlName());
+            identity{mismatch} += "_different";
+            f.ds.selectRow("select pg_catalog.set_config('qore.physical_placement', %v, true) as value",
+                make_json(identity));
+            f.table.update({"value": "ordinary write in a different context"}, {"id": 1});
+            assertTrue(f.table.selectRow().modified != Stamp);
+            f.ds.rollback(); assertEq("", active(f)); assertEq(Stamp, f.table.selectRow().modified);
+            f.ds.commit();
+        }
+    }
+    private nested() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        f.ds.beginTransaction();
+        f.ds.selectRow("select pg_catalog.set_config('qore.physical_placement', %v, true) as value", "occupied");
+        assertThrows("PHYSICAL-PLACEMENT-ERROR", \f.table.updatePhysicalPlacement(), ({"bucket": 11}, {"id": 1}, ("bucket",)));
+        assertEq("occupied", active(f)); assertEq(1, f.table.selectRow().bucket); f.ds.rollback();
+        assertEq("", active(f));
+        assertEq(1, f.table.updatePhysicalPlacement({"bucket": 11}, {"id": 1}, ("bucket",))); f.ds.commit();
+        assertEq(Stamp, f.table.selectRow().modified);
+    }
+}

@@ -148,6 +148,39 @@ public hash<auto> sub generate_auto_triggers_all_drivers(string table_name,
     };
 }
 
+#! Generates a cooperative physical-placement guard for a PostgreSQL row trigger body
+/** Insert the returned block immediately after the trigger body's BEGIN, before business effects.
+    It returns NEW (or OLD for a delete trigger) only for updatePhysicalPlacement() on the exact
+    declared logical table and schema. Row movement's destination-partition INSERT and source DELETE
+    use the same declared table identity. All integrity constraints remain active.
+
+    @param driver_name database driver; currently only pgsql supports this context
+    @param table_name unqualified logical parent table name, not a SQL expression
+    @param delete_row if True, return OLD for a delete trigger; otherwise return NEW
+    @return the driver-specific trigger-body block for a SqlUtil schema description
+    @throw AUTO-TRIGGER-ERROR unsupported driver or invalid table name
+    @note This is a cooperation protocol, not an authorization boundary against the database owner.
+    The statement API accepts only constant values for application-declared physical columns.
+    @par Example
+    Include this block in the existing history table's trigger definition and use
+    AbstractTable::updatePhysicalPlacement() after locking and admitting the selected history rows.
+    @since SqlUtil 3.4
+*/
+public string sub get_physical_placement_trigger_guard(string driver_name, string table_name,
+        bool delete_row = False) {
+    if (driver_name != "pgsql" || !table_name || table_name.size() > 128 || table_name.find("\0") >= 0) {
+        throw "AUTO-TRIGGER-ERROR", "physical-placement guard requires pgsql and a bounded table name";
+    }
+    string literal = table_name;
+    literal =~ s/\\/\\\\/g;
+    literal =~ s/'/''/g;
+    return "  if nullif(pg_catalog.current_setting('qore.physical_placement', true), '') is not null then\n"
+        "    if (pg_catalog.current_setting('qore.physical_placement', true)::jsonb ->> 'schema') = TG_TABLE_SCHEMA\n"
+        + sprintf("        and (pg_catalog.current_setting('qore.physical_placement', true)::jsonb ->> 'table') = E'%s' then\n", literal)
+        + sprintf("      return %s;\n", delete_row ? "old" : "new")
+        + "    end if;\n  end if;\n";
+}
+
 # --- PostgreSQL ---
 
 hash<auto> sub generate_pgsql_auto_triggers(string name, bool has_created, bool has_modified,
