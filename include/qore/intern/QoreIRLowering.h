@@ -81,6 +81,14 @@ constexpr size_t QORE_IR_LOWERING_STACK_RESERVE = 128 * 1024;
 constexpr const char* QORE_IR_LOWERING_STACK_ERROR = "the code is nested too deeply to be lowered within the stack of "
     "this thread";
 
+//! Returns true if the thread's stack has reached QORE_IR_LOWERING_STACK_RESERVE in a recursive walk of the code
+/** For the analyses and walks of the AST or of the IR that lowering and IR optimization make: they recurse with the
+    nesting of the code and stop when this returns true.  An analysis then returns its conservative answer; the
+    lowering in progress in the thread, if any, fails with QORE_IR_LOWERING_STACK_ERROR (see
+    QoreIRLowering::stackLimitReached()) so that a walk that had to be complete cannot leave its result incomplete.
+*/
+DLLLOCAL bool qore_ir_walk_stack_reserve_reached();
+
 //! Per-callback state passed to plugin IR lowering hooks.
 /** Plugin lowering callbacks use this object to publish their lowered IR result
  *  and, on failure, the diagnostic that should be propagated to the caller.
@@ -260,6 +268,11 @@ public:
 private:
     //! set when lowering stopped at QORE_IR_LOWERING_STACK_RESERVE; see stackLimitReached()
     bool stack_limit_reached = false;
+
+    //! the number of walks that stopped at the stack reserve in this thread when lowering started
+    /** see qore_ir_walk_stack_reserve_reached()
+    */
+    unsigned walk_stack_reserve_hits;
 
     //! Returns true and sets the lowering error if the thread's stack has reached the lowering reserve
     bool stackReserveReached(std::string& error);

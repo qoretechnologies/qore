@@ -10,6 +10,7 @@
 */
 
 #include <qore/intern/QoreIRAnalysis.h>
+#include <qore/intern/QoreIRLowering.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreJITIncludes.h>
 #include <qore/intern/QoreBinaryLValueOperatorNode.h>
@@ -44,56 +45,74 @@ static bool qore_ir_analysis_cancelled(size_t& count, const char* operation) {
     Returns nullptr when the tree cannot be resolved to a simple variable reference.
 */
 const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue) {
-    if (!lvalue.hasNode()) {
+    // follows the chain of operators iteratively: it is as long as the nesting of the lvalue
+    QoreValue cur = lvalue;
+    while (true) {
+        if (!cur.hasNode()) {
+            return nullptr;
+        }
+        const AbstractQoreNode* node = cur.getInternalNode();
+        if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+            return var;
+        }
+        if (auto* op = dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)) {
+            cur = op->getLeft();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
+            cur = op->getLeft();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+            cur = op->getLeft();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+            cur = op->get(0);
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+            cur = op->getLeft();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreShiftOperatorNode*>(node)) {
+            cur = op->getExp();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreUnshiftOperatorNode*>(node)) {
+            cur = op->getLeft();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
+            cur = op->getLValue();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
+            cur = op->getExp();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
+            cur = op->getExp();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
+            cur = op->getExp();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
+            cur = op->getExp();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreRemoveOperatorNode*>(node)) {
+            cur = op->getExp();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreDeleteOperatorNode*>(node)) {
+            cur = op->getExp();
+            continue;
+        }
         return nullptr;
     }
-    const AbstractQoreNode* node = lvalue.getInternalNode();
-    if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
-        return var;
-    }
-    if (auto* op = dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->getLeft());
-    }
-    if (auto* op = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->getLeft());
-    }
-    if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->getLeft());
-    }
-    if (auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->get(0));
-    }
-    if (auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->getLeft());
-    }
-    if (auto* op = dynamic_cast<const QoreShiftOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->getExp());
-    }
-    if (auto* op = dynamic_cast<const QoreUnshiftOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->getLeft());
-    }
-    if (auto* op = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->getLValue());
-    }
-    if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->getExp());
-    }
-    if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->getExp());
-    }
-    if (auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->getExp());
-    }
-    if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->getExp());
-    }
-    if (auto* op = dynamic_cast<const QoreRemoveOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->getExp());
-    }
-    if (auto* op = dynamic_cast<const QoreDeleteOperatorNode*>(node)) {
-        return extractLValueBaseVarRef(op->getExp());
-    }
-    return nullptr;
 }
 
 static bool qore_ir_is_ast_lvalue_mutation(QoreIROpcode opcode) {
@@ -8592,9 +8611,12 @@ static bool qore_ir_value_is_proven_assigned(
         const std::unordered_set<const LocalVar*>* known_locals,
         std::unordered_set<uint32_t>& visiting, size_t& check_count,
         bool track_closure_locals = false) {
+    // the proof recurses through the definitions of the operands; when the stack reserve is reached, the value is
+    // not proven, which is the conservative answer
     if (!value.isValid()
             || qore_ir_analysis_cancelled(check_count,
                 "IR local assigned-value proof")
+            || qore_ir_walk_stack_reserve_reached()
             || !visiting.insert(value.id).second) {
         return false;
     }
@@ -8909,6 +8931,10 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
         const std::vector<QoreIRValue>& values) {
     if (!point || values.empty() || func.blocks.empty()
             || func.has_opaque_ast_local_access) {
+        return false;
+    }
+    // the conservative answer: not proven
+    if (qore_ir_walk_stack_reserve_reached()) {
         return false;
     }
     size_t check_count = 0;

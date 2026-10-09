@@ -287,6 +287,10 @@ static bool expressionMayCreateNodeTemp(const QoreValue& val) {
     if (!val) {
         return false;
     }
+    // the conservative answer: a temp scope is created
+    if (qore_ir_walk_stack_reserve_reached()) {
+        return true;
+    }
     const AbstractQoreNode* node = val.getInternalNode();
     if (!node) {
         return !isImmediateCleanupFreeValue(val);
@@ -374,6 +378,10 @@ static bool anyOperandMayCreateTemp(const QoreValue& val, F operand_may_create_t
     if (!node || val.isValue() || dynamic_cast<const VarRefNode*>(node)
             || dynamic_cast<const RuntimeConstantRefNode*>(node)) {
         return false;
+    }
+    // the conservative answer, as for an unknown kind of expression: a temp scope is created
+    if (qore_ir_walk_stack_reserve_reached()) {
+        return true;
     }
 
     auto args_may_create_temp = [&operand_may_create_temp](const QoreParseListNode* parse_args,
@@ -661,9 +669,23 @@ static QoreIRValue tryDescriptorPluginLowering(QoreIRLowering& lowering, QoreIRB
     return QoreIRValue();
 }
 
+namespace {
+//! the number of walks of the code that stopped at the lowering stack reserve in this thread
+thread_local unsigned ir_walk_stack_reserve_hits = 0;
+}
+
+bool qore_ir_walk_stack_reserve_reached() {
+    if (!q_thread_stack_reserve_exceeded(QORE_IR_LOWERING_STACK_RESERVE)) {
+        return false;
+    }
+    ++ir_walk_stack_reserve_hits;
+    return true;
+}
+
 QoreIRLowering::QoreIRLowering(QoreIRBuilder& n_builder, QoreParseContext* n_parse_context,
         const AOTConstantReverseMap* n_constant_reverse_map)
-        : builder(n_builder), parse_context(n_parse_context), constant_reverse_map(n_constant_reverse_map) {
+        : builder(n_builder), parse_context(n_parse_context), constant_reverse_map(n_constant_reverse_map),
+        walk_stack_reserve_hits(ir_walk_stack_reserve_hits) {
 }
 
 // Check if a variable is a local (not global) and not captured by a closure.
@@ -870,6 +892,10 @@ static bool qoreIrExpressionInvalidatesListSizeHoist(const QoreValue& expr,
     if (!expr.hasNode()) {
         return false;
     }
+    // the conservative answer: nothing is hoisted
+    if (qore_ir_walk_stack_reserve_reached()) {
+        return true;
+    }
     const AbstractQoreNode* node = expr.getInternalNode();
     if (!node) {
         return false;
@@ -923,6 +949,11 @@ static void qoreIrCollectListSizeHoistCandidates(const QoreValue& expr,
         std::unordered_set<LocalVar*>& list_candidates, std::unordered_set<LocalVar*>& invalidation_candidates,
         std::vector<QoreValue>& value_candidates, bool& cancelled) {
     if (cancelled || !expr.hasNode()) {
+        return;
+    }
+    // a cancelled analysis hoists nothing
+    if (qore_ir_walk_stack_reserve_reached()) {
+        cancelled = true;
         return;
     }
     if (LocalVar* local = qoreIrGetHoistableListSizeLocal(expr)) {
@@ -1091,6 +1122,10 @@ static bool qoreIrStatementInvalidatesListSizeHoist(const AbstractStatement* stm
     if (!stmt) {
         return false;
     }
+    // the conservative answer: nothing is hoisted
+    if (qore_ir_walk_stack_reserve_reached()) {
+        return true;
+    }
     if (auto* expr_stmt = dynamic_cast<const ExpressionStatement*>(stmt)) {
         return qoreIrExpressionInvalidatesListSizeHoist(expr_stmt->getExpression(), candidates);
     }
@@ -1131,6 +1166,11 @@ static void qoreIrCollectListSizeHoistCandidatesFromBlock(const StatementBlock* 
         std::unordered_set<LocalVar*>& list_candidates, std::unordered_set<LocalVar*>& invalidation_candidates,
         std::vector<QoreValue>& value_candidates, bool& cancelled) {
     if (cancelled || !block) {
+        return;
+    }
+    // a cancelled analysis hoists nothing
+    if (qore_ir_walk_stack_reserve_reached()) {
+        cancelled = true;
         return;
     }
     size_t count = 0;
@@ -1356,7 +1396,10 @@ bool QoreIRLowering::stackReserveReached(std::string& error) {
     // Lowering recurses with the nesting of the code, and a thread's stack can be smaller than the nesting the parser
     // accepts requires; lowering stops while enough stack remains for the next steps, and the function runs on the
     // AST tier, which checks the stack itself as it executes (see QORE_IR_LOWERING_STACK_RESERVE)
-    if (!q_thread_stack_reserve_exceeded(QORE_IR_LOWERING_STACK_RESERVE)) {
+    // a walk of the code that stopped at the reserve since lowering started leaves its result incomplete or
+    // conservative, so lowering fails as well
+    if (!q_thread_stack_reserve_exceeded(QORE_IR_LOWERING_STACK_RESERVE)
+            && ir_walk_stack_reserve_hits == walk_stack_reserve_hits) {
         return false;
     }
     stack_limit_reached = true;
@@ -3873,6 +3916,10 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         builder.setBlock(after_block);
     }
 
+    // a walk of the code made after the last statement was lowered may have stopped at the stack reserve
+    if (stackReserveReached(error)) {
+        return false;
+    }
     return true;
 }
 
@@ -4041,6 +4088,11 @@ static void collectLocalVarsFromExpr(const QoreValue& expr,
     if (!node) {
         return;
     }
+    // the variables are needed by the code being lowered, so a walk stopped here fails the lowering (see
+    // qore_ir_walk_stack_reserve_reached())
+    if (qore_ir_walk_stack_reserve_reached()) {
+        return;
+    }
 
     qore_type_t ntype = expr.getType();
 
@@ -4117,6 +4169,10 @@ static void collectLocalVarsFromExpr(const QoreValue& expr,
 static void collectLocalVarsFromStatements(const StatementBlock* block,
         std::unordered_set<LocalVar*>& local_vars) {
     if (!block) {
+        return;
+    }
+    // a walk stopped here fails the lowering, as in collectLocalVarsFromExpr()
+    if (qore_ir_walk_stack_reserve_reached()) {
         return;
     }
     for (const auto* stmt : block->getStatements()) {
@@ -5308,51 +5364,67 @@ static bool isRangeLValue(const QoreValue& value) {
 }
 
 static bool getLValueBaseValue(const QoreValue& value, QoreValue& base) {
-    const AbstractQoreNode* node = value.getInternalNode();
-    if (!node) {
+    // follows the chain of operators iteratively: it is as long as the nesting of the lvalue
+    QoreValue cur = value;
+    while (true) {
+        const AbstractQoreNode* node = cur.getInternalNode();
+        if (!node) {
+            return false;
+        }
+        if (dynamic_cast<const VarRefNode*>(node)) {
+            base = cur;
+            return true;
+        }
+        if (auto* op = dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)) {
+            cur = op->getLeft();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
+            cur = op->getLeft();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+            cur = op->getLeft();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+            cur = op->get(0);
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+            cur = op->getLeft();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreShiftOperatorNode*>(node)) {
+            cur = op->getExp();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreUnshiftOperatorNode*>(node)) {
+            cur = op->getLeft();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
+            cur = op->getLValue();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
+            cur = op->getExp();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
+            cur = op->getExp();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
+            cur = op->getExp();
+            continue;
+        }
+        if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
+            cur = op->getExp();
+            continue;
+        }
         return false;
     }
-    if (dynamic_cast<const VarRefNode*>(node)) {
-        base = value;
-        return true;
-    }
-    if (auto* op = dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getLeft(), base);
-    }
-    if (auto* op = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getLeft(), base);
-    }
-    if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getLeft(), base);
-    }
-    if (auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
-        return getLValueBaseValue(op->get(0), base);
-    }
-    if (auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getLeft(), base);
-    }
-    if (auto* op = dynamic_cast<const QoreShiftOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getExp(), base);
-    }
-    if (auto* op = dynamic_cast<const QoreUnshiftOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getLeft(), base);
-    }
-    if (auto* op = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getLValue(), base);
-    }
-    if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getExp(), base);
-    }
-    if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getExp(), base);
-    }
-    if (auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getExp(), base);
-    }
-    if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getExp(), base);
-    }
-    return false;
 }
 
 static bool isInvokeLValueNode(const AbstractQoreNode* node) {
@@ -11141,6 +11213,11 @@ QoreIRValue QoreIRLowering::lowerContainerLiteral(const QoreValue& expr, std::st
 }
 
 QoreIRValue QoreIRLowering::lowerContainerElement(const QoreValue& expr, std::string& error) {
+    // a literal container nested in a literal container is lowered here without lowerExpression(), which checks the
+    // stack for the other kinds of nesting
+    if (stackReserveReached(error)) {
+        return QoreIRValue();
+    }
     QoreIRValue value = lowerContainerLiteral(expr, error);
     if (value.isValid() || !error.empty()) {
         return value;
