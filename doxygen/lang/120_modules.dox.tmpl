@@ -1362,6 +1362,14 @@ qcc of this Qore installation
     generated code keeps the identity, so existing compiled modules keep loading.  Ordinary binary modules written
     in C/C++ are not affected.
 
+    Modules built outside of the %Qore source tree with the %Qore CMake support (\c qore_user_modules() and
+    \c qore_external_user_module()) recompile their AOT modules whenever \c qcc, the %Qore library or the installed
+    qcc format fingerprint changes, so rebuilding such a module after installing a new %Qore library is enough.
+    \c qcc compiles them with the directory of the %Qore library found by \c find_package(Qore) ahead of the
+    configure-time \c LD_LIBRARY_PATH, so a library path that names another %Qore build tree does not make it
+    compile for that tree's library, and the build fails before compiling any module when \c qcc reports no AOT
+    runtime identity.
+
     User modules will have their own dedicated @ref Qore::Program "Program" object; the @ref Qore::Program "Program"
     object is created automatically when the module is loaded and initialized.  The module's
     @ref Qore::Program "Program" object is created with locked parse options as follows:

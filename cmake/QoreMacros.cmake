@@ -165,6 +165,22 @@ function(QORE_GET_BINARY_MODULE_PATH _out_var)
     set(${_out_var} "${_qore_bm_path}" PARENT_SCOPE)
 endfunction()
 
+#! Returns the LD_LIBRARY_PATH that AOT module compilation runs qcc with
+# The module build directory comes first (for the module's own binary modules), then the directory of the Qore
+# library the module is built against, then the library path of the configuring environment.  Putting the Qore library
+# before the configure-time environment keeps qcc on that library even when the environment points at another Qore
+# build tree; qcc would otherwise compile modules for that tree's library, and the Qore library the modules are built
+# for would refuse them.  Qore's own build defines no QORE_LIBRARY.
+function(QORE_GET_AOT_LIBRARY_PATH _out_var)
+    set(_qore_aot_library_path "${CMAKE_BINARY_DIR}")
+    if (DEFINED QORE_LIBRARY AND IS_ABSOLUTE "${QORE_LIBRARY}")
+        get_filename_component(_qore_aot_library_dir "${QORE_LIBRARY}" DIRECTORY)
+        string(APPEND _qore_aot_library_path ":${_qore_aot_library_dir}")
+    endif()
+    string(APPEND _qore_aot_library_path ":$ENV{LD_LIBRARY_PATH}")
+    set(${_out_var} "${_qore_aot_library_path}" PARENT_SCOPE)
+endfunction()
+
 function(QORE_GET_QCC_COMMAND _out_var)
     if (TARGET qcc)
         set(_qore_qcc_command $<TARGET_FILE:qcc>)
@@ -1993,11 +2009,13 @@ MACRO (QORE_EXTERNAL_BINARY_MODULE _module_name _version)
             set(_qore_external_module_path
                 "${_qore_external_module_path}:${QORE_BUILDTREE_USER_MODULE_PATH}")
         endif()
+        QORE_GET_AOT_LIBRARY_PATH(_qore_external_library_path)
         set(QORE_QM_METADATA_ENV
             "QORE_MODULE_DIR=${_qore_external_module_path}"
             "QORE_INCLUDE_DIR="
-            "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}")
+            "LD_LIBRARY_PATH=${_qore_external_library_path}")
         unset(_qore_external_module_path)
+        unset(_qore_external_library_path)
     endif()
 ENDMACRO (QORE_EXTERNAL_BINARY_MODULE)
 
@@ -2437,22 +2455,44 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             set(_qore_user_module_path
                 "${_qore_user_module_path}:${QORE_BUILDTREE_USER_MODULE_PATH}")
         endif()
+        QORE_GET_AOT_LIBRARY_PATH(_qore_user_library_path)
         set(QORE_QM_METADATA_ENV
             "QORE_MODULE_DIR=${_qore_user_module_path}"
             "QORE_INCLUDE_DIR="
-            "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}")
+            "LD_LIBRARY_PATH=${_qore_user_library_path}")
         unset(_qore_user_module_path)
+        unset(_qore_user_library_path)
     endif()
 
     if (NOT DEFINED QCC_FORMAT_STAMP)
+        # A module built outside the Qore source tree: every AOT .qmod depends on this stamp, which is rewritten
+        # whenever qcc, the Qore library or the installed qcc format fingerprint changes.  qcc itself is not always
+        # relinked or reinstalled when a new Qore library is installed, so depending on the qcc executable alone left
+        # qmods compiled for the previous library, which the new library refuses.  The stamp records the AOT runtime
+        # identity that qcc reports in the AOT environment, and the build fails clearly when qcc reports none.
         set(QCC_FORMAT_STAMP ${CMAKE_BINARY_DIR}/qcc-format.stamp)
+        set(_qore_qcc_stamp_deps ${_qore_qcc_command})
+        if (DEFINED QORE_LIBRARY AND IS_ABSOLUTE "${QORE_LIBRARY}" AND EXISTS "${QORE_LIBRARY}")
+            list(APPEND _qore_qcc_stamp_deps ${QORE_LIBRARY})
+        endif()
+        if (DEFINED QORE_QCC_FORMAT_STAMP AND EXISTS "${QORE_QCC_FORMAT_STAMP}")
+            list(APPEND _qore_qcc_stamp_deps ${QORE_QCC_FORMAT_STAMP})
+        endif()
+        string(REPLACE ";" "|" _qore_qcc_stamp_env "${QORE_QM_METADATA_ENV}")
         add_custom_command(
             OUTPUT ${QCC_FORMAT_STAMP}
-            COMMAND ${CMAKE_COMMAND} -E touch ${QCC_FORMAT_STAMP}
-            DEPENDS ${_qore_qcc_command}
+            COMMAND ${CMAKE_COMMAND}
+                "-DQCC=${_qore_qcc_command}"
+                "-DENV=${_qore_qcc_stamp_env}"
+                "-DLIBRARY=${QORE_LIBRARY}"
+                "-DOUTPUT=${QCC_FORMAT_STAMP}"
+                -P ${QORE_CMAKE_DIR}/QoreWriteQccRuntimeStamp.cmake
+            DEPENDS ${_qore_qcc_stamp_deps} ${QORE_CMAKE_DIR}/QoreWriteQccRuntimeStamp.cmake
             COMMENT "Updating qcc format-version stamp"
             VERBATIM
         )
+        unset(_qore_qcc_stamp_deps)
+        unset(_qore_qcc_stamp_env)
         if (NOT TARGET qcc-format-version)
             add_custom_target(qcc-format-version DEPENDS ${QCC_FORMAT_STAMP})
         endif()

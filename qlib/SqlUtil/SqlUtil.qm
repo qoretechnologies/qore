@@ -121,6 +121,8 @@ module SqlUtil {
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv3_3_0 SqlUtil v3.3.0
+    - added explicit capability-checked non-key update row locks: status writers can permit independent
+      foreign-key checks while continuing to exclude competing writers, deletes and key changes
     - added capability-checked @ref SqlUtil::AbstractTable::dropEmptyPartition()
       "dropEmptyPartition()" and its commit wrapper: physical identity, emptiness proof, and removal are
       protected by the same database locks, preventing late inserts from being lost during retention
@@ -618,6 +620,7 @@ hash soh = (
     - @ref select_option_partition "partition": a canonical physical-partition name restricting the primary table
       reference on drivers advertising @ref SqlUtil::AbstractTable::supportsPartitionRead() "supportsPartitionRead()"
     - @ref select_option_superquery "superquery": (@ref hash_type "hash") specifies that the rest of the argument belong to a subquery and the hash arguments under this key will select from the subquery
+    - @ref select_option_forupdate_no_key "forupdate_no_key": (@c bool) explicitly permits concurrent key-share locks
     - @ref select_option_forupdate "forupdate": (\c bool_type "bool") adds a \c "for update" clause to a select query
 
     @subsubsection select_option_alias Select Option "alias"
@@ -936,6 +939,28 @@ hash<auto> sh = {
   The above example results in an SQL commit equivalent to the following:
     @code{.py}
 *list<auto> rows = table.vselectRows("select serviceid,service_methodid from schema.service_methods for update");
+    @endcode
+
+    @subsubsection select_option_forupdate_no_key Select Option "forupdate_no_key"
+    With @c forupdate set to @c True, @c forupdate_no_key requests a row write lock that permits concurrent
+    key-share locks. PostgreSQL 9.3 and later emit @c FOR @c NO @c KEY @c UPDATE. Other drivers reject the
+    request unless @ref SqlUtil::AbstractTable::supportsNonKeyUpdateLocks() reports support. This option is
+    rejected without @c forupdate or together with @c superquery. False leaves ordinary locking unchanged.
+
+    A writer that changes only a parent's status can use this lock while an independent transaction inserts
+    an audit row referencing that parent. Writers, deletes and key-changing moves remain excluded. A later
+    key change upgrades the lock and can block on those foreign-key checks; callers must use ordinary
+    @c forupdate when reserving a key change. The caller owns commit, rollback and complete transaction retry.
+    @code{.py}
+    try {
+        on_error table.rollback();
+        hash<auto> row = table.selectRow({"where": {"id": id},
+            "forupdate": True, "forupdate_no_key": True});
+        table.update({"status": "complete"}, {"id": id});
+        table.commit();
+    } catch (hash<ExceptionInfo> ex) {
+        rethrow;
+    }
     @endcode
 
     @subsection sql_paging Select With Paging

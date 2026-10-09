@@ -215,6 +215,8 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev112 PgsqlSqlUtilBase v1.12
+    - added explicit non-key update row locking through the SqlUtil @c forupdate_no_key select option;
+      independent foreign-key checks can complete while other writers, deletes and key changes remain excluded
     - Fixed bulk timestamp, date, and time writes in a different input time zone so they use the same
       calendar conversion as scalar writes, including prepared bulk update predicates and upserts.
     - atomic empty-partition removal now detaches the leaf in the same transaction before dropping it;
@@ -4648,6 +4650,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private bool supportsEmptyPartitionDropImpl() {
         return True;
+    }
+
+    private bool supportsNonKeyUpdateLocksImpl() {
+        getServerVersion();
+        return server_version_major > 9 || (server_version_major == 9 && server_version_minor >= 3);
+    }
+
+    private doForNonKeyUpdate(reference<string> sql) {
+        sql += " for no key update";
     }
 
     private bool supportsBoundedTransactionsImpl() {
