@@ -159,8 +159,13 @@ provider.complete("Classify invoices by department", invoice_text, NOTHING,
     notes add about 5% to the size of the function declarations.  Response schemas keep \c enum and \c default
     natively and state only the other constraints.
 
-    A value sent as JSON text is declared as a string whose description holds the original schema, including the
-    schemas that it references.  The providers record which arguments of which tools of a request are JSON text
+    A value sent as JSON text is declared as a string whose description summarizes the shape of the original schema
+    in at most @ref SchemaSummaryMaxChars characters: its members with their types, required members first and
+    marked with \c *, allowed values and formats, for example
+    <tt>{invoice*: {number*: string, total*: number, lines*: [{sku*: string, quantity*: integer}]}, note: string |
+    null}</tt>.  References are resolved and a recursive one is shown as <tt>{…}</tt>.  When the shape is too large,
+    its deepest levels are shortened to <tt>{…}</tt> / <tt>[…]</tt> first, and then the members of the value that do
+    not fit are replaced by <tt>…</tt>; the caller still validates the decoded value against the full schema.  The providers record which arguments of which tools of a request are JSON text
     (@ref GeminiChatRequest::stringified_arguments) and return tool calls (@ref QoreLlmUtils::ChatResponse::tool_calls,
     and the function calls of streamed chunks) with these values parsed, so tool callers and tool contracts keep the
     original schema.  Tool calls replayed in the conversation history are sent in the declared form.  A request that
@@ -198,7 +203,8 @@ hash<auto> args = GeminiBodyShape::decodeToolArguments({"options": (), "metadata
       (\c reasoning_in_output = @ref False) and reports the cached tokens explicitly, as \c 0 for a cache miss
     - tool parameter schemas keep their nested members, so that Gemini can fill nested objects and arrays of objects
       instead of sending \c {}; values that Gemini's schema cannot declare are sent as JSON text and returned to
-      callers with their original types (see @ref geminibodyshapetoolschemas)
+      callers with their original types; their descriptions summarize their shape in at most
+      @ref SchemaSummaryMaxChars characters (see @ref geminibodyshapetoolschemas)
     - the constraints that Gemini's schema does not receive (allowed values, defaults, formats, patterns, lengths,
       ranges, item and property counts) are stated in the schema's description (see @ref geminibodyshapetoolschemas)
 */
@@ -222,6 +228,15 @@ public const ToolSchemaMaxDepth = 5;
     left out.
 */
 public const SchemaConstraintNoteMaxChars = 200;
+
+#! The maximum length of the shape summary in the description of a tool argument sent as JSON text
+/** A value that Gemini's schema cannot declare is sent as JSON text, and its description tells the model its shape
+    (see @ref geminibodyshapetoolschemas).  800 characters (about 200 tokens) state an object with a few dozen typed
+    members, or several nested levels of a typical API request body, in full; larger shapes keep their outer levels
+    and required members.  The bound keeps a catalog with many such values from growing without limit: Qorus chat
+    catalogs have up to 22 of them in 34 tools.
+*/
+public const SchemaSummaryMaxChars = 800;
 
 #! A Gemini tool parameter schema and the arguments that it declares as JSON strings
 /** Returned by @ref shapeToolParameters().
@@ -314,8 +329,8 @@ public *hash<auto> sub sanitizeSchema(*hash<auto> schema, bool compact = False) 
 #! Returns the Gemini form of a tool's parameter schema
 /** Every member of the schema is kept, so that Gemini's constrained decoder can fill it, and the schema keywords
     that are unsupported or expensive for Gemini's decoder are removed (see @ref geminibodyshapetoolschemas).  A
-    value that Gemini's schema cannot declare is declared as a string holding JSON text instead, with the original
-    schema in its description:
+    value that Gemini's schema cannot declare is declared as a string holding JSON text instead, with a summary of
+    the original schema in its description:
     - an object or array nested deeper than @ref ToolSchemaMaxDepth
     - a free-form object (one without declared properties that allows additional properties); Gemini can fill only
       the declared properties of an object, so it would always send \c {}
@@ -472,6 +487,13 @@ auto sub transformToolArgument(auto value, list<*string> path, int idx, bool dec
 
 #! Shapes a JSON schema for Gemini (internal to @ref sanitizeSchema() and @ref shapeToolParameters())
 class GeminiSchemaShaper {
+    public {
+        #! The deepest nesting that a shape summary shows in full
+        const SummaryMaxLevels = 8;
+        #! The number of allowed values that a shape summary lists
+        const SummaryMaxEnumValues = 8;
+    }
+
     private {
         #! the root schema, against which local references are resolved
         hash<auto> root;
@@ -960,20 +982,15 @@ class GeminiSchemaShaper {
         return rv;
     }
 
-    #! Returns a string schema whose description holds the original schema, and records the value's path
+    #! Returns a string schema whose description summarizes the original schema, and records the value's path
     private hash<auto> stringify(hash<auto> node, list<*string> path, bool nullable) {
         push stringified, path;
         string desc;
         if (node.description.typeCode() == NT_STRING && node.description.val()) {
             desc = node.description + "\n\n";
         }
-        desc += "This value is a string holding JSON text (not an object or list) that matches this JSON schema: "
-            + make_json(node - ("description", "$schema", "$id", "$comment", "$defs", "definitions"));
-        hash<string, hash<auto>> defs = {};
-        collectReferences(node, \defs);
-        if (defs) {
-            desc += "\nThe schemas that it references with \"$ref\": " + make_json(defs);
-        }
+        desc += "This value is a string holding JSON text (not an object or list) in this shape "
+            "(* marks a required member): " + summarizeSchema(node);
         # hash<auto!>: a literal of string values would otherwise type the hash as hash<string, string>
         hash<auto!> rv = {
             "type": "string",
@@ -985,33 +1002,153 @@ class GeminiSchemaShaper {
         return rv;
     }
 
-    #! Collects the local schemas that a schema references, transitively
-    private collectReferences(auto value, reference<hash<string, hash<auto>>> defs) {
-        if (value.typeCode() == NT_LIST) {
-            foreach auto item in (value) {
-                collectReferences(item, \defs);
+    #! Returns a compact summary of the shape of a schema, at most @ref SchemaSummaryMaxChars long
+    /** The summary names the type, the members with their types (required members first, marked with \c *), the
+        allowed values and formats, for example
+        <tt>{customer*: {name*: string, address: {city*: string, …}}, lines*: [{sku*: string, quantity*: integer}],
+        mode: "fast"|"slow"}</tt>.  When the full summary is too long, nested objects and arrays are shortened to
+        <tt>{…}</tt> / <tt>[…]</tt> from the deepest level up, and then the members that do not fit are replaced by
+        <tt>…</tt>, so the required members of the outer levels are kept longest.
+    */
+    private string summarizeSchema(hash<auto> node) {
+        # the levels of nesting shown in full, from all of them down to the value itself
+        # the value's own members are always shown (level 2 shows them with their nested values as {…} / […])
+        int levels = GeminiSchemaShaper::SummaryMaxLevels;
+        while (levels > 1) {
+            string summary = summarizeValue(node, levels, -1, {});
+            if (summary.length() <= GeminiBodyShape::SchemaSummaryMaxChars) {
+                return summary;
             }
-            return;
+            --levels;
         }
-        if (value.typeCode() != NT_HASH) {
-            return;
+        # even the members of the value do not fit: the ones that do not are replaced by …
+        string summary = summarizeValue(node, 2, GeminiBodyShape::SchemaSummaryMaxChars, {});
+        if (summary.length() > GeminiBodyShape::SchemaSummaryMaxChars) {
+            # alternatives are not cut member by member; the text is cut instead
+            summary = summary.substr(0, GeminiBodyShape::SchemaSummaryMaxChars - 1) + "…";
         }
-        foreach hash<auto> i in (value.pairIterator()) {
-            if (i.key == "$ref" && i.value.typeCode() == NT_STRING) {
-                string ref = i.value;
-                if (defs{ref}) {
-                    continue;
-                }
-                *hash<auto> target = resolveRef(ref);
-                if (target) {
-                    hash<auto> def = target - ("$defs", "definitions");
-                    defs{ref} = def;
-                    collectReferences(def, \defs);
-                }
-                continue;
+        @assert(summary.length() <= GeminiBodyShape::SchemaSummaryMaxChars);
+        return summary;
+    }
+
+    #! Returns the summary of one schema value
+    /** @param node the schema
+        @param levels the levels of nesting still shown in full; below them an object is \c {…} and an array \c […]
+        @param budget the maximum length of the summary of an object's members, or -1 for no limit (used only at the
+        top level)
+        @param refs the references being expanded, to show a recursive reference as \c {…}
+    */
+    private string summarizeValue(hash<auto> node, int levels, int budget, hash<string, bool> refs) {
+        if (node."$ref".typeCode() == NT_STRING) {
+            string ref = node."$ref";
+            *hash<auto> target = refs{ref} ? NOTHING : resolveRef(ref);
+            if (!target) {
+                return "{…}";
             }
-            collectReferences(i.value, \defs);
+            refs{ref} = True;
+            return summarizeValue(target + (node - "$ref"), levels, budget, refs);
         }
+        list<string> alternatives = ();
+        foreach string key in (("anyOf", "oneOf")) {
+            foreach auto variant in (node{key}) {
+                if (variant.typeCode() == NT_HASH) {
+                    alternatives += summarizeValue(variant, levels, -1, refs);
+                }
+            }
+        }
+        if (alternatives) {
+            return alternatives.join(" | ");
+        }
+        hash<auto> merged = node;
+        foreach auto part in (node.allOf) {
+            if (part.typeCode() == NT_HASH) {
+                merged = GeminiBodyShape::mergeSchemaObjects(merged, part);
+            }
+        }
+        string nullable = merged.nullable === True ? " | null" : "";
+        if (merged."enum".typeCode() == NT_LIST && merged."enum") {
+            list<string> values = map make_json($1), merged."enum";
+            return (values.size() > SummaryMaxEnumValues
+                ? values[0..(SummaryMaxEnumValues - 1)].join("|") + "|…"
+                : values.join("|")) + nullable;
+        }
+        if (merged.hasKey("const")) {
+            return make_json(merged."const");
+        }
+        list<string> types = ();
+        foreach auto type in (merged.type.typeCode() == NT_LIST ? merged.type : (merged.type,)) {
+            if (type == "null") {
+                nullable = " | null";
+            } else if (type.typeCode() == NT_STRING) {
+                types += type;
+            }
+        }
+        if (types.size() > 1) {
+            return types.join(" | ") + nullable;
+        }
+        *string type = types[0] ?? GeminiSchemaShaper::inferType(merged);
+        if (type == "array") {
+            if (levels <= 1) {
+                return "[…]" + nullable;
+            }
+            return "[" + (merged.items.typeCode() == NT_HASH && merged.items
+                ? summarizeValue(merged.items, levels - 1, -1, refs) : "any") + "]" + nullable;
+        }
+        if (type == "object") {
+            hash<auto> props = merged.properties.typeCode() == NT_HASH ? merged.properties : {};
+            if (!props) {
+                if (merged.additionalProperties.typeCode() == NT_HASH && merged.additionalProperties) {
+                    if (levels <= 1) {
+                        return "{…}" + nullable;
+                    }
+                    return "{[key]: " + summarizeValue(merged.additionalProperties, levels - 1, -1, refs) + "}"
+                        + nullable;
+                }
+                return "object" + nullable;
+            }
+            if (levels <= 1) {
+                return "{…}" + nullable;
+            }
+            return "{" + summarizeMembers(props, GeminiBodyShape::schemaStringList(merged.required), levels,
+                budget < 0 ? -1 : budget - 2 - nullable.length(), refs) + "}" + nullable;
+        }
+        if (!type) {
+            return "any" + nullable;
+        }
+        if (type == "string" && merged.format.typeCode() == NT_STRING && merged.format.val()) {
+            return "string<" + merged.format + ">" + nullable;
+        }
+        return type + nullable;
+    }
+
+    #! Returns the summary of an object's members, required members first
+    /** With a \a budget, the members that do not fit in it are replaced by \c …
+    */
+    private string summarizeMembers(hash<auto> props, list<string> required, int levels, int budget,
+            hash<string, bool> refs) {
+        list<string> names = select required, props.hasKey($1);
+        names += select keys props, !required.contains($1);
+        list<string> parts = ();
+        int len = 0;
+        foreach string name in (names) {
+            auto member = props{name};
+            string text = name + (required.contains(name) ? "*" : "") + ": "
+                + (member.typeCode() == NT_HASH
+                    ? summarizeValue(member, levels - 1, -1, refs)
+                    : "any");
+            if (budget >= 0) {
+                # room for the separator before this member and for ", …" after it if more members follow
+                int more = $# < (names.size() - 1) ? 3 : 0;
+                int next = len + (parts ? 2 : 0) + text.length();
+                if (next + more > budget) {
+                    parts += "…";
+                    break;
+                }
+                len = next;
+            }
+            parts += text;
+        }
+        return parts.join(", ");
     }
 
     #! Resolves a local JSON pointer reference (\c "#" or \c "#/...") against the root schema

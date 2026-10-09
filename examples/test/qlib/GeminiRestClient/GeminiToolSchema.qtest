@@ -263,6 +263,8 @@ class GeminiToolSchemaTest inherits QUnit::Test {
         addTestCase("constraint notes are bounded", \constraintNoteCap());
         addTestCase("constraint notes do not repeat the description", \constraintNoteDuplicates());
         addTestCase("constraint notes do not change tool calls", \constraintNoteRoundTrip());
+        addTestCase("JSON text summaries name every required member", \summaryMembers());
+        addTestCase("JSON text summaries are bounded and deterministic", \summaryBound());
         set_return_value(main());
     }
 
@@ -309,8 +311,8 @@ class GeminiToolSchemaTest inherits QUnit::Test {
         assertEq("string", l5.properties.name.type);
         assertEq("string", l5.properties.l6.type, "depth 6 is JSON text");
         assertTrue(l5.properties.l6.description.find("deep detail") == 0, "the original description is kept");
-        assertTrue(l5.properties.l6.description =~ /"leaf"/, "the description holds the original schema");
-        assertTrue(l5.properties.l6.description =~ /"count"/);
+        assertTrue(l5.properties.l6.description.find("{l7*: {leaf: string}, count: integer}") > 0,
+            "the description summarizes the original schema");
         assertEq((), lostMembers(DeepTree, declaredParameters("deep", DeepTree)));
 
         hash<auto> l6 = {"l7": {"leaf": "green"}, "count": 3};
@@ -331,7 +333,7 @@ class GeminiToolSchemaTest inherits QUnit::Test {
         assertTrue(props.labels.description.find("label map") == 0);
         assertEq("string", props.options.type);
         assertTrue(props.options.nullable, "a nullable value sent as JSON text stays nullable");
-        assertTrue(props.value.description =~ /anyOf/, "the alternatives are described");
+        assertTrue(props.value.description.find(": string | {x: integer}") > 0, "the alternatives are described");
         assertEq({"type": "object", "properties": {}}, props.empty, "a closed empty object needs no text");
         assertEq({"type": "string", "description": "Allowed values: fast"}, props.mode,
             "a constant is a string whose value is stated as a constraint");
@@ -339,8 +341,8 @@ class GeminiToolSchemaTest inherits QUnit::Test {
         assertEq("object", tree.type, "the first level of a recursive schema is structured");
         assertEq("string", tree.properties.label.type);
         assertEq("string", tree.properties.children.items.type, "the recursion is JSON text");
-        assertTrue(tree.properties.children.items.description =~ /#\/\$defs\/Node/,
-            "the description holds the referenced schema");
+        assertTrue(tree.properties.children.items.description.find(": {label: string, children: [{…}]}") > 0,
+            "the description summarizes the referenced schema and marks the recursion");
         assertEq((), lostMembers(Unsupported, declaredParameters("unsupported", Unsupported)));
 
         hash<auto> args = {
@@ -535,6 +537,106 @@ class GeminiToolSchemaTest inherits QUnit::Test {
         assertEq((), GeminiBodyShape::shapeToolParameters(Constrained).stringified);
         assertEq(args, callTool("constrained", Constrained, args));
         assertEq(Constrained, Constrained + {}, "the caller's schema is not changed");
+    }
+
+    summaryMembers() {
+        # typical shapes sent as JSON text: beyond the depth limit, a free-form map, a type alternative
+        hash<auto> leaf = {
+            "type": "object",
+            "properties": {
+                "invoice": {
+                    "type": "object",
+                    "properties": {
+                        "number": {"type": "string"},
+                        "issued": {"type": "string", "format": "date"},
+                        "total": {"type": "number"},
+                        "status": {"type": "string", "enum": ("draft", "sent", "paid")},
+                        "lines": {"type": "array", "items": {"$ref": "#/$defs/Line"}},
+                        "note": {"type": ("string", "null")},
+                    },
+                    "required": ("number", "total", "lines"),
+                },
+                "options": {"type": "array", "items": PresentChoices.properties.options.items},
+            },
+            "required": ("invoice", "options"),
+        };
+        hash<auto> schema = {
+            "type": "object",
+            "$defs": {"Line": {"type": "object", "properties": {"sku": {"type": "string"},
+                "quantity": {"type": "integer"}, "tags": {"type": "array", "items": {"type": "string"}}},
+                "required": ("sku", "quantity")}},
+            "properties": {"a": {"type": "object", "properties": {"b": {"type": "object", "properties": {
+                "c": {"type": "object", "properties": {"d": {"type": "object", "properties": {
+                    "e": leaf}}}}}}}},
+                "attributes": {"type": "object", "additionalProperties": {"type": "integer"}},
+                "amount": {"type": ("number", "string")},
+            },
+        };
+        hash<GeminiToolParameterSchema> shaped = GeminiBodyShape::shapeToolParameters(schema);
+        assertEq((("a", "b", "c", "d", "e"), ("attributes",), ("amount",)), shaped.stringified);
+        string e = shaped.parameters.properties.a.properties.b.properties.c.properties.d.properties.e.description;
+        assertEq("This value is a string holding JSON text (not an object or list) in this shape (* marks a required "
+            "member): {invoice*: {number*: string, total*: number, lines*: [{sku*: string, quantity*: integer, "
+            "tags: [string]}], issued: string<date>, status: \"draft\"|\"sent\"|\"paid\", note: string | null}, "
+            "options*: [{label*: string, value*: string, description: string}]}", e);
+        assertTrue(shaped.parameters.properties.attributes.description =~ /: \{\[key\]: integer\}$/);
+        assertTrue(shaped.parameters.properties.amount.description =~ /: number \| string$/);
+
+        # the model fills the value from the summary; the caller gets the declared structure back
+        hash<auto> args = {"a": {"b": {"c": {"d": {"e": {
+            "invoice": {"number": "INV-7", "total": 12.5, "lines": ({"sku": "A-1", "quantity": 2},)},
+            "options": ({"label": "Pay", "value": "pay"},),
+        }}}}}, "attributes": {"priority": 2}, "amount": 12.5};
+        CaptureToolRest rest(functionCallResponse("bill", GeminiBodyShape::encodeToolArguments(args,
+            shaped.stringified)));
+        hash<QoreLlmUtils::ChatResponse> rv = makeProvider("vertex", rest).chat(
+            (<QoreLlmUtils::ChatMessage>{"role": "user", "content": "bill"},),
+            (<QoreLlmUtils::ToolDefinition>{"name": "bill", "parameters": schema},));
+        assertEq(args, rv.tool_calls[0].arguments);
+    }
+
+    summaryBound() {
+        # 120 members, 4 required (declared last), each an object with nested members, beyond the depth limit
+        hash<auto> wide = {"type": "object", "properties": {}, "required": ()};
+        for (int i = 0; i < 120; ++i) {
+            wide.properties{sprintf("member_%03d", i)} = {"type": "object", "properties": {
+                "code": {"type": "string"}, "detail": {"type": "object", "properties": {
+                    "text": {"type": "string"}, "count": {"type": "integer"}}}}};
+        }
+        wide.required = ("member_119", "member_118", "member_117", "member_116");
+        hash<auto> schema = {"type": "object", "properties": {"l2": {"type": "object", "properties": {
+            "l3": {"type": "object", "properties": {"l4": {"type": "object", "properties": {
+                "l5": {"type": "object", "properties": {"wide": wide}}}}}}}}}};
+        hash<GeminiToolParameterSchema> shaped = GeminiBodyShape::shapeToolParameters(schema);
+        string desc = shaped.parameters.properties.l2.properties.l3.properties.l4.properties.l5.properties.wide
+            .description;
+        string summary = desc.substr(desc.find("member): ") + 9);
+        assertTrue(summary.length() <= GeminiBodyShape::SchemaSummaryMaxChars, sprintf("%d", summary.length()));
+        assertTrue(summary.length() > GeminiBodyShape::SchemaSummaryMaxChars - 40, "the bound is used");
+        assertRegex("^\\{member_119\\*: \\{…\\}, member_118\\*: \\{…\\}, member_117\\*: \\{…\\}, "
+            "member_116\\*: \\{…\\}, member_000: \\{…\\}, .*, …\\}$", summary,
+            "required members come first; members that do not fit are replaced by …");
+        assertEq(desc, GeminiBodyShape::shapeToolParameters(schema).parameters.properties.l2.properties.l3
+            .properties.l4.properties.l5.properties.wide.description, "the summary is deterministic");
+
+        # a shape that fits at a shallower level keeps every member and shortens only the deep levels
+        hash<auto> medium = {"type": "object", "properties": {}};
+        for (int i = 0; i < 30; ++i) {
+            medium.properties{sprintf("field_%02d", i)} = {"type": "object", "properties": {
+                "value": {"type": "string"}, "unit": {"type": "string"}}};
+        }
+        string m = GeminiBodyShape::shapeToolParameters({"type": "object", "properties": {"m": medium + {
+            "additionalProperties": True, "properties": {}}}}).parameters.properties.m.description;
+        assertTrue(m =~ /: object$/, "a free-form object without members is summarized as object");
+        hash<auto> deep_medium = {"type": "object", "properties": {"a": {"type": "object", "properties": {
+            "b": {"type": "object", "properties": {"c": {"type": "object", "properties": {
+                "d": {"type": "object", "properties": {"medium": medium}}}}}}}}}};
+        string dm = GeminiBodyShape::shapeToolParameters(deep_medium).parameters.properties.a.properties.b
+            .properties.c.properties.d.properties.medium.description;
+        string dms = dm.substr(dm.find("member): ") + 9);
+        assertTrue(dms.length() <= GeminiBodyShape::SchemaSummaryMaxChars);
+        assertEq(30, (dms =~ x/(field_[0-9]+: \{…\})/g).size(), "every member is kept, its detail is shortened");
+        assertFalse(dms =~ /, …\}$/, "no member is cut");
     }
 
     #! Returns the parameters of a tool as the provider sends them
