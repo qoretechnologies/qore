@@ -4276,6 +4276,12 @@ while (*binary chunk = input.read(65536)) {
       datasource that was not open, so the next open or the datasource's destruction left it behind; the
       connection is now closed with the error
 
+    - Fixed threads with a small stack size on Linux with glibc having less stack for their code than the size set
+      with @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()": glibc takes the static
+      thread-local storage of the process from each thread's stack, which left a thread set to 128KB too little stack
+      to start running code, so it ended with \c STACK-LIMIT-EXCEEDED before its first statement; the thread-local
+      storage is now added to the stack size of each thread
+
     - Fixed a crash evaluating a deeply nested expression with the AST interpreter on a thread with a small stack, or
       near the end of a thread's stack, such as nested arguments of function, method, static method and closure
       calls, chained assignments and long arithmetic expressions: evaluation recursed once for each level of

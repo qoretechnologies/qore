@@ -1194,9 +1194,22 @@ DLLLOCAL QoreListNode* qore_get_thread_call_stack();
 #endif
 #endif
 
+//! Returns the size of the static thread-local storage that the C library places at the top of each thread's stack
+/** glibc takes a thread's static TLS (and its guard page) from the stack size requested for the thread, so a thread
+    created with a small stack has that much less stack for its code: with libqore's thread-local data, a 128KB
+    thread had too little left to start running Qore code (the stack guard raised STACK-LIMIT-EXCEEDED at thread
+    start).  Other C libraries (musl, macOS) allocate it separately, and 0 is returned.
+
+    The size is taken from glibc's \c __pthread_get_minstack(), as other runtimes do (JVM, Rust); it is constant for
+    the process, as dlopen() takes static TLS for modules from a surplus reserved at startup.
+*/
+DLLLOCAL size_t q_thread_stack_tls_size();
+
 class QorePThreadAttr {
 private:
     pthread_attr_t attr;
+    //! the stack size requested with setstacksize(), without the static TLS added to it; 0 if not set
+    size_t requested_stack_size = 0;
 
 public:
     DLLLOCAL QorePThreadAttr() {
@@ -1216,14 +1229,26 @@ public:
     }
 #endif
 
+    //! Returns the stack size of threads created with these attributes, as requested with setstacksize()
     DLLLOCAL size_t getstacksize() const {
+        if (requested_stack_size) {
+            return requested_stack_size;
+        }
         size_t ssize;
         pthread_attr_getstacksize(&attr, &ssize);
         return ssize;
     }
 
+    //! Sets the stack size of threads created with these attributes
+    /** The stack of each thread is this size for its code: the static TLS that the C library places on the stack
+        (see q_thread_stack_tls_size()) is added to it
+    */
     DLLLOCAL int setstacksize(size_t ssize) {
-        return pthread_attr_setstacksize(&attr, ssize);
+        int rc = pthread_attr_setstacksize(&attr, ssize + q_thread_stack_tls_size());
+        if (!rc) {
+            requested_stack_size = ssize;
+        }
+        return rc;
     }
 
     DLLLOCAL pthread_attr_t* get_ptr() {

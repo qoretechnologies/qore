@@ -94,6 +94,11 @@
 #endif
 
 #include <pthread.h>
+#include <climits>
+#if defined(__GLIBC__) && defined(HAVE_DLFCN_H)
+// dlsym() of __pthread_get_minstack(); see q_thread_stack_tls_size()
+#include <dlfcn.h>
+#endif
 #include <utility>
 #include <vector>
 #include <set>
@@ -4120,6 +4125,30 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
     }
 
     return tid;
+}
+
+size_t q_thread_stack_tls_size() {
+#if defined(__GLIBC__) && defined(HAVE_DLFCN_H)
+    static size_t tls_size = []() -> size_t {
+        // __pthread_get_minstack() returns the static TLS size, the guard size, and PTHREAD_STACK_MIN; it is a
+        // GLIBC_PRIVATE symbol, so it is looked up at run time
+        typedef size_t (*minstack_t)(const pthread_attr_t*);
+        minstack_t minstack = reinterpret_cast<minstack_t>(dlsym(RTLD_DEFAULT, "__pthread_get_minstack"));
+        if (!minstack) {
+            return 0;
+        }
+        pthread_attr_t attr;
+        if (pthread_attr_init(&attr)) {
+            return 0;
+        }
+        size_t min = minstack(&attr);
+        pthread_attr_destroy(&attr);
+        return min > static_cast<size_t>(PTHREAD_STACK_MIN) ? min - PTHREAD_STACK_MIN : 0;
+    }();
+    return tls_size;
+#else
+    return 0;
+#endif
 }
 
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_size, int flags) {
