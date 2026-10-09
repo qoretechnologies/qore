@@ -139,8 +139,8 @@ if (smh) {
 #define QORE_IO_POLL_INTERVAL_MS 500
 ```
 
-Deprecated.  `libqore` no longer polls: every blocking wait in the core is woken directly when
-cancellation is requested (see [Waking Blocked Threads](#waking-blocked-threads)).  The constant
+Deprecated.  Neither `libqore` nor the in-tree modules poll any more: every blocking wait is woken
+directly when cancellation is requested (see [Waking Blocked Threads](#waking-blocked-threads)).  The constant
 remains for modules that still poll, until they are converted to
 [Cancellable Waits](#cancellable-waits).
 
@@ -262,7 +262,11 @@ If a library waits in an event loop of its own, add the wakeup descriptor from
 `qore_cancel_wakeup_register()` to the loop (see [Cancellable Waits](#cancellable-waits)).  If it
 lets the module supply the transport (custom stream or I/O callbacks), let the module own the
 descriptors and wait with `qore_cancellable_poll()` in the callbacks; a callback that can only report
-`errno` clears the exception and reports `EINTR`:
+`errno` clears the exception and reports `EINTR`.  The in-tree `mongodb` module is the reference: it
+connects its own non-blocking socket in its `mongoc_client_set_stream_initiator()` initiator and
+implements a `mongoc_stream_t` on it (libmongoc stacks its TLS stream on top, and
+`mongoc_stream_poll()` calls the root stream's poll function, which reports every stream as failed on
+cancellation so that libmongoc's topology scanner ends the command at once):
 
 ```cpp
 static ssize_t my_stream_read(my_stream_t* s, void* buf, size_t len, int timeout_ms) {
@@ -328,7 +332,7 @@ while (db_fetch_row(stmt)) {
 **Type C: Custom I/O Callbacks**
 - Wrap socket/stream operations with cancel-aware I/O
 - Check cancel during read/write
-- Examples: MongoDB (libmongoc custom streams)
+- Examples: MongoDB (libmongoc custom streams on the module's own socket)
 
 **Type D: Cross-Connection Cancel**
 - Execute query on one connection
@@ -353,7 +357,7 @@ while (db_fetch_row(stmt)) {
 | module-jni | — | **TODO**: `Statement.cancel()` | Minimal | — |
 | module-python | — | **TODO**: `PyErr_SetInterrupt()` | GIL-level | — |
 | module-v8 | — | **TODO**: `TerminateExecution()` | **TODO** | **TODO** |
-| mongodb (in-tree) | N/A (stream wrapper) | N/A | Yes | Yes (stream I/O) |
+| mongodb (in-tree) | N/A (own socket stream, `qore_cancellable_poll()`) | N/A | Yes | Woken directly |
 
 All modules with existing `qore_check_io_interrupt()` calls need a mechanical replacement to `qore_check_cancel()`.
 The old symbol must remain exported until compatible module rebuilds are no longer required.
@@ -898,9 +902,8 @@ an event that fires rarely.
 
 **Polling interval**: no core wait polls for cancellation.  `File::lock()` still retries `F_SETLK`
 every 50ms, because a record lock offers nothing that could be waited on, but the wait between
-attempts ends at once on cancellation.  `QORE_IO_POLL_INTERVAL_MS` (500ms) is only used by binary
-modules (for example the in-tree `mongodb` module, whose I/O happens inside libmongoc on descriptors
-that it does not expose).
+attempts ends at once on cancellation.  `QORE_IO_POLL_INTERVAL_MS` (500ms) is only used by external
+binary modules that have not been converted to [Cancellable Waits](#cancellable-waits) yet.
 
 **Descriptor waits**: the first descriptor wait of a thread creates its wakeup channel (one kqueue,
 eventfd or pipe); each wait adds one entry to the poll set, one seq_cst store, one
@@ -1010,7 +1013,7 @@ do_io_operation();  # Works normally, no overhead
 - **Cancel callback (RAII)**: `module-oracle/src/oracle.h` — `QoreOracleCancelHelper`
 - **Cancel callback (atomic handle)**: `module-pgsql/src/QorePGConnection.h` — `QorePGCancelHelper`
 - **Non-blocking polling**: `module-ssh2/src/SSH2Client.h` — `waitSocketUnlocked()`
-- **Custom stream wrapper**: `modules/mongodb/src/QoreMongoStream.cpp`
+- **Custom stream on the module's own socket**: `modules/mongodb/src/QoreMongoStream.cpp`
 - **Cancellable waits from a module**: `examples/test/module-cpp-api/ql_cppapiuser.qpp` (`cpp_api_cancellable_poll()`, `cpp_api_wakeup_loop()`)
 - **ZMQ poll loop**: `module-zmq/src/QoreZSock.cpp`
 
