@@ -26,7 +26,7 @@
 %requires qore >= 1.14
 
 # requires the SqlUtil module
-%requires SqlUtil >= 3.4
+%requires SqlUtil >= 3.5
 %requires json
 
 # don't use "$" signs for variables and class members, assume local variable scope
@@ -37,7 +37,7 @@
 # enable all warnings
 
 module PgsqlSqlUtilBase {
-    version = "1.13";
+    version = "1.14";
     desc = "base user module for working with PostgreSQL SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -213,6 +213,10 @@ $function$
     @ref SqlUtil::AbstractDatabase::getAlignFunctionSql() "AbstractDatabase::getAlignFunctionSql()" for example.
 
     @section pgsql_relnotes Release Notes
+
+    @subsection pgsqlsqlutilbasev114 PgsqlSqlUtilBase v1.14
+    - measures text and binary column byte lengths from their uncompressed length metadata,
+      without transferring or decompressing large values; ambiguous selections are rejected
 
     @subsection pgsqlsqlutilbasev113 PgsqlSqlUtilBase v1.13
     - supports SqlUtil physical-placement updates with a context scoped to the exact live table and
@@ -4558,6 +4562,47 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private AbstractTrigger addTriggerImpl(string tname, string src, *hash opt) {
         return new PgsqlTrigger(tname, src);
+    }
+
+    private bool supportsColumnByteSizesImpl() {
+        return True;
+    }
+
+    private *hash<string, *int> getColumnByteSizesImpl(list<string> columns, hash<auto> cond) {
+        list<string> expressions;
+        int index = 0;
+        foreach string column in (columns) {
+            if (column.size() > 63) {
+                throw "COLUMN-BYTE-SIZE-ERROR", "PostgreSQL column names must fit 63 bytes without truncation";
+            }
+            # Names are literal identifiers, including embedded quotes and reserved words.
+            string quoted = column;
+            quoted =~ s/"/""/g;
+            # A custom type or domain can have an implicit cast that materializes its value. Only
+            # the built-in types with metadata-only octet_length implementations enter the branch.
+            expressions += sprintf("case when pg_catalog.pg_typeof(\"%s\") in "
+                "('pg_catalog.text'::regtype, 'pg_catalog.varchar'::regtype, "
+                "'pg_catalog.bpchar'::regtype, 'pg_catalog.bytea'::regtype) "
+                "then pg_catalog.octet_length(\"%s\") else -1 end as qore_size_%d", quoted, quoted, index++);
+        }
+        list<auto> args;
+        string sql = "select " + (foldl $1 + ", " + $2, expressions) + " from " + getSqlName();
+        sql += getWhereClause(cond, \args) + " limit 2";
+        list<hash<auto>> rows = ds.vselectRows(sql, args) ?? ();
+        if (rows.size() > 1) {
+            throw "COLUMN-BYTE-SIZE-ERROR", "column byte measurement matched more than one row";
+        }
+        if (!rows) { return NOTHING; }
+        hash<string, *int> result;
+        index = 0;
+        foreach string column in (columns) {
+            auto value = rows[0]{sprintf("qore_size_%d", index++)};
+            if (exists value && value.typeCode() != NT_NULL && value < 0) {
+                throw "COLUMN-BYTE-SIZE-ERROR", "only native text, varchar, char and bytea columns can be measured";
+            }
+            result{column} = exists value && value.typeCode() != NT_NULL ? value.toInt() : NOTHING;
+        }
+        return result;
     }
 
     private int updatePhysicalPlacementImpl(hash<auto> set, hash<auto> cond) {

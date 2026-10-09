@@ -535,6 +535,14 @@
     @ref SqlUtil::AbstractTable::beginBoundedTransaction() "beginBoundedTransaction()".
     @endparblock
 
+    @par Measuring Large Database Values Before Maintenance
+    @parblock
+    SqlUtil can measure the byte lengths of PostgreSQL text and binary columns without transferring or
+    decompressing their contents. Applications can reject oversized work before loading large values.
+    NULL and empty values remain distinct, and ambiguous row selections are rejected; see
+    @ref SqlUtil::AbstractTable::getColumnByteSizes() "getColumnByteSizes()".
+    @endparblock
+
     @par Safe Removal of Empty Retention Partitions
     @parblock
     SqlUtil can now remove an empty PostgreSQL partition while excluding concurrent inserts. The operation

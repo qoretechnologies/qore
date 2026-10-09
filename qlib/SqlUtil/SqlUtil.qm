@@ -42,7 +42,7 @@
 # enable all warnings
 
 module SqlUtil {
-    version = "3.4.0";
+    version = "3.5.0";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -119,6 +119,10 @@ module SqlUtil {
       bodies
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
+
+    @subsection sqlutilv3_5_0 SqlUtil v3.5.0
+    - added capability-checked AbstractTable::getColumnByteSizes() for measuring text and binary
+      values without transferring or decompressing payloads; ambiguous row selections fail
 
     @subsection sqlutilv3_4_0 SqlUtil v3.4.0
     - fixed trigger removal when a driver returns its SQL as a statement list
