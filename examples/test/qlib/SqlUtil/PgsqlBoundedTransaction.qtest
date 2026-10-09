@@ -21,6 +21,11 @@ class BoundedTransactionTest inherits QUnit::Test {
         addTestCase("blocked writer times out without changing either owner", \lockWait());
         addTestCase("statement timeout rolls back preceding writes", \statement());
         addTestCase("whole transaction deadline covers multiple short statements", \transaction());
+        addTestCase("maintenance uses fresh snapshots and restores isolation and access defaults", \maintenance());
+        addTestCase("maintenance refuses policy-hidden rows without bypassing row security", \visibility());
+        addTestCase("maintenance settings do not leak to the next pooled borrower", \maintenancePool());
+        addTestCase("maintenance setup rejection rolls back partial transaction settings", \maintenanceFailure());
+        addTestCase("maintenance setup and writes preserve the caller mutation declaration", \maintenanceDeclaration());
         set_return_value(main());
     }
 
@@ -83,9 +88,14 @@ class BoundedTransactionTest inherits QUnit::Test {
         on_exit cleanup(f);
         bool supported = f.ds.getServerVersion() >= 170000;
         assertEq(supported, f.table.supportsBoundedTransactions());
+        assertEq(supported, f.table.supportsBoundedMaintenanceTransactions());
         if (!supported) {
             assertThrows("TRANSACTION-LIMIT-NOT-SUPPORTED", sub() {
                 f.table.beginBoundedTransaction(50, 100, 500);
+            });
+            assertFalse(f.ds.currentThreadInTransaction());
+            assertThrows("TRANSACTION-LIMIT-NOT-SUPPORTED", sub() {
+                f.table.beginBoundedMaintenanceTransaction(50, 100, 500);
             });
             assertFalse(f.ds.currentThreadInTransaction());
             return;
@@ -95,13 +105,19 @@ class BoundedTransactionTest inherits QUnit::Test {
                 f.table.beginBoundedTransaction(limits[0], limits[1], limits[2]);
             });
             assertFalse(f.ds.currentThreadInTransaction());
+            assertThrows("OPTION-ERROR", sub() {
+                f.table.beginBoundedMaintenanceTransaction(limits[0], limits[1], limits[2]);
+            });
+            assertFalse(f.ds.currentThreadInTransaction());
         }
         f.ds.beginTransaction();
         assertThrows("TRANSACTION-ERROR", sub() { f.table.beginBoundedTransaction(50, 100, 500); });
+        assertThrows("TRANSACTION-ERROR", sub() { f.table.beginBoundedMaintenanceTransaction(50, 100, 500); });
         assertTrue(f.ds.currentThreadInTransaction(), "rejecting a nested call does not rollback its caller");
         f.ds.rollback();
         f.ds.setAutoCommit(True);
         assertThrows("AUTOCOMMIT-ERROR", sub() { f.table.beginBoundedTransaction(50, 100, 500); });
+        assertThrows("AUTOCOMMIT-ERROR", sub() { f.table.beginBoundedMaintenanceTransaction(50, 100, 500); });
         assertTrue(f.ds.getAutoCommit());
         f.ds.setAutoCommit(False);
     }
@@ -129,6 +145,195 @@ class BoundedTransactionTest inherits QUnit::Test {
         f.ds.commit();
     }
 
+    private static hash<auto> readModes(AbstractDatasource ds) {
+        return ds.selectRow("select current_setting('transaction_isolation') as isolation, "
+            "current_setting('transaction_read_only') as read_only, current_setting('row_security') as row_security");
+    }
+
+    private maintenance() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        # These are defaults of this owned connection, not of the database or any serving session.
+        f.ds.execRaw("set default_transaction_isolation = 'repeatable read'");
+        f.ds.execRaw("set default_transaction_read_only = on");
+        f.ds.execRaw("set row_security = on");
+        f.ds.execRaw("set lock_timeout = '50ms'");
+        f.ds.commit();
+        hash<auto> original = readModes(f.ds);
+        hash<string, int> original_limits = readSettings(f.ds);
+        f.ds.commit();
+        assertEq({"isolation": "repeatable read", "read_only": "on", "row_security": "on"}, original);
+        hash<string, int> effective = f.table.beginBoundedMaintenanceTransaction(100, 1000, 5000);
+        assertEq({"isolation": "read committed", "read_only": "off", "row_security": "off"}, readModes(f.ds));
+        assertEq(effective, readSettings(f.ds));
+        assertEq(50, effective.lock_timeout_ms, "stricter session lock deadline survives maintenance setup");
+        assertEq(0, f.table.selectRow({"where": {"id": 1}}).value.toInt());
+        Datasource independent = connection();
+        on_exit independent.rollback();
+        AbstractTable other = AbstractTable::getTable(independent, f.name);
+        other.update({"value": 8}, {"id": 1});
+        independent.commit();
+        assertEq(8, f.table.selectRow({"where": {"id": 1}}).value.toInt(), "later statements see the independent commit");
+        f.table.update({"value": 9}, {"id": 1});
+        f.ds.commit();
+        assertEq(original, readModes(f.ds));
+        assertEq(original_limits, readSettings(f.ds));
+        f.ds.commit();
+        f.table.beginBoundedMaintenanceTransaction(100, 1000, 5000);
+        f.table.update({"value": 10}, {"id": 1});
+        f.ds.rollback();
+        assertEq(original, readModes(f.ds));
+        assertEq(original_limits, readSettings(f.ds));
+        assertEq(9, f.table.selectRow({"where": {"id": 1}}).value.toInt());
+        f.ds.rollback();
+    }
+
+    private visibility() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        string role = f.name + "_reader";
+        # PostgreSQL-specific privilege/policy fixture. Identifiers are locally generated ASCII;
+        # the runner owns this database and its roles, and no application credentials are used.
+        f.ds.execRaw("create role " + role);
+        f.ds.commit();
+        on_exit {
+            f.ds.rollback();
+            f.ds.execRaw("reset role");
+            f.ds.execRaw("revoke all on " + f.name + " from " + role);
+            f.ds.execRaw("revoke usage on schema public from " + role);
+            f.ds.execRaw("drop role " + role);
+            f.ds.commit();
+        }
+        f.ds.execRaw("grant usage on schema public to " + role);
+        f.ds.execRaw("grant select on " + f.name + " to " + role);
+        f.ds.execRaw("alter table " + f.name + " enable row level security");
+        f.ds.execRaw("create policy " + f.name + "_policy on " + f.name + " using (id = 999)");
+        f.ds.execRaw("set role " + role);
+        f.ds.commit();
+        assertEq(0, f.table.selectRows().size(), "the ordinary query silently filters the owned row");
+        f.ds.rollback();
+        f.table.beginBoundedMaintenanceTransaction(100, 1000, 5000);
+        *hash<ExceptionInfo> failure;
+        try { f.table.selectRows(); }
+        catch (hash<ExceptionInfo> ex) { failure = ex; }
+        assertTrue(exists failure, "maintenance cannot certify a policy-filtered empty result");
+        assertTrue(make_json(failure).find("42501") >= 0, "PostgreSQL rejects row-security filtering");
+        f.ds.rollback();
+        assertEq("on", readModes(f.ds).row_security);
+        assertEq(0, f.table.selectRows().size(), "the role did not gain permission to see the row");
+        f.ds.commit();
+        f.ds.execRaw("reset role");
+        f.ds.commit();
+        assertEq(1, f.table.selectRows().size(), "the fixture owner still sees the original row");
+        f.ds.rollback();
+    }
+
+    private maintenancePool() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        hash<auto> config = parse_datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        config.options = (config.options ?? {}) + {"min": 1, "max": 1};
+        DatasourcePool pool(config);
+        assertEq(1, pool.getMinimum());
+        assertEq(1, pool.getMaximum());
+        AbstractTable table = AbstractTable::getTable(pool, f.name);
+        pool.execRaw("set default_transaction_isolation = 'repeatable read'");
+        pool.execRaw("set default_transaction_read_only = on");
+        pool.commit();
+        hash<auto> original = readModes(pool);
+        int original_pid = pool.selectRow("select pg_catalog.pg_backend_pid() as pid").pid.toInt();
+        pool.commit();
+        table.beginBoundedMaintenanceTransaction(100, 1000, 5000);
+        assertEq("off", readModes(pool).row_security);
+        table.update({"value": 11}, {"id": 1});
+        pool.commit();
+        table.beginBoundedMaintenanceTransaction(100, 1000, 5000);
+        table.update({"value": 12}, {"id": 1});
+        pool.rollback();
+        Counter done(1);
+        Queue results();
+        int tid = background sub() {
+            on_exit done.dec();
+            on_exit pool.rollback();
+            try { results.push({"modes": readModes(pool), "value": table.selectRow().value.toInt(),
+                "pid": pool.selectRow("select pg_catalog.pg_backend_pid() as pid").pid.toInt()}); }
+            catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED") { clear_thread_cancel(); }
+                results.push({"error": ex.err});
+            }
+        }();
+        on_exit {
+            if (done.waitForZero(5s)) {
+                cancel_thread(tid, "owned maintenance pool test cleanup");
+                if (done.waitForZero(5s)) { throw "TEST-WORKER-ERROR", "maintenance pool worker did not stop"; }
+            }
+        }
+        assertEq(0, done.waitForZero(5s));
+        hash<auto> result = results.get(1s);
+        assertNothing(result.error);
+        assertEq(original_pid, result.pid, "the next thread borrows the same physical PostgreSQL connection");
+        assertEq(original, result.modes, "the same connection restores its session defaults in another thread");
+        assertEq(11, result.value, "the next borrower sees only the committed maintenance write");
+    }
+
+    private maintenanceFailure() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        f.ds.execRaw("set default_transaction_isolation = 'repeatable read'");
+        f.ds.execRaw("set default_transaction_read_only = on");
+        f.ds.commit();
+        hash<auto> original = readModes(f.ds);
+        f.ds.commit();
+        int executions = 0;
+        f.ds.setMutationObserver(*hash<SqlMutationDecisionInfo> sub(hash<SqlMutationEventInfo> event) {
+            if (event.event == SQL_MUTATION_EVENT_PRE_EXEC && ++executions == 2) {
+                return <SqlMutationDecisionInfo>{"admit": False, "err": "TEST-MAINTENANCE-SETUP-REJECTED",
+                    "desc": "injected second setup rejection"};
+            }
+        }, SQL_MUTATION_MASK_ALL);
+        on_exit f.ds.clearMutationObserver();
+        assertThrows("TEST-MAINTENANCE-SETUP-REJECTED", sub() {
+            f.table.beginBoundedMaintenanceTransaction(100, 1000, 5000);
+        });
+        f.ds.clearMutationObserver();
+        assertEq(2, executions);
+        assertFalse(f.ds.currentThreadInTransaction(), "partial setup is rolled back by the API");
+        assertEq(original, readModes(f.ds));
+        f.ds.rollback();
+        f.table.beginBoundedMaintenanceTransaction(100, 1000, 5000);
+        assertEq("read committed", readModes(f.ds).isolation, "the same connection is reusable after setup rejection");
+        f.ds.rollback();
+    }
+
+    private maintenanceDeclaration() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        list<hash<SqlMutationEventInfo>> events = ();
+        f.ds.setMutationObserver(*hash<SqlMutationDecisionInfo> sub(hash<SqlMutationEventInfo> event) {
+            events += event;
+        }, SQL_MUTATION_MASK_ALL);
+        on_exit f.ds.clearMutationObserver();
+        hash<SqlMutationInfo> intent = <SqlMutationInfo>{"op_id": "owned-maintenance-fixture",
+            "path_id": "bounded_tx_test", "effect": SQL_MUTATION_EFFECT_MAY_GROW, "max_growth_bytes": 4096};
+        {
+            SqlMutationDeclaration declaration(f.ds, intent);
+            f.table.beginBoundedMaintenanceTransaction(100, 1000, 5000);
+            f.table.update({"value": 13}, {"id": 1});
+            f.ds.commit();
+        }
+        f.ds.clearMutationObserver();
+        int executions = 0;
+        bool committed = False;
+        foreach hash<SqlMutationEventInfo> event in (events) {
+            assertTrue(event.declared);
+            assertEq(intent, event.info, "the helper never replaces the complete producer declaration");
+            if (event.event == SQL_MUTATION_EVENT_PRE_EXEC) { ++executions; }
+            if (event.outcome == SQL_MUTATION_OUTCOME_COMMIT) { committed = True; }
+        }
+        assertTrue(executions >= 3, "both setup commands and the business write cross the observer boundary");
+        assertTrue(committed);
+    }
+
     private stricter() {
         hash<auto> f = fixture();
         on_exit cleanup(f);
@@ -152,9 +357,10 @@ class BoundedTransactionTest inherits QUnit::Test {
         hash<auto> f = fixture();
         on_exit cleanup(f);
         hash<auto> config = parse_datasource(ENV.QORE_DB_CONNSTR_PGSQL);
-        config.min = 1;
-        config.max = 1;
+        config.options = (config.options ?? {}) + {"min": 1, "max": 1};
         DatasourcePool pool(config);
+        assertEq(1, pool.getMinimum());
+        assertEq(1, pool.getMaximum());
         AbstractTable table = AbstractTable::getTable(pool, f.name);
         hash<string, int> original = readSettings(pool);
         pool.commit();

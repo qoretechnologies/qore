@@ -533,6 +533,9 @@
     on PostgreSQL 17 and later. Limits are local to one transaction, preserve stricter session settings, and are
     cleared by commit or rollback. Unsupported drivers reject this operation; see
     @ref SqlUtil::AbstractTable::beginBoundedTransaction() "beginBoundedTransaction()".
+    Maintenance that rechecks ownership after locking can also request fresh read snapshots and
+    rejection of policy-hidden rows, with the same deadlines and no changes to session defaults; see
+    @ref SqlUtil::AbstractTable::beginBoundedMaintenanceTransaction() "beginBoundedMaintenanceTransaction()".
     @endparblock
 
     @par Measuring Large Database Values Before Maintenance

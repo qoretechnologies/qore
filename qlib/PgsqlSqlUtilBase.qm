@@ -26,7 +26,7 @@
 %requires qore >= 1.14
 
 # requires the SqlUtil module
-%requires SqlUtil >= 3.5
+%requires SqlUtil >= 3.6
 %requires json
 
 # don't use "$" signs for variables and class members, assume local variable scope
@@ -37,7 +37,7 @@
 # enable all warnings
 
 module PgsqlSqlUtilBase {
-    version = "1.14";
+    version = "1.15";
     desc = "base user module for working with PostgreSQL SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -213,6 +213,10 @@ $function$
     @ref SqlUtil::AbstractDatabase::getAlignFunctionSql() "AbstractDatabase::getAlignFunctionSql()" for example.
 
     @section pgsql_relnotes Release Notes
+
+    @subsection pgsqlsqlutilbasev115 PgsqlSqlUtilBase v1.15
+    - bounded maintenance starts with fresh READ COMMITTED snapshots and refuses silently hidden rows,
+      while preserving stricter deadlines and restoring session defaults on transaction completion
 
     @subsection pgsqlsqlutilbasev114 PgsqlSqlUtilBase v1.14
     - measures text and binary column byte lengths from their uncompressed length metadata,
@@ -4743,6 +4747,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     private bool supportsBoundedTransactionsImpl() {
         getServerVersion();
         return server_version_major >= 17;
+    }
+
+    private bool supportsBoundedMaintenanceTransactionsImpl() {
+        return supportsBoundedTransactionsImpl();
+    }
+
+    private prepareBoundedMaintenanceTransactionImpl() {
+        # SET TRANSACTION must precede the first query, including deadline introspection. These
+        # controls are local to this fresh transaction; row_security=off rejects, rather than hides,
+        # policy-filtered rows and does not grant BYPASSRLS privileges.
+        ds.execRaw("set transaction isolation level read committed, read write");
+        ds.execRaw("set local row_security = off");
     }
 
     private hash<string, int> beginBoundedTransactionImpl(int lock_timeout_ms, int statement_timeout_ms,

@@ -732,6 +732,53 @@ table.commit();
     */
     hash<string, int> beginBoundedTransaction(int lock_timeout_ms, int statement_timeout_ms,
             int transaction_timeout_ms) {
+        return beginBoundedTransactionIntern(lock_timeout_ms, statement_timeout_ms, transaction_timeout_ms, False);
+    }
+
+    #! Returns whether bounded maintenance transactions can establish fresh, complete read snapshots
+    /** @return True if @ref beginBoundedMaintenanceTransaction() is supported
+        @throw DBI-ERROR if capability discovery fails
+        @note Unsupported drivers must not silently substitute their default isolation or visibility.
+        @par Example
+        A retention coordinator checks support before requesting its temporary-space reservation.
+        @since SqlUtil 3.6.0
+    */
+    bool supportsBoundedMaintenanceTransactions() {
+        return supportsBoundedMaintenanceTransactionsImpl();
+    }
+
+    #! Begins bounded maintenance with fresh statement snapshots and complete-row visibility
+    /** Establishes READ COMMITTED, read/write operation and a driver guard against silently hidden
+        rows before the first query. PostgreSQL sets transaction-local \c row_security=off, which raises
+        an error instead of applying an otherwise applicable row policy; it does not bypass that policy.
+        Commit and rollback restore the session's isolation, access and visibility defaults.
+
+        @param lock_timeout_ms maximum database lock wait, in milliseconds
+        @param statement_timeout_ms maximum database statement duration, in milliseconds
+        @param transaction_timeout_ms maximum database transaction duration, in milliseconds
+        @return effective limits with the same keys as @ref beginBoundedTransaction()
+        @throw OPTION-ERROR for invalid or unordered limits
+        @throw TRANSACTION-ERROR if a transaction already exists
+        @throw AUTOCOMMIT-ERROR if the datasource has autocommit enabled
+        @throw TRANSACTION-LIMIT-NOT-SUPPORTED if the complete maintenance capability is unavailable
+        @throw TRANSACTION-LIMIT-EXCEEDED if the budget expires during setup
+        @throw DBI-ERROR if isolation, visibility or deadline setup fails
+        @note The caller must obtain real resource admission first and own commit, rollback and retry.
+            All deadline and commit/WAL limitations of @ref beginBoundedTransaction() still apply.
+            Later code must not disable the installed transaction settings. This API does not authorize
+            writes, prove an ownership closure, reserve physical resources or reconcile a lost commit.
+        @par Example
+        A reserved tree mover begins maintenance, locks every owner/member and then re-reads the
+        closure, observing children committed while it waited for those locks.
+        @since SqlUtil 3.6.0
+    */
+    hash<string, int> beginBoundedMaintenanceTransaction(int lock_timeout_ms, int statement_timeout_ms,
+            int transaction_timeout_ms) {
+        return beginBoundedTransactionIntern(lock_timeout_ms, statement_timeout_ms, transaction_timeout_ms, True);
+    }
+
+    private hash<string, int> beginBoundedTransactionIntern(int lock_timeout_ms, int statement_timeout_ms,
+            int transaction_timeout_ms, bool maintenance) {
         if (lock_timeout_ms < 1 || statement_timeout_ms < lock_timeout_ms
                 || transaction_timeout_ms < statement_timeout_ms || transaction_timeout_ms > 60000) {
             throw "OPTION-ERROR", "transaction limits require 1 <= lock <= statement <= transaction <= 60000 ms";
@@ -739,12 +786,21 @@ table.commit();
         if (ds.currentThreadInTransaction()) {
             throw "TRANSACTION-ERROR", "bounded transaction requires an idle datasource";
         }
-        if (!supportsBoundedTransactions()) {
+        if (!supportsBoundedTransactions() || (maintenance && !supportsBoundedMaintenanceTransactions())) {
             throw "TRANSACTION-LIMIT-NOT-SUPPORTED", "the database driver does not support bounded transactions";
         }
         ds.beginTransaction();
         on_error ds.rollback();
+        if (maintenance) { prepareBoundedMaintenanceTransactionImpl(); }
         return beginBoundedTransactionImpl(lock_timeout_ms, statement_timeout_ms, transaction_timeout_ms);
+    }
+
+    private bool supportsBoundedMaintenanceTransactionsImpl() {
+        return False;
+    }
+
+    private prepareBoundedMaintenanceTransactionImpl() {
+        throw "TRANSACTION-LIMIT-NOT-SUPPORTED", "the database driver does not support bounded maintenance";
     }
 
     private bool supportsBoundedTransactionsImpl() {
