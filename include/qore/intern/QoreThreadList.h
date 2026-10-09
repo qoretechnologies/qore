@@ -156,6 +156,8 @@ public:
     int wake_fd = -1;
     //! the process that created the wakeup channel; a forked child creates its own instead of sharing it
     pid_t wake_pid = 0;
+    //! the nesting depth of qore_cancel_wakeup_register() registrations; only used by the thread itself
+    int wake_reg_depth = 0;
 
     DLLLOCAL void cleanup();
 
@@ -408,6 +410,12 @@ public:
         empty for the next wait.
     */
     DLLLOCAL void clearCurrentWaitingFd(int tid);
+
+    //! Returns the thread's entry; for the thread's own wakeup registration state
+    DLLLOCAL ThreadEntry& getEntry(int tid) {
+        assert(tid >= 0 && tid < MAX_QORE_THREADS);
+        return entry[tid];
+    }
 
     //! Get a reference to the cancel reason for the given thread, or nullptr if there is none
     /** The reference is acquired under the lock, so the string cannot be replaced and freed by a

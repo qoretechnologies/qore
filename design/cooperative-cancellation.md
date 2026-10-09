@@ -70,6 +70,50 @@ class QoreCancelDeferralHelper;
 See [Cleanup Critical Sections](#cleanup-critical-sections) for what this is for and what it
 guarantees.
 
+### Cancellable Waits
+
+A blocking wait in a module must end as soon as cancellation is requested, without a periodic
+timeout.  Two exported APIs (since Qore 3.0; `#ifdef _QORE_HAS_CANCELLABLE_POLL`) let a module wait
+on the thread's cancellation wakeup channel (see [Wakeup descriptor](#wakeup-descriptor)):
+
+```cpp
+// Waits like poll(2) with the thread's wakeup channel added; EINTR is retried internally.
+// Returns > 0 (descriptors with events), 0 (timeout), -1 (poll() failed, errno set, no exception),
+// or QORE_POLL_CANCELLED (-2: THREAD-CANCELLED, PROGRAM-INTERRUPTED or THREAD-ERROR raised).
+DLLEXPORT int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms,
+    ExceptionSink* xsink, const char* operation = "poll");
+
+// For a library's own event loop: the descriptor to watch for readability, QORE_CANCEL_WAKEUP_NONE
+// (-2: nothing to watch), or -1 (exception raised: a request made before the call).
+DLLEXPORT int qore_cancel_wakeup_register(ExceptionSink* xsink, const char* operation = "wait");
+// When the descriptor is readable: -1 if the request was raised (end the wait), 0 to continue.
+DLLEXPORT int qore_cancel_wakeup_check(ExceptionSink* xsink, const char* operation = "wait");
+// After the wait, whatever ended it; once per successful register.
+DLLEXPORT void qore_cancel_wakeup_unregister();
+
+// RAII wrapper (header-inline) for register/unregister.
+class QoreCancelWakeupHelper;
+```
+
+The register protocol has no race window:
+
+- **Register, then check.**  `qore_cancel_wakeup_register()` stores the registration (seq_cst) and then
+  checks for a request: a request made before the registration is raised by the call, and one made after
+  it signals the channel, which stays readable until it is drained.
+- **Check drains first.**  `qore_cancel_wakeup_check()` drains the channel and then checks: a requester
+  stores the request before it signals, so a drained signal's request is seen by the check, and a
+  signal made after the drain makes the descriptor readable again.  A wakeup that delivers nothing (an
+  out-of-scope request that was dropped, a cleared program interrupt, or a request while cancellation
+  is deferred) therefore leaves the descriptor unreadable, and the loop does not spin.
+- **Unregister drains last.**  The outermost `qore_cancel_wakeup_unregister()` clears the registration
+  under `thread_list.lck` and then drains, so the next wait starts unsignalled.
+- **Nesting.**  Registrations nest (the depth is kept in `ThreadEntry::wake_reg_depth`, used only by the
+  thread itself); a nested registration returns the same descriptor, and `qore_cancellable_poll()`
+  called inside one neither registers nor unregisters the channel, and drains it only after a wakeup.
+- The descriptor is only watched for readability (`POLLIN`, `EPOLLIN`, `EVFILT_READ` — a macOS kqueue
+  can itself be watched by another kqueue, `poll()` and `select()`); the caller never reads, writes
+  or closes it.
+
 ### Lower-Level APIs
 
 These are used internally and by `QoreCondition::waitWithInterrupt()`. Module authors
@@ -95,10 +139,10 @@ if (smh) {
 #define QORE_IO_POLL_INTERVAL_MS 500
 ```
 
-`libqore` itself no longer polls: every blocking wait in the core is woken directly when cancellation
-is requested (see [Waking Blocked Threads](#waking-blocked-threads)).  The constant remains public for
-binary modules, which have no access to the internal wakeup primitives yet and still use Patterns 2 and
-4 below.
+Deprecated.  `libqore` no longer polls: every blocking wait in the core is woken directly when
+cancellation is requested (see [Waking Blocked Threads](#waking-blocked-threads)).  The constant
+remains for modules that still poll, until they are converted to
+[Cancellable Waits](#cancellable-waits).
 
 ## Implementation Patterns for Modules
 
@@ -116,46 +160,26 @@ int myBlockingOperation(ExceptionSink* xsink) {
 }
 ```
 
-### Pattern 2: Polling During Long Operations
+### Pattern 2: Waiting on Descriptors
 
-For operations that may block for extended periods, use polling with timeouts:
+For a wait on descriptors the module owns, use `qore_cancellable_poll()`; never poll in slices:
 
 ```cpp
-ssize_t myLongRead(void* buf, size_t len, int timeout_ms, ExceptionSink* xsink) {
-    // Check before starting
-    if (qore_check_cancel(xsink, "reading data")) {
+ssize_t myRead(int fd, void* buf, size_t len, int timeout_ms, ExceptionSink* xsink) {
+    struct pollfd pfd = {fd, POLLIN, 0};
+    int rc = qore_cancellable_poll(&pfd, 1, timeout_ms, xsink, "reading data");
+    if (rc == QORE_POLL_CANCELLED) {
+        return -1;  // exception raised
+    }
+    if (rc < 0) {
+        xsink->raiseErrnoException("MY-READ-ERROR", errno, "poll() failed");
         return -1;
     }
-
-    // Poll with short timeouts
-    int remaining = timeout_ms;
-    while (remaining > 0 || timeout_ms < 0) {  // timeout_ms < 0 means infinite
-        if (qore_check_cancel(xsink, "reading data")) {
-            return -1;
-        }
-
-        // Use chunk timeout (don't exceed remaining time)
-        int chunk = QORE_IO_POLL_INTERVAL_MS;
-        if (timeout_ms >= 0 && remaining < chunk) {
-            chunk = remaining;
-        }
-
-        ssize_t rv = do_nonblocking_read_with_timeout(buf, len, chunk);
-
-        if (rv > 0) {
-            return rv;  // Success
-        }
-        if (rv < 0 && errno != ETIMEDOUT && errno != EAGAIN) {
-            return rv;  // Real error
-        }
-
-        if (timeout_ms >= 0) {
-            remaining -= chunk;
-        }
+    if (!rc) {
+        xsink->raiseException("MY-TIMEOUT", "timed out after %d ms", timeout_ms);
+        return -1;
     }
-
-    errno = ETIMEDOUT;
-    return -1;
+    return read(fd, buf, len);
 }
 ```
 
@@ -232,45 +256,32 @@ int executeQuery(const char* sql, ExceptionSink* xsink) {
 }
 ```
 
-### Pattern 4: Custom Stream/Socket Wrapper
+### Pattern 4: A Library's Own Event Loop or Stream Hooks
 
-For libraries that support custom I/O callbacks (e.g., MongoDB), wrap the stream:
+If a library waits in an event loop of its own, add the wakeup descriptor from
+`qore_cancel_wakeup_register()` to the loop (see [Cancellable Waits](#cancellable-waits)).  If it
+lets the module supply the transport (custom stream or I/O callbacks), let the module own the
+descriptors and wait with `qore_cancellable_poll()` in the callbacks; a callback that can only report
+`errno` clears the exception and reports `EINTR`:
 
 ```cpp
-static ssize_t interruptible_read(library_stream_t* stream, void* buf,
-                                   size_t len, int timeout_ms) {
-    interruptible_stream_t* s = (interruptible_stream_t*)stream;
-
-    if (qore_check_cancel(/* no xsink in callback — use errno */)) {
+static ssize_t my_stream_read(my_stream_t* s, void* buf, size_t len, int timeout_ms) {
+    // recv() on the non-blocking socket; on EAGAIN:
+    struct pollfd pfd = {s->fd, POLLIN, 0};
+    ExceptionSink xsink;
+    int rc = qore_cancellable_poll(&pfd, 1, remaining_ms, &xsink, "stream read");
+    if (rc == QORE_POLL_CANCELLED) {
+        xsink.clear();  // the library reports errors through errno; the request stays pending
         errno = EINTR;
         return -1;
     }
-
-    // Polling read with cancel checking
-    int remaining = timeout_ms;
-    while (remaining > 0 || timeout_ms < 0) {
-        if (qore_is_cancel_requested()) {
-            errno = EINTR;
-            return -1;
-        }
-
-        int chunk = (remaining > QORE_IO_POLL_INTERVAL_MS || timeout_ms < 0)
-                    ? QORE_IO_POLL_INTERVAL_MS : remaining;
-
-        ssize_t rv = library_stream_read(s->base, buf, len, chunk);
-        if (rv >= 0 || (errno != ETIMEDOUT && errno != EAGAIN)) {
-            return rv;
-        }
-
-        if (timeout_ms >= 0) {
-            remaining -= chunk;
-        }
-    }
-
-    errno = ETIMEDOUT;
-    return -1;
+    ...
 }
 ```
+
+Only a library that waits internally on descriptors it exposes neither directly nor through hooks
+still needs a periodic check (with `QORE_IO_POLL_INTERVAL_MS`) or, better, a cancel callback that
+aborts the library's operation (Pattern 3).
 
 ### Pattern 5: Periodic Check in Fetch Loops
 
@@ -987,7 +998,7 @@ do_io_operation();  # Works normally, no overhead
 - [ ] Replace `qore_check_io_interrupt()` with `qore_check_cancel()` in all check points
 - [ ] Replace inline `QoreSandboxManagerHelper` + `isInterruptRequested()` patterns with `qore_check_cancel()`
 - [ ] Use `qore_check_cancel()` for pre-operation checks
-- [ ] Implement polling for long operations using `QORE_IO_POLL_INTERVAL_MS`
+- [ ] Wait on descriptors with `qore_cancellable_poll()`, or add the descriptor from `qore_cancel_wakeup_register()` to a library's own event loop; never poll with `QORE_IO_POLL_INTERVAL_MS` slices
 - [ ] Register cancel callback via `QoreSandboxManagerHelper` if library has a cancel API
 - [ ] Check every ~100 rows in fetch loops
 - [ ] Ensure zero overhead when no cancellation is active
@@ -1000,6 +1011,7 @@ do_io_operation();  # Works normally, no overhead
 - **Cancel callback (atomic handle)**: `module-pgsql/src/QorePGConnection.h` — `QorePGCancelHelper`
 - **Non-blocking polling**: `module-ssh2/src/SSH2Client.h` — `waitSocketUnlocked()`
 - **Custom stream wrapper**: `modules/mongodb/src/QoreMongoStream.cpp`
+- **Cancellable waits from a module**: `examples/test/module-cpp-api/ql_cppapiuser.qpp` (`cpp_api_cancellable_poll()`, `cpp_api_wakeup_loop()`)
 - **ZMQ poll loop**: `module-zmq/src/QoreZSock.cpp`
 
 ## Implementation Phases
@@ -1031,7 +1043,7 @@ do_io_operation();  # Works normally, no overhead
 - Performance regression test
 
 ### Phase 5: Documentation
-- Remove `interruptible-io-module-guide.md` and `safe-thread-cancellation.md` (replaced by this document)
+- Remove `safe-thread-cancellation.md` (replaced by this document); `doxygen/lang/interruptible-io-module-guide.md` is the module author's guide, and this document holds the design
 - Update module developer guide
 - Release notes for Qore 3.0
 
@@ -1041,9 +1053,8 @@ do_io_operation();  # Works normally, no overhead
 
 2. **Mutex/RWLock cancellation**: resolved — Qore-level lock waits are woken by the request (see "Lock waits").
 
-6. **A public cancellable wait for modules**: modules still poll with `QORE_IO_POLL_INTERVAL_MS`
-   (Patterns 2 and 4).  Exporting `qore_cancellable_poll()` (or the thread's wakeup descriptor) would let
-   them wait deterministically too; it is a module-facing API addition and has not been made.
+6. **A public cancellable wait for modules**: resolved — see [Cancellable Waits](#cancellable-waits).
+   External modules that still poll are converted in their own repositories.
 
 3. **`join_thread(tid)`**: Currently there's no way to wait for a background thread to finish. `cancel_thread()` is more useful when paired with a join. Could be implemented separately using a per-thread condition variable signaled at thread exit.
 

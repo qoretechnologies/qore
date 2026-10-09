@@ -5268,7 +5268,12 @@ int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, Exc
         }
     }
 
-    int wake_fd = thread_list.getCancelWakeupFd(tid);
+    // a registration made with qore_cancel_wakeup_register() is already active on this thread: the channel is
+    // registered for the whole of it, so this wait neither registers nor unregisters it, and drains it only to
+    // continue after a wakeup that delivers nothing (see qore_cancel_wakeup_check())
+    ThreadEntry& te = thread_list.getEntry(tid);
+    bool nested = te.wake_reg_depth > 0;
+    int wake_fd = nested ? te.wake_fd : thread_list.getCancelWakeupFd(tid);
     if (wake_fd < 0) {
         xsink->raiseErrnoException("THREAD-ERROR", errno, "%s: cannot create the cancellation wakeup channel for "
             "thread %d", operation, tid);
@@ -5300,7 +5305,9 @@ int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, Exc
 
         // register, then check: either this check sees a request delivered before the registration, or the
         // canceller sees the registration and signals the channel (seq_cst on both sides)
-        thread_list.setCurrentWaitingFd(tid, wake_fd);
+        if (!nested) {
+            thread_list.setCurrentWaitingFd(tid, wake_fd);
+        }
         int rc = 0;
         int poll_errno = 0;
         bool cancelled = qore_check_cancel(xsink, operation);
@@ -5308,10 +5315,15 @@ int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, Exc
             rc = poll(pfds, nfds + 1, qore_poll_remaining_ms(timeout_ms, deadline_us));
             poll_errno = errno;
         }
-        // once this returns, nothing can signal the channel any more, so draining it leaves it empty for the
-        // next wait, whether or not it was signalled
-        thread_list.clearCurrentWaitingFd(tid);
-        qore_cancel_wakeup_drain(wake_fd);
+        if (!nested) {
+            // once this returns, nothing can signal the channel any more, so draining it leaves it empty for the
+            // next wait, whether or not it was signalled
+            thread_list.clearCurrentWaitingFd(tid);
+            qore_cancel_wakeup_drain(wake_fd);
+        } else if (rc > 0 && pfds[nfds].revents) {
+            // drain before the check below: a request made after the drain signals the channel again
+            qore_cancel_wakeup_drain(wake_fd);
+        }
 
         if (cancelled || qore_check_cancel(xsink, operation)) {
             return QORE_POLL_CANCELLED;
@@ -5346,6 +5358,94 @@ int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, Exc
             return 0;
         }
     }
+}
+
+int qore_cancel_wakeup_register(ExceptionSink* xsink, const char* operation) {
+    assert(xsink);
+    if (qore_check_cancel(xsink, operation)) {
+        return -1;
+    }
+    int tid = q_gettid();
+    if (tid < 0 || tid >= MAX_QORE_THREADS) {
+        // a thread unknown to Qore cannot be cancelled
+        return QORE_CANCEL_WAKEUP_NONE;
+    }
+    ThreadEntry& te = thread_list.getEntry(tid);
+    if (te.wake_reg_depth) {
+        // nested: the outer registration is in effect
+        ++te.wake_reg_depth;
+        return te.wake_fd;
+    }
+    int wake_fd = thread_list.getCancelWakeupFd(tid);
+    if (wake_fd < 0) {
+        xsink->raiseErrnoException("THREAD-ERROR", errno, "%s: cannot create the cancellation wakeup channel for "
+            "thread %d", operation, tid);
+        return -1;
+    }
+    // register, then check: either the check sees a request made before the registration, or the canceller sees the
+    // registration and signals the channel
+    thread_list.setCurrentWaitingFd(tid, wake_fd);
+    if (qore_check_cancel(xsink, operation)) {
+        thread_list.clearCurrentWaitingFd(tid);
+        qore_cancel_wakeup_drain(wake_fd);
+        return -1;
+    }
+    te.wake_reg_depth = 1;
+    return wake_fd;
+}
+
+int qore_cancel_wakeup_check(ExceptionSink* xsink, const char* operation) {
+    assert(xsink);
+    int tid = q_gettid();
+    if (tid >= 0 && tid < MAX_QORE_THREADS) {
+        ThreadEntry& te = thread_list.getEntry(tid);
+        assert(te.wake_reg_depth > 0);
+        if (te.wake_reg_depth > 0) {
+            // the requester stores the request before it signals the channel: a signal drained here is followed by
+            // the check below, and one made after the drain makes the descriptor readable again
+            qore_cancel_wakeup_drain(te.wake_fd);
+        }
+    }
+    return qore_check_cancel(xsink, operation) ? -1 : 0;
+}
+
+void qore_cancel_wakeup_unregister() {
+    int tid = q_gettid();
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    if (tid < 0 || tid >= MAX_QORE_THREADS) {
+        return;
+    }
+    ThreadEntry& te = thread_list.getEntry(tid);
+    assert(te.wake_reg_depth > 0);
+    if (te.wake_reg_depth <= 0 || --te.wake_reg_depth) {
+        return;
+    }
+    // nothing can signal the channel after this, so draining it leaves it empty for the next wait
+    thread_list.clearCurrentWaitingFd(tid);
+    qore_cancel_wakeup_drain(te.wake_fd);
+}
+#else
+int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, ExceptionSink* xsink,
+        const char* operation) {
+    (void)fds;
+    (void)nfds;
+    (void)timeout_ms;
+    if (qore_check_cancel(xsink, operation)) {
+        return QORE_POLL_CANCELLED;
+    }
+    errno = ENOSYS;
+    return -1;
+}
+
+int qore_cancel_wakeup_register(ExceptionSink* xsink, const char* operation) {
+    return qore_check_cancel(xsink, operation) ? -1 : QORE_CANCEL_WAKEUP_NONE;
+}
+
+int qore_cancel_wakeup_check(ExceptionSink* xsink, const char* operation) {
+    return qore_check_cancel(xsink, operation) ? -1 : 0;
+}
+
+void qore_cancel_wakeup_unregister() {
 }
 #endif
 

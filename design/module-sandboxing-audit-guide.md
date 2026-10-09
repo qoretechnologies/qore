@@ -549,54 +549,28 @@ int quickOperation(ExceptionSink* xsink) {
 }
 ```
 
-#### Pattern B: Polling During Blocking Operation
+#### Pattern B: Waiting During a Blocking Operation
+
+Wait with `qore_cancellable_poll()`, which ends as soon as the thread is cancelled or its program is
+interrupted (see `doxygen/lang/interruptible-io-module-guide.md`); never poll in
+`QORE_IO_POLL_INTERVAL_MS` slices, which delays every cancellation by up to 500 ms:
 
 ```cpp
 ssize_t blockingRead(int fd, void* buf, size_t len, int timeout_ms,
                      ExceptionSink* xsink) {
-    QoreSandboxManagerHelper smh;
-
-    // Fast path: no sandbox
-    if (!smh) {
-        return blocking_read_with_timeout(fd, buf, len, timeout_ms);
+    struct pollfd pfd = {fd, POLLIN, 0};
+    int rc = qore_cancellable_poll(&pfd, 1, timeout_ms, xsink, "reading");
+    if (rc == QORE_POLL_CANCELLED) {
+        return -1;  // THREAD-CANCELLED or PROGRAM-INTERRUPTED raised
     }
-
-    // Check before starting
-    if (smh->isInterruptRequested()) {
-        xsink->raiseException("PROGRAM-INTERRUPTED", "I/O interrupted");
+    if (rc < 0) {
+        return -1;  // poll() failed; errno is set
+    }
+    if (!rc) {
+        errno = ETIMEDOUT;
         return -1;
     }
-
-    // Poll with short timeouts
-    int remaining = timeout_ms;
-    while (remaining > 0 || timeout_ms < 0) {
-        if (smh->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "I/O interrupted");
-            return -1;
-        }
-
-        int chunk = QORE_IO_POLL_INTERVAL_MS;  // 500ms
-        if (timeout_ms >= 0 && remaining < chunk) {
-            chunk = remaining;
-        }
-
-        struct pollfd pfd = {fd, POLLIN, 0};
-        int rv = poll(&pfd, 1, chunk);
-
-        if (rv > 0) {
-            return read(fd, buf, len);
-        }
-        if (rv < 0 && errno != EINTR) {
-            return -1;  // Real error
-        }
-
-        if (timeout_ms >= 0) {
-            remaining -= chunk;
-        }
-    }
-
-    errno = ETIMEDOUT;
-    return -1;
+    return read(fd, buf, len);
 }
 ```
 
@@ -839,7 +813,14 @@ QoreSandboxManagerHelper smh(pgm);     // specific program
 // Convenience function for interrupt checking
 bool qore_check_cancel(ExceptionSink* xsink = nullptr);
 
-// Constants
+// Waits that end as soon as cancellation is requested (qore_thread.h)
+int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, ExceptionSink* xsink,
+    const char* operation = "poll");
+int qore_cancel_wakeup_register(ExceptionSink* xsink, const char* operation = "wait");
+int qore_cancel_wakeup_check(ExceptionSink* xsink, const char* operation = "wait");
+void qore_cancel_wakeup_unregister();
+
+// Deprecated: the polling interval for waits that cannot be woken directly
 #define QORE_IO_POLL_INTERVAL_MS 500
 
 // Access mode flags

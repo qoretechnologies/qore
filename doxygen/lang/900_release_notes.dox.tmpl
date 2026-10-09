@@ -30,6 +30,14 @@
     including when extracted inside another repository. Revision updates reject corrupt
     metadata, and standalone compiler-fingerprint generation sets its list policy explicitly.
 
+    Binary modules can now wait deterministically for cancellation: the C++ API function
+    <tt>qore_cancellable_poll()</tt> waits like <tt>poll(2)</tt> and ends as soon as the thread is cancelled or its
+    @ref Qore::Program "Program" is interrupted, and <tt>qore_cancel_wakeup_register()</tt>,
+    <tt>qore_cancel_wakeup_check()</tt> and <tt>qore_cancel_wakeup_unregister()</tt> (or the
+    <tt>QoreCancelWakeupHelper</tt> class) give a library's own event loop a descriptor that becomes readable when
+    cancellation is requested.  Modules no longer need to poll in <tt>QORE_IO_POLL_INTERVAL_MS</tt> slices, which is
+    deprecated; <tt>_QORE_HAS_CANCELLABLE_POLL</tt> is defined when the API is available.
+
     A thread cancelled with @ref Qore::cancel_thread() "cancel_thread()", or whose @ref Qore::Program "Program" was
     interrupted, just as it started to wait on a condition — for example in
     @ref Qore::Thread::Semaphore::acquire() "Semaphore::acquire()" — could miss the request and wait until the

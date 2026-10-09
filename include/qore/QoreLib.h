@@ -131,6 +131,9 @@ typedef std::vector<int> sig_vec_t;
 //! defined for q_enforce_thread_size_on_primary_thread()
 #define _QORE_HAS_ENFORCE_THREAD_SIZE_ON_PRIMARY_THREAD 1
 
+//! defined for qore_cancellable_poll() and the cancellation wakeup descriptor API (qore_cancel_wakeup_register())
+#define _QORE_HAS_CANCELLABLE_POLL 1
+
 /** @defgroup qore_code_flags Qore Code Flags
     Flags describing properties of a builtin function or method variant.
 

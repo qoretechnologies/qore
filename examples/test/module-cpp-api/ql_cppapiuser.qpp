@@ -27,8 +27,10 @@
 #include "cppapiuser-module.h"
 
 #include <atomic>
+#include <cerrno>
 #include <fcntl.h>
 #include <mutex>
+#include <poll.h>
 #include <pthread.h>
 #include <sys/resource.h>
 #include <sys/types.h>
@@ -36,6 +38,53 @@
 #include <unistd.h>
 
 namespace {
+// a pipe whose descriptors are closed when it goes out of scope
+class TestPipe {
+public:
+    DLLLOCAL TestPipe(ExceptionSink* xsink) {
+        if (pipe(fds)) {
+            fds[0] = fds[1] = -1;
+            xsink->raiseErrnoException("PIPE-ERROR", errno, "pipe() failed");
+        }
+    }
+
+    DLLLOCAL ~TestPipe() {
+        if (fds[0] != -1) {
+            close(fds[0]);
+            close(fds[1]);
+        }
+    }
+
+    // makes the read end readable; returns 0 for success
+    DLLLOCAL int fill(ExceptionSink* xsink) {
+        char c = 'x';
+        if (write(fds[1], &c, 1) != 1) {
+            xsink->raiseErrnoException("PIPE-ERROR", errno, "write() failed");
+            return -1;
+        }
+        return 0;
+    }
+
+    DLLLOCAL int readFd() const {
+        return fds[0];
+    }
+
+    TestPipe(const TestPipe&) = delete;
+    TestPipe& operator=(const TestPipe&) = delete;
+
+private:
+    int fds[2];
+};
+
+// returns the time remaining until a deadline for poll(): -1 for no timeout, 0 if it has passed
+int remaining_ms(int timeout_ms, int64 deadline_us) {
+    if (timeout_ms < 0) {
+        return -1;
+    }
+    int64 us = deadline_us - q_get_monotonic_us();
+    return us <= 0 ? 0 : static_cast<int>((us + 999) / 1000);
+}
+
 // the file that records the children created with fork(); -1 until cpp_api_record_fork_children() is called
 std::atomic<int> fork_child_fd(-1);
 
@@ -334,6 +383,131 @@ int cpp_api_queue_private_refs(object queue) {
     int refs = pd->reference_count() - 1;
     pd->deref(xsink);
     return refs;
+}
+
+//! waits for a new pipe to become readable with qore_cancellable_poll()
+/** Lets tests check the exported cancellable poll: its results without a cancellation request and how soon a
+    request ends it.
+
+    @param fill if @ref True, the pipe is made readable before the wait
+    @param timeout_ms the timeout for the wait; negative for none
+
+    @return a hash with \c rc: the return value (the number of descriptors with events or 0 on timeout) and
+    \c readable: @ref True if the pipe was reported readable
+
+    @throw THREAD-CANCELLED the thread was cancelled during the wait
+    @throw PROGRAM-INTERRUPTED the thread's Program was interrupted during the wait
+*/
+hash<auto> cpp_api_cancellable_poll(bool fill, int timeout_ms) {
+    TestPipe p(xsink);
+    if (*xsink || (fill && p.fill(xsink))) {
+        return QoreValue();
+    }
+    struct pollfd pfd = {p.readFd(), POLLIN, 0};
+    int rc = qore_cancellable_poll(&pfd, 1, static_cast<int>(timeout_ms), xsink, "cpp api poll");
+    if (rc == QORE_POLL_CANCELLED) {
+        assert(*xsink);
+        return QoreValue();
+    }
+    if (rc < 0) {
+        return xsink->raiseErrnoException("POLL-ERROR", errno, "qore_cancellable_poll() failed");
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("rc", rc, xsink);
+    rv->setKeyValue("readable", (pfd.revents & POLLIN) ? true : false, xsink);
+    return rv.release();
+}
+
+//! waits for a new pipe to become readable in a loop of the module's own that watches the wakeup descriptor
+/** Lets tests check qore_cancel_wakeup_register(), qore_cancel_wakeup_check() and qore_cancel_wakeup_unregister()
+    (through QoreCancelWakeupHelper) as a library with its own event loop uses them.
+
+    @param fill if @ref True, the pipe is made readable before the wait
+    @param timeout_ms the timeout for the wait; negative for none
+    @param nested if @ref True, a nested registration and a nested qore_cancellable_poll() are made inside the loop
+
+    @return a hash with \c rc: 1 if the pipe became readable, 0 on timeout, and \c wake_fd: @ref True if there was
+    a wakeup descriptor to watch
+
+    @throw THREAD-CANCELLED the thread was cancelled during the wait
+    @throw PROGRAM-INTERRUPTED the thread's Program was interrupted during the wait
+*/
+hash<auto> cpp_api_wakeup_loop(bool fill, int timeout_ms, bool nested = False) {
+    TestPipe p(xsink);
+    if (*xsink || (fill && p.fill(xsink))) {
+        return QoreValue();
+    }
+    QoreCancelWakeupHelper cwh(xsink, "cpp api loop");
+    if (*xsink) {
+        return QoreValue();
+    }
+    int64 deadline_us = timeout_ms > 0 ? q_get_monotonic_us() + timeout_ms * 1000 : 0;
+    int rc = 0;
+    while (true) {
+        if (nested) {
+            // a nested registration and a nested cancellable poll leave the outer registration in effect
+            QoreCancelWakeupHelper inner(xsink, "cpp api nested");
+            if (*xsink) {
+                return QoreValue();
+            }
+            if (inner.fd() != cwh.fd()) {
+                return xsink->raiseException("NESTED-ERROR", "a nested registration returned descriptor %d; "
+                    "expecting %d", inner.fd(), cwh.fd());
+            }
+            struct pollfd npfd = {p.readFd(), POLLIN, 0};
+            int nrc = qore_cancellable_poll(&npfd, 1, 0, xsink, "cpp api nested poll");
+            if (nrc == QORE_POLL_CANCELLED) {
+                return QoreValue();
+            }
+            if (nrc > 0) {
+                rc = 1;
+                break;
+            }
+        }
+        struct pollfd pfds[2] = {{p.readFd(), POLLIN, 0}, {cwh.fd(), POLLIN, 0}};
+        int nfds = cwh.fd() >= 0 ? 2 : 1;
+        int prc = poll(pfds, nfds, remaining_ms(static_cast<int>(timeout_ms), deadline_us));
+        if (prc < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return xsink->raiseErrnoException("POLL-ERROR", errno, "poll() failed");
+        }
+        if (nfds == 2 && pfds[1].revents) {
+            if (qore_cancel_wakeup_check(xsink, "cpp api loop")) {
+                return QoreValue();
+            }
+        }
+        if (pfds[0].revents & POLLIN) {
+            rc = 1;
+            break;
+        }
+        if (!prc) {
+            break;
+        }
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("rc", rc, xsink);
+    rv->setKeyValue("wake_fd", cwh.fd() >= 0, xsink);
+    return rv.release();
+}
+
+//! returns @ref True if the current thread's wakeup descriptor is readable right after it has been registered
+/** A request that has been delivered or cleared must not leave the descriptor readable for the next wait.
+
+    @throw THREAD-CANCELLED a request is pending
+*/
+bool cpp_api_wakeup_fd_readable() {
+    QoreCancelWakeupHelper cwh(xsink, "cpp api readiness");
+    if (*xsink || cwh.fd() < 0) {
+        return false;
+    }
+    struct pollfd pfd = {cwh.fd(), POLLIN, 0};
+    int rc = poll(&pfd, 1, 0);
+    if (rc < 0) {
+        return xsink->raiseErrnoException("POLL-ERROR", errno, "poll() failed");
+    }
+    return rc > 0;
 }
 
 ///@}
