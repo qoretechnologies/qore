@@ -4286,6 +4286,11 @@ while (*binary chunk = input.read(65536)) {
       to start running code, so it ended with \c STACK-LIMIT-EXCEEDED before its first statement; the thread-local
       storage is now added to the stack size of each thread
 
+    - Fixed the order in which a closure releases the variables it captured depending on the memory allocator: they
+      were ordered by address, so on Linux with musl (Alpine), a closure could release a variable holding the rest of
+      a chain of closures before the one holding its own object, and the objects' destructors ran in reverse order;
+      captured variables are now released in the order they were declared
+
     - Fixed malformed UTF-8 encoding a value above U+10FFFF not being rejected when converted through a stream (for
       example with @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream") on Linux with glibc,
       where a \c "?" was substituted for it; such input now raises \c ENCODING-CONVERSION-ERROR as on other

@@ -628,7 +628,7 @@ enum class LocalVarLValueLookup {
 // now shared between parent and child Program objects for top-level local variables with global scope
 class LocalVar {
 public:
-    DLLLOCAL LocalVar(const char* n_name, const QoreTypeInfo* ti) : name(n_name) {
+    DLLLOCAL LocalVar(const char* n_name, const QoreTypeInfo* ti) : name(n_name), decl_seq(getNextDeclarationSeq()) {
         const QoreTypeInfo* base_ti;
         no_narrowing = isNoNarrowMarkerType(ti, base_ti);
         is_auto_type = isAutoTypeInfo(base_ti);
@@ -637,7 +637,7 @@ public:
         updateTypeSubstitutionFlags();
     }
 
-    DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), closure_use(old.closure_use),
+    DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), decl_seq(old.decl_seq), closure_use(old.closure_use),
             parse_assigned(old.parse_assigned), is_self(old.is_self), is_top_level(old.is_top_level),
             is_auto_type(old.is_auto_type), no_narrowing(old.no_narrowing), read_only(old.read_only),
             typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
@@ -1096,8 +1096,20 @@ public:
         narrowedLoc = nullptr;
     }
 
+    //! Returns the next declaration sequence number
+    DLLLOCAL static uint64_t getNextDeclarationSeq();
+
+    //! Returns the sequence number of the variable's declaration; see LocalVarDeclarationOrder
+    /** A copy has the sequence number of the variable it was copied from
+    */
+    DLLLOCAL uint64_t getDeclarationSeq() const {
+        return decl_seq;
+    }
+
 private:
     std::string name;
+    //! the order of the variable's creation at parse time
+    uint64_t decl_seq;
     bool closure_use = false,
         parse_assigned = false,
         //! \c parse_assigned as it stood when the variable left the parse stack; see

@@ -1002,7 +1002,7 @@ public:
    DLLLOCAL ~ThreadSafeLocalVarRuntimeEnvironmentHelper();
 };
 
-typedef std::map<const LocalVar*, ClosureVarValue*> cvar_map_t;
+typedef std::map<const LocalVar*, ClosureVarValue*, LocalVarDeclarationOrder> cvar_map_t;
 typedef std::set<ClosureVarValue*> cvv_set_t;
 
 class ThreadSafeLocalVarRuntimeEnvironment {

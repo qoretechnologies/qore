@@ -1671,6 +1671,22 @@ const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* cur
     return rv;
 }
 
+namespace {
+//! the next declaration sequence number of a local variable
+std::atomic<uint64_t> local_var_decl_seq{0};
+}
+
+uint64_t LocalVar::getNextDeclarationSeq() {
+    return local_var_decl_seq.fetch_add(1, std::memory_order_relaxed);
+}
+
+bool LocalVarDeclarationOrder::operator()(const LocalVar* a, const LocalVar* b) const {
+    uint64_t sa = a->getDeclarationSeq();
+    uint64_t sb = b->getDeclarationSeq();
+    // a copy of a variable has the sequence number of the original; the address orders them
+    return sa != sb ? sa < sb : a < b;
+}
+
 cvv_vec_t* thread_get_closure_vars_for_vlist(const LVarSet* vlist) {
     if (!vlist || vlist->empty()) {
         return nullptr;

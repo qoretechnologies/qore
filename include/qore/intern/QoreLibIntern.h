@@ -822,7 +822,17 @@ static inline long long atoll(const char* str) {
 #endif
 
 typedef std::set<const AbstractQoreNode*> const_node_set_t;
-typedef std::set<LocalVar*> lvar_set_t;
+//! Orders local variables by declaration: the order in which they were created at parse time
+/** Closures capture and release their variables in this order, whatever the addresses of the variables are (a set of
+    pointers ordered by address gave an order that depended on the memory allocator: on musl, a closure released the
+    variable holding the rest of a chain of closures before the one holding its own object, which reversed the order
+    of their destructors); see LocalVar::getDeclarationSeq()
+*/
+struct LocalVarDeclarationOrder {
+    DLLLOCAL bool operator()(const LocalVar* a, const LocalVar* b) const;
+};
+
+typedef std::set<LocalVar*, LocalVarDeclarationOrder> lvar_set_t;
 
 class LVarSet : public lvar_set_t {
 protected:
