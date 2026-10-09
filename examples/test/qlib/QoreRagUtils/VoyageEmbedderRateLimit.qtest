@@ -1,0 +1,567 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# VoyageEmbedderRateLimit.qtest Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreRagTypes.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/VoyageRestClient.qm
+%requires json
+
+%exec-class VoyageEmbedderRateLimitTest
+
+#! Fake Voyage embeddings endpoint driven by a per-test script
+/** Every input "t<N>" is answered with the vector (N, 0.5); the data items are returned in reverse order
+    so the client must restore the input order from their indexes.
+*/
+class FakeVoyageHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! Receives True when a request has arrived
+        Channel arrived(100);
+    }
+
+    private {
+        Mutex m();
+        #! Scripted responses for the next requests; an empty script answers success
+        list<hash<auto>> script = ();
+        #! A response repeated after the script is exhausted
+        *hash<auto> repeat;
+        list<hash<auto>> requests = ();
+    }
+
+    setScript(list<hash<auto>> responses, *hash<auto> repeat) {
+        AutoLock al(m);
+        script = responses;
+        self.repeat = repeat;
+        requests = ();
+        while (arrived.size()) {
+            arrived.recv();
+        }
+    }
+
+    list<hash<auto>> getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        hash<auto> req = parse_json(body);
+        *hash<auto> step;
+        {
+            AutoLock al(m);
+            push requests, {
+                "arrived_us": clock_get_monotonic_us(),
+                "input": req.input,
+                "body": req,
+                "auth": hdr.authorization,
+            };
+            step = script ? shift script : repeat;
+        }
+        arrived.send(True);
+        if (step.status) {
+            return makeResponse(step.status, make_json(step.body ?? {"detail": "scripted failure"}),
+                {"Content-Type": MimeTypeJson} + (step.headers ?? {}));
+        }
+        list<hash<auto>> data = ();
+        int tokens = 0;
+        for (int i = req.input.size() - 1; i >= 0; --i) {
+            string text = req.input[i];
+            float n = (text =~ /^t[0-9]+$/) ? float(text.substr(1)) : -1.0;
+            push data, {"index": i, "embedding": (n, 0.5)};
+            tokens += text.size() / 4 + 1;
+        }
+        return makeResponse(200, make_json({"data": data, "usage": {"total_tokens": tokens}}),
+            {"Content-Type": MimeTypeJson});
+    }
+}
+
+#! Voyage embedder with a test limiter and no jitter, so waits are exact
+class TestVoyageEmbedder inherits VoyageEmbedder {
+    private {
+        *EmbedderRateLimiter test_limiter;
+    }
+
+    constructor(hash<EmbedderConfig> config, *EmbedderRateLimiter limiter) : VoyageEmbedder(config) {
+        test_limiter = limiter;
+    }
+
+    private EmbedderRateLimiter getRateLimiter() {
+        return test_limiter ?? VoyageEmbedder::getRateLimiter();
+    }
+
+    private int jitter(int limit_ms) {
+        return 0;
+    }
+}
+
+class VoyageEmbedderRateLimitTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        FakeVoyageHandler handler;
+        int key_seq = 0;
+    }
+
+    constructor() : Test("VoyageEmbedderRateLimitTest", "1.0") {
+        addTestCase("limiter: request limit spaces concurrent admissions", \testLimiterRequestSpacing());
+        addTestCase("limiter: token limit waits and settling frees capacity", \testLimiterTokens());
+        addTestCase("limiter: block delays admission", \testLimiterBlock());
+        addTestCase("limiter: deadline fails at once when nothing can free capacity",
+            \testLimiterDeadline());
+        addTestCase("limiter: invalid limits are rejected", \testLimiterConfig());
+        addTestCase("limiter: cancellation interrupts an admission wait", \testLimiterCancel());
+        addTestCase("limiter: shared per key", \testSharedRegistry());
+        addTestCase("packing: input limit keeps order", \testPackInputs());
+        addTestCase("packing: token limit and oversized input", \testPackTokens());
+        addTestCase("packing: failed request names its inputs", \testAttribution());
+        addTestCase("packing: preferred batch size", \testPreferredBatchSize());
+        addTestCase("rate limit: concurrent embedders are spaced by the shared limiter",
+            \testEmbedderSpacing());
+        addTestCase("rate limit: 429 with Retry-After is retried after the delay", \testRetryAfter());
+        addTestCase("rate limit: 429 without Retry-After backs off exponentially", \testBackoff());
+        addTestCase("rate limit: exhausted retries raise EMBEDDER-RATE-LIMIT-ERROR", \testExhausted());
+        addTestCase("rate limit: Retry-After beyond the budget fails at once", \testBudget());
+        addTestCase("rate limit: cancellation interrupts the backoff wait", \testCancelBackoff());
+        addTestCase("rate limit: defaults and configured limits", \testLimits());
+        addTestCase("rate limit: transient failures are still retried", \testTransientRetry());
+        addTestCase("dimension: learned once per process", \testSharedDimension());
+        addTestCase("connection: rate limit options", \testConnectionOptions());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("voyage-rate-limit-test", LoggerLevel::getLevelWarn());
+        http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        handler = new FakeVoyageHandler();
+        http.setDefaultHandler("voyage", handler);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete http;
+    }
+
+    #! Each embedder gets its own API key, so the shared limiters of different tests never interact
+    private hash<EmbedderConfig> config(*hash<auto> extra) {
+        return cast<hash<EmbedderConfig>>(<EmbedderConfig>{
+            "backend": "voyage",
+            "url": "http://localhost:" + port,
+            "model": "voyage-4-lite",
+            "api_key": sprintf("key-%d-%d", getpid(), ++key_seq),
+            "retry_max_delay": 0,
+        } + (extra ?? {}));
+    }
+
+    private list<string> inputs(int count, int offset = 0) {
+        return map sprintf("t%d", $1), xrange(offset, offset + count);
+    }
+
+    private assertOrdered(list<list<float>> vectors, int count) {
+        assertEq(count, vectors.size());
+        for (int i = 0; i < count; ++i) {
+            if (vectors[i][0] != float(i)) {
+                fail(sprintf("vector %d is for input %y", i, vectors[i][0]));
+            }
+        }
+    }
+
+    testLimiterRequestSpacing() {
+        EmbedderRateLimiter limiter(2, NOTHING, 300);
+        Queue admitted();
+        Counter done(5);
+        for (int i = 0; i < 5; ++i) {
+            background sub () {
+                on_exit done.dec();
+                int id = limiter.admit(1, clock_get_monotonic_us() + 5000000);
+                admitted.push(clock_get_monotonic_us());
+                limiter.settle(id, 1);
+            }();
+        }
+        done.waitForZero();
+        list<int> times = ();
+        while (admitted.size()) {
+            push times, admitted.get();
+        }
+        times = sort(times);
+        assertEq(5, times.size());
+        for (int i = 2; i < times.size(); ++i) {
+            assertGe(300000, times[i] - times[i - 2], sprintf("admission %d waited for the window", i));
+        }
+    }
+
+    testLimiterTokens() {
+        EmbedderRateLimiter limiter(NOTHING, 100, 60000);
+        int first = limiter.admit(80, clock_get_monotonic_us() + 1000000);
+        Channel admitted(1);
+        int started = clock_get_monotonic_us();
+        background sub () {
+            int id = limiter.admit(50, clock_get_monotonic_us() + 5000000);
+            admitted.send(clock_get_monotonic_us());
+            limiter.settle(id, 50);
+        }();
+        # the provider reported less usage than the estimate, which frees the window for the waiter
+        limiter.settle(first, 10);
+        int when = admitted.recv(5s);
+        assertLt(5000000, when - started, "settled usage admitted the waiter long before the window expired");
+        assertEq({"requests": 2, "tokens": 60}, limiter.usage());
+
+        # a request larger than the token limit is admitted alone, once the window is empty
+        EmbedderRateLimiter small(NOTHING, 10, 200);
+        int id = small.admit(5, clock_get_monotonic_us() + 1000000);
+        small.settle(id, 5);
+        int t0 = clock_get_monotonic_us();
+        small.settle(small.admit(50, clock_get_monotonic_us() + 2000000));
+        assertGe(150000, clock_get_monotonic_us() - t0, "an oversized request waits for an empty window");
+    }
+
+    testLimiterBlock() {
+        EmbedderRateLimiter limiter(100, NOTHING, 60000);
+        limiter.block(300);
+        int t0 = clock_get_monotonic_us();
+        limiter.settle(limiter.admit(1, clock_get_monotonic_us() + 2000000));
+        assertGe(300000, clock_get_monotonic_us() - t0, "a block holds admission for its duration");
+        # an earlier block does not shorten a later one
+        limiter.block(300);
+        limiter.block(10);
+        t0 = clock_get_monotonic_us();
+        limiter.settle(limiter.admit(1, clock_get_monotonic_us() + 2000000));
+        assertGe(300000, clock_get_monotonic_us() - t0);
+    }
+
+    testLimiterDeadline() {
+        EmbedderRateLimiter limiter(1, NOTHING, 60000);
+        limiter.settle(limiter.admit(1, clock_get_monotonic_us() + 1000000));
+        int t0 = clock_get_monotonic_us();
+        try {
+            limiter.admit(1, clock_get_monotonic_us() + 5000000);
+            fail("expected EMBEDDER-RATE-LIMIT-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("EMBEDDER-RATE-LIMIT-ERROR", ex.err);
+            assertEq("rate_limit_wait_deadline", ex.arg.reason_code);
+            assertTrue(ex.arg.retryable);
+            assertGt(50000, ex.arg.wait_ms);
+        }
+        assertLt(1000000, clock_get_monotonic_us() - t0, "nothing in flight: no wait before failing");
+
+        # with a request in flight, the waiter waits until its deadline for it to settle
+        EmbedderRateLimiter busy(1, NOTHING, 60000);
+        busy.admit(1, clock_get_monotonic_us() + 1000000);
+        t0 = clock_get_monotonic_us();
+        assertThrows("EMBEDDER-RATE-LIMIT-ERROR", \busy.admit(), (1, clock_get_monotonic_us() + 200000));
+        assertGe(200000, clock_get_monotonic_us() - t0);
+    }
+
+    testLimiterConfig() {
+        assertThrows("EMBEDDER-RATE-LIMIT-CONFIG-ERROR", sub () { new EmbedderRateLimiter(-1); });
+        assertThrows("EMBEDDER-RATE-LIMIT-CONFIG-ERROR", sub () { new EmbedderRateLimiter(1, -1); });
+        assertThrows("EMBEDDER-RATE-LIMIT-CONFIG-ERROR", sub () { new EmbedderRateLimiter(1, 1, 0); });
+        EmbedderRateLimiter limiter(0, 0);
+        assertEq({"requests": NOTHING, "tokens": NOTHING}, limiter.getLimits(), "zero means unlimited");
+        assertThrows("EMBEDDER-CONFIG-ERROR", sub () {
+            new VoyageEmbedder(config({"requests_per_minute": -1}));
+        });
+        assertThrows("EMBEDDER-CONFIG-ERROR", sub () {
+            new VoyageEmbedder(config({"rate_limit_timeout": 0}));
+        });
+    }
+
+    testLimiterCancel() {
+        EmbedderRateLimiter limiter(2, NOTHING, 60000);
+        limiter.settle(limiter.admit(1, clock_get_monotonic_us() + 1000000));
+        # keep a request in flight so the waiter waits instead of failing at once
+        limiter.admit(1, clock_get_monotonic_us() + 1000000);
+        Channel started(1);
+        Channel done(1);
+        background sub () {
+            started.send(gettid());
+            try {
+                limiter.admit(1, clock_get_monotonic_us() + 50000000);
+                done.send("admitted");
+            } catch (hash<ExceptionInfo> ex) {
+                clear_thread_cancel();
+                done.send(ex.err);
+            }
+        }();
+        int tid = started.recv(2s);
+        int t0 = clock_get_monotonic_us();
+        cancel_thread(tid);
+        assertEq("THREAD-CANCELLED", done.recv(5s));
+        assertLt(5000000, clock_get_monotonic_us() - t0);
+    }
+
+    testSharedRegistry() {
+        string key = sprintf("test|%d|shared", getpid());
+        EmbedderRateLimiter a = EmbedderRateLimiter::getShared(key, 10, 100);
+        EmbedderRateLimiter b = EmbedderRateLimiter::getShared(key, 20, 200);
+        assertTrue(a == b, "one limiter per key");
+        assertEq({"requests": 20, "tokens": 200}, a.getLimits(), "the latest configuration applies");
+        assertFalse(a == EmbedderRateLimiter::getShared(key + "|other", 10, 100));
+    }
+
+    testPackInputs() {
+        handler.setScript(());
+        VoyageEmbedder emb(config());
+        assertOrdered(emb.encodeDocuments(inputs(2500)), 2500);
+        list<hash<auto>> requests = handler.getRequests();
+        assertEq((1000, 1000, 500), map $1.input.size(), requests);
+        assertEq(inputs(1000, 1000), requests[1].input, "requests carry consecutive inputs");
+        assertEq("document", requests[2].body.input_type);
+    }
+
+    testPackTokens() {
+        handler.setScript(());
+        # voyage-4-large: 120,000 tokens per request; an input is estimated at its byte length
+        VoyageEmbedder emb(config({"model": "voyage-4-large"}));
+        assertEq(120000, emb.getMaxTokensPerRequest());
+        list<string> texts = map sprintf("t%d", $1) + strmul(" ", 1000 - sprintf("t%d", $1).size()), xrange(0, 300);
+        list<list<float>> vectors = emb.encodeBatch(texts);
+        assertEq(300, vectors.size());
+        list<hash<auto>> requests = handler.getRequests();
+        assertEq((120, 120, 60), map $1.input.size(), requests);
+
+        # an input larger than the request limit is sent alone, between its neighbors
+        handler.setScript(());
+        texts = ("t0", "t1" + strmul(" ", 130000), "t2");
+        vectors = emb.encodeBatch(texts);
+        assertEq(3, vectors.size());
+        assertEq((1, 1, 1), map $1.input.size(), handler.getRequests());
+
+        # a configured token counter replaces the byte estimate
+        handler.setScript(());
+        emb.setTokenCounter(new FixedTokenCounter(60000));
+        emb.encodeBatch(inputs(5));
+        assertEq((2, 2, 1), map $1.input.size(), handler.getRequests());
+    }
+
+    testAttribution() {
+        handler.setScript(({}, {"status": 503}));
+        VoyageEmbedder emb(config({"max_retries": 0}));
+        try {
+            emb.encodeBatch(inputs(1500));
+            fail("expected a request failure");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(503, ex.arg.status_code);
+            assertEq(1000, ex.arg.input_offset);
+            assertEq(500, ex.arg.input_count);
+        }
+        # a malformed response names its request's inputs as well
+        handler.setScript(({"status": 200, "body": {"data": ()}},));
+        try {
+            emb.encodeBatch(inputs(2));
+            fail("expected EMBEDDER-RESPONSE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("EMBEDDER-RESPONSE-ERROR", ex.err);
+            assertEq(0, ex.arg.input_offset);
+            assertEq(2, ex.arg.input_count);
+        }
+    }
+
+    testPreferredBatchSize() {
+        assertEq(1000, new VoyageEmbedder(config()).getPreferredBatchSize());
+    }
+
+    testEmbedderSpacing() {
+        handler.setScript(());
+        # two requests per 400ms window, shared by independently created embedders
+        EmbedderRateLimiter limiter(2, NOTHING, 400);
+        hash<EmbedderConfig> cfg = config();
+        Counter done(6);
+        Queue errors();
+        for (int i = 0; i < 6; ++i) {
+            background sub () {
+                on_exit done.dec();
+                try {
+                    TestVoyageEmbedder emb(cfg, limiter);
+                    emb.encodeQuery("t0");
+                } catch (hash<ExceptionInfo> ex) {
+                    errors.push(get_exception_string(ex));
+                }
+            }();
+        }
+        done.waitForZero();
+        assertEq(0, errors.size(), errors.size() ? errors.get() : "");
+        list<int> times = sort(map $1.arrived_us, handler.getRequests());
+        assertEq(6, times.size());
+        for (int i = 2; i < times.size(); ++i) {
+            # arrival follows admission by the request latency, which varies a little between requests
+            assertGe(350000, times[i] - times[i - 2], sprintf("request %d waited for the window", i));
+        }
+        assertGe(750000, times[5] - times[0]);
+    }
+
+    testRetryAfter() {
+        handler.setScript(({"status": 429, "headers": {"Retry-After": "1"}},));
+        list<hash<RagTelemetryEvent>> events = ();
+        VoyageEmbedder emb(config({"telemetry_observer": <RagTelemetryObserver>{
+            "event_callback": sub (hash<RagTelemetryEvent> event) { push events, event; },
+        }}));
+        assertOrdered(emb.encodeBatch(inputs(3)), 3);
+        list<hash<auto>> requests = handler.getRequests();
+        assertEq(2, requests.size());
+        assertGe(1000000, requests[1].arrived_us - requests[0].arrived_us, "Retry-After was honored");
+        assertEq(requests[0].input, requests[1].input, "the same inputs are sent again");
+        assertEq(1, events.size());
+        assertEq(429, events[0].error.status_code);
+        assertGe(1000, events[0].attributes.retry_delay_ms);
+    }
+
+    testBackoff() {
+        handler.setScript(({"status": 429}, {"status": 429}));
+        TestVoyageEmbedder emb(config());
+        assertOrdered(emb.encodeBatch(inputs(1)), 1);
+        list<hash<auto>> requests = handler.getRequests();
+        assertEq(3, requests.size());
+        # without jitter: half of 1s, then half of 2s
+        assertGe(500000, requests[1].arrived_us - requests[0].arrived_us);
+        assertGe(1000000, requests[2].arrived_us - requests[1].arrived_us);
+    }
+
+    testExhausted() {
+        handler.setScript((), {"status": 429, "headers": {"Retry-After": "0"},
+            "body": {"detail": "You have exceeded your project's Requests Per Minute (RPM) rate limit"}});
+        VoyageEmbedder emb(config({"rate_limit_max_retries": 2}));
+        try {
+            emb.encodeBatch(inputs(2));
+            fail("expected EMBEDDER-RATE-LIMIT-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("EMBEDDER-RATE-LIMIT-ERROR", ex.err);
+            assertEq("provider_rate_limited", ex.arg.reason_code);
+            assertEq(429, ex.arg.status_code);
+            assertEq(3, ex.arg.attempts);
+            assertEq(0, ex.arg.input_offset);
+            assertEq(2, ex.arg.input_count);
+            assertEq("voyage-4-lite", ex.arg.model);
+            assertRegex("Requests Per Minute", ex.arg.body.detail);
+        }
+        assertEq(3, handler.getRequests().size(), "the initial attempt and two retries");
+        handler.setScript(());
+    }
+
+    testBudget() {
+        handler.setScript(({"status": 429, "headers": {"Retry-After": "60"}},));
+        VoyageEmbedder emb(config({"rate_limit_timeout": 2s}));
+        int t0 = clock_get_monotonic_us();
+        try {
+            emb.encodeBatch(inputs(1));
+            fail("expected EMBEDDER-RATE-LIMIT-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("EMBEDDER-RATE-LIMIT-ERROR", ex.err);
+            assertEq(1, ex.arg.attempts);
+            assertEq(60000, ex.arg.retry_after_ms);
+        }
+        assertLt(1000000, clock_get_monotonic_us() - t0, "a delay beyond the budget is not waited");
+        assertEq(1, handler.getRequests().size());
+
+        # a positive per-call timeout further limits the budget
+        handler.setScript(({"status": 429, "headers": {"Retry-After": "3"}},));
+        emb = new VoyageEmbedder(config());
+        assertThrows("EMBEDDER-RATE-LIMIT-ERROR", \emb.encodeBatch(), (inputs(1), {"timeout": 1s}));
+        assertEq(1, handler.getRequests().size());
+    }
+
+    testCancelBackoff() {
+        handler.setScript(({"status": 429, "headers": {"Retry-After": "30"}},));
+        Channel started(1);
+        Channel done(1);
+        VoyageEmbedder emb(config());
+        background sub () {
+            started.send(gettid());
+            try {
+                emb.encodeBatch(inputs(1));
+                done.send("completed");
+            } catch (hash<ExceptionInfo> ex) {
+                clear_thread_cancel();
+                done.send(ex.err);
+            }
+        }();
+        int tid = started.recv(2s);
+        assertTrue(handler.arrived.recv(5s), "the first request reached the server");
+        int t0 = clock_get_monotonic_us();
+        cancel_thread(tid);
+        assertEq("THREAD-CANCELLED", done.recv(5s));
+        assertLt(5000000, clock_get_monotonic_us() - t0, "cancellation ended the 30s wait");
+        assertEq(1, handler.getRequests().size());
+    }
+
+    testLimits() {
+        assertEq({"requests_per_minute": 1900, "tokens_per_minute": 15200000},
+            new VoyageEmbedder(config()).getRateLimits());
+        assertEq({"requests_per_minute": 1900, "tokens_per_minute": 7600000},
+            new VoyageEmbedder(config({"model": "voyage-4"})).getRateLimits());
+        assertEq({"requests_per_minute": 1900, "tokens_per_minute": 2850000},
+            new VoyageEmbedder(config({"model": "voyage-unknown"})).getRateLimits());
+        assertEq({"requests_per_minute": 500, "tokens_per_minute": 1000},
+            new VoyageEmbedder(config({"requests_per_minute": 500, "tokens_per_minute": 1000}))
+                .getRateLimits());
+        assertEq(320000, new VoyageEmbedder(config({"model": "voyage-4"})).getMaxTokensPerRequest());
+        assertEq(1000000, new VoyageEmbedder(config()).getMaxTokensPerRequest());
+        assertEq(120000, new VoyageEmbedder(config({"model": "voyage-unknown"})).getMaxTokensPerRequest());
+
+        # the configured limit paces real requests: one per window
+        handler.setScript(());
+        hash<EmbedderConfig> cfg = config({"requests_per_minute": 1});
+        VoyageEmbedder emb(cfg);
+        emb.encodeBatch(inputs(1));
+        assertThrows("EMBEDDER-RATE-LIMIT-ERROR", \emb.encodeBatch(), (inputs(1), {"rate_limit_timeout": 100ms}));
+        assertThrows("EMBEDDER-RATE-LIMIT-ERROR", sub () {
+            new VoyageEmbedder(cfg).encodeBatch(inputs(1), {"rate_limit_timeout": 100ms});
+        }, NOTHING, "another embedder with the same key shares the limit");
+        assertEq(1, handler.getRequests().size());
+    }
+
+    testTransientRetry() {
+        handler.setScript(({"status": 503},));
+        VoyageEmbedder emb(config());
+        assertOrdered(emb.encodeBatch(inputs(2)), 2);
+        assertEq(2, handler.getRequests().size());
+    }
+
+    testSharedDimension() {
+        handler.setScript(());
+        hash<EmbedderConfig> cfg = config({"model": "voyage-3.5"});
+        assertEq(2, new VoyageEmbedder(cfg).getDimension());
+        assertEq(1, handler.getRequests().size());
+        assertEq(2, new VoyageEmbedder(cfg).getDimension(), "a new embedder reuses the learned dimension");
+        assertEq(1, handler.getRequests().size());
+        assertFalse(exists handler.getRequests()[0].body.output_dimension,
+            "an unconfigured dimension is not sent");
+    }
+
+    testConnectionOptions() {
+        hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme("voyage");
+        assertEq("int", info.options."requests-per-minute".type);
+        assertEq("int", info.options."tokens-per-minute".type);
+        hash<auto> opts = VoyageRestClient::VoyageRestClientBase::getOptions({
+            "apikey": "k",
+            "requests-per-minute": 100,
+            "tokens-per-minute": 1000,
+        });
+        assertFalse(exists opts."requests-per-minute");
+        assertFalse(exists opts."tokens-per-minute");
+        VoyageRestClient::VoyageRestConnection conn("voyage", "test", "voyage://api.voyageai.com", {}, {
+            "apikey": "k",
+            "requests-per-minute": 100,
+            "tokens-per-minute": 1000,
+        });
+        assertEq(100, conn.getRealOptions()."requests-per-minute");
+    }
+}
+
+#! Counts every input as a fixed number of tokens
+class FixedTokenCounter {
+    private {
+        int tokens;
+    }
+
+    constructor(int tokens) {
+        self.tokens = tokens;
+    }
+
+    int countTokens(string text) {
+        return tokens;
+    }
+}

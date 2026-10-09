@@ -202,7 +202,8 @@ class EmbedderRetryTest inherits QUnit::Test {
     }
     testServerDeadline() {
         handler.setScript(({"status": 429, "headers": {"Retry-After": "60"}},));
-        hash<ExceptionInfo> ex = failure(embedder("voyage"), {"timeout": 100ms});
+        # Voyage applies Retry-After to every embedder sharing the API key, so this case uses its own key
+        hash<ExceptionInfo> ex = failure(embedder("voyage", {"api_key": "retry-after-key"}), {"timeout": 100ms});
         assertEq(1, ex.arg.attempts);
         assertEq(1, handler.getRequests().size());
     }
