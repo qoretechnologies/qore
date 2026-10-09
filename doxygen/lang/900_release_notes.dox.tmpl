@@ -4286,6 +4286,11 @@ while (*binary chunk = input.read(65536)) {
       to start running code, so it ended with \c STACK-LIMIT-EXCEEDED before its first statement; the thread-local
       storage is now added to the stack size of each thread
 
+    - Fixed malformed UTF-8 encoding a value above U+10FFFF not being rejected when converted through a stream (for
+      example with @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream") on Linux with glibc,
+      where a \c "?" was substituted for it; such input now raises \c ENCODING-CONVERSION-ERROR as on other
+      platforms and in string conversions
+
     - Fixed a crash evaluating a deeply nested expression with the AST interpreter on a thread with a small stack, or
       near the end of a thread's stack, such as nested arguments of function, method, static method and closure
       calls, chained assignments and long arithmetic expressions: evaluation recursed once for each level of

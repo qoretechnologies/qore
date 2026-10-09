@@ -201,7 +201,8 @@ public:
 
    //! Returns true if the platform's iconv rejects malformed UTF-8 input
    /** glibc and GNU libiconv fail with \c EILSEQ on malformed UTF-8 input; some versions of Apple's system libiconv
-       convert some malformed sequences, such as a lead byte followed by an ASCII character, without an error.  The
+       convert some malformed sequences, such as a lead byte followed by an ASCII character, without an error, and
+       glibc with \c "//TRANSLIT" (see \c NEED_ICONV_TRANSLIT) substitutes a character for a value above U+10FFFF.  The
        answer is a property of the library %Qore is linked against, so it is probed once with malformed sequences;
        where any of them is accepted, iconv() validates UTF-8 input itself.
    */
@@ -254,15 +255,22 @@ public:
 private:
    //! Performs the one-time probe described by rejectsMalformedUtf8()
    DLLLOCAL static bool probeMalformedUtf8Rejection() {
+      // the probe opens the conversion as conversions are opened: with "//TRANSLIT", glibc substitutes a character
+      // for a value above U+10FFFF and reports it only in the count of non-reversible conversions, which a stream
+      // conversion does not see, while it fails with EILSEQ without it
+#ifdef NEED_ICONV_TRANSLIT
+      iconv_t cd = iconv_open("UTF-16LE//TRANSLIT", "UTF-8");
+#else
       iconv_t cd = iconv_open("UTF-16LE", "UTF-8");
+#endif
       if (cd == (iconv_t)-1) {
          // the probe cannot run; assume the worst and validate UTF-8 input
          return false;
       }
-      // a lead byte followed by ASCII, a lone continuation byte, an overlong form, a surrogate and a value above
-      // U+10FFFF, each followed by ASCII text
+      // a lead byte followed by ASCII, a lone continuation byte, an overlong form, a surrogate, a value above
+      // U+10FFFF and a lead byte of one, each followed by ASCII text
       static const char* const samples[] = {
-         "a\xc2 b", "a\x80 b", "a\xc0\x80 b", "a\xed\xa0\x80 b", "a\xf4\x90\x80\x80 b",
+         "a\xc2 b", "a\x80 b", "a\xc0\x80 b", "a\xed\xa0\x80 b", "a\xf4\x90\x80\x80 b", "a\xf5\x80\x80\x80 b",
       };
       bool rv = true;
       for (const char* sample : samples) {
