@@ -400,11 +400,25 @@ echo "QORE_INCLUDE_DIR=$QORE_INCLUDE_DIR"
 echo "QORE_MODULE_DIR=$QORE_MODULE_DIR"
 echo "LD_PRELOAD=$LD_PRELOAD"
 echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
-echo "QORE_DB_CONNSTR: ${QORE_DB_CONNSTR}"
-echo "QORE_DB_CONNSTR_FREETDS: ${QORE_DB_CONNSTR_FREETDS}"
-echo "QORE_DB_CONNSTR_MYSQL: ${QORE_DB_CONNSTR_MYSQL}"
-echo "QORE_DB_CONNSTR_PGSQL: ${QORE_DB_CONNSTR_PGSQL}"
-echo "QORE_DB_CONNSTR_ORACLE: ${QORE_DB_CONNSTR_ORACLE}"
+# Prints a datasource string with its password replaced by "****", for logs that others can read (CI job logs)
+# The string is split as parseDatasource() splits it: an option string ("{...}") at the end is kept as is, the
+# driver name ends at the first ':', the user name at the first '/' and the password at the last '@'
+mask_connstr() {
+    _cs=$1
+    _opts=""
+    case "$_cs" in
+        *\{*\})
+            _opts="{${_cs##*\{}"
+            _cs=${_cs%\{*}
+            ;;
+    esac
+    printf '%s%s\n' "$(printf '%s\n' "$_cs" | sed -e 's|^\(\([^:/@%]*:\)\{0,1\}[^/]*\)/.*@|\1/****@|')" "$_opts"
+}
+echo "QORE_DB_CONNSTR: $(mask_connstr "${QORE_DB_CONNSTR}")"
+echo "QORE_DB_CONNSTR_FREETDS: $(mask_connstr "${QORE_DB_CONNSTR_FREETDS}")"
+echo "QORE_DB_CONNSTR_MYSQL: $(mask_connstr "${QORE_DB_CONNSTR_MYSQL}")"
+echo "QORE_DB_CONNSTR_PGSQL: $(mask_connstr "${QORE_DB_CONNSTR_PGSQL}")"
+echo "QORE_DB_CONNSTR_ORACLE: $(mask_connstr "${QORE_DB_CONNSTR_ORACLE}")"
 # Mask credentials in REDIS_URL (replace user:pass@ with ***@)
 echo "REDIS_URL: $(echo "${REDIS_URL}" | sed 's|://[^@]*@|://***@|')"
 
