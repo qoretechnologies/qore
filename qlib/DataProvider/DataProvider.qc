@@ -1244,6 +1244,8 @@ string dpql = DataProvider::serializeDpqlExpression(exp);
 # Result: @name == "John"
         @endcode
 
+        @throw DPQL-SERIALIZE-ERROR an operator that takes two arguments has more in the expression
+
         @since DataProvider 3.3
     */
     static string serializeDpqlExpression(hash<DataProviderExpression> exp,
