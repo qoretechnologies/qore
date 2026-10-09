@@ -224,6 +224,7 @@ class GeminiToolSchemaTest inherits QUnit::Test {
                 "mode": {"const": "fast"},
                 "tree": {"$ref": "#/$defs/Node"},
                 "missing": {"$ref": "#/$defs/Missing"},
+                "options": {"type": ("object", "null"), "description": "optional settings"},
             },
         };
     }
@@ -299,11 +300,13 @@ class GeminiToolSchemaTest inherits QUnit::Test {
         hash<GeminiToolParameterSchema> shaped = GeminiBodyShape::shapeToolParameters(Unsupported);
         hash<auto> props = shaped.parameters.properties;
         assertEq((("labels",), ("settings",), ("value",), ("anything",), ("tree", "children", NOTHING),
-            ("missing",)), shaped.stringified);
+            ("missing",), ("options",)), shaped.stringified);
         foreach string name in (("labels", "settings", "value", "anything", "missing")) {
             assertEq("string", props{name}.type, name);
         }
         assertTrue(props.labels.description.find("label map") == 0);
+        assertEq("string", props.options.type);
+        assertTrue(props.options.nullable, "a nullable value sent as JSON text stays nullable");
         assertTrue(props.value.description =~ /anyOf/, "the alternatives are described");
         assertEq({"type": "object", "properties": {}}, props.empty, "a closed empty object needs no text");
         assertEq({"type": "string"}, props.mode, "a constant is a string; its value is a constraint");
@@ -324,6 +327,7 @@ class GeminiToolSchemaTest inherits QUnit::Test {
             "mode": "fast",
             "tree": {"label": "root", "children": ({"label": "a", "children": ({"label": "a1"},)}, {"label": "b"})},
             "missing": {"free": "form"},
+            "options": {"retries": 2},
         };
         assertEq(args, callTool("unsupported", Unsupported,
             GeminiBodyShape::encodeToolArguments(args, shaped.stringified)));

@@ -721,7 +721,8 @@ class GeminiSchemaShaper {
         if (defs) {
             desc += "\nThe schemas that it references with \"$ref\": " + make_json(defs);
         }
-        hash<auto> rv = {
+        # hash<auto!>: a literal of string values would otherwise type the hash as hash<string, string>
+        hash<auto!> rv = {
             "type": "string",
             "description": desc,
         };
