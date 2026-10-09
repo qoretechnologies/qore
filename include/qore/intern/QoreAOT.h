@@ -727,9 +727,9 @@ DLLLOCAL const char* qore_aot_get_compile_runtime_identity();
 extern "C" void qore_aot_fill_module_runtime_identity(QoreModuleInfo* mod_info, const char* identity);
 
 //! Marker and masks encoding the AOT ABI in the existing descriptor API-minor argument.
-/** Runtimes that predate the AOT ABI revision see the tagged value as an unsupported module API.  Runtimes that
-    predate descriptor revision 2 cannot resolve qore_aot_fill_module_runtime_identity(), so they refuse a revision 2
-    module when mapping it with RTLD_NOW (modules with a dependency trailer). */
+/** Runtimes that predate the AOT ABI revision see the tagged value as an unsupported module API.  Generated
+    descriptors reference qore_aot_fill_module_runtime_identity() weakly and only call it when it resolves, so a
+    runtime that predates descriptor revision 2 refuses a revision 2 module with its own ABI revision error. */
 constexpr unsigned QORE_AOT_MODULE_ABI_API_MINOR_MARKER = 0x51410000U;
 constexpr unsigned QORE_AOT_MODULE_ABI_API_MINOR_MARKER_MASK = 0xffff0000U;
 constexpr unsigned QORE_AOT_MODULE_ABI_VERSION_MASK = 0x0000ff00U;
