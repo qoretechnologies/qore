@@ -174,6 +174,7 @@ resp = rc.restGet("/api/data");
     @subsection restclientio_v1_0 Version 1.0
     - added reusable opt-in RestRetryPolicy and inherited request methods, with Retry-After, bounded
       jittered backoff, cancellation, and safe retry observers (issue 5475)
+    - RestRetryOptions::attempt_timeout bounds one attempt, so a stalled attempt is retried within the budget
     - call-local timeout requests now cancel unfinished I/O when their deadline expires
     - a call-local request timeout (restDoRequestWithTimeout(), restPostWithTimeout()) is also the request's transport
       deadline, so it may exceed the client's request timeout; such requests previously failed at the client's timeout
@@ -222,6 +223,13 @@ public namespace RestClientIo {
         timeout retry_timeout = 30s;
         #! An optional positive caller timeout further limits the total budget
         *timeout timeout;
+        #! Optional longest time of one attempt; a value below the budget lets a stalled attempt be retried
+        /** Without it, the first attempt may take the whole remaining budget, so a request whose connection
+            stalls (no response at all) fails at the budget instead of being retried.  An attempt that reaches
+            this limit fails with \c HTTPCLIENT-TIMEOUT, which is retried while the budget allows.  Only set
+            it for requests that are expected to finish well within it.
+        */
+        *timeout attempt_timeout;
         #! Best-effort observer called before each retry, without request/response content
         *code<nothing(hash<RestRetryEvent>)> retry_callback;
     }
@@ -276,9 +284,10 @@ public namespace RestClientIo {
         constructor(*hash<RestRetryOptions> options) {
             self.options = options ?? <RestRetryOptions>{};
             if (self.options.max_retries < 0 || self.options.retry_max_delay < 0
-                    || self.options.retry_timeout <= 0) {
+                    || self.options.retry_timeout <= 0 || self.options.attempt_timeout < 0) {
                 throw "REST-RETRY-OPTION-ERROR",
-                    "max_retries and retry_max_delay must be nonnegative and retry_timeout must be positive";
+                    "max_retries, retry_max_delay and attempt_timeout must be nonnegative and retry_timeout must "
+                    "be positive";
             }
             int budget = self.options.retry_timeout;
             if (self.options.timeout > 0) {
@@ -293,8 +302,9 @@ public namespace RestClientIo {
         }
 
         #! Executes a request with the remaining budget and bounded retries
-        /** @param request callback accepting a positive remaining timeout in milliseconds; it must bound
-                the entire request and cancel unfinished I/O before throwing
+        /** @param request callback accepting a positive timeout in milliseconds - the remaining budget, or the
+                \c attempt_timeout when that is smaller; it must bound the entire request and cancel unfinished
+                I/O before throwing
             @return the successful response
             @throw HTTPCLIENT-TIMEOUT the shared deadline expired before a request could start
             @throw THREAD-CANCELLED the thread was cancelled
@@ -312,8 +322,13 @@ public namespace RestClientIo {
                     throw "HTTPCLIENT-TIMEOUT", "REST retry budget exhausted", {"attempts": attempts};
                 }
                 ++attempts;
+                # a stalled attempt ends at the attempt limit, leaving budget for another attempt
+                int attempt_ms = remaining;
+                if (options.attempt_timeout > 0 && options.attempt_timeout < attempt_ms) {
+                    attempt_ms = options.attempt_timeout;
+                }
                 try {
-                    return request(remaining);
+                    return request(attempt_ms);
                 } catch (hash<ExceptionInfo> ex) {
                     if (inlist(ex.err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED"))) {
                         rethrow;

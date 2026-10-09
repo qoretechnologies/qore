@@ -921,7 +921,7 @@ public class VoyageEmbedder inherits AbstractEmbedder {
                 },
             }, hash<auto> sub () {
                 # a fresh transient-failure budget for each request admitted
-                hash<auto> req_opts = embedderRequestOptions(config, opts, Backend);
+                hash<auto> req_opts = embedderRequestOptions(config, opts, Backend, slice.count);
                 return client.restPostWithRetry("/embeddings", request, NOTHING,
                     req_opts._embedder_retry_policy);
             }, *int sub (hash<auto> resp) {
@@ -1273,7 +1273,12 @@ public class VoyageReranker inherits AbstractReranker {
                 notifyRateLimitEvent(opts ?? {}, event, documents.size());
             },
         }, hash<auto> sub () {
-            return rest_client.restPost("/rerank", body);
+            # a fresh transient-failure budget for each request admitted; a stalled attempt is retried
+            # within it (see AbstractEmbedder::defaultAttemptTimeoutMs())
+            hash<RestClientIo::RestRetryOptions> retry_opts();
+            retry_opts.attempt_timeout = AbstractEmbedder::defaultAttemptTimeoutMs(retry_opts.retry_timeout, 1);
+            return rest_client.restPostWithRetry("/rerank", body, NOTHING,
+                new VoyageTransientRetryPolicy(retry_opts));
         }, *int sub (hash<auto> resp) {
             auto used = resp.body.usage.total_tokens;
             return used.typeCode() == NT_INT ? used : NOTHING;

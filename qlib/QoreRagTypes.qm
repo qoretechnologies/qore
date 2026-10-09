@@ -95,6 +95,8 @@ module QoreRagTypes {
     - initial release
     - HTTP embedders share RestClientIo's bounded transient-failure retries, configurable per embedder
       and per call, with RAG retry telemetry (issue 5475)
+    - EmbedderConfig::attempt_timeout bounds one HTTP attempt so a stalled attempt is retried within the
+      budget; embedders that size their own requests derive it with AbstractEmbedder::defaultAttemptTimeoutMs()
     - added @ref QoreRagUtils::EmbedderRateLimiter "EmbedderRateLimiter", a process-wide requests- and
       tokens-per-minute limiter for provider requests, and the \c requests_per_minute,
       \c tokens_per_minute, \c rate_limit_max_retries, and \c rate_limit_timeout
@@ -245,6 +247,13 @@ public hashdecl EmbedderConfig {
         Per-call options can override all three retry settings.
     */
     timeout retry_timeout = 30s;
+    #! Longest time of one HTTP request attempt, so a stalled attempt is retried within the budget
+    /** See @ref RestClientIo::RestRetryOptions::attempt_timeout.  When unset, embedders that size their own
+        requests (currently @ref QoreRagUtils::VoyageEmbedder "VoyageEmbedder") derive it from the budget (see
+        @ref AbstractEmbedder::defaultAttemptTimeoutMs()); other embedders do not limit an attempt.  Per-call
+        options can override it.
+    */
+    *timeout attempt_timeout;
     #! Client-side requests-per-minute limit for embedders that pace their requests
     /** Honored by embedders with a client-side rate limiter (currently
         @ref QoreRagUtils::VoyageEmbedder "VoyageEmbedder"); when unset, the backend's default for the model
@@ -1058,6 +1067,8 @@ public hashdecl RagProviderInfo {
     - \c max_retries (\c int) — retries per HTTP request after the initial attempt (default three)
     - \c retry_max_delay (\c timeout) — exponential-backoff cap (default 8s)
     - \c retry_timeout (\c timeout) — total budget for HTTP requests and backoff (default 30s)
+    - \c attempt_timeout (\c timeout) — longest time of one HTTP attempt, so a stalled attempt is retried
+      within the budget (see @ref EmbedderConfig::attempt_timeout)
     - \c telemetry_observer and \c telemetry_context — overrides for direct-call retry telemetry
 
     The effective total budget is the smaller of retry_timeout and a positive timeout. Batch slices
@@ -1087,6 +1098,11 @@ public hashdecl RagProviderInfo {
     rate limits) without parsing backend-specific JSON shapes.
 */
 public class AbstractEmbedder {
+    public {
+        #! The most inputs of a request treated as small by @ref defaultAttemptTimeoutMs()
+        const SmallRequestInputs = 32;
+    }
+
     private {
         #! Optional token counter for chunk sizing (an object with int countTokens(string)); see @ref setTokenCounter()
         *object token_counter;
@@ -1114,14 +1130,49 @@ public class AbstractEmbedder {
     */
     abstract list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts);
 
+    #! Returns the default attempt limit of a request whose size is known
+    /** A request is retried after a stall only if its first attempt cannot take the whole budget: a small
+        request (at most @ref SmallRequestInputs inputs, such as a query) gets the smaller of 10 seconds and a
+        third of the budget, so up to three attempts fit; a larger one gets half the budget, so one retry fits
+        while a slow but progressing batch keeps most of the budget.
+
+        @param budget_ms the request's total budget in milliseconds
+        @param input_count the number of inputs in the request
+
+        @return the attempt limit in milliseconds
+    */
+    static int defaultAttemptTimeoutMs(int budget_ms, int input_count) {
+        if (input_count <= SmallRequestInputs) {
+            return max(1, min(10000, budget_ms / 3));
+        }
+        return max(1, budget_ms / 2);
+    }
+
     #! Creates a shared REST retry budget for all HTTP requests in one encodeBatch() call
-    private hash<auto> embedderRequestOptions(hash<EmbedderConfig> config, *hash<auto> opts, string backend) {
+    /** @param config the embedder configuration
+        @param opts per-call options
+        @param backend the backend name for telemetry
+        @param input_count when given, the number of inputs of the request, and an unset \c attempt_timeout is
+            derived from the budget with @ref defaultAttemptTimeoutMs()
+    */
+    private hash<auto> embedderRequestOptions(hash<EmbedderConfig> config, *hash<auto> opts, string backend,
+            *int input_count) {
         hash<auto!> rv = opts ?? {};
+        *timeout attempt_timeout = opts.attempt_timeout ?? config.attempt_timeout;
+        if (!exists attempt_timeout && exists input_count) {
+            int budget = opts.retry_timeout ?? config.retry_timeout;
+            *timeout call_timeout = opts.timeout ?? config.timeout;
+            if (call_timeout > 0 && call_timeout < budget) {
+                budget = call_timeout;
+            }
+            attempt_timeout = defaultAttemptTimeoutMs(budget, input_count);
+        }
         hash<RestClientIo::RestRetryOptions> policy = <RestClientIo::RestRetryOptions>{
             "max_retries": opts.max_retries ?? config.max_retries,
             "retry_max_delay": opts.retry_max_delay ?? config.retry_max_delay,
             "retry_timeout": opts.retry_timeout ?? config.retry_timeout,
             "timeout": opts.timeout ?? config.timeout,
+            "attempt_timeout": attempt_timeout,
             "retry_callback": sub (hash<RestClientIo::RestRetryEvent> event) {
                 notifyEmbedderRetry(config, opts ?? {}, backend, event);
             },
