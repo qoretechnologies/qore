@@ -69,6 +69,18 @@ class ForEachStatement;
 
 class QoreIRLowering;
 
+//! The stack that IR lowering keeps free above the thread's stack limit
+/** Lowering recurses with the nesting of the code, and several of its frames are large (much larger again with
+    AddressSanitizer), so each check leaves room for a few levels of nesting; code nested more deeply than the thread's
+    stack allows for lowering runs on the AST tier, which checks the stack itself and raises \c STACK-LIMIT-EXCEEDED if
+    it runs out.
+*/
+constexpr size_t QORE_IR_LOWERING_STACK_RESERVE = 128 * 1024;
+
+//! The lowering error when the reserve is reached
+constexpr const char* QORE_IR_LOWERING_STACK_ERROR = "the code is nested too deeply to be lowered within the stack of "
+    "this thread";
+
 //! Per-callback state passed to plugin IR lowering hooks.
 /** Plugin lowering callbacks use this object to publish their lowered IR result
  *  and, on failure, the diagnostic that should be propagated to the caller.
@@ -144,6 +156,14 @@ public:
     int compileAllHandlerIRs(std::string& error);
 
 public:
+    //! Returns true if lowering stopped because the thread's stack is too small for the nesting of the code
+    /** The code itself can be lowered; the function runs on the AST tier, which checks the stack as it executes.
+        See QORE_IR_LOWERING_STACK_RESERVE.
+    */
+    bool stackLimitReached() const {
+        return stack_limit_reached;
+    }
+
     // Expression handler methods - public for use by QoreIRExprRegistry
     // These are implementation details not meant for external use
     QoreIRValue lowerConstant(const QoreValue& expr, std::string& error);
@@ -238,6 +258,12 @@ public:
     QoreIRValue lowerStaticCall(const QoreValue& expr, std::string& error);
 
 private:
+    //! set when lowering stopped at QORE_IR_LOWERING_STACK_RESERVE; see stackLimitReached()
+    bool stack_limit_reached = false;
+
+    //! Returns true and sets the lowering error if the thread's stack has reached the lowering reserve
+    bool stackReserveReached(std::string& error);
+
     //! Phase 3b: Analyze handler code for variable references to enable parameter capture
     /** Walks the handler AST to identify which parent scope variables are referenced.
      *  These variables will be passed as parameters to the compiled handler IR function.

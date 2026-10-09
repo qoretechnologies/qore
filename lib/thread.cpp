@@ -1388,6 +1388,24 @@ int check_stack(ExceptionSink* xsink) {
 }
 #endif
 
+bool q_thread_stack_reserve_exceeded(size_t reserve) {
+#ifdef QORE_MANAGE_STACK
+    ThreadData* td = thread_data.get();
+    // a thread with no stack guard has no limit (see QTF_NO_STACK_GUARD)
+    if (!td || !td->stack_limit) {
+        return false;
+    }
+    size_t pos = get_stack_pos();
+#ifdef STACK_DIRECTION_DOWN
+    return pos < td->stack_limit + reserve;
+#else
+    return pos + reserve > td->stack_limit;
+#endif
+#else
+    return false;
+#endif
+}
+
 int q_check_stack(ExceptionSink* xsink) {
 #ifdef QORE_MANAGE_STACK
     return check_stack(xsink);

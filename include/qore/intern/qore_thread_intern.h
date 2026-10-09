@@ -1303,6 +1303,15 @@ DLLLOCAL extern QorePThreadAttr ta_default;
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 #endif
 
+//! Returns true if less than the given number of bytes remain above the current thread's stack limit
+/** For native code that recurses without an exception sink to report check_stack()'s exception, such as IR
+    lowering: it stops before the next recursion step could exhaust the stack.  Always false for a thread with no
+    stack limit, and where the stack is not managed.
+
+    @param reserve the stack, in bytes, that the caller needs before it reaches its next check
+*/
+DLLLOCAL bool q_thread_stack_reserve_exceeded(size_t reserve);
+
 class ParseCodeInfoHelper {
 private:
     const char* parse_code;

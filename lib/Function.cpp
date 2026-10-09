@@ -5637,7 +5637,9 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         if (pgm) {
             pgm->recordIRFallback((std::string("lowering: ") + error).c_str());
         }
-        if (raise_on_failure) {
+        // a stack too small for the nesting of the code is not a gap in IR lowering: the function runs on the AST
+        // tier, which checks the stack as it executes
+        if (raise_on_failure && !lowering.stackLimitReached()) {
             parseException(*signature.getParseLocation(), "IR-COMPILATION-ERROR",
                 "IR lowering of '%s' failed: %s (silent AST fallback disabled)",
                 name ? name : "<fn>", error.c_str());

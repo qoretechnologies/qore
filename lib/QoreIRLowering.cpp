@@ -1352,9 +1352,24 @@ bool QoreIRLowering::tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
     return true;
 }
 
+bool QoreIRLowering::stackReserveReached(std::string& error) {
+    // Lowering recurses with the nesting of the code, and a thread's stack can be smaller than the nesting the parser
+    // accepts requires; lowering stops while enough stack remains for the next steps, and the function runs on the
+    // AST tier, which checks the stack itself as it executes (see QORE_IR_LOWERING_STACK_RESERVE)
+    if (!q_thread_stack_reserve_exceeded(QORE_IR_LOWERING_STACK_RESERVE)) {
+        return false;
+    }
+    stack_limit_reached = true;
+    error = QORE_IR_LOWERING_STACK_ERROR;
+    return true;
+}
+
 bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& error) {
     if (!stmt) {
         error = "null statement for IR lowering";
+        return false;
+    }
+    if (stackReserveReached(error)) {
         return false;
     }
     if (!ensureBuilderContext(error)) {
@@ -5388,6 +5403,9 @@ static const std::string& getIRExprRegistryValidationError() {
 }
 
 QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& error) {
+    if (stackReserveReached(error)) {
+        return QoreIRValue();
+    }
     const std::string& registry_error = getIRExprRegistryValidationError();
     if (!registry_error.empty()) {
         error = registry_error;
