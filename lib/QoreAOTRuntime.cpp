@@ -198,6 +198,7 @@
 #include <chrono>
 #include <deque>
 #include <map>
+#include <set>
 #include <limits>
 #include <unordered_map>
 #include <unordered_set>
@@ -3404,7 +3405,7 @@ std::unique_ptr<QoreIRFunction> QoreAOTContext::materializeDebugIR(
 namespace {
 struct AotPcRange {
     uintptr_t base = 0;     //!< native function start (dladdr dli_saddr)
-    uintptr_t end = 0;      //!< exclusive upper bound (set when the registry is sorted)
+    uintptr_t end = 0;      //!< precise exclusive upper bound, or zero for a lookup-time bound
     uint32_t max_off = 0;   //!< largest mapped function-relative offset
     //! sorted by offset: function-relative native offset -> source location
     std::vector<std::pair<uint32_t, const QoreProgramLocation*>> offmap;
@@ -3420,8 +3421,28 @@ struct AotSymEntry {
 };
 using AotSymMap = std::unordered_map<std::string, AotSymEntry>;
 std::unordered_map<std::string, std::shared_ptr<const AotSymMap>> g_aot_trailer_cache;
-std::vector<AotPcRange> g_aot_pc_ranges;  //!< kept sorted by base once finalized
-bool g_aot_pc_ranges_sorted = true;
+std::map<uintptr_t, AotPcRange> g_aot_pc_ranges;
+// A native image can be registered into several Programs, each with its own
+// destructible context. Registry locations (including their strings) must not
+// borrow from any of them. Intern by value so repeated registrations do not
+// retain another copy. Set nodes stay valid after lookup releases the lock,
+// including while another thread replaces the range for the same native PC.
+// Like the mapped AOT images and trailer cache, these nodes live until exit.
+std::set<std::string> g_aot_pc_loc_strings;
+std::set<QoreProgramLocation> g_aot_pc_locs;
+
+const QoreProgramLocation* internAotPcLocationLocked(const QoreProgramLocation& loc) {
+    auto intern = [](const char* value) -> const char* {
+        // Preserve null versus empty, and canonicalize string pointers for the
+        // existing QoreProgramLocation ordering (which compares their addresses).
+        return value ? g_aot_pc_loc_strings.emplace(value).first->c_str() : nullptr;
+    };
+    QoreProgramLocation owned(loc);
+    owned.setFile(intern(loc.getFile()));
+    owned.setSource(intern(loc.getSource()));
+    owned.setLanguage(intern(loc.getLanguage()));
+    return &*g_aot_pc_locs.insert(owned).first;
+}
 //! Lock-free fast-path: true once any AOT PC range is registered. Lets the throw
 //! path skip the lock entirely in non-AOT programs (the common case).
 std::atomic<bool> g_aot_have_ranges{false};
@@ -3753,13 +3774,27 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
             return a.first < b.first;
         });
     AutoLocker al(g_aot_pcmap_lock);
-    g_aot_pc_ranges.push_back(std::move(range));
-    g_aot_pc_ranges_sorted = false;
+    // Diagnostic metadata publication cannot raise cancellation: this map is
+    // also needed to construct a cancellation exception. There is no xsink at
+    // this boundary. Complete the validated finite map atomically; the caller's
+    // normal execution checks still deliver any pending request.
+    std::unordered_map<const QoreProgramLocation*, const QoreProgramLocation*> interned;
+    for (auto& entry : range.offmap) {
+        auto found = interned.find(entry.second);
+        if (found == interned.end()) {
+            found = interned.emplace(entry.second, internAotPcLocationLocked(*entry.second)).first;
+        }
+        entry.second = found->second;
+    }
+    // One range per native function, not per Program. Keep old interned
+    // locations alive: an exception reader may already have borrowed one.
+    const size_t entry_count = range.offmap.size();
+    g_aot_pc_ranges.insert_or_assign(range.base, std::move(range));
     g_aot_have_ranges.store(true, std::memory_order_release);
     if (getenv("QORE_AOT_LOC_DEBUG")) {
         fprintf(stderr, "AOT-LOC: registered PC range base=0x%lx sym=%s entries=%zu (total=%zu)\n",
             (unsigned long)fn_start, info.dli_sname ? info.dli_sname : "(symtab)",
-            g_aot_pc_ranges.back().offmap.size(),
+            entry_count,
             g_aot_pc_ranges.size());
     }
 }
@@ -3777,28 +3812,6 @@ void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx) {
 }
 
 namespace {
-// Sort the registry by base and fill any missing upper bounds. Call with the lock
-// held. A range whose precise size was unavailable (no ELF symbol size) is bounded
-// by the next range's base, falling back to its last mapped offset for the final one.
-void finalizeAotPcRangesLocked() {
-    if (g_aot_pc_ranges_sorted) {
-        return;
-    }
-    std::sort(g_aot_pc_ranges.begin(), g_aot_pc_ranges.end(),
-        [](const AotPcRange& a, const AotPcRange& b) { return a.base < b.base; });
-    for (size_t i = 0; i < g_aot_pc_ranges.size(); ++i) {
-        AotPcRange& r = g_aot_pc_ranges[i];
-        if (r.end > r.base) {
-            continue;  // precise size already known
-        }
-        uintptr_t next = (i + 1 < g_aot_pc_ranges.size())
-            ? g_aot_pc_ranges[i + 1].base : 0;
-        uintptr_t loose = r.base + r.max_off + 64;
-        r.end = next > r.base ? std::min(next, loose) : loose;
-    }
-    g_aot_pc_ranges_sorted = true;
-}
-
 // Map a native PC to its source location via the registry, or nullptr if the PC is
 // not within a known AOT function.
 const QoreProgramLocation* aotLookupLocForPc(uintptr_t pc) {
@@ -3806,18 +3819,22 @@ const QoreProgramLocation* aotLookupLocForPc(uintptr_t pc) {
     if (g_aot_pc_ranges.empty()) {
         return nullptr;
     }
-    finalizeAotPcRangesLocked();
     // Largest base <= pc.
-    size_t lo = 0, hi = g_aot_pc_ranges.size();
-    while (lo < hi) {
-        size_t mid = (lo + hi) / 2;
-        if (g_aot_pc_ranges[mid].base <= pc) { lo = mid + 1; } else { hi = mid; }
-    }
-    if (lo == 0) {
+    auto next = g_aot_pc_ranges.upper_bound(pc);
+    if (next == g_aot_pc_ranges.begin()) {
         return nullptr;
     }
-    const AotPcRange& r = g_aot_pc_ranges[lo - 1];
-    if (pc < r.base || pc >= r.end) {
+    const AotPcRange& r = std::prev(next)->second;
+    // Without a precise symbol size, bound the range by the next function or
+    // its last mapped offset. Recompute after registrations change the map.
+    uintptr_t end = r.end;
+    if (end <= r.base) {
+        end = r.base + r.max_off + 64;
+        if (next != g_aot_pc_ranges.end()) {
+            end = std::min(end, next->first);
+        }
+    }
+    if (pc >= end) {
         return nullptr;
     }
     uint32_t off = static_cast<uint32_t>(pc - r.base);

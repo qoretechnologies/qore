@@ -6161,3 +6161,102 @@ preparation for stable nullable receivers. Parameter mutation-epoch caching
 already covers optional classes; the remaining target is dispatch/admission,
 not a duplicate local cache. Separately compare polymorphic dispatch with its
 receiver-selection control before attributing its much larger gap to calls.
+
+## Prepared method entry rejected (2026-10-09)
+
+An invocation-local descriptor for stable required/nullable receiver parameters
+did not improve execution time and was removed. The experiment reused the
+caller's existing receiver owner and cached an immutable method-PIC entry;
+live receiver, Program, parse-policy, dispatch-epoch, debugger, publication and
+stack checks remained. It added a 16-byte descriptor and increased the unary
+method helper's AArch64 stack reservation from 400 to 416 bytes.
+
+All four runs used five randomized forks, three warmups and five 500 ms samples
+per fork, with five startup observations. The 135 jobs / 675 timing windows ran
+without concurrent task builds, tests, profiles or evidence computation.
+Baseline was the saved committed `cbc9bfddae5b0039ef63c2efcc2246c299e06eba`
+runtime. Every comparison compiled separate AOT executables. Values below are
+median fork means for whole kernels, in ns/element, not isolated call latency.
+[Evidence](results-prepared-method-rejected-macos-arm64.json) preserves exact
+precommit binary identities, raw windows, statistics and all controls.
+
+The initial implementation omitted recognition of the new helper in the
+compiler's scalar-cleanup guard. At count 1024, seed 810807 (`run-wreqnh_5`),
+nullable calls regressed from 12.031 to 17.258 ns/element (+43.45%) and
+monomorphic calls from 5.328 to 10.280 (+92.95%), both non-overlapping fork
+ranges. Polymorphic, wide callback and arithmetic controls moved +0.73%, +1.42%
+and +0.06%, all overlapping. Java measured 1.673/1.678 ns/element for nullable/
+monomorphic in this run; the rejected candidate does not redefine current Qore
+performance. A same-library compiler-off control, seed 810808 (`run-9j8abnpq`),
+reproduced the nullable +42.91% and monomorphic +94.23% regressions.
+
+After correcting cleanup recognition, same-library compiler-off comparisons
+still showed no benefit:
+
+|!Count / seed / run|!Kernel|!Unprepared|!Prepared|!Change|!Fork ranges overlap
+|1024 / 810809 / run-l_qy_c23|optional_method_call|12.044|12.131|+0.72%|yes
+|1024 / 810809 / run-l_qy_c23|monomorphic_call|5.200|5.224|+0.45%|yes
+|4096 / 810810 / run-vo3mhzks|optional_method_call|10.693|10.909|+2.02%|no
+|4096 / 810810 / run-vo3mhzks|monomorphic_call|3.897|3.925|+0.73%|yes
+
+Range overlap is descriptive, not a significance test. No Java timing was
+collected for the corrected candidate, and no startup/compilation improvement
+is claimed. Replacing PIC lookup with the descriptor did not pay for its
+additional state and guards in these workloads. No prepared-method helper,
+compiler flag, descriptor ABI or special cleanup case is retained.
+
+The initial ownership-fixed candidate passed 35-file release/debug matrices;
+the corrected candidate passed the expanded name-method suite (3 cases, 700
+assertions) and native suite (120 driver assertions plus C++ checks) in both
+builds. Its focused cleanup test failed on the frozen initial compiler and
+passed after recognition was fixed. Both candidates passed six-mode reference
+checks (330 per mode); all timing samples/statistics and artifact hashes were
+independently checked. These are rejected-candidate results, not verification
+of a later committed rebuild.
+
+### Retained PC-location ownership fix
+
+Expanded native stress tests exposed an independent lifetime bug: the
+process-wide native-PC registry borrowed locations and strings from destructible
+Program contexts and accumulated equal-base ranges on repeated registration.
+An exception could read a destroyed prior Program's descriptor. The focused
+`AOTPcLocationLifetime` test independently fails on the saved committed baseline
+by overwriting still-allocated backing strings; it does not rely on allocator
+reuse or dereferencing freed memory.
+
+The registry now interns immutable location/string snapshots under its existing
+lock and stores one range per native function base. Readers can retain borrowed
+snapshot pointers after unlocking, even when another Program replaces a range.
+Unknown symbol bounds are recomputed from the current next range. Like loaded
+AOT images and the trailer cache, interned snapshots live until process exit;
+equal values deduplicate across Programs. No normal-call guard or compiler ABI
+changes are retained. Tests cover O0/O3, lazy/eager attachment, repeated Program
+destruction, concurrent foreign-thread registration, ordinary and inline
+descriptors, and independent backing-string ownership. Native continuation
+tests also retain useful receiver-replacement, readiness and epoch-invalidation
+coverage against the existing v1 helper.
+
+With all prepared code removed, release/debug each pass 35 files (27 QUnit
+files, 72 cases, 4,070 assertions plus eight standalones), six benchmark modes
+pass 330 references each, and 11 harness tests pass. The retained-only precommit
+release library is `7e364f910b1a7ea94c2875c43450a0100af8a2cf5c6f4382033684038ffbecb9`;
+this is distinct from both rejected candidates. Identical-artifact comparisons
+against the saved committed baseline add 200 quiet timing windows:
+
+|!Count / seed / run|!Kernel|!Before|!After|!Change|!Fork ranges overlap
+|1024 / 810811 / run-budwpdbx|optional_method_call|12.016|11.934|-0.69%|yes
+|1024 / 810811 / run-budwpdbx|monomorphic_call|5.324|5.290|-0.64%|yes
+|4096 / 810812 / run-6ddkmnav|optional_method_call|10.635|10.651|+0.16%|yes
+|4096 / 810812 / run-6ddkmnav|monomorphic_call|4.033|3.922|-2.75%|yes
+
+All ranges overlap; no execution or startup gain is claimed. Startup medians
+before/after are 31.309/32.248 ms and 30.875/30.471 ms, also overlapping. Full
+retained-only identities, raw samples, verification and the 62-check audit are
+separate from the rejected candidates in the evidence.
+
+Next experiment: examine per-call stack-check and diagnostic-frame costs.
+Separate cold overflow materialization/exception construction from the hot
+native stack-limit comparison, then inspect generated assembly and measure
+before/after. Preserve native/RSE limits, pending-context materialization,
+diagnostic publication and all existing call semantics. This is a hypothesis,
+not a promised gain or Java-parity claim.

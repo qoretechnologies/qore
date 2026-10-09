@@ -283,6 +283,47 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     assert(!xsink && enumeration->isEnum());
     check(*enumeration, false);
     check(*object, true);
+    // Warm a second receiver class at the same call site, then verify that
+    // subsequent calls still select the original receiver's override.
+    ValueHolder replacement(program->callFunction("makeBaseMethodProbe", nullptr, &xsink), &xsink);
+    assert(!xsink && replacement->getType() == NT_OBJECT);
+    ReferenceHolder<QoreListNode> replacement_args(new QoreListNode(autoTypeInfo), &xsink);
+    replacement_args->push(replacement->refSelf(), &xsink);
+    assert(!xsink);
+    replacement_args->push(QoreValue(int64_t{7}), &xsink);
+    assert(!xsink);
+    ValueHolder replacement_result(program->callFunction(caller_name, *replacement_args, &xsink), &xsink);
+    assert(!xsink && replacement_result->getAsBigInt() == 14);
+    check(*object, true);
+    auto* cache = ctx->call_targets[slot].method_dispatch_cache.load(std::memory_order_acquire);
+    assert(cache);
+    const auto* admitted = cache->entries[0].load(std::memory_order_acquire);
+    assert(admitted && admitted->native_int_uvb);
+    auto* callee = admitted->native_int_uvb->getCachedAOTContext();
+    // Publication readiness remains live even after a successful lookup.
+    bool map_attached = callee->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
+    check(*object, false);
+    callee->pc_loc_map_attached.store(map_attached, std::memory_order_release);
+    check(*object, true);
+    auto normal = callee->pc_loc_fn;
+    callee->pc_loc_fn = nullptr;
+    check(*object, false);
+    callee->pc_loc_fn = normal;
+    check(*object, true);
+    // Publishing a real class invalidates the old dispatch epoch. The
+    // continuation must miss until the ordinary path establishes a fresh key.
+    {
+        QoreProgramHelper mutation(PO_MODERN, xsink);
+        ProgramRuntimeExternalParseContextHelper parse_context(*mutation);
+        assert(parse_context);
+        mutation->parse("%modern\nclass MethodEpochProbe { int probe() { return 1; } }\n",
+            "native-method-epoch", &xsink);
+        assert(!xsink);
+    }
+    check(*object, false);
+    ValueHolder rewarmed(program->callFunction(caller_name, *args, &xsink), &xsink);
+    assert(!xsink && rewarmed->getAsBigInt() == 24);
+    check(*object, true);
     // The guard must reread deletion status, even for an unchanged receiver
     // still owned by both ordinary and opaque references.
     object->get<QoreObject>()->doDelete(&xsink);

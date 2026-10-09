@@ -319,8 +319,9 @@ struct QoreAOTContext {
     /** LLVM inlines AOT functions into one another, and an inlined body's locations belong to the
         callee's table, not this function's.  The PC map carries such locations literally and
         addresses them with indices at or above num_locs; they are materialized here at attach time
-        so the map can hand out stable QoreProgramLocation pointers.  Owned by this context (the
-        destructor deletes them) together with the interned file strings they point at.
+        as inputs to the registry's independently owned, interned snapshots. Owned by this context
+        (the destructor deletes them) together with the file strings they point at; registry readers
+        never borrow these descriptors or strings after attachment returns.
     */
     std::vector<const QoreProgramLocation*> pc_extra_locs;
     //! Backing store for pc_extra_locs file names; QoreProgramLocation::file is a raw pointer that

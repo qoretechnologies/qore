@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AOTPcLocationLifetimeTest
+
+class AOTPcLocationLifetimeTest inherits QUnit::Test {
+    constructor() : Test("AOT PC location lifetime", "1.0", \ARGV) {
+        addTestCase("registry owns locations beyond Program lifetime", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private check() {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        TmpDir dir("qore-pc-location-lifetime-");
+        string source = dir.path + "/pc_location_lifetime.qr";
+        File file();
+        file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
+        file.write("%modern\nint sub pcLifetimeDirect() {\n"
+            "    throw \"PC-LOCATION-LIFETIME\", \"direct\";\n}\n"
+            "int sub pcLifetimeLeaf() {\n"
+            "    throw \"PC-LOCATION-LIFETIME\", \"inline\";\n}\n"
+            "int sub pcLifetimeInline() { return pcLifetimeLeaf(); }\n");
+        file.close();
+        string control = dir.path + "/control.qr";
+        file.open2(control, O_WRONLY | O_CREAT | O_TRUNC);
+        file.write("%modern\nint sub pcLifetimeControl() { return 1; }\n");
+        file.close();
+        string executable = dir.path + "/location-test";
+        string env = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " ";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-pthread", "-g", "-DHAVE_UNIX_CONFIG_H",
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir,
+            get_script_dir() + "/aot_pc_location_lifetime.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", executable);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        foreach string level in (("-O0", "-O3")) {
+            int status;
+            string output = backquote(env + quote(qcc) + " " + level
+                + " -c --batch-script-aggregate=PC_LOCATION_LIFETIME --script-aggregate-native-registers"
+                + " --batch-script-aggregate-output=" + quote(dir.path + "/aggregate.qo")
+                + " --output-dir=" + quote(dir.path) + " " + quote(source) + " " + quote(control)
+                + " 2>&1", \status);
+            assertEq(0, status, output);
+            list<string> objects = glob(dir.path + "/*.qo");
+            assertEq(3, objects.size());
+            output = backquote((map quote($1), args).join(" ") + " "
+                + (map quote($1), objects).join(" ") + " 2>&1", \status);
+            assertEq(0, status, output);
+            foreach string attach in (("", "QORE_AOT_LOC_EAGER_ATTACH=1 ")) {
+                output = backquote(env + attach + quote(executable) + " 2>&1", \status);
+                assertEq(0, status, output);
+                assertEq("aot-pc-location-lifetime: ok\n", output);
+            }
+        }
+    }
+}

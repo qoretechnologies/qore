@@ -356,6 +356,19 @@ iterations show 26.0%/31.7% lower monomorphic kernel time (about 1.85 ns/element
 with 56 bytes of additional runtime text. Other call kinds do not show a repeated
 gain. See `bench/runtime-comparison/results-receiver-validity-macos-arm64.json`.
 
+An invocation-local prepared method-PIC entry for stable required/nullable
+receivers was measured and rejected. After correcting scalar-cleanup integration,
+it showed no improvement at 1024 iterations and a 2.02% nullable regression at
+4096; the descriptor/helper/emitter are not retained. Existing scalar callback
+preparation is unaffected. See
+`bench/runtime-comparison/results-prepared-method-rejected-macos-arm64.json`.
+The experiment's stress tests exposed an independent diagnostic lifetime bug:
+the native-PC registry now owns interned immutable location/string snapshots,
+rather than borrowing from destructible Program contexts. Its locked ordered
+map replaces repeated registrations at the same native function base; old
+snapshot pointers remain valid after readers release the lock. The cache owns
+no Program and deduplicates equal values for the process lifetime.
+
 Plain-class AOT parameters can avoid repeated reload-helper calls only with
 both a compiler proof and live invalidation. Admission excludes written,
 captured, reference/weak, AST-visible, self/top-level and parameterized
