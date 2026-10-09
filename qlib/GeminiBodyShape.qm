@@ -189,6 +189,41 @@ hash<auto> args = GeminiBodyShape::decodeToolArguments({"options": (), "metadata
 # args.metadata is {"env": "prod"}
     @endcode
 
+    @subsection geminibodyshapetoolschemacomplexity Tool catalogs that are too complex
+
+    Gemini rejects a request whose function declarations exceed the budget of its constrained decoder.  The budget
+    is not documented; it depends on the whole catalog (the number and size of the tools together), not on any one
+    schema or nesting depth, and it applies when the model must call a tool (function calling mode \c ANY) without
+    \c allowedFunctionNames.  The same catalog in \c AUTO mode, or restricted to a few tools with
+    \c allowedFunctionNames, is accepted.  Measured with \c gemini-3.7-flash on Vertex AI: real Qorus tool sets of
+    8 and 9 tools (130 KB and 71 KB of declarations) were accepted in unrestricted \c ANY mode, and the same 17 tools
+    together (200 KB) were rejected.
+
+    Gemini answers such a request with HTTP 400, status \c INVALID_ARGUMENT and only the generic message
+    \c "Request contains an invalid argument." (or, on some endpoints, a message about \c "too many states").  The
+    providers recognize exactly this response to a request that declares tools in unrestricted \c ANY mode (see
+    @ref getToolSchemaTooComplexInfo()) and raise @ref ToolSchemaTooComplexError
+    (\c GEMINI-TOOL-SCHEMA-TOO-COMPLEX) with a @ref GeminiToolSchemaTooComplexInfo argument (the number of tools,
+    the size of their declarations, the mode and Gemini's error), instead of a generic \c LLM-ERROR.  Other errors
+    are raised as before.  The remedy is to offer fewer or smaller tools per request, for example with a tiered or
+    two-phase catalog that first offers groups of tools and then the tools of the chosen group, or to restrict the
+    call with \c allowedFunctionNames.
+
+    @par Example
+    @code{.py}
+try {
+    hash<ChatResponse> r = provider.chat(messages, tools, <LlmRequestOptions>{
+        "body_options": {"toolConfig": {"functionCallingConfig": {"mode": "ANY"}}},
+    });
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err != GeminiBodyShape::ToolSchemaTooComplexError) {
+        rethrow;
+    }
+    # offer the tool groups first, then the tools of the chosen group
+    r = chatWithTieredCatalog(messages, tools);
+}
+    @endcode
+
     @section geminibodyshaperelnotes Release Notes
 
     @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
@@ -207,6 +242,9 @@ hash<auto> args = GeminiBodyShape::decodeToolArguments({"options": (), "metadata
       @ref SchemaSummaryMaxChars characters (see @ref geminibodyshapetoolschemas)
     - the constraints that Gemini's schema does not receive (allowed values, defaults, formats, patterns, lengths,
       ranges, item and property counts) are stated in the schema's description (see @ref geminibodyshapetoolschemas)
+    - a request that Gemini rejects because its tool declarations exceed its constrained-decoding budget raises
+      \c GEMINI-TOOL-SCHEMA-TOO-COMPLEX with the number and size of the tools, instead of a generic \c LLM-ERROR
+      (see @ref geminibodyshapetoolschemacomplexity)
 */
 
 #! Contains all public definitions in the GeminiBodyShape module
@@ -2093,6 +2131,31 @@ public string sub requestErrorDetail(hash<ExceptionInfo> ex) {
     if (ex.arg.typeCode() != NT_HASH) {
         return ex.desc;
     }
+    auto body = GeminiBodyShape::requestErrorBody(ex);
+    *string msg;
+    switch (body.typeCode()) {
+        case NT_HASH:
+            msg = body.error.message ?? body.error.status ?? body.message;
+            break;
+        case NT_STRING:
+            msg = body;
+            break;
+    }
+    if (!msg.val()) {
+        return ex.desc;
+    }
+    return sprintf("%s (HTTP %s: %s)", ex.desc, ex.arg.status_code ?? "?", trim(msg));
+}
+
+#! Returns the response body carried by a REST exception, deserialized when it is JSON text
+/** @param ex the REST exception caught from a request
+
+    @return the response body: a hash for a JSON error object, otherwise the body as received, or @ref nothing
+*/
+auto sub requestErrorBody(hash<ExceptionInfo> ex) {
+    if (ex.arg.typeCode() != NT_HASH) {
+        return NOTHING;
+    }
     auto body = ex.arg.body;
     if (body.typeCode() == NT_BINARY) {
         body = body.toString("UTF-8");
@@ -2109,19 +2172,91 @@ public string sub requestErrorDetail(hash<ExceptionInfo> ex) {
     if (body.typeCode() == NT_LIST && body.size() == 1) {
         body = body[0];
     }
-    *string msg;
-    switch (body.typeCode()) {
-        case NT_HASH:
-            msg = body.error.message ?? body.error.status ?? body.message;
-            break;
-        case NT_STRING:
-            msg = body;
-            break;
+    return body;
+}
+
+#! The exception raised when Gemini rejects a request because its tool declarations are too complex
+/** See @ref geminibodyshapetoolschemacomplexity; the exception argument is a
+    @ref GeminiToolSchemaTooComplexInfo hash.
+*/
+public const ToolSchemaTooComplexError = "GEMINI-TOOL-SCHEMA-TOO-COMPLEX";
+
+#! The message of the error response that Gemini returns when the tool declarations exceed its decoding budget
+/** Gemini and Vertex AI return this message with status \c INVALID_ARGUMENT and no further detail; a request that
+    is invalid in another way is answered with a message that names the invalid field.
+*/
+public const ToolSchemaBudgetErrorMessage = "Request contains an invalid argument.";
+
+#! Describes a request that Gemini rejected because its tool declarations are too complex
+/** The argument of a @ref ToolSchemaTooComplexError exception.
+
+    @since GeminiBodyShape 1.0
+*/
+public hashdecl GeminiToolSchemaTooComplexInfo {
+    #! the number of function declarations of the request
+    int tool_count;
+    #! the size of the request's function declarations as JSON, in bytes
+    int declaration_bytes;
+    #! the function calling mode of the request (\c "ANY" for unrestricted any-tool mode)
+    string function_calling_mode;
+    #! Gemini's error status (ex: \c "INVALID_ARGUMENT")
+    string provider_status;
+    #! Gemini's error message
+    string provider_message;
+    #! the HTTP status code of the response
+    int status_code;
+}
+
+#! Returns whether a rejected request failed because its tool declarations are too complex for Gemini
+/** Gemini compiles the function declarations of a request into one constrained-decoding state machine.  When the
+    declarations exceed its budget, it rejects the request with HTTP 400: either with a message that names the
+    \c "too many states" cause, or, in unrestricted any-tool mode (function calling mode \c ANY without
+    \c allowedFunctionNames), with status \c INVALID_ARGUMENT and the generic message
+    @ref ToolSchemaBudgetErrorMessage and no details.  The same request in \c AUTO mode, or restricted with
+    \c allowedFunctionNames, is accepted.
+
+    Only these responses to requests that declare tools are recognized; any other error returns @ref nothing.
+
+    @param request_body the \c generateContent request body that was sent
+    @param ex the exception raised by the request
+
+    @return a description of the rejection, or @ref nothing if the request was not rejected for this reason
+
+    @since GeminiBodyShape 1.0
+*/
+public *hash<GeminiToolSchemaTooComplexInfo> sub getToolSchemaTooComplexInfo(hash<auto> request_body,
+        hash<ExceptionInfo> ex) {
+    if (ex.arg.typeCode() != NT_HASH || ex.arg.status_code != 400) {
+        return NOTHING;
     }
-    if (!msg.val()) {
-        return ex.desc;
+    *list<auto> declarations = request_body.tools[0].functionDeclarations;
+    if (!declarations) {
+        return NOTHING;
     }
-    return sprintf("%s (HTTP %s: %s)", ex.desc, ex.arg.status_code ?? "?", trim(msg));
+    auto body = GeminiBodyShape::requestErrorBody(ex);
+    if (body.typeCode() != NT_HASH || body.error.typeCode() != NT_HASH) {
+        return NOTHING;
+    }
+    hash<auto> error = body.error;
+    string message = error.message.typeCode() == NT_STRING ? error.message : "";
+    string status = error.status.typeCode() == NT_STRING ? error.status : "";
+    *hash<auto> calling = request_body.toolConfig.functionCallingConfig;
+    string mode = calling.mode.typeCode() == NT_STRING ? toupper(calling.mode) : "AUTO";
+    bool too_many_states = message =~ /too many states/i;
+    bool unrestricted_any = mode == "ANY" && !calling.allowedFunctionNames;
+    if (!too_many_states
+            && !(unrestricted_any && status == "INVALID_ARGUMENT" && message == ToolSchemaBudgetErrorMessage
+                && !error.details)) {
+        return NOTHING;
+    }
+    return <GeminiToolSchemaTooComplexInfo>{
+        "tool_count": declarations.size(),
+        "declaration_bytes": make_json(request_body.tools).size(),
+        "function_calling_mode": mode,
+        "provider_status": status,
+        "provider_message": message,
+        "status_code": 400,
+    };
 }
 
 #! Common provider base for Gemini-family models served over different transports
@@ -2222,6 +2357,8 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         @throw LLM-ERROR the request failed or was rejected, the response was
         not an event stream, an event could not be parsed, the stream reported
         an error, or no event arrived within the request timeout
+        @throw GEMINI-TOOL-SCHEMA-TOO-COMPLEX Gemini rejected the request because its tool declarations exceed its
+        constrained-decoding budget (see @ref geminibodyshapetoolschemacomplexity)
         @throw LLM-CANCELLED the request was cancelled with
         @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation"; the connection
         of a stream in flight is closed at once
@@ -2257,6 +2394,7 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             if (ex.err == "LLM-CANCELLED") {
                 rethrow;
             }
+            checkToolSchemaTooComplex(request.body, ex);
             throw "LLM-ERROR",
                 sprintf("%s streaming request to %y failed: %s", getProviderLabel(), path,
                     GeminiBodyShape::requestErrorDetail(ex)), ex;
@@ -2602,10 +2740,35 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             if (ex.err == "LLM-CANCELLED") {
                 rethrow;
             }
+            checkToolSchemaTooComplex(body, ex);
             throw "LLM-ERROR",
                 sprintf("%s request to %y failed: %s", getProviderLabel(), path,
                     GeminiBodyShape::requestErrorDetail(ex)), ex;
         }
+    }
+
+    #! Raises @ref GeminiBodyShape::ToolSchemaTooComplexError if Gemini rejected the request's tool declarations
+    /** @param body the request body that was sent
+        @param ex the exception raised by the request
+
+        @throw GEMINI-TOOL-SCHEMA-TOO-COMPLEX Gemini rejected the request because its tool declarations exceed its
+        constrained-decoding budget (see @ref GeminiBodyShape::getToolSchemaTooComplexInfo()); the argument is a
+        @ref GeminiBodyShape::GeminiToolSchemaTooComplexInfo hash
+    */
+    private checkToolSchemaTooComplex(hash<auto> body, hash<ExceptionInfo> ex) {
+        *hash<GeminiToolSchemaTooComplexInfo> info = GeminiBodyShape::getToolSchemaTooComplexInfo(body, ex);
+        if (!info) {
+            return;
+        }
+        throw GeminiBodyShape::ToolSchemaTooComplexError,
+            sprintf("%s rejected a request with %d tool declarations (%d bytes): they exceed Gemini's "
+                "constrained-decoding budget for the declared tools in %s (HTTP %d %s: %y); offer fewer or "
+                "smaller tools per request (for example with a tiered or two-phase tool catalog), or restrict the "
+                "call to the tools it needs with allowedFunctionNames", getProviderLabel(), info.tool_count,
+                info.declaration_bytes, info.function_calling_mode == "ANY"
+                    ? "unrestricted any-tool mode (function calling mode ANY without allowedFunctionNames)"
+                    : sprintf("function calling mode %s", info.function_calling_mode),
+                info.status_code, info.provider_status, info.provider_message), info;
     }
 
     #! Returns the lazily-initialized REST client (for subclass streaming overrides)

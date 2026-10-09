@@ -30,6 +30,25 @@ class CaptureToolRest inherits RestClientIo::RestClientIo {
     }
 }
 
+#! Answers every generateContent request with an HTTP error, as the REST client raises it
+class ErrorToolRest inherits CaptureToolRest {
+    public {
+        int status_code;
+        hash<auto> error_body;
+    }
+    constructor(int status_code, hash<auto> error_body) : CaptureToolRest({}) {
+        self.status_code = status_code;
+        self.error_body = error_body;
+    }
+    hash<RestClient::RestResponseInfo> restPostWithTimeout(string path, auto body, *hash<auto> hdr, int timeout_ms) {
+        push bodies, body;
+        throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received", status_code), {
+            "status_code": status_code,
+            "body": error_body,
+        };
+    }
+}
+
 class CaptureToolGeminiProvider inherits GeminiRestClient::GeminiLlmProvider {
     private {
         CaptureToolRest rest;
@@ -62,12 +81,16 @@ class FakeGeminiStreamHandler inherits AbstractHttpRequestHandler {
     public {
         list<hash<auto>> chunks;
         list<hash<auto>> requests = ();
+        *hash<auto> error_body;
     }
     constructor(list<hash<auto>> chunks) {
         self.chunks = chunks;
     }
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         push requests, {"path": cx.raw_path, "body": body.val() ? parse_json(body) : {}};
+        if (error_body) {
+            return makeResponse(400, make_json(error_body), {"Content-Type": MimeTypeJson});
+        }
         list<string> frames = map "data: " + make_json($1), chunks;
         return makeResponse(200, frames.join("\n\n") + "\n\n", {"Content-Type": "text/event-stream"});
     }
@@ -265,6 +288,10 @@ class GeminiToolSchemaTest inherits QUnit::Test {
         addTestCase("constraint notes do not change tool calls", \constraintNoteRoundTrip());
         addTestCase("JSON text summaries name every required member", \summaryMembers());
         addTestCase("JSON text summaries are bounded and deterministic", \summaryBound());
+        addTestCase("a tool catalog too complex for any-tool mode raises a specific error", \tooComplex());
+        addTestCase("other errors are raised as before", \tooComplexNot());
+        addTestCase("a streamed tool catalog too complex for any-tool mode raises a specific error",
+            \tooComplexStream());
         set_return_value(main());
     }
 
@@ -637,6 +664,129 @@ class GeminiToolSchemaTest inherits QUnit::Test {
         assertTrue(dms.length() <= GeminiBodyShape::SchemaSummaryMaxChars);
         assertEq(30, (dms =~ x/(field_[0-9]+: \{…\})/g).size(), "every member is kept, its detail is shortened");
         assertFalse(dms =~ /, …\}$/, "no member is cut");
+    }
+
+    #! the error response that Vertex AI returned for a real Qorus tool set in unrestricted any-tool mode
+    const BudgetErrorBody = {"error": {"code": 400, "message": "Request contains an invalid argument.",
+        "status": "INVALID_ARGUMENT"}};
+
+    #! a synthetic stress catalog
+    private list<hash<QoreLlmUtils::ToolDefinition>> stressTools() {
+        list<hash<QoreLlmUtils::ToolDefinition>> rv = ();
+        foreach hash<auto> i in ({"present_choices": PresentChoices, "create_customer": CreateCustomer,
+                "create_order": CreateOrder, "deep": DeepTree, "unsupported": Unsupported,
+                "constrained": Constrained}.pairIterator()) {
+            rv += <QoreLlmUtils::ToolDefinition>{"name": i.key, "description": "stress tool " + i.key,
+                "parameters": i.value};
+        }
+        return rv;
+    }
+
+    private static hash<QoreLlmUtils::LlmRequestOptions> modeOpts(string mode, *list<string> allowed) {
+        hash<auto!> calling = {"mode": mode};
+        if (allowed) {
+            calling.allowedFunctionNames = allowed;
+        }
+        return <QoreLlmUtils::LlmRequestOptions>{"body_options": {"toolConfig": {"functionCallingConfig": calling}}};
+    }
+
+    #! Returns the exception raised by a chat call that answers with the given error
+    private hash<ExceptionInfo> chatError(string mode, int status_code, hash<auto> error_body,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools, *hash<QoreLlmUtils::LlmRequestOptions> opts,
+            reference<list<hash<auto>>> sent) {
+        ErrorToolRest rest(status_code, error_body);
+        try {
+            makeProvider(mode, rest).chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},), tools,
+                opts);
+        } catch (hash<ExceptionInfo> ex) {
+            sent = rest.bodies;
+            return ex;
+        }
+        throw "TEST-ERROR", "the chat call did not fail";
+    }
+
+    tooComplex() {
+        foreach string mode in (("gemini", "vertex")) {
+            list<hash<auto>> sent;
+            hash<ExceptionInfo> ex = chatError(mode, 400, BudgetErrorBody, stressTools(), modeOpts("ANY"), \sent);
+            assertEq(GeminiBodyShape::ToolSchemaTooComplexError, ex.err, mode);
+            assertEq("GEMINI-TOOL-SCHEMA-TOO-COMPLEX", ex.err);
+            assertEq(<GeminiToolSchemaTooComplexInfo>{
+                "tool_count": 6,
+                "declaration_bytes": make_json(sent[0].tools).size(),
+                "function_calling_mode": "ANY",
+                "provider_status": "INVALID_ARGUMENT",
+                "provider_message": "Request contains an invalid argument.",
+                "status_code": 400,
+            }, ex.arg, mode);
+            assertRegex("6 tool declarations \\([0-9]+ bytes\\).*constrained-decoding budget.*unrestricted "
+                "any-tool mode.*tiered or two-phase tool catalog.*allowedFunctionNames", ex.desc, mode);
+            assertEq(1, sent.size(), "a rejected request is not retried");
+        }
+        # a message that names the cause is recognized in any mode
+        list<hash<auto>> sent;
+        hash<ExceptionInfo> ex = chatError("vertex", 400, {"error": {"code": 400, "status": "INVALID_ARGUMENT",
+            "message": "The specified schema produces a constraint that has too many states for serving."}},
+            stressTools(), modeOpts("AUTO"), \sent);
+        assertEq(GeminiBodyShape::ToolSchemaTooComplexError, ex.err);
+        assertEq("AUTO", ex.arg.function_calling_mode);
+    }
+
+    tooComplexNot() {
+        list<hash<auto>> sent;
+        hash<string, list<auto>> cases = {
+            "a request without tools": ("ANY", 400, BudgetErrorBody, NOTHING),
+            "AUTO mode": ("AUTO", 400, BudgetErrorBody, stressTools()),
+            "no tool config (AUTO)": (NOTHING, 400, BudgetErrorBody, stressTools()),
+            "ANY restricted with allowedFunctionNames": ("ANY:deep", 400, BudgetErrorBody, stressTools()),
+            "a 400 naming the invalid field": ("ANY", 400, {"error": {"code": 400, "status": "INVALID_ARGUMENT",
+                "message": "Invalid JSON payload received. Unknown name \"foo\" at 'tools[0]': Cannot find field."}},
+                stressTools()),
+            "a 400 with details": ("ANY", 400, BudgetErrorBody + {"error": BudgetErrorBody.error + {"details": (
+                {"@type": "type.googleapis.com/google.rpc.BadRequest"},)}}, stressTools()),
+            "another status": ("ANY", 400, {"error": {"code": 400, "status": "FAILED_PRECONDITION",
+                "message": "Request contains an invalid argument."}}, stressTools()),
+            "a 500": ("ANY", 500, {"error": {"code": 500, "status": "INTERNAL",
+                "message": "Request contains an invalid argument."}}, stressTools()),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            *string mode = i.value[0];
+            *hash<QoreLlmUtils::LlmRequestOptions> opts;
+            if (mode) {
+                list<string> parts = mode.split(":");
+                opts = modeOpts(parts[0], parts[1] ? (parts[1],) : NOTHING);
+            }
+            hash<ExceptionInfo> ex = chatError("gemini", i.value[1], i.value[2], i.value[3], opts, \sent);
+            assertEq("LLM-ERROR", ex.err, i.key);
+            assertEq("REST-RESPONSE-ERROR", ex.arg.err, i.key + ": the REST error is kept");
+            assertTrue(ex.desc.find(i.value[2].error.message) > 0, i.key + ": the provider message is reported");
+        }
+    }
+
+    tooComplexStream() {
+        Logger logger("test", LoggerLevel::getLevelWarn());
+        HttpServer http(<HttpServerOptionInfo>{"logger": logger, "debug": False});
+        on_exit delete http;
+        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeGeminiStreamHandler handler(());
+        handler.error_body = BudgetErrorBody;
+        http.setHandler("gemini", "/", MimeTypeJson, handler);
+        QoreLlmUtils::LlmBackend llm(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "gemini", "url": "http://localhost:" + port, "model": "gemini-2.5-flash",
+            "api_key": "test-only-key", "max_retries": 0,
+        });
+        code stream = sub (*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+            llm.chatStreamCollect((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},),
+                sub (hash<QoreLlmUtils::ChatStreamEvent> event) {}, stressTools(), opts);
+        };
+        try {
+            stream(modeOpts("ANY"));
+            assertTrue(False, "the stream must fail");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(GeminiBodyShape::ToolSchemaTooComplexError, ex.err);
+            assertEq(6, ex.arg.tool_count);
+        }
+        assertThrows("LLM-ERROR", stream, (modeOpts("AUTO"),));
     }
 
     #! Returns the parameters of a tool as the provider sends them
