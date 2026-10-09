@@ -867,7 +867,9 @@ int stack_size = set_default_thread_stack_size(2 * 1024 * 1024);
 
     @return the value actually set
 
-    @throw SET-DEFAULT-THREAD-STACK-SIZE-ERROR an error occurred setting the default thread stack size
+    @throw SET-DEFAULT-THREAD-STACK-SIZE-ERROR an error occurred setting the default thread stack size, or the size
+    is not larger than the stack that is reserved at the end of each thread's stack for the stack guard (80KB on
+    x86_64 and aarch64), which would leave no stack for the thread to run code
 
     @since %Qore 0.9.0
 */

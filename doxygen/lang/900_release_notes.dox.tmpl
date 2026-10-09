@@ -4250,6 +4250,12 @@ while (*binary chunk = input.read(65536)) {
       operator now block until the command exits, and a cancellation or interrupt ends the wait at once and kills
       the command
 
+    - Fixed @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()" accepting a stack size no
+      larger than the stack reserved at the end of each thread's stack for the stack guard (80KB on x86_64 and
+      aarch64): every thread then raised \c STACK-LIMIT-EXCEEDED as soon as it ran any code, reporting a limit of
+      nearly 2^64 bytes; such a size now raises a \c SET-DEFAULT-THREAD-STACK-SIZE-ERROR exception, and a thread
+      started by other code with such a small stack reports a limit of 0 bytes
+
     - Fixed a crash serializing or deserializing deeply nested data with
       @ref Qore::Serializable "Serializable": serialization and deserialization recursed once for each level of
       nesting without checking the stack, so a value nested more deeply than the thread's stack allows, or

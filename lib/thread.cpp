@@ -619,7 +619,9 @@ public:
                 stack_size = get_stack_size();
             }
             stack_start = get_stack_pos();
-            size_t stack_adjusted_size = stack_size - stack_guard;
+            // a stack no larger than the guard leaves no usable stack: every stack check then fails, instead of the
+            // limit wrapping around and never being reached
+            size_t stack_adjusted_size = stack_size > stack_guard ? stack_size - stack_guard : 0;
             printd(5, "ThreadData::ThreadData() stack_adjusted_size: %lld qore_thread_stack_limit: %lld\n",
                 stack_adjusted_size, qore_thread_stack_limit);
 #ifdef STACK_DIRECTION_DOWN
@@ -668,6 +670,13 @@ public:
         }
 #endif // #ifdef QORE_MANAGE_STACK
     }
+
+#ifdef QORE_MANAGE_STACK
+    //! Returns the stack size of the thread less the stack guard, or 0 if the stack is no larger than the guard
+    DLLLOCAL size_t getUsableStackSize() const {
+        return stack_size > QORE_STACK_GUARD ? stack_size - QORE_STACK_GUARD : 0;
+    }
+#endif
 
     DLLLOCAL ~ThreadData() {
         // delete all user TLD
@@ -774,10 +783,12 @@ public:
     DLLLOCAL void setStackSize(size_t new_stack_size) {
         if (stack_size != new_stack_size) {
             stack_size = new_stack_size;
+            // a stack no larger than the guard leaves no usable stack; see the constructor
+            size_t usable = getUsableStackSize();
 #ifdef STACK_DIRECTION_DOWN
-            stack_limit = stack_start - new_stack_size + QORE_STACK_GUARD;
+            stack_limit = stack_start - usable;
 #else
-            stack_limit = stack_start + new_stack_size - QORE_STACK_GUARD;
+            stack_limit = stack_start + usable;
 #endif
             printd(5, "ThreadData::setStackSize() set stack size to: %lld\n", new_stack_size);
         }
@@ -1356,7 +1367,7 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
     //printd(5, "check_stack() bsp current: %p limit: %p\n", get_rse_bsp(), td->rse_limit);
     if (td->rse_limit < get_rse_bsp()) {
         xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the IA-64 RSE (Register " \
-            "Stack Engine) stack size limit (%ld bytes)", td->stack_size - QORE_STACK_GUARD);
+            "Stack Engine) stack size limit (%ld bytes)", td->getUsableStackSize());
         return -1;
     }
 #endif
@@ -1376,7 +1387,7 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
     if (td->stack_limit < pos) {
 #endif
         xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the stack size limit " \
-            "(%lu bytes)", td->stack_size - QORE_STACK_GUARD);
+            "(%lu bytes)", td->getUsableStackSize());
         return -1;
     }
 
@@ -4216,6 +4227,17 @@ size_t q_thread_get_this_stack_size() {
 
 // returns the default thread stack size set for new threads
 size_t q_thread_set_stack_size(size_t size, ExceptionSink* xsink) {
+#ifdef QORE_MANAGE_STACK
+    // the stack guard is reserved at the end of every thread's stack, so a thread whose stack is no larger than the
+    // guard could not run any code: every stack check would fail
+    if (size <= QORE_STACK_GUARD) {
+        xsink->raiseException("SET-DEFAULT-THREAD-STACK-SIZE-ERROR", "cannot set the default thread stack size to "
+            "%lu bytes; it must be larger than the %lu bytes reserved at the end of each thread's stack for the stack "
+            "guard", size, (size_t)QORE_STACK_GUARD);
+        return 0;
+    }
+#endif
+
     // make sure accesses to stack info are made locked
     AutoLocker al(stack_lck);
 
