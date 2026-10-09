@@ -3606,11 +3606,13 @@ int QuicSession::cancelStream(int64_t stream_id, uint64_t app_error_code, Except
             ngtcp2_conn_get_conn_info(conn_, &cinfo);
             uint64_t now = nowLocked();
             const QuicStreamInfo& si = *it->second;
+            // log the path without its query string, which can carry credentials (e.g. an API key parameter)
+            std::string path = si.path.substr(0, si.path.find('?'));
             qore_async_io_log(QORE_LOG_LEVEL_WARN, "QUIC: cancelling unanswered client stream %lld "
                 "(%s %s) on session %lld after %lld ms: handshake_complete=%d last_rx=%lld ms ago "
                 "pkt_sent=%llu pkt_recv=%llu pkt_lost=%llu bytes_in_flight=%llu cwnd=%llu smoothed_rtt=%lld ms "
                 "loss_timer_in=%lld ms streams=%zu",
-                (long long)stream_id, si.method.c_str(), si.path.c_str(), (long long)session_id_,
+                (long long)stream_id, si.method.c_str(), path.c_str(), (long long)session_id_,
                 si.opened_ts ? (long long)((now - si.opened_ts) / 1000000) : -1LL,
                 (int)isHandshakeComplete(),
                 last_rx_ts_ ? (long long)((now - last_rx_ts_) / 1000000) : -1LL,

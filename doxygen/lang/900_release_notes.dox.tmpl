@@ -165,6 +165,14 @@
     <tt>0.000000000000000000000000000001</tt> for <tt>1e-30n</tt>; the zeros that place its first
     significant digit used to be taken for conversion noise and the value converted to \c "0".
 
+    An HTTP/3 server accepts a client whose first datagram is lost or arrives after the second: a
+    ClientHello with a post-quantum key share spans two datagrams, and the server used to close such a
+    connection, so the client failed with "connection closed by peer" or waited for its connect timeout.
+    The server now answers with a QUIC Retry (<a href="https://datatracker.ietf.org/doc/html/rfc9000#section-8.1.2">RFC 9000
+    section 8.1.2</a>) and accepts the client's next Initial even if its first datagram is lost again.  A
+    client HTTP/3 request cancelled before any response header (for example by its timeout) logs the
+    connection's transport state at warning level to the async I/O logger, to diagnose stalled connections.
+
     HTTP/3 connections on macOS no longer abort the process when the system clock is set back,
     such as when a virtual machine resynchronizes its clock: QUIC timers use a clock that cannot
     go backwards, and a connection never receives a time earlier than one it has already used.

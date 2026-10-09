@@ -99,6 +99,9 @@ hash<RestResponseInfo> resp2 = f2.get(30s);
     and capped at 8s. A policy has a 30s total budget; a positive caller timeout further limits it.
     Retry-After seconds and HTTP dates are honored even when longer than the backoff cap, provided the
     remaining budget permits another request. Setting max_retries to zero disables retries.
+    By default an attempt may use the whole remaining budget; @ref RestClientIo::RestRetryOptions::attempt_timeout
+    "attempt_timeout" bounds one attempt, so an attempt whose connection delivers nothing times out and is
+    retried within the budget.
 
     Only explicitly transient HTTP and transport errors are retried. Cancellation interrupts backoff
     and pending response waits; final request exceptions retain their original error and add an

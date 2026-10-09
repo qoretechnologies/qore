@@ -58,10 +58,39 @@ class PingHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+class StallHandler inherits AbstractHttpRequestHandler {
+    public {
+        Channel release(10);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        release.recv(20s);
+        return makeResponse(200, make_json({"ok": True}), {"Content-Type": MimeTypeJson});
+    }
+}
+
+#! Records the messages logged to the async I/O logger
+class CaptureAppender inherits LoggerAppenderWithLayout {
+    public {
+        Queue messages();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            messages.push(params);
+        }
+    }
+}
+
 class Http3LostFirstInitialTest inherits QUnit::Test {
     private {
         HttpServer mServer;
         string mUrl;
+        StallHandler mStall;
 
         const CertPem = "-----BEGIN CERTIFICATE-----
 MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
@@ -125,6 +154,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("lost first datagram: the server answers with Retry", \testLostFirst());
         addTestCase("lost first datagram after the Retry: the validated client is buffered", \testLostAfterRetry());
         addTestCase("every datagram of a request is delivered after a lost first datagram", \testBody());
+        addTestCase("a cancelled unanswered request logs its transport state without the query",
+            \testStallDiagnostic());
         set_return_value(main());
     }
 
@@ -132,6 +163,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         Logger logger("h3-lost-initial", LoggerLevel::getLevelWarn());
         mServer = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "debug": False});
         mServer.setHandler("ping", "/ping", NOTHING, new PingHandler());
+        mStall = new StallHandler();
+        mServer.setHandler("stall", "/stall", NOTHING, mStall);
         mServer.waitForAsyncIo();
         hash<auto> info = mServer.addQuicListener(<HttpListenerOptionInfo>{
             "cert": new SSLCertificate(CertPem),
@@ -142,6 +175,9 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     globalTearDown() {
+        if (mStall) {
+            mStall.release.send(True);
+        }
         if (mServer) {
             mServer.stop();
         }
@@ -208,5 +244,28 @@ l50Xb2GWQesIt9k5jF5IOw==
             hash<auto> resp = rc.restPost("/ping", {"n": i, "pad": strmul("x", 3000)});
             assertEq(200, resp.status_code);
         }
+    }
+
+    testStallDiagnostic() {
+        Logger logger("h3-diag", LoggerLevel::getLevelWarn());
+        CaptureAppender capture();
+        logger.addAppender(capture);
+        set_async_io_logger(logger);
+        on_exit set_async_io_logger();
+        RestClientIo rc({"url": mUrl, "protocol": "h3", "ssl_verify_cert": False, "data": "json",
+            "timeout": 1s});
+        assertThrows("HTTPCLIENT-TIMEOUT", \rc.restGet(), ("/stall?apikey=secret-value",));
+        mStall.release.send(True);
+        list<string> lines = ();
+        while (capture.messages.size()) {
+            auto m = capture.messages.get();
+            lines += m.typeCode() == NT_STRING ? m : sprintf("%y", m);
+        }
+        *string line = (select lines, $1 =~ /cancelling unanswered client stream/)[0];
+        assertTrue(exists line, sprintf("diagnostic logged: %y", lines));
+        assertRegex("\\(GET /stall\\)", line);
+        assertRegex("handshake_complete=1", line);
+        assertRegex("pkt_recv=[0-9]+", line);
+        assertFalse(line =~ /secret-value/, "the query string is not logged");
     }
 }
