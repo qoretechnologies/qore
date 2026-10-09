@@ -741,6 +741,10 @@ nothing remove_signal_handler(softint signal) [dom=PROCESS;flags=NAMED_ARGS] {
 /** @defgroup async_io_logger_functions Async I/O Logger Functions
     Functions for setting and getting the global async I/O logger used by QUIC, HTTP/3, and
     the @ref Qore::AsyncIoController "AsyncIoController" when no per-controller logger is set.
+
+    QUIC and HTTP/3 messages go to the global async I/O logger; when none is set, they go to the logger of the
+    global async I/O controller (@ref Qore::AsyncIoController::setLogger() "AsyncIoController::setLogger()"), so an
+    application that only sets the controller's logger receives them as well.
  */
 ///@{
 //! Sets the global logger for async I/O, QUIC, and HTTP/3 operations

@@ -176,7 +176,11 @@
     The server now answers with a QUIC Retry (<a href="https://datatracker.ietf.org/doc/html/rfc9000#section-8.1.2">RFC 9000
     section 8.1.2</a>) and accepts the client's next Initial even if its first datagram is lost again.  A
     client HTTP/3 request cancelled before any response header (for example by its timeout) logs the
-    connection's transport state at warning level to the async I/O logger, to diagnose stalled connections.
+    connection's transport state at warning level to the async I/O logger (see @ref Qore::set_async_io_logger()
+    "set_async_io_logger()") or, when none is set, to the async I/O controller's logger, to diagnose stalled
+    connections: how much of the request was sent and acknowledged, when the connection last sent and received, and
+    its flow-control and congestion state.  With \c QORE_QUIC_STALL_TRACE set, it also logs the connection's last
+    QUIC events.
 
     An HTTP/3 client request no longer waits until its timeout when its response arrives while the request is
     still being registered with its connection: the response was kept for the request but never delivered to it.
