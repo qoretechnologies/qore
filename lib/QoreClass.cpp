@@ -1348,6 +1348,19 @@ void qore_class_private::mergeAbstract() {
 void qore_class_private::finalizeBuiltin(const char* nspath) {
     initializeBuiltin();
     initializeMembers();
+    // A builtin class is shared by every Program and can be used by other threads as soon as it is registered, which a
+    // binary module loaded at runtime does while other threads run: the parse state that a parse would otherwise
+    // resolve the first time it reaches the class is resolved now, before the class is published, so that no later
+    // parse writes it while the class is in use
+    parseResolveHierarchy();
+    parseResolveAbstract();
+    // the one-time runtime initialization that a parse commit would otherwise make the first time it reaches the
+    // class, writing flags that share a word with the ones that method calls read
+    {
+        ExceptionSink xsink;
+        parseCommitRuntimeInit(&xsink);
+        assert(!xsink);
+    }
     generateBuiltinSignature(nspath);
 }
 
@@ -5445,7 +5458,7 @@ void qore_class_private::parseWarnAmbiguousOverloads() {
 
 int qore_class_private::parseResolveHierarchy() {
     // nothing is resolved again for a committed user class (see parseInitPartial()); builtin classes are resolved
-    // here when a parse first reaches them
+    // when they are registered (see finalizeBuiltin())
     if (!parse_resolve_hierarchy && !(committed && !sys)) {
         parse_resolve_hierarchy = true;
 

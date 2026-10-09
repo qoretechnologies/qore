@@ -4209,6 +4209,11 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a data race when a binary module loaded at runtime with @ref Qore::load_module() "load_module()" registered
+      classes that other threads used while a @ref Qore::Program "Program" parsed a subclass of one of them: the
+      parse resolved the shared builtin class's hierarchy and initialized it then; builtin classes are now resolved
+      and initialized when they are registered
+
     - Fixed a crash parsing deeply nested code in a thread with a small stack: the parser accepts up to 1000 nested
       syntax elements whatever the thread's stack size, and parse initialization overflowed a small stack before
       reaching that limit; it now raises a parse exception while enough stack remains
