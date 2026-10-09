@@ -29,12 +29,14 @@ class Recorded {
 /** Releasing a deeply nested structure is bounded so that it does not exhaust the thread's stack: lists, hashes and
     objects replay the depth-first order of the recursion, and closures and other runtime values are released as
     before.  The objects they hold must be destroyed in the same order, and before the release returns, at any
-    nesting depth.  See design/deferred-release.md.
+    nesting depth.  See design/deferred-release.md and design/dgc.md, "Deleting long chains".
 */
 class DestructorOrderTest inherits QUnit::Test {
     public {
         #! the nesting, deeper than the depth to which releases recurse on the stack
         const Depth = 40;
+        #! the nesting of the deep closure chain
+        const DeepDepth = 1000;
 
         #! the destructions recorded, and the points before and after each release
         static list<string> events;
@@ -45,6 +47,8 @@ class DestructorOrderTest inherits QUnit::Test {
         addTestCase("nested hashes", \hashTest());
         addTestCase("a chain of objects", \chainTest());
         addTestCase("a chain of closures", \closureTest());
+        addTestCase("a deep chain of closures", \deepClosureTest());
+        addTestCase("a deep chain of self-capturing closures", \deepCycleTest());
         set_return_value(main());
     }
 
@@ -87,9 +91,35 @@ class DestructorOrderTest inherits QUnit::Test {
     }
 
     closureTest() {
+        closureChain(Depth);
+    }
+
+    deepClosureTest() {
+        closureChain(DeepDepth);
+    }
+
+    #! each closure captures itself, so each level is a recursive set collected when the chain is released
+    deepCycleTest() {
+        events = ();
+        *code head;
+        for (int i = DeepDepth - 1; i >= 0; --i) {
+            Recorded o("o" + i);
+            *code inner = head;
+            code c;
+            c = auto sub () { return (c, o, inner); };
+            head = c;
+        }
+        events += "before";
+        remove head;
+        events += "after";
+        assertEq(expected(DeepDepth), events);
+    }
+
+    #! each closure holds an object and captures a variable holding the next closure
+    private closureChain(int depth) {
         events = ();
         *code c;
-        for (int i = Depth - 1; i >= 0; --i) {
+        for (int i = depth - 1; i >= 0; --i) {
             Recorded o("o" + i);
             *code inner = c;
             c = auto sub () { return (o, inner); };
@@ -97,11 +127,11 @@ class DestructorOrderTest inherits QUnit::Test {
         events += "before";
         remove c;
         events += "after";
-        assertEq(expected(), events);
+        assertEq(expected(depth), events);
     }
 
     #! the outermost object is destroyed first, and all of them while the release is made
-    private static list<string> expected() {
-        return ("before",) + (map "o" + $1, xrange(Depth)) + ("after",);
+    private static list<string> expected(int depth = Depth) {
+        return ("before",) + (map "o" + $1, xrange(depth)) + ("after",);
     }
 }

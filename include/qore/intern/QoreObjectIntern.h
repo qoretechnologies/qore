@@ -662,15 +662,10 @@ public:
     */
     DLLLOCAL void customDeref(ExceptionSink* xsink, bool real);
 
-    //! Deletes an object whose last reference has been released, or defers its deletion to a deletion loop
-    /** Deleting an object releases the objects it references, whose deletion would otherwise recurse for each object
-        in a chain of objects.
-
-        @param xsink for exceptions raised by destructors
-        @param cleanup the other members of the object's collected recursive set, which are released after the
-        object's deletion
-    */
-    DLLLOCAL void deleteOrDefer(ExceptionSink* xsink, RSetDerefHelper& cleanup);
+    //! Runs the destructor and releases the object's data; see RObject::deleteOrDefer()
+    DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) {
+        doDeleteIntern(xsink);
+    }
 
     DLLLOCAL void fastDeref();
 

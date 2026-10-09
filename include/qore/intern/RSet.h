@@ -45,6 +45,7 @@
 
 class RSet;
 class RSetHelper;
+class RSetDerefHelper;
 
 #ifdef DEBUG
 //! Returns the number of recursive sets that scans in the current thread have created
@@ -521,6 +522,23 @@ public:
 
     // deletes the object itself
     DLLLOCAL virtual void deleteObject() = 0;
+
+    //! Deletes an object whose last reference has been released, or defers its deletion to a deletion loop
+    /** Deleting an object or a closure-bound variable releases what it holds, whose deletion would otherwise recurse
+        for each link in a chain of objects and closures.  Deletions nested more than 16 deep on the thread's stack are
+        deferred to a loop run by the deletion that is 16 levels up, which makes them in the depth-first order of the
+        recursion; see design/dgc.md, "Deleting long chains".
+
+        @param xsink for exceptions raised by destructors
+        @param cleanup the other members of the object's collected recursive set, which are released after the
+        object's deletion
+    */
+    DLLLOCAL void deleteOrDefer(ExceptionSink* xsink, RSetDerefHelper& cleanup);
+
+    //! Makes the deletion that deleteOrDefer() makes now or defers
+    /** The object must stay allocated until this is called.
+    */
+    DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) = 0;
 
     //! Releases a temporary strong reference retained while a collectable recursive set is torn down
     DLLLOCAL virtual void releaseCycleReference(ExceptionSink* xsink) = 0;

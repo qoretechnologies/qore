@@ -4209,6 +4209,10 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a crash releasing a long chain of closures, each capturing a variable that holds the next one: each
+      closure was released recursively, so a chain of a few thousand closures exhausted a thread's stack; closures
+      are now released iteratively beyond a depth of 16, together with objects, in the same order as before
+
     - Fixed a crash freeing deeply nested code, such as the code of a @ref Qore::Program "Program" deleted in a thread
       with a small stack: each level of nesting was freed recursively, so code nested close to the parser's limit
       exhausted the stack; code nested more than 16 levels deep is now freed iteratively

@@ -895,11 +895,17 @@ If you rely on Pattern A's invariant, verify that the internal-member slot is ac
 
 ## Deleting long chains
 
-Deleting an object releases the objects it references, and deleting those would recurse for each object in a chain.
-`qore_object_private::deleteOrDefer()` deletes objects recursively up to a nesting depth of 16 in a thread and defers
-deeper deletions to a loop with an explicit stack. The loop deletes the objects deferred while deleting an object
-before the remaining objects deferred earlier, so destructors run in the same depth-first order as with recursion, and
-the members retained by a collected recursive set are released after the deferred object's deletion.
+Deleting an object releases the objects and closures it references, and deleting a closure-bound variable releases
+its value, so deleting those would recurse for each link in a chain of objects and closures. `RObject::deleteOrDefer()`
+deletes objects and closure-bound variables recursively up to a combined nesting depth of 16 in a thread and defers
+deeper deletions to a loop with an explicit stack; each `RObject` makes its deletion in `deleteNow()`: an object runs
+its destructor and releases its data, and a closure-bound variable releases its value. The loop deletes the objects
+and variables deferred while deleting one before the remaining ones deferred earlier, so destructors run in the same
+depth-first order as with recursion, and the members retained by a collected recursive set are released after the
+deferred deletion. A deferred object stays allocated while its destructor is in progress; a closure-bound variable
+holds a weak reference from its dereference until its deletion is made (the initial weak reference when its last
+reference was released, or one taken for the deletion when it is collected with its recursive set). The deletion loop
+is per thread, so no lock is involved.
 
 ## `rrefs` / `realRef()`: when to use it
 

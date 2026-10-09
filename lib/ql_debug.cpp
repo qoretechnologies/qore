@@ -712,6 +712,9 @@ public:
     DLLLOCAL virtual void deleteObject() {
     }
 
+    DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) {
+    }
+
     DLLLOCAL virtual void releaseCycleReference(ExceptionSink* xsink) {
     }
 

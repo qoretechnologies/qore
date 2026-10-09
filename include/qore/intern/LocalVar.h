@@ -598,6 +598,16 @@ public:
         deref(xsink);
     }
 
+    //! Releases the value of a variable whose last reference has been released; see RObject::deleteOrDefer()
+    /** Releases the weak reference that keeps the variable allocated until its deletion is made.
+    */
+    DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) {
+        // releasing the value can re-enter deref() for this variable (a closure that captured it), which the weak
+        // reference keeps allocated
+        del(xsink);
+        tDeref();
+    }
+
     // returns the name of the object
     DLLLOCAL virtual const char* getName() const {
         return id;

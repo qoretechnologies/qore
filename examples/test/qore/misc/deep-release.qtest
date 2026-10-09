@@ -16,6 +16,17 @@ class Link {
     }
 }
 
+#! holds a closure
+class Holder {
+    public {
+        code c;
+    }
+
+    constructor(code c) {
+        self.c = c;
+    }
+}
+
 #! Tests that deeply nested data and code are freed on a thread with a small stack
 /** Releasing the last reference to a container, an object or a parse node releases what it holds, so freeing a
     structure nested more deeply than the thread's stack allows recursed once per level and overflowed the stack.
@@ -37,6 +48,9 @@ class DeepReleaseTest inherits QUnit::Test {
         addTestCase("a list of lists", \listTest());
         addTestCase("nested hashes", \hashTest());
         addTestCase("a chain of objects", \objectTest());
+        addTestCase("a chain of closures", \closureTest());
+        addTestCase("a chain of self-capturing closures", \cycleTest());
+        addTestCase("objects and closures", \mixedTest());
         addTestCase("deeply nested code", \codeTest());
         set_return_value(main());
     }
@@ -72,6 +86,47 @@ class DeepReleaseTest inherits QUnit::Test {
                 head = l;
             }
             assertEq("Link", head.className());
+            remove head;
+        });
+    }
+
+    #! each closure captures a variable holding the next one
+    closureTest() {
+        inThread(sub () {
+            *code c;
+            for (int i = 0; i < ChainLength; ++i) {
+                *code inner = c;
+                c = auto sub () { return inner; };
+            }
+            assertEq(NT_CLOSURE, c.typeCode());
+            remove c;
+        });
+    }
+
+    #! each closure captures itself and a variable holding the next one: each level is a recursive set
+    cycleTest() {
+        inThread(sub () {
+            *code head;
+            for (int i = 0; i < ChainLength; ++i) {
+                *code inner = head;
+                code c;
+                c = auto sub () { return (c, inner); };
+                head = c;
+            }
+            assertEq(NT_CLOSURE, head.typeCode());
+            remove head;
+        });
+    }
+
+    #! a chain alternating objects and closures: each object holds a closure capturing the next object
+    mixedTest() {
+        inThread(sub () {
+            *Holder head;
+            for (int i = 0; i < ChainLength; ++i) {
+                *Holder next = head;
+                head = new Holder(auto sub () { return next; });
+            }
+            assertEq("Holder", head.className());
             remove head;
         });
     }
