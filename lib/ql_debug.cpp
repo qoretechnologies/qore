@@ -182,7 +182,7 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
             tref_count = priv->tRefs.reference_count();
             rset = priv->rset.load(std::memory_order_relaxed);
             deferred_scan = priv->deferred_scan;
-            scan_private_data = priv->scan_private_data;
+            scan_private_data = priv->scan_private_data.load(std::memory_order_relaxed);
             status = priv->status;
         }
         s->sprintf("priv: %p elements: %d (cls: %p, type: %s, valid: %s, refs: %d, rrefs: %d, "
@@ -568,6 +568,126 @@ static void ut_rsection_try_notify_does_not_block_on_writer(UnitTestCounters& c)
     UT_ASSERT(c, !notifier.setp, "writer release clears registered notification");
 }
 
+#ifdef DEBUG
+namespace {
+//! State for ut_cond_wait_cancel_in_window(); see there
+struct CondWindowTest {
+    //! the waiter's mutex and condition; the condition is never signalled except by the cancellation
+    QoreThreadLock m;
+    QoreCondition cond;
+    //! synchronizes the test with the waiter's hook
+    QoreThreadLock sync_lck;
+    QoreCondition sync_cond;
+    int waiter_tid = 0;
+    bool in_window = false;
+    bool cancelled = false;
+    bool done = false;
+    int result = -1;
+};
+
+std::atomic<CondWindowTest*> cond_window_test{nullptr};
+
+//! Holds the waiter after its last check for a request and before it blocks, until the request has been made
+void cond_window_hook() {
+    CondWindowTest* t = cond_window_test.load();
+    if (!t || q_gettid() != t->waiter_tid) {
+        return;
+    }
+    AutoLocker al(t->sync_lck);
+    t->in_window = true;
+    t->sync_cond.broadcast();
+    while (!t->cancelled) {
+        t->sync_cond.wait(&t->sync_lck);
+    }
+}
+
+void cond_window_waiter(ExceptionSink* xsink, void* arg) {
+    CondWindowTest* t = static_cast<CondWindowTest*>(arg);
+    {
+        AutoLocker al(t->sync_lck);
+        t->waiter_tid = q_gettid();
+        t->sync_cond.broadcast();
+    }
+    int rc;
+    {
+        AutoLocker al(t->m);
+        rc = t->cond.waitWithInterrupt(&t->m, xsink);
+    }
+    // the cancellation exception is expected
+    xsink->clear();
+    AutoLocker al(t->sync_lck);
+    t->result = rc;
+    t->done = true;
+    t->sync_cond.broadcast();
+}
+
+//! waits for a predicate on CondWindowTest for up to 10 seconds; sync_lck is held
+template <typename P>
+bool cond_window_wait(CondWindowTest& t, P pred) {
+    int64 deadline_us = q_get_monotonic_us() + 10000000;
+    while (!pred()) {
+        int64 remaining_us = deadline_us - q_get_monotonic_us();
+        if (remaining_us <= 0) {
+            return false;
+        }
+        t.sync_cond.wait2(&t.sync_lck, (remaining_us + 999) / 1000);
+    }
+    return true;
+}
+}
+
+//! A cancellation requested while a waiter is between its last check for a request and its wait is not lost
+/** The waiter holds its mutex from its check until pthread_cond_wait() releases it; a broadcast in that window
+    without the mutex was lost, and the waiter then slept until something else signalled its condition (here:
+    never).  The hook holds the waiter in exactly that window while the request is made.
+*/
+static void ut_cond_wait_cancel_in_window(UnitTestCounters& c) {
+    CondWindowTest t;
+    // installs the hook for the lifetime of the test; the waiter has finished when the test returns
+    struct HookHelper {
+        DLLLOCAL HookHelper(CondWindowTest* t) {
+            cond_window_test = t;
+            qore_cond_wait_window_hook = cond_window_hook;
+        }
+        DLLLOCAL ~HookHelper() {
+            qore_cond_wait_window_hook = nullptr;
+            cond_window_test = nullptr;
+        }
+    } hook_helper(&t);
+
+    ExceptionSink xsink;
+    if (q_start_thread(&xsink, cond_window_waiter, &t) < 0) {
+        UT_ASSERT(c, false, "the waiter thread starts");
+        xsink.clear();
+        return;
+    }
+    SafeLocker sl(t.sync_lck);
+    bool in_window = cond_window_wait(t, [&t] () { return t.in_window; });
+    UT_ASSERT(c, in_window, "the waiter reaches the window between its check and its wait");
+    int tid = t.waiter_tid;
+    sl.unlock();
+    UT_ASSERT_EQ(c, 0, qore_cancel_thread(tid, "cond window test"), "the request is delivered");
+    sl.lock();
+    t.cancelled = true;
+    t.sync_cond.broadcast();
+    bool woken = cond_window_wait(t, [&t] () { return t.done; });
+    UT_ASSERT(c, woken, "the waiter is woken by a request made in the window");
+    if (!woken) {
+        // release the waiter so that the test can end
+        sl.unlock();
+        {
+            AutoLocker al(t.m);
+            t.cond.broadcast();
+        }
+        sl.lock();
+        while (!t.done) {
+            t.sync_cond.wait(&t.sync_lck);
+        }
+    }
+    UT_ASSERT_EQ(c, QORE_COND_RESULT_INTERRUPTED, t.result, "the wait reports the cancellation");
+}
+#endif
+
 //! Minimal RObject for the deterministic garbage collection scan generation test
 /** Nothing about this object participates in a cycle: it exists only to count how often the scanner
     walks it and to expose the scan generation it maintains.
@@ -590,6 +710,9 @@ public:
     }
 
     DLLLOCAL virtual void deleteObject() {
+    }
+
+    DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) {
     }
 
     DLLLOCAL virtual void releaseCycleReference(ExceptionSink* xsink) {
@@ -3655,6 +3778,13 @@ static void ut_negotiate_close_cancels_after_closed_state(UnitTestCounters& c) {
 
     int cache_before = ctl_priv_holder->getCacheSize();
 
+    // the state shared with the server's connection handler must outlive the server: its destructor joins the
+    // server thread, which can still be using them after this function has released the handler
+    std::mutex mu;
+    std::condition_variable cv;
+    bool accepted = false;
+    bool release_server = false;
+
     UtH1Server server;
     if (server.start() != 0) {
         UT_ASSERT(c, false, "negotiate close test server bind/listen failed");
@@ -3671,11 +3801,6 @@ static void ut_negotiate_close_cancels_after_closed_state(UnitTestCounters& c) {
         xsink.clear();
         return;
     }
-
-    std::mutex mu;
-    std::condition_variable cv;
-    bool accepted = false;
-    bool release_server = false;
 
     server.serveOnce([&](int cfd) {
         (void)cfd;
@@ -4982,6 +5107,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 #ifdef DEBUG
     AsyncIoCloseTest::resize(c);
     AsyncIoCloseTest::run(c);
+    ut_cond_wait_cancel_in_window(c);
 #endif
     ut_asyncio_autostop(c);
     ut_asyncio_start_stop(c);
@@ -5171,6 +5297,24 @@ static QoreValue f_dbg_get_lvalue_scan_count(const QoreListNode* params, Runtime
 */
 static QoreValue f_dbg_get_scan_object_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return q_get_scan_object_count();
+}
+
+//! returns the number of regions whose dependencies scans in the current thread have walked
+/** A scan that reaches an object of a closed region decides whether the region is current, which can mean walking
+    the regions it depends on; tests use this to verify that a region found current is not walked again while
+    nothing has changed.
+*/
+static QoreValue f_dbg_get_region_walk_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return q_get_region_walk_count();
+}
+
+//! returns the number of heap integers that exist in the process
+/** An integer outside the inline (48-bit) range of a value is a heap object; code that does not release one leaks
+    it, so tests compare the count before and after the code under test, in every execution mode and on every
+    platform.
+*/
+static QoreValue f_dbg_get_live_bigint_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return q_get_live_bigint_count();
 }
 
 //! returns the number of recursive sets that scans in the current thread have created
@@ -5842,6 +5986,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_region_walk_count", f_dbg_get_region_walk_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_live_bigint_count", f_dbg_get_live_bigint_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_rset_create_count", f_dbg_get_rset_create_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);

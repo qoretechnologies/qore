@@ -136,7 +136,8 @@ public:
     DLLLOCAL void clear(ExceptionSink* xsink);
     DLLLOCAL void clearConstants(QoreListNode& l);
     DLLLOCAL void clearConstants(ExceptionSink* xsink);
-    DLLLOCAL void deleteClassData(bool deref_vars, ExceptionSink* xsink);
+    //! releases the class data held by the Program whose namespace is deleted; see qore_class_private::deleteClassData()
+    DLLLOCAL void deleteClassData(bool deref_vars, const QoreProgram* pgm, ExceptionSink* xsink);
 };
 
 class ClassListIterator {

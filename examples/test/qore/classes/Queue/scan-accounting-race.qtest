@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class QueueScanAccountingRaceTest
+
+#! a value that can be part of a reference cycle, so a queue holding it is scanned by the garbage collector
+class ScanValue {
+}
+
+class QueueScanAccountingRaceTest inherits QUnit::Test {
+    public {
+        #! the number of queues shared by the threads
+        const QueueCount = 2;
+        #! the number of threads using the queues
+        const ThreadCount = 8;
+        #! the number of operations each thread makes
+        const Iterations = 20000;
+
+        #! the error set by setError() in the test; pushes and takes made while it is set fail with it
+        const TestError = "SCAN-ACCOUNTING-TEST";
+    }
+
+    constructor() : QUnit::Test("Queue scan accounting race", "1.0") {
+        addTestCase("scan accounting with concurrent pushes and takes", \raceTest());
+        set_return_value(main());
+    }
+
+    #! many threads push scannable values and take them with tryGet(), tryPop(), clear() and setError() on shared queues
+    /** A queue counts the scannable values it holds, and while it holds any the object's private data scan count
+        includes it; the count of the object must follow the queue's count in the same order as the queue's
+        transitions.  When it does not, a take decrements the object's count before the push that made the queue's
+        count non-zero has incremented it, which the library asserts against in debug builds; and once the threads
+        are done, the object's count must be 1 for a queue that holds values and 0 for an empty one.
+    */
+    raceTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_node_info() requires library debugging");
+        }
+
+        list<Queue> queues = map new Queue(), xrange(QueueCount);
+        Queue<hash<ExceptionInfo>> errors();
+        Counter running(ThreadCount);
+        for (int t = 0; t < ThreadCount; ++t) {
+            background run(t, queues, errors, running);
+        }
+        running.waitForZero();
+
+        list<hash<ExceptionInfo>> unexpected;
+        while (*hash<QueueTryResult<hash<ExceptionInfo>>> r = errors.tryGet()) {
+            unexpected += r.value;
+        }
+        assertEq(0, unexpected.size(), sprintf("unexpected errors: %y",
+            (map sprintf("%s: %s", $1.err, $1.desc), unexpected)));
+
+        foreach Queue q in (queues) {
+            # every value in the queues can be part of a cycle, so a queue that holds any is counted once
+            assertEq(q.empty() ? 0 : 1, getScanPrivateData(q), sprintf("queue %d holds %d value(s)", $#, q.size()));
+            q.clear();
+            assertEq(0, getScanPrivateData(q), sprintf("queue %d after clear()", $#));
+        }
+    }
+
+    #! one thread's operations: a push followed by one of the ways to take values
+    private run(int t, list<Queue> queues, Queue<hash<ExceptionInfo>> errors, Counter running) {
+        on_exit {
+            running.dec();
+        }
+        try {
+            for (int i = 0; i < Iterations; ++i) {
+                Queue q = queues[(t + i) % QueueCount];
+                try {
+                    q.push(new ScanValue());
+                    switch ((t + i) % 8) {
+                        case 0:
+                        case 1:
+                            q.tryGet();
+                            break;
+                        case 2:
+                        case 3:
+                            q.tryPop();
+                            break;
+                        case 4:
+                        case 5:
+                            q.clear();
+                            break;
+                        case 6:
+                            q.setError(TestError, "the queue is cleared by setError()");
+                            q.clearError();
+                            break;
+                        # case 7: the value is left for the other threads to take
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # another thread set the queue's error between this thread's operations
+                    if (ex.err != TestError) {
+                        rethrow;
+                    }
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors.push(ex);
+        }
+    }
+
+    #! returns the private data scan count of the given object as reported by dbg_node_info()
+    private static int getScanPrivateData(object obj) {
+        *list<*string> m = (call_function("dbg_node_info", obj, True) =~ x/scan_private_data: ([0-9-]+)/);
+        return m[0].toInt();
+    }
+}

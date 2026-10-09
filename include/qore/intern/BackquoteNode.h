@@ -71,4 +71,40 @@ protected:
 
 DLLLOCAL QoreStringNode *backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink);
 
+#ifndef _Q_WINDOWS
+#include <sys/types.h>
+
+//! the result of qore_wait_child_process()
+enum class QoreChildWaitResult {
+    EXITED,         //!< the process ended; its wait status is available
+    WAIT_FAILED,    //!< waitpid() failed with the errno value given; no exception is raised
+    RAISED,         //!< an exception was raised: the wait was cancelled or could not be made; the process is reaped
+};
+
+//! waits for a child process to end; the wait can be cancelled
+/** The calling thread blocks until the process ends or the thread is cancelled, or its Program is interrupted by its
+    SandboxManager; there is no polling: a helper thread blocks in waitpid() and wakes the caller, and cancellation
+    wakes the caller through its interruptible condition wait.
+
+    When the wait is cancelled, or the helper thread cannot be started, \a kill_target (the process, or its process
+    group as a negative number) is killed with SIGKILL, the process is reaped, and an exception is raised.
+
+    @param pid the child process to wait for
+    @param kill_target the argument for kill() to terminate the process: \a pid or the process group as -pgid
+    @param status the wait status of the process if QoreChildWaitResult::EXITED is returned
+    @param wait_errno the errno value of waitpid() if QoreChildWaitResult::WAIT_FAILED is returned
+    @param err the exception code raised if the helper thread cannot be started
+    @param xsink for the exception raised
+
+    @return the result of the wait
+*/
+DLLLOCAL QoreChildWaitResult qore_wait_child_process(pid_t pid, pid_t kill_target, int& status, int& wait_errno,
+        const char* err, ExceptionSink* xsink);
+
+//! reaps a child process, blocking until it ends; waitpid() is retried when interrupted by a signal
+/** @return 0 if the process was reaped and \a status is set, -1 if waitpid() failed (errno is set)
+*/
+DLLLOCAL int qore_reap_child_process(pid_t pid, int& status);
+#endif
+
 #endif

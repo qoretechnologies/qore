@@ -24,12 +24,53 @@ class TestMcpServerHandler inherits McpServerHandler {
     bool getNeedsMap(string name) {
         return tmap{name}.needs_map ?? False;
     }
+
+    #! Looks up a field's allowed values on demand, as a subclass's lookup tool would
+    *list<hash<AllowedValueInfo>> lookUp(AbstractDataField field, AbstractDataProvider prov) {
+        return getAllowedValues(field, prov);
+    }
+}
+
+#! Names a lookup tool in the description of a reference-data parameter
+class LookupMcpServerHandler inherits TestMcpServerHandler {
+    private string getReferenceDataDescription(string name, string ref_data, *AbstractDataProvider prov) {
+        return sprintf("Find %s with tool lookup-%s of %s.", name, ref_data, prov ? prov.getName() : "n/a");
+    }
+}
+
+#! Gives reference data from the connected system and counts each read
+class CustomerProvider inherits AbstractDataProvider {
+    public {
+        int reads = 0;
+    }
+
+    private {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "CustomerProvider",
+        };
+    }
+
+    string getName() {
+        return "customers";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        ++reads;
+        return map <AllowedValueInfo>{"value": sprintf("gid://shopify/Customer/%d", $1)}, range(1, 4);
+    }
 }
 
 public class McpServerHandlerTypeInfoTest inherits QUnit::Test {
     constructor() : Test("McpServerHandler tools from type descriptions", "1.0") {
         addTestCase("a type description gives the schema of its type", \equivalenceTest());
         addTestCase("constraints are published as JSON schema keywords", \constraintTest());
+        addTestCase("reference data is described, never listed or read for a schema", \referenceDataTest());
+        addTestCase("a subclass names its lookup for reference data", \referenceDataLookupTest());
+        addTestCase("fixed values are listed up to the bound", \fixedValueBoundTest());
         set_return_value(main());
     }
 
@@ -84,5 +125,105 @@ public class McpServerHandlerTypeInfoTest inherits QUnit::Test {
         assertEq(("fast", "slow"), props.mode."enum");
         assertEq({}, props.either);
         assertEq(("name", "code", "either", "inner"), handler.getInput("tool").required);
+    }
+
+    #! Returns an input type with a reference-data parameter, a fixed-value parameter and a plain one
+    private static HashDataType getReferenceInputType() {
+        HashDataType type("CustomerTag");
+        type.addQoreFields({
+            "customerId": {"name": "customerId", "type": AbstractDataProviderTypeMap."string",
+                "desc": "The customer", "attr": {"ref_data": "customerId"}},
+            "mode": {"name": "mode", "type": AbstractDataProviderTypeMap."*string", "allowed_values": (
+                <AllowedValueInfo>{"value": "add"}, <AllowedValueInfo>{"value": "remove"}),
+                "attr": {"ref_data": "mode"}},
+            "note": {"name": "note", "type": AbstractDataProviderTypeMap."*string"},
+        });
+        return type;
+    }
+
+    referenceDataTest() {
+        TestMcpServerHandler handler();
+        CustomerProvider prov();
+        HashDataType type = getReferenceInputType();
+        handler.registerTool("from-type", "a tool", type, sub (auto v) {}, NOTHING, NOTHING, prov);
+        handler.registerToolWithTypeInfo("from-info", "a tool", type.getInfo(), sub (auto v) {}, NOTHING,
+            NOTHING, prov);
+        # building either schema reads nothing from the connected system
+        assertEq(0, prov.reads);
+        foreach string tool in (("from-type", "from-info")) {
+            hash<auto> props = handler.getInput(tool).properties;
+            assertFalse(props.customerId.hasKey("enum"), tool);
+            assertRegex("^The customer The value identifies an existing record of the connected system "
+                "\\(reference data \"customerId\"\\)", props.customerId.description, tool);
+            assertEq("string", props.customerId.type, tool);
+            # fixed values win over reference data and are listed
+            assertEq(("add", "remove"), props.mode."enum", tool);
+            assertFalse(props.mode.hasKey("description"), tool);
+            assertEq({"type": "string"}, props.note, tool);
+            assertEq(("customerId",), handler.getInput(tool).required, tool);
+        }
+        assertEq(make_json(handler.getInput("from-type")), make_json(handler.getInput("from-info")));
+        assertEq(0, prov.reads);
+
+        # a subclass can still read the values on demand
+        *list<hash<AllowedValueInfo>> values = handler.lookUp(type.getField("customerId"), prov);
+        assertEq(("gid://shopify/Customer/1", "gid://shopify/Customer/2", "gid://shopify/Customer/3"),
+            map $1.value, values);
+        assertEq(1, prov.reads);
+        # fixed values are returned without reading
+        assertEq(("add", "remove"), map $1.value, handler.lookUp(type.getField("mode"), prov));
+        assertEq(1, prov.reads);
+
+        # without a provider, a reference-data parameter is described in the same way
+        handler.registerTool("no-prov", "a tool", type, sub (auto v) {});
+        assertFalse(handler.getInput("no-prov").properties.customerId.hasKey("enum"));
+        assertRegex("reference data \"customerId\"", handler.getInput("no-prov").properties.customerId.description);
+    }
+
+    referenceDataLookupTest() {
+        LookupMcpServerHandler handler();
+        CustomerProvider prov();
+        HashDataType type = getReferenceInputType();
+        handler.registerTool("from-type", "a tool", type, sub (auto v) {}, NOTHING, NOTHING, prov);
+        handler.registerToolWithTypeInfo("from-info", "a tool", type.getInfo(), sub (auto v) {}, NOTHING,
+            NOTHING, prov);
+        foreach string tool in (("from-type", "from-info")) {
+            assertEq("The customer Find customerId with tool lookup-customerId of customers.",
+                handler.getInput(tool).properties.customerId.description, tool);
+        }
+        assertEq(0, prov.reads);
+    }
+
+    fixedValueBoundTest() {
+        TestMcpServerHandler handler();
+        list<hash<AllowedValueInfo>> at_bound = map <AllowedValueInfo>{"value": sprintf("v%d", $1)},
+            range(1, McpServerHandler::MaxInlineEnumValues + 1);
+        list<hash<AllowedValueInfo>> over_bound = at_bound + (<AllowedValueInfo>{"value": "one-more"},);
+        list<string> over_strings = map $1.value, over_bound;
+        HashDataType type("Bound");
+        type.addQoreFields({
+            "at": {"name": "at", "type": AbstractDataProviderTypeMap."string", "allowed_values": at_bound},
+            "over": {"name": "over", "type": AbstractDataProviderTypeMap."string", "allowed_values": over_bound,
+                "desc": "A code"},
+            "constrained": {"name": "constrained", "type": AbstractDataProviderTypeMap."string"
+                .copyWithConstraints(<DataTypeConstraintInfo>{"enum_values": over_strings})},
+            "constrained_at": {"name": "constrained_at", "type": AbstractDataProviderTypeMap."string"
+                .copyWithConstraints(<DataTypeConstraintInfo>{"enum_values": ("x", "y")})},
+        });
+        handler.registerTool("from-type", "a tool", type, sub (auto v) {});
+        handler.registerToolWithTypeInfo("from-info", "a tool", type.getInfo(), sub (auto v) {});
+        foreach string tool in (("from-type", "from-info")) {
+            hash<auto> props = handler.getInput(tool).properties;
+            assertEq(McpServerHandler::MaxInlineEnumValues, props.at."enum".size(), tool);
+            assertEq("v1", props.at."enum"[0], tool);
+            assertFalse(props.over.hasKey("enum"), tool);
+            assertEq(sprintf("A code The value is one of %d fixed values; a value that is not one of them is "
+                "rejected when the tool is called.", McpServerHandler::MaxInlineEnumValues + 1),
+                props.over.description, tool);
+            assertFalse(props.constrained.hasKey("enum"), tool);
+            assertRegex(sprintf("one of %d fixed values", McpServerHandler::MaxInlineEnumValues + 1),
+                props.constrained.description, tool);
+            assertEq(("x", "y"), props.constrained_at."enum", tool);
+        }
     }
 }

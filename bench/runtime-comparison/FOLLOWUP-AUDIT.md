@@ -6327,3 +6327,120 @@ not full-repository, sanitizer or cross-architecture qualification.
 |60. QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP class, method, namespace or flag change.
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new indexing, format string, buffer, access bypass or credential. Existing slot guards precede access. Evidence uses allowlisted metadata without inherited environment or absolute paths.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug each pass 35 files: 27 QUnit files/72 cases/4073 assertions plus8standalones; six reference modes330checks each; eleven harness tests. Existing regressions cover both stores, disabled paths, errors, weak/opaque, ownership, reflection and receiver deletion.
+
+
+## Upstream merge after empty-holder optimization (2026-10-09)
+
+Fetched and merged `origin/develop` at
+`f9be2f45119e3a1c7eb54e5140ead0da64e100fe` (108 upstream commits, 400 files)
+onto `de47a3235`. This full 62-item audit applies to the **manual conflict
+resolutions and branch-specific integration delta**, not an independent re-audit
+of all 108 upstream commits. Straight upstream changes are retained; changed
+qlib modules and dependencies were rebuilt in release/debug before testing.
+
+Resolved `QoreThreadList.h` by retaining the native fixed-slot flag getter and
+upstream's new condition/mutex wait-registration API, removing the obsolete
+registration method. The flag remains atomic and read seq_cst by generated
+polling code. In `cooperative-cancellation.md`, retained branch native-poll and
+pending-interrupt documentation alongside upstream direct wakeups, using Qore
+pipe tables. Reread the updated cancellation and sandboxing guides completely;
+module-structure instructions are unchanged from the preceding audit.
+
+Integration review found one additional branch-only runtime dispatch site:
+`qore_rt_try_method_int_unary_v1` now uses `runtimeCheckPrivateClassAccess()`,
+matching the ordinary paths changed upstream in `43981d930`. Its cache key,
+receiver lifetime and access/fallback behavior remain intact. Expanded upstream's
+runtime-loaded class-context test to run both ordinary and unary calls while
+threads call shared module classes, subclasses are parsed and Programs deleted.
+It asserts an actual native helper call in emitted IR. The initial direct-return
+fixture did not select the integer continuation and correctly failed that check;
+integer assignment followed by return selects it, and both complete integration
+runs then pass. No assertion was weakened or runtime failure hidden.
+
+Validation (no performance timing):
+
+- Release/debug core qore/qcc builds and QUnit/FsUtil/Util plus changed CsvUtil,
+  DataProvider, GeminiBodyShape, GeminiRestClient, VertexAiRestClient,
+  McpServerHandler and RestClientIo qmod targets/dependencies pass.
+- Each build passes the 35-file performance regression matrix: 27 QUnit files,
+  72 cases, 4073 assertions plus 8 standalones.
+- Each passes 15 merge-integration files:155 cases, 1375 assertions in release and
+  1398 in debug. The debug native-unit driver also passes its 2 assertions, including
+  zero native failures. Tests include live native polling, blocked waits,
+  closure-frame/promotion, module/class context and 60 stack-guard cases.
+- `run-bdpylu1c`: Qore IR/AOT and Java interpreter/JIT each pass 330 references;
+  eleven harness tests pass. No sanitizer, cross-platform or full 400-file
+  upstream qualification is claimed.
+- Precommit merged release SHA256:
+  `34e2db094fe25b91a8d8b752b29a352338a44a1419040baff9007cfb34e00935`;
+  debug:
+  `3b196352a008d615d22536263e643a7c68ce040ab8ffa8bff1b2da131de0bb2b`.
+  Runtime identity:
+  `d65dbbc4a9cf894fb900a90fc109287d83e4000d55e220412892ab2afd2f6f0d`.
+  These are not the pre-merge binaries measured in the empty-holder results.
+
+All 62 checks for the resolution/integration delta: **18 Pass, 44 N/A, 0 Fail**.
+
+|!Check|!Status|!Evidence
+|1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new product module, QPP class, module registration/layout or new file in the manual resolution/integration delta.
+|2. Entry exists in doxygen/lang/900_release_notes.dox.tmpl (for modules in the Qore repo; external modules have release notes in their .qm)|N/A|No new product module, QPP class, module registration/layout or new file in the manual resolution/integration delta.
+|3. qore_user_module() or qore_external_user_module() call in CMakeLists.txt|N/A|No new product module, QPP class, module registration/layout or new file in the manual resolution/integration delta.
+|4. Module added to QMOD list in CMakeLists.txt|N/A|No new product module, QPP class, module registration/layout or new file in the manual resolution/integration delta.
+|5. .qm file has @section <lowercasemodname>intro as first doc section — must be all lowercase (e.g., avrodataproviderintro, not AvroDataProviderintro)|N/A|No new product module, QPP class, module registration/layout or new file in the manual resolution/integration delta.
+|6. %modern in .qm file — no redundant %new-style, %require-types, %strict-args, %enable-all-warnings|N/A|No new product module, QPP class, module registration/layout or new file in the manual resolution/integration delta.
+|7. No parse directives (%requires, %modern, %new-style) in separated .qc files (check OUTSIDE of @code blocks only)|N/A|No new product module, QPP class, module registration/layout or new file in the manual resolution/integration delta.
+|8. No %include usage (deprecated for modules)|N/A|No new product module, QPP class, module registration/layout or new file in the manual resolution/integration delta.
+|9. Copyright 2026 on all new files|N/A|No new product module, QPP class, module registration/layout or new file in the manual resolution/integration delta.
+|10. Directory layout: .qm inside qlib/<ModuleName>/ directory (not at qlib/<ModuleName>.qm for multi-file modules)|N/A|No new product module, QPP class, module registration/layout or new file in the manual resolution/integration delta.
+|11. No second .qm for the same module at qlib/<ModuleName>.qm|N/A|No new product module, QPP class, module registration/layout or new file in the manual resolution/integration delta.
+|12. ns=Qore::XX matches the QoreNamespace constructor path|N/A|No new product module, QPP class, module registration/layout or new file in the manual resolution/integration delta.
+|13. %modern directive present|Pass|Expanded existing runtime-module fixture uses %modern; embedded module/worker sources retain %modern.
+|14. Executable permission set (chmod +x)|Pass|aot-runtime-class-context.qtest retains executable mode100755.
+|15. Uses %prepend-module-path  before %requires for in-repo modules|Pass|Driver prepends repository qlib before FsUtil/QUnit; no module-path change.
+|16. External module dependencies use %try-module — except modules delivered with Qore itself (DataProvider, ConnectionProvider, QUnit, etc.) which use hard %requires|Pass|Only delivered FsUtil/QUnit dependencies; no external dependency introduced.
+|17. No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks|Pass|Resolution-only C++ getter and committed-hierarchy predicate introduce no filesystem operation.
+|18. No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks|Pass|Resolution-only C++ code introduces no network operation.
+|19. If filesystem/network ops exist, verify QoreSandboxManagerHelper usage|N/A|No new C++ filesystem/network operation requiring a manager.
+|20. No File::, Dir::, Socket::, HTTPClient:: usage without justification|Pass|Existing fixture File/backquote operations remain within its TmpDir and compile/run local generated test sources; no new I/O destination.
+|21. All for/while loops that could iterate >100 times have qore_check_cancel() checks|Pass|No C++ loop introduced. Existing fixed four-entry dispatch cache scan is unchanged; expanded Qore worker loop retains language cancellation checks.
+|22. Uses qore_check_cancel() (NOT deprecated qore_check_io_interrupt())|N/A|Existing generated polling cadence and seq_cst loads are preserved; no new cancellation API/loop.
+|23. Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations|N/A|Existing generated polling cadence and seq_cst loads are preserved; no new cancellation API/loop.
+|24. No blocking operations without cancellation support|Pass|Native flag getter and class lookup remain non-blocking; upstream wait-registration implementation is kept unchanged.
+|25. Every action has display_name, short_desc (plain text, <80 chars), desc (markdown)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|26. Every action has options populated via getActionOptionFromFields() — without this, the action shows an empty, unusable form|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|27. Every action has output_type set to a typed data type constant (e.g., MyResponseDataType) — not omitted|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|28. DPAT_API actions: provider has "supports_request": True and implements doRequestImpl()|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|29. DPAT_FIND actions: every option exists in SearchOptions, getRecordTypeImpl() returns hash<string, AbstractDataField>|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|30. Scheme-based apps (with "scheme" in registerApp): actions use "path" and do NOT use "cls" — having both scheme and cls causes a runtime error|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|31. Single-key hash slices use trailing comma: Fields{"key",} (without trailing comma, Fields{"key"} returns the value, not a hash)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|32. Typed data type classes exist for request and response types — inherit HashDataType, have const Fields hash, call addQoreFields(Fields) in constructor, export public constant at bottom (e.g., public const MyDataType = new MyDataType();)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|33. Request/input types use public Fields (enables ClassName::Fields in action registration)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|34. Response/output types use private Fields|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|35. Each field in data types has display_name, type, and desc (markdown-formatted)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|36. Input fields have example_value where useful (string fields, endpoint URIs, SQL queries, etc.)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|37. Fields with finite allowed values use allowed_values with AllowedValueInfo containing both value and display_name (Title Case, human-readable) — never bare values, never described only in text|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|38. Password/secret fields have "sensitive": True|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|39. groups uses AppGroup enum values from qlib/DataProvider/AppGroup.qc|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|40. App logo stored as separate file, loaded at module level in Priv namespace|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|41. App desc uses markdown: bullet list of capabilities, links to project website, business-language explanation of value|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|42. display_name is user-friendly ("Apache Avro" not "avro")|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|43. short_desc is plain text, under 80 chars, single sentence — no markdown|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|44. desc uses markdown: backticks for code/field refs ( field_name ,  True ,  pdf ), \n\n for paragraphs, -  bullet lists for enumerations, bold for caveats|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|45. Descriptions use plain business language relating to common challenges — not just technical "what" but "why" and "when to use"|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|46. No bare True/False/NOTHING — must be backtick-wrapped in desc|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|47. No bare field/option names in prose — must use backticks|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|48. Long descriptions (>500 chars) use bold section headers and bullet lists|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|49. Factory registration in Qore repo: every factory name registered in qlib/DataProvider/DataProvider.qc → FactoryMap (without this, module loads but doesn't appear in Qorus apps)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|50. getRecordTypeImpl() signature: must be private hash<string, AbstractDataField> getRecordTypeImpl(hash<auto> search_options) — NOT returning AbstractDataProviderType|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|51. Dependency JARs committed (for JNI modules): JAR files in qlib//jar/ may be gitignored — use git add -f to ensure they're tracked, otherwise CI compilation fails|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|52. JAR install rules in CMakeLists.txt for all dependency JARs|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change in the manual resolution/integration delta.
+|53. No workarounds: No TODOs, FIXMEs, stubs, or partially-implemented features|Pass|No runtime stub, workaround or feature disable. Preserves native flag view with new upstream wait APIs; aligns the extra fast dispatch site with upstream committed-hierarchy semantics.
+|54. Exception safety: C++ uses ReferenceHolder for Qore allocations, std::unique_ptr for C++ allocations, xsink checked after every fallible operation|Pass|No new C++ allocation or ownership transfer. Existing dispatch sink checks, borrowed receiver owners, frame/context RAII and Qore fixture TmpDir lifetime are unchanged.
+|55. Thread safety: All mutable shared state protected by std::lock_guard<std::mutex> or documented as immutable-after-construction|Pass|Fixed ThreadEntry array and atomic<bool> flag remain; descriptor lifetime stays invocation/thread-local with seq_cst reads. New wait-registry lock protocol is retained. Fast class lookup reads committed hierarchy instead of mutating parse state.
+|56. Type safety: Strongly-typed code<return(args)> instead of untyped code; static_cast instead of C casts; typed hashdecls for results; enums where appropriate|Pass|Getter retains const atomic<bool>* and TID bounds. Unary fixture uses int arguments/continuation; no cast, public call ABI or RuntimeConfig layout added by resolution.
+|57. Performance: No O(n²) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply|Pass|No performance claim for the merge. Pre-merge 1.37-1.80% results retain their exact binary identities. Four benchmark modes330reference checks pass on the merged build; new timing requires a new baseline.
+|58. Error handling: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable|Pass|Existing TID bounds, dispatch guards and ordinary fallback remain. Fixture checks an actual LLVM call (not just a declaration), child exit status and expected sums. Unsupported qcc compilation still uses the upstream skip path; this host compiled and executed all cases.
+|59. Documentation: Doxygen @param, @return, @throw on all public methods; @par Example with realistic business scenarios; @note for important caveats|Pass|Resolution preserves native polling contract and documents upstream direct wakeup behavior in Qore table format. Fixture doc explains ordinary/unary coverage; report distinguishes merge validation from performance timing and a full upstream re-audit.
+|60. QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP method or flags changed by the resolution.
+|61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new format input, buffer access, credential, access bypass or unchecked index. Native path now uses the same runtime class-context predicate as ordinary dispatch.
+|62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Merged release/debug each pass35original files (72cases4073assertions+8standalones) and15integration files (155cases;1375release/1398debugassertions). Debug native unit driver passes2assertions. Four modes330checks each;11harness tests. Initial test emitted boxed-return fallback, was corrected to integer assignment and rerun without weakening its emission assertion.

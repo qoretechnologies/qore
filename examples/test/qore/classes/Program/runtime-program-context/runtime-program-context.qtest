@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
+%requires QUnit
+%requires reflection
+
+%exec-class RuntimeProgramContextTest
+
+#! Tests that code keeps resolving names in its own Program after it calls code in another Program
+/** A statement block evaluates its statements with the thread's runtime context, which names the current Program;
+    a call into another Program must leave that context naming the caller's Program when it returns, or every name
+    the caller resolves at runtime afterwards (ex: a typed hash by name) is resolved in the Program it last called
+    instead.  Here the child Program calls a method that its class inherits from a module, which executes in the
+    module's Program.
+*/
+class RuntimeProgramContextTest inherits QUnit::Test {
+    private {
+        const ChildCode = "%modern
+%requires reflection
+%requires %s
+
+hashdecl ChildDecl {
+    int i = 1;
+}
+
+class Child inherits RuntimeProgramContextBase::Base {
+    #! calls the inherited module method on self, then resolves typed hashes by name in this Program
+    /** the names are literals, so the constructor arguments are not evaluated at runtime and the lookups only see
+        the runtime context left by the call
+    */
+    string resolveAfterCall() {
+        int rv = work();
+        TypedHash th(\"ChildDecl\");
+        return sprintf(\"%%d:%%s\", rv, th.getName());
+    }
+
+    #! resolves a typed hash by name after each of several calls into the module's Program
+    string resolveAfterEachCall() {
+        list<string> names;
+        for (int i = 0; i < 3; ++i) {
+            work();
+            names += (new TypedHash(\"ChildDecl\")).getName();
+        }
+        return names.join(\",\");
+    }
+
+    #! resolves a typed hash that is visible only in the module's Program after a call into the module's Program
+    string resolveModuleNameAfterCall() {
+        work();
+        TypedHash th(\"ModuleOnlyDecl\");
+        return th.getName();
+    }
+}
+
+string sub resolve_after_call() {
+    return (new Child()).resolveAfterCall();
+}
+
+string sub resolve_after_each_call() {
+    return (new Child()).resolveAfterEachCall();
+}
+
+string sub resolve_module_name_after_call() {
+    return (new Child()).resolveModuleNameAfterCall();
+}
+";
+    }
+
+    constructor() : QUnit::Test("RuntimeProgramContextTest", "1.0") {
+        addTestCase("AST: own names resolve after a cross-Program call", \testOwnNamesAst());
+        addTestCase("AST: the called Program's names do not leak after the call", \testCalleeNamesDoNotLeakAst());
+        addTestCase("default mode: same behavior", \testDefaultMode());
+        set_return_value(main());
+    }
+
+    testOwnNamesAst() {
+        Program pgm = getChild(True);
+        assertEq(EM_AST, pgm.getExecMode());
+        assertEq("2:ChildDecl", pgm.callFunction("resolve_after_call"));
+        assertEq("ChildDecl,ChildDecl,ChildDecl", pgm.callFunction("resolve_after_each_call"));
+    }
+
+    testCalleeNamesDoNotLeakAst() {
+        Program pgm = getChild(True);
+        assertThrows("UNKNOWN-TYPED-HASH", "ModuleOnlyDecl", \pgm.callFunction(),
+            "resolve_module_name_after_call");
+    }
+
+    testDefaultMode() {
+        Program pgm = getChild(False);
+        assertEq("2:ChildDecl", pgm.callFunction("resolve_after_call"));
+        assertEq("ChildDecl,ChildDecl,ChildDecl", pgm.callFunction("resolve_after_each_call"));
+        assertThrows("UNKNOWN-TYPED-HASH", "ModuleOnlyDecl", \pgm.callFunction(),
+            "resolve_module_name_after_call");
+    }
+
+    private Program getChild(bool ast) {
+        Program pgm(PO_NEW_STYLE);
+        if (ast) {
+            pgm.setExecMode(EM_AST);
+        }
+        pgm.parse(sprintf(ChildCode, get_script_dir() + "RuntimeProgramContextBase.qm"), "child");
+        return pgm;
+    }
+}

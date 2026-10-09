@@ -48,7 +48,7 @@ as U+FFFE followed by two byte-swapped CJK ideographs: `length()` was 3 and `"h√
 ### Byte order marks in external data are resolved by retagging
 
 Data that enters %Qore from outside may carry a BOM and may be little-endian.
-`q_remove_bom_utf16()` (`lib/QoreLib.cpp`) strips the mark and, for `QCS_UTF16`, **retags the string
+`q_remove_bom()` (`lib/QoreLib.cpp`) strips the mark and, for `QCS_UTF16`, **retags the string
 as `QCS_UTF16BE` or `QCS_UTF16LE`** according to the mark found. The byte order is carried on the
 string by its encoding pointer; the shared `QoreEncoding` objects hold fixed handler pointers and
 cannot switch endianness per string.

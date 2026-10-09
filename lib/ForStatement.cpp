@@ -32,6 +32,7 @@
 #include "qore/intern/ForStatement.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreDeferredRelease.h"
 
 ForStatement::ForStatement(int start_line, int end_line, QoreValue a, QoreValue c, QoreValue i, StatementBlock* cd)
         : AbstractStatement(start_line, end_line), assignment(a), cond(c), iterator(i), code(cd) {
@@ -41,7 +42,7 @@ ForStatement::~ForStatement() {
     assignment.discard(nullptr);
     cond.discard(nullptr);
     iterator.discard(nullptr);
-    delete code;
+    qore_delete_statement(code);
     delete lvars;
 }
 

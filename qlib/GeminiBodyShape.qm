@@ -65,10 +65,14 @@ module GeminiBodyShape {
     Request-side:
     - @ref shapeChatBody() — full request-body builder (counterpart to the
       legacy private \c buildGeminiBody method)
+    - @ref shapeChatRequest() — the request body plus the tool arguments that it
+      declares as JSON strings
     - @ref shapeContentParts() — multimodal parts from a
       @ref QoreLlmUtils::ChatMessage
-    - @ref sanitizeSchema() — strip JSON Schema keywords Gemini rejects, and
-      (in compact mode) flatten deep object/array payloads
+    - @ref sanitizeSchema() — strip JSON Schema keywords Gemini rejects and
+      resolve references and alternatives
+    - @ref shapeToolParameters() — the Gemini form of a tool's parameter schema
+      (see @ref geminibodyshapetoolschemas)
     - @ref openAiToolChoiceToGeminiConfig() — adapt OpenAI \c tool_choice
       to Gemini \c toolConfig
     - @ref normalizeGenerationConfig() — model-specific generation controls, applied after body overrides
@@ -81,6 +85,9 @@ module GeminiBodyShape {
     - @ref parseChatResponse() — Gemini response → @ref QoreLlmUtils::ChatResponse
     - @ref parseToolResponse() — adapt OpenAI tool-result strings for
       Gemini \c functionResponse.response
+    - @ref decodeToolArguments() / @ref decodeResponseToolArguments() — return
+      tool-call arguments with the types of the original tool schema
+      (@ref encodeToolArguments() is the inverse)
     - @ref extractText() — concatenate text parts in a Gemini response
     - @ref normalizeUsage() — Gemini \c usageMetadata → OpenAI-style counters
     - @ref mapFinishReason() / @ref finishReasonToOpenAi() — finish-reason
@@ -120,6 +127,103 @@ provider.complete("Classify invoices by department", invoice_text, NOTHING,
     See https://ai.google.dev/gemini-api/docs/generate-content/thinking and
     https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/migrate for Google's model guidance.
 
+    @section geminibodyshapetoolschemas Tool parameter schemas
+
+    Gemini fills a function call's arguments with a constrained decoder that follows the declared parameter schema:
+    it can only produce the members that the schema declares, so an object declared without its members is always
+    sent as \c {}.  The decoder compiles the function declarations of a request into one state machine, and Google
+    states that very large or deeply nested schemas may be rejected, which Gemini reports as
+    \c "too many states for serving".  Gemini's schema is also a subset of JSON Schema without references, free-form
+    maps or type alternatives.
+
+    @ref shapeToolParameters() therefore keeps every member of a tool's parameters and declares the rest as JSON text:
+    |!Original schema|!Sent to Gemini
+    |objects and arrays up to @ref ToolSchemaMaxDepth levels deep, with their members, types, descriptions and \c required lists|unchanged
+    |constraint keywords (\c enum, \c default, lengths, bounds, \c pattern, \c format, item and property counts, ...)|left out of the schema and stated in its description (see below); the caller still validates them
+    |\c title, \c additionalProperties|left out
+    |local \c "$ref" references (\c "#/$defs/...", \c "#/definitions/...", any local JSON pointer)|the referenced schema
+    |\c allOf, \c anyOf, \c oneOf alternatives of one type|one schema with the members of all alternatives
+    |a \c "null" alternative or type|\c nullable
+    |\c const|a one-value \c enum (left out of tool parameters, as other constraints)
+    |an object or array nested deeper than @ref ToolSchemaMaxDepth|a string holding JSON text
+    |a free-form object (no declared properties, additional properties allowed)|a string holding JSON text
+    |a value without a type, or alternatives of different types|a string holding JSON text
+    |a recursive or unresolvable reference|a string holding JSON text
+
+    The constraints left out of a schema are stated at the end of its description, so that the model still uses the
+    allowed values and formats, for example <tt>Allowed values: EUR, USD, CZK; default: EUR; pattern: ^[A-Z]{3}$;
+    length: 3</tt>.  The note is at most @ref SchemaConstraintNoteMaxChars characters long: a long list of allowed
+    values ends with the number of values left out (<tt>… and 12 more</tt>), and a pattern too long to state whole is
+    left out rather than cut.  A constraint that the description already states is not repeated.  Descriptions add no
+    states to Gemini's decoder, but they are input tokens of every request: measured on 50-tool OpenAPI catalogs, the
+    notes add about 5% to the size of the function declarations.  Response schemas keep \c enum and \c default
+    natively and state only the other constraints.
+
+    A value sent as JSON text is declared as a string whose description summarizes the shape of the original schema
+    in at most @ref SchemaSummaryMaxChars characters: its members with their types, required members first and
+    marked with \c *, allowed values and formats, for example
+    <tt>{invoice*: {number*: string, total*: number, lines*: [{sku*: string, quantity*: integer}]}, note: string |
+    null}</tt>.  References are resolved and a recursive one is shown as <tt>{…}</tt>.  When the shape is too large,
+    its deepest levels are shortened to <tt>{…}</tt> / <tt>[…]</tt> first, and then the members of the value that do
+    not fit are replaced by <tt>…</tt>; the caller still validates the decoded value against the full schema.  The providers record which arguments of which tools of a request are JSON text
+    (@ref GeminiChatRequest::stringified_arguments) and return tool calls (@ref QoreLlmUtils::ChatResponse::tool_calls,
+    and the function calls of streamed chunks) with these values parsed, so tool callers and tool contracts keep the
+    original schema.  Tool calls replayed in the conversation history are sent in the declared form.  A request that
+    uses cached content should be given the tools of the cache, so that their arguments are decoded.
+
+    @par Example
+    A choice dialog keeps the members of its options, and a free-form \c metadata map is sent as JSON text:
+    @code{.py}
+hash<GeminiToolParameterSchema> shaped = GeminiBodyShape::shapeToolParameters({
+    "type": "object",
+    "properties": {
+        "options": {"type": "array", "items": {"type": "object", "properties": {
+            "label": {"type": "string"}, "value": {"type": "string"}}}},
+        "metadata": {"type": "object", "additionalProperties": {"type": "string"}},
+    },
+});
+# shaped.parameters.properties.options.items.properties has "label" and "value"
+# shaped.parameters.properties.metadata.type is "string"; shaped.stringified is (("metadata",),)
+hash<auto> args = GeminiBodyShape::decodeToolArguments({"options": (), "metadata": "{\"env\":\"prod\"}"},
+    shaped.stringified);
+# args.metadata is {"env": "prod"}
+    @endcode
+
+    @subsection geminibodyshapetoolschemacomplexity Tool catalogs that are too complex
+
+    Gemini rejects a request whose function declarations exceed the budget of its constrained decoder.  The budget
+    is not documented; it depends on the whole catalog (the number and size of the tools together), not on any one
+    schema or nesting depth, and it applies when the model must call a tool (function calling mode \c ANY) without
+    \c allowedFunctionNames.  The same catalog in \c AUTO mode, or restricted to a few tools with
+    \c allowedFunctionNames, is accepted.  Measured with \c gemini-3.7-flash on Vertex AI: real Qorus tool sets of
+    8 and 9 tools (130 KB and 71 KB of declarations) were accepted in unrestricted \c ANY mode, and the same 17 tools
+    together (200 KB) were rejected.
+
+    Gemini answers such a request with HTTP 400, status \c INVALID_ARGUMENT and only the generic message
+    \c "Request contains an invalid argument." (or, on some endpoints, a message about \c "too many states").  The
+    providers recognize exactly this response to a request that declares tools in unrestricted \c ANY mode (see
+    @ref getToolSchemaTooComplexInfo()) and raise @ref ToolSchemaTooComplexError
+    (\c GEMINI-TOOL-SCHEMA-TOO-COMPLEX) with a @ref GeminiToolSchemaTooComplexInfo argument (the number of tools,
+    the size of their declarations, the mode and Gemini's error), instead of a generic \c LLM-ERROR.  Other errors
+    are raised as before.  The remedy is to offer fewer or smaller tools per request, for example with a tiered or
+    two-phase catalog that first offers groups of tools and then the tools of the chosen group, or to restrict the
+    call with \c allowedFunctionNames.
+
+    @par Example
+    @code{.py}
+try {
+    hash<ChatResponse> r = provider.chat(messages, tools, <LlmRequestOptions>{
+        "body_options": {"toolConfig": {"functionCallingConfig": {"mode": "ANY"}}},
+    });
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err != GeminiBodyShape::ToolSchemaTooComplexError) {
+        rethrow;
+    }
+    # offer the tool groups first, then the tools of the chosen group
+    r = chatWithTieredCatalog(messages, tools);
+}
+    @endcode
+
     @section geminibodyshaperelnotes Release Notes
 
     @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
@@ -132,12 +236,76 @@ provider.complete("Classify invoices by department", invoice_text, NOTHING,
       @ref QoreLlmUtils::LlmRequestOptions::cached_content "LlmRequestOptions::cached_content"
     - @ref normalizeUsage() marks that thinking tokens are not part of the output tokens
       (\c reasoning_in_output = @ref False) and reports the cached tokens explicitly, as \c 0 for a cache miss
+    - tool parameter schemas keep their nested members, so that Gemini can fill nested objects and arrays of objects
+      instead of sending \c {}; values that Gemini's schema cannot declare are sent as JSON text and returned to
+      callers with their original types; their descriptions summarize their shape in at most
+      @ref SchemaSummaryMaxChars characters (see @ref geminibodyshapetoolschemas)
+    - the constraints that Gemini's schema does not receive (allowed values, defaults, formats, patterns, lengths,
+      ranges, item and property counts) are stated in the schema's description (see @ref geminibodyshapetoolschemas)
+    - a request that Gemini rejects because its tool declarations exceed its constrained-decoding budget raises
+      \c GEMINI-TOOL-SCHEMA-TOO-COMPLEX with the number and size of the tools, instead of a generic \c LLM-ERROR
+      (see @ref geminibodyshapetoolschemacomplexity)
 */
 
 #! Contains all public definitions in the GeminiBodyShape module
 public namespace GeminiBodyShape {
-#! Root depth where compact tool schemas flatten object fields
-public const CompactSchemaPropertyFlattenDepth = 0;
+#! The maximum nesting depth of objects and arrays that a Gemini tool parameter schema keeps as structure
+/** The root parameters object is at depth 1, an object or array in one of its properties at depth 2, and so on.
+    An object or array nested deeper is declared to Gemini as a string holding JSON text (see
+    @ref geminibodyshapetoolschemas).
+
+    Google documents no numeric limit; it states only that very large or deeply nested schemas may be rejected,
+    which Gemini reports as \c "too many states for serving" because it compiles the function declarations of a
+    request into one constrained-decoding state machine.  Values deeper than this limit are still sent and
+    returned exactly, as JSON text.
+*/
+public const ToolSchemaMaxDepth = 5;
+
+#! The maximum length of the constraint note that a schema's description gets for the constraints Gemini does not receive
+/** See @ref geminibodyshapetoolschemas; a longer list of allowed values is cut and ends with the number of values
+    left out.
+*/
+public const SchemaConstraintNoteMaxChars = 200;
+
+#! The maximum length of the shape summary in the description of a tool argument sent as JSON text
+/** A value that Gemini's schema cannot declare is sent as JSON text, and its description tells the model its shape
+    (see @ref geminibodyshapetoolschemas).  800 characters (about 200 tokens) state an object with a few dozen typed
+    members, or several nested levels of a typical API request body, in full; larger shapes keep their outer levels
+    and required members.  The bound keeps a catalog with many such values from growing without limit: Qorus chat
+    catalogs have up to 22 of them in 34 tools.
+*/
+public const SchemaSummaryMaxChars = 800;
+
+#! A Gemini tool parameter schema and the arguments that it declares as JSON strings
+/** Returned by @ref shapeToolParameters().
+
+    @since GeminiBodyShape 1.0
+*/
+public hashdecl GeminiToolParameterSchema {
+    #! The parameter schema to send in the function declaration
+    hash<auto> parameters;
+    #! The path of each argument value that @ref parameters declares as a string holding JSON text
+    /** Each path element is a property name, or @ref nothing for every element of an array; for example
+        <tt>("order", "lines", NOTHING, "product")</tt> is the \c product of every element of \c order.lines.
+        @ref decodeToolArguments() parses these values back to their declared types.
+    */
+    list<list<*string>> stringified = ();
+}
+
+#! A Gemini \c generateContent request body and the tool arguments that it declares as JSON strings
+/** Returned by @ref shapeChatRequest().
+
+    @since GeminiBodyShape 1.0
+*/
+public hashdecl GeminiChatRequest {
+    #! The request body
+    hash<auto> body;
+    #! The paths of the stringified arguments of each tool (only tools that have any), by tool name
+    /** See @ref GeminiToolParameterSchema::stringified; pass this to @ref parseChatResponse() or
+        @ref decodeResponseToolArguments() so that tool calls are returned with their declared argument types.
+    */
+    hash<string, list<list<*string>>> stringified_arguments = {};
+}
 
 #! Returns the Gemini model resource for REST calls
 /** Canonicalizes the model name to the form Gemini's REST APIs expect:
@@ -172,13 +340,16 @@ public string sub bareModelName(string model) {
 
     Simplify unsupported or serving-expensive schema keywords at the
     provider boundary so callers can keep using stricter OpenAI/Anthropic
-    schemas and local validators.
+    schemas and local validators: local \c "$ref" references are resolved,
+    \c allOf / \c anyOf / \c oneOf alternatives are merged, a \c "null"
+    alternative or type becomes \c nullable, and \c const becomes a
+    one-value \c enum.
 
     @param schema the input JSON schema (or @ref nothing)
-    @param compact when @ref True, also strip serving-expensive keywords
-        and flatten generic nested payload slots to a bare
-        \c {"type": "object"} or \c {"type": "array"} so Gemini's
-        constrained decoder has fewer states to enumerate
+    @param compact when @ref True, shape the schema as tool parameters with
+        @ref shapeToolParameters() and return its \c parameters; use
+        @ref shapeToolParameters() directly to also get the arguments that
+        are declared as JSON strings
 
     @return the sanitized schema (or @ref nothing if input was empty)
 */
@@ -186,46 +357,347 @@ public *hash<auto> sub sanitizeSchema(*hash<auto> schema, bool compact = False) 
     if (!schema) {
         return NOTHING;
     }
-    return cast<hash>(GeminiBodyShape::sanitizeSchemaValue(schema,
-        compact, 0, NOTHING));
+    if (compact) {
+        return GeminiBodyShape::shapeToolParameters(schema).parameters;
+    }
+    GeminiSchemaShaper shaper(schema, False);
+    return shaper.shapeRoot();
 }
 
-#! Recursively sanitizes a schema value (internal to @ref sanitizeSchema())
-auto sub sanitizeSchemaValue(auto value, bool compact, int depth,
-        *string field_name) {
-    if (value.typeCode() == NT_HASH) {
-        hash<auto> input = cast<hash>(value);
-        hash<auto> rv;
-        foreach string key in (keys input) {
+#! Returns the Gemini form of a tool's parameter schema
+/** Every member of the schema is kept, so that Gemini's constrained decoder can fill it, and the schema keywords
+    that are unsupported or expensive for Gemini's decoder are removed (see @ref geminibodyshapetoolschemas).  A
+    value that Gemini's schema cannot declare is declared as a string holding JSON text instead, with a summary of
+    the original schema in its description:
+    - an object or array nested deeper than @ref ToolSchemaMaxDepth
+    - a free-form object (one without declared properties that allows additional properties); Gemini can fill only
+      the declared properties of an object, so it would always send \c {}
+    - a value without a type, or whose alternatives (\c anyOf, \c oneOf, a type list) have different types
+    - a recursive or unresolvable \c "$ref" reference
+
+    The returned paths name these values, so that @ref decodeToolArguments() returns tool-call arguments with the
+    types of the original schema.
+
+    @param parameters the tool's parameter schema; an empty schema declares no parameters
+
+    @return the schema to send and the paths of the arguments that it declares as JSON strings
+
+    @par Example
+    @code{.py}
+hash<GeminiToolParameterSchema> shaped = GeminiBodyShape::shapeToolParameters(tool.parameters);
+# ... send shaped.parameters, then decode a function call's arguments
+hash<auto> args = GeminiBodyShape::decodeToolArguments(function_call.args, shaped.stringified);
+    @endcode
+
+    @since GeminiBodyShape 1.0
+*/
+public hash<GeminiToolParameterSchema> sub shapeToolParameters(*hash<auto> parameters) {
+    if (!parameters) {
+        return <GeminiToolParameterSchema>{"parameters": {"type": "object", "properties": {}}};
+    }
+    GeminiSchemaShaper shaper(parameters, True);
+    hash<auto> schema = shaper.shapeRoot();
+    return <GeminiToolParameterSchema>{
+        "parameters": schema,
+        "stringified": shaper.getStringified(),
+    };
+}
+
+#! Returns tool-call arguments with the values that were declared as JSON strings parsed
+/** @param args the arguments of a Gemini \c functionCall
+    @param stringified the paths of the arguments that the tool declares as JSON strings
+        (@ref GeminiToolParameterSchema::stringified)
+
+    @return the arguments with each string value at one of the paths parsed as JSON; a value that is not a string
+    (Gemini already sent it structured) or that is not valid JSON is returned unchanged, so that the caller's
+    validation reports it
+
+    @since GeminiBodyShape 1.0
+*/
+public hash<auto> sub decodeToolArguments(hash<auto> args, *list<list<*string>> stringified) {
+    hash<auto> rv = args;
+    foreach list<*string> path in (stringified) {
+        rv = cast<hash>(GeminiBodyShape::transformToolArgument(rv, path, 0, True));
+    }
+    return rv;
+}
+
+#! Returns tool-call arguments with the values that a tool declares as JSON strings serialized
+/** The inverse of @ref decodeToolArguments(), used to replay a previous tool call to Gemini in the form that its
+    tool declaration has.
+
+    @param args tool-call arguments with their declared types
+    @param stringified the paths of the arguments that the tool declares as JSON strings
+        (@ref GeminiToolParameterSchema::stringified)
+
+    @return the arguments with each value at one of the paths serialized as JSON text
+
+    @since GeminiBodyShape 1.0
+*/
+public hash<auto> sub encodeToolArguments(hash<auto> args, *list<list<*string>> stringified) {
+    hash<auto> rv = args;
+    foreach list<*string> path in (stringified) {
+        rv = cast<hash>(GeminiBodyShape::transformToolArgument(rv, path, 0, False));
+    }
+    return rv;
+}
+
+#! Returns a Gemini response with the stringified arguments of its function calls decoded
+/** Applies @ref decodeToolArguments() to the \c args of every \c functionCall part of every candidate; used for
+    streamed responses, whose chunks carry the function calls.
+
+    @param body a \c generateContent response or \c streamGenerateContent chunk
+    @param stringified_arguments the paths of the stringified arguments of each tool, by tool name
+        (@ref GeminiChatRequest::stringified_arguments)
+
+    @return the response with decoded function-call arguments
+
+    @since GeminiBodyShape 1.0
+*/
+public hash<auto> sub decodeResponseToolArguments(hash<auto> body,
+        *hash<string, list<list<*string>>> stringified_arguments) {
+    if (!stringified_arguments || body.candidates.typeCode() != NT_LIST) {
+        return body;
+    }
+    hash<auto> rv = body;
+    list<auto> candidates = ();
+    foreach auto cand in (body.candidates) {
+        if (cand.typeCode() != NT_HASH || cand.content.parts.typeCode() != NT_LIST) {
+            push candidates, cand;
+            continue;
+        }
+        list<auto> parts = ();
+        foreach auto part in (cand.content.parts) {
+            if (part.typeCode() == NT_HASH && part.functionCall.typeCode() == NT_HASH
+                    && part.functionCall.args.typeCode() == NT_HASH
+                    && part.functionCall.name.typeCode() == NT_STRING
+                    && stringified_arguments{part.functionCall.name}) {
+                hash<auto> decoded = cast<hash>(part);
+                decoded.functionCall.args = GeminiBodyShape::decodeToolArguments(part.functionCall.args,
+                    stringified_arguments{part.functionCall.name});
+                push parts, decoded;
+            } else {
+                push parts, part;
+            }
+        }
+        hash<auto> decoded_cand = cast<hash>(cand);
+        decoded_cand.content.parts = parts;
+        push candidates, decoded_cand;
+    }
+    rv.candidates = candidates;
+    return rv;
+}
+
+#! Applies JSON decoding or encoding to the value at a stringified argument path
+auto sub transformToolArgument(auto value, list<*string> path, int idx, bool decode) {
+    if (idx == path.size()) {
+        if (decode) {
+            if (value.typeCode() != NT_STRING) {
+                return value;
+            }
+            try {
+                return parse_json(value);
+            } catch (hash<ExceptionInfo> ex) {
+                # not JSON: return the text so that the caller's validation reports it
+                return value;
+            }
+        }
+        return exists value ? make_json(value) : value;
+    }
+    *string name = path[idx];
+    if (!exists name) {
+        if (value.typeCode() != NT_LIST) {
+            return value;
+        }
+        list<auto> rv = ();
+        foreach auto elem in (value) {
+            push rv, GeminiBodyShape::transformToolArgument(elem, path, idx + 1, decode);
+        }
+        return rv;
+    }
+    if (value.typeCode() != NT_HASH || !value.hasKey(name)) {
+        return value;
+    }
+    hash<auto> rv = cast<hash>(value);
+    rv{name} = GeminiBodyShape::transformToolArgument(rv{name}, path, idx + 1, decode);
+    return rv;
+}
+
+#! Shapes a JSON schema for Gemini (internal to @ref sanitizeSchema() and @ref shapeToolParameters())
+class GeminiSchemaShaper {
+    public {
+        #! The deepest nesting that a shape summary shows in full
+        const SummaryMaxLevels = 8;
+        #! The number of allowed values that a shape summary lists
+        const SummaryMaxEnumValues = 8;
+    }
+
+    private {
+        #! the root schema, against which local references are resolved
+        hash<auto> root;
+        #! True when shaping tool parameters
+        bool tool;
+        #! the paths of the values declared as JSON strings
+        list<list<*string>> stringified = ();
+        #! the references being expanded on the current path, to detect recursion
+        hash<string, bool> expanding = {};
+    }
+
+    constructor(hash<auto> root, bool tool) {
+        self.root = root;
+        self.tool = tool;
+    }
+
+    #! Returns the shaped root schema
+    hash<auto> shapeRoot() {
+        auto rv = shape(root, 1, (), False);
+        # a hash input is always shaped to a hash: only member positions are stringified
+        @assert(rv.typeCode() == NT_HASH);
+        return cast<hash>(rv);
+    }
+
+    #! Returns the paths of the values declared as JSON strings
+    list<list<*string>> getStringified() {
+        return stringified;
+    }
+
+    #! Shapes one schema value
+    /** @param value the schema value
+        @param depth the object/array nesting depth of the value (the root is at depth 1)
+        @param path the argument path of the value
+        @param member True if the value is a property or array element, which can be declared as a JSON string
+    */
+    private auto shape(auto value, int depth, list<*string> path, bool member) {
+        if (value.typeCode() != NT_HASH) {
+            return value;
+        }
+        hash<auto> node = cast<hash>(value);
+
+        if (node."$ref".typeCode() == NT_STRING) {
+            string ref = node."$ref";
+            *hash<auto> target = expanding{ref} ? NOTHING : resolveRef(ref);
+            if (!exists target) {
+                if (tool && member) {
+                    return stringify(node, path, False);
+                }
+                # Gemini has no references: an unresolvable one is dropped
+                remove node."$ref";
+            } else {
+                expanding{ref} = True;
+                on_exit remove expanding{ref};
+                # sibling keywords (e.g. a description) refine the referenced schema
+                return shape(target + (node - "$ref"), depth, path, member);
+            }
+        }
+
+        if (node.hasKey("const")) {
+            if (!node.hasKey("enum")) {
+                node."enum" = (node."const",);
+            }
+            remove node."const";
+        }
+
+        bool nullable = False;
+        bool type_conflict = False;
+        list<string> variant_refs = ();
+        if (node.allOf.typeCode() == NT_LIST || node.anyOf.typeCode() == NT_LIST
+                || node.oneOf.typeCode() == NT_LIST) {
+            node = mergeComposition(node, \nullable, \type_conflict, \variant_refs);
+        }
+        # references expanded in the alternatives are being expanded until this value is shaped
+        foreach string ref in (variant_refs) {
+            expanding{ref} = True;
+        }
+        on_exit {
+            foreach string ref in (variant_refs) {
+                remove expanding{ref};
+            }
+        }
+
+        if (node.type.typeCode() == NT_LIST) {
+            list<string> types = ();
+            foreach auto type in (node.type) {
+                if (type == "null") {
+                    nullable = True;
+                } else if (type.typeCode() == NT_STRING && !types.contains(type)) {
+                    types += type;
+                }
+            }
+            if (types.size() == 1) {
+                node.type = types[0];
+            } else if (!types) {
+                remove node.type;
+            } else {
+                type_conflict = True;
+            }
+        }
+        if (nullable) {
+            node.nullable = True;
+        }
+        if (!exists node.type) {
+            *string type = GeminiSchemaShaper::inferType(node);
+            if (type) {
+                node.type = type;
+            }
+        }
+
+        if (tool && member
+                && (type_conflict
+                    || node.type.typeCode() != NT_STRING
+                    || GeminiSchemaShaper::isFreeFormObject(node)
+                    || (depth > GeminiBodyShape::ToolSchemaMaxDepth
+                        && (node.type == "object" || node.type == "array")))) {
+            return stringify(cast<hash>(value), path, nullable);
+        }
+
+        hash<auto> rv = {};
+        foreach string key in (keys node) {
             if (GeminiBodyShape::isSchemaKeywordStripped(key)
                     || GeminiBodyShape::isSchemaMetadataKeyword(key)
-                    || (compact
-                        && GeminiBodyShape::isCompactSchemaKeywordStripped(key))
+                    || (tool && GeminiBodyShape::isCompactSchemaKeywordStripped(key))
                     || GeminiBodyShape::isSchemaCompositionKeyword(key)) {
                 continue;
             }
             # "properties" and "patternProperties" are name->schema maps:
             # their keys are caller-defined field names (or patterns), not
             # schema keywords, so they must pass through verbatim while only
-            # the mapped schema values are sanitized.  Treating them as an
+            # the mapped schema values are shaped.  Treating them as an
             # ordinary schema object would drop any property whose name
             # collides with a stripped keyword (e.g. a field literally named
             # "name", "format", or "enum").
-            if ((key == "properties" || key == "patternProperties")
-                    && input{key}.typeCode() == NT_HASH) {
-                rv{key} = GeminiBodyShape::sanitizeSchemaPropertyMap(
-                    cast<hash>(input{key}), compact, depth + 1);
+            if (key == "properties" && node.properties.typeCode() == NT_HASH) {
+                # {} (not unassigned): a no-argument tool's "properties": {} must stay an empty map
+                hash<auto> props = {};
+                foreach hash<auto> i in (node.properties.pairIterator()) {
+                    list<*string> member_path = path;
+                    push member_path, i.key;
+                    props{i.key} = shape(i.value, depth + 1, member_path, True);
+                }
+                rv.properties = props;
                 continue;
             }
-            rv{key} = GeminiBodyShape::sanitizeSchemaValue(input{key}, compact,
-                depth + 1, key);
-        }
-        foreach string key in (("allOf", "anyOf", "oneOf")) {
-            if (input{key}.typeCode() == NT_LIST) {
-                rv = GeminiBodyShape::applySchemaComposition(rv,
-                    cast<list>(input{key}), key == "allOf",
-                    compact, depth + 1, field_name);
+            if (key == "patternProperties" && node.patternProperties.typeCode() == NT_HASH) {
+                hash<auto> props = {};
+                foreach hash<auto> i in (node.patternProperties.pairIterator()) {
+                    props{i.key} = shape(i.value, depth + 1, path, False);
+                }
+                rv.patternProperties = props;
+                continue;
             }
+            if (key == "items" && node.items.typeCode() == NT_HASH && node.items) {
+                list<*string> item_path = path;
+                push item_path, NOTHING;
+                rv.items = shape(node.items, depth + 1, item_path, True);
+                continue;
+            }
+            rv{key} = shapeOther(node{key}, depth);
+        }
+        # the constraints that Gemini does not receive are stated in the description, so the model still knows them
+        *string note = getConstraintNote(node, rv.description.typeCode() == NT_STRING ? rv.description : NOTHING);
+        if (note) {
+            rv.description = rv.description.typeCode() == NT_STRING && rv.description.val()
+                ? rv.description + "\n" + note
+                : note;
         }
         # An unconstrained array is legal JSON Schema and is commonly
         # produced for Qore softlist<auto> data-provider fields as
@@ -235,105 +707,555 @@ auto sub sanitizeSchemaValue(auto value, bool compact, int depth,
         # provider-neutral schema permissive and apply the same conservative
         # string-item fallback used by QoreLlmUtils at this provider boundary.
         if (rv.type == "array"
-                && (rv.items.typeCode() != NT_HASH
-                    || !cast<hash>(rv.items))) {
+                && (rv.items.typeCode() != NT_HASH || !rv.items)) {
             rv.items = {"type": "string"};
         }
-        if (compact && rv.properties.typeCode() == NT_HASH
-                && GeminiBodyShape::shouldFlattenCompactSchemaProperties(
-                    field_name, depth)) {
-            rv.properties = GeminiBodyShape::flattenCompactSchemaProperties(
-                cast<hash>(rv.properties));
-        }
         return rv;
     }
-    if (value.typeCode() == NT_LIST) {
-        list<auto> rv = ();
-        foreach auto item in (value) {
-            push rv, GeminiBodyShape::sanitizeSchemaValue(item, compact,
-                depth + 1, field_name);
+
+    #! Returns the note stating the constraints of a schema that are left out of its Gemini form
+    /** @param node the schema, after references, alternatives and \c const were resolved
+        @param desc the description of the schema; a constraint that it already states is not repeated
+
+        @return the note, at most @ref SchemaConstraintNoteMaxChars long, or @ref nothing if there is nothing to state
+    */
+    private *string getConstraintNote(hash<auto> node, *string desc) {
+        # the parts after the allowed values, in the order in which they are dropped when the note is too long
+        list<string> parts = ();
+        *string lwr_desc = desc ? desc.lwr() : NOTHING;
+
+        # enum and default are kept natively in a response schema and left out of tool parameters
+        auto default_value;
+        if (tool && node.hasKey("default")) {
+            default_value = node."default";
+        } else if (node.hasKey("default_value") && (tool || !node.hasKey("default"))) {
+            default_value = node.default_value;
         }
+        if (exists default_value && !(lwr_desc =~ /\bdefault/
+                && GeminiSchemaShaper::mentions(desc, GeminiSchemaShaper::formatValue(default_value)))) {
+            parts += "default: " + GeminiSchemaShaper::formatValue(default_value);
+        }
+        if (node.format.typeCode() == NT_STRING && node.format.val()
+                && !(lwr_desc =~ /\bformat/ && GeminiSchemaShaper::mentions(desc, node.format))) {
+            parts += "format: " + node.format;
+        }
+        if (node.pattern.typeCode() == NT_STRING && node.pattern.val()
+                && (!desc || desc.find(node.pattern) < 0)) {
+            # a cut regular expression would state a different constraint
+            if (node.pattern.length() <= (SchemaConstraintNoteMaxChars / 2)) {
+                parts += "pattern: " + node.pattern;
+            }
+        }
+        GeminiSchemaShaper::addRange(\parts, node.minLength, node.maxLength, "length: %s to %s", "length: %s",
+            "length: at least %s", "length: at most %s");
+        addNumberRange(\parts, node);
+        if (GeminiSchemaShaper::isNumber(node.multipleOf)) {
+            parts += "multiple of: " + GeminiSchemaShaper::formatNumber(node.multipleOf);
+        }
+        GeminiSchemaShaper::addRange(\parts, node.minItems, node.maxItems, "items: %s to %s", "items: %s",
+            "items: at least %s", "items: at most %s");
+        if (node.uniqueItems === True) {
+            parts += "items: unique";
+        }
+        GeminiSchemaShaper::addRange(\parts, node.minProperties, node.maxProperties, "properties: %s to %s",
+            "properties: %s", "properties: at least %s", "properties: at most %s");
+        if (exists node.example_value) {
+            parts += "example: " + GeminiSchemaShaper::formatValue(node.example_value);
+        }
+        if (lwr_desc) {
+            # a constraint that the description already states in the same words is not repeated
+            parts = select parts, lwr_desc.find($1.lwr()) < 0;
+        }
+
+        # the parts that fit; the allowed values get what is left
+        string rest = "";
+        foreach string part in (parts) {
+            string next = rest.val() ? rest + "; " + part : part;
+            if (next.length() > SchemaConstraintNoteMaxChars) {
+                break;
+            }
+            rest = next;
+        }
+
+        *list<auto> values;
+        if (tool && node."enum".typeCode() == NT_LIST) {
+            values = node."enum";
+        } else if (node.allowed_values.typeCode() == NT_LIST && (tool || !node.hasKey("enum"))) {
+            values = map $1.typeCode() == NT_HASH && $1.hasKey("value") ? $1.value : $1, node.allowed_values;
+        }
+        *string allowed;
+        if (values && !GeminiSchemaShaper::mentionsAll(desc, values)) {
+            int budget = SchemaConstraintNoteMaxChars - (rest.val() ? rest.length() + 2 : 0);
+            allowed = GeminiSchemaShaper::formatAllowedValues(values, budget);
+        }
+
+        string note = allowed ? (rest.val() ? allowed + "; " + rest : allowed) : rest;
+        @assert(note.length() <= SchemaConstraintNoteMaxChars);
+        return note.val() ? note : NOTHING;
+    }
+
+    #! Adds the numeric range of a schema to the constraint note parts
+    private addNumberRange(reference<list<string>> parts, hash<auto> node) {
+        *string low;
+        *string high;
+        bool low_exclusive = False;
+        bool high_exclusive = False;
+        if (GeminiSchemaShaper::isNumber(node.exclusiveMinimum)) {
+            low = GeminiSchemaShaper::formatNumber(node.exclusiveMinimum);
+            low_exclusive = True;
+        } else if (GeminiSchemaShaper::isNumber(node.minimum)) {
+            low = GeminiSchemaShaper::formatNumber(node.minimum);
+            # draft 4 exclusive bounds are booleans
+            low_exclusive = node.exclusiveMinimum === True;
+        }
+        if (GeminiSchemaShaper::isNumber(node.exclusiveMaximum)) {
+            high = GeminiSchemaShaper::formatNumber(node.exclusiveMaximum);
+            high_exclusive = True;
+        } else if (GeminiSchemaShaper::isNumber(node.maximum)) {
+            high = GeminiSchemaShaper::formatNumber(node.maximum);
+            high_exclusive = node.exclusiveMaximum === True;
+        }
+        if (exists low && exists high && !low_exclusive && !high_exclusive) {
+            parts += sprintf("range: %s to %s", low, high);
+            return;
+        }
+        if (exists low) {
+            parts += (low_exclusive ? "greater than " : "minimum: ") + low;
+        }
+        if (exists high) {
+            parts += (high_exclusive ? "less than " : "maximum: ") + high;
+        }
+    }
+
+    #! Adds a minimum/maximum count to the constraint note parts
+    private static addRange(reference<list<string>> parts, auto min, auto max, string both, string equal,
+            string min_only, string max_only) {
+        bool has_min = GeminiSchemaShaper::isNumber(min);
+        bool has_max = GeminiSchemaShaper::isNumber(max);
+        if (has_min && has_max) {
+            string low = GeminiSchemaShaper::formatNumber(min);
+            string high = GeminiSchemaShaper::formatNumber(max);
+            parts += low == high ? sprintf(equal, low) : sprintf(both, low, high);
+        } else if (has_min) {
+            parts += sprintf(min_only, GeminiSchemaShaper::formatNumber(min));
+        } else if (has_max) {
+            parts += sprintf(max_only, GeminiSchemaShaper::formatNumber(max));
+        }
+    }
+
+    #! Returns the allowed values part of a constraint note, cut to the given length with the number of values left out
+    private static *string formatAllowedValues(list<auto> values, int budget) {
+        string prefix = "Allowed values: ";
+        list<string> shown = ();
+        int len = prefix.length();
+        foreach auto value in (values) {
+            string text = GeminiSchemaShaper::formatValue(value);
+            int left = values.size() - shown.size() - 1;
+            # the room needed after this value for the number of values left out
+            int suffix = left ? sprintf(" … and %d more", left).length() : 0;
+            int next = len + (shown ? 2 : 0) + text.length();
+            if (next + suffix > budget) {
+                break;
+            }
+            shown += text;
+            len = next;
+        }
+        if (!shown) {
+            string all = sprintf("%d allowed values", values.size());
+            return all.length() <= budget ? all : NOTHING;
+        }
+        string rv = prefix + shown.join(", ");
+        if (shown.size() < values.size()) {
+            rv += sprintf(" … and %d more", values.size() - shown.size());
+        }
+        @assert(rv.length() <= budget);
         return rv;
     }
-    return value;
-}
 
-#! Sanitizes a JSON-Schema name->schema map, preserving caller-defined keys
-/** Used for \c properties and \c patternProperties, whose keys are
-    application-defined field names (or patterns) rather than schema
-    keywords: the keys pass through unchanged and only the mapped schema
-    values are sanitized.
-
-    @param props the name->schema map to sanitize
-    @param compact whether compact (tool-parameter) stripping is in effect
-    @param depth recursion depth of the map itself
-
-    @return the map with every value sanitized and every key preserved
-*/
-hash<auto> sub sanitizeSchemaPropertyMap(hash<auto> props, bool compact,
-        int depth) {
-    # Initialized to {} (not left unassigned): an empty props map — e.g. a
-    # no-argument tool's "properties": {} — means the loop never runs, and an
-    # unassigned hash<auto> is NOTHING, which would make this typed return
-    # throw RUNTIME-TYPE-ERROR.
-    hash<auto> rv = {};
-    foreach string name in (keys props) {
-        rv{name} = GeminiBodyShape::sanitizeSchemaValue(props{name}, compact,
-            depth + 1, name);
+    #! Returns a value as it appears in a constraint note
+    private static string formatValue(auto value) {
+        if (value.typeCode() == NT_STRING) {
+            string str = value;
+            # a value that the note's punctuation would make ambiguous is quoted
+            if (!str.val() || str =~ /[,;"\n]/ || str =~ /^\s/ || str =~ /\s$/) {
+                return make_json(str);
+            }
+            return str;
+        }
+        return make_json(value);
     }
-    return rv;
-}
 
-bool sub shouldFlattenCompactSchemaProperties(*string field_name, int depth) {
-    return field_name == "payload"
-        || depth >= GeminiBodyShape::CompactSchemaPropertyFlattenDepth;
-}
-
-hash<auto> sub flattenCompactSchemaProperties(hash<auto> props) {
-    # {} default for the empty-props case (see sanitizeSchemaPropertyMap):
-    # an unassigned hash<auto> is NOTHING and would fail this typed return.
-    hash<auto> rv = {};
-    foreach string key in (keys props) {
-        rv{key} = GeminiBodyShape::flattenCompactSchemaProperty(props{key});
+    #! Returns a number as it appears in a constraint note
+    private static string formatNumber(auto value) {
+        return value.typeCode() == NT_INT ? value.toString() : make_json(value);
     }
-    return rv;
-}
 
-auto sub flattenCompactSchemaProperty(auto value) {
-    if (value.typeCode() != NT_HASH) {
+    #! True if the value is a JSON number
+    private static bool isNumber(auto value) {
+        switch (value.typeCode()) {
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+                return True;
+        }
+        return False;
+    }
+
+    #! True if the description names every value
+    private static bool mentionsAll(*string desc, list<auto> values) {
+        if (!desc) {
+            return False;
+        }
+        foreach auto value in (values) {
+            if (!GeminiSchemaShaper::mentions(desc, GeminiSchemaShaper::formatValue(value))) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! True if the description names the value as a whole word
+    /** A value shorter than two characters is never taken as named: it occurs in most texts by chance.
+    */
+    private static bool mentions(*string desc, string value) {
+        if (!desc || value.length() < 2) {
+            return False;
+        }
+        int start = 0;
+        while (True) {
+            int pos = desc.find(value, start);
+            if (pos < 0) {
+                return False;
+            }
+            int end = pos + value.length();
+            if ((!pos || !GeminiSchemaShaper::isWordChar(desc[pos - 1]))
+                    && (end == desc.length() || !GeminiSchemaShaper::isWordChar(desc[end]))) {
+                return True;
+            }
+            start = pos + 1;
+        }
+    }
+
+    #! True for a letter, digit or underscore
+    private static bool isWordChar(string c) {
+        return c =~ /^\w$/;
+    }
+
+    #! Shapes the value of a keyword that is not a name->schema map; nested schemas are not argument values
+    private auto shapeOther(auto value, int depth) {
+        if (value.typeCode() == NT_HASH) {
+            return shape(value, depth + 1, (), False);
+        }
+        if (value.typeCode() == NT_LIST) {
+            list<auto> rv = ();
+            foreach auto item in (value) {
+                push rv, shapeOther(item, depth);
+            }
+            return rv;
+        }
         return value;
     }
-    hash<auto> schema = cast<hash>(value);
-    if (schema.type == "object" || schema.properties.typeCode() == NT_HASH) {
-        hash<auto!> rv = {"type": "object"};
-        if (schema.description.val()) {
-            rv.description = schema.description;
-        }
-        return rv;
-    }
-    if (schema.type == "array" || schema.items.typeCode() == NT_HASH) {
-        hash<auto!> rv = {"type": "array"};
-        if (schema.description.val()) {
-            rv.description = schema.description;
-        }
-        if (schema.items.typeCode() == NT_HASH) {
-            rv.items = GeminiBodyShape::flattenCompactArrayItemSchema(
-                cast<hash>(schema.items));
-        }
-        return rv;
-    }
-    return schema;
-}
 
-hash<auto> sub flattenCompactArrayItemSchema(hash<auto> schema) {
-    if (schema.type == "object" || schema.properties.typeCode() == NT_HASH) {
-        hash<auto!> rv = {"type": "object"};
-        if (schema.description.val()) {
-            rv.description = schema.description;
+    #! Merges allOf / anyOf / oneOf alternatives into one schema
+    private hash<auto> mergeComposition(hash<auto> node, reference<bool> nullable, reference<bool> type_conflict,
+            reference<list<string>> variant_refs) {
+        hash<auto> rv = node - ("allOf", "anyOf", "oneOf");
+        hash<string, bool> types = {};
+        if (rv.type.typeCode() == NT_STRING) {
+            types{rv.type} = True;
+        }
+        foreach string key in (("allOf", "anyOf", "oneOf")) {
+            if (node{key}.typeCode() != NT_LIST) {
+                continue;
+            }
+            list<hash<auto>> variants = ();
+            foreach auto raw in (node{key}) {
+                if (raw.typeCode() != NT_HASH) {
+                    continue;
+                }
+                hash<auto> variant = cast<hash>(raw);
+                if (variant."$ref".typeCode() == NT_STRING) {
+                    string ref = variant."$ref";
+                    *hash<auto> target = expanding{ref} || variant_refs.contains(ref) ? NOTHING : resolveRef(ref);
+                    if (!exists target) {
+                        # the alternative cannot be declared
+                        type_conflict = True;
+                        continue;
+                    }
+                    variant_refs += ref;
+                    variant = target + (variant - "$ref");
+                }
+                if (variant.type == "null") {
+                    nullable = True;
+                    continue;
+                }
+                if (variant.type.typeCode() == NT_STRING) {
+                    types{variant.type} = True;
+                }
+                variants += variant;
+            }
+            if (!variants) {
+                continue;
+            }
+            hash<auto> base = rv;
+            foreach hash<auto> variant in (variants) {
+                rv = GeminiBodyShape::mergeSchemaObjects(rv, variant);
+            }
+            if (tool) {
+                remove rv.required;
+            } else {
+                list<string> required = GeminiBodyShape::mergeRequiredLists(
+                    GeminiBodyShape::schemaStringList(base.required),
+                    GeminiBodyShape::compositionRequiredFields(variants, key == "allOf"));
+                if (required) {
+                    rv.required = required;
+                } else {
+                    remove rv.required;
+                }
+            }
+        }
+        if (types.size() > 1) {
+            type_conflict = True;
         }
         return rv;
     }
-    return schema;
+
+    #! Returns a string schema whose description summarizes the original schema, and records the value's path
+    private hash<auto> stringify(hash<auto> node, list<*string> path, bool nullable) {
+        push stringified, path;
+        string desc;
+        if (node.description.typeCode() == NT_STRING && node.description.val()) {
+            desc = node.description + "\n\n";
+        }
+        desc += "This value is a string holding JSON text (not an object or list) in this shape "
+            "(* marks a required member): " + summarizeSchema(node);
+        # hash<auto!>: a literal of string values would otherwise type the hash as hash<string, string>
+        hash<auto!> rv = {
+            "type": "string",
+            "description": desc,
+        };
+        if (nullable) {
+            rv.nullable = True;
+        }
+        return rv;
+    }
+
+    #! Returns a compact summary of the shape of a schema, at most @ref SchemaSummaryMaxChars long
+    /** The summary names the type, the members with their types (required members first, marked with \c *), the
+        allowed values and formats, for example
+        <tt>{customer*: {name*: string, address: {city*: string, …}}, lines*: [{sku*: string, quantity*: integer}],
+        mode: "fast"|"slow"}</tt>.  When the full summary is too long, nested objects and arrays are shortened to
+        <tt>{…}</tt> / <tt>[…]</tt> from the deepest level up, and then the members that do not fit are replaced by
+        <tt>…</tt>, so the required members of the outer levels are kept longest.
+    */
+    private string summarizeSchema(hash<auto> node) {
+        # the levels of nesting shown in full, from all of them down to the value itself
+        # the value's own members are always shown (level 2 shows them with their nested values as {…} / […])
+        int levels = GeminiSchemaShaper::SummaryMaxLevels;
+        while (levels > 1) {
+            string summary = summarizeValue(node, levels, -1, {});
+            if (summary.length() <= GeminiBodyShape::SchemaSummaryMaxChars) {
+                return summary;
+            }
+            --levels;
+        }
+        # even the members of the value do not fit: the ones that do not are replaced by …
+        string summary = summarizeValue(node, 2, GeminiBodyShape::SchemaSummaryMaxChars, {});
+        if (summary.length() > GeminiBodyShape::SchemaSummaryMaxChars) {
+            # alternatives are not cut member by member; the text is cut instead
+            summary = summary.substr(0, GeminiBodyShape::SchemaSummaryMaxChars - 1) + "…";
+        }
+        @assert(summary.length() <= GeminiBodyShape::SchemaSummaryMaxChars);
+        return summary;
+    }
+
+    #! Returns the summary of one schema value
+    /** @param node the schema
+        @param levels the levels of nesting still shown in full; below them an object is \c {…} and an array \c […]
+        @param budget the maximum length of the summary of an object's members, or -1 for no limit (used only at the
+        top level)
+        @param refs the references being expanded, to show a recursive reference as \c {…}
+    */
+    private string summarizeValue(hash<auto> node, int levels, int budget, hash<string, bool> refs) {
+        if (node."$ref".typeCode() == NT_STRING) {
+            string ref = node."$ref";
+            *hash<auto> target = refs{ref} ? NOTHING : resolveRef(ref);
+            if (!target) {
+                return "{…}";
+            }
+            refs{ref} = True;
+            return summarizeValue(target + (node - "$ref"), levels, budget, refs);
+        }
+        list<string> alternatives = ();
+        foreach string key in (("anyOf", "oneOf")) {
+            foreach auto variant in (node{key}) {
+                if (variant.typeCode() == NT_HASH) {
+                    alternatives += summarizeValue(variant, levels, -1, refs);
+                }
+            }
+        }
+        if (alternatives) {
+            return alternatives.join(" | ");
+        }
+        hash<auto> merged = node;
+        foreach auto part in (node.allOf) {
+            if (part.typeCode() == NT_HASH) {
+                merged = GeminiBodyShape::mergeSchemaObjects(merged, part);
+            }
+        }
+        string nullable = merged.nullable === True ? " | null" : "";
+        if (merged."enum".typeCode() == NT_LIST && merged."enum") {
+            list<string> values = map make_json($1), merged."enum";
+            return (values.size() > SummaryMaxEnumValues
+                ? values[0..(SummaryMaxEnumValues - 1)].join("|") + "|…"
+                : values.join("|")) + nullable;
+        }
+        if (merged.hasKey("const")) {
+            return make_json(merged."const");
+        }
+        list<string> types = ();
+        foreach auto type in (merged.type.typeCode() == NT_LIST ? merged.type : (merged.type,)) {
+            if (type == "null") {
+                nullable = " | null";
+            } else if (type.typeCode() == NT_STRING) {
+                types += type;
+            }
+        }
+        if (types.size() > 1) {
+            return types.join(" | ") + nullable;
+        }
+        *string type = types[0] ?? GeminiSchemaShaper::inferType(merged);
+        if (type == "array") {
+            if (levels <= 1) {
+                return "[…]" + nullable;
+            }
+            return "[" + (merged.items.typeCode() == NT_HASH && merged.items
+                ? summarizeValue(merged.items, levels - 1, -1, refs) : "any") + "]" + nullable;
+        }
+        if (type == "object") {
+            hash<auto> props = merged.properties.typeCode() == NT_HASH ? merged.properties : {};
+            if (!props) {
+                if (merged.additionalProperties.typeCode() == NT_HASH && merged.additionalProperties) {
+                    if (levels <= 1) {
+                        return "{…}" + nullable;
+                    }
+                    return "{[key]: " + summarizeValue(merged.additionalProperties, levels - 1, -1, refs) + "}"
+                        + nullable;
+                }
+                return "object" + nullable;
+            }
+            if (levels <= 1) {
+                return "{…}" + nullable;
+            }
+            return "{" + summarizeMembers(props, GeminiBodyShape::schemaStringList(merged.required), levels,
+                budget < 0 ? -1 : budget - 2 - nullable.length(), refs) + "}" + nullable;
+        }
+        if (!type) {
+            return "any" + nullable;
+        }
+        if (type == "string" && merged.format.typeCode() == NT_STRING && merged.format.val()) {
+            return "string<" + merged.format + ">" + nullable;
+        }
+        return type + nullable;
+    }
+
+    #! Returns the summary of an object's members, required members first
+    /** With a \a budget, the members that do not fit in it are replaced by \c …
+    */
+    private string summarizeMembers(hash<auto> props, list<string> required, int levels, int budget,
+            hash<string, bool> refs) {
+        list<string> names = select required, props.hasKey($1);
+        names += select keys props, !required.contains($1);
+        list<string> parts = ();
+        int len = 0;
+        foreach string name in (names) {
+            auto member = props{name};
+            string text = name + (required.contains(name) ? "*" : "") + ": "
+                + (member.typeCode() == NT_HASH
+                    ? summarizeValue(member, levels - 1, -1, refs)
+                    : "any");
+            if (budget >= 0) {
+                # room for the separator before this member and for ", …" after it if more members follow
+                int more = $# < (names.size() - 1) ? 3 : 0;
+                int next = len + (parts ? 2 : 0) + text.length();
+                if (next + more > budget) {
+                    parts += "…";
+                    break;
+                }
+                len = next;
+            }
+            parts += text;
+        }
+        return parts.join(", ");
+    }
+
+    #! Resolves a local JSON pointer reference (\c "#" or \c "#/...") against the root schema
+    private *hash<auto> resolveRef(string ref) {
+        if (ref == "#") {
+            return root;
+        }
+        if (ref !~ /^#\//) {
+            return NOTHING;
+        }
+        auto cur = root;
+        foreach string seg in (ref.substr(2).split("/")) {
+            # JSON pointer escapes (RFC 6901)
+            seg = replace(replace(seg, "~1", "/"), "~0", "~");
+            if (cur.typeCode() == NT_HASH) {
+                if (!cur.hasKey(seg)) {
+                    return NOTHING;
+                }
+                cur = cur{seg};
+            } else if (cur.typeCode() == NT_LIST && seg =~ /^[0-9]+$/) {
+                cur = cur[seg.toInt()];
+            } else {
+                return NOTHING;
+            }
+        }
+        return cur.typeCode() == NT_HASH ? cast<hash>(cur) : NOTHING;
+    }
+
+    #! Returns the type of a schema without one, if its keywords determine it
+    private static *string inferType(hash<auto> node) {
+        if (node.properties.typeCode() == NT_HASH) {
+            return "object";
+        }
+        if (node.hasKey("items")) {
+            return "array";
+        }
+        if (node."enum".typeCode() == NT_LIST && node."enum") {
+            hash<string, bool> types = {};
+            foreach auto v in (node."enum") {
+                switch (v.typeCode()) {
+                    case NT_STRING: types.string = True; break;
+                    case NT_INT: types.integer = True; break;
+                    case NT_FLOAT:
+                    case NT_NUMBER: types.number = True; break;
+                    case NT_BOOLEAN: types.boolean = True; break;
+                    default: return NOTHING;
+                }
+            }
+            if (types.size() == 1) {
+                return types.firstKey();
+            }
+            if (types.size() == 2 && types.integer && types.number) {
+                return "number";
+            }
+        }
+        return NOTHING;
+    }
+
+    #! True for an object without declared properties that allows additional properties
+    private static bool isFreeFormObject(hash<auto> node) {
+        if (node.type != "object") {
+            return False;
+        }
+        if (node.properties.typeCode() == NT_HASH && node.properties) {
+            return False;
+        }
+        # an object closed to additional properties can only be {}, which Gemini can fill
+        return node.additionalProperties !== False;
+    }
 }
 
 bool sub isSchemaCompositionKeyword(string key) {
@@ -401,6 +1323,10 @@ bool sub isSchemaKeywordStripped(string key) {
     return False;
 }
 
+#! True for the keywords that tool parameter schemas leave out to keep Gemini's decoder small
+/** These constrain values rather than declare members; the constrained decoder enumerates their states for every
+    function declaration of the request.
+*/
 bool sub isCompactSchemaKeywordStripped(string key) {
     switch (key) {
         case "default":
@@ -409,43 +1335,6 @@ bool sub isCompactSchemaKeywordStripped(string key) {
             return True;
     }
     return False;
-}
-
-hash<auto> sub applySchemaComposition(hash<auto> base, list<auto> raw_variants,
-        bool all_required, bool compact, int depth, *string field_name) {
-    list<hash<auto>> variants = ();
-    foreach auto raw in (raw_variants) {
-        if (raw.typeCode() != NT_HASH) {
-            continue;
-        }
-        auto sanitized = GeminiBodyShape::sanitizeSchemaValue(raw, compact,
-            depth, field_name);
-        if (sanitized.typeCode() == NT_HASH) {
-            variants += cast<hash>(sanitized);
-        }
-    }
-    if (!variants) {
-        return base;
-    }
-
-    hash<auto> rv = base;
-    foreach hash<auto> variant in (variants) {
-        rv = GeminiBodyShape::mergeSchemaObjects(rv, variant);
-    }
-
-    if (compact) {
-        remove rv.required;
-    } else {
-        list<string> required = GeminiBodyShape::mergeRequiredLists(
-            GeminiBodyShape::schemaStringList(base.required),
-            GeminiBodyShape::compositionRequiredFields(variants, all_required));
-        if (required) {
-            rv.required = required;
-        } else {
-            remove rv.required;
-        }
-    }
-    return rv;
 }
 
 hash<auto> sub mergeSchemaObjects(hash<auto> left, hash<auto> right) {
@@ -716,6 +1605,24 @@ public hash<auto> sub normalizeGenerationConfig(string model, hash<auto> body) {
 }
 
 #! Builds a Gemini \c generateContent request body from generic chat inputs
+/** Returns the \c body of @ref shapeChatRequest(); use @ref shapeChatRequest() to also get the tool arguments
+    that the request declares as JSON strings, which a response's tool calls need to be decoded.
+
+    @param messages provider-neutral chat history
+    @param tools optional tool definitions
+    @param output_schema optional JSON schema for structured output
+    @param resolved already-resolved per-call knobs; see @ref shapeChatRequest()
+
+    @return the Gemini-shaped request body
+*/
+public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messages,
+        *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+        *hash<auto> output_schema,
+        hash<auto> resolved) {
+    return GeminiBodyShape::shapeChatRequest(messages, tools, output_schema, resolved).body;
+}
+
+#! Builds a Gemini \c generateContent request from generic chat inputs
 /** Counterpart to the legacy \c buildGeminiBody private instance method.
     The function is pure-static; callers resolve their request-option
     knobs (max output tokens, temperature, reasoning budget, body merge)
@@ -753,12 +1660,33 @@ public hash<auto> sub normalizeGenerationConfig(string model, hash<auto> body) {
           the cached content instead (see @ref applyCachedContent()); system
           messages are therefore not sent
 
-    @return the Gemini-shaped request body
+    Tool parameter schemas are shaped with @ref shapeToolParameters(); the arguments of the assistant tool calls
+    in \a messages are replayed in the shaped form (see @ref encodeToolArguments()).
+
+    @return the Gemini-shaped request body and the paths of the arguments that each tool declares as JSON strings;
+    pass \c stringified_arguments to @ref parseChatResponse() or @ref decodeResponseToolArguments()
+
+    @since GeminiBodyShape 1.0
 */
-public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messages,
+public hash<GeminiChatRequest> sub shapeChatRequest(list<hash<QoreLlmUtils::ChatMessage>> messages,
         *list<hash<QoreLlmUtils::ToolDefinition>> tools,
         *hash<auto> output_schema,
         hash<auto> resolved) {
+    # tools are shaped first: replayed tool calls take the shape of their declarations
+    list<hash<auto>> declarations = ();
+    hash<string, list<list<*string>>> stringified_arguments = {};
+    foreach hash<QoreLlmUtils::ToolDefinition> td in (tools) {
+        hash<GeminiToolParameterSchema> shaped = GeminiBodyShape::shapeToolParameters(td.parameters);
+        push declarations, {
+            "name": td.name,
+            "description": td.description ?? "",
+            "parameters": shaped.parameters,
+        };
+        if (shaped.stringified) {
+            stringified_arguments{td.name} = shaped.stringified;
+        }
+    }
+
     list<hash<auto>> contents = ();
     list<hash<auto>> system_parts = ();
     list<hash<auto>> tool_response_parts = ();
@@ -801,7 +1729,8 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
                 hash<auto!> part = {
                     "functionCall": {
                         "name": tc.name,
-                        "args": tc.arguments ?? {},
+                        "args": GeminiBodyShape::encodeToolArguments(tc.arguments ?? {},
+                            stringified_arguments{tc.name}),
                     },
                 };
                 # Gemini 3.x rejects a replayed function call whose reasoning signature is missing,
@@ -852,16 +1781,7 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
     }
     body.generationConfig = generation_config;
 
-    if (tools && tools.size()) {
-        list<hash<auto>> declarations = ();
-        foreach hash<QoreLlmUtils::ToolDefinition> td in (tools) {
-            push declarations, {
-                "name": td.name,
-                "description": td.description ?? "",
-                "parameters": GeminiBodyShape::sanitizeSchema(td.parameters, True)
-                    ?? {"type": "object", "properties": {}},
-            };
-        }
+    if (declarations) {
         body.tools = ({"functionDeclarations": declarations},);
     }
 
@@ -870,9 +1790,12 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
     }
     body = normalizeGenerationConfig(resolved.model ?? "", body);
     if (resolved.cached_content.val()) {
-        return GeminiBodyShape::applyCachedContent(body, resolved.cached_content);
+        body = GeminiBodyShape::applyCachedContent(body, resolved.cached_content);
     }
-    return body;
+    return <GeminiChatRequest>{
+        "body": body,
+        "stringified_arguments": stringified_arguments,
+    };
 }
 
 #! Makes a request body use a cached content resource
@@ -982,8 +1905,12 @@ public hash<auto> sub shapeCachedContentBody(string model, list<hash<QoreLlmUtil
 #! Parses a Gemini response into a generic @ref QoreLlmUtils::ChatResponse
 /** @param body the response body
     @param cache_requested @ref True if the request used cached content; see @ref normalizeUsage()
+    @param stringified_arguments the paths of the arguments that each tool of the request declares as JSON strings
+        (@ref GeminiChatRequest::stringified_arguments); tool calls are returned with these arguments decoded
+        (@ref decodeToolArguments()), while \c raw keeps the response as received
 */
-public hash<QoreLlmUtils::ChatResponse> sub parseChatResponse(hash<auto> body, *bool cache_requested) {
+public hash<QoreLlmUtils::ChatResponse> sub parseChatResponse(hash<auto> body, *bool cache_requested,
+        *hash<string, list<list<*string>>> stringified_arguments) {
     hash<auto> cand = body.candidates[0] ?? {};
     list<string> text_parts = ();
     *list<hash<QoreLlmUtils::ChatToolCall>> tool_calls;
@@ -1001,7 +1928,8 @@ public hash<QoreLlmUtils::ChatResponse> sub parseChatResponse(hash<auto> body, *
                 "id": part.functionCall.id ?? sprintf("gemini-tool-%d",
                     ++tc_index),
                 "name": part.functionCall.name,
-                "arguments": part.functionCall.args ?? {},
+                "arguments": GeminiBodyShape::decodeToolArguments(part.functionCall.args ?? {},
+                    stringified_arguments{part.functionCall.name}),
                 "thought_signature": part.thoughtSignature.typeCode() == NT_STRING
                     ? part.thoughtSignature
                     : NOTHING,
@@ -1203,6 +2131,31 @@ public string sub requestErrorDetail(hash<ExceptionInfo> ex) {
     if (ex.arg.typeCode() != NT_HASH) {
         return ex.desc;
     }
+    auto body = GeminiBodyShape::requestErrorBody(ex);
+    *string msg;
+    switch (body.typeCode()) {
+        case NT_HASH:
+            msg = body.error.message ?? body.error.status ?? body.message;
+            break;
+        case NT_STRING:
+            msg = body;
+            break;
+    }
+    if (!msg.val()) {
+        return ex.desc;
+    }
+    return sprintf("%s (HTTP %s: %s)", ex.desc, ex.arg.status_code ?? "?", trim(msg));
+}
+
+#! Returns the response body carried by a REST exception, deserialized when it is JSON text
+/** @param ex the REST exception caught from a request
+
+    @return the response body: a hash for a JSON error object, otherwise the body as received, or @ref nothing
+*/
+auto sub requestErrorBody(hash<ExceptionInfo> ex) {
+    if (ex.arg.typeCode() != NT_HASH) {
+        return NOTHING;
+    }
     auto body = ex.arg.body;
     if (body.typeCode() == NT_BINARY) {
         body = body.toString("UTF-8");
@@ -1219,19 +2172,91 @@ public string sub requestErrorDetail(hash<ExceptionInfo> ex) {
     if (body.typeCode() == NT_LIST && body.size() == 1) {
         body = body[0];
     }
-    *string msg;
-    switch (body.typeCode()) {
-        case NT_HASH:
-            msg = body.error.message ?? body.error.status ?? body.message;
-            break;
-        case NT_STRING:
-            msg = body;
-            break;
+    return body;
+}
+
+#! The exception raised when Gemini rejects a request because its tool declarations are too complex
+/** See @ref geminibodyshapetoolschemacomplexity; the exception argument is a
+    @ref GeminiToolSchemaTooComplexInfo hash.
+*/
+public const ToolSchemaTooComplexError = "GEMINI-TOOL-SCHEMA-TOO-COMPLEX";
+
+#! The message of the error response that Gemini returns when the tool declarations exceed its decoding budget
+/** Gemini and Vertex AI return this message with status \c INVALID_ARGUMENT and no further detail; a request that
+    is invalid in another way is answered with a message that names the invalid field.
+*/
+public const ToolSchemaBudgetErrorMessage = "Request contains an invalid argument.";
+
+#! Describes a request that Gemini rejected because its tool declarations are too complex
+/** The argument of a @ref ToolSchemaTooComplexError exception.
+
+    @since GeminiBodyShape 1.0
+*/
+public hashdecl GeminiToolSchemaTooComplexInfo {
+    #! the number of function declarations of the request
+    int tool_count;
+    #! the size of the request's function declarations as JSON, in bytes
+    int declaration_bytes;
+    #! the function calling mode of the request (\c "ANY" for unrestricted any-tool mode)
+    string function_calling_mode;
+    #! Gemini's error status (ex: \c "INVALID_ARGUMENT")
+    string provider_status;
+    #! Gemini's error message
+    string provider_message;
+    #! the HTTP status code of the response
+    int status_code;
+}
+
+#! Returns whether a rejected request failed because its tool declarations are too complex for Gemini
+/** Gemini compiles the function declarations of a request into one constrained-decoding state machine.  When the
+    declarations exceed its budget, it rejects the request with HTTP 400: either with a message that names the
+    \c "too many states" cause, or, in unrestricted any-tool mode (function calling mode \c ANY without
+    \c allowedFunctionNames), with status \c INVALID_ARGUMENT and the generic message
+    @ref ToolSchemaBudgetErrorMessage and no details.  The same request in \c AUTO mode, or restricted with
+    \c allowedFunctionNames, is accepted.
+
+    Only these responses to requests that declare tools are recognized; any other error returns @ref nothing.
+
+    @param request_body the \c generateContent request body that was sent
+    @param ex the exception raised by the request
+
+    @return a description of the rejection, or @ref nothing if the request was not rejected for this reason
+
+    @since GeminiBodyShape 1.0
+*/
+public *hash<GeminiToolSchemaTooComplexInfo> sub getToolSchemaTooComplexInfo(hash<auto> request_body,
+        hash<ExceptionInfo> ex) {
+    if (ex.arg.typeCode() != NT_HASH || ex.arg.status_code != 400) {
+        return NOTHING;
     }
-    if (!msg.val()) {
-        return ex.desc;
+    *list<auto> declarations = request_body.tools[0].functionDeclarations;
+    if (!declarations) {
+        return NOTHING;
     }
-    return sprintf("%s (HTTP %s: %s)", ex.desc, ex.arg.status_code ?? "?", trim(msg));
+    auto body = GeminiBodyShape::requestErrorBody(ex);
+    if (body.typeCode() != NT_HASH || body.error.typeCode() != NT_HASH) {
+        return NOTHING;
+    }
+    hash<auto> error = body.error;
+    string message = error.message.typeCode() == NT_STRING ? error.message : "";
+    string status = error.status.typeCode() == NT_STRING ? error.status : "";
+    *hash<auto> calling = request_body.toolConfig.functionCallingConfig;
+    string mode = calling.mode.typeCode() == NT_STRING ? toupper(calling.mode) : "AUTO";
+    bool too_many_states = message =~ /too many states/i;
+    bool unrestricted_any = mode == "ANY" && !calling.allowedFunctionNames;
+    if (!too_many_states
+            && !(unrestricted_any && status == "INVALID_ARGUMENT" && message == ToolSchemaBudgetErrorMessage
+                && !error.details)) {
+        return NOTHING;
+    }
+    return <GeminiToolSchemaTooComplexInfo>{
+        "tool_count": declarations.size(),
+        "declaration_bytes": make_json(request_body.tools).size(),
+        "function_calling_mode": mode,
+        "provider_status": status,
+        "provider_message": message,
+        "status_code": 400,
+    };
 }
 
 #! Common provider base for Gemini-family models served over different transports
@@ -1290,10 +2315,10 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
     hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
             string user_prompt, *hash<auto> output_schema,
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        hash<auto> body = buildModelBody((
+        hash<auto> body = buildModelRequest((
             <QoreLlmUtils::ChatMessage>{"role": "system", "content": system_prompt},
             <QoreLlmUtils::ChatMessage>{"role": "user", "content": user_prompt},
-        ), NOTHING, output_schema, opts);
+        ), NOTHING, output_schema, opts).body;
         hash<auto> resp = postGenerate(body, opts);
         return <QoreLlmUtils::LlmCompletionResult>{
             "content": GeminiBodyShape::extractText(resp.body),
@@ -1305,10 +2330,10 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             list<hash<QoreLlmUtils::ChatMessage>> messages,
             *list<hash<QoreLlmUtils::ToolDefinition>> tools,
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        hash<auto> body = buildModelBody(messages, tools, opts.output_schema, opts);
-        hash<auto> resp = postGenerate(body, opts);
-        hash<QoreLlmUtils::ChatResponse> rv =
-            GeminiBodyShape::parseChatResponse(resp.body, exists body.cachedContent);
+        hash<GeminiChatRequest> request = buildModelRequest(messages, tools, opts.output_schema, opts);
+        hash<auto> resp = postGenerate(request.body, opts);
+        hash<QoreLlmUtils::ChatResponse> rv = GeminiBodyShape::parseChatResponse(resp.body,
+            exists request.body.cachedContent, request.stringified_arguments);
         rv.model = getModelName(opts);
         return rv;
     }
@@ -1332,6 +2357,8 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         @throw LLM-ERROR the request failed or was rejected, the response was
         not an event stream, an event could not be parsed, the stream reported
         an error, or no event arrived within the request timeout
+        @throw GEMINI-TOOL-SCHEMA-TOO-COMPLEX Gemini rejected the request because its tool declarations exceed its
+        constrained-decoding budget (see @ref geminibodyshapetoolschemacomplexity)
         @throw LLM-CANCELLED the request was cancelled with
         @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation"; the connection
         of a stream in flight is closed at once
@@ -1341,12 +2368,12 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             *list<hash<QoreLlmUtils::ToolDefinition>> tools,
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         ensureRestClient();
-        hash<auto> body = buildModelBody(messages, tools, opts.output_schema, opts);
+        hash<GeminiChatRequest> request = buildModelRequest(messages, tools, opts.output_schema, opts);
         string path = getStreamRequestPath(opts);
         hash<auto> hdr = (getRequestHeaders(opts) ?? {}) + {
             "Content-Type": "application/json",
         };
-        string json_body = make_json(body);
+        string json_body = make_json(request.body);
         *date request_deadline = exists opts.timeout_ms
             ? now_us() + milliseconds(getRequestTimeoutMs(opts)) : NOTHING;
         # a cancellation closes the connection of the request at once, also while its response is awaited
@@ -1367,13 +2394,15 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             if (ex.err == "LLM-CANCELLED") {
                 rethrow;
             }
+            checkToolSchemaTooComplex(request.body, ex);
             throw "LLM-ERROR",
                 sprintf("%s streaming request to %y failed: %s", getProviderLabel(), path,
                     GeminiBodyShape::requestErrorDetail(ex)), ex;
         }
         # a stream left before its end must not keep the server sending
         on_exit reader.cancel();
-        deliverStreamEvents(reader, callback, getRequestTimeoutMs(opts), request_deadline, opts);
+        deliverStreamEvents(reader, callback, getRequestTimeoutMs(opts), request_deadline, opts,
+            request.stringified_arguments);
     }
 
     #! Explicit call deadlines cover the whole stream, not a fresh wait per chunk
@@ -1417,6 +2446,9 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         @param deadline optional absolute deadline shared by all event waits
         @param opts optional per-call request overrides; a cancellation of
         @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation" ends the delivery
+        @param stringified_arguments the paths of the arguments that each tool of the request declares as JSON
+        strings; the function calls of each chunk are delivered in \c raw with these arguments decoded
+        (@ref GeminiBodyShape::decodeResponseToolArguments())
 
         @throw LLM-ERROR an event could not be parsed, the stream reported an
         error, or no event arrived within \a timeout_ms
@@ -1424,7 +2456,8 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
     */
     private deliverStreamEvents(HttpClientStreamingIo::SseStreamReader reader,
             code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback, int timeout_ms,
-            *date deadline, *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+            *date deadline, *hash<QoreLlmUtils::LlmRequestOptions> opts,
+            *hash<string, list<list<*string>>> stringified_arguments) {
         while (True) {
             *hash<SseMessageInfo> evt = callCancellable(*hash<SseMessageInfo> sub () {
                 return reader.readEvent(remainingStreamTimeout(timeout_ms, deadline));
@@ -1460,7 +2493,9 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
                     sprintf("%s streaming response contained an event that is not a JSON object: %y",
                         getProviderLabel(), parsed);
             }
-            hash<auto> chunk = cast<hash>(parsed);
+            # the chunk carries the function calls: their arguments are delivered with their declared types
+            hash<auto> chunk = GeminiBodyShape::decodeResponseToolArguments(cast<hash>(parsed),
+                stringified_arguments);
             if (chunk.error) {
                 auto error = chunk.error;
                 *string msg;
@@ -1643,8 +2678,10 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         return streamed;
     }
 
-    #! Builds a generateContent request body, honoring per-call knobs and body_options
-    private hash<auto> buildModelBody(
+    #! Builds a generateContent request, honoring per-call knobs and body_options
+    /** @return the request body and the paths of the arguments that each tool declares as JSON strings
+    */
+    private hash<GeminiChatRequest> buildModelRequest(
             list<hash<QoreLlmUtils::ChatMessage>> messages,
             *list<hash<QoreLlmUtils::ToolDefinition>> tools,
             *hash<auto> output_schema,
@@ -1658,14 +2695,15 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             "reasoning_effort": getRequestReasoningEffort(opts),
             "cached_content": cached_content,
         };
-        hash<auto> body = GeminiBodyShape::shapeChatBody(messages, tools,
+        hash<GeminiChatRequest> request = GeminiBodyShape::shapeChatRequest(messages, tools,
             output_schema, resolved);
-        body = mergeRequestBodyOptions(body, opts);
+        hash<auto> body = mergeRequestBodyOptions(request.body, opts);
         body = GeminiBodyShape::normalizeGenerationConfig(getModelName(opts), body);
         # body options such as a toolConfig translated from an OpenAI tool_choice must not be sent with a cache
-        return cached_content
+        request.body = cached_content
             ? GeminiBodyShape::applyCachedContent(body, cached_content)
             : body;
+        return request;
     }
 
     #! Returns the cached content resource that a request uses, if any
@@ -1702,10 +2740,35 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             if (ex.err == "LLM-CANCELLED") {
                 rethrow;
             }
+            checkToolSchemaTooComplex(body, ex);
             throw "LLM-ERROR",
                 sprintf("%s request to %y failed: %s", getProviderLabel(), path,
                     GeminiBodyShape::requestErrorDetail(ex)), ex;
         }
+    }
+
+    #! Raises @ref GeminiBodyShape::ToolSchemaTooComplexError if Gemini rejected the request's tool declarations
+    /** @param body the request body that was sent
+        @param ex the exception raised by the request
+
+        @throw GEMINI-TOOL-SCHEMA-TOO-COMPLEX Gemini rejected the request because its tool declarations exceed its
+        constrained-decoding budget (see @ref GeminiBodyShape::getToolSchemaTooComplexInfo()); the argument is a
+        @ref GeminiBodyShape::GeminiToolSchemaTooComplexInfo hash
+    */
+    private checkToolSchemaTooComplex(hash<auto> body, hash<ExceptionInfo> ex) {
+        *hash<GeminiToolSchemaTooComplexInfo> info = GeminiBodyShape::getToolSchemaTooComplexInfo(body, ex);
+        if (!info) {
+            return;
+        }
+        throw GeminiBodyShape::ToolSchemaTooComplexError,
+            sprintf("%s rejected a request with %d tool declarations (%d bytes): they exceed Gemini's "
+                "constrained-decoding budget for the declared tools in %s (HTTP %d %s: %y); offer fewer or "
+                "smaller tools per request (for example with a tiered or two-phase tool catalog), or restrict the "
+                "call to the tools it needs with allowedFunctionNames", getProviderLabel(), info.tool_count,
+                info.declaration_bytes, info.function_calling_mode == "ANY"
+                    ? "unrestricted any-tool mode (function calling mode ANY without allowedFunctionNames)"
+                    : sprintf("function calling mode %s", info.function_calling_mode),
+                info.status_code, info.provider_status, info.provider_message), info;
     }
 
     #! Returns the lazily-initialized REST client (for subclass streaming overrides)

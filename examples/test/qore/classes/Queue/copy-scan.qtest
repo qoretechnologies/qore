@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class QueueCopyScanTest
+
+#! a value that can refer to a Queue, so that it can close a cycle through the queue's private data
+class QueueValue {
+    public {
+        *Queue q;
+        static Counter destroyed();
+    }
+
+    destructor() {
+        destroyed.inc();
+    }
+}
+
+#! Tests that a copy of a Queue counts the values it copies for garbage collection scanning
+/** A Queue object is scanned for reference cycles only while it counts values that can be part of one; a copy that
+    did not count the values it copied was never scanned, so a cycle through it was never collected.
+*/
+class QueueCopyScanTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Queue copy scan", "1.0") {
+        addTestCase("the copy counts its values", \countTest());
+        addTestCase("a cycle through the copy is collected", \cycleTest());
+        set_return_value(main());
+    }
+
+    #! the copy is counted while it holds values that can be part of a cycle, and uncounted when they are taken
+    countTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_node_info() requires library debugging");
+        }
+        Queue q();
+        q.push(1);
+        q.push(new QueueValue());
+        q.push(new QueueValue());
+        Queue q2 = q.copy();
+        assertEq(3, q2.size());
+        assertEq(1, getScanPrivateData(q2));
+        q2.get();
+        q2.get();
+        assertEq(1, getScanPrivateData(q2), "one value that can be part of a cycle remains");
+        q2.get();
+        assertEq(0, getScanPrivateData(q2), "no value that can be part of a cycle remains");
+
+        # a copy of a queue with no such values is not counted
+        Queue q3 = q2.copy();
+        assertEq(0, getScanPrivateData(q3));
+        q.clear();
+    }
+
+    #! a cycle that is closed through a copied queue is collected once nothing else references it
+    cycleTest() {
+        int destroyed = QueueValue::destroyed.getCount();
+        {
+            QueueValue v();
+            Queue q();
+            q.push(v);
+            Queue q2 = q.copy();
+            # the cycle q2 -> v -> q2 runs through the copy's private data
+            v.q = q2;
+            q.clear();
+        }
+        assertEq(destroyed + 1, QueueValue::destroyed.getCount(), "the cycle through the copy is collected");
+    }
+
+    #! returns the private data scan count of the given object as reported by dbg_node_info()
+    private static int getScanPrivateData(object obj) {
+        *list<*string> m = (call_function("dbg_node_info", obj, True) =~ x/scan_private_data: ([0-9-]+)/);
+        return m[0].toInt();
+    }
+}

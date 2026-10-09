@@ -183,39 +183,6 @@ int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, ExceptionSink* xsink) {
 }
 
 int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink) {
-    // pre-wait check: cancel set before we even tried to wait
-    if (qore_check_cancel(xsink, "condition wait")) {
-        return QORE_COND_RESULT_INTERRUPTED;
-    }
-
-    // Register so cancelThread()/SandboxManager::requestInterrupt() can wake us via broadcast().
-    // The seq_cst on this store pairs with seq_cst on the cancel side (set flag, read waiting_on)
-    // to defeat the lost-wakeup race: at least one of "waiter sees flag" or "canceller sees pointer"
-    // is guaranteed.  See design/cooperative-cancellation.md.
-    thread_list.setCurrentWaitingOn(this);
-
-    // Re-check after registration: if cancel arrived just before our store became visible to the
-    // canceller, the canceller may have read waiting_on==nullptr and skipped the broadcast — so
-    // we must catch it ourselves.
-    if (qore_check_cancel(xsink, "condition wait")) {
-        thread_list.clearCurrentWaitingOn();
-        return QORE_COND_RESULT_INTERRUPTED;
-    }
-
-    // Single wait — broadcast-on-cancel will wake us if cancellation is requested while we sleep,
-    // so no polling loop is needed.
-    int rc = wait2(m, timeout_ms);
-
-    thread_list.clearCurrentWaitingOn();
-
-    // If we were woken by a cancel-induced broadcast (rc==0) or cancel arrived between wakeup
-    // and unregister, report INTERRUPTED rather than SUCCESS.
-    if (qore_check_cancel(xsink, "condition wait")) {
-        return QORE_COND_RESULT_INTERRUPTED;
-    }
-
-    if (rc == 0) {
-        return QORE_COND_RESULT_SUCCESS;
-    }
-    return QORE_COND_RESULT_TIMEOUT;
+    // see qore_cond_wait_cancellable() and "Condition waits" in design/cooperative-cancellation.md
+    return qore_cond_wait_cancellable(*this, m, timeout_ms, xsink, "condition wait");
 }

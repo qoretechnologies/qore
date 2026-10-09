@@ -109,6 +109,12 @@ int AbstractStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Exce
 int AbstractStatement::parseInit(QoreParseContext& parse_context) {
     printd(2, "AbstractStatement::parseInit() this: %p type: %s file: %s line: %d\n", this, typeid(this).name(),
         loc->getFile(), loc->start_line);
+    // statements nest with the code, and parse initialization recurses with them: it stops while enough stack
+    // remains (see parse_check_stack())
+    if (parse_check_stack(loc)) {
+        return -1;
+    }
+
     // set parse options and warning mask for this statement
     ParseWarnHelper pwh(pwo);
 

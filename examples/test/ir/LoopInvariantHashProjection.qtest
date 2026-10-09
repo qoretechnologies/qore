@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -113,8 +114,8 @@ source_file.write(source);
 source_file.close();
 
 string sub runMode(string mode, string extra_env = "") {
-    return backquote(sprintf(
-        "%s LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+    return ExecModeHarness::run(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
         extra_env, libqore_dir, qore_bin, mode, source_path));
 }
 

@@ -70,5 +70,6 @@ DLLLOCAL void init_cppapiuser_functions(QoreNamespace& ns);
 
 #include "QC_ProgramContextProbe.h"
 #include "QC_SerializationIndexProbe.h"
+#include "QC_ExceptionResultProbe.h"
 
 #endif // _QORE_CPPAPIUSER_MODULE_H

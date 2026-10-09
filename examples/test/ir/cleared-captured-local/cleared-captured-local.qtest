@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ClearedCapturedLocalTest
+
+#! Tests that compiled code checks a local variable for NOTHING after a reference or a closure can have cleared it
+/** A typed local variable, such as a \c string parameter, that has been assigned is taken by the IR lowering as
+    never NOTHING, so compiled string fast paths (\c index(), \c rindex(), <tt><string>::find()</tt>, \c substr())
+    skipped their checks.  But a reference passed to a function, or a closure, can remove the variable's value at a
+    point the parse-time analysis cannot see - even before the read, in an earlier iteration of a loop - so with JIT
+    execution \c index() of such a variable returned -1 instead of raising \c RUNTIME-OVERLOAD-ERROR as the
+    interpreters do.
+
+    The worker runs in every execution mode through ExecModeHarness, which makes the second call of each function
+    run as native code with JIT and tiered execution and checks that it does, and as a qcc-compiled executable.
+*/
+class ClearedCapturedLocalTest inherits QUnit::Test {
+    public {
+        #! the results of one pass of the worker
+        const Pass = "ref_index=RUNTIME-OVERLOAD-ERROR\n"
+            "ref_rindex=RUNTIME-OVERLOAD-ERROR\n"
+            "ref_find=PSEUDO-METHOD-DOES-NOT-EXIST\n"
+            "closure_index=RUNTIME-OVERLOAD-ERROR\n"
+            "loop_index=1;RUNTIME-OVERLOAD-ERROR;\n"
+            "ref_kept=1\n"
+            "ref_substr=RUNTIME-OVERLOAD-ERROR\n";
+
+        #! the output of the worker, which runs two passes
+        const Expected = Pass + Pass;
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+        string env;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("ClearedCapturedLocalTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        worker = get_script_dir() + DirSep + "cleared-captured-local-worker.q";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("qcc-compiled executable", \testCompiled());
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, worker),
+                ExecModeHarness::NativeCheck::JitAndTiered), mode);
+        }
+    }
+
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-cleared-captured-local-");
+        string exe = tmp.path + DirSep + "cleared-captured-local";
+        string compile_out = backquote(sprintf("%s %s -o %s %s 2>&1", env, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "qcc: " + compile_out);
+        assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "aot");
+    }
+}

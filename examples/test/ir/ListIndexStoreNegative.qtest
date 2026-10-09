@@ -16,6 +16,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class ListIndexStoreNegativeTest
 
@@ -46,13 +47,11 @@ class ListIndexStoreNegativeTest inherits QUnit::Test {
         script.file.write("%modern\n" + code);
         script.file.close();
 
-        TmpFile out();
-        TmpFile err();
-        string cmd = sprintf("%s --exec-mode=%s %s > %s 2> %s",
-            qore_bin, mode, script.path, out.path, err.path);
-        int rc = system(cmd);
+        string cmd = sprintf("%s --exec-mode=%s %s", qore_bin, mode, script.path);
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd);
+        int rc = r.rc;
         if (rc != 0) {
-            string err_output = ReadOnlyFile::readTextFile(err.path) ?? "";
+            string err_output = r.stderr;
             if (err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
                 testSkip("exec-mode option not supported");
                 return "";
@@ -61,7 +60,8 @@ class ListIndexStoreNegativeTest inherits QUnit::Test {
             # both are failures, so report the stderr output to make the cause visible
             throw "EXEC-ERROR", sprintf("%y in %y mode exited with status %d: %s", cmd, mode, rc, err_output);
         }
-        return ReadOnlyFile::readTextFile(out.path) ?? "";
+        ExecModeHarness::check_native(r);
+        return r.stdout;
     }
 
     private assertSameInAllModes(string code, string expected, string desc) {

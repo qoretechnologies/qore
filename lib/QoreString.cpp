@@ -592,11 +592,54 @@ void QoreAsciiCompatStringHelper::setupSlow(const qore_string_private& str) {
     enc = QCS_UTF8;
 }
 
+// decodes text with iconv; for an encoding with no character decoding functions (ex: EBCDIC), or one whose text can
+// start with a byte order mark in either byte order (ex: "UTF-32"), which iconv resolves
+static void decode_to_utf8_iconv(const QoreEncoding* enc, const char* p, size_t size, QoreString& out) {
+    qore_string_private* op = qore_string_private::get(out);
+    IconvHelper c(QCS_UTF8, enc, nullptr);
+    if (!c.isValid()) {
+        op->concatUTF8FromUnicode(0xfffd);
+        return;
+    }
+    char buf[1024];
+    char* ib = const_cast<char*>(p);
+    size_t il = size;
+    // after the input is converted, iconv is called once more to complete the output of a stateful encoding
+    bool flushing = false;
+    while (true) {
+        char* ob = buf;
+        size_t ol = sizeof(buf);
+        size_t rc = flushing ? c.iconv(nullptr, nullptr, &ob, &ol) : c.iconv(&ib, &il, &ob, &ol);
+        int err = errno;
+        out.concat(buf, ob - buf);
+        if (rc == static_cast<size_t>(-1)) {
+            if (err == E2BIG) {
+                continue;
+            }
+            // an invalid or incomplete character, where parsing stops
+            op->concatUTF8FromUnicode(0xfffd);
+            return;
+        }
+        if (flushing) {
+            return;
+        }
+        assert(!il);
+        flushing = true;
+    }
+}
+
 void QoreAsciiCompatStringHelper::decodeToUtf8(const QoreEncoding* enc, const char* p, size_t size,
         QoreString& out) {
     assert(enc);
     assert(!enc->isAsciiCompat());
     assert(out.getEncoding() == QCS_UTF8);
+    {
+        const qore_encoding_private* ep = qore_encoding_private::get(*enc);
+        if (!ep->get_unicode || !ep->iconv_target_code.empty()) {
+            decode_to_utf8_iconv(enc, p, size, out);
+            return;
+        }
+    }
     const char* end = p + size;
     // a byte order mark gives the byte order of a string in the generic "UTF-16" encoding (big-endian by default)
     if (enc == QCS_UTF16 && size >= 2) {
@@ -828,7 +871,8 @@ bool qore_string_private::conversion_needs_roundtrip_check(const QoreEncoding* f
         return false;
     }
     // every character has a representation in Unicode, so these conversions cannot lose data
-    if (to == QCS_UTF8 || to == QCS_UTF16 || to == QCS_UTF16BE || to == QCS_UTF16LE) {
+    if (to == QCS_UTF8 || to == QCS_UTF16 || to == QCS_UTF16BE || to == QCS_UTF16LE
+            || qore_encoding_private::get(*to)->unicode_complete) {
         return false;
     }
     // an all-ASCII source moving between ASCII-compatible encodings cannot lose data either;
@@ -869,9 +913,13 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
         size_t ilen = src_len;
         char* ob = targ.priv->buf;
         size_t olen = al;
-        size_t rc = c.iconv(&ib, &ilen, &ob, &olen);
+        size_t rc = c.iconv(&ib, &ilen, &ob, &olen, xsink);
         if (rc == static_cast<size_t>(-1)) {
             switch (errno) {
+                case ECANCELED:
+                    // the exception has been raised
+                    targ.clear();
+                    return -1;
                 case EINVAL:
                 case EILSEQ:
                     c.reportIllegalSequence(ib - src, xsink);
@@ -898,6 +946,24 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
             targ.clear();
             return -1;
         } else {
+            // write the bytes that return a stateful encoding (ex: UTF-7, ISO-2022-JP) to its initial state; without
+            // them, the last characters of the output cannot be decoded
+            if (c.iconv(nullptr, nullptr, &ob, &olen) == static_cast<size_t>(-1)) {
+                if (errno != E2BIG) {
+                    c.reportUnknownError(xsink);
+                    targ.clear();
+                    return -1;
+                }
+                // retry the conversion with a larger buffer
+                if (c.iconv(nullptr, nullptr, nullptr, nullptr) == static_cast<size_t>(-1)) {
+                    c.reportUnknownError(xsink);
+                    targ.clear();
+                    return -1;
+                }
+                al *= 2;
+                targ.allocate(al + 1);
+                continue;
+            }
             // terminate string
             targ.priv->buf[al - olen] = '\0';
             targ.priv->len = al - olen;
@@ -1009,6 +1075,15 @@ int qore_string_private::concatEncode(ExceptionSink* xsink, const QoreString& st
                 i += len - 1;
                 continue;
             }
+
+            // the character is not encoded: all of its bytes are output, as the bytes after the first one of a
+            // multi-byte character are not characters themselves (ex: in EUC-JP, GB18030, or Big5)
+            assert(len);
+            for (unsigned j = 0; j < len; ++j) {
+                concat(p_buf[i + j]);
+            }
+            i += len - 1;
+            continue;
         } else if (((code & CE_HTML) && HTML_ASCII(c))
                 || ((code & CE_XML) && XML_ASCII(c))) {
             smap_t::iterator it = smap.find(c);
@@ -3789,5 +3864,5 @@ void TempEncodingHelper::removeBom() {
     }
     qore_string_private* pstr = qore_string_private::get(str);
     assert(pstr->encoding);
-    q_remove_bom_utf16(str, pstr->encoding);
+    q_remove_bom(str, pstr->encoding);
 }

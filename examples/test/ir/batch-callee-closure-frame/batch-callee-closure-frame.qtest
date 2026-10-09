@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class BatchCalleeClosureFrameTest
+
+#! Tests recursive calls of a function compiled in its caller's batch whose locals are captured by closures
+/** A function compiled to native code as a callee in its caller's batch module is called through
+    qore_rt_call_fast_with_target(), which did not push a frame boundary on the closure variable stack as the other
+    native call paths do.  The callee's closure-use locals were then looked up in the caller's frame: a recursive
+    call found its caller's variable, did not instantiate its own, and popped the caller's variable on exit, so the
+    caller's closure was left with a dangling capture and the process crashed (an assertion in a debug build).
+
+    The worker runs in every execution mode through ExecModeHarness, which compiles each function before its first
+    call returns with JIT execution and checks that native code ran, and as a qcc-compiled executable.
+*/
+class BatchCalleeClosureFrameTest inherits QUnit::Test {
+    public {
+        const Expected = "[1, 2, 3, 4] 6\n[1, 2]\n[1, 2, 3, 4] 6\n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+        string env;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("BatchCalleeClosureFrameTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        worker = get_script_dir() + DirSep + "batch-callee-closure-frame-worker.q";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("qcc-compiled executable", \testCompiled());
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "--exec-mode=%s %s", env, qore_bin, mode, worker));
+            assertEq(0, r.rc, mode + ": exit status: " + r.out);
+            assertEq(Expected, r.out, mode);
+            ExecModeHarness::check_native(r);
+            if (mode == "jit") {
+                # the recursive functions run as batch callees
+                foreach string fn in (("captured_list", "captured_sum")) {
+                    assertTrue((select r.trace, $1 =~ /^\[BG-JIT\] batch-promoted callee '/
+                        && $1.find("'" + fn + "@") >= 0).size() > 0,
+                        sprintf("%s: %s() is compiled as a batch callee: %s", mode, fn, r.trace.join("\n")));
+                }
+            }
+        }
+    }
+
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-batch-callee-closure-frame-");
+        string exe = tmp.path + DirSep + "batch-callee-closure-frame";
+        string compile_out = backquote(sprintf("%s %s -o %s %s 2>&1", env, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "qcc: " + compile_out);
+        assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "aot");
+    }
+}

@@ -1586,7 +1586,7 @@ bool <string>::contains(string substring) [const;flags=RET_VALUE_ONLY,NAMED_ARGS
     size_t avail = str->size() - offset;
     // in encodings that are not self-synchronizing (UTF-16*) a byte-oriented match can start in the
     // middle of a character; those matches must be skipped
-    const unsigned align = qore_string_private::get_char_alignment(str->getEncoding());
+    const qore_char_boundary align = qore_string_private::get_char_alignment(str->getEncoding());
     SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(str->getEncoding()));
 
     // the end of line sequence found, if any, and its length in bytes

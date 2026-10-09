@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class AOTOpaqueReferenceOwnershipTest
 
@@ -143,7 +144,7 @@ sub report(string name, auto value) {
     }
 
     private string run(string cmd) {
-        return backquote(cmd + " 2>&1");
+        return ExecModeHarness::run_any(cmd);
     }
 
     private writeFile(string path, string contents) {

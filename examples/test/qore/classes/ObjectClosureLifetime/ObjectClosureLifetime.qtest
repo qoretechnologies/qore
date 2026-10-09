@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../../ExecModeHarness.qm
 
 %exec-class ObjectClosureLifetimeTest
 
@@ -165,7 +166,7 @@ printf("done\n");
 
     testAst() {
         TmpDir tmp("qore-object-closure-lifetime-");
-        hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, writeScript(tmp.path)));
+        hash<auto> rv = run(sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, writeScript(tmp.path)));
         assertEq(0, rv.rc, rv.err);
         list<string> lines = rv.out.split("\n");
         # temporaries are destroyed before the closure is called; no closure sees a destroyed object
@@ -188,9 +189,9 @@ printf("done\n");
     testExecModes() {
         TmpDir tmp("qore-object-closure-lifetime-");
         string src = writeScript(tmp.path);
-        string expected = run(tmp.path, sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, src)).out;
+        string expected = run(sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, src)).out;
         foreach string mode in (("ir", "jit", "tiered")) {
-            hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src));
+            hash<auto> rv = run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src));
             assertEq(0, rv.rc, mode + ": " + rv.err);
             assertEq(expected, rv.out, mode);
         }
@@ -202,13 +203,13 @@ printf("done\n");
         }
         TmpDir tmp("qore-object-closure-lifetime-");
         string src = writeScript(tmp.path);
-        string expected = run(tmp.path, sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, src)).out;
+        string expected = run(sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, src)).out;
         string exe = tmp.path + DirSep + "object-closure-lifetime";
-        hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
+        hash<auto> rv = run(sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
         assertEq(0, rv.rc, rv.err);
         # native closures, and closure bodies run by the IR interpreter
         foreach string opts in (("", "QORE_DISABLE_AOT_NATIVE_CLOSURES=1")) {
-            rv = run(tmp.path, sprintf("%s %s %s", env, opts, exe));
+            rv = run(sprintf("%s %s %s", env, opts, exe));
             assertEq(0, rv.rc, opts + ": " + rv.err);
             assertEq(expected, rv.out, opts);
         }
@@ -240,12 +241,14 @@ printf("done\n");
     }
 
     #! runs @a cmd; returns its exit code, its standard output, and its standard error output
-    private hash<auto> run(string dir, string cmd) {
-        string err_file = dir + DirSep + "stderr.txt";
-        int rc;
-        string out = backquote(sprintf("%s 2>%s", cmd, err_file), \rc);
-        string err = File::readTextFile(err_file);
-        unlink(err_file);
-        return {"rc": rc, "out": out, "err": err};
+    /** a command that runs qore with an execution mode runs through ExecModeHarness, which checks its native
+        compilation
+    */
+    private hash<auto> run(string cmd) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        return {"rc": r.rc, "out": r.stdout, "err": r.stderr};
     }
 }

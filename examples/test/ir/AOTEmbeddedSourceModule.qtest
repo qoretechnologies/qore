@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class AOTEmbeddedSourceModuleTest
 
@@ -61,7 +62,7 @@ class AOTEmbeddedSourceModuleTest inherits QUnit::Test {
     }
 
     private string run(string cmd) {
-        return backquote(cmd + " 2>&1");
+        return ExecModeHarness::run_any(cmd);
     }
 
     private string writeFile(string path, string text) {

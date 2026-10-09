@@ -1,0 +1,43 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class NoopVariantWarningTest
+
+#! Tests the parse warning for a call of the variant of a builtin function that returns a constant value
+/** A call that matches a RUNTIME_NOOP variant of a builtin function, such as \c abs() without arguments in old-style
+    code, raises a \c CALL-WITH-TYPE-ERRORS warning that gives the constant value, which getNoopError() gets by
+    calling the variant.  It called the variant without an exception sink, which builtin code must always get: the
+    runtime checks the sink when builtin code returns, so the parse crashed (an assertion in a debug build).
+
+    The worker is an old-style script, since %modern code does not match these variants; it runs in a child process
+    with warnings enabled.
+*/
+class NoopVariantWarningTest inherits QUnit::Test {
+    constructor() : QUnit::Test("NoopVariantWarningTest", "1.0", \ARGV) {
+        addTestCase("noop variant warning", \testWarning());
+        set_return_value(main());
+    }
+
+    testWarning() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string cmd = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -W %s", libqore_dir, libqore_dir, qore_bin,
+            get_script_dir() + DirSep + "noop-variant-warning-worker.q");
+        int rc;
+        string out = backquote(cmd + " 2>&1", \rc);
+        assertEq(0, rc, out);
+        # one warning for each call, with the constant value the variant returns
+        assertEq(2, (out =~ x/(CALL-WITH-TYPE-ERRORS)/g).size(), out);
+        assertRegex("abs\\(\\) is a variant that returns a constant value .* and always returns the following "
+            "value: 0 \\(type 'float'\\)", out);
+        # the calls return the constant values
+        assertEq("0 0\n", backquote(cmd + " 2>/dev/null"));
+    }
+}

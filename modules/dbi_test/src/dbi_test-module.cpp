@@ -40,6 +40,7 @@
 #include <qore/DBI.h>
 #include <qore/SQLStatement.h>
 
+#include <atomic>
 #include <cstring>
 #include <string>
 
@@ -57,6 +58,10 @@
 #define DBITEST_OPT_BULK_LOAD_STATS "bulk-load-stats"
 //! driver option resetting native bulk-load protocol statistics
 #define DBITEST_OPT_BULK_LOAD_RESET "bulk-load-reset"
+//! driver option that fails when it is set to True on an open connection, as an invalid connection option does
+#define DBITEST_OPT_REJECT "reject"
+//! driver option returning the number of connections of the driver that are open in the process
+#define DBITEST_OPT_LIVE_CONNECTIONS "live-connections"
 
 static DBIDriver* DBID_DBITEST = nullptr;
 static DBIDriver* DBID_DBITEST_NO_BULK = nullptr;
@@ -66,8 +71,22 @@ static void dbitest_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Excep
 static void dbitest_module_delete();
 
 //! per-connection state
+//! the number of DbiTestConn objects in the process: the driver's open connections
+static std::atomic<int64> dbitest_live_connections(0);
+
 class DbiTestConn {
 public:
+    DLLLOCAL DbiTestConn() {
+        ++dbitest_live_connections;
+    }
+
+    DLLLOCAL ~DbiTestConn() {
+        --dbitest_live_connections;
+    }
+
+    DbiTestConn(const DbiTestConn&) = delete;
+    DbiTestConn& operator=(const DbiTestConn&) = delete;
+
     //! the currently armed fault; sticky until changed with the "fault" option
     std::string fault;
     //! rows reported as affected by exec operations
@@ -515,10 +534,20 @@ static int dbitest_opt_set(Datasource* ds, const char* opt, const QoreValue val,
         }
         return 0;
     }
+    if (!strcmp(opt, DBITEST_OPT_REJECT)) {
+        if (val.getAsBool()) {
+            xsink->raiseException("DBI-TEST-OPTION-ERROR", "injected failure setting option '%s'", opt);
+            return -1;
+        }
+        return 0;
+    }
     return 0;
 }
 
 static QoreValue dbitest_opt_get(const Datasource* ds, const char* opt) {
+    if (!strcmp(opt, DBITEST_OPT_LIVE_CONNECTIONS)) {
+        return dbitest_live_connections.load();
+    }
     DbiTestConn* conn = reinterpret_cast<DbiTestConn*>(const_cast<Datasource*>(ds)->getPrivateData());
     if (!conn) {
         return QoreValue();
@@ -709,6 +738,10 @@ static void dbitest_add_methods(qore_dbi_method_list& methods, bool bulk_load) {
         bigIntTypeInfo);
     methods.registerOption(DBITEST_OPT_BULK_LOAD_STATS, "native bulk-load protocol statistics");
     methods.registerOption(DBITEST_OPT_BULK_LOAD_RESET, "reset native bulk-load protocol statistics", boolTypeInfo);
+    methods.registerOption(DBITEST_OPT_REJECT, "if True, setting this option on an open connection fails",
+        boolTypeInfo);
+    methods.registerOption(DBITEST_OPT_LIVE_CONNECTIONS, "the number of the driver's open connections in the "
+        "process");
 }
 
 static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {

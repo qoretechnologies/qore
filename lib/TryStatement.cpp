@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/TryStatement.h"
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreDeferredRelease.h"
 
 TryStatement::TryStatement(const QoreProgramLocation* loc, StatementBlock* t, StatementBlock* c, char* p,
         const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo, const QoreProgramLocation* vloc)
@@ -41,8 +42,8 @@ TryStatement::TryStatement(const QoreProgramLocation* loc, StatementBlock* t, St
 TryStatement::~TryStatement() {
     if (param)
         free(param);
-    delete try_block;
-    delete catch_block;
+    qore_delete_statement(try_block);
+    qore_delete_statement(catch_block);
     delete parseTypeInfo;
 }
 

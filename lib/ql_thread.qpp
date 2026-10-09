@@ -43,10 +43,6 @@
 #include "qore/intern/QC_Promise.h"
 #include "qore/intern/QC_Channel.h"
 
-#ifndef QORE_IO_POLL_INTERVAL_MS
-#define QORE_IO_POLL_INTERVAL_MS 500
-#endif
-
 #include <pthread.h>
 #include <thread>
 #include <random>
@@ -871,7 +867,9 @@ int stack_size = set_default_thread_stack_size(2 * 1024 * 1024);
 
     @return the value actually set
 
-    @throw SET-DEFAULT-THREAD-STACK-SIZE-ERROR an error occurred setting the default thread stack size
+    @throw SET-DEFAULT-THREAD-STACK-SIZE-ERROR an error occurred setting the default thread stack size, or the size
+    is not larger than the stack that is reserved at the end of each thread's stack for the stack guard (80KB on
+    x86_64 and aarch64), which would leave no stack for the thread to run code
 
     @since %Qore 0.9.0
 */
@@ -2097,28 +2095,17 @@ auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS;dom
                     break;
                 }
 
-                // Use wait2 directly instead of waitWithInterrupt to avoid the
-                // 500ms polling wrapper.  waitWithInterrupt chunks the wait into
-                // QORE_IO_POLL_INTERVAL_MS sub-waits with its own internal loop;
-                // on macOS, pthread_cond_timedwait_relative_np can fail to deliver
-                // broadcasts promptly through the sub-wait boundaries, causing
-                // significant latency (observed 168ms for a 20ms expected wakeup).
-                //
-                // By calling wait2 with the exact remaining timeout, the condvar
-                // wait covers the full period and wakes deterministically on
-                // broadcast.  Interrupt responsiveness is maintained by capping
-                // individual waits at QORE_IO_POLL_INTERVAL_MS for the infinite-
-                // timeout case and by checking qore_check_cancel in the outer loop.
+                // a single wait for the rest of the user timeout (none if there is no timeout): a
+                // cancellation request or program interrupt wakes it at once, and the check after the
+                // wakeup raises it
+                int64 wait_ms = -1;
                 if (has_deadline) {
-                    int64 remaining_ms = deadline_ms - now_ms();
-                    if (remaining_ms <= 0) {
+                    wait_ms = deadline_ms - now_ms();
+                    if (wait_ms <= 0) {
                         break;  // user timeout expired
                     }
-                    waiter->cond.wait2(&waiter->lock, remaining_ms);
-                } else {
-                    // Infinite timeout — wait for one poll interval then re-check
-                    waiter->cond.wait2(&waiter->lock, QORE_IO_POLL_INTERVAL_MS);
                 }
+                waiter->cond.waitWithInterrupt(&waiter->lock, wait_ms);
             }
             // If notified or woken by condvar/timeout: loop back and try_cases again
         }

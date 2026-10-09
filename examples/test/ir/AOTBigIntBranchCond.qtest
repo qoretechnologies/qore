@@ -7,6 +7,7 @@
 %requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class AOTBigIntBranchCondTest
 
@@ -80,7 +81,7 @@ printf(\"%y %y %y %y %d %d\\n\",
     }
 
     private string runMode(string path, string mode) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
             libqore_dir, qore_bin, mode, path));
     }
 

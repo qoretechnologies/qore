@@ -10,6 +10,7 @@
 %requires QUnit
 %requires FsUtil
 %requires DgcRemoveScanChecks
+%requires ../../../ExecModeHarness.qm
 
 %exec-class DgcRemoveScanTest
 
@@ -158,7 +159,7 @@ class DgcRemoveScanTest inherits QUnit::Test {
     #! runs the worker with the checks module loaded from the given directory and returns its output
     private string runWorker(string module_dir, string opts = "") {
         string worker = get_script_dir() + DirSep + "dgc-remove-scan-worker.q";
-        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>&1", libqore_dir,
+        return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s", libqore_dir,
             module_dir, qore_bin, opts, worker));
     }
 

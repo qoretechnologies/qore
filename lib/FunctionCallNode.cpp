@@ -1010,15 +1010,9 @@ QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excep
     // Resolve the Program to execute this call in.  When the node carries an
     // explicit program (a genuine cross-Program call, e.g. a runtime callFunction),
     // use it.  Otherwise resolve against the authoritative thread-current Program
-    // (::getProgram()) rather than the threaded RuntimeConfig (rc.getProgram()):
-    // rc's program pointer is NOT restored when a nested cross-Program call
-    // returns (ProgramThreadCountContextHelper restores td->current_pgm but leaves
-    // rc.pgm pointing at the callee's Program), so reading rc here can resolve the
-    // call against the wrong Program.  This regressed set_return_value() in
-    // --exec-mode=ast for %exec-class tests deriving from a module class such as
-    // QUnit::Test: the inherited main() call left rc.pgm in QUnit's Program, so
-    // set_return_value then ran against a non-%exec-class Program and threw
-    // SETRETURNVALUE-ERROR.  Note: getProgram() (unqualified) would bind to the
+    // (::getProgram()); the Program context helpers keep the thread's RuntimeConfig
+    // in step with it, so rc.getProgram() names the same Program and is only used
+    // when the thread has no current Program.  Note: getProgram() (unqualified) would bind to the
     // FunctionCallNode::getProgram() member accessor (the node's optional explicit
     // program), so the global scope qualifier is required here.
     QoreProgram* call_pgm = pgm ? pgm : ::getProgram();
@@ -1449,9 +1443,11 @@ QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
 }
 
 QoreValue MethodCallNode::exec(QoreObject* o, ExceptionSink* xsink) const {
-    // issue #3596: do not use the context class if it's not compatible with "o"
+    // issue #3596: do not use the context class if it's not compatible with "o"; checked against the committed
+    // class hierarchy: the parse-time check resolves the hierarchy of the class context, which is parse state that
+    // other threads read while the class runs
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
         class_ctx = nullptr;
     }
     return AbstractMethodCallNode::exec(o, c_str, class_ctx, xsink);

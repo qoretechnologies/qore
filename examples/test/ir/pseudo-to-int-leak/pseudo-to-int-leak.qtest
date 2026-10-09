@@ -1,0 +1,150 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class PseudoToIntLeakTest
+
+#! the output, the native compilation trace and the heap integer count of a worker
+hashdecl WorkerResult {
+    #! the result line printed on stdout
+    string out;
+    #! the native compilation trace (QORE_JIT_TIMING)
+    list<string> trace;
+    #! all output other than the trace
+    string err;
+    #! the number of heap integers the conversions left behind, or NOTHING without library debugging
+    *int live;
+}
+
+#! Tests that integers converted from strings outside the inline integer range are released by compiled code
+/** An integer outside the inline (48-bit) range of a NaN-boxed value is a heap QoreBigIntNode.  The compiled fast
+    path of <tt><string>::toInt()</tt> returns a new reference to one, which compiled code did not release, so every
+    such conversion leaked with JIT and tiered execution and in AOT-compiled code; strtoint() returning a clamped
+    value with its exception in a closure leaked on the IR tier.
+
+    The worker counts the heap integers that exist before and after the conversions with
+    dbg_get_live_bigint_count(), which needs library debugging, and reports how many the conversions left behind,
+    which must be none; the check runs in-process on every platform.  The worker runs in every execution mode, with
+    synchronous native compilation following the first call of a function, and as a qcc-compiled executable.
+*/
+class PseudoToIntLeakTest inherits QUnit::Test {
+    public {
+        #! the result printed by the worker
+        const Expected = "[1, -9223372036854775808, 1, 1, \"STRTOINT-ERROR\", 1, -9223372036854775808, 1, 1, "
+            "\"STRTOINT-ERROR\", 1, -9223372036854775808, 1, 1, \"STRTOINT-ERROR\"]\n";
+
+        #! the functions of the worker that must run as native code with JIT and tiered execution
+        const NativeFunctions = ("passed", "assigned", "unused", "discarded", "in_closure");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+        string env;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("PseudoToIntLeakTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        worker = get_script_dir() + DirSep + "pseudo-to-int-leak-worker.q";
+
+        addTestCase("negative: the heap integer report check", \testLiveReportCheck());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("qcc-compiled executable", \testCompiled());
+        set_return_value(main());
+    }
+
+    testLiveReportCheck() {
+        assertEq(0, getLiveCount("[1]\nlive heap integers: 0\n"));
+        assertEq(6, getLiveCount("x\nlive heap integers: 6\ny\n"));
+        assertEq(NOTHING, getLiveCount("[1]\n"));
+    }
+
+    testExecModes() {
+        checkDebugging();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<WorkerResult> r = runWorker(sprintf("%s -b --exec-mode=%s %s", qore_bin, mode, worker));
+            assertEq(Expected, r.out, mode + ": result");
+            assertEq(0, r.live, mode + ": heap integers left behind: " + r.err);
+            if (mode == "ast" || mode == "ir") {
+                assertEq((), r.trace, mode + ": no code is compiled to native code");
+            } else {
+                foreach string fn in (NativeFunctions) {
+                    assertTrue((select r.trace, $1 =~ /promoted/ && $1.find("'" + fn + "@") >= 0).size() > 0,
+                        sprintf("%s: %s() runs as native code: %s", mode, fn, r.trace.join("\n")));
+                }
+            }
+        }
+    }
+
+    testCompiled() {
+        checkDebugging();
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-pseudo-to-int-leak-");
+        string exe = tmp.path + DirSep + "pseudo-to-int-leak";
+        string compile_out = backquote(sprintf("%s %s -o %s %s 2>&1", env, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "qcc: " + compile_out);
+        hash<WorkerResult> r = runWorker(exe);
+        assertEq(Expected, r.out, "aot: result");
+        assertEq(0, r.live, "aot: heap integers left behind: " + r.err);
+    }
+
+    #! skips the test without library debugging, which dbg_get_live_bigint_count() needs
+    private checkDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_get_live_bigint_count() requires library debugging");
+        }
+    }
+
+    #! runs a command and returns its output, compilation trace and heap integer count
+    /** ExecModeHarness runs the command with synchronous native compilation following the first call of a function,
+        so with --exec-mode=jit or tiered the functions run as native code from their second call on, and checks the
+        compilation trace: native code must have been compiled with JIT and tiered execution and none with AST and
+        IR execution.
+    */
+    private hash<WorkerResult> runWorker(string command) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env, command));
+        if (r.mode) {
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::JitAndTiered);
+        }
+        # the result is the line printed by the worker that starts with the list
+        list<string> result = select r.out.split("\n"), $1 =~ /^\[/;
+        return <WorkerResult>{
+            "out": result ? result.join("\n") + "\n" : "",
+            "trace": r.trace,
+            "err": r.out,
+            "live": getLiveCount(r.out),
+        };
+    }
+
+    #! returns the number of heap integers the worker reported left behind, or NOTHING if it reported none
+    /** The worker reports the count only with library debugging
+    */
+    private *int getLiveCount(string out) {
+        *string count = (out =~ x/^live heap integers: (-?[0-9]+)$/m)[0];
+        return exists count ? count.toInt() : NOTHING;
+    }
+}

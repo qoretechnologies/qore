@@ -11504,6 +11504,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
         return toBits(QoreValue());
     }
 
+    // This is a call of a function compiled in the caller's batch module, not a closure invocation: as in
+    // qore_rt_call_fast(), a caller closure's captured LocalVar* map must not shadow the callee's own closure-use
+    // locals, and the callee needs its own frame on the closure variable stack.  Without the frame boundary the
+    // callee's closure-use locals are looked up in the caller's frame: a recursive call finds the caller's
+    // variable, skips instantiating its own, and its exit pops the caller's variable, which leaves the caller's
+    // closures with dangling captures.
+    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
+    ThreadFrameBoundaryHelper tfbh(true);
+
     // Instantiate parameter locals directly from NaN-boxed args
     if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
         return toBits(QoreValue());
@@ -17485,7 +17494,8 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
     // otherwise runtimeFindCommittedMethodForEval picks up a private:internal method
     // from the caller's class for an unrelated target object.
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
+    // checked against the committed hierarchy, as in MethodCallNode::exec()
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
         class_ctx = nullptr;
     }
     RuntimeConfig& rc = rc_get_current_ref();
@@ -17773,7 +17783,8 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
         // the caller's class even though the target object is a completely unrelated
         // class. Mirrors MethodCallNode::exec() in FunctionCallNode.cpp:928.
         const qore_class_private* class_ctx = runtime_get_class();
-        if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
+        // checked against the committed hierarchy, as in MethodCallNode::exec()
+        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
             class_ctx = nullptr;
         }
         RuntimeConfig& rc = rc_get_current_ref();
@@ -18006,7 +18017,8 @@ extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v1(QoreAOTContext* caller_
         return 0;
     }
     const qore_class_private* class_ctx = RuntimeConfigNativeAccess::getClass(*rc);
-    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*object->getClass(), class_ctx)) {
+    // Match the ordinary dispatch path: runtime calls use the committed hierarchy.
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*object->getClass(), class_ctx)) {
         class_ctx = nullptr;
     }
     QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(*rc);
@@ -18180,7 +18192,8 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
     assert(object && method_name);
 
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(
+    // checked against the committed hierarchy, as in MethodCallNode::exec()
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(
             *object->getClass(), class_ctx)) {
         class_ctx = nullptr;
     }
@@ -19834,6 +19847,9 @@ extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_consume_native_noguard(
 }
 
 //! Fast pseudo-method: <string>::toInt() for bases known as string/NOTHING/NULL.
+/** Returns a new reference: an integer outside the inline NaN-boxed range is a new QoreBigIntNode, which the caller
+    must release.
+*/
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_bits, ExceptionSink* xsink) {
     QoreValue v = fromBits(val_bits);
     if (!v.isShortString() && v.getType() != NT_STRING) {

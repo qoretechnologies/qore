@@ -83,33 +83,16 @@ public:
                continue;
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-               // Would block - poll for write readiness
-               const int poll_ms = QORE_IO_POLL_INTERVAL_MS;
+               // Would block - wait for write readiness; the wait ends at once on cancellation
                struct pollfd pfd;
                pfd.fd = STDOUT_FILENO;
                pfd.events = POLLOUT;
-
-               while (true) {
-                  int pret = ::poll(&pfd, 1, poll_ms);
-                  if (pret > 0) {
-                     // Ready for writing
-                     break;
-                  }
-                  if (pret == 0) {
-                     // Timeout - check for cancel/interrupt and retry
-                     if (qore_check_cancel(xsink, "stdout write")) {
-                        return;
-                     }
-                     break;
-                  }
-                  // pret < 0: error
-                  if (errno == EINTR) {
-                     // Interrupted by signal - check for cancel/interrupt then retry poll
-                     if (qore_check_cancel(xsink, "stdout write")) {
-                        return;
-                     }
-                     continue;
-                  }
+               pfd.revents = 0;
+               int pret = qore_cancellable_poll(&pfd, 1, -1, xsink, "stdout write");
+               if (pret == QORE_POLL_CANCELLED) {
+                  return;
+               }
+               if (pret < 0) {
                   xsink->raiseErrnoException("STDOUT-WRITE-ERROR", errno,
                      "error polling stdout for write readiness");
                   return;

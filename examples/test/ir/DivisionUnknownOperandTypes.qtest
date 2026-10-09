@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class DivisionUnknownOperandTypesTest
 
@@ -87,7 +88,7 @@ main();
     }
 
     private string run(string cmd) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cmd));
+        return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, cmd));
     }
 
     testExecutionModes() {

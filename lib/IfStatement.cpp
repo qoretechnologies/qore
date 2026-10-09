@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,6 +32,7 @@
 #include "qore/intern/IfStatement.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreDeferredRelease.h"
 
 IfStatement::IfStatement(int start_line, int end_line, QoreValue c, StatementBlock* i, StatementBlock* e)
         : AbstractStatement(start_line, end_line), cond(c), if_code(i), else_code(e) {
@@ -39,8 +40,8 @@ IfStatement::IfStatement(int start_line, int end_line, QoreValue c, StatementBlo
 
 IfStatement::~IfStatement() {
     cond.discard(nullptr);
-    delete if_code;
-    delete else_code;
+    qore_delete_statement(if_code);
+    qore_delete_statement(else_code);
     delete lvars;
 }
 

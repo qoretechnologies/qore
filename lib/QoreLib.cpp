@@ -557,12 +557,86 @@ bool qore_has_debug() {
 #endif
 }
 
+int parse_check_stack(const QoreProgramLocation* loc) {
+    if (!q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+        return 0;
+    }
+    parse_error(loc ? *loc : loc_builtin, "the code is nested too deeply to be parsed within the stack of this thread");
+    return -1;
+}
+
+#ifndef NDEBUG
+thread_local const AbstractQoreNode* qore_parse_init_entry = nullptr;
+#endif
+
+namespace {
+//! The nesting depth of the expressions being parse-initialized in this thread; see QORE_EVAL_STACK_CHECK_INTERVAL
+thread_local unsigned parse_init_depth = 0;
+
+#ifndef NDEBUG
+//! Records the node whose parse initialization is made for its scope; see qore_parse_init_entry
+class ParseInitEntryHelper {
+public:
+    DLLLOCAL explicit ParseInitEntryHelper(const AbstractQoreNode* n) : old(qore_parse_init_entry) {
+        qore_parse_init_entry = n;
+    }
+
+    DLLLOCAL ~ParseInitEntryHelper() {
+        qore_parse_init_entry = old;
+    }
+
+private:
+    const AbstractQoreNode* old;
+};
+#endif
+
+//! Counts a level of nesting of parse initialization for its scope
+class ParseInitDepthHelper {
+public:
+    DLLLOCAL ParseInitDepthHelper() : depth(++parse_init_depth) {
+    }
+
+    DLLLOCAL ~ParseInitDepthHelper() {
+        --parse_init_depth;
+    }
+
+    //! Returns the nesting depth of this level
+    DLLLOCAL unsigned get() const {
+        return depth;
+    }
+
+private:
+    unsigned depth;
+};
+}
+
 int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.analysis.clear();
     if (val.hasNode()) {
         AbstractQoreNode* n = val.getInternalNode();
         //printd(5, "parse_init_value() n: %p '%s'\n", n, get_type_name(n));
-        return n->parseInit(val, parse_context);
+        // parse initialization recurses with the nesting of the code: it stops while enough stack remains
+        if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+            const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
+            return parse_check_stack(pn ? pn->loc : nullptr);
+        }
+        // every nested expression is parse-initialized here, one level deeper than the expression containing it, so
+        // flagging the nodes at every QORE_EVAL_STACK_CHECK_INTERVAL'th level makes the evaluation of any chain of
+        // nested expressions check the stack at least that often; the node to flag is the one that parse
+        // initialization leaves in the value, which is the one evaluated at run time
+        ParseInitDepthHelper depth;
+#ifndef NDEBUG
+        ParseInitEntryHelper entry(n);
+#endif
+        int rc = n->parseInit(val, parse_context);
+        if (!(depth.get() % QORE_EVAL_STACK_CHECK_INTERVAL) && val.hasNode()) {
+            AbstractQoreNode* rn = val.getInternalNode();
+            // only expressions are evaluated; values may be shared with code that is already running
+            if (rn->needs_eval()) {
+                rn->setEvalChecksStack();
+            }
+        }
+        return rc;
     }
 
     parse_context.typeInfo = val.getFullTypeInfo();
@@ -573,6 +647,13 @@ int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
     }
     parse_context.analysis.known_type = parse_context.typeInfo;
     return 0;
+}
+
+int parse_init_same_level(AbstractQoreNode* n, QoreValue& val, QoreParseContext& parse_context) {
+#ifndef NDEBUG
+    ParseInitEntryHelper entry(n);
+#endif
+    return n->parseInit(val, parse_context);
 }
 
 void qore_set_result_parse_analysis(QoreParseContext& parse_context, const QoreTypeInfo* typeInfo) {
@@ -3293,8 +3374,23 @@ int q_env_subst(QoreString& str) {
     return 0;
 }
 
-static void q_remove_bom_utf16_intern(QoreString* str, const QoreEncoding*& enc) {
+static void q_remove_bom_intern(QoreString* str, const QoreEncoding*& enc) {
     assert(str->getEncoding() == enc);
+    if (enc != QCS_UTF16 && enc != QCS_UTF16BE && enc != QCS_UTF16LE) {
+        // a Unicode encoding created on the fly (ex: UTF-32): the byte order mark of the encoding is removed, and for
+        // an encoding with a byte order mark (ex: "UTF-32"), the string gets the encoding of the byte order found
+        size_t bom_len;
+        const QoreEncoding* bom_enc = qore_encoding_private::get(*enc)->getBomEncoding(enc, str->c_str(),
+            str->size(), bom_len);
+        if (bom_enc) {
+            str->replace(0, bom_len, static_cast<const char*>(nullptr));
+            if (bom_enc != enc) {
+                str->setEncoding(bom_enc);
+                enc = bom_enc;
+            }
+        }
+        return;
+    }
     if (str->size() > 1 && !enc->isAsciiCompat()) {
         if ((enc == QCS_UTF16 || enc == QCS_UTF16BE) && str->c_str()[0] == (char)0xfe && str->c_str()[1] == (char)0xff) {
             str->replace(0, 2, (const char*)nullptr);
@@ -3313,13 +3409,19 @@ static void q_remove_bom_utf16_intern(QoreString* str, const QoreEncoding*& enc)
     }
 }
 
-QoreString* q_remove_bom_utf16(QoreString* str, const QoreEncoding*& enc) {
-    q_remove_bom_utf16_intern(str, enc);
+// returns the number of bytes needed to check text in the given multi-byte encoding for a byte order mark
+static size_t q_bom_check_size(const QoreEncoding* enc) {
+    const qore_encoding_private* ep = qore_encoding_private::get(*enc);
+    return ep->bom.empty() ? 2 : ep->bom.size();
+}
+
+QoreString* q_remove_bom(QoreString* str, const QoreEncoding*& enc) {
+    q_remove_bom_intern(str, enc);
     return str;
 }
 
-QoreStringNode* q_remove_bom_utf16(QoreStringNode* str, const QoreEncoding*& enc) {
-    q_remove_bom_utf16_intern(str, enc);
+QoreStringNode* q_remove_bom(QoreStringNode* str, const QoreEncoding*& enc) {
+    q_remove_bom_intern(str, enc);
     return str;
 }
 
@@ -3345,7 +3447,7 @@ QoreStringNode* q_read_string_all(ExceptionSink* xsink, const QoreEncoding* enc,
     // resolve any UTF-16 byte order mark, as in q_read_string() and q_read_string_short(); without
     // this the mark would be decoded as a character and, with the byte-order-neutral "UTF-16"
     // encoding, little-endian data would be decoded as big-endian
-    q_remove_bom_utf16(*str, enc);
+    q_remove_bom(*str, enc);
     return str.release();
 }
 
@@ -3394,9 +3496,9 @@ QoreStringNode* q_read_string(ExceptionSink* xsink, int64 size, const QoreEncodi
             if ((size_t)size == str->size())
                 break;
             continue;
-        } else if (!check_bom && str->size() > 1) {
+        } else if (!check_bom && str->size() >= q_bom_check_size(enc)) {
             check_bom = true;
-            q_remove_bom_utf16(*str, enc);
+            q_remove_bom(*str, enc);
         }
 
         // scan data read and find the last valid character position
@@ -3478,8 +3580,8 @@ QoreStringNode* q_read_string_short(ExceptionSink* xsink, int64 size, const Qore
         return str.release();
     }
 
-    if (str->size() > 1) {
-        q_remove_bom_utf16(*str, enc);
+    if (str->size() >= q_bom_check_size(enc)) {
+        q_remove_bom(*str, enc);
     }
 
     size_t last_char = 0;

@@ -53,10 +53,11 @@
 #ifdef HAVE_ARPA_INET_H
 #include <arpa/inet.h>
 #endif
-#ifdef __linux__
-#include <poll.h>
+// a command is started with posix_spawn() where available: unlike fork(), it runs no code in the child before the
+// command is executed, which a multithreaded process must not do (another thread may hold a lock the child needs)
+#if defined(HAVE_POSIX_SPAWN) && defined(HAVE_SPAWN_H) && defined(HAVE_SIGNAL_HANDLING)
+#define QORE_SYSTEM_POSIX_SPAWN 1
 #include <spawn.h>
-#include <sys/syscall.h>
 #endif
 
 #ifdef HAVE_GRP_H
@@ -95,8 +96,13 @@
 #define MAX_GIDS 100
 
 extern bool threads_initialized;
-#ifdef __linux__
+#ifdef QORE_SYSTEM_POSIX_SPAWN
+#ifdef DARWIN
+#include <crt_externs.h>
+#define environ (*_NSGetEnviron())
+#else
 extern char **environ;
+#endif
 #endif
 
 AbstractQoreNode* missing_function_error(const char* func, ExceptionSink* xsink) {
@@ -572,7 +578,14 @@ nothing exec(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS,PROCESS] {
 
     @param command the command to execute with %system() (3)
 
-    @return the exit code of the process executed
+    @return the exit code of the process executed, or -1 if the process did not exit normally or could not be waited
+    for
+
+    @throw SYSTEM-ERROR the process to execute the command could not be started, or the thread that waits for it
+    could not be started (the process is then killed)
+    @throw THREAD-CANCELLED the thread was cancelled while waiting for the process; the process is killed
+    @throw PROGRAM-INTERRUPTED the Program was interrupted by its @ref Qore::SandboxManager "SandboxManager" while
+    waiting for the process; the process group is killed
 
     @par Process group behavior:
     - With a @ref Qore::SandboxManager "SandboxManager" attached, the child process is started in a new process group so
@@ -597,96 +610,20 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
         return -1;
     }
 #endif
-#ifdef __linux__
-    auto pidfd_open = [](pid_t target_pid) -> int {
-#ifdef SYS_pidfd_open
-        return syscall(SYS_pidfd_open, target_pid, 0);
-#else
-        return -1;
-#endif
-    };
-#endif
-
-    auto wait_for_process = [&xsink, use_pgroup
-#ifdef __linux__
-        , &pidfd_open
-#endif
-    ](pid_t pid, bool pgroup_ok) -> int {
+#if defined(QORE_SYSTEM_POSIX_SPAWN) || (defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING))
+    // waits for the process to exit; the wait ends at once when the thread is cancelled or the Program is interrupted
+    auto wait_for_process = [&xsink, use_pgroup](pid_t pid, bool pgroup_ok) -> int {
         int status = 0;
-#ifdef __linux__
-        int pidfd = pidfd_open(pid);
-        if (pidfd >= 0) {
-            while (true) {
-                if (qore_check_cancel(xsink, "process wait")) {
-                    // Use SIGKILL to enforce immediate termination on interrupt.
-                    kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
-                    waitpid(pid, &status, 0);
-                    close(pidfd);
-                    return -1;
-                }
-
-                struct pollfd pfd;
-                pfd.fd = pidfd;
-                pfd.events = POLLIN;
-                pfd.revents = 0;
-                // Use a shorter interval here to reduce system() latency without changing global defaults.
-                const int system_poll_ms = 50;
-                int rc_local = poll(&pfd, 1, system_poll_ms);
-                if (rc_local > 0) {
-                    break;
-                }
-                if (rc_local == 0) {
-                    continue;
-                }
-#ifdef EINTR
-                if (errno == EINTR) {
-                    continue;
-                }
-#endif
-                break;
-            }
-            close(pidfd);
-            if (waitpid(pid, &status, 0) != pid) {
-                return -1;
-            }
-            return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-        }
-#endif
-
-        while (true) {
-            // check for sandbox interrupt
-            if (qore_check_cancel(xsink, "process wait")) {
-                // Use SIGKILL to enforce immediate termination on interrupt.
-                kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
-                waitpid(pid, &status, 0);
-                return -1;
-            }
-
-            // use WNOHANG for non-blocking check
-            int rc_local = waitpid(pid, &status, WNOHANG);
-            if (rc_local == pid) {
-                // child has exited
-                break;
-            }
-            if (rc_local == 0) {
-                // child still running, sleep briefly and retry
-                // Use a shorter interval here to reduce system() latency without changing global defaults.
-                const int system_poll_ms = 50;
-                usleep(system_poll_ms * 1000);
-                continue;
-            }
-#ifdef EINTR
-            if (rc_local == -1 && errno == EINTR) {
-                continue;
-            }
-#endif
-            // error
+        int wait_errno = 0;
+        if (qore_wait_child_process(pid, (use_pgroup && pgroup_ok) ? -pid : pid, status, wait_errno, "SYSTEM-ERROR",
+            xsink) != QoreChildWaitResult::EXITED) {
             return -1;
         }
         return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
     };
+#endif
 
-#if defined(__linux__) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
+#ifdef QORE_SYSTEM_POSIX_SPAWN
     pid_t spawn_pid = -1;
     bool spawn_pgroup_ok = false;
     int spawn_rc = 0;
@@ -721,17 +658,20 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
         }
         posix_spawnattr_destroy(&attr);
     }
-    if (spawn_rc == 0) {
-        if (use_pgroup) {
-            if (setpgid(spawn_pid, spawn_pid) == 0 || errno == EACCES) {
-                spawn_pgroup_ok = true;
-            }
-        }
-        return wait_for_process(spawn_pid, spawn_pgroup_ok);
+    if (spawn_rc) {
+        // posix_spawn() and its attribute functions return an errno value; the command was not started
+        xsink->raiseErrnoException("SYSTEM-ERROR", spawn_rc, "cannot start '/bin/sh' to execute the command");
+        return -1;
     }
-#endif
-#if defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
-    // on platforms with fork(2) and signal handling, we need to fork, enable all signals, then execl()
+    if (use_pgroup) {
+        if (setpgid(spawn_pid, spawn_pid) == 0 || errno == EACCES) {
+            spawn_pgroup_ok = true;
+        }
+    }
+    return wait_for_process(spawn_pid, spawn_pgroup_ok);
+#elif defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
+    // fallback for platforms without posix_spawn(): fork(), enable all signals, then execl(); in a multithreaded
+    // process, the child of fork() may only call async-signal-safe functions before the command is executed
     pid_t pid;
     bool pgroup_ok = false;
     if (!(pid = fork())) {
@@ -753,6 +693,7 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
         //qore_exit_process(-1);
     }
     if (pid == -1) {
+        xsink->raiseErrnoException("SYSTEM-ERROR", errno, "cannot start '/bin/sh' to execute the command");
         return -1;
     }
     if (use_pgroup && (setpgid(pid, pid) == 0 || errno == EACCES)) {
@@ -932,7 +873,7 @@ nothing setgroups(softlist<softint> group_ids) [flags=NAMED_ARGS;dom=PROCESS] {
 sleep(10s);
     @endcode
 
-    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function polls for interrupt requests every 100ms
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function returns as soon as the interrupt is requested
 
     @see usleep() for a similar function supporting microsecond resolution
 
@@ -943,23 +884,8 @@ int sleep(softint seconds) [flags=NAMED_ARGS;dom=PROCESS] {
       return 0;
    }
 
-   // Always poll in chunks for cancel/interrupt checking
-   int64 remaining_usecs = seconds * 1000000ll;
-   const int64 chunk_usecs = 100000ll; // 100ms chunks
-
-   while (remaining_usecs > 0) {
-      if (qore_check_cancel(xsink, "sleep")) {
-         return -1;
-      }
-
-      int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
-      int rc_local = qore_usleep(sleep_time);
-      if (rc_local != 0) {
-         return rc_local;
-      }
-      remaining_usecs -= sleep_time;
-   }
-   return 0;
+   // the sleep ends at once when the thread is cancelled or its Program is interrupted
+   return qore_cancellable_sleep(seconds * 1000000ll, xsink, "sleep");
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -978,11 +904,11 @@ nothing sleep() [flags=RUNTIME_NOOP;dom=PROCESS] {
 usleep(5000);
     @endcode
 
-    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function polls for interrupt requests every 100ms
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function returns as soon as the interrupt is requested
 
     @see sleep() for a similar function supporting second resolution
 
-    @note both sleep() and usleep() are implemented internally by calls to nanosleep() (2) if available on the current platform, otherwise both are implemented by calls to usleep() (3)
+    @note both sleep() and usleep() wait on a condition variable that a cancellation request or program interrupt signals, so they return as soon as one is requested; a remainder of less than a millisecond is slept with nanosleep() (2) if available on the current platform, otherwise with usleep() (3)
 
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
@@ -991,23 +917,8 @@ int usleep(softint microseconds) [flags=NAMED_ARGS;dom=PROCESS] {
       return 0;
    }
 
-   // Always poll in chunks for cancel/interrupt checking
-   int64 remaining_usecs = microseconds;
-   const int64 chunk_usecs = 100000ll; // 100ms chunks
-
-   while (remaining_usecs > 0) {
-      if (qore_check_cancel(xsink, "usleep")) {
-         return -1;
-      }
-
-      int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
-      int rc_local = qore_usleep(sleep_time);
-      if (rc_local != 0) {
-         return rc_local;
-      }
-      remaining_usecs -= sleep_time;
-   }
-   return 0;
+   // the sleep ends at once when the thread is cancelled or its Program is interrupted
+   return qore_cancellable_sleep(microseconds, xsink, "usleep");
 }
 
 //! Causes the current thread to sleep for a certain number of microseconds
@@ -1020,11 +931,11 @@ int usleep(softint microseconds) [flags=NAMED_ARGS;dom=PROCESS] {
 usleep(250ms);
     @endcode
 
-    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function polls for interrupt requests every 100ms
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the function is blocked; the function returns as soon as the interrupt is requested
 
     @see sleep() for a similar function supporting second resolution
 
-    @note both sleep() and usleep() are implemented internally by calls to nanosleep() (2) if available on the current platform, otherwise both are implemented by calls to usleep() (3)
+    @note both sleep() and usleep() wait on a condition variable that a cancellation request or program interrupt signals, so they return as soon as one is requested; a remainder of less than a millisecond is slept with nanosleep() (2) if available on the current platform, otherwise with usleep() (3)
 
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
@@ -1034,23 +945,8 @@ int usleep(date duration) [flags=NAMED_ARGS;dom=PROCESS] {
       return 0;
    }
 
-   // Always poll in chunks for cancel/interrupt checking
-   int64 remaining_usecs = usecs;
-   const int64 chunk_usecs = 100000ll; // 100ms chunks
-
-   while (remaining_usecs > 0) {
-      if (qore_check_cancel(xsink, "usleep")) {
-         return -1;
-      }
-
-      int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
-      int rc_local = qore_usleep(sleep_time);
-      if (rc_local != 0) {
-         return rc_local;
-      }
-      remaining_usecs -= sleep_time;
-   }
-   return 0;
+   // the sleep ends at once when the thread is cancelled or its Program is interrupted
+   return qore_cancellable_sleep(usecs, xsink, "usleep");
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments

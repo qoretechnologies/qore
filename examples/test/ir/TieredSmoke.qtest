@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class TieredSmokeTest
 
@@ -18,6 +19,9 @@ class TieredSmokeTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("TieredSmokeTest", "1.0", \ARGV) {
+        # the scripts set their own tiered thresholds or have only top-level code, which tiered execution does not
+        # compile, so native code is only required with JIT execution
+        ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         addTestCase("tiered basic correctness", \testTieredBasicCorrectness());
         addTestCase("tiered low-threshold promotion to IR", \testTieredIRPromotion());
@@ -57,9 +61,9 @@ class TieredSmokeTest inherits QUnit::Test {
         tmp.file.write(code);
         tmp.file.close();
         string path = tmp.path;
-        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s %s 2>&1",
+        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s %s",
             qore_bin, mode, extra_opts ?? "", path);
-        return backquote(cmd);
+        return ExecModeHarness::run(cmd);
     }
 
     testTieredBasicCorrectness() {

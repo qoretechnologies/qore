@@ -60,12 +60,13 @@ setup_postgres_on_host() {
 
     . /tmp/env.sh
 
-    # create user for test
+    # create user for test; CREATEROLE lets SqlUtil's PgsqlBoundedTransaction.qtest create (and drop) the role its
+    # row-security case needs
     cat <<EOF | psql -Upostgres ${PSQL_ARGS}
 create database ${OMQ_DB_NAME} encoding = 'utf8';
 \connect ${OMQ_DB_NAME};
 create extension if not exists vector;
-create user ${OMQ_DB_USER} password 'omq';
+create user ${OMQ_DB_USER} password 'omq' createrole;
 grant create, connect, temp on database ${OMQ_DB_NAME} to ${OMQ_DB_USER};
 grant create on tablespace omq_data to ${OMQ_DB_USER};
 grant create on tablespace omq_index to ${OMQ_DB_USER};

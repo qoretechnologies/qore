@@ -241,6 +241,10 @@ QoreValue QoreYamlDocumentIterator::parseDocument(ExceptionSink* xsink) {
 }
 
 QoreValue QoreYamlDocumentIterator::parseNode(ExceptionSink* xsink) {
+    // parsing recurses with the nesting of the document, which is unbounded
+    if (q_check_stack(xsink)) {
+        return QoreValue();
+    }
     QoreValue rv;
     std::string anchor;
 

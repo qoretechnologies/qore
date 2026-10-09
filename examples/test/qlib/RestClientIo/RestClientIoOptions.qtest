@@ -44,6 +44,11 @@
 #! Echoes the request, or sends a gzip-encoded JSON document
 class EchoHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path == "/slow") {
+            # answers after the client's own request timeout in testRequestTimeout()
+            usleep(1500ms);
+            return makeResponse({"Content-Type": "application/json"}, 200, binary(make_json({"slow": True})));
+        }
         if (cx.raw_path == "/gzip-json") {
             hash<HttpResponseInfo> rv = makeResponse({"Content-Type": "application/json",
                 "Content-Encoding": "gzip"}, 200, gzip(binary(make_json({"a": 1}))));
@@ -72,6 +77,7 @@ public class RestClientIoOptionsTest inherits QUnit::Test {
         addTestCase("enable_http3", \testEnableHttp3());
         addTestCase("HttpConnection async options", \testHttpConnection());
         addTestCase("URL schemes", \testSchemes());
+        addTestCase("call-local request timeout", \testRequestTimeout());
 
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": new Logger("test", LoggerLevel::getLevelInfo()),
@@ -167,6 +173,21 @@ public class RestClientIoOptionsTest inherits QUnit::Test {
         HttpClientConnectionManager mgr = conn.getAsync();
         on_exit mgr.closeAll();
         assertEq("ISO-8859-2", mgr.getAssumeEncoding());
+    }
+
+    testRequestTimeout() {
+        # a call-local timeout replaces the client's request timeout: a request may take longer than it
+        RestClientIo rest({"url": url, "data": "json", "timeout": 500ms});
+        on_exit rest.close();
+        assertEq({"slow": True}, rest.restDoRequestWithTimeout("GET", "/slow", NOTHING, NOTHING, 10000).body);
+        assertEq({"slow": True}, rest.restPostWithTimeout("/slow", {}, NOTHING, 10000).body);
+        # and a call-local timeout shorter than the client's still ends the request
+        RestClientIo patient({"url": url, "data": "json", "timeout": 10s});
+        on_exit patient.close();
+        date start = now_us();
+        assertThrows("HTTPCLIENT-TIMEOUT", \patient.restDoRequestWithTimeout(), ("GET", "/slow", NOTHING, NOTHING,
+            300));
+        assertLt(1400ms, now_us() - start);
     }
 
     testSchemes() {

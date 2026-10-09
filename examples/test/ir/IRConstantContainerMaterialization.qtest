@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class IRConstantContainerMaterializationTest
 
@@ -45,6 +46,9 @@ class IRConstantContainerMaterializationTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("IRConstantContainerMaterializationTest", "1.0", \ARGV) {
+        # the scripts run their code too few times for tiered execution to compile it, so native code is only
+        # required with JIT execution
+        ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
@@ -89,7 +93,7 @@ class IRConstantContainerMaterializationTest inherits QUnit::Test {
         # no output calls: nothing else in the program may build a container
         write(path, sprintf("%%modern\n%s\nstring k = \"k1\";\nint idx = 1;\nauto sink;\n"
             "for (int i = 0; i < 3; ++i) { sink = %s; }\n", decl, read));
-        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s 2>&1",
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s",
             libqore_dir, qore_bin, path));
     }
 
@@ -157,7 +161,7 @@ printf(\"%%y:%%y:%%y\\n\", acc, T.k7, copy.k7);
 ", hashEntries(20), listEntries(20)));
         string expected;
         foreach string mode in (Modes) {
-            string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+            string actual = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
                 libqore_dir, qore_bin, mode, path));
             if (!expected.val()) {
                 expected = actual;

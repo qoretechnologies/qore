@@ -1,0 +1,161 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file builtin-exception-result-checks.qi checks that no caller receives a value returned with an exception
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+/** Builtin code can raise an exception and still return a value, as strtoint() does for an out-of-range number.
+    The builtin function and methods of the cppapiuser test module return a new reference to their argument with an
+    exception; each check passes a new object as the argument and verifies that the object is destroyed once the
+    exception has been caught, which it is only if every reference to it, including the one returned with the
+    exception, was released.  The calls are made in closures called from a function, as in the reported leak, and
+    directly in functions.
+
+    The checks are run in each execution mode by builtin-exception-result-worker.q, which includes this file in its
+    main program, and as a compiled (AOT) module by BuiltinExceptionResultChecks.qm.
+*/
+public namespace BuiltinExceptionResultChecks {
+#! the exception raised by the builtin code
+const Err = "BUILTIN-RESULT-ERROR";
+
+#! counts its destructions
+class Tracked {
+    public {
+        #! the number of objects destroyed
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+#! calls the given closure and returns the code of the exception it raises
+*string sub try_call(code c) {
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! calls the builtin function in a closure with a new object and returns the code of the exception it raises
+*string sub closure_function() {
+    return try_call(auto sub () {
+        return cpp_api_return_with_exception(new Tracked(), Err);
+    });
+}
+
+#! calls the builtin method in a closure with a new object and returns the code of the exception it raises
+*string sub closure_method() {
+    ExceptionResultProbe probe();
+    return try_call(auto sub () {
+        return probe.returnWithException(new Tracked(), Err);
+    });
+}
+
+#! calls the builtin static method in a closure with a new object and returns the code of the exception it raises
+*string sub closure_static_method() {
+    return try_call(auto sub () {
+        return ExceptionResultProbe::staticReturnWithException(new Tracked(), Err);
+    });
+}
+
+#! calls the builtin function with a new object and returns the code of the exception it raises
+*string sub direct_function() {
+    try {
+        cpp_api_return_with_exception(new Tracked(), Err);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! calls the builtin function with a new object, assigning the result, and returns the exception code
+*string sub direct_function_assigned() {
+    try {
+        auto v = cpp_api_return_with_exception(new Tracked(), Err);
+        # never reached
+        return sprintf("returned %y", v);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! calls the builtin method with a new object and returns the code of the exception it raises
+*string sub direct_method() {
+    ExceptionResultProbe probe();
+    try {
+        probe.returnWithException(new Tracked(), Err);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! calls the builtin static method with a new object and returns the code of the exception it raises
+*string sub direct_static_method() {
+    try {
+        ExceptionResultProbe::staticReturnWithException(new Tracked(), Err);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! collects the result of each check as \c "ok <label>" or \c "FAIL <label>: <reason>"
+class ResultChecker {
+    private {
+        list<string> results = ();
+    }
+
+    #! runs a call that must raise #Err and checks that the object passed to the builtin code was destroyed
+    check(string label, code<*string()> call) {
+        int before = Tracked::destroyed;
+        *string err = call();
+        if (err != Err) {
+            results += sprintf("FAIL %s: got exception %y; expected %y", label, err, Err);
+            return;
+        }
+        int destroyed = Tracked::destroyed - before;
+        if (destroyed != 1) {
+            results += sprintf("FAIL %s: %d object(s) destroyed; expected 1 (the result returned with the "
+                "exception was leaked)", label, destroyed);
+            return;
+        }
+        results += "ok " + label;
+    }
+
+    list<string> getResults() {
+        return results;
+    }
+}
+
+#! runs the checks and returns their results
+public list<string> sub get_results() {
+    ResultChecker c();
+    c.check("function in a closure", \closure_function());
+    c.check("method in a closure", \closure_method());
+    c.check("static method in a closure", \closure_static_method());
+    c.check("function", \direct_function());
+    c.check("function, assigned", \direct_function_assigned());
+    c.check("method", \direct_method());
+    c.check("static method", \direct_static_method());
+    return c.getResults();
+}
+}

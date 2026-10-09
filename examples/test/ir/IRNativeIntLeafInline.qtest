@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -249,7 +250,7 @@ script.close();
 
 string sub runMode(string mode, bool disabled = False) {
     string disable = disabled ? "QORE_DISABLE_IR_NATIVE_LEAF_INLINE=1 " : "";
-    return backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+    return ExecModeHarness::run(sprintf("%sLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
         disable, libqore_dir, qore_bin, mode, script_path));
 }
 

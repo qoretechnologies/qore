@@ -2315,6 +2315,10 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         try {
             Socket ns = s.acceptSSL(15s);
             q.push(ns.getRemoteCertificate());
+            # an HTTP server only responds to a request: the client rejects data that arrives on a connection before
+            # it has sent a request (HTTP1-UNEXPECTED-DATA), so a reply sent before the request is read fails the
+            # client whenever it arrives before the client has queued its request
+            ns.readHTTPHeader(15s);
             ns.send(NormalReply1);
             # wait until reply has been received to delete the socket
             done.waitForZero();

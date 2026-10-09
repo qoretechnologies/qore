@@ -1,0 +1,42 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
+%requires QUnit
+
+%exec-class H2ProxyHandoffTest
+
+#! Tests that an HTTP/2 connection through a proxy is handed over before HTTP/2 data arrives
+/** Through a proxy, HTTPClient makes the CONNECT request and the TLS handshake with an HTTP/1.1 connection and, when
+    the server selects HTTP/2 with ALPN, hands the socket over to an HTTP/2 connection.  The HTTP/1.1 connection went
+    on reading the socket after the handshake: when the server's first HTTP/2 frame (SETTINGS) arrived before the
+    handover, it was taken for unexpected data on an idle HTTP/1.1 connection, the connection was closed, and the
+    request failed (HTTP1-UNEXPECTED-DATA or SOCKET-NOT-OPEN).  This was seen in HttpClientHttpsProxy.qtest under
+    load.
+
+    The worker makes the timing deterministic: with TLS 1.2, the server sends its SETTINGS frame right after its
+    Finished message, and the worker's proxy delivers both to the client together, so the frame is always on the
+    connection when the client's handshake completes.  The worker runs in its own process, since it disables TLS 1.3
+    for the process.
+*/
+class H2ProxyHandoffTest inherits QUnit::Test {
+    constructor() : QUnit::Test("H2ProxyHandoffTest", "1.0", \ARGV) {
+        addTestCase("HTTP/2 through a proxy with early SETTINGS", \testHandoff());
+        set_return_value(main());
+    }
+
+    testHandoff() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string dir = get_script_dir();
+        int rc;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s %s 2>&1", libqore_dir,
+            libqore_dir, qore_bin, dir + DirSep + "h2-proxy-handoff-worker.q", dir + DirSep + "localhost.pem"), \rc);
+        assertEq(0, rc, out);
+        assertEq("0: http2:True\n1: http2:True\n2: http2:True\n", out);
+    }
+}

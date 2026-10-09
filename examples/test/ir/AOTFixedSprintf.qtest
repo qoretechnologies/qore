@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -45,7 +46,7 @@ script.write(code);
 script.close();
 
 string sub runMode(string mode) {
-    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+    return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
         libqore_dir, qore_bin, mode, script_path));
 }
 
@@ -70,7 +71,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     }
 }
 
-string ir_dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s 2>&1",
+string ir_dump = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s",
     libqore_dir, qore_bin, script_path));
 if (ir_dump !~ /sprintf\.int\.fixed/) {
     printf("fixed sprintf opcode missing from IR dump:\n%s", ir_dump);

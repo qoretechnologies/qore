@@ -44,11 +44,15 @@ public:
    //! creates the convertor
    /** A byte order mark at the start of UTF-16 input (in the generic \c "UTF-16" encoding or in UTF-16LE or
        UTF-16BE) is not content and is removed; for the generic \c "UTF-16" encoding, it gives the byte order of
-       the input, which is otherwise big-endian.
+       the input, which is otherwise big-endian.  The same applies to the Unicode encodings created on the fly
+       (ex: \c "UTF-32", \c "UTF-32LE", \c "UTF-32BE").
    */
    EncodingConvertor(const QoreEncoding *srcEncoding, const QoreEncoding *dstEncoding, ExceptionSink *xsink)
          : srcEncoding(srcEncoding), dstEncoding(dstEncoding),
-         checkBom(srcEncoding == QCS_UTF16 || srcEncoding == QCS_UTF16LE || srcEncoding == QCS_UTF16BE),
+         checkBom(srcEncoding == QCS_UTF16 || srcEncoding == QCS_UTF16LE || srcEncoding == QCS_UTF16BE
+            || !qore_encoding_private::get(*srcEncoding)->bom.empty()),
+         bomSize(qore_encoding_private::get(*srcEncoding)->bom.empty()
+            ? 2 : qore_encoding_private::get(*srcEncoding)->bom.size()),
          conv(new IconvHelper(dstEncoding, srcEncoding, xsink)), inCount(0), outCount(0) {
    }
 
@@ -65,9 +69,9 @@ public:
             inCount += r;
          }
 
-         // a UTF-16 code unit is never converted from fewer than two bytes, so the input cannot have been
-         // converted before its first two bytes are available
-         if (checkBom && (inCount >= 2 || src == nullptr) && removeBom(xsink)) {
+         // a UTF-16 code unit is never converted from fewer than two bytes (a UTF-32 character from fewer than
+         // four), so the input cannot have been converted before the bytes of a byte order mark are available
+         if (checkBom && (inCount >= bomSize || src == nullptr) && removeBom(xsink)) {
             return std::make_pair(0, 0);
          }
 
@@ -75,8 +79,11 @@ public:
          size_t inavail = inCount;
          char *outbuf = outBuf + outCount;
          size_t outavail = BUFSIZE - outCount;
-         if (conv->iconv(&inbuf, &inavail, &outbuf, &outavail) == (size_t) -1) {
+         if (conv->iconv(&inbuf, &inavail, &outbuf, &outavail, xsink) == (size_t) -1) {
             switch (errno) {
+               case ECANCELED:
+                  // the exception has been raised
+                  return std::make_pair(0, 0);
                case EINVAL:
                   if (src == nullptr) {         //flushing - there will be no more input
                      conv->reportIllegalSequence(inbuf - inBuf, xsink);
@@ -97,6 +104,20 @@ public:
          if (rc) {
             inCount -= rc;
             memmove(inBuf, inBuf + rc, inCount);
+         }
+
+         // at the end of the input, write the bytes that return a stateful encoding (ex: UTF-7, ISO-2022-JP) to its
+         // initial state; without them, the last characters of the output cannot be decoded
+         if (src == nullptr && !inCount && !shiftWritten) {
+            if (conv->iconv(nullptr, nullptr, &outbuf, &outavail) == static_cast<size_t>(-1)) {
+               if (errno != E2BIG) {
+                  conv->reportUnknownError(xsink);
+                  return std::make_pair(0, 0);
+               }
+               // the output buffer is full; the bytes are written when it has been read
+            } else {
+               shiftWritten = true;
+            }
          }
 
          size_t wc = BUFSIZE - outCount - outavail;
@@ -123,6 +144,10 @@ private:
    const QoreEncoding *dstEncoding;
    //! true until the start of UTF-16 input has been checked for a byte order mark
    bool checkBom;
+   //! the byte length of a byte order mark in the input encoding
+   size_t bomSize;
+   //! true once the bytes that return the output encoding to its initial state have been written at the end
+   bool shiftWritten = false;
    std::unique_ptr<IconvHelper> conv;
    char inBuf[BUFSIZE];
    size_t inCount;
@@ -135,6 +160,24 @@ private:
    DLLLOCAL int removeBom(ExceptionSink *xsink) {
       assert(checkBom);
       checkBom = false;
+      if (srcEncoding != QCS_UTF16 && srcEncoding != QCS_UTF16LE && srcEncoding != QCS_UTF16BE) {
+         // a Unicode encoding created on the fly
+         size_t bom_len;
+         const QoreEncoding *bomEncoding = qore_encoding_private::get(*srcEncoding)->getBomEncoding(srcEncoding,
+            inBuf, inCount, bom_len);
+         if (!bomEncoding) {
+            return 0;
+         }
+         inCount -= bom_len;
+         memmove(inBuf, inBuf + bom_len, inCount);
+         if (bomEncoding != srcEncoding) {
+            conv.reset(new IconvHelper(dstEncoding, bomEncoding, xsink));
+            if (*xsink) {
+               return -1;
+            }
+         }
+         return 0;
+      }
       if (inCount < 2) {
          return 0;
       }

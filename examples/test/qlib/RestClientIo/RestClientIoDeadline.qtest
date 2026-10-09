@@ -95,7 +95,8 @@ class DeadlineRestClient inherits RestClientIo {
     private int requestNow() {
         return clock.ticks;
     }
-    RestFuture restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr) {
+    private RestFuture restDoRequestAsyncWithTimeout(string method, string path, auto body, *hash<auto> hdr,
+            int timeout_ms) {
         clock.prepare();
         return new DeadlineRestFuture(clock);
     }

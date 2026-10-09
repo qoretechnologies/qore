@@ -26,7 +26,113 @@ class Test inherits QUnit::Test {
         addTestCase("tryGet and tryPop tests", \tryGetTryPopTests());
         addTestCase("leak test", \leakTest());
         addTestCase("events for a deleted queue are released", \deletedEventQueueTest());
+        addTestCase("state accessors run concurrently with queue operations", \concurrentAccessorTest());
+        addTestCase("values taken from the queue are no longer scanned", \scanAccountingTest());
         set_return_value(main());
+    }
+
+    #! reads the queue's state without its lock while other threads push, get and wait on a bounded queue
+    /** the state accessors do not take the queue's lock, so a race detector (TSan) reports their reads if the
+        counters they read are not atomic; the assertions check the invariants that every snapshot must satisfy
+    */
+    concurrentAccessorTest() {
+        const int Max = 2;
+        const int Count = 2000;
+        Queue q(Max);
+        Counter done(2);
+        background sub () {
+            on_exit done.dec();
+            for (int i = 0; i < Count; ++i) {
+                q.push(i);
+            }
+        }();
+        background sub () {
+            on_exit done.dec();
+            for (int i = 0; i < Count; ++i) {
+                q.get();
+            }
+        }();
+
+        # a fixed number of snapshots, so the test does not depend on how the threads are scheduled
+        int bad_size = 0;
+        int bad_waiting = 0;
+        for (int i = 0; i < Count; ++i) {
+            # the queue can change between the two reads, so the size read after empty() returns False can be 0
+            int size = q.empty() ? 0 : q.size();
+            if (size < 0 || size > Max) {
+                ++bad_size;
+            }
+            # there is only one reader and one writer
+            if (q.getReadWaiting() > 1 || q.getWriteWaiting() > 1) {
+                ++bad_waiting;
+            }
+        }
+        done.waitForZero();
+
+        assertEq(0, bad_size);
+        assertEq(0, bad_waiting);
+        assertEq(0, q.size());
+        assertTrue(q.empty());
+        assertEq(0, q.getReadWaiting());
+        assertEq(0, q.getWriteWaiting());
+    }
+
+    #! checks that the queue's scannable values are counted while they are in the queue, and only then
+    /** a Queue object is scanned for reference cycles only while it holds values that can be part of one; the count
+        is reported by dbg_node_info(), which is only available with library debugging
+    */
+    scanAccountingTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_node_info() requires library debugging");
+        }
+        Queue q();
+        assertEq(0, getScanPrivateData(q));
+
+        # values that cannot be part of a cycle are not counted
+        q.push(1);
+        assertEq(0, getScanPrivateData(q));
+        q.get();
+
+        q.push(new EventArg());
+        assertEq(1, getScanPrivateData(q));
+        q.get();
+        assertEq(0, getScanPrivateData(q));
+
+        q.insert(new EventArg());
+        assertEq(1, getScanPrivateData(q));
+        q.pop();
+        assertEq(0, getScanPrivateData(q));
+
+        # the object stays counted until its last scannable value is taken
+        q.push(new EventArg());
+        q.push(1);
+        q.push(new EventArg());
+        assertEq(1, getScanPrivateData(q));
+        # takes the first object
+        assertTrue(q.get() instanceof EventArg);
+        assertEq(1, getScanPrivateData(q));
+        # takes the integer
+        assertEq(1, q.get());
+        assertEq(1, getScanPrivateData(q));
+        # takes the last object
+        assertTrue(q.pop() instanceof EventArg);
+        assertEq(0, getScanPrivateData(q));
+
+        # clearing the queue uncounts it
+        q.push(new EventArg());
+        q.clear();
+        assertEq(0, getScanPrivateData(q));
+        # a value added after the queue was cleared is counted again
+        q.push(new EventArg());
+        assertEq(1, getScanPrivateData(q));
+        q.get();
+        assertEq(0, getScanPrivateData(q));
+    }
+
+    #! returns the private data scan count of the given object as reported by dbg_node_info()
+    private static int getScanPrivateData(object obj) {
+        *list<*string> m = (call_function("dbg_node_info", obj, True) =~ x/scan_private_data: ([0-9]+)/);
+        return m[0].toInt();
     }
 
     leakTest() {

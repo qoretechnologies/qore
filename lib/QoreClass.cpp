@@ -1106,7 +1106,8 @@ int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
 }
 
 int qore_class_private::initializeMembers() {
-    if (!parse_resolve_class_members) {
+    // nothing is resolved again for a committed user class (see parseInitPartial())
+    if (!parse_resolve_class_members && !(committed && !sys)) {
         parse_resolve_class_members = true;
 
         if (scl) {
@@ -1347,6 +1348,19 @@ void qore_class_private::mergeAbstract() {
 void qore_class_private::finalizeBuiltin(const char* nspath) {
     initializeBuiltin();
     initializeMembers();
+    // A builtin class is shared by every Program and can be used by other threads as soon as it is registered, which a
+    // binary module loaded at runtime does while other threads run: the parse state that a parse would otherwise
+    // resolve the first time it reaches the class is resolved now, before the class is published, so that no later
+    // parse writes it while the class is in use
+    parseResolveHierarchy();
+    parseResolveAbstract();
+    // the one-time runtime initialization that a parse commit would otherwise make the first time it reaches the
+    // class, writing flags that share a word with the ones that method calls read
+    {
+        ExceptionSink xsink;
+        parseCommitRuntimeInit(&xsink);
+        assert(!xsink);
+    }
     generateBuiltinSignature(nspath);
 }
 
@@ -4980,7 +4994,11 @@ QoreListNode* QoreClass::getStaticMethodList() const {
 }
 
 int qore_class_private::parseInitPartial() {
-    if (parse_init_partial_called || sys) {
+    // A committed class cannot be changed, so it has nothing to initialize; it can be shared with other Programs and
+    // run by their threads, and a later parse in another Program that reaches it - one that imports it, or parses a
+    // subclass of it - must not write its parse state.  The same holds for parseInit(), parseResolveHierarchy(),
+    // initializeMembers() and parseResolveAbstract().
+    if (parse_init_partial_called || sys || committed) {
         return 0;
     }
 
@@ -5080,6 +5098,12 @@ int qore_class_private::parseInitConstants() {
 }
 
 int qore_class_private::parseInit() {
+    // a committed class has nothing to initialize, and a parse in another Program sharing it must not write its parse
+    // state while other threads run it (see parseInitPartial())
+    if (committed) {
+        return 0;
+    }
+
     // make sure initialize() is called first
     int err = initialize();
 
@@ -5433,7 +5457,9 @@ void qore_class_private::parseWarnAmbiguousOverloads() {
 }
 
 int qore_class_private::parseResolveHierarchy() {
-    if (!parse_resolve_hierarchy) {
+    // nothing is resolved again for a committed user class (see parseInitPartial()); builtin classes are resolved
+    // when they are registered (see finalizeBuiltin())
+    if (!parse_resolve_hierarchy && !(committed && !sys)) {
         parse_resolve_hierarchy = true;
 
         if (!scl) {
@@ -5449,7 +5475,8 @@ int qore_class_private::parseResolveHierarchy() {
 }
 
 void qore_class_private::parseResolveAbstract() {
-    if (!parse_resolve_abstract) {
+    // nothing is resolved again for a committed user class (see parseInitPartial())
+    if (!parse_resolve_abstract && !(committed && !sys)) {
         parse_resolve_abstract = true;
 
         if (!scl)
@@ -6685,8 +6712,10 @@ const char* MethodVariantBase::getAbstractSignature() {
 QoreValue BuiltinNormalMethodVariantBase::evalMethod(QoreObject* self, CodeEvaluationHelper& ceh,
         ExceptionSink* xsink) const {
     CodeContextHelper cch(xsink, CT_BUILTIN, qmethod->getName(), self, qore_class_private::get(*qmethod->getClass()));
-    return qore_object_private::evalBuiltinMethodWithPrivateData(*self, *qmethod, this, ceh.getArgs(),
-        ceh.getRuntimeConfig(), xsink);
+    return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
+        return qore_object_private::evalBuiltinMethodWithPrivateData(*self, *qmethod, this, ceh.getArgs(),
+            ceh.getRuntimeConfig(), xsink);
+    });
 }
 
 QoreValue BuiltinNormalMethodVariantBase::evalPseudoMethod(const QoreValue n, CodeEvaluationHelper& ceh,
@@ -6703,7 +6732,9 @@ QoreValue BuiltinNormalMethodVariantBase::evalPseudoMethod(const QoreValue n, Co
             arg = *materialized;
         }
     }
-    return evalImpl(nullptr, (AbstractPrivateData*)&arg, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+    return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
+        return evalImpl(nullptr, (AbstractPrivateData*)&arg, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+    });
 }
 
 class qmi_priv {

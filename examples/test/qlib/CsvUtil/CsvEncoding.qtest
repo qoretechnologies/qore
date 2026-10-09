@@ -33,6 +33,11 @@ public class CsvEncodingTest inherits QUnit::Test {
             {"encoding": "UTF-8", "headers": CzechHeaders},
             {"encoding": "UTF-16LE", "headers": CzechHeaders},
             {"encoding": "UTF-16BE", "headers": CzechHeaders},
+            # encodings created on the fly
+            {"encoding": "UTF-32LE", "headers": CzechHeaders},
+            {"encoding": "UTF-32BE", "headers": CzechHeaders},
+            {"encoding": "UTF-32", "headers": CzechHeaders},
+            {"encoding": "UCS-2LE", "headers": CzechHeaders},
         );
 
         #! the headers of the data with typed fields
@@ -94,7 +99,16 @@ public class CsvEncodingTest inherits QUnit::Test {
             {"encoding": "UTF-16", "data_encoding": "UTF-16LE", "bom": <fffe>},
             {"encoding": "UTF-16", "data_encoding": "UTF-16BE", "bom": <feff>},
             {"encoding": "UTF-16", "data_encoding": "UTF-16BE"},
+            {"encoding": "UTF-32LE"},
+            {"encoding": "UTF-32BE"},
+            {"encoding": "UTF-32", "data_encoding": "UTF-32LE", "bom": <fffe0000>},
+            {"encoding": "UTF-32", "data_encoding": "UTF-32BE", "bom": <0000feff>},
+            {"encoding": "UTF-32", "data_encoding": "UTF-32BE"},
+            {"encoding": "UCS-2BE"},
         );
+
+        #! an EBCDIC code page, used if iconv supports it
+        const Ebcdic = "IBM1140";
 
         #! the data rows
         const Rows = (
@@ -116,6 +130,8 @@ public class CsvEncodingTest inherits QUnit::Test {
         addTestCase("UTF-16 byte order marks", \utf16ByteOrderMarks());
         addTestCase("generic UTF-16", \genericUtf16());
         addTestCase("typed fields", \typedFields());
+        addTestCase("EBCDIC", \ebcdic());
+        addTestCase("custom end-of-line in multi-byte data", \multiByteEol());
         set_return_value(main());
     }
 
@@ -284,6 +300,65 @@ public class CsvEncodingTest inherits QUnit::Test {
             checkTyped(c, label + " number format", FormatHeaders, FormatRows, FormatRecords,
                 {"fields": FormatFields, "number_format": ".,"});
         }
+    }
+
+    ebcdic() {
+        try {
+            if (convert_encoding("A", Ebcdic).toBinary() != <c1>) {
+                testSkip(Ebcdic + " is not an EBCDIC code page in iconv on this platform");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(Ebcdic + " is not supported by iconv on this platform");
+        }
+        # the separators, quotes, and line ends of a CSV file in EBCDIC are not ASCII bytes
+        binary data = encode(GermanHeaders, Ebcdic);
+        hash<auto> opts = {"separator": ";", "header_names": True};
+        checkRecords(GermanHeaders, read(new CsvIterator(new BinaryInputStream(data), Ebcdic, opts)), "CsvIterator");
+        checkRecords(GermanHeaders, read(new CsvFileIterator(writeFile("ebcdic.csv", data),
+            opts + {"encoding": Ebcdic})), "CsvFileIterator");
+        checkRecords(GermanHeaders, search(new CsvReadDataProvider(opts + {"data": data, "encoding": Ebcdic})),
+            "CsvReadDataProvider");
+        checkTyped({"encoding": Ebcdic}, Ebcdic, TypedHeaders, TypedRows, TypedRecords, {"fields": TypedFields});
+    }
+
+    multiByteEol() {
+        # Big5 弋 is 0xa4 0x7c and 許 is 0xb3 0x5c: the end-of-line marker "|" and the escape character "\" are only
+        # the ASCII characters, not the second bytes of these characters
+        list<hash<auto>> cases = (
+            {"enc": "BIG5", "text": "弋許"},
+            {"enc": "GBK", "text": "丂丄"},
+            {"enc": "SHIFT_JIS", "text": "ポソ"},
+        );
+        int tested = 0;
+        foreach hash<auto> c in (cases) {
+            string text = "h1;h2|" + c.text + ";a" + c.text + "|x" + c.text + ";" + c.text + "|";
+            binary data;
+            try {
+                data = binary(convert_encoding(text, c.enc));
+            } catch (hash<ExceptionInfo> ex) {
+                continue;
+            }
+            ++tested;
+            list<hash<auto>> expected = (
+                {"h1": c.text, "h2": "a" + c.text},
+                {"h1": "x" + c.text, "h2": c.text},
+            );
+            hash<auto> opts = {"separator": ";", "eol": "|", "header_names": True};
+            string label = c.enc;
+            list<hash<auto>> recs = read(new CsvIterator(new BinaryInputStream(data), c.enc, opts));
+            assertEq(expected, map utf8Record($1), recs, label + " CsvIterator");
+            recs = read(new CsvFileIterator(writeFile("eol.csv", data), opts + {"encoding": c.enc}));
+            assertEq(expected, map utf8Record($1), recs, label + " CsvFileIterator");
+            recs = search(new CsvReadDataProvider(opts + {"data": data, "encoding": c.enc}));
+            assertEq(expected, map utf8Record($1), recs, label + " CsvReadDataProvider");
+        }
+        assertTrue(tested > 0, "an encoding is supported");
+    }
+
+    #! Returns the record with its string values converted to UTF-8
+    private static hash<auto> utf8Record(hash<auto> rec) {
+        return map {$1.key: $1.value.typeCode() == NT_STRING ? convert_encoding($1.value, "UTF-8") : $1.value},
+            rec.pairIterator();
     }
 
     #! Checks the records read from data with typed fields in the given encoding

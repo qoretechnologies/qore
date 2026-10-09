@@ -3,6 +3,11 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
+
+# the script runs its code too few times for tiered execution to compile it, so native code is only required with JIT
+# execution
+ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -67,7 +72,7 @@ int sub main() {
 }
 
 string sub runMode(string script_path, string mode) {
-    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+    return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
         libqore_dir, qore_bin, mode, script_path));
 }
 

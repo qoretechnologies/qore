@@ -1,0 +1,257 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# An encoding that Qore does not know is created from its name; its properties come from the encoding itself:
+# UTF-32*, UCS-4*, and UCS-2* have the characters of a Unicode encoding form, and an EBCDIC code page is not
+# ASCII-compatible.  Strings in these encodings must have the same characters as the same text in UTF-8 for every
+# character operation (length, substr, find, split, chomp), and text in them must be read in lines and characters from
+# streams and files.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class OnTheFlyEncodingTest
+
+class OnTheFlyEncodingTest inherits QUnit::Test {
+    public {
+        #! encodings with the characters of a Unicode encoding form, with text with a character outside the BMP
+        const UnicodeEncodings = {
+            "UTF-32LE": "Grüße 12 😀 中",
+            "UTF-32BE": "Grüße 12 😀 中",
+            "UTF-32": "Grüße 12 😀 中",
+            "UCS-4": "Grüße 12 😀 中",
+            "UCS-2LE": "Grüße 12 € 中",
+            "UCS-2BE": "Grüße 12 € 中",
+        };
+
+        #! the EBCDIC code page used, if iconv supports it
+        const Ebcdic = "IBM1140";
+    }
+
+    constructor() : Test("OnTheFlyEncodingTest", "1.0", \ARGV) {
+        addTestCase("character operations", \testCharacters());
+        addTestCase("byte order marks", \testByteOrderMarks());
+        addTestCase("EBCDIC", \testEbcdic());
+        addTestCase("stream lines", \testStreamLines());
+        addTestCase("stream strings", \testStreamStrings());
+        addTestCase("line iterators", \testLineIterators());
+        addTestCase("unknown encodings", \testUnknown());
+        set_return_value(main());
+    }
+
+    private bool hasEbcdic() {
+        try {
+            return convert_encoding("A", Ebcdic).toBinary() == <c1>;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    #! checks character operations on a string in the given encoding against the same text in UTF-8
+    private checkCharacters(string enc, string text) {
+        string s = convert_encoding(text, enc);
+        assertEq(enc, s.encoding(), enc);
+        assertEq(text, convert_encoding(s, "UTF-8"), enc + " round trip");
+        assertEq(text.length(), s.length(), enc + " length()");
+        assertEq(text.substr(2, 3), convert_encoding(s.substr(2, 3), "UTF-8"), enc + " substr()");
+        assertEq(enc, s.substr(2, 3).encoding(), enc + " substr() encoding");
+        assertEq(text.substr(-2), convert_encoding(s.substr(-2), "UTF-8"), enc + " substr() from the end");
+        assertEq(text.find("12"), s.find("12"), enc + " find() UTF-8");
+        assertEq(text.find("12"), s.find(convert_encoding("12", enc)), enc + " find()");
+        assertEq(text.rfind(" "), s.rfind(" "), enc + " rfind()");
+        assertEq(text.find("ß"), s.find("ß"), enc + " find() non-ASCII");
+        assertEq(text[1], s[1], enc + " character");
+        assertEq(text.getUnicode(1), s.getUnicode(1), enc + " getUnicode()");
+        assertEq(text.split(" "), (map convert_encoding($1, "UTF-8"), s.split(" ")), enc + " split()");
+        assertEq(text.split(" ", "\""), (map convert_encoding($1, "UTF-8"), s.split(" ", "\"")),
+            enc + " split() with quote");
+        string q = convert_encoding("\"a b\",12,\"c\"", enc);
+        assertEq(("a b", "12", "c"), (map convert_encoding($1, "UTF-8"), q.split(",", "\"")), enc + " quoted fields");
+        string nl = convert_encoding(text + "\r\n", enc);
+        chomp nl;
+        assertEq(text, convert_encoding(nl, "UTF-8"), enc + " chomp()");
+        assertEq(text.upr(), convert_encoding(s.upr(), "UTF-8"), enc + " upr()");
+        assertEq(reverse(text), convert_encoding(reverse(s), "UTF-8"), enc + " reverse()");
+        assertEq(text, convert_encoding(s, "UTF-8"), enc + " unchanged");
+        # concatenation in the same encoding
+        string c = s + s;
+        assertEq(text.length() * 2, c.length(), enc + " concatenation");
+        # the string compares equal to the same text in UTF-8
+        assertTrue(s == text, enc + " ==");
+        hash<auto> h = {s: 1};
+        assertEq((text,), keys h, enc + " hash key");
+    }
+
+    testCharacters() {
+        foreach hash<auto> i in (UnicodeEncodings.pairIterator()) {
+            checkCharacters(i.key, i.value);
+        }
+        # fixed widths
+        assertEq(12, convert_encoding("abc", "UTF-32LE").size());
+        assertEq(6, convert_encoding("abc", "UCS-2LE").size());
+        # the generic UTF-32 encoding is big-endian without a byte order mark
+        assertEq(<0000004100000042>, binary(convert_encoding("AB", "UTF-32")));
+        # incomplete and invalid UTF-32 strings
+        assertThrows("INVALID-ENCODING", sub () { binary_to_string(<410000004200>, "UTF-32LE").substr(1, 1); });
+        assertThrows("INVALID-ENCODING", sub () { binary_to_string(<00110000>, "UTF-32BE").substr(0, 1); });
+        assertThrows("INVALID-ENCODING", sub () { binary_to_string(<00d8>, "UCS-2LE").substr(0, 1); });
+    }
+
+    testByteOrderMarks() {
+        # a byte order mark gives the byte order of a string in the generic UTF-32 encoding and is removed
+        string le = binary_to_string(<fffe0000> + binary(convert_encoding("Grüße", "UTF-32LE")), "UTF-32");
+        assertEq("UTF-32LE", le.encoding());
+        assertEq(5, le.length());
+        assertEq("Grüße", convert_encoding(le, "UTF-8"));
+        string be = binary_to_string(<0000feff> + binary(convert_encoding("Grüße", "UTF-32BE")), "UTF-32");
+        assertEq("UTF-32BE", be.encoding());
+        assertEq("Grüße", convert_encoding(be, "UTF-8"));
+        # a byte order mark in the byte order of an explicit-endian encoding is removed
+        string lele = binary_to_string(<fffe0000> + binary(convert_encoding("ab", "UTF-32LE")), "UTF-32LE");
+        assertEq("UTF-32LE", lele.encoding());
+        assertEq("ab", convert_encoding(lele, "UTF-8"));
+    }
+
+    testEbcdic() {
+        if (!hasEbcdic()) {
+            testSkip(Ebcdic + " is not supported by iconv on this platform");
+        }
+        string text = "Grüße 12 3€";
+        string s = convert_encoding(text, Ebcdic);
+        assertEq(text.size() - 4, s.size(), "single-byte");
+        assertEq(text.length(), s.length());
+        assertEq(text.substr(6, 2), convert_encoding(s.substr(6, 2), "UTF-8"));
+        assertEq(text.find("12"), s.find("12"));
+        assertEq(text.split(" "), (map convert_encoding($1, "UTF-8"), s.split(" ")));
+        assertEq(text.split(" ", "\""), (map convert_encoding($1, "UTF-8"), s.split(" ", "\"")));
+        string nl = convert_encoding(text + "\n", Ebcdic);
+        chomp nl;
+        assertEq(text, convert_encoding(nl, "UTF-8"));
+        # ASCII bytes are other characters in EBCDIC
+        assertEq(12, int(convert_encoding("12", Ebcdic)));
+        assertEq(0, int(binary_to_string(<3132>, Ebcdic)));
+        assertTrue(s == text);
+        assertEq(("Grüße",), keys {convert_encoding("Grüße", Ebcdic): 1});
+        assertEq(0xfc, convert_encoding("ü", Ebcdic).getUnicode(0));
+        assertEq(0x41, convert_encoding("A", Ebcdic).getUnicode(0));
+    }
+
+    #! the encodings for the stream tests
+    private list<string> getStreamEncodings() {
+        list<string> rv = keys UnicodeEncodings;
+        if (hasEbcdic()) {
+            rv += Ebcdic;
+        }
+        return rv;
+    }
+
+    testStreamLines() {
+        list<string> lines = ("line 1", "zwei ü", "", "12");
+        foreach string enc in (getStreamEncodings()) {
+            binary data = binary(convert_encoding(lines.join("\n") + "\n", enc));
+            StreamReader sr(new BinaryInputStream(data), enc);
+            list<string> got = ();
+            *string l;
+            while (exists (l = sr.readLine())) {
+                assertEq(enc, l.encoding(), enc + " line encoding");
+                got += convert_encoding(l, "UTF-8");
+            }
+            assertEq(lines, got, enc + " readLine()");
+
+            sr = new StreamReader(new BinaryInputStream(data), enc);
+            got = ();
+            while (exists (l = sr.readLine("\n", False))) {
+                got += convert_encoding(l, "UTF-8");
+            }
+            assertEq((map $1 + "\n", lines), got, enc + " readLine() untrimmed");
+
+            InputStreamLineIterator i(new BinaryInputStream(data), enc);
+            got = map convert_encoding($1, "UTF-8"), i;
+            assertEq(lines, got, enc + " InputStreamLineIterator");
+        }
+
+        # the bytes of the end-of-line marker at the end of one character and the start of the next one do not end
+        # the line: U+0100 U+0A00 in UTF-32BE is 00000100 00000a00, with 0000000a at byte offset 3
+        string text = "Ā਀x\nnext";
+        foreach string enc in ("UTF-32BE", "UTF-32", "UTF-16BE") {
+            StreamReader sr(new BinaryInputStream(binary(convert_encoding(text, enc))), enc);
+            assertEq("Ā਀x", convert_encoding(sr.readLine(), "UTF-8"), enc + " misaligned marker");
+            assertEq("next", convert_encoding(sr.readLine(), "UTF-8"), enc + " next line");
+        }
+        # U+0100 U+0A41 in UTF-16BE is 0100 0a41, with 000a at byte offset 1
+        StreamReader sr(new BinaryInputStream(binary(convert_encoding("Āੁ\nb", "UTF-16BE"))), "UTF-16BE");
+        assertEq("Āੁ", convert_encoding(sr.readLine(), "UTF-8"), "UTF-16BE misaligned marker");
+
+        # a byte order mark gives the byte order of a stream in the generic UTF-32 encoding
+        binary le = <fffe0000> + binary(convert_encoding("a\nb\n", "UTF-32LE"));
+        sr = new StreamReader(new BinaryInputStream(le), "UTF-32");
+        *string l = sr.readLine();
+        assertEq("a", convert_encoding(l, "UTF-8"));
+        assertEq("UTF-32LE", l.encoding());
+        assertEq("b", convert_encoding(sr.readLine(), "UTF-8"));
+        assertEq(NOTHING, sr.readLine());
+        binary be = <0000feff> + binary(convert_encoding("a\nb", "UTF-32BE"));
+        sr = new StreamReader(new BinaryInputStream(be), "UTF-32");
+        l = sr.readLine();
+        assertEq("a", convert_encoding(l, "UTF-8"));
+        assertEq("UTF-32BE", l.encoding());
+        # bytes that are the start of a byte order mark but not one are content
+        sr = new StreamReader(new BinaryInputStream(binary(convert_encoding("\u0000z\n", "UTF-32"))), "UTF-32");
+        assertEq("\u0000z", convert_encoding(sr.readLine(), "UTF-8"));
+    }
+
+    testStreamStrings() {
+        foreach hash<auto> i in (UnicodeEncodings.pairIterator()) {
+            binary data = binary(convert_encoding(i.value, i.key));
+            StreamReader sr(new BinaryInputStream(data), i.key);
+            string s = sr.readString(4);
+            assertEq(i.value.substr(0, 4), convert_encoding(s, "UTF-8"), i.key + " readString()");
+            assertEq(i.value.substr(4), convert_encoding(sr.readString(), "UTF-8"), i.key + " readString() rest");
+        }
+        # a byte order mark is removed from a string read from a stream in the generic UTF-32 encoding
+        StreamReader sr(new BinaryInputStream(<fffe0000> + binary(convert_encoding("12", "UTF-32LE"))), "UTF-32");
+        string s = sr.readString();
+        assertEq("UTF-32LE", s.encoding());
+        assertEq(12, int(s));
+        # conversion streams remove the byte order mark and use its byte order
+        EncodingConversionInputStream ecis(new BinaryInputStream(<fffe0000> +
+            binary(convert_encoding("Grüße", "UTF-32LE"))), "UTF-32", "UTF-8");
+        assertEq("Grüße", ecis.read(100).toString());
+        ecis = new EncodingConversionInputStream(new BinaryInputStream(<fffe0000> +
+            binary(convert_encoding("ab", "UTF-32LE"))), "UTF-32LE", "UTF-8");
+        assertEq("ab", ecis.read(100).toString());
+    }
+
+    testLineIterators() {
+        list<string> lines = ("a,b", "Grüße", "12");
+        TmpDir tmp("qore-on-the-fly-enc-");
+        foreach string enc in (getStreamEncodings()) {
+            string data = convert_encoding(lines.join("\n") + "\n", enc);
+            DataLineIterator di(data);
+            assertEq(lines, (map convert_encoding($1, "UTF-8"), di), enc + " DataLineIterator");
+            string path = tmp.path + DirSep + "lines.txt";
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(binary(data));
+            f.close();
+            FileLineIterator fi(path, enc);
+            assertEq(lines, (map convert_encoding($1, "UTF-8"), fi), enc + " FileLineIterator");
+            assertEq(convert_encoding(lines.join("\n") + "\n", "UTF-8"),
+                convert_encoding(ReadOnlyFile::readTextFile(path, enc), "UTF-8"), enc + " readTextFile()");
+        }
+    }
+
+    testUnknown() {
+        # an encoding that iconv does not know can still tag a string; it cannot be converted
+        string s = binary_to_string(<313233>, "X-NO-SUCH-ENCODING-QORE");
+        assertEq("X-NO-SUCH-ENCODING-QORE", s.encoding());
+        assertEq(3, s.length());
+        assertEq(123, int(s));
+        assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), (s, "UTF-8"));
+    }
+}

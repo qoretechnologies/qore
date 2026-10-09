@@ -76,7 +76,8 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
             rc = 0;
         } else {
             // wait for condition
-            rc = timeout_ms > 0 ? cond->wait2(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
+            // a cancellation point if the caller made it one; see VLock::condWait()
+            rc = nvl->condWait(*cond, this, timeout_ms > 0 ? timeout_ms : 0);
         }
 
         // check for signals before reacquiring the lock for efficiency
@@ -88,7 +89,13 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
         // check the signal generation after reacquisition.  During grabImpl, this
         // thread waits on asl_cond (not the user's condition), so any broadcast on
         // the user's condition during that window would be lost without this check.
-        if (grabImpl(mtid, nvl, xsink)) {
+        // the lock is always reacquired before the wait returns, including when it reports a cancellation
+        int grab_rc;
+        {
+            VLockCancellationSuspend no_cancel(nvl);
+            grab_rc = grabImpl(mtid, nvl, xsink);
+        }
+        if (grab_rc) {
             // error: clean up cond map before returning
             if (!--(i->second)) {
                 cmap.erase(i);
@@ -111,6 +118,10 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
             cmap.erase(i);
         }
 
+        if (rc == QORE_VLOCK_WAIT_CANCELLED) {
+            // raised with the lock held again; a request that is no longer to be delivered is a wakeup
+            return nvl->raiseCancel(xsink) ? -1 : 0;
+        }
         return rc;
     }
 
@@ -157,7 +168,8 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
         rc = 0;
     } else {
         // wait for condition
-        rc = timeout_ms ? cond->wait(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
+        // a cancellation point if the caller made it one; see VLock::condWait()
+        rc = nvl->condWait(*cond, this, timeout_ms > 0 ? timeout_ms : 0);
     }
 
     // check for signals before reacquiring the lock for efficiency
@@ -171,13 +183,17 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
     // broadcast on the user's condition during that window would be lost without
     // this check.
     // issue #2817: handle the case when the read lock is held recursively
-    for (int j = 0; j < read_count; ++j) {
-        if (grab_read_lock_intern(mtid, nvl, 0, xsink)) {
-            // error: clean up cond map before returning
-            if (!--(ci->second)) {
-                cmap.erase(ci);
+    // the lock is always reacquired before the wait returns, including when it reports a cancellation
+    {
+        VLockCancellationSuspend no_cancel(nvl);
+        for (int j = 0; j < read_count; ++j) {
+            if (grab_read_lock_intern(mtid, nvl, 0, xsink)) {
+                // error: clean up cond map before returning
+                if (!--(ci->second)) {
+                    cmap.erase(ci);
+                }
+                return -1;
             }
-            return -1;
         }
     }
 
@@ -194,6 +210,10 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
         cmap.erase(ci);
     }
 
+    if (rc == QORE_VLOCK_WAIT_CANCELLED) {
+        // raised with the lock held again; a request that is no longer to be delivered is a wakeup
+        return nvl->raiseCancel(xsink) ? -1 : 0;
+    }
     return rc;
 }
 

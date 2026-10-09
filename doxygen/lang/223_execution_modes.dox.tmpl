@@ -90,6 +90,13 @@ qore --exec-mode=jit script.qr
 QORE_JIT_SYNC_COMPILE=1 qore --exec-mode=jit script.qr
     @endcode
 
+    Set \c QORE_JIT_TIMING as well to trace every native compilation on stderr: a function compiled in the
+    background is reported with <tt>[BG-JIT] compiled '<name>' and promoted to JIT tier</tt> (and the functions
+    compiled with it with <tt>[BG-JIT] batch-promoted callee '<name>' to JIT tier</tt>), and top-level code, which
+    @ref exec_mode_jit "JIT" execution compiles before it runs, with <tt>[JIT] compiled '<name>' synchronously</tt>.
+    Together with \c QORE_JIT_THRESHOLD=1, with which tiered execution compiles a function after its first call
+    on the IR tier, this shows exactly which code runs as native code.
+
     @note This serializes execution behind LLVM and is meant for testing and
     diagnostics; leave it unset in production, where the point of background
     compilation is that execution continues while LLVM works.

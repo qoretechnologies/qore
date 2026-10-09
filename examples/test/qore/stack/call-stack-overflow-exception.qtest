@@ -17,6 +17,8 @@ public class StackGuardTest inherits QUnit::Test {
         addTestCase("stack size", \testStackSize());
         addTestCase("Test overflowing the stack limit", \testInfiniteRecurse());
         addTestCase("Test two threads", \testRecurseWithBackground());
+        addTestCase("Test a stack no larger than the guard", \testStackSizeTooSmall());
+        addTestCase("Test a small stack", \testSmallStack());
 
         set_return_value(main());
     }
@@ -68,5 +70,38 @@ public class StackGuardTest inherits QUnit::Test {
         if (bg_result instanceof hash<ExceptionInfo>) {
             throw bg_result.err, bg_result.desc, bg_result.arg;
         }
+    }
+
+    testStackSizeTooSmall() {
+        # the stack guard reserves 80KB on these CPUs
+        if (!inlist(Qore::PlatformCPU, ("x86_64", "arm64", "aarch64"))) {
+            testSkip(sprintf("the stack guard size on %y is not known to this test", Qore::PlatformCPU));
+        }
+        int size = get_default_thread_stack_size();
+        # a stack of 64KB is valid for threads, but no larger than the stack guard: no code could run on it
+        assertThrows("SET-DEFAULT-THREAD-STACK-SIZE-ERROR", "stack guard", \set_default_thread_stack_size(), 64 * 1024);
+        # the default is unchanged
+        assertEq(size, get_default_thread_stack_size());
+    }
+
+    testSmallStack() {
+        int size = get_default_thread_stack_size();
+        on_exit set_default_thread_stack_size(size);
+        set_default_thread_stack_size(160 * 1024);
+        Queue q();
+        background sub () {
+            try {
+                recurse();
+                q.push("no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+        auto rv = q.get();
+        assertEq("STACK-LIMIT-EXCEEDED", rv.err);
+        # the limit reported is the part of the stack not reserved for the guard
+        *string limit = (rv.desc =~ x/\(([0-9]+) bytes\)/)[0];
+        assertGt(0, int(limit));
+        assertLt(160 * 1024, int(limit));
     }
 }

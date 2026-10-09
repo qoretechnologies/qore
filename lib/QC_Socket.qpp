@@ -862,7 +862,12 @@ static QoreValue socket_exec_accept(QoreObject* self, QoreSocketObject* s, int t
     }
 
     ValueHolder output(accept_poller->getOutput(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     if (output->isNothing()) {
+        // no connection and no timeout: the operation was canceled
+        qore_socket_raise_accept_without_connection(*result, ssl ? "acceptSSL" : "accept", xsink);
         return QoreValue();
     }
     if (output->getType() != NT_OBJECT) {
@@ -3874,6 +3879,7 @@ nothing Socket::bindINET(*string bind_address, *softstring service, softbool reu
     @return a new Socket object is returned for the new connection
 
     @throw SOCKET-NOT-OPEN The socket is not bound
+    @throw SOCKET-CLOSED The socket was closed by another thread while waiting for a connection
     @throw SOCKET-ACCEPT-ERROR Error in accepting connection
 
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
@@ -3895,6 +3901,7 @@ Socket Socket::accept() {
     @return If no connection is accepted within the timeout period, then @ref nothing is returned, otherwise a Socket object for the new connection is returned.
 
     @throw SOCKET-NOT-OPEN The socket is not bound
+    @throw SOCKET-CLOSED The socket was closed by another thread while waiting for a connection
     @throw SOCKET-ACCEPT-ERROR Error in accepting connection
 
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
@@ -3917,6 +3924,7 @@ Socket Socket::accept() {
     object is returned for the new connectio
 
     @throw SOCKET-NOT-OPEN The socket is not bound
+    @throw SOCKET-CLOSED The socket was closed by another thread while waiting for a connection
     @throw SOCKET-ACCEPT-ERROR Error in accepting connection
 
     @see Socket::accept(), Socket::listen(), Socket::getPeerInfo()
@@ -3938,6 +3946,7 @@ Socket Socket::acceptSSL() {
     @return If no connection is accepted within the timeout period, then @ref nothing is returned, otherwise a Socket object for the new connection is returned.
 
     @throw SOCKET-NOT-OPEN The socket is not bound
+    @throw SOCKET-CLOSED The socket was closed by another thread while waiting for a connection
     @throw SOCKET-ACCEPT-ERROR Error in accepting connection
 
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()

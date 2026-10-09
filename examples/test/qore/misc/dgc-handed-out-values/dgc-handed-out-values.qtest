@@ -1,0 +1,216 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DgcHandedOutValuesTest
+
+#! counts destructor calls
+class Destroyed {
+    public {
+        static Counter count();
+    }
+}
+
+#! a value that refers back to the Queue holding it, closing a cycle through the queue's private data
+class QueueValue {
+    public {
+        *Queue q;
+    }
+
+    constructor(*Queue q) {
+        self.q = q;
+    }
+
+    destructor() {
+        Destroyed::count.inc();
+    }
+}
+
+#! a value that refers back to the TreeMap holding it, closing a cycle through the map's private data
+class MapValue {
+    public {
+        *TreeMap tm;
+    }
+
+    constructor(*TreeMap tm) {
+        self.tm = tm;
+    }
+
+    destructor() {
+        Destroyed::count.inc();
+    }
+}
+
+#! Tests that values handed out by a container whose values are scanned through private data keep the cycle alive
+/** A Queue or TreeMap hands a value to the caller with its own reference; a recursive set that counted that
+    reference as internal still reads the same number of references, now held from outside the set, and must not be
+    collected while the caller holds the value.  See design/dgc.md, "Values handed out by a container".
+*/
+class DgcHandedOutValuesTest inherits QUnit::Test {
+    public {
+        #! the number of queues shared by the threads of the concurrent test
+        const QueueCount = 2;
+        #! the number of threads in the concurrent test
+        const ThreadCount = 8;
+        #! the number of operations each thread makes in the concurrent test
+        const Iterations = 20000;
+        #! the error set by setError() in the concurrent test
+        const TestError = "HANDED-OUT-TEST";
+    }
+
+    constructor() : QUnit::Test("DGC values handed out by containers", "1.0") {
+        addTestCase("Queue::get()", \queueGetTest());
+        addTestCase("Queue::pop()", \queuePopTest());
+        addTestCase("TreeMap::take()", \treeMapTakeTest());
+        addTestCase("concurrent takes and scans", \concurrentTest());
+        set_return_value(main());
+    }
+
+    queueGetTest() {
+        queueTest(False);
+    }
+
+    queuePopTest() {
+        queueTest(True);
+    }
+
+    #! a value taken from a queue keeps the queue it refers to after the queue's last other reference is released
+    private queueTest(bool use_pop) {
+        int destroyed = Destroyed::count.getCount();
+        Queue q();
+        {
+            QueueValue v(q);
+            q.push(v);
+        }
+        assertSet(q, "the queue and its value");
+        QueueValue v2 = use_pop ? q.pop() : q.get();
+        remove q;
+        assertEq(destroyed, Destroyed::count.getCount(), "nothing collected");
+        assertEq(0, v2.q.size(), "the queue is still usable");
+        assertEq("QueueValue", v2.className());
+
+        # releasing the value releases both, as they no longer form a cycle
+        remove v2;
+        assertEq(destroyed + 1, Destroyed::count.getCount(), "the value is destroyed");
+    }
+
+    #! a value taken from a TreeMap keeps the map it refers to after the map's last other reference is released
+    treeMapTakeTest() {
+        int destroyed = Destroyed::count.getCount();
+        TreeMap tm();
+        {
+            MapValue v(tm);
+            tm.put("a", v);
+        }
+        assertSet(tm, "the map and its value");
+        MapValue v2 = tm.take("a");
+        remove tm;
+        assertEq(destroyed, Destroyed::count.getCount(), "nothing collected");
+        assertEq(NOTHING, v2.tm.getAll(), "the map is still usable");
+
+        remove v2;
+        assertEq(destroyed + 1, Destroyed::count.getCount(), "the value is destroyed");
+    }
+
+    #! threads push values that refer back to their queue and take them while the values are scanned
+    /** Each push and each take changes the cycle the queue is in, and the scans that follow run while other threads
+        take the values the scan reported and release them.  A scan may then commit counts that the values no
+        longer have, which is only allowed when the queue has handed a value out since the scan read it; and no value
+        may be collected while a thread holds it.  At the end, every queue is counted for scanning exactly when it
+        holds values.
+    */
+    concurrentTest() {
+        list<Queue> queues = map new Queue(), xrange(QueueCount);
+        Queue<hash<ExceptionInfo>> errors();
+        Counter running(ThreadCount);
+        for (int t = 0; t < ThreadCount; ++t) {
+            background runThread(t, queues, errors, running);
+        }
+        running.waitForZero();
+
+        list<hash<ExceptionInfo>> unexpected;
+        while (*hash<QueueTryResult<hash<ExceptionInfo>>> r = errors.tryGet()) {
+            unexpected += r.value;
+        }
+        assertEq(0, unexpected.size(), sprintf("unexpected errors: %y",
+            (map sprintf("%s: %s", $1.err, $1.desc), unexpected)));
+
+        foreach Queue q in (queues) {
+            if (Option::HAVE_LIBRARY_DEBUGGING) {
+                assertEq(q.empty() ? 0 : 1, getScanPrivateData(q), sprintf("queue %d holds %d value(s)", $#,
+                    q.size()));
+            }
+            # clearing the queue also releases the cycles made by its values
+            q.clear();
+        }
+    }
+
+    #! one thread's operations: a push followed by one of the ways to take values
+    private runThread(int t, list<Queue> queues, Queue<hash<ExceptionInfo>> errors, Counter running) {
+        on_exit {
+            running.dec();
+        }
+        try {
+            for (int i = 0; i < Iterations; ++i) {
+                Queue q = queues[(t + i) % QueueCount];
+                try {
+                    q.push(new QueueValue(q));
+                    *QueueValue v;
+                    switch ((t + i) % 8) {
+                        case 0:
+                        case 1:
+                            v = q.tryGet().value;
+                            break;
+                        case 2:
+                        case 3:
+                            v = q.tryPop().value;
+                            break;
+                        case 4:
+                        case 5:
+                            q.clear();
+                            break;
+                        case 6:
+                            q.setError(TestError, "the queue is cleared by setError()");
+                            q.clearError();
+                            break;
+                        # case 7: the value is left for the other threads to take
+                    }
+                    # a value taken is still usable
+                    if (v) {
+                        v.q.size();
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # another thread set the queue's error between this thread's operations
+                    if (ex.err != TestError) {
+                        rethrow;
+                    }
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors.push(ex);
+        }
+    }
+
+    #! checks that the object is in a recursive set, so that the test exercises a collection decision
+    /** dbg_node_info() is only available with library debugging; the set is not checked without it
+    */
+    private assertSet(object obj, string label) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        *list<*string> m = (call_function("dbg_node_info", obj, True) =~ x/rset: (0x[0-9a-f]+|0x0|\(nil\))/);
+        assertNeq("0x0", m[0], label);
+        assertNeq("(nil)", m[0], label);
+    }
+
+    #! returns the private data scan count of the given object as reported by dbg_node_info()
+    private static int getScanPrivateData(object obj) {
+        *list<*string> m = (call_function("dbg_node_info", obj, True) =~ x/scan_private_data: ([0-9-]+)/);
+        return m[0].toInt();
+    }
+}

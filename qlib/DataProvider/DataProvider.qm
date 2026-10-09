@@ -1380,6 +1380,9 @@ fetch
       constructor; any other error raised while looking up the constructor (for example \c PROGRAM-ERROR when the
       @ref Qore::Program "Program" holding the class has been deleted) is now raised unchanged instead of being
       hidden behind that message
+    - fixed the polling thread of @ref DataProvider::AbstractWatchDataProviderBase "AbstractWatchDataProviderBase"
+      dying with an unhandled \c THREAD-CANCELLED exception when polling was stopped while the thread was between
+      the statements of its polling loop; the thread now always ends cleanly
     - a DPQL field name can be written without quotes in any script: <tt>\@menge_bestätigt</tt> and
       <tt>\@größe</tt> are read like <tt>\@name</tt>, and the serializer and completion write such names bare;
       a non-ASCII field name was read byte by byte, so it failed with a parse error whose message held a single

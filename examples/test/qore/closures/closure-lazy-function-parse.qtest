@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/FsUtil.qm
+%requires ../../ExecModeHarness.qm
 
 %exec-class ClosureLazyFunctionParseTest
 
@@ -49,13 +50,13 @@ class ClosureLazyFunctionParseTest inherits QUnit::Test {
         script.file.write("%modern\n" + code);
         script.file.close();
 
-        TmpFile out();
-        # synchronous compilation keeps the compiled tiers from racing the short programs
-        int rc = system(sprintf("QORE_JIT_SYNC_COMPILE=1 %s -b --enable-debug --exec-mode=%s %s > %s 2>&1",
-            qore_bin, mode, script.path, out.path));
-        string output = ReadOnlyFile::readTextFile(out.path) ?? "";
-        assertEq(0, rc, sprintf("%s: exit status (output: %y)", mode, output));
-        return output;
+        # ExecModeHarness compiles synchronously, which keeps the compiled tiers from racing the short programs, and
+        # checks the native compilation
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s", qore_bin, mode, script.path));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        ExecModeHarness::check_native(r);
+        return r.out;
     }
 
     private check(string code, string expected) {

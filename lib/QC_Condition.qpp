@@ -38,46 +38,25 @@
 #include <cerrno>
 
 static int condition_wait_impl(Condition* c, AbstractSmartLock* lock, int64 timeout_ms, ExceptionSink* xsink) {
-    // Always poll for cancel/interrupt checking
-    const int poll_ms = 500;  // 500ms polling interval
-    int64 remaining = timeout_ms;
-    bool infinite = (timeout_ms <= 0);
-
-    while (true) {
-        if (qore_check_cancel(xsink, "condition wait")) {
-            return -1;
-        }
-
-        int this_timeout;
-        if (infinite) {
-            this_timeout = poll_ms;
-        } else {
-            this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
-        }
-
-        int rc = c->wait(lock, this_timeout, xsink);
-        if (*xsink) {
-            return -1;
-        }
-        if (rc == 0) {
-            return 0;
-        }
-        if (rc != ETIMEDOUT) {
-            xsink->raiseErrnoException("CONDITION-WAIT-ERROR", rc,
-                "unknown system error code returned from "
-                "Condition::wait(lock: %s, timeout: %d): rc: %d", lock->getName(), this_timeout, rc);
-            return rc;
-        }
-
-        // ETIMEDOUT - check if overall timeout exceeded
-        if (!infinite) {
-            remaining -= this_timeout;
-            if (remaining <= 0) {
-                return ETIMEDOUT;
-            }
-        }
+    if (qore_check_cancel(xsink, "condition wait")) {
+        return -1;
     }
+
+    // a single wait for the timeout (none if it is not positive): a cancellation request or program interrupt wakes
+    // it at once, and it is raised with the lock held again (see VLockCancellationPoint)
+    VLockCancellationPoint cancel_point(getVLock(), "condition wait");
+    int rc = c->wait(lock, timeout_ms > 0 ? timeout_ms : 0, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (rc && rc != ETIMEDOUT) {
+        xsink->raiseErrnoException("CONDITION-WAIT-ERROR", rc,
+            "unknown system error code returned from "
+            "Condition::wait(lock: %s, timeout: " QLLD "): rc: %d", lock->getName(), timeout_ms, rc);
+    }
+    return rc;
 }
+
 //! The Condition class can be used For blocking a thread until a condition becomes @ref True
 /** Condition objects, when used along with an AbstractSmartLock object (such as RWLock and Mutex objects), allow
     %Qore threads to sleep until a certain condition becomes @ref True.
@@ -183,7 +162,7 @@ printf("finally some_value is 0\n");
 
     @throw CONDITION-SIGNAL-ERROR This exception should never be thrown; it indicates a low-level error in executing
     the method
-    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method polls for interrupt requests every 500ms
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method returns as soon as the interrupt is requested
 
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
@@ -222,7 +201,7 @@ while (some_value > 0) {
 
     @throw CONDITION-SIGNAL-ERROR This exception should never be thrown; it indicates a low-level error in executing
     the method
-    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method polls for interrupt requests every 500ms
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method returns as soon as the interrupt is requested
 
     @since %Qore 3.0
  */

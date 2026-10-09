@@ -14,11 +14,15 @@
 %requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class LValueSliceTest
 
 class LValueSliceTest inherits QUnit::Test {
     constructor() : QUnit::Test("LValueSliceTest", "1.0", \ARGV) {
+        # the scripts have only top-level code, which tiered execution does not compile, so native code is only required
+        # with JIT execution
+        ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
         addTestCase("hash multi-key remove", \testHashMultiKeyRemove());
         addTestCase("hash multi-key delete", \testHashMultiKeyDelete());
         addTestCase("hash multi-key remove return value", \testHashMultiKeyRemoveReturn());
@@ -46,19 +50,18 @@ class LValueSliceTest inherits QUnit::Test {
         script.file.write("%modern\n" + code);
         script.file.close();
 
-        TmpFile out();
-        TmpFile err();
-        string cmd = sprintf("%s --exec-mode=%s %s > %s 2> %s",
-            qore_bin, mode, script.path, out.path, err.path);
-        int rc = system(cmd);
+        string cmd = sprintf("%s --exec-mode=%s %s", qore_bin, mode, script.path);
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd);
+        int rc = r.rc;
         if (rc != 0) {
-            string err_output = ReadOnlyFile::readTextFile(err.path) ?? "";
+            string err_output = r.stderr;
             if (err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
                 testSkip("exec-mode option not supported");
                 return "";
             }
         }
-        return ReadOnlyFile::readTextFile(out.path) ?? "";
+        ExecModeHarness::check_native(r);
+        return r.stdout;
     }
 
     private assertSameInAllModes(string code, string expected, string desc) {

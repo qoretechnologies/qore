@@ -115,11 +115,15 @@ static QoreStringNode* qore_regex_escape_string(const QoreStringNode* str, Excep
 }
 
 // finds the first occurrence of "pattern" (length "pl") in "str" (length "len") that starts at a
-// character boundary; "align" is the byte alignment of character boundaries in the string's encoding
+// character boundary; "b" gives the character boundaries of the string's encoding
 // (see qore_string_private::get_char_alignment()) and "base" is the byte offset of "str" within the
 // string, used for the alignment check; returns nullptr if there is no such match
 static const char* memstr(const char* str, const char* pattern, size_t pl, size_t len,
-        unsigned align = 1, size_t base = 0) {
+        const qore_char_boundary& b = qore_char_boundary(), size_t base = 0) {
+    if (b.charlen && pl) {
+        return qore_string_private::memmem_boundary(str, len, pattern, pl, b.charlen);
+    }
+    const unsigned align = b.align;
     const char* ostr = str;
     while (true) {
         const char* p = (const char*)memchr(str, pattern[0], len);
@@ -174,7 +178,7 @@ QoreListNode* split_intern(const char* pattern, size_t pl, const char* str, size
         bool with_separator, bool keep_trailing_empty) {
     QoreListNode* l = new QoreListNode(enc ? stringTypeInfo : binaryTypeInfo);
     const char* ostr = str;
-    const unsigned align = qore_string_private::get_char_alignment(enc);
+    const qore_char_boundary align = qore_string_private::get_char_alignment(enc);
     while (const char* p = memstr(str, pattern, pl, sl - (str - ostr), align, str - ostr)) {
         split_add_element(l, str, p - str + (with_separator ? pl : 0), enc);
         str = p + pl;
@@ -1867,7 +1871,7 @@ string replace(string str, string source, string target, int start = 0, int end 
 
         //printd(5, "cstr: %p str: %p size: %d cstr - str: %d\n", cstr, str->c_str(), (int)size, (int)(cstr - str->c_str()));
         assert(static_cast<size_t>(cstr - str->c_str()) < size);
-        const unsigned align = qore_string_private::get_char_alignment(ccs);
+        const qore_char_boundary align = qore_string_private::get_char_alignment(ccs);
         while (const char* p = qore_string_private::memmem_aligned(cstr, size - (cstr - str->c_str()),
             pattern, plen, align, cstr - str->c_str())) {
             //printd(5, "str: %p p: %p '%s' '%s'->'%s'\n", cstr, p, cstr, pattern, t2->c_str());

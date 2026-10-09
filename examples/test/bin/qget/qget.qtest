@@ -415,12 +415,13 @@ public *hash<auto> sub get_mod_connections() {
         TmpDir tmp("qget-test-");
         on_exit handler.slow_release.push(True);
 
-        # qget is started by a shell script that writes the process ID and then runs qget in its place
+        # qget is started by a shell script that writes the process ID and then runs qget in its place, in the
+        # temporary directory like every other case, so that the data it keeps is written there
         string script = tmp.path + "/run.sh";
         File f();
         f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
-        f.write(sprintf("echo $$ > %s\nexec %s\n", shellQuote(tmp.path + "/pid"),
-            getQgetCommand(tmp.path, url("/slow"))));
+        f.write(sprintf("echo $$ > %s\ncd %s || exit 99\nexec %s\n", shellQuote(tmp.path + "/pid"),
+            shellQuote(tmp.path), getQgetCommand(tmp.path, url("/slow"))));
         f.close();
 
         Counter done(1);
@@ -440,6 +441,10 @@ public *hash<auto> sub get_mod_connections() {
         assertEq(130, rc, err);
         assertRegex("cancelled", err);
         assertFalse(is_file(tmp.path + "/slow"));
+        # the data received before the cancellation, if any, is kept in the directory qget ran in
+        if (err =~ /kept in slow\.part/) {
+            assertTrue(is_file(tmp.path + "/slow.part"), err);
+        }
     }
 
     private string url(string path) {

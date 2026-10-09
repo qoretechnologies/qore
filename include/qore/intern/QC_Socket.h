@@ -46,6 +46,20 @@ DLLLOCAL TypedHashDecl* init_hashdecl_DatagramInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_QuicGoawayStateInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_LingeringCloseInfo(QoreNamespace& ns);
 
+//! Raises the exception for a synchronous accept operation that ended without a connection and without an exception
+/** The I/O controller cancels the pending operations of a socket that is closed by another thread
+    (AsyncIoControllerPriv::close()), so a canceled result means that the listening socket was closed while the call
+    was waiting for a connection: \c SOCKET-CLOSED is raised, as when the controller finds the socket closed while
+    waiting for I/O readiness.  Any other result without a connection is an internal error (\c SOCKET-ACCEPT-ERROR);
+    a timeout is reported with a \c SOCKET-TIMEOUT exception in the result and is not handled here.
+
+    @param result the result of the poll operation; may be null
+    @param method the name of the Socket method, for the exception description
+    @param xsink for the exception raised
+*/
+DLLLOCAL void qore_socket_raise_accept_without_connection(const QoreHashNode* result, const char* method,
+        ExceptionSink* xsink);
+
 #include <qore/QoreSocket.h>
 #include <qore/AbstractPrivateData.h>
 #include <qore/QoreThreadLock.h>

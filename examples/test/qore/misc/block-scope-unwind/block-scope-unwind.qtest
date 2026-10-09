@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires ../../../../../qlib/QUnit.qm
 %requires ../../../../../qlib/FsUtil.qm
+%requires ../../../ExecModeHarness.qm
 %exec-class BlockScopeUnwindTest
 
 #! Covers lexical-scope teardown on the exception-unwind path.
@@ -131,8 +132,12 @@ class BlockScopeUnwindTest inherits QUnit::Test {
         part of the result; only the line the handler printed is
     */
     private checkTopLevel(string mode) {
-        string output = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s 2>/dev/null",
-            shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(mode), shellQuote(top_level_worker)));
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s -b "
+            "--enable-debug --exec-mode=%s %s", shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(mode),
+            shellQuote(top_level_worker)));
+        # the worker has only top-level code, which tiered execution does not compile
+        ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::Jit);
+        string output = r.stdout;
         assertEq("top-level=RELEASED\n", output,
             sprintf("the top-level on_error saw the nested block's AutoLock released (%s)", mode));
     }
@@ -160,7 +165,7 @@ class BlockScopeUnwindTest inherits QUnit::Test {
     }
 
     private string run(string path, string mode) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s 2>&1",
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
             shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(mode), shellQuote(path)));
     }
 

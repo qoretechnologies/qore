@@ -523,6 +523,169 @@ DLLEXPORT void qore_clear_thread_cancel();
 */
 DLLEXPORT bool qore_is_thread_cancel_requested();
 
+struct pollfd;
+
+//! returned by qore_cancellable_poll() when an exception has been raised on the exception sink
+/** Normally \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED; see qore_cancellable_poll()
+
+    @since %Qore 3.0
+*/
+#define QORE_POLL_CANCELLED -2
+
+//! Waits like poll(2) for events on the given descriptors or until the current thread is cancelled
+/** The thread's cancellation wakeup channel is polled with the caller's descriptors, and a cancellation request
+    (@ref qore_cancel_thread()) or program interrupt (\c SandboxManager::requestInterrupt()) signals it, so the wait
+    ends as soon as one is made — also when it is made just before the wait starts — without any periodic timeout.
+    Use this instead of polling with @ref QORE_IO_POLL_INTERVAL_MS slices.
+
+    @param fds the descriptors to poll; their \c revents members are set when the call returns a positive value
+    @param nfds the number of descriptors in \a fds; may be 0 for a cancellable sleep
+    @param timeout_ms the timeout in milliseconds; negative for no timeout, 0 to check without waiting
+    @param xsink the exception sink for the cancellation exception; must not be nullptr
+    @param operation the operation named in the cancellation exception
+
+    @return
+    - > 0: the number of descriptors in \a fds with events
+    - 0: the timeout expired
+    - -1: poll(2) failed; \c errno is set and no exception has been raised (\c EINTR is handled internally: the wait
+      resumes for the rest of the timeout)
+    - @ref QORE_POLL_CANCELLED: an exception has been raised: \c THREAD-CANCELLED, \c PROGRAM-INTERRUPTED, or
+      \c THREAD-ERROR if the wakeup channel could not be created (for example because no descriptors are left)
+
+    While cancellation is deferred (@ref qore_push_cancel_deferral()), and on a thread that is not registered with
+    %Qore, nothing can be delivered and the call is a plain poll(2).  On platforms without poll(2) it returns -1
+    with \c errno set to \c ENOSYS.
+
+    @code{.cpp}
+struct pollfd pfd = {sock, POLLIN, 0};
+int rc = qore_cancellable_poll(&pfd, 1, timeout_ms, xsink, "reading the response");
+if (rc == QORE_POLL_CANCELLED) {
+    return -1;  // THREAD-CANCELLED or PROGRAM-INTERRUPTED raised
+}
+if (rc < 0) {
+    return xsink->raiseErrnoException("MY-ERROR", errno, "poll() failed");
+}
+if (!rc) {
+    return xsink->raiseException("MY-TIMEOUT", "timed out");
+}
+// read from sock
+    @endcode
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, ExceptionSink* xsink,
+        const char* operation = "poll");
+
+//! returned by qore_cancel_wakeup_register() when there is no wakeup descriptor to watch
+/** The current thread is not registered with %Qore, so it cannot be cancelled, or the platform has no wakeup
+    channel; the caller waits without the descriptor.
+
+    @since %Qore 3.0
+*/
+#define QORE_CANCEL_WAKEUP_NONE -2
+
+//! Registers the current thread's cancellation wakeup descriptor for a wait made by the caller's own event loop
+/** For libraries with their own event loop (epoll, kqueue, select, a library-specific poll): the descriptor
+    returned becomes readable when cancellation is requested for the thread or its %Program is interrupted, so
+    the caller adds it to its wait, for readability only.
+
+    Protocol:
+    -# call this before the wait; it checks for a request after registering, so a request made at any point
+       after this call wakes the wait, and one made before it is raised here
+    -# add the descriptor to the wait for readability (\c POLLIN, \c EPOLLIN, \c EVFILT_READ, a select() read
+       set); never read, write or close it
+    -# when the descriptor is readable, call @ref qore_cancel_wakeup_check(): it raises the request and returns
+       -1, or, if no request is to be delivered (it was out of the thread's scope and has been dropped, or a
+       program interrupt was cleared), it returns 0 and the descriptor is no longer readable: continue waiting
+    -# after the wait, whatever ended it, call @ref qore_cancel_wakeup_unregister() exactly once for each
+       successful call to this function (use @ref QoreCancelWakeupHelper)
+
+    Registrations nest on the same thread (the descriptor is the same), and @ref qore_cancellable_poll() can be
+    called while one is active.  While cancellation is deferred the descriptor can become readable, but
+    @ref qore_cancel_wakeup_check() then returns 0.
+
+    @param xsink the exception sink for the cancellation exception
+    @param operation the operation named in the cancellation exception
+
+    @return the descriptor to watch; @ref QORE_CANCEL_WAKEUP_NONE if there is none (do not call
+    @ref qore_cancel_wakeup_unregister()); or -1 if an exception has been raised (\c THREAD-CANCELLED or
+    \c PROGRAM-INTERRUPTED for a request made before the call, or \c THREAD-ERROR if the wakeup channel could not
+    be created; do not call @ref qore_cancel_wakeup_unregister())
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int qore_cancel_wakeup_register(ExceptionSink* xsink, const char* operation = "wait");
+
+//! Called when the descriptor from qore_cancel_wakeup_register() is readable
+/** Clears the descriptor's readiness and then checks for a request, so a request made at any time is either
+    raised here or makes the descriptor readable again.
+
+    @param xsink the exception sink for the cancellation exception
+    @param operation the operation named in the cancellation exception
+
+    @return -1 if \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED has been raised (end the wait), 0 if there is
+    nothing to deliver (continue waiting)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int qore_cancel_wakeup_check(ExceptionSink* xsink, const char* operation = "wait");
+
+//! Ends a registration made with qore_cancel_wakeup_register()
+/** After the outermost registration of the thread has ended, no request can make the descriptor readable, and it is
+    left without pending readiness for the thread's next wait.
+
+    @since %Qore 3.0
+*/
+DLLEXPORT void qore_cancel_wakeup_unregister();
+
+//! Registers the current thread's cancellation wakeup descriptor for the lifetime of the object
+/** Exception-safe RAII wrapper for @ref qore_cancel_wakeup_register() / @ref qore_cancel_wakeup_unregister().
+
+    @code{.cpp}
+QoreCancelWakeupHelper cwh(xsink, "waiting for the broker");
+if (*xsink) {
+    return -1;
+}
+// cwh.fd() is QORE_CANCEL_WAKEUP_NONE if there is nothing to watch
+my_loop_add_read_watch(loop, cwh.fd());
+while (true) {
+    int fd = my_loop_wait(loop, timeout_ms);
+    if (fd == cwh.fd()) {
+        if (qore_cancel_wakeup_check(xsink, "waiting for the broker")) {
+            return -1;
+        }
+        continue;
+    }
+    // handle the event
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+class QoreCancelWakeupHelper {
+public:
+    DLLLOCAL QoreCancelWakeupHelper(ExceptionSink* xsink, const char* operation = "wait")
+            : wake_fd(qore_cancel_wakeup_register(xsink, operation)) {
+    }
+
+    DLLLOCAL ~QoreCancelWakeupHelper() {
+        if (wake_fd >= 0) {
+            qore_cancel_wakeup_unregister();
+        }
+    }
+
+    //! Returns the descriptor to watch for readability, QORE_CANCEL_WAKEUP_NONE, or -1 if an exception was raised
+    DLLLOCAL int fd() const {
+        return wake_fd;
+    }
+
+    DLLLOCAL QoreCancelWakeupHelper(const QoreCancelWakeupHelper&) = delete;
+    DLLLOCAL QoreCancelWakeupHelper& operator=(const QoreCancelWakeupHelper&) = delete;
+
+private:
+    int wake_fd;
+};
+
 //! Defers cancellation and program-interrupt delivery on the current thread
 /** Use this to run a short cleanup critical section — acquire a lock, release ownership, signal
     waiters, unlock — that must complete even though the thread has already been cancelled or its

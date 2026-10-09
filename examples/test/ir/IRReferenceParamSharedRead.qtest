@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../../../qlib/QUnit.qm
 %requires ../../../qlib/FsUtil.qm
+%requires ../ExecModeHarness.qm
 
 %exec-class IRReferenceParamSharedReadTest
 
@@ -75,9 +76,9 @@ class IRReferenceParamSharedReadTest inherits QUnit::Test {
     }
 
     private string run(string mode, string env) {
-        # synchronous compilation makes promotion deterministic instead of racing the compiler
-        return backquote(sprintf("%sQORE_JIT_SYNC_COMPILE=1 LD_LIBRARY_PATH=%s %s -b --enable-debug "
-            "--exec-mode=%s %s 2>&1", env, shellQuote(libqore_dir), shellQuote(qore_bin), mode,
+        # ExecModeHarness compiles synchronously, which makes promotion deterministic instead of racing the compiler
+        return ExecModeHarness::run(sprintf("%sLD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=%s %s", env, shellQuote(libqore_dir), shellQuote(qore_bin), mode,
             shellQuote(fixture)));
     }
 

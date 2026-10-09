@@ -53,7 +53,6 @@
 
 #include <cstdlib>
 #include <cstring>
-#include <deque>
 #include <string>
 #include <vector>
 
@@ -258,16 +257,20 @@ void qore_object_private::cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_
 
 void qore_object_private::incScanPrivateData() {
     AutoLocker lck(rlck);
-    ++scan_private_data;
-    if (scan_private_data && !deferred_scan) {
+    // a plain load and store, as rlck excludes other writers
+    int n = scan_private_data.load(std::memory_order_relaxed) + 1;
+    scan_private_data.store(n, std::memory_order_relaxed);
+    if (n && !deferred_scan) {
         deferred_scan = true;
     }
 }
 
 void qore_object_private::decScanPrivateData() {
     AutoLocker lck(rlck);
-    assert(scan_private_data > 0);
-    --scan_private_data;
+    // a plain load and store, as rlck excludes other writers
+    int n = scan_private_data.load(std::memory_order_relaxed);
+    assert(n > 0);
+    scan_private_data.store(n - 1, std::memory_order_relaxed);
 }
 
 int qore_object_private::copyData(ExceptionSink* xsink, const qore_object_private& old) {
@@ -490,7 +493,7 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
         }
     }
 
-    if (scan_private_data) {
+    if (scan_private_data.load(std::memory_order_relaxed)) {
         // Each probe below looks for private data that most scanned objects do not have, so the lookups must
         // not raise exceptions: see getScanPrivateData().  The sink only receives private data dereferences, and
         // is cleared on every exit, as before, so the scan never reports them.
@@ -1228,7 +1231,11 @@ void qore_object_private::doDeleteIntern(ExceptionSink* xsink) {
     }
 
     RuntimeConfig& rc = rc_get_current_ref();
-    qore_class_private::get(*theclass)->execDestructor(obj, rc, xsink);
+    {
+        // deletions deferred while the destructor runs are bounded by the stack; see RObject::deleteOrDefer()
+        DestructorRunHelper drh;
+        qore_class_private::get(*theclass)->execDestructor(obj, rc, xsink);
+    }
 
     cdmap_t* cdm;
     QoreHashNode* td;
@@ -1512,99 +1519,6 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
     }
 
     deleteOrDefer(xsink, cycle_cleanup);
-}
-
-namespace {
-// the nesting depth of object deletions that are made recursively; a deeper deletion is deferred
-constexpr unsigned QORE_OBJECT_DELETE_RECURSION_DEPTH = 16;
-
-// the nesting depth of the object deletions in progress in this thread since the innermost deletion loop, if any
-thread_local unsigned object_delete_depth = 0;
-
-//! An object whose deletion is deferred to a deletion loop
-struct DeferredObjectDelete {
-    qore_object_private* obj;
-    // the other members of the object's collected recursive set, which are released after the object's deletion
-    std::vector<RObject*> retained;
-};
-
-typedef std::vector<std::deque<DeferredObjectDelete>> deferred_delete_stack_t;
-
-// the stack of the innermost deletion loop in this thread, if any: the last queue holds the objects deferred while
-// deleting the object that the loop is deleting, which are deleted before the remaining objects of the previous
-// queues, in the depth-first order of the recursion
-thread_local deferred_delete_stack_t* object_delete_stack = nullptr;
-
-class ObjectDeleteDepthHelper {
-public:
-    ObjectDeleteDepthHelper() {
-        ++object_delete_depth;
-    }
-
-    ~ObjectDeleteDepthHelper() {
-        --object_delete_depth;
-    }
-};
-
-class ObjectDeleteLoopHelper {
-public:
-    explicit ObjectDeleteLoopHelper(deferred_delete_stack_t* stack) : old_stack(object_delete_stack),
-            old_depth(object_delete_depth) {
-        object_delete_stack = stack;
-        object_delete_depth = 0;
-    }
-
-    ~ObjectDeleteLoopHelper() {
-        object_delete_stack = old_stack;
-        object_delete_depth = old_depth;
-    }
-
-private:
-    deferred_delete_stack_t* old_stack;
-    unsigned old_depth;
-};
-}
-
-void qore_object_private::deleteOrDefer(ExceptionSink* xsink, RSetDerefHelper& cleanup) {
-    if (object_delete_depth < QORE_OBJECT_DELETE_RECURSION_DEPTH) {
-        ObjectDeleteDepthHelper dh;
-        doDeleteIntern(xsink);
-        return;
-    }
-
-    if (object_delete_stack) {
-        // the enclosing deletion loop deletes the object after the object that it is deleting
-        object_delete_stack->back().push_back(DeferredObjectDelete{this, {}});
-        cleanup.take(object_delete_stack->back().back().retained);
-        return;
-    }
-
-    // a thread's stack may be much smaller than a chain of objects, so this deletion starts a loop that deletes more
-    // deeply nested objects without recursion
-    deferred_delete_stack_t stack;
-    stack.emplace_back();
-    stack.back().push_back(DeferredObjectDelete{this, {}});
-    cleanup.take(stack.back().back().retained);
-
-    ObjectDeleteLoopHelper lh(&stack);
-    while (!stack.empty()) {
-        if (stack.back().empty()) {
-            stack.pop_back();
-            continue;
-        }
-        DeferredObjectDelete d = std::move(stack.back().front());
-        stack.back().pop_front();
-        // the objects deferred while deleting this object are deleted next
-        stack.emplace_back();
-        {
-            ObjectDeleteDepthHelper dh;
-            d.obj->doDeleteIntern(xsink);
-        }
-        // as RSetDerefHelper does, the retained members are released after the object's deletion
-        for (RObject* obj : d.retained) {
-            obj->releaseCycleReference(xsink);
-        }
-    }
 }
 
 int qore_object_private::startCall(const char* mname, ExceptionSink* xsink) {
@@ -2332,6 +2246,11 @@ QoreString* QoreObject::getAsString(bool& del, int foff, ExceptionSink* xsink) c
 }
 
 int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
+    // formatting recurses with the nesting of the value, which is unbounded
+    if (xsink && q_check_stack(xsink)) {
+        return -1;
+    }
+
     // applies any format bounds active in this thread; when bounds are active, a recursive reference is rendered
     // as an alias to the anchor rendered with the object, so this check is made before the recursion check
     QoreString elision;

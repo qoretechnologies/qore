@@ -7,6 +7,7 @@
 %requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class JITSmokeTest
 
@@ -79,14 +80,15 @@ class JITSmokeTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private string runScript(string code, *string exec_mode, *string suffix) {
+    private string runScript(string code, *string exec_mode, *string suffix,
+            *ExecModeHarness::NativeCheck check) {
         string mode = exec_mode ?? "jit";
         TmpFile tmp(NOTHING, suffix ?? ".qr");
         tmp.file.write(code);
         tmp.file.close();
         string path = tmp.path;
-        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s 2>&1", qore_bin, mode, path);
-        return backquote(cmd);
+        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s", qore_bin, mode, path);
+        return ExecModeHarness::run(cmd, check);
     }
 
     testJitIntArithmetic() {
@@ -250,9 +252,9 @@ printf(\"%s\\n\", h.key);
     }
 
     testJitNonModernFallback() {
-        # Non-%modern code should fail with EXEC-MODE-ERROR in JIT mode
+        # Non-%modern code should fail with EXEC-MODE-ERROR in JIT mode, before any code runs
         string code = "printf(\"%d\\n\", 42);\n";
-        string result = runScript(code, NOTHING, ".q");
+        string result = runScript(code, NOTHING, ".q", ExecModeHarness::NativeCheck::None);
         assertRegex("EXEC-MODE-ERROR", result, "non-modern code should fail in JIT mode");
     }
 
@@ -850,8 +852,9 @@ int j;
 int s = j++;
 printf(\"%d:%d:%d:%d\\n\", r, i, s, j);
 ";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "jit", "tiered") {
-            string result = trim(runScript(code, mode));
+            string result = trim(runScript(code, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("5:6:0:1", result, sprintf("int post-increment %s", mode));
         }
     }
@@ -866,8 +869,9 @@ int j;
 int s = j--;
 printf(\"%d:%d:%d:%d\\n\", r, i, s, j);
 ";
+        # the script calls its code too few times for tiered execution to compile it
         foreach string mode in ("ast", "ir", "jit", "tiered") {
-            string result = trim(runScript(code, mode));
+            string result = trim(runScript(code, mode, NOTHING, ExecModeHarness::NativeCheck::Jit));
             assertEq("5:4:0:-1", result, sprintf("int post-decrement %s", mode));
         }
     }

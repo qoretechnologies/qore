@@ -128,15 +128,19 @@ bool Http2ClientPollOperationPriv::scanMembers(RObject& obj, RSetHelper& rsh) {
     // lock and waiting on the same QoreObject's rsection lock (held by the
     // scanner).  See qore_queue_private::scanMembers for the reference
     // implementation of this pattern.
-    if (stream_lock.trylock() == 0) {
-        AutoLocker al(stream_lock, true);
-        for (auto& [sid, info] : stream_queues) {
-            if (info.queue_obj && obj.scanCheck(rsh, info.queue_obj)) {
-                return true;
-            }
-            if (info.notifier_obj && obj.scanCheck(rsh, info.notifier_obj)) {
-                return true;
-            }
+    //
+    // Both containers are read in one critical section of stream_queues_lock: the I/O thread moves pending
+    // registrations into stream_queues under it, so a registration in transit cannot be missed by both reads.
+    if (stream_queues_lock.trylock()) {
+        return false;
+    }
+    AutoLocker ml(stream_queues_lock, true);
+    for (auto& [sid, info] : stream_queues) {
+        if (info.queue_obj && obj.scanCheck(rsh, info.queue_obj)) {
+            return true;
+        }
+        if (info.notifier_obj && obj.scanCheck(rsh, info.notifier_obj)) {
+            return true;
         }
     }
     if (sq_lock.trylock() == 0) {
@@ -852,10 +856,14 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
             // so the listener's notifyIo() fires.
             {
                 int32_t sid32 = (int32_t)stream_id_val;
-                ASYNC_IO_TRACE("H2Client handleReading: stream=%d queues=%d is_end=%d\n",
-                    sid32, (int)stream_queues.size(), (int)is_end);
-                if (!stream_queues.empty()
-                        && stream_queues.find(sid32) != stream_queues.end()) {
+                bool registered;
+                {
+                    AutoLocker ml(stream_queues_lock);
+                    ASYNC_IO_TRACE("H2Client handleReading: stream=%d queues=%d is_end=%d\n",
+                        sid32, (int)stream_queues.size(), (int)is_end);
+                    registered = stream_queues.find(sid32) != stream_queues.end();
+                }
+                if (registered) {
                     ASYNC_IO_TRACE("H2Client handleReading: signaling stream=%d\n", sid32);
                     if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
                             sid32) == data_ready_streams.end()) {
@@ -1185,26 +1193,62 @@ void Http2ClientPollOperationPriv::registerStreamQueue(int32_t stream_id, Queue*
     wakeIoThread(&wake_xsink);
 }
 
+void Http2ClientPollOperationPriv::releaseStreamQueueInfos(std::vector<StreamQueueInfo>& infos,
+        ExceptionSink* xsink) {
+    for (StreamQueueInfo& info : infos) {
+        if (info.queue) {
+            info.queue->deref(xsink);
+        }
+        if (info.queue_obj) {
+            info.queue_obj->deref(xsink);
+        }
+        if (info.notifier) {
+            info.notifier->deref(xsink);
+        }
+        if (info.notifier_obj) {
+            info.notifier_obj->deref(xsink);
+        }
+    }
+    infos.clear();
+}
+
+void Http2ClientPollOperationPriv::markStreamQueuesRemoved() {
+    // the objects given up are released after the lock, and the scanner reports them: a recursive set of this
+    // object may count their references as internal (Pattern B in design/dgc.md)
+    if (self) {
+        qore_object_private::get(**self)->edgesRemoved();
+    }
+}
+
 void Http2ClientPollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
+    // the registrations given up are released after stream_queues_lock, as releasing them can run destructors
+    std::vector<StreamQueueInfo> released;
+    {
+        AutoLocker ml(stream_queues_lock);
+        drainStreamQueuesLocked(released, xsink);
+        if (!released.empty()) {
+            markStreamQueuesRemoved();
+        }
+    }
+    releaseStreamQueueInfos(released, xsink);
+}
+
+void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQueueInfo>& released,
+        ExceptionSink* xsink) {
     // Apply pending registrations from app threads (under sq_lock briefly)
     {
         AutoLocker al(sq_lock);
         for (auto& [sid, info] : pending_stream_registrations) {
             auto it = stream_queues.find(sid);
             if (it != stream_queues.end()) {
-                // Replace — deref old refs
-                if (it->second.notifier && it->second.notifier != info.notifier) {
-                    it->second.notifier->deref(xsink);
-                }
-                if (it->second.notifier_obj && it->second.notifier_obj != info.notifier_obj) {
-                    it->second.notifier_obj->deref(xsink);
-                }
-                if (it->second.queue != info.queue) {
-                    it->second.queue->deref(xsink);
-                }
-                if (it->second.queue_obj != info.queue_obj) {
-                    it->second.queue_obj->deref(xsink);
-                }
+                // Replace — the old references that the new registration does not hold are released
+                StreamQueueInfo old = it->second;
+                released.push_back({
+                    old.queue != info.queue ? old.queue : nullptr,
+                    old.queue_obj != info.queue_obj ? old.queue_obj : nullptr,
+                    old.notifier != info.notifier ? old.notifier : nullptr,
+                    old.notifier_obj != info.notifier_obj ? old.notifier_obj : nullptr,
+                });
                 it->second = info;
             } else {
                 stream_queues[sid] = info;
@@ -1260,33 +1304,40 @@ void Http2ClientPollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
         }
     }
 
-    // Remove completed streams and deref their objects
+    // Remove completed streams; their objects are released by the caller
     for (int32_t sid : completed) {
         auto it = stream_queues.find(sid);
         if (it != stream_queues.end()) {
-            it->second.queue->deref(xsink);
-            it->second.queue_obj->deref(xsink);
-            if (it->second.notifier) {
-                it->second.notifier->deref(xsink);
-            }
-            if (it->second.notifier_obj) {
-                it->second.notifier_obj->deref(xsink);
-            }
+            released.push_back(it->second);
             stream_queues.erase(it);
         }
     }
 }
 
 void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
-    // Drain pending registrations so we clean up everything
+    // the registrations are taken out of the containers under their locks and processed after them, as pushing to
+    // the queues and releasing the registrations can block and run destructors
+    std::vector<StreamQueueInfo> cleared;
     {
-        AutoLocker al(sq_lock);
-        for (auto& [sid, info] : pending_stream_registrations) {
-            stream_queues[sid] = info;
+        AutoLocker ml(stream_queues_lock);
+        // Drain pending registrations so we clean up everything
+        {
+            AutoLocker al(sq_lock);
+            for (auto& [sid, info] : pending_stream_registrations) {
+                stream_queues[sid] = info;
+            }
+            pending_stream_registrations.clear();
         }
-        pending_stream_registrations.clear();
+        cleared.reserve(stream_queues.size());
+        for (auto& [stream_id, info] : stream_queues) {
+            cleared.push_back(info);
+        }
+        stream_queues.clear();
+        if (!cleared.empty()) {
+            markStreamQueuesRemoved();
+        }
     }
-    for (auto& [stream_id, info] : stream_queues) {
+    for (StreamQueueInfo& info : cleared) {
         // Push an error marker instead of NOTHING so consumers (e.g.,
         // WebSocketClientHcioPollOp) can distinguish "connection closed"
         // from "no data available" (timeout).
@@ -1297,16 +1348,8 @@ void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
         if (info.notifier) {
             info.notifier->notify();
         }
-        info.queue->deref(xsink);
-        info.queue_obj->deref(xsink);
-        if (info.notifier) {
-            info.notifier->deref(xsink);
-        }
-        if (info.notifier_obj) {
-            info.notifier_obj->deref(xsink);
-        }
     }
-    stream_queues.clear();
+    releaseStreamQueueInfos(cleared, xsink);
 }
 
 // --- Stream management (app thread) ---

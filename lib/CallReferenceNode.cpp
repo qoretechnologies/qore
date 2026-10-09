@@ -878,7 +878,7 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
             LocalFunctionCallReferenceNode* fr = new LocalFunctionCallReferenceNode(loc, f);
             deref();
             val = fr;
-            return fr->parseInit(val, parse_context);
+            return parse_init_same_level(fr, val, parse_context);
         }
         if (qore_aot_source_parse_active() && scope->size() >= 2) {
             if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {

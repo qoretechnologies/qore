@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../../ExecModeHarness.qm
 
 %exec-class InheritedVariantDispatchTest
 
@@ -105,7 +106,7 @@ printf("%y\n", rv);
         TmpDir tmp("qore-inherited-variant-dispatch-");
         string src = writeScript(tmp.path);
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
-            hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src));
+            hash<auto> rv = run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, src));
             assertEq(0, rv.rc, mode + ": " + rv.err);
             assertEq(Expected, rv.out, mode);
         }
@@ -118,9 +119,9 @@ printf("%y\n", rv);
         TmpDir tmp("qore-inherited-variant-dispatch-");
         string src = writeScript(tmp.path);
         string exe = tmp.path + DirSep + "inherited-variant-dispatch";
-        hash<auto> rv = run(tmp.path, sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
+        hash<auto> rv = run(sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
         assertEq(0, rv.rc, rv.err);
-        rv = run(tmp.path, sprintf("%s %s", env, exe));
+        rv = run(sprintf("%s %s", env, exe));
         assertEq(0, rv.rc, rv.err);
         assertEq(Expected, rv.out);
     }
@@ -135,12 +136,14 @@ printf("%y\n", rv);
     }
 
     #! runs @a cmd; returns its exit code, its standard output, and its standard error output
-    private hash<auto> run(string dir, string cmd) {
-        string err_file = dir + DirSep + "stderr.txt";
-        int rc;
-        string out = backquote(sprintf("%s 2>%s", cmd, err_file), \rc);
-        string err = File::readTextFile(err_file);
-        unlink(err_file);
-        return {"rc": rc, "out": out, "err": err};
+    /** a command that runs qore with an execution mode runs through ExecModeHarness, which checks its native
+        compilation
+    */
+    private hash<auto> run(string cmd) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        return {"rc": r.rc, "out": r.stdout, "err": r.stderr};
     }
 }

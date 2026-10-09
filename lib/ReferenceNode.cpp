@@ -518,7 +518,7 @@ bool ReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsin
         return false;
     if (!val)
         return is_nothing(v) ? true : false;
-    return val->isEqualHard(v);
+    return val->isEqualHard(v, xsink);
 }
 
 // returns the type name as a c string

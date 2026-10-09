@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/DebugStatement.h"
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreDeferredRelease.h"
 
 DebugStatement::DebugStatement(int start_line, int end_line, QoreValue exp)
         : AbstractStatement(start_line, end_line), expression(exp), code(nullptr) {
@@ -42,7 +43,7 @@ DebugStatement::DebugStatement(int start_line, int end_line, StatementBlock* blo
 
 DebugStatement::~DebugStatement() {
     expression.discard(nullptr);
-    delete code;
+    qore_delete_statement(code);
 }
 
 int DebugStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {

@@ -7,6 +7,7 @@
 %requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class RelativeDateLiteralTest
 
@@ -42,7 +43,7 @@ printf(\"%d,%d,%d,%d,%d,%d,%d\\n\",
         TmpFile tmp(NOTHING, ".qr");
         tmp.file.write(code);
         tmp.file.close();
-        return trim(backquote(sprintf("%s --enable-debug --exec-mode=%s %s 2>&1", qore_bin, mode, tmp.path)));
+        return trim(ExecModeHarness::run(sprintf("%s --enable-debug --exec-mode=%s %s", qore_bin, mode, tmp.path)));
     }
 
     testRelativeDateLiteralFields() {

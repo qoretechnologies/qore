@@ -4,6 +4,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 # Shared implicit map arguments must survive every use, including calls that
 # normally consume their argument temporaries. Reproduces the Qorus startup UAF.
@@ -128,13 +129,15 @@ string sub quote(string value) {
 }
 
 string sub run(string command) {
-    int rc;
-    string output = backquote(command + " 2>&1", \rc);
-    if (rc) {
-        printf("command failed (status %d): %s\n%s", rc, command, output);
+    hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+    if (r.mode) {
+        ExecModeHarness::check_native(r);
+    }
+    if (r.rc) {
+        printf("command failed (status %d): %s\n%s", r.rc, command, r.out);
         exit(2);
     }
-    return output;
+    return r.out;
 }
 
 foreach string mode in (("ast", "ir", "tiered", "jit")) {

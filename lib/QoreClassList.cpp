@@ -303,7 +303,7 @@ void QoreClassList::clear(ExceptionSink* xsink) {
     }
 }
 
-void QoreClassList::deleteClassData(bool deref_vars, ExceptionSink* xsink) {
+void QoreClassList::deleteClassData(bool deref_vars, const QoreProgram* pgm, ExceptionSink* xsink) {
     if (deref_vars) {
         if (!ns_vars) {
             ns_vars = true;
@@ -314,7 +314,7 @@ void QoreClassList::deleteClassData(bool deref_vars, ExceptionSink* xsink) {
         assert(ns_vars);
     }
     for (auto& i : hm) {
-        qore_class_private::get(*i.second.cls)->deleteClassData(deref_vars, xsink);
+        qore_class_private::get(*i.second.cls)->deleteClassData(deref_vars, pgm, xsink);
     }
 }
 

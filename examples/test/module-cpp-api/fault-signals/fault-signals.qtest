@@ -1,0 +1,44 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class FaultSignalsTest
+
+#! Tests that the signals raised by a fault in the executing thread are never blocked in Qore threads
+/** %Qore blocks the signals it handles in every thread but its signal handling thread.  A signal that a fault raises
+    in the thread executing the faulting instruction cannot be delivered while it is blocked: the thread executes
+    the instruction again for ever, so a stack overflow onto a guard page (\c SIGBUS on macOS), a trap instruction or
+    an arithmetic fault hung the process instead of terminating it.
+*/
+class FaultSignalsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("fault signals", "1.0") {
+        addTestCase("the main thread", \mainThreadTest());
+        addTestCase("a background thread", \backgroundThreadTest());
+        addTestCase("the fault signals cannot have Qore handlers", \handlerTest());
+        set_return_value(main());
+    }
+
+    mainThreadTest() {
+        assertEq((), cpp_api_blocked_fault_signals());
+    }
+
+    backgroundThreadTest() {
+        Queue<list<int>> q();
+        background q.push(cpp_api_blocked_fault_signals());
+        assertEq((), q.get());
+    }
+
+    handlerTest() {
+        foreach int sig in ((SIGBUS, SIGILL, SIGFPE, SIGTRAP)) {
+            assertThrows("SIGNAL-HANDLER-ERROR", \set_signal_handler(), (sig, sub (int s) {}), SignalToName{sig});
+        }
+    }
+}

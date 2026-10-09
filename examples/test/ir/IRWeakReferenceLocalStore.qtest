@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class IRWeakReferenceLocalStoreTest
 
@@ -114,13 +115,12 @@ class IRWeakReferenceLocalStoreTest inherits QUnit::Test {
         script.file.close();
 
         foreach string mode in (ExecModes) {
-            TmpFile out();
             # "-p enable-debug" disables the silent AST fallback, so an IR gap
             # is reported instead of being papered over
-            string cmd = sprintf("%s -p enable-debug --exec-mode=%s %s > %s 2>&1",
-                qore_bin, mode, script.path, out.path);
-            int rc = system(cmd);
-            string output = ReadOnlyFile::readTextFile(out.path);
+            string cmd = sprintf("%s -p enable-debug --exec-mode=%s %s", qore_bin, mode, script.path);
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd);
+            int rc = r.rc;
+            string output = r.out;
             if (rc != 0 && output =~ /valid long option/) {
                 testSkip("exec-mode option not supported by test qore binary");
             }
@@ -129,6 +129,7 @@ class IRWeakReferenceLocalStoreTest inherits QUnit::Test {
                 sprintf("%y mode does not abandon execution", mode));
             assertEq(ExpectedOutput, output,
                 sprintf("%y mode assigns the weak reference", mode));
+            ExecModeHarness::check_native(r);
         }
     }
 }

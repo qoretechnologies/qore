@@ -25,6 +25,7 @@
 
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class JitDebugStepTest
 
@@ -108,9 +109,9 @@ printf("STEPLINES:%y\n", dbg.step_lines);
         TmpFile tmp(NOTHING, ".qr");
         tmp.file.write(ChildScript);
         tmp.file.close();
-        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s 2>&1", qore_bin, exec_mode,
+        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s", qore_bin, exec_mode,
             tmp.path);
-        string out = backquote(cmd);
+        string out = ExecModeHarness::run(cmd);
         list<int> step_lines = ();
         list<string> nums = (out =~ x/STEPLINES:\[([0-9, ]*)\]/)[0].split(",");
         foreach string n in (nums) {

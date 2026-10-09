@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class AOTScriptParseOptionsTest
 
@@ -193,14 +194,14 @@ public int sub f(int a) {
         TmpDir tmp("qore-aot-script-parse-options-");
         foreach hash<auto> i in (Accepted.pairIterator()) {
             string src = writeScript(tmp.path, i.key, i.value);
-            hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=ast %s %s", env, qore_bin,
+            hash<auto> rv = run(sprintf("%s %s -b --exec-mode=ast %s %s", env, qore_bin,
                 i.value.qore_opts ?? "", src));
             assertEq(0, rv.rc, i.key + ": " + rv.err);
             assertEq(ModernOutput, rv.out, i.key);
         }
         foreach hash<auto> i in (Rejected.pairIterator()) {
             string src = writeScript(tmp.path, i.key, i.value);
-            hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=ast %s %s", env, qore_bin,
+            hash<auto> rv = run(sprintf("%s %s -b --exec-mode=ast %s %s", env, qore_bin,
                 i.value.qore_opts ?? "", src));
             assertEq(0, rv.rc, i.key + ": " + rv.err);
             assertTrue(rv.out.val(), i.key);
@@ -212,7 +213,7 @@ public int sub f(int a) {
         foreach string mode in (("ir", "jit")) {
             foreach hash<auto> i in (Accepted.pairIterator()) {
                 string src = writeScript(tmp.path, i.key, i.value);
-                hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=%s %s %s", env, qore_bin, mode,
+                hash<auto> rv = run(sprintf("%s %s -b --exec-mode=%s %s %s", env, qore_bin, mode,
                     i.value.qore_opts ?? "", src));
                 assertEq(0, rv.rc, sprintf("%s %s: %s", mode, i.key, rv.err));
                 assertEq(ModernOutput, rv.out, sprintf("%s %s", mode, i.key));
@@ -220,8 +221,9 @@ public int sub f(int a) {
             foreach hash<auto> i in (Rejected.pairIterator()) {
                 string label = sprintf("%s %s", mode, i.key);
                 string src = writeScript(tmp.path, i.key, i.value);
-                hash<auto> rv = run(tmp.path, sprintf("%s %s -b --exec-mode=%s %s %s", env, qore_bin, mode,
-                    i.value.qore_opts ?? "", src));
+                # the script is rejected before any code runs
+                hash<auto> rv = run(sprintf("%s %s -b --exec-mode=%s %s %s", env, qore_bin, mode,
+                    i.value.qore_opts ?? "", src), ExecModeHarness::NativeCheck::None);
                 assertNeq(0, rv.rc, label);
                 assertRegex("EXEC-MODE-ERROR", rv.err, label);
                 assertEq(i.value.missing, getMissing(rv.err), label);
@@ -237,11 +239,11 @@ public int sub f(int a) {
             foreach hash<auto> opt in (CompileOptions.pairIterator()) {
                 string label = sprintf("%s %s", i.key, opt.key);
                 string exe = tmp.path + DirSep + i.key + "-" + opt.key;
-                hash<auto> rv = run(tmp.path, sprintf("%s %s %s %s -o %s %s", env, qcc_bin, opt.value,
+                hash<auto> rv = run(sprintf("%s %s %s %s -o %s %s", env, qcc_bin, opt.value,
                     i.value.qcc_opts ?? "", exe, src));
                 assertEq(0, rv.rc, label + ": " + rv.err);
                 assertFalse(rv.err.find(Diagnostic) >= 0, label);
-                rv = run(tmp.path, sprintf("%s %s", env, exe));
+                rv = run(sprintf("%s %s", env, exe));
                 assertEq(0, rv.rc, label + ": " + rv.err);
                 assertEq(ModernOutput, rv.out, label);
             }
@@ -256,7 +258,7 @@ public int sub f(int a) {
             foreach string opt in (("-O0", "-O3")) {
                 string label = sprintf("%s %s", i.key, opt);
                 string exe = tmp.path + DirSep + i.key + opt;
-                hash<auto> rv = run(tmp.path, sprintf("%s %s %s %s -o %s %s", env, qcc_bin, opt,
+                hash<auto> rv = run(sprintf("%s %s %s %s -o %s %s", env, qcc_bin, opt,
                     i.value.qcc_opts ?? "", exe, src));
                 checkRejection(label, rv, src, i.value.missing);
                 assertFalse(is_file(exe), label);
@@ -270,7 +272,7 @@ public int sub f(int a) {
         foreach hash<auto> i in (Rejected.pairIterator()) {
             string src = writeScript(tmp.path, i.key, i.value);
             string obj = tmp.path + DirSep + i.key + ".qo";
-            hash<auto> rv = run(tmp.path, sprintf("%s %s -c %s -o %s %s", env, qcc_bin, i.value.qcc_opts ?? "",
+            hash<auto> rv = run(sprintf("%s %s -c %s -o %s %s", env, qcc_bin, i.value.qcc_opts ?? "",
                 obj, src));
             checkRejection(i.key + " -c", rv, src, i.value.missing);
             assertFalse(is_file(obj), i.key + " -c");
@@ -278,7 +280,7 @@ public int sub f(int a) {
         # positive control: a %modern script compiles to an object
         string src = writeScript(tmp.path, "modern_qr_default", Accepted.modern_qr_default);
         string obj = tmp.path + DirSep + "modern_qr_default.qo";
-        hash<auto> rv = run(tmp.path, sprintf("%s %s -c -o %s %s", env, qcc_bin, obj, src));
+        hash<auto> rv = run(sprintf("%s %s -c -o %s %s", env, qcc_bin, obj, src));
         assertEq(0, rv.rc, rv.err);
         assertTrue(is_file(obj));
     }
@@ -290,7 +292,7 @@ public int sub f(int a) {
         string mod = tmp.path + DirSep + "AotParseOptionsModern.qm";
         writeFile(mod, sprintf(ModuleSrc, "AotParseOptionsModern", "AotParseOptionsModern"));
         string out = tmp.path + DirSep + "AotParseOptionsModern.qmod";
-        hash<auto> rv = run(tmp.path, sprintf("%s %s -m -o %s %s", env, qcc_bin, out, mod));
+        hash<auto> rv = run(sprintf("%s %s -m -o %s %s", env, qcc_bin, out, mod));
         assertEq(0, rv.rc, rv.err);
         assertTrue(is_file(out));
 
@@ -298,7 +300,7 @@ public int sub f(int a) {
         mod = tmp.path + DirSep + "AotParseOptionsLoose.qm";
         writeFile(mod, "%loose-args\n" + sprintf(ModuleSrc, "AotParseOptionsLoose", "AotParseOptionsLoose"));
         out = tmp.path + DirSep + "AotParseOptionsLoose.qmod";
-        rv = run(tmp.path, sprintf("%s %s -m -o %s %s", env, qcc_bin, out, mod));
+        rv = run(sprintf("%s %s -m -o %s %s", env, qcc_bin, out, mod));
         checkRejection("module", rv, mod, ("PO_STRICT_ARGS",));
         assertFalse(is_file(out));
 
@@ -309,7 +311,7 @@ public int sub f(int a) {
         src = replace(src, "\npublic namespace", "\n%loose-args\npublic namespace");
         writeFile(mod, src);
         out = tmp.path + DirSep + "AotParseOptionsLoose2.qmod";
-        rv = run(tmp.path, sprintf("%s %s -m -o %s %s", env, qcc_bin, out, mod));
+        rv = run(sprintf("%s %s -m -o %s %s", env, qcc_bin, out, mod));
         checkRejection("module directive after the module block", rv, mod, ("PO_STRICT_ARGS",));
         assertFalse(is_file(out));
     }
@@ -327,29 +329,29 @@ public int sub f(int a) {
         # each source of a batch is parsed with the default for its own extension
         string out_dir = tmp.path + DirSep + "objs";
         mkdir(out_dir);
-        hash<auto> rv = run(tmp.path, sprintf("%s %s -c --output-dir=%s %s %s %s", env, qcc_bin, out_dir, lib_q,
+        hash<auto> rv = run(sprintf("%s %s -c --output-dir=%s %s %s %s", env, qcc_bin, out_dir, lib_q,
             lib_qr, main_qr));
         assertEq(0, rv.rc, rv.err);
         assertEq(3, listFiles(out_dir).size());
 
         # a multi-source executable
         string exe = tmp.path + DirSep + "batch_exe";
-        rv = run(tmp.path, sprintf("%s %s -o %s %s %s %s", env, qcc_bin, exe, lib_q, lib_qr, main_qr));
+        rv = run(sprintf("%s %s -o %s %s %s %s", env, qcc_bin, exe, lib_q, lib_qr, main_qr));
         assertEq(0, rv.rc, rv.err);
-        rv = run(tmp.path, sprintf("%s %s", env, exe));
+        rv = run(sprintf("%s %s", env, exe));
         assertEq("g1\ng2\n", rv.out);
 
         # negative: one source that is not %modern rejects the batch; the diagnostic names that source
         string bad_dir = tmp.path + DirSep + "bad-objs";
         mkdir(bad_dir);
-        rv = run(tmp.path, sprintf("%s %s -c --output-dir=%s %s %s", env, qcc_bin, bad_dir, lib_qr, legacy));
+        rv = run(sprintf("%s %s -c --output-dir=%s %s %s", env, qcc_bin, bad_dir, lib_qr, legacy));
         checkRejection("batch", rv, legacy, ModernOptions);
         assertFalse(rv.err.find(lib_qr + ":") >= 0, "batch: only the legacy source is named");
         assertEq((), listFiles(bad_dir));
 
         # negative: a multi-source executable
         exe = tmp.path + DirSep + "batch_bad_exe";
-        rv = run(tmp.path, sprintf("%s %s -o %s %s %s", env, qcc_bin, exe, lib_qr, legacy));
+        rv = run(sprintf("%s %s -o %s %s %s", env, qcc_bin, exe, lib_qr, legacy));
         checkRejection("multi-source executable", rv, legacy, ModernOptions);
         assertFalse(is_file(exe));
         # a standalone script aggregate: each source keeps its own parse options; the %modern .q file's
@@ -359,14 +361,14 @@ public int sub f(int a) {
             "%modern\n%exec-class BatchExecClass\nclass BatchExecClass {\n}\n");
         string top_level = writeFile(tmp.path + DirSep + "batch_top_level.qr", "int x = 1;\nx++;\n");
         string agg = tmp.path + DirSep + "agg.qo";
-        rv = run(tmp.path, sprintf("%s %s -c --script-aggregate=agg -o %s %s %s", env, qcc_bin, agg, exec_class,
+        rv = run(sprintf("%s %s -c --script-aggregate=agg -o %s %s %s", env, qcc_bin, agg, exec_class,
             top_level));
         assertEq(0, rv.rc, rv.err);
         assertTrue(is_file(agg));
 
         # negative: a standalone script aggregate with a legacy source
         agg = tmp.path + DirSep + "bad-agg.qo";
-        rv = run(tmp.path, sprintf("%s %s -c --script-aggregate=agg -o %s %s %s", env, qcc_bin, agg, lib_qr,
+        rv = run(sprintf("%s %s -c --script-aggregate=agg -o %s %s %s", env, qcc_bin, agg, lib_qr,
             legacy));
         checkRejection("script aggregate", rv, legacy, ModernOptions);
         assertFalse(is_file(agg));
@@ -415,12 +417,14 @@ public int sub f(int a) {
     }
 
     #! runs @a cmd; returns its exit code, its standard output, and its standard error output
-    private hash<auto> run(string dir, string cmd) {
-        string err_file = dir + DirSep + "stderr.txt";
-        int rc;
-        string out = backquote(sprintf("%s 2>%s", cmd, err_file), \rc);
-        string err = File::readTextFile(err_file);
-        unlink(err_file);
-        return {"rc": rc, "out": out, "err": err};
+    /** a command that runs qore with an execution mode runs through ExecModeHarness, which checks its native
+        compilation as given by @a check
+    */
+    private hash<auto> run(string cmd, ExecModeHarness::NativeCheck check = ExecModeHarness::NativeCheck::Jit) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd);
+        if (r.mode) {
+            ExecModeHarness::check_native(r, check);
+        }
+        return {"rc": r.rc, "out": r.stdout, "err": r.stderr};
     }
 }

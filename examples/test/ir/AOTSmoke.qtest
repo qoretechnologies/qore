@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class AOTSmokeTest
 
@@ -627,7 +628,7 @@ class AOTSmokeTest inherits QUnit::Test {
             unlink(paths.src);
         }
 
-        return backquote(sprintf("%s -b --enable-debug --exec-mode=%s %s 2>&1",
+        return ExecModeHarness::run(sprintf("%s -b --enable-debug --exec-mode=%s %s",
             qore_bin, mode, paths.src));
     }
 
@@ -5729,8 +5730,8 @@ foreach auto c in (Reflection::Class::forName(\"Outer::Inner::Derived\").getClas
             f.close();
         }
 
-        string out = backquote(sprintf(
-            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast %s 2>&1",
+        string out = ExecModeHarness::run(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast %s",
             libqore_dir, prependModulePath(tmp_dir), qore_bin, script_path));
         assertTrue(out.regex("Outer::Inner::Base\\|Outer::Inner"),
             "AOT qmod preserves nested base class namespace path: " + out);
@@ -5838,8 +5839,8 @@ printf(\"%y\\n\", (w.direct(), w.mapped((\"a\\\"b\",)), w.emptyTruthy(), w.quote
             f.close();
         }
 
-        string out = backquote(sprintf(
-            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast %s 2>&1",
+        string out = ExecModeHarness::run(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast %s",
             libqore_dir, tmp_dir, qore_bin, script_path));
         assertEq("[\"\\\\\\\"\", [\"a\\\\\\\"b\"], False, True, True, 1, \"a\", True, \"BTREE\"]\n", out,
             "AOT qmod SSO values stay out of numeric fast paths and legacy pseudo dispatch");
@@ -5884,10 +5885,10 @@ public class AOTLocalTempCleanup {
         assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "1"),
             "IR-only local ownership module fully precompiled: " + result.compile_out);
 
-        string out = backquote(sprintf(
+        string out = ExecModeHarness::run(sprintf(
             "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --modern --exec-mode=ast -l AOTLocalTempCleanup "
             "-e 'list<string> p = (\"`code`\",); printf(\"%%y\\n\", "
-            "AOTLocalTempCleanup::restoreCodeBlocks(\"before <<PROTECTED_0>> after\", p));' 2>&1",
+            "AOTLocalTempCleanup::restoreCodeBlocks(\"before <<PROTECTED_0>> after\", p));'",
             libqore_dir, tmp_dir, qore_bin));
         assertEq("\"before `code` after\"\n", out,
             "AOT qmod StoreLocal must keep IR-only local value alive after DiscardTemps");
@@ -6030,8 +6031,8 @@ printf(\"after=%d action=%y context=%y\\n\", AOTWeakDiagnosticLeak::getDestroyed
             f.close();
         }
 
-        string out = backquote(sprintf(
-            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast %s 2>&1",
+        string out = ExecModeHarness::run(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast %s",
             libqore_dir, tmp_dir, qore_bin, script_path));
         assertEq("inside=0 action=True context=True\nafter=2 action=False context=False\n", out,
             "AOT qmod weak diagnostic hash assignments must not retain helper/context objects");
@@ -7023,11 +7024,11 @@ printf(\"value=%y\\n\", AOTPointerNullCoalesce::runCase(row));
             unlink(paths.src);
         }
 
-        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast --enable-debug %s 2>&1",
-            libqore_dir, tmp_dir, qore_bin, paths.src));
+        string aot_out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast "
+            "--enable-debug %s", libqore_dir, tmp_dir, qore_bin, paths.src));
         unlink(qmod_path);
-        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast --enable-debug %s 2>&1",
-            libqore_dir, tmp_dir, qore_bin, paths.src));
+        string interp_out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b "
+            "--exec-mode=ast --enable-debug %s", libqore_dir, tmp_dir, qore_bin, paths.src));
 
         assertEq(interp_out, aot_out, "compiled module pointer NULL coalescing matches source: " + aot_out);
         assertEq("value=0\n", aot_out, "pointer-encoded NULL coalesces before softint assignment");

@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class FindCreateTimeZoneTest
+
+#! Tests the public find_create_timezone() API that DBI drivers and Arrow imports use for a time zone name
+/** A name is either a region (ex: "Europe/Prague") or a UTC offset ("+01:00", "-0530", "+01").
+*/
+class FindCreateTimeZoneTest inherits QUnit::Test {
+    public {
+        #! 2026-07-01 00:00:00Z in seconds since the epoch: summer time in Europe
+        const Summer = 1782864000;
+    }
+
+    constructor() : QUnit::Test("FindCreateTimeZoneTest", "1.0", \ARGV) {
+        addTestCase("UTC offsets", \testOffsets());
+        addTestCase("regions", \testRegions());
+        addTestCase("invalid names", \testInvalid());
+        set_return_value(main());
+    }
+
+    testOffsets() {
+        # every accepted form of an offset, with the seconds east it stands for
+        hash<string, int> offsets = {
+            "+01:00": 3600,
+            "+0100": 3600,
+            "+01": 3600,
+            "-05:30": -19800,
+            "-0530": -19800,
+            "+05:45": 20700,
+            "+14:00": 50400,
+            "-12": -43200,
+            "+01:00:30": 3630,
+            "+010030": 3630,
+        };
+        foreach hash<auto> i in (offsets.pairIterator()) {
+            hash<auto> h = cpp_api_find_create_timezone(i.key);
+            assertEq(i.value, h.utc_offset, i.key + ": UTC offset");
+            # an offset has no daylight saving time
+            assertEq(i.value, cpp_api_find_create_timezone(i.key, Summer).utc_offset, i.key + ": UTC offset in summer");
+            # the zone is named by its offset
+            assertRegex("^[-+][0-9]{2}", h.region, i.key + ": zone name");
+        }
+
+        # a zero offset is UTC
+        foreach string name in ("+00:00", "-00:00", "+00", "+0000") {
+            assertEq({"region": "UTC", "utc_offset": 0}, cpp_api_find_create_timezone(name), name);
+        }
+    }
+
+    testRegions() {
+        hash<auto> h = cpp_api_find_create_timezone("Europe/Prague");
+        assertEq("Europe/Prague", h.region);
+        assertEq(3600, h.utc_offset, "winter");
+        assertEq(7200, cpp_api_find_create_timezone("Europe/Prague", Summer).utc_offset, "summer");
+
+        h = cpp_api_find_create_timezone("America/New_York", Summer);
+        assertEq("America/New_York", h.region);
+        assertEq(-14400, h.utc_offset);
+    }
+
+    testInvalid() {
+        # an offset with a malformed minutes or seconds part
+        foreach string name in ("+01:0", "+01:xx", "+01:00:", "+01:00:00x", "-05:3") {
+            assertThrows("PARSE-SET-TIME-ZONE-ERROR", \cpp_api_find_create_timezone(), name, name);
+        }
+        # not an offset: the name is looked up as a zoneinfo region and not found
+        foreach string name in ("+1", "+x1", "-", "No/Such_Region") {
+            assertThrows("FILE-OPEN2-ERROR", \cpp_api_find_create_timezone(), name, name);
+        }
+    }
+}

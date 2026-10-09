@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -225,7 +226,7 @@ script.write(code);
 script.close();
 
 string sub runMode(string mode) {
-    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+    return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
         libqore_dir, qore_bin, mode, script_path));
 }
 
@@ -238,8 +239,8 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     }
 }
 
-string stats = backquote(sprintf(
-    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+string stats = ExecModeHarness::run(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s",
     libqore_dir, qore_bin, script_path));
 foreach string name in (("hashLoopControl", "hashdeclLoopHeterogeneous",
         "dynamicHashSelectorLoop")) {

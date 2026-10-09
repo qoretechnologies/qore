@@ -325,9 +325,10 @@ int QoreFile::lockBlocking(struct flock& fl, ExceptionSink* xsink) {
 
     // We cannot use F_SETLKW because thread cancellation and program interrupts
     // are cooperative (atomic flags) and don't send signals, so F_SETLKW would
-    // block indefinitely with no way to check for cancellation.
-    // Instead we poll with F_SETLK using a short interval (50ms) to maintain
-    // reasonable fairness under contention while supporting cancellation.
+    // block indefinitely with no way to check for cancellation, and a record lock
+    // offers nothing that could be polled for.  Instead we retry F_SETLK every 50ms,
+    // which keeps reasonable fairness under contention; the wait between attempts
+    // ends at once when the thread is cancelled or its Program is interrupted.
     while (true) {
         // Check for cancellation or program interrupt
         if (qore_check_cancel(xsink, "file lock")) {
@@ -342,11 +343,10 @@ int QoreFile::lockBlocking(struct flock& fl, ExceptionSink* xsink) {
 
         // If lock is held by another process, wait and retry
         if (rc == -1 && (errno == EACCES || errno == EAGAIN)) {
-            // Short poll interval for fairness under contention
-            struct timespec ts;
-            ts.tv_sec = 0;
-            ts.tv_nsec = 50000000;  // 50ms
-            nanosleep(&ts, nullptr);
+            // Short retry interval for fairness under contention
+            if (qore_cancellable_sleep(50000, xsink, "file lock") && *xsink) {
+                return -1;
+            }
             continue;
         }
 

@@ -6,6 +6,7 @@
 
 %requires QUnit
 %requires FsUtil
+%requires ../ExecModeHarness.qm
 
 %exec-class HashLiteralTypePropagationTest
 
@@ -91,7 +92,7 @@ class HashLiteralTypePropagationTest inherits QUnit::Test {
     }
 
     private string runScript(string path, string mode) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1; echo EXIT=$?",
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s; echo EXIT=$?",
             libqore_dir, qore_bin, mode, path));
     }
 

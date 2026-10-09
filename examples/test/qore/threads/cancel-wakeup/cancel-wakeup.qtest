@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CancelWakeupTest
+
+#! A blocked wait ends as soon as cancellation is requested, without a periodic timeout
+/** The worker blocks a thread in each kind of wait, cancels it (or interrupts its Program) and reports how long the
+    wait took to end after the request, the longest of three trials.  Before blocking waits were woken by the
+    request, they noticed it at their next periodic check: up to 500 ms later for I/O, lock and condition waits, and up
+    to 100 ms later for sleep() and usleep(), so the longest of three trials was nearly always well over the limits
+    below.  Woken waits end within a millisecond or so, also with sanitizers.
+
+    Each case also checks the order of events: the wait ends with the cancellation exception and nothing else, the
+    child process never writes to its output, and a condition wait ends with its lock held again.
+*/
+class CancelWakeupTest inherits QUnit::Test {
+    public {
+        #! the most a woken wait may take to end after the request, in microseconds
+        const MaxLatencyUs = 100000;
+        #! the same for sleep() and usleep(), which checked every 100 ms before
+        const MaxSleepLatencyUs = 25000;
+
+        #! the cases whose waits ended at the next periodic check before they were woken by the request
+        const SleepCases = ("sleep", "usleep");
+
+        #! cases with their expected exception and detail; the latency is not checked for those with a detail
+        const Special = {
+            "interrupted backquote read": {"err": "PROGRAM-INTERRUPTED"},
+            "deferred backquote read": {"err": "THREAD-CANCELLED", "detail": "\"done\""},
+            "wait after cleared cancel": {"err": "AFTER-CLEAR", "detail": "True"},
+        };
+
+        #! every case the worker runs
+        const Cases = (
+            "pipe read", "backquote read", "system wait", "stream pipe read", "socket read", "tls socket read",
+            "sleep", "usleep", "mutex lock", "mutex lock timeout", "auto lock", "read lock", "read lock timeout",
+            "write lock", "write lock timeout", "gate enter", "gate enter timeout", "condition wait", "counter wait",
+            "queue get", "auto semaphore", "channel select", "channel select timeout", "datasource lock",
+            "interrupted backquote read", "deferred backquote read", "wait after cleared cancel",
+        );
+    }
+
+    constructor() : Test("CancelWakeupTest", "1.0") {
+        addTestCase("blocked waits wake on cancellation", \wakeTest());
+        set_return_value(main());
+    }
+
+    wakeTest() {
+        if (PlatformOS == "Windows") {
+            testSkip("requires POSIX processes and FIFOs");
+        }
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string worker = get_script_dir() + "/cancel-wakeup-worker.q";
+        string pem = get_script_dir() + "/../../classes/HTTPClient/h2-proxy-handoff/localhost.pem";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            TmpDir tmp("cancel-wakeup");
+            string out = ExecModeHarness::run(sprintf("'%s' --exec-mode=%s '%s' '%s' '%s'", qore, mode, worker,
+                tmp.path, pem), ExecModeHarness::NativeCheck::Jit);
+            checkOutput(mode, out);
+        }
+    }
+
+    private checkOutput(string mode, string out) {
+        hash<string, list<string>> results;
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            list<string> l = line.split("|");
+            # an empty detail at the end of the line is not returned by split()
+            if (l.size() == 3) {
+                l += "";
+            }
+            if (l.size() != 4) {
+                fail(sprintf("%s: unexpected output line %y", mode, line));
+            }
+            results{l[0]} = l;
+        }
+        foreach string name in (Cases) {
+            string label = sprintf("%s: %s", mode, name);
+            *list<string> l = results{name};
+            if (!l) {
+                fail(sprintf("%s: no result; output: %y", label, out));
+            }
+            # the dbitest driver is built with the library; a build without it cannot run the case
+            if (name == "datasource lock" && l[1] == "SKIP") {
+                continue;
+            }
+            *hash<auto> special = Special{name};
+            assertEq(special.err ?? "THREAD-CANCELLED", l[1], label + ": exception");
+            if (special.detail) {
+                assertEq(special.detail, l[3], label + ": detail");
+                continue;
+            }
+            int max_us = inlist(name, SleepCases) ? MaxSleepLatencyUs : MaxLatencyUs;
+            int us = l[2].toInt();
+            assertTrue(us < max_us, sprintf("%s: woken %d us after the request (limit %d us)", label, us, max_us));
+        }
+    }
+}

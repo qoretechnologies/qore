@@ -68,6 +68,10 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler& wh, int flags, int width,
 }
 
 int QoreYamlEmitter::emit(const QoreValue& v) {
+    // emitting recurses with the nesting of the value, which is unbounded
+    if (q_check_stack(xsink)) {
+        return -1;
+    }
     switch (v.getType()) {
         case NT_STRING: {
             QoreStringNodeValueHelper str(v);

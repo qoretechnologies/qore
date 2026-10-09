@@ -193,7 +193,12 @@ class qore_object_private : public RObject {
 public:
     const QoreClass* theclass;
     const QoreTypeInfo* instantiated_type = nullptr;
-    int status = OS_OK;
+    //! OS_OK, the TID of the thread running the destructor, or OS_DELETED
+    /** Changed under the object's write lock, but read without it where a stale value only defers a decision: by
+        the dereference fast paths, and by RSet::canDelete() and the scan for the other objects of a recursive set,
+        whose locks it does not hold while another thread can be deleting them.  Atomic for those reads.
+    */
+    std::atomic<int> status{OS_OK};
 
     KeyList* privateData = nullptr;
     // member data
@@ -206,9 +211,17 @@ public:
 
     mutable VRMutex gate;
 
-    int scan_private_data = 0;
+    //! The number of private data containers whose values the scanner has to report for this object
+    /** Changed under rlck, in the critical section of the container's own lock in which its count changes; read
+        without rlck by the scan (needsScan(), scanMembers(), valuesCanChangeWithoutScan()), which only needs a value
+        that was current at some point, so it is atomic and read with relaxed ordering.  A container that a scan
+        misses because of a stale read has marked the edges it added (qore_dgc_value_stored()).
+    */
+    std::atomic<int> scan_private_data{0};
 
-    bool system_object, in_destructor;
+    bool system_object;
+    //! set when the object's destruction has started; read without the object's locks as status is
+    std::atomic<bool> in_destructor;
     bool recursive_ref_found;
 
     QoreObject* obj;
@@ -508,7 +521,7 @@ public:
     DLLLOCAL virtual bool isValidImpl() const {
         if (status != OS_OK || in_destructor) {
             printd(QRO_LVL, "qore_object_intern::isValidImpl() this: %p cannot delete graph obj status: %d "
-                "in_destructor: %d\n", this, status, in_destructor);
+                "in_destructor: %d\n", this, status.load(), (int)in_destructor.load());
             return false;
         }
         return true;
@@ -516,7 +529,7 @@ public:
 
     //! Private data containers hold values that their own methods change without scanning this object
     DLLLOCAL virtual bool valuesCanChangeWithoutScan() const {
-        return scan_private_data != 0;
+        return scan_private_data.load(std::memory_order_relaxed) != 0;
     }
 
     DLLLOCAL virtual bool scanMembersIntern(RSetHelper& rsh, QoreHashNode* odata);
@@ -527,10 +540,10 @@ public:
     DLLLOCAL virtual bool needsScan(bool scan_now) {
         assert(rml.checkRSectionHeld());
         printd(5, "qore_object_private::needsScan() scan_count: %d scan_private_data: %d scan_now: %d\n",
-            getScanCount(), scan_private_data, scan_now);
+            getScanCount(), scan_private_data.load(std::memory_order_relaxed), scan_now);
 
         // the status cannot change while this lock is held
-        if ((!getScanCount() && !scan_private_data) || status != OS_OK) {
+        if ((!getScanCount() && !scan_private_data.load(std::memory_order_relaxed)) || status != OS_OK) {
             return false;
         }
 
@@ -649,15 +662,10 @@ public:
     */
     DLLLOCAL void customDeref(ExceptionSink* xsink, bool real);
 
-    //! Deletes an object whose last reference has been released, or defers its deletion to a deletion loop
-    /** Deleting an object releases the objects it references, whose deletion would otherwise recurse for each object
-        in a chain of objects.
-
-        @param xsink for exceptions raised by destructors
-        @param cleanup the other members of the object's collected recursive set, which are released after the
-        object's deletion
-    */
-    DLLLOCAL void deleteOrDefer(ExceptionSink* xsink, RSetDerefHelper& cleanup);
+    //! Runs the destructor and releases the object's data; see RObject::deleteOrDefer()
+    DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) {
+        doDeleteIntern(xsink);
+    }
 
     DLLLOCAL void fastDeref();
 

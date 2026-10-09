@@ -650,7 +650,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
     inlineTest() {
         HTTPClient hc = getH1Client();
-        foreach int i in (xrange(2)) {
+        for (int i = 0; i < 2; ++i) {
             string id = getId("inline");
             hash<auto> resp = send(hc, "/inline", id);
             assertEq("inline", resp.body);

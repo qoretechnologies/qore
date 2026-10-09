@@ -1,0 +1,28 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module RuntimeProgramContextBase {
+    version = "1.0";
+    desc    = "base class in a module Program for runtime-program-context.qtest";
+    author  = "Qore Technologies, s.r.o.";
+    url     = "https://qore.org";
+    license = "MIT";
+}
+
+#! a typed hash that is visible only in this module's Program
+hashdecl ModuleOnlyDecl {
+    int i = 1;
+}
+
+#! a base class whose methods are executed in this module's Program
+public namespace RuntimeProgramContextBase {
+    public class Base {
+        #! executes statements in the module's Program
+        int work() {
+            hash<ModuleOnlyDecl> h();
+            return h.i + 1;
+        }
+    }
+}

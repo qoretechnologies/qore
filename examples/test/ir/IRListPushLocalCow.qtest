@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -133,8 +134,8 @@ on_exit {
 
 string expected = "1:2|1:2|RUNTIME-TYPE-ERROR:1|RUNTIME-TYPE-ERROR:False:0:1|1:4|True|True\n";
 foreach string mode in ("ast", "ir", "tiered", "jit") {
-    string actual = backquote(sprintf(
-        "LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s 2>&1",
+    string actual = ExecModeHarness::run(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
         libqore_dir, qore_bin, mode, script_path));
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);

@@ -95,6 +95,14 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
         return backquote("{ " + cmd + "; } 2>&1");
     }
 
+    #! Returns the local time the given number of seconds from now in the format of POSIX "touch -t"
+    /** "touch -t [[CC]YY]MMDDhhmm[.SS]" is supported by both BSD (macOS) and GNU touch, unlike "touch -d \@epoch",
+        which BSD touch rejects
+    */
+    private static string future_touch_time(int secs) {
+        return format_date("YYYYMMDDHHmm.SS", now() + seconds(secs));
+    }
+
     private static string shellQuote(string value) {
         return "'" + replace(value, "'", "'\"'\"'") + "'";
     }
@@ -1003,20 +1011,20 @@ qore_external_user_module(\"qlib/Fixture\" \"\")
         assertEq(1, compiles(), "an unchanged build recompiles nothing");
 
         # a new Qore library is installed and qcc is not: the qmods are recompiled
-        run(sprintf("touch -d @%d %s", now().getEpochSeconds() + 2, shellQuote(library)));
+        run(sprintf("touch -t %s %s", future_touch_time(2), shellQuote(library)));
         build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
         assertEq(2, compiles(), "a new Qore library recompiles the qmods: " + build);
 
         # a new qcc reporting a new identity: recompiled, and the stamp names the new identity
         write(identity_file, "bbbb\n");
-        run(sprintf("touch -d @%d %s", now().getEpochSeconds() + 4, shellQuote(qcc)));
+        run(sprintf("touch -t %s %s", future_touch_time(4), shellQuote(qcc)));
         build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
         assertEq(3, compiles(), "a new qcc recompiles the qmods: " + build);
         assertRegex("aot-runtime-identity=bbbb", read(stamp));
 
         # a qcc that reports no identity fails the build before any module is compiled
         write(identity_file, "");
-        run(sprintf("touch -d @%d %s", now().getEpochSeconds() + 6, shellQuote(qcc)));
+        run(sprintf("touch -t %s %s", future_touch_time(6), shellQuote(qcc)));
         build = run(sprintf("cmake --build %s; echo RC=$?", shellQuote(build_dir)));
         assertRegex("does\\s+not\\s+report\\s+an\\s+AOT\\s+runtime\\s+identity", build);
         assertFalse(build =~ /RC=0/, "the build fails: " + build);

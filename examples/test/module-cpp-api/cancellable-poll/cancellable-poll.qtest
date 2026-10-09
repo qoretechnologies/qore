@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class CancellablePollTest
+
+#! Tests the public cancellable wait API for binary modules from a module's own C++ code
+/** qore_cancellable_poll() polls a module's descriptors with the thread's cancellation wakeup channel, and
+    qore_cancel_wakeup_register() / qore_cancel_wakeup_check() / qore_cancel_wakeup_unregister() let a module's own
+    event loop watch the same channel.  Without a request both behave like poll(2); a request ends the wait at once.
+*/
+class CancellablePollTest inherits QUnit::Test {
+    public {
+        #! the most a woken wait may take to end after the request, in microseconds; the wait has no timeout, so
+        #! a missed wakeup never ends it
+        const MaxLatencyUs = 100000;
+    }
+
+    constructor() : QUnit::Test("CancellablePollTest", "1.0", \ARGV) {
+        addTestCase("results without a cancellation", \testResults());
+        addTestCase("a cancellation ends the wait", \testCancel());
+        addTestCase("a request made before the wait", \testPending());
+        addTestCase("a delivered request leaves no readiness", \testReadinessCleared());
+        set_return_value(main());
+    }
+
+    testResults() {
+        hash<auto> h = cpp_api_cancellable_poll(True, -1);
+        assertEq(1, h.rc, "poll: a readable pipe is reported");
+        assertTrue(h.readable, "poll: the pipe is readable");
+
+        int start = clock_get_monotonic_us();
+        h = cpp_api_cancellable_poll(False, 50);
+        assertEq(0, h.rc, "poll: the timeout expires");
+        assertFalse(h.readable, "poll: nothing is reported on timeout");
+        assertGe(50000, clock_get_monotonic_us() - start, "poll: the whole timeout elapsed");
+
+        h = cpp_api_cancellable_poll(False, 0);
+        assertEq(0, h.rc, "poll: a zero timeout checks without waiting");
+
+        foreach bool nested in ((False, True)) {
+            string label = nested ? "nested loop" : "loop";
+            h = cpp_api_wakeup_loop(True, -1, nested);
+            assertEq(1, h.rc, label + ": a readable pipe is reported");
+            assertTrue(h.wake_fd, label + ": there is a wakeup descriptor to watch");
+
+            start = clock_get_monotonic_us();
+            h = cpp_api_wakeup_loop(False, 50, nested);
+            assertEq(0, h.rc, label + ": the timeout expires");
+            assertGe(50000, clock_get_monotonic_us() - start, label + ": the whole timeout elapsed");
+        }
+    }
+
+    testCancel() {
+        list<hash<auto>> cases = (
+            {"name": "poll", "call": sub () { cpp_api_cancellable_poll(False, -1); }},
+            {"name": "loop", "call": sub () { cpp_api_wakeup_loop(False, -1); }},
+            {"name": "nested loop", "call": sub () { cpp_api_wakeup_loop(False, -1, True); }},
+        );
+        foreach hash<auto> c in (cases) {
+            # three trials; the longest must be well under the old 500 ms polling interval
+            for (int i = 0; i < 3; ++i) {
+                hash<auto> rv = cancelBlocked(c.call);
+                assertEq("THREAD-CANCELLED", rv.err, c.name + ": the wait ends with the cancellation");
+                assertTrue(rv.us < MaxLatencyUs, sprintf("%s: woken %d us after the request (limit %d us)", c.name,
+                    rv.us, MaxLatencyUs));
+            }
+        }
+    }
+
+    testPending() {
+        # the request is pending when the wait starts: it is raised before the wait, which would otherwise never end
+        Queue ready();
+        Queue go();
+        list<string> errs;
+        Counter done(1);
+        int tid = background sub () {
+            on_exit done.dec();
+            # the request arrives while it is deferred
+            defer_thread_cancel(sub () {
+                ready.push(True);
+                go.get();
+            });
+            # a loop iteration is itself a cancellation point, so each call has its own block
+            try {
+                cpp_api_cancellable_poll(False, -1);
+                errs += "NONE";
+            } catch (hash<ExceptionInfo> ex) {
+                errs += ex.err;
+            }
+            try {
+                cpp_api_wakeup_loop(False, -1);
+                errs += "NONE";
+            } catch (hash<ExceptionInfo> ex) {
+                errs += ex.err;
+            }
+        }();
+        ready.get();
+        cancel_thread(tid, "pending");
+        go.push(True);
+        done.waitForZero();
+        assertEq(("THREAD-CANCELLED", "THREAD-CANCELLED"), errs);
+    }
+
+    testReadinessCleared() {
+        Queue started();
+        Queue result();
+        int tid = background sub () {
+            try {
+                started.push(True);
+                cpp_api_wakeup_loop(False, -1);
+            } catch (hash<ExceptionInfo> ex) {
+                clear_thread_cancel();
+            }
+            result.push(cpp_api_wakeup_fd_readable());
+        }();
+        started.get();
+        cancel_thread(tid, "readiness");
+        assertFalse(result.get(), "the next registration's descriptor is not readable");
+    }
+
+    #! runs a call in a new thread, cancels it once it has started, and returns its exception and the time from the
+    #! request to the end of the call
+    private hash<auto> cancelBlocked(code call) {
+        Queue started();
+        Queue done();
+        int tid = background sub () {
+            hash<auto> rv;
+            try {
+                started.push(True);
+                call();
+                rv.err = "NONE";
+            } catch (hash<ExceptionInfo> ex) {
+                rv.err = ex.err;
+            }
+            rv.end = clock_get_monotonic_us();
+            done.push(rv);
+        }();
+        started.get();
+        int start = clock_get_monotonic_us();
+        cancel_thread(tid, "cancellable poll test");
+        hash<auto> rv = done.get();
+        rv.us = rv.end - start;
+        return rv;
+    }
+}

@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%requires ../ExecModeHarness.qm
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -191,8 +192,8 @@ source.close();
 
 string expected = "220:225.00:10:590:14:1:nothing:7:nothing:11:nothing:15:nothing:1:nothing:0:nothing:0:12:int:1.50:3.75\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
-    string actual = backquote(sprintf(
-        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+    string actual = ExecModeHarness::run(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
         libqore_dir, qore_bin, mode, source_path));
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s",
@@ -201,9 +202,9 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     }
 }
 
-string stats = backquote(sprintf(
+string stats = ExecModeHarness::run(sprintf(
     "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s"
-        + " %s -b --exec-mode=ir %s 2>&1",
+        + " %s -b --exec-mode=ir %s",
     libqore_dir, qore_bin, source_path));
 if (stats !~ /IR-OPT: branchInt:.*native-local-loads=[1-9]/
         || stats !~ /IR-OPT: branchFloat:.*native-local-loads=[1-9]/
@@ -247,10 +248,10 @@ foreach string function in (("typedForeachInt", "typedForeachFloat")) {
     }
 }
 
-string loads_only_stats = backquote(sprintf(
+string loads_only_stats = ExecModeHarness::run(sprintf(
     "QORE_DISABLE_IR_NATIVE_LOCAL_STORE_ELIMINATION=1"
         + " QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s"
-        + " %s -b --exec-mode=ir %s 2>&1",
+        + " %s -b --exec-mode=ir %s",
     libqore_dir, qore_bin, source_path));
 if (loads_only_stats
         !~ /IR-OPT: straightInt:.*native-local-loads=[3-9]/

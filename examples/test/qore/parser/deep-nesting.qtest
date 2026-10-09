@@ -15,6 +15,13 @@ class DeepNestingTest inherits QUnit::Test {
         const Moderate = 50;
         #! the stack size of a test thread
         const StackSize = 512 * 1024;
+        #! nesting that the parser accepts but that small thread stacks cannot hold
+        const SmallStackDepth = 450;
+        #! the small thread stacks
+        const SmallStackSizes = (128 * 1024, 256 * 1024);
+        #! the parse error for code nested too deeply for the thread's stack
+        const StackParseError = "the code is nested too deeply to be parsed within the stack of this thread";
+
         #! the error for code that is nested too deeply
         const DepthError = "the code is nested too deeply; the parser supports up to 1000 nested syntax elements, "
             "including each operator in an expression";
@@ -32,6 +39,7 @@ class DeepNestingTest inherits QUnit::Test {
         addTestCase("Pending prefix operators are limited", \pendingOperators());
         addTestCase("Moderately nested code runs", \moderateCode());
         addTestCase("Long flat code parses", \flatCode());
+        addTestCase("Code nested beyond a small stack fails with an exception", \smallStackCode());
         set_return_value(main());
     }
 
@@ -135,6 +143,51 @@ class DeepNestingTest inherits QUnit::Test {
         });
     }
 
+    #! code nested beyond what a small thread stack holds is rejected or raises an exception instead of crashing
+    /** The parser accepts up to 1000 nested syntax elements whatever the thread's stack size; parse initialization,
+        IR lowering and execution each recurse with the nesting, so on a small stack each must stop with an error
+        while enough stack remains: a parse error, or \c STACK-LIMIT-EXCEEDED from execution.  IR lowering that runs
+        out of stack leaves the code to the AST tier.
+    */
+    smallStackCode() {
+        foreach int size in (SmallStackSizes) {
+            foreach ExecMode mode in (EM_AST, EM_IR) {
+                # the outcome of each kind of code: its result or the exception it raised; the thread only records
+                # them, as a sanitizer's frames can leave too little of a small stack for the assertions
+                hash<string, hash<auto>> outcomes;
+                inThread(sub () {
+                    foreach string kind in (Kinds) {
+                        try {
+                            Program p = newProgram(mode);
+                            p.parse(makeSource(kind, SmallStackDepth), kind);
+                            outcomes{kind} = {"result": p.callFunction("run")};
+                        } catch (hash<ExceptionInfo> ex) {
+                            outcomes{kind} = {"err": ex.err, "desc": ex.desc};
+                        }
+                    }
+                }, size);
+                foreach string kind in (Kinds) {
+                    string label = sprintf("%s in mode %y with a %dK stack", kind, mode, size / 1024);
+                    hash<auto> outcome = outcomes{kind};
+                    if (!outcome.err) {
+                        if (kind != "list" && kind != "hash") {
+                            assertEq(getResult(kind, SmallStackDepth), outcome.result, label);
+                        }
+                    } else if (outcome.err == "PARSE-EXCEPTION") {
+                        assertTrue(outcome.desc == StackParseError || outcome.desc == DepthError,
+                            sprintf("%s: %s", label, outcome.desc));
+                    } else {
+                        assertEq("STACK-LIMIT-EXCEEDED", outcome.err, sprintf("%s: %s", label, outcome.desc));
+                    }
+                }
+                # the thread's failures left the process able to parse and run code
+                Program p = newProgram(mode);
+                p.parse(makeSource("call", Moderate), "after");
+                assertEq(getResult("call", Moderate), p.callFunction("run"), sprintf("after a %dK stack", size / 1024));
+            }
+        }
+    }
+
     #! Returns a Program for the tests
     private static Program newProgram(*ExecMode mode) {
         Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
@@ -180,12 +233,12 @@ class DeepNestingTest inherits QUnit::Test {
         return 1;
     }
 
-    private inThread(code test) {
+    private inThread(code test, int stack_size = StackSize) {
         if (!HAVE_MANAGE_STACK) {
             testSkip("stack management is not available");
         }
         int defaultSize = get_default_thread_stack_size();
-        set_default_thread_stack_size(StackSize);
+        set_default_thread_stack_size(stack_size);
         on_exit set_default_thread_stack_size(defaultSize);
 
         Counter c(1);

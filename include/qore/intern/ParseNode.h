@@ -40,6 +40,15 @@
 
 struct QoreParseContext;
 
+#ifndef NDEBUG
+//! The node whose parse initialization parse_init_value() or parse_init_same_level() is making in this thread
+/** Debug builds assert in ParseNode::parseInit() that every parse node is parse-initialized through one of these
+    functions: parse_init_value() counts the levels of nesting of expressions, so that their evaluation checks the
+    stack at regular intervals of nesting (see QORE_EVAL_STACK_CHECK_INTERVAL)
+*/
+DLLLOCAL extern thread_local const AbstractQoreNode* qore_parse_init_entry;
+#endif
+
 class ParseNode : public SimpleQoreNode {
 public:
     const QoreProgramLocation* loc;
@@ -99,6 +108,8 @@ public:
     }
 
     DLLLOCAL virtual int parseInit(QoreValue& val, QoreParseContext& parse_context) {
+        // every parse node is parse-initialized through parse_init_value() or parse_init_same_level()
+        assert(qore_parse_init_entry == this);
         if (parse_init) {
             parse_context.typeInfo = getTypeInfo();
             parse_context.analysis = parse_analysis;

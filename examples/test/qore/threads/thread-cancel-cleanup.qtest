@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../ExecModeHarness.qm
 
 %exec-class ThreadCancelCleanupTest
 
@@ -701,7 +702,7 @@ printf(\"%y %y %y\\n\", r.isOwned(), flag_retained, ex_info.err);
     }
 
     private string run(string cmd) {
-        return backquote(cmd + " 2>&1");
+        return ExecModeHarness::run_any(cmd);
     }
 
     testExecutionModes() {

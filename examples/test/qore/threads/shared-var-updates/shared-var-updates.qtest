@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../../ExecModeHarness.qm
 
 %exec-class SharedVarUpdatesTest
 
@@ -67,8 +68,9 @@ class SharedVarUpdatesTest inherits QUnit::Test {
     testExecModes() {
         foreach string mode in (ExecModes) {
             string opts = mode ? "--exec-mode=" + mode : "";
-            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b %s %s 2>&1", libqore_dir, qore_bin, opts,
-                getWorker()));
+            # the default execution mode gives no --exec-mode option, so its native compilation is not checked
+            string out = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s -b %s %s", libqore_dir, qore_bin,
+                opts, getWorker()));
             checkWorkerOutput(mode ?: "default", out);
         }
     }

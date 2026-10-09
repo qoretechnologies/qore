@@ -17,6 +17,7 @@ class BackquoteTest inherits QUnit::Test {
         addTestCase("Backquote SIGINT handling", \testSignalHandling());
         addTestCase("Backquote interrupt kills process group", \testInterruptKillsProcessGroup());
         addTestCase("Backquote restricted access", \testRestrictedAccess());
+        addTestCase("Backquote cancellation after the command closes its output", \testCancelAfterOutput());
         set_return_value(main());
     }
 
@@ -178,5 +179,56 @@ string sub run_backquote_op() {
             assertEq("PARSE-EXCEPTION", ex.err, "backquote operator blocked at parse time");
         }
         assertTrue(parse_op_caught, "backquote operator should be blocked by PO_NO_EXTERNAL_PROCESS");
+    }
+
+    #! a thread waiting for a command that has closed its output can be cancelled
+    /** The command closes its standard output, so backquote() has read all of the output and waits for the process
+        to exit; the wait must end when the thread is cancelled, and the process must be killed and reaped.  The wait
+        could not be interrupted before (it ended only when the command exited).
+    */
+    testCancelAfterOutput() {
+        if (PlatformOS == "Windows") {
+            testSkip("skipping because the test is being run on Windows");
+        }
+
+        string fifo = sprintf("%s/backquote_fifo_%d_%d", tmp_location(), getpid(), gettid());
+        assertEq(0, mkfifo(fifo));
+        on_exit unlink(fifo);
+
+        Counter done(1);
+        *string err;
+        *string output;
+        int tid = background sub () {
+            on_exit done.dec();
+            try {
+                # the command reports its PID through the FIFO after closing its output and then sleeps
+                output = backquote(sprintf("exec >&-; echo $$ > %s; exec sleep 60", fifo));
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+            }
+        }();
+
+        # blocks until the command has closed its output and written its PID
+        int pid;
+        {
+            ReadOnlyFile f(fifo);
+            pid = f.readLine().toInt();
+        }
+        assertGt(0, pid);
+        on_exit {
+            # ends the command if the wait was not interrupted, so that the thread ends
+            if (done.getCount()) {
+                kill(pid, SIGKILL);
+                done.waitForZero();
+            }
+        }
+
+        assertTrue(cancel_thread(tid, "test"));
+        # a backstop only: the cancellation ends the wait at once
+        assertEq(0, done.waitForZero(20s), "the cancelled wait ended");
+        assertEq("THREAD-CANCELLED", err);
+        assertEq(NOTHING, output);
+        # the process has been killed and reaped before backquote() returned
+        assertEq(-1, kill(pid, 0), "the process is gone");
     }
 }

@@ -191,19 +191,38 @@ class BoundedTransactionTest inherits QUnit::Test {
     private visibility() {
         hash<auto> f = fixture();
         on_exit cleanup(f);
-        string role = f.name + "_reader";
-        # PostgreSQL-specific privilege/policy fixture. Identifiers are locally generated ASCII;
-        # the runner owns this database and its roles, and no application credentials are used.
-        f.ds.execRaw("create role " + role);
-        f.ds.commit();
-        on_exit {
+        # the case needs a role of its own: the test user must be able to create one
+        if (!f.ds.selectRow("select (rolsuper or rolcreaterole) as ok from pg_catalog.pg_roles "
+                "where rolname = current_user").ok) {
             f.ds.rollback();
-            f.ds.execRaw("reset role");
-            f.ds.execRaw("revoke all on " + f.name + " from " + role);
-            f.ds.execRaw("revoke usage on schema public from " + role);
-            f.ds.execRaw("drop role " + role);
-            f.ds.commit();
+            testSkip("the test user needs the CREATEROLE attribute to create the row-security reader role");
         }
+        f.ds.rollback();
+        string role = f.name + "_reader";
+        # PostgreSQL-specific privilege/policy fixture. Identifiers are locally generated ASCII, and no application
+        # credentials are used.  The role is dropped however the case ends: every cleanup step runs even if an
+        # earlier one fails, and nothing is left if the role was never created.
+        on_exit {
+            foreach string sql in (("reset role", "revoke all on " + f.name + " from " + role,
+                    "revoke usage on schema public from " + role, "drop role if exists " + role)) {
+                try {
+                    f.ds.rollback();
+                    f.ds.execRaw(sql);
+                    f.ds.commit();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the role or its privileges may not exist when an earlier step failed
+                    f.ds.rollback();
+                }
+            }
+            assertEq(0, f.ds.selectRow("select count(1) as cnt from pg_catalog.pg_roles where rolname = %v",
+                role).cnt.toInt(), "the reader role was dropped");
+            f.ds.rollback();
+        }
+        f.ds.execRaw("create role " + role);
+        # since PostgreSQL 16 a role's creator that is not a superuser administers it but is not a member, and
+        # "set role" needs membership
+        f.ds.execRaw("grant " + role + " to current_user");
+        f.ds.commit();
         f.ds.execRaw("grant usage on schema public to " + role);
         f.ds.execRaw("grant select on " + f.name + " to " + role);
         f.ds.execRaw("alter table " + f.name + " enable row level security");

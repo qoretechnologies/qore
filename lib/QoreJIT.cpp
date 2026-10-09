@@ -1069,11 +1069,24 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
         }
     }
 
+    // copied before any LLVM operations; see compileFunctionInternal()
+    const std::string func_name = func.name;
+
     // Serialize the entire compilation pipeline: LLVM's code generation (MCStreamer,
     // DWARF emission, debugger support) is not thread-safe for concurrent compilations.
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
 
-    return compileFunctionInternal(func, error, deopt_counter);
+    bool rc = compileFunctionInternal(func, error, deopt_counter);
+    // synchronous compilations (top-level code with JIT execution) are traced like background ones, so that the
+    // trace shows all native code
+    if (getenv("QORE_JIT_TIMING")) {
+        if (rc) {
+            fprintf(stderr, "[JIT] compiled '%s' synchronously\n", func_name.c_str());
+        } else {
+            fprintf(stderr, "[JIT] failed to compile '%s' synchronously: %s\n", func_name.c_str(), error.c_str());
+        }
+    }
+    return rc;
 }
 
 bool QoreJIT::compileFunctionLocked(const QoreIRFunction& func, std::string& error,
@@ -1122,6 +1135,35 @@ static bool jit_check_size_budget(const std::string& func_name, size_t instructi
     return false;
 }
 
+int QoreJIT::adoptDefinedFunction(const std::string& name, std::string& error) {
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        if (compiled_functions.find(name) != compiled_functions.end()) {
+            return 1;
+        }
+        if (!defined_batch_symbols.count(name)) {
+            return 0;
+        }
+    }
+    // the entry was defined by a batch module that did not publish it; compile_mutex is held, so no other thread
+    // adds modules to the JIT while it is looked up
+    auto sym = jit->lookup(name);
+    if (!sym) {
+        error = "failed to look up function '" + name + "' defined by a batch module: "
+            + llvm::toString(sym.takeError());
+        return -1;
+    }
+    auto fn_ptr = sym->toPtr<uint64_t(ExceptionSink*)>();
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        compiled_functions[name] = fn_ptr;
+    }
+    if (getenv("QORE_JIT_TIMING")) {
+        fprintf(stderr, "[BG-JIT] reused '%s' compiled in an earlier batch\n", name.c_str());
+    }
+    return 1;
+}
+
 bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& error,
         void* deopt_counter, const std::string* symbol_name) {
     // Copy func.name before any LLVM operations.
@@ -1131,11 +1173,12 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     // heap activity and remains valid even if the original is corrupted.
     const std::string func_name = symbol_name ? *symbol_name : func.name;
 
-    // Re-check cache under compile lock (another thread may have compiled this function)
+    // Re-check under compile lock: another thread may have compiled this function, or a batch module may have
+    // defined it
     {
-        std::lock_guard<std::mutex> lock(cache_mutex);
-        if (compiled_functions.find(func_name) != compiled_functions.end()) {
-            return true;
+        int rc = adoptDefinedFunction(func_name, error);
+        if (rc) {
+            return rc > 0;
         }
     }
 
@@ -1280,11 +1323,12 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     // as compileFunctionInternal — see comment there for details).
     const std::string root_func_name = root_func.name;
 
-    // Re-check cache under compile lock
+    // Re-check under compile lock: another thread may have compiled the root function, or an earlier batch module
+    // may have defined it
     {
-        std::lock_guard<std::mutex> lock(cache_mutex);
-        if (compiled_functions.find(root_func_name) != compiled_functions.end()) {
-            return true;
+        int rc = adoptDefinedFunction(root_func_name, error);
+        if (rc) {
+            return rc > 0;
         }
     }
 
