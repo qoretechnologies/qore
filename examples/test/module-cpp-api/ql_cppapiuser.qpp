@@ -372,7 +372,7 @@ nothing cpp_api_queue_clear(object queue) {
 
     @throw QUEUE-ERROR the object is not a Queue
 */
-int cpp_api_queue_private_refs(object queue) {
+int cpp_api_queue_private_refs(object queue) [flags=RET_VALUE_ONLY] {
     AbstractPrivateData* pd = queue->getReferencedPrivateData(CID_QUEUE, xsink);
     if (!pd) {
         if (!*xsink) {
