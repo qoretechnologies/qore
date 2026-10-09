@@ -33,6 +33,7 @@
 #define _QORE_QOREJIT_H
 
 #include <functional>
+#include <pthread.h>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -84,6 +85,45 @@ DLLLOCAL llvm::thread q_start_llvm_compile_thread(Function&& f, Args&&... args) 
     return llvm::thread(std::optional<unsigned>(QORE_LLVM_COMPILE_STACK_SIZE),
         std::forward<Function>(f), std::forward<Args>(args)...);
 }
+
+//! A thread with a stack large enough for LLVM compilation that reports a failure to start
+/** llvm::thread calls report_fatal_error() when the thread cannot be created, which aborts the process: the tiered
+    JIT starts its background compiler when a function first becomes hot, which can be when the process has no more
+    threads (ex: examples/test/qore/threads/max-threads-count.qtest in a container with a pids limit), and a program
+    that was running correctly in the IR tier died with "LLVM ERROR: pthread_create failed".  This thread reports
+    the error instead, and the caller keeps running the code where it is.
+*/
+class QoreLlvmCompileThread {
+public:
+    DLLLOCAL QoreLlvmCompileThread() = default;
+
+    DLLLOCAL ~QoreLlvmCompileThread() {
+        assert(!started);
+    }
+
+    //! Starts the thread
+    /** @return 0 for success, or the error number of pthread_create() or pthread_attr_setstacksize()
+    */
+    DLLLOCAL int start(std::function<void()> f);
+
+    //! Returns true if the thread was started and has not been joined
+    DLLLOCAL bool joinable() const {
+        return started;
+    }
+
+    //! Waits for the thread to exit
+    DLLLOCAL void join();
+
+private:
+    pthread_t tid;
+    bool started = false;
+    std::function<void()> fn;
+
+    DLLLOCAL static void* run(void* arg);
+
+    QoreLlvmCompileThread(const QoreLlvmCompileThread&) = delete;
+    QoreLlvmCompileThread& operator=(const QoreLlvmCompileThread&) = delete;
+};
 
 //! JIT-compiled function signature: takes ExceptionSink*, returns NaN-boxed QoreValue as uint64_t
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
@@ -794,7 +834,7 @@ private:
     };
 
     // Background compilation thread management
-    llvm::thread bg_compile_thread;                         //!< dedicated background worker thread
+    QoreLlvmCompileThread bg_compile_thread;                //!< dedicated background worker thread
     std::queue<BgCompileWork> bg_compile_queue;             //!< pending compilation work
     std::mutex bg_queue_mutex;                              //!< protects the queue
     std::condition_variable bg_queue_cv;                    //!< signals new work or queue empty
