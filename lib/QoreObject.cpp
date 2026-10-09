@@ -2246,6 +2246,11 @@ QoreString* QoreObject::getAsString(bool& del, int foff, ExceptionSink* xsink) c
 }
 
 int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
+    // formatting recurses with the nesting of the value, which is unbounded
+    if (xsink && q_check_stack(xsink)) {
+        return -1;
+    }
+
     // applies any format bounds active in this thread; when bounds are active, a recursive reference is rendered
     // as an alias to the anchor rendered with the object, so this check is made before the recursion check
     QoreString elision;

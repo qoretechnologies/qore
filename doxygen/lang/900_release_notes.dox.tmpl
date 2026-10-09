@@ -4250,6 +4250,11 @@ while (*binary chunk = input.read(65536)) {
       operator now block until the command exits, and a cancellation or interrupt ends the wait at once and kills
       the command
 
+    - Fixed a crash formatting a deeply nested list, hash or object as a string, as with
+      @ref Qore::sprintf() "sprintf()" and the \c "%y", \c "%N" and \c "%n" format specifiers: formatting recursed
+      once for each level of nesting without checking the stack, so a value nested more deeply than the thread's
+      stack allows overflowed it; a \c STACK-LIMIT-EXCEEDED exception is now raised instead
+
     - Fixed @ref Qore::system() "system()" returning -1 without an error when the process to execute the command
       could not be started; it now raises a \c SYSTEM-ERROR exception with the reason
 
