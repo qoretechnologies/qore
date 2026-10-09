@@ -557,11 +557,24 @@ bool qore_has_debug() {
 #endif
 }
 
+int parse_check_stack(const QoreProgramLocation* loc) {
+    if (!q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+        return 0;
+    }
+    parse_error(loc ? *loc : loc_builtin, "the code is nested too deeply to be parsed within the stack of this thread");
+    return -1;
+}
+
 int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.analysis.clear();
     if (val.hasNode()) {
         AbstractQoreNode* n = val.getInternalNode();
         //printd(5, "parse_init_value() n: %p '%s'\n", n, get_type_name(n));
+        // parse initialization recurses with the nesting of the code: it stops while enough stack remains
+        if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+            const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
+            return parse_check_stack(pn ? pn->loc : nullptr);
+        }
         return n->parseInit(val, parse_context);
     }
 
