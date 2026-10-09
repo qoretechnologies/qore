@@ -236,7 +236,12 @@ int QoreParseListNode::initArgs(QoreParseContext& parse_context, type_vec_t& arg
         args = nullptr;
     }
     bool v_needs_eval = false;
+    // The surrounding hint describes the call's result, not its arguments.
+    // Restore it for receiver inference after parsing the argument list.
+    const QoreTypeInfo* saved_expected = parse_context.expected_type_info;
+    parse_context.expected_type_info = nullptr;
     int err = parseInitIntern(v_needs_eval, parse_context, true);
+    parse_context.expected_type_info = saved_expected;
     arg_types = std::move(vtypes);
 
     ReferenceHolder<QoreListNode> l(qore_list_private::newList(needs_eval()), nullptr);

@@ -2961,6 +2961,8 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTInstRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTRuntime.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreCastOperatorNode.cpp
+    # Argument hint boundaries affect inferred types embedded in compiled modules.
+    ${CMAKE_SOURCE_DIR}/lib/QoreParseListNode.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRBuilder.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRAnalysis.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRIntrinsic.cpp
