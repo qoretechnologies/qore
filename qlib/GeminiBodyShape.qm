@@ -1332,6 +1332,9 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         @throw LLM-ERROR the request failed or was rejected, the response was
         not an event stream, an event could not be parsed, the stream reported
         an error, or no event arrived within the request timeout
+        @throw LLM-CANCELLED the request was cancelled with
+        @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation"; the connection
+        of a stream in flight is closed at once
     */
     chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
             code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
@@ -1346,20 +1349,31 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         string json_body = make_json(body);
         *date request_deadline = exists opts.timeout_ms
             ? now_us() + milliseconds(getRequestTimeoutMs(opts)) : NOTHING;
+        # a cancellation closes the connection of the request at once, also while its response is awaited
+        list<int> cancel_ids = ();
+        on_exit map removeRequestCancelHandler(opts, $1), cancel_ids;
+        *code<nothing(HttpClientIo::HttpClientStreamHandle)> on_stream = opts.cancellation
+            ? sub (HttpClientIo::HttpClientStreamHandle stream) {
+                cancel_ids += addRequestCancelHandler(opts, sub () { stream.cancel(); });
+            }
+            : NOTHING;
         HttpClientStreamingIo::SseStreamReader reader;
         try {
             reader = withRetry(HttpClientStreamingIo::SseStreamReader sub () {
                 return rest_client.restSseReaderWithTimeout("POST", path, hdr, json_body,
-                    remainingStreamTimeout(getRequestTimeoutMs(opts), request_deadline));
+                    remainingStreamTimeout(getRequestTimeoutMs(opts), request_deadline), on_stream);
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "LLM-CANCELLED") {
+                rethrow;
+            }
             throw "LLM-ERROR",
                 sprintf("%s streaming request to %y failed: %s", getProviderLabel(), path,
                     GeminiBodyShape::requestErrorDetail(ex)), ex;
         }
         # a stream left before its end must not keep the server sending
         on_exit reader.cancel();
-        deliverStreamEvents(reader, callback, getRequestTimeoutMs(opts), request_deadline);
+        deliverStreamEvents(reader, callback, getRequestTimeoutMs(opts), request_deadline, opts);
     }
 
     #! Explicit call deadlines cover the whole stream, not a fresh wait per chunk
@@ -1401,15 +1415,20 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         @param callback receives each event
         @param timeout_ms the maximum time to wait for each event
         @param deadline optional absolute deadline shared by all event waits
+        @param opts optional per-call request overrides; a cancellation of
+        @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation" ends the delivery
 
         @throw LLM-ERROR an event could not be parsed, the stream reported an
         error, or no event arrived within \a timeout_ms
+        @throw LLM-CANCELLED the request was cancelled
     */
     private deliverStreamEvents(HttpClientStreamingIo::SseStreamReader reader,
             code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback, int timeout_ms,
-            *date deadline) {
+            *date deadline, *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         while (True) {
-            *hash<SseMessageInfo> evt = reader.readEvent(remainingStreamTimeout(timeout_ms, deadline));
+            *hash<SseMessageInfo> evt = callCancellable(*hash<SseMessageInfo> sub () {
+                return reader.readEvent(remainingStreamTimeout(timeout_ms, deadline));
+            }, opts);
             if (!evt) {
                 # the reader also returns nothing when the wait times out, which must not be reported as a
                 # complete response
@@ -1680,6 +1699,9 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
                     getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "LLM-CANCELLED") {
+                rethrow;
+            }
             throw "LLM-ERROR",
                 sprintf("%s request to %y failed: %s", getProviderLabel(), path,
                     GeminiBodyShape::requestErrorDetail(ex)), ex;

@@ -2026,6 +2026,10 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             @param path request path
             @param hdr additional HTTP headers (\c Accept is set automatically)
             @param body optional request body (for \c POST-based SSE endpoints)
+            @param on_stream optional code called with each HTTP stream handle as soon as its request has been
+            submitted (a redirect or authentication retry submits a new request), before the response is read; a
+            caller can keep the handle to cancel the stream from another thread at any time, including while the
+            response headers are awaited
 
             @return a \c HttpClientStreamingIo::SseStreamReader ready for
             \c readEvent() calls
@@ -2049,8 +2053,9 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             @see restSseStream()
         */
         HttpClientStreamingIo::SseStreamReader restSseReader(string method, string path,
-                *hash<auto> hdr, *data body) {
-            return restSseReaderIntern(method, path, hdr, body, NOTHING);
+                *hash<auto> hdr, *data body,
+                *code<nothing(HttpClientIo::HttpClientStreamHandle)> on_stream) {
+            return restSseReaderIntern(method, path, hdr, body, NOTHING, on_stream);
         }
 
         #! Opens an SSE stream with a call-local response-start deadline
@@ -2059,6 +2064,10 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             @param hdr additional HTTP headers
             @param body optional serialized request body
             @param timeout_ms positive timeout for opening this stream, in milliseconds
+            @param on_stream optional code called with each HTTP stream handle as soon as its request has been
+            submitted (a redirect or authentication retry submits a new request), before the response is read; a
+            caller can keep the handle to cancel the stream from another thread at any time, including while the
+            response headers are awaited
             @return an event reader; subsequent event waits are controlled by its caller
             @throw RESTCLIENTIO-OPTION-ERROR if the timeout is not positive
             @throw HTTPCLIENT-TIMEOUT if response setup exceeds the timeout
@@ -2074,17 +2083,17 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
         */
         HttpClientStreamingIo::SseStreamReader restSseReaderWithTimeout(
                 string method, string path, *hash<auto> hdr, *data body,
-                int timeout_ms) {
+                int timeout_ms, *code<nothing(HttpClientIo::HttpClientStreamHandle)> on_stream) {
             if (timeout_ms <= 0) {
                 throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be greater than zero";
             }
             return restSseReaderIntern(method, path, hdr, body,
-                now_us() + milliseconds(timeout_ms));
+                now_us() + milliseconds(timeout_ms), on_stream);
         }
 
         private HttpClientStreamingIo::SseStreamReader restSseReaderIntern(
                 string method, string path, *hash<auto> hdr, *data body,
-                *date deadline) {
+                *date deadline, *code<nothing(HttpClientIo::HttpClientStreamHandle)> on_stream) {
             ensureToken();
             hdr = hdr ?? {};
             if (!hdr.accept && !hdr.Accept) {
@@ -2113,6 +2122,9 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                         addClientCookies(origin, req_path, redirected ? rf.getHeaders() : hdr), False,
                         redirected ? rf.getBody() : prepared.serialized_body);
                 try {
+                    if (on_stream) {
+                        on_stream(stream);
+                    }
                     hash<auto> response_start = readSseResponseStart(stream, method,
                         path, deadline);
                     *hash<auto> response = response_start.response;
