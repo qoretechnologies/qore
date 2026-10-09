@@ -1443,9 +1443,11 @@ QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
 }
 
 QoreValue MethodCallNode::exec(QoreObject* o, ExceptionSink* xsink) const {
-    // issue #3596: do not use the context class if it's not compatible with "o"
+    // issue #3596: do not use the context class if it's not compatible with "o"; checked against the committed
+    // class hierarchy: the parse-time check resolves the hierarchy of the class context, which is parse state that
+    // other threads read while the class runs
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
         class_ctx = nullptr;
     }
     return AbstractMethodCallNode::exec(o, c_str, class_ctx, xsink);

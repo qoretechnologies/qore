@@ -16440,7 +16440,8 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
     // otherwise runtimeFindCommittedMethodForEval picks up a private:internal method
     // from the caller's class for an unrelated target object.
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
+    // checked against the committed hierarchy, as in MethodCallNode::exec()
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
         class_ctx = nullptr;
     }
     RuntimeConfig& rc = rc_get_current_ref();
@@ -16728,7 +16729,8 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
         // the caller's class even though the target object is a completely unrelated
         // class. Mirrors MethodCallNode::exec() in FunctionCallNode.cpp:928.
         const qore_class_private* class_ctx = runtime_get_class();
-        if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
+        // checked against the committed hierarchy, as in MethodCallNode::exec()
+        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
             class_ctx = nullptr;
         }
         RuntimeConfig& rc = rc_get_current_ref();
@@ -16985,7 +16987,8 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
     assert(object && method_name);
 
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(
+    // checked against the committed hierarchy, as in MethodCallNode::exec()
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(
             *object->getClass(), class_ctx)) {
         class_ctx = nullptr;
     }
