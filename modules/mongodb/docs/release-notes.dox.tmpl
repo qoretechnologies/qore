@@ -11,4 +11,7 @@
       including null elements and nested arrays
     - array conversion honors thread cancellation and sandbox interruption,
       including large arrays, while preserving cleanup deferral
+    - a call blocked on the server (connecting, the TLS handshake, reading or writing) ends as soon as the thread
+      is cancelled or its Program is interrupted, instead of within 500 ms: connections use a socket of the
+      module's own whose waits are woken directly by the request
 */

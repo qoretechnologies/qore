@@ -33,18 +33,11 @@
 
 #include <mongoc/mongoc.h>
 
-//! Interruptible stream wrapper for MongoDB operations
-/** This stream wrapper wraps the default MongoDB socket stream and adds
-    interrupt checking at regular intervals during blocking I/O operations.
-
-    When a SandboxManager is attached to the current program and an interrupt
-    is requested, I/O operations will return with an error, allowing the
-    operation to be cancelled.
-*/
-
 //! Stream initiator function for interruptible MongoDB streams
-/** This function creates a new interruptible stream that wraps the default
-    socket stream. It should be set on the MongoDB client using
+/** Connects a socket of the module's own and returns a stream on it (with libmongoc's TLS stream stacked on it for
+    TLS connections) whose waits use qore_cancellable_poll(), so every blocking wait of the connection - connect,
+    TLS handshake, reads, writes and libmongoc's stream polls - ends as soon as the thread is cancelled or its
+    Program is interrupted, without a periodic timeout.  It should be set on the MongoDB client using
     mongoc_client_set_stream_initiator().
 
     @param uri The MongoDB URI
@@ -52,7 +45,7 @@
     @param user_data User data (unused)
     @param error Error structure for reporting errors
 
-    @return A new interruptible stream or nullptr on error
+    @return A new stream or nullptr on error
 */
 DLLLOCAL mongoc_stream_t* qore_mongo_stream_initiator(
     const mongoc_uri_t* uri,
