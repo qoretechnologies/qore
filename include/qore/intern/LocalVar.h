@@ -919,12 +919,12 @@ public:
         root requiring lvalue cleanup. Type/access validation and real-reference
         bookkeeping are identical to the normal assignment path.
         @param value borrowed, already weak-normalized input
-        @param result initially empty holder receiving the owned stored value
+        @param result holder containing NOTHING, receiving the owned stored value
         @param xsink exception sink
         @return true if handled (including a type error), false for ordinary fallback
     */
     DLLLOCAL bool tryAssignInitialClassValue(QoreValue value, ValueHolder& result, ExceptionSink* xsink) const {
-        assert(!*xsink && !result);
+        assert(!*xsink && result->isNothing());
         if (closure_use || is_self || name == "self"
                 || type_info_needs_substitution || ref_type_info_needs_substitution) {
             return false;
@@ -952,7 +952,10 @@ public:
                 removed->deref(xsink);
             }
             if (!*xsink) {
-                result = QoreValue(object->objectRefSelf());
+                // This is initialization, not replacement: the result holder
+                // contains NOTHING. Keep its RAII ownership without discarding
+                // an empty value through ValueHolder::operator=().
+                *result = QoreValue(object->objectRefSelf());
             }
             return true;
         }
@@ -971,7 +974,7 @@ public:
             removed->deref(xsink);
         }
         if (!*xsink) {
-            result = slot->val.getReferencedValue();
+            *result = slot->val.getReferencedValue();
         }
         return true;
     }

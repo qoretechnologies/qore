@@ -681,3 +681,10 @@ not Java parity or an isolated virtual-call cost. Receiver-local ownership and
 cleanup remain included. Raw normalized samples, exact binary identities and
 separate profile observations are in
 [the evidence](results-object-admission-macos-arm64.json).
+
+The [empty-result-holder follow-up](RESULTS.md#empty-class-result-holder-2026-10-09)
+removes replacement cleanup only for a proven-NOTHING initializer output. Three
+identical-executable comparisons show modest 1.37–1.80% polymorphic median gains,
+with overlapping fork ranges; RAII cleanup and both object references remain.
+See [normalized evidence](results-class-holder-macos-arm64.json) for all controls,
+binary identities and validation. This does not establish Java parity.

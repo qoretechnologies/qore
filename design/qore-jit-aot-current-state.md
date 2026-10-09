@@ -249,6 +249,15 @@ measurements at 1024/4096 elements improve the mixed polymorphic kernel by
 cleanup remain the dominant follow-up targets; see
 [object-admission results](../bench/runtime-comparison/RESULTS.md#object-admission-specialization-2026-10-09).
 
+The admitted class initializer also fills its known-NOTHING result holder
+directly, avoiding replacement cleanup while retaining the holder's RAII
+ownership and both slot/cache references. Both internal callers satisfy the
+explicit empty-output precondition, including a rejected first attempt followed
+by weak normalization. Three identical-executable comparisons show modest
+1.37–1.80% polymorphic median gains with overlapping fork ranges; no general
+owner elimination or Java parity follows. See
+[empty-holder results](../bench/runtime-comparison/RESULTS.md#empty-class-result-holder-2026-10-09).
+
 The class-check runtime comparison requested 16-byte alignment on the twelve
 prepared scalar callback v3 entrypoints. The unaligned class-check candidate
 repeatedly regressed wide callbacks; a 128-byte alternative recovered that AOT

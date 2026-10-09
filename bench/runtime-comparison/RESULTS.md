@@ -6442,3 +6442,89 @@ Next: reduce repeated class compatibility/local setup and owned-value cleanup,
 using live explicit RuntimeConfig or valid compiler proofs. Preserve runtime
 local visibility and declaration-order destruction. Do not revive the rejected
 native-only local lowering without its required unified cleanup proof.
+
+
+## Empty class-result holder (2026-10-09)
+
+Retained runtime-only follow-up to object admission: an admitted class-local
+initializer fills its result holder directly instead of using replacement
+assignment, which unnecessarily calls `discard()` on NOTHING. The internal
+precondition now asserts `isNothing()`, not the broader false-value test. Both
+callers create the holder empty; a rejected first attempt does not modify it.
+The holder remains an RAII owner. Slot/cache references, type/access validation,
+weak normalization, real-reference bookkeeping and error cleanup are unchanged.
+This is not a general reference-count or runtime-local elimination.
+
+Baseline is the committed merged `18d04ebe5` runtime (release SHA256
+`c76ba61124c09e517c22633d75ed488a31bd1d150e51f98187a91e6408c9cdf4`),
+not the preceding section's precommit candidate. The measured candidate release
+SHA256 is `de83c7febad5addb2ea94387dacbe8a20657616aa533d8193559a3163e83559c`.
+The header edit changes the module runtime identity, so test qmods were rebuilt
+for both release and debug. Standalone AOT ABI remains compatible: each run uses
+the exact same executable for before/after. Complete source patch, binary
+identities and normalized samples are in
+[the evidence](results-class-holder-macos-arm64.json).
+
+Two randomized seven-kernel runs use five forks, three warmups and five 500ms
+samples per fork. A focused confirmation uses twelve forks with the same windows.
+Together: 282 jobs and 1,410 timing windows, independently checked against raw
+Qore/JMH output. No task builds, tests, profiles, disassembly or evidence
+computation ran during timing. Host background activity is uncontrolled.
+All numbers below are whole-kernel ns/element, median of fork means.
+
+Count 1024, 5 forks, seed 810818, `run-vpsp78_j`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|polymorphic_call|45.838|45.033|-1.76%|yes|2.536|17.76x
+|optional_method_call|12.053|12.123|+0.58%|yes|1.675|7.24x
+|monomorphic_call|5.471|5.317|-2.81%|yes|1.677|3.17x
+|indirect_wide|8.340|8.507|+1.99%|yes|1.684|5.05x
+|indirect_float|10.261|10.300|+0.37%|yes|1.654|6.23x
+|arithmetic|2.475|2.448|-1.05%|yes|0.890|2.75x
+|dispatch_control|2.598|2.608|+0.38%|yes|0.988|2.64x
+
+Count 4096, 5 forks, seed 810819, `run-vroocuab`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|polymorphic_call|44.535|43.926|-1.37%|yes|2.543|17.27x
+|optional_method_call|10.689|10.759|+0.65%|yes|1.674|6.43x
+|monomorphic_call|4.014|4.012|-0.05%|yes|1.676|2.39x
+|indirect_wide|7.269|7.216|-0.73%|yes|1.686|4.28x
+|indirect_float|9.165|9.106|-0.65%|yes|1.655|5.50x
+|arithmetic|1.365|1.370|+0.35%|yes|0.929|1.47x
+|dispatch_control|1.424|1.423|-0.08%|yes|0.998|1.43x
+
+Count 4096, 12 forks, seed 810820, `run-v313j42s`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|polymorphic_call|44.334|43.535|-1.80%|yes|not rerun|n/a
+|optional_method_call|10.777|10.669|-1.00%|yes|not rerun|n/a
+|dispatch_control|1.424|1.426|+0.14%|yes|not rerun|n/a
+
+The polymorphic median improves 1.76%, 1.37% and 1.80%; the repeated direction
+and removal of a known-empty cleanup support keeping this small change.
+All fork ranges overlap; overlap is descriptive, not a significance test.
+The nullable medians initially rise about 0.6%, then fall 1.00% in the twelve-fork
+repeat. Wide callbacks initially rise 1.99%, then fall 0.73%. Do not claim a
+broad speedup, an isolated call-latency gain or a startup improvement.
+
+At 4096 elements Java remains about 2.4x faster for monomorphic calls, 6.4x
+nullable, 4.3x wide callbacks, 5.5x float callbacks and 17.3x for this mixed
+polymorphic kernel. Java's DynamicStep methods are DONT_INLINE; Qore can inline
+the exact-base branch, so these do not enforce the same inlining policy.
+
+Validation: release and debug each pass 35 selected files (27 QUnit files,
+72 cases, 4,073 assertions plus eight standalones); six execution/reference
+modes pass 330 checks each and all eleven harness tests pass. Existing tests
+cover both result-producing branches, disabled fast paths, weak/opaque inputs,
+class errors/access, scope/unwind ownership, deletion and reflective mutation.
+No full-repository, sanitizer or cross-architecture qualification is claimed.
+The initializer has zero direct discard callsites instead of two, but grows
+from 257 to 260 static instructions; runtime text grows 12 bytes. This does
+not remove the holder destructor or either owned object reference.
+
+Next: add a separately named, matched Java/Qore polymorphic-expression kernel
+to distinguish receiver-local initialization/cleanup from dispatch work. Keep
+the existing kernel and its historical results intact. Any ownership elimination
+must preserve reflective local visibility and declaration-order destruction;
+the previously rejected native-only local lowering remains rejected.
