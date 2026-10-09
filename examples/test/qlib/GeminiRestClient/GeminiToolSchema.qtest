@@ -202,6 +202,26 @@ class GeminiToolSchemaTest inherits QUnit::Test {
             },
         };
 
+        #! constraints that Gemini does not receive
+        const Constrained = {
+            "type": "object",
+            "properties": {
+                "currency": {"type": "string", "description": "ISO currency", "enum": ("EUR", "USD", "CZK"),
+                    "default": "EUR", "pattern": "^[A-Z]{3}$", "minLength": 3, "maxLength": 3},
+                "quantity": {"type": "integer", "minimum": 1, "maximum": 10, "multipleOf": 2},
+                "ratio": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 100},
+                "score": {"type": "number", "minimum": 0, "exclusiveMinimum": True, "maximum": 5},
+                "due": {"type": "string", "format": "date-time"},
+                "company": {"type": "string", "minLength": 1, "example_value": "ACME"},
+                "tags": {"type": "array", "minItems": 1, "maxItems": 5, "uniqueItems": True,
+                    "items": {"type": "string", "enum": ("a", "b")}},
+                "labels_closed": {"type": "object", "properties": {"x": {"type": "string"}}, "minProperties": 1},
+                "odd": {"type": "string", "enum": ("a, b", "", 1, True, NULL)},
+                "level": {"type": "string", "allowed_values": ({"value": "low", "display_name": "Low"},
+                    {"value": "high", "display_name": "High"}), "default_value": "low"},
+            },
+        };
+
         #! schemas that Gemini cannot declare as structure
         const Unsupported = {
             "type": "object",
@@ -239,6 +259,10 @@ class GeminiToolSchemaTest inherits QUnit::Test {
         addTestCase("replayed tool calls take their declared shape", \replay());
         addTestCase("streamed tool calls are decoded", \streaming());
         addTestCase("decoding keeps what is not JSON text", \decodingEdges());
+        addTestCase("dropped constraints are stated in descriptions", \constraintNotes());
+        addTestCase("constraint notes are bounded", \constraintNoteCap());
+        addTestCase("constraint notes do not repeat the description", \constraintNoteDuplicates());
+        addTestCase("constraint notes do not change tool calls", \constraintNoteRoundTrip());
         set_return_value(main());
     }
 
@@ -271,8 +295,8 @@ class GeminiToolSchemaTest inherits QUnit::Test {
         assertEq("number", line.properties.product.properties.price.type, "a nested reference is resolved");
         assertEq({"type": "string", "nullable": True}, params.properties.body.properties.note,
             "a null alternative makes the value nullable");
-        assertEq({"type": "string", "nullable": True}, params.properties.body.properties.priority,
-            "a null type makes the value nullable");
+        assertEq({"type": "string", "nullable": True, "description": "Allowed values: low, high, null"},
+            params.properties.body.properties.priority, "a null type makes the value nullable");
         assertEq("request body", params.properties.body.description);
         assertEq((), GeminiBodyShape::shapeToolParameters(CreateOrder).stringified);
     }
@@ -309,7 +333,8 @@ class GeminiToolSchemaTest inherits QUnit::Test {
         assertTrue(props.options.nullable, "a nullable value sent as JSON text stays nullable");
         assertTrue(props.value.description =~ /anyOf/, "the alternatives are described");
         assertEq({"type": "object", "properties": {}}, props.empty, "a closed empty object needs no text");
-        assertEq({"type": "string"}, props.mode, "a constant is a string; its value is a constraint");
+        assertEq({"type": "string", "description": "Allowed values: fast"}, props.mode,
+            "a constant is a string whose value is stated as a constraint");
         hash<auto> tree = props.tree;
         assertEq("object", tree.type, "the first level of a recursive schema is structured");
         assertEq("string", tree.properties.label.type);
@@ -420,6 +445,96 @@ class GeminiToolSchemaTest inherits QUnit::Test {
             {"functionCall": {"name": "other", "args": {"a": "{\"x\":1}"}}})}},)};
         assertEq(body, GeminiBodyShape::decodeResponseToolArguments(body, {"tool": paths}),
             "the arguments of other tools are unchanged");
+    }
+
+    constraintNotes() {
+        hash<auto> props = declaredParameters("constrained", Constrained).properties;
+        assertEq("ISO currency\nAllowed values: EUR, USD, CZK; default: EUR; pattern: ^[A-Z]{3}$; length: 3",
+            props.currency.description);
+        assertEq("string", props.currency.type);
+        assertFalse(props.currency.hasKey("enum"));
+        assertEq("range: 1 to 10; multiple of: 2", props.quantity.description);
+        assertEq("greater than 0; less than 100", props.ratio.description, "exclusive bounds (JSON Schema 2019)");
+        assertEq("greater than 0; maximum: 5", props.score.description, "exclusive bounds (JSON Schema draft 4)");
+        assertEq("format: date-time", props.due.description);
+        assertEq("length: at least 1; example: ACME", props.company.description);
+        assertEq("items: 1 to 5; items: unique", props.tags.description);
+        assertEq("Allowed values: a, b", props.tags.items.description, "item constraints are stated on the item");
+        assertEq("properties: at least 1", props.labels_closed.description);
+        assertEq("Allowed values: \"a, b\", \"\", 1, true, null", props.odd.description,
+            "values that the note's punctuation would make ambiguous are quoted");
+        assertEq("Allowed values: low, high; default: low", props.level.description,
+            "data provider allowed_values and default_value are stated");
+        # a value sent as JSON text already has its whole schema in the description
+        hash<auto> deep = declaredParameters("deep", DeepTree).properties.l2.properties.l3.properties.l4
+            .properties.l5.properties.l6;
+        assertEq(1, (deep.description =~ x/(holding JSON text)/g).size());
+        assertFalse(deep.description =~ /\n(Allowed values|range|length|format):/,
+            "no constraint note is added to JSON text");
+
+        # a response schema keeps enum and default natively, so only the other constraints are stated
+        hash<auto> response = GeminiBodyShape::sanitizeSchema(Constrained).properties.currency;
+        assertEq(("EUR", "USD", "CZK"), response."enum");
+        assertEq("EUR", response."default");
+        assertEq("ISO currency\npattern: ^[A-Z]{3}$; length: 3", response.description);
+    }
+
+    constraintNoteCap() {
+        list<string> values = map sprintf("value_%03d", $1), xrange(60);
+        hash<auto> schema = {"type": "object", "properties": {
+            "big": {"type": "string", "enum": values},
+            "big_with_range": {"type": "string", "enum": values, "minLength": 9, "maxLength": 9,
+                "pattern": "^value_[0-9]{3}$", "default": "value_000"},
+            "long_pattern": {"type": "string", "pattern": "^" + strmul("[a-z]", 30) + "$", "minLength": 30},
+            "huge": {"type": "string", "enum": (strmul("x", 300), "y")},
+        }};
+        hash<auto> props = GeminiBodyShape::shapeToolParameters(schema).parameters.properties;
+        string big = props.big.description;
+        assertTrue(big.length() <= GeminiBodyShape::SchemaConstraintNoteMaxChars, big);
+        assertRegex("^Allowed values: value_000, value_001, .* … and [0-9]+ more$", big);
+        int shown = (big =~ x/(value_[0-9]+)/g).size();
+        assertEq(sprintf(" … and %d more", 60 - shown), big.substr(big.rfind(" …")), "the count is exact");
+        assertTrue(big.length() > GeminiBodyShape::SchemaConstraintNoteMaxChars - 20, "the cap is used");
+
+        string with_range = props.big_with_range.description;
+        assertTrue(with_range.length() <= GeminiBodyShape::SchemaConstraintNoteMaxChars, with_range);
+        assertRegex("^Allowed values: value_000, .* … and [0-9]+ more; default: value_000; "
+            "pattern: \\^value_\\[0-9\\]\\{3\\}\\$; length: 9$", with_range,
+            "the other constraints are kept and the values take what is left");
+
+        assertEq("length: at least 30", props.long_pattern.description,
+            "a pattern too long to state whole is left out rather than cut");
+        assertEq("2 allowed values", props.huge.description, "a value longer than the cap is counted");
+    }
+
+    constraintNoteDuplicates() {
+        hash<auto> schema = {"type": "object", "properties": {
+            "currency": {"type": "string", "enum": ("EUR", "USD"), "default": "EUR",
+                "description": "Currency, one of EUR or USD (default EUR)"},
+            "code": {"type": "string", "pattern": "^[A-Z]{3}$",
+                "description": "Three letters matching ^[A-Z]{3}$"},
+            "due": {"type": "string", "format": "date-time", "description": "Due date in date-time format"},
+            "count": {"type": "integer", "minimum": 1, "maximum": 9, "description": "range: 1 to 9 units"},
+            "flag": {"type": "string", "enum": ("y", "n"), "description": "y or n"},
+            "mode": {"type": "string", "enum": ("fast", "slow"), "description": "fast or medium"},
+        }};
+        hash<auto> props = GeminiBodyShape::shapeToolParameters(schema).parameters.properties;
+        assertEq("Currency, one of EUR or USD (default EUR)", props.currency.description);
+        assertEq("Three letters matching ^[A-Z]{3}$", props.code.description);
+        assertEq("Due date in date-time format", props.due.description);
+        assertEq("range: 1 to 9 units", props.count.description);
+        assertEq("y or n\nAllowed values: y, n", props.flag.description,
+            "one-character values are never taken as already stated");
+        assertEq("fast or medium\nAllowed values: fast, slow", props.mode.description,
+            "values are stated unless the description names all of them");
+    }
+
+    constraintNoteRoundTrip() {
+        hash<auto> args = {"currency": "USD", "quantity": 4, "ratio": 2.5, "score": 3, "due": "2026-10-09T00:00:00Z",
+            "company": "ACME", "tags": ("a", "b"), "labels_closed": {}, "odd": "a, b", "level": "high"};
+        assertEq((), GeminiBodyShape::shapeToolParameters(Constrained).stringified);
+        assertEq(args, callTool("constrained", Constrained, args));
+        assertEq(Constrained, Constrained + {}, "the caller's schema is not changed");
     }
 
     #! Returns the parameters of a tool as the provider sends them

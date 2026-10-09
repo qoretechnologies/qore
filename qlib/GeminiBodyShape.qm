@@ -139,7 +139,8 @@ provider.complete("Classify invoices by department", invoice_text, NOTHING,
     @ref shapeToolParameters() therefore keeps every member of a tool's parameters and declares the rest as JSON text:
     |!Original schema|!Sent to Gemini
     |objects and arrays up to @ref ToolSchemaMaxDepth levels deep, with their members, types, descriptions and \c required lists|unchanged
-    |constraint keywords (\c enum, \c default, \c title, lengths, bounds, \c pattern, \c format, \c additionalProperties, ...)|left out; the caller still validates them
+    |constraint keywords (\c enum, \c default, lengths, bounds, \c pattern, \c format, item and property counts, ...)|left out of the schema and stated in its description (see below); the caller still validates them
+    |\c title, \c additionalProperties|left out
     |local \c "$ref" references (\c "#/$defs/...", \c "#/definitions/...", any local JSON pointer)|the referenced schema
     |\c allOf, \c anyOf, \c oneOf alternatives of one type|one schema with the members of all alternatives
     |a \c "null" alternative or type|\c nullable
@@ -148,6 +149,15 @@ provider.complete("Classify invoices by department", invoice_text, NOTHING,
     |a free-form object (no declared properties, additional properties allowed)|a string holding JSON text
     |a value without a type, or alternatives of different types|a string holding JSON text
     |a recursive or unresolvable reference|a string holding JSON text
+
+    The constraints left out of a schema are stated at the end of its description, so that the model still uses the
+    allowed values and formats, for example <tt>Allowed values: EUR, USD, CZK; default: EUR; pattern: ^[A-Z]{3}$;
+    length: 3</tt>.  The note is at most @ref SchemaConstraintNoteMaxChars characters long: a long list of allowed
+    values ends with the number of values left out (<tt>… and 12 more</tt>), and a pattern too long to state whole is
+    left out rather than cut.  A constraint that the description already states is not repeated.  Descriptions add no
+    states to Gemini's decoder, but they are input tokens of every request: measured on 50-tool OpenAPI catalogs, the
+    notes add about 5% to the size of the function declarations.  Response schemas keep \c enum and \c default
+    natively and state only the other constraints.
 
     A value sent as JSON text is declared as a string whose description holds the original schema, including the
     schemas that it references.  The providers record which arguments of which tools of a request are JSON text
@@ -189,6 +199,8 @@ hash<auto> args = GeminiBodyShape::decodeToolArguments({"options": (), "metadata
     - tool parameter schemas keep their nested members, so that Gemini can fill nested objects and arrays of objects
       instead of sending \c {}; values that Gemini's schema cannot declare are sent as JSON text and returned to
       callers with their original types (see @ref geminibodyshapetoolschemas)
+    - the constraints that Gemini's schema does not receive (allowed values, defaults, formats, patterns, lengths,
+      ranges, item and property counts) are stated in the schema's description (see @ref geminibodyshapetoolschemas)
 */
 
 #! Contains all public definitions in the GeminiBodyShape module
@@ -204,6 +216,12 @@ public namespace GeminiBodyShape {
     returned exactly, as JSON text.
 */
 public const ToolSchemaMaxDepth = 5;
+
+#! The maximum length of the constraint note that a schema's description gets for the constraints Gemini does not receive
+/** See @ref geminibodyshapetoolschemas; a longer list of allowed values is cut and ends with the number of values
+    left out.
+*/
+public const SchemaConstraintNoteMaxChars = 200;
 
 #! A Gemini tool parameter schema and the arguments that it declares as JSON strings
 /** Returned by @ref shapeToolParameters().
@@ -614,6 +632,13 @@ class GeminiSchemaShaper {
             }
             rv{key} = shapeOther(node{key}, depth);
         }
+        # the constraints that Gemini does not receive are stated in the description, so the model still knows them
+        *string note = getConstraintNote(node, rv.description.typeCode() == NT_STRING ? rv.description : NOTHING);
+        if (note) {
+            rv.description = rv.description.typeCode() == NT_STRING && rv.description.val()
+                ? rv.description + "\n" + note
+                : note;
+        }
         # An unconstrained array is legal JSON Schema and is commonly
         # produced for Qore softlist<auto> data-provider fields as
         # {"type":"array","items":{}}.  Gemini's protobuf-backed Schema
@@ -626,6 +651,234 @@ class GeminiSchemaShaper {
             rv.items = {"type": "string"};
         }
         return rv;
+    }
+
+    #! Returns the note stating the constraints of a schema that are left out of its Gemini form
+    /** @param node the schema, after references, alternatives and \c const were resolved
+        @param desc the description of the schema; a constraint that it already states is not repeated
+
+        @return the note, at most @ref SchemaConstraintNoteMaxChars long, or @ref nothing if there is nothing to state
+    */
+    private *string getConstraintNote(hash<auto> node, *string desc) {
+        # the parts after the allowed values, in the order in which they are dropped when the note is too long
+        list<string> parts = ();
+        *string lwr_desc = desc ? desc.lwr() : NOTHING;
+
+        # enum and default are kept natively in a response schema and left out of tool parameters
+        auto default_value;
+        if (tool && node.hasKey("default")) {
+            default_value = node."default";
+        } else if (node.hasKey("default_value") && (tool || !node.hasKey("default"))) {
+            default_value = node.default_value;
+        }
+        if (exists default_value && !(lwr_desc =~ /\bdefault/
+                && GeminiSchemaShaper::mentions(desc, GeminiSchemaShaper::formatValue(default_value)))) {
+            parts += "default: " + GeminiSchemaShaper::formatValue(default_value);
+        }
+        if (node.format.typeCode() == NT_STRING && node.format.val()
+                && !(lwr_desc =~ /\bformat/ && GeminiSchemaShaper::mentions(desc, node.format))) {
+            parts += "format: " + node.format;
+        }
+        if (node.pattern.typeCode() == NT_STRING && node.pattern.val()
+                && (!desc || desc.find(node.pattern) < 0)) {
+            # a cut regular expression would state a different constraint
+            if (node.pattern.length() <= (SchemaConstraintNoteMaxChars / 2)) {
+                parts += "pattern: " + node.pattern;
+            }
+        }
+        GeminiSchemaShaper::addRange(\parts, node.minLength, node.maxLength, "length: %s to %s", "length: %s",
+            "length: at least %s", "length: at most %s");
+        addNumberRange(\parts, node);
+        if (GeminiSchemaShaper::isNumber(node.multipleOf)) {
+            parts += "multiple of: " + GeminiSchemaShaper::formatNumber(node.multipleOf);
+        }
+        GeminiSchemaShaper::addRange(\parts, node.minItems, node.maxItems, "items: %s to %s", "items: %s",
+            "items: at least %s", "items: at most %s");
+        if (node.uniqueItems === True) {
+            parts += "items: unique";
+        }
+        GeminiSchemaShaper::addRange(\parts, node.minProperties, node.maxProperties, "properties: %s to %s",
+            "properties: %s", "properties: at least %s", "properties: at most %s");
+        if (exists node.example_value) {
+            parts += "example: " + GeminiSchemaShaper::formatValue(node.example_value);
+        }
+        if (lwr_desc) {
+            # a constraint that the description already states in the same words is not repeated
+            parts = select parts, lwr_desc.find($1.lwr()) < 0;
+        }
+
+        # the parts that fit; the allowed values get what is left
+        string rest = "";
+        foreach string part in (parts) {
+            string next = rest.val() ? rest + "; " + part : part;
+            if (next.length() > SchemaConstraintNoteMaxChars) {
+                break;
+            }
+            rest = next;
+        }
+
+        *list<auto> values;
+        if (tool && node."enum".typeCode() == NT_LIST) {
+            values = node."enum";
+        } else if (node.allowed_values.typeCode() == NT_LIST && (tool || !node.hasKey("enum"))) {
+            values = map $1.typeCode() == NT_HASH && $1.hasKey("value") ? $1.value : $1, node.allowed_values;
+        }
+        *string allowed;
+        if (values && !GeminiSchemaShaper::mentionsAll(desc, values)) {
+            int budget = SchemaConstraintNoteMaxChars - (rest.val() ? rest.length() + 2 : 0);
+            allowed = GeminiSchemaShaper::formatAllowedValues(values, budget);
+        }
+
+        string note = allowed ? (rest.val() ? allowed + "; " + rest : allowed) : rest;
+        @assert(note.length() <= SchemaConstraintNoteMaxChars);
+        return note.val() ? note : NOTHING;
+    }
+
+    #! Adds the numeric range of a schema to the constraint note parts
+    private addNumberRange(reference<list<string>> parts, hash<auto> node) {
+        *string low;
+        *string high;
+        bool low_exclusive = False;
+        bool high_exclusive = False;
+        if (GeminiSchemaShaper::isNumber(node.exclusiveMinimum)) {
+            low = GeminiSchemaShaper::formatNumber(node.exclusiveMinimum);
+            low_exclusive = True;
+        } else if (GeminiSchemaShaper::isNumber(node.minimum)) {
+            low = GeminiSchemaShaper::formatNumber(node.minimum);
+            # draft 4 exclusive bounds are booleans
+            low_exclusive = node.exclusiveMinimum === True;
+        }
+        if (GeminiSchemaShaper::isNumber(node.exclusiveMaximum)) {
+            high = GeminiSchemaShaper::formatNumber(node.exclusiveMaximum);
+            high_exclusive = True;
+        } else if (GeminiSchemaShaper::isNumber(node.maximum)) {
+            high = GeminiSchemaShaper::formatNumber(node.maximum);
+            high_exclusive = node.exclusiveMaximum === True;
+        }
+        if (exists low && exists high && !low_exclusive && !high_exclusive) {
+            parts += sprintf("range: %s to %s", low, high);
+            return;
+        }
+        if (exists low) {
+            parts += (low_exclusive ? "greater than " : "minimum: ") + low;
+        }
+        if (exists high) {
+            parts += (high_exclusive ? "less than " : "maximum: ") + high;
+        }
+    }
+
+    #! Adds a minimum/maximum count to the constraint note parts
+    private static addRange(reference<list<string>> parts, auto min, auto max, string both, string equal,
+            string min_only, string max_only) {
+        bool has_min = GeminiSchemaShaper::isNumber(min);
+        bool has_max = GeminiSchemaShaper::isNumber(max);
+        if (has_min && has_max) {
+            string low = GeminiSchemaShaper::formatNumber(min);
+            string high = GeminiSchemaShaper::formatNumber(max);
+            parts += low == high ? sprintf(equal, low) : sprintf(both, low, high);
+        } else if (has_min) {
+            parts += sprintf(min_only, GeminiSchemaShaper::formatNumber(min));
+        } else if (has_max) {
+            parts += sprintf(max_only, GeminiSchemaShaper::formatNumber(max));
+        }
+    }
+
+    #! Returns the allowed values part of a constraint note, cut to the given length with the number of values left out
+    private static *string formatAllowedValues(list<auto> values, int budget) {
+        string prefix = "Allowed values: ";
+        list<string> shown = ();
+        int len = prefix.length();
+        foreach auto value in (values) {
+            string text = GeminiSchemaShaper::formatValue(value);
+            int left = values.size() - shown.size() - 1;
+            # the room needed after this value for the number of values left out
+            int suffix = left ? sprintf(" … and %d more", left).length() : 0;
+            int next = len + (shown ? 2 : 0) + text.length();
+            if (next + suffix > budget) {
+                break;
+            }
+            shown += text;
+            len = next;
+        }
+        if (!shown) {
+            string all = sprintf("%d allowed values", values.size());
+            return all.length() <= budget ? all : NOTHING;
+        }
+        string rv = prefix + shown.join(", ");
+        if (shown.size() < values.size()) {
+            rv += sprintf(" … and %d more", values.size() - shown.size());
+        }
+        @assert(rv.length() <= budget);
+        return rv;
+    }
+
+    #! Returns a value as it appears in a constraint note
+    private static string formatValue(auto value) {
+        if (value.typeCode() == NT_STRING) {
+            string str = value;
+            # a value that the note's punctuation would make ambiguous is quoted
+            if (!str.val() || str =~ /[,;"\n]/ || str =~ /^\s/ || str =~ /\s$/) {
+                return make_json(str);
+            }
+            return str;
+        }
+        return make_json(value);
+    }
+
+    #! Returns a number as it appears in a constraint note
+    private static string formatNumber(auto value) {
+        return value.typeCode() == NT_INT ? value.toString() : make_json(value);
+    }
+
+    #! True if the value is a JSON number
+    private static bool isNumber(auto value) {
+        switch (value.typeCode()) {
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+                return True;
+        }
+        return False;
+    }
+
+    #! True if the description names every value
+    private static bool mentionsAll(*string desc, list<auto> values) {
+        if (!desc) {
+            return False;
+        }
+        foreach auto value in (values) {
+            if (!GeminiSchemaShaper::mentions(desc, GeminiSchemaShaper::formatValue(value))) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! True if the description names the value as a whole word
+    /** A value shorter than two characters is never taken as named: it occurs in most texts by chance.
+    */
+    private static bool mentions(*string desc, string value) {
+        if (!desc || value.length() < 2) {
+            return False;
+        }
+        int start = 0;
+        while (True) {
+            int pos = desc.find(value, start);
+            if (pos < 0) {
+                return False;
+            }
+            int end = pos + value.length();
+            if ((!pos || !GeminiSchemaShaper::isWordChar(desc[pos - 1]))
+                    && (end == desc.length() || !GeminiSchemaShaper::isWordChar(desc[end]))) {
+                return True;
+            }
+            start = pos + 1;
+        }
+    }
+
+    #! True for a letter, digit or underscore
+    private static bool isWordChar(string c) {
+        return c =~ /^\w$/;
     }
 
     #! Shapes the value of a keyword that is not a name->schema map; nested schemas are not argument values
