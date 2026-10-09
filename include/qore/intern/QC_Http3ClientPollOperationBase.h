@@ -66,6 +66,9 @@ class Http3ClientConnection;
     @since %Qore 3.0
 */
 class DLLLOCAL Http3ClientPollOperationPriv : public SocketPollOperationBase {
+#ifdef DEBUG
+    friend class Http3ClientResponseRegistrationTest;
+#endif
 public:
     //! HTTP/3 client connection states
     enum class H3State {
@@ -466,6 +469,25 @@ private:
 
     DLLLOCAL QoreHashNode* handleConnecting(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleReading(ExceptionSink* xsink);
+
+    //! Routes a response drained from the QUIC session to its stream's request
+    /** Returns the action of the response's stream, or buffers the response for a request that is still being
+        submitted or registered (see registerStream()), which takes the buffered response when it registers.  The
+        check and the buffering are made in one critical section under stream_lock, so a registration made at the
+        same time either finds the response buffered or registered its action before the check; otherwise the
+        response could be buffered after the registration had looked for it, and the request would never complete.
+
+        @param sid the stream ID
+        @param output the response; uniquely referenced, as a buffered response is modified; a buffered response is
+        referenced for the buffer
+        @param buffered set to true if the response was buffered
+        @param xsink for exception handling
+        @return the stream's action (referenced; the caller releases it), or nullptr if the response was buffered or
+        belongs to no request
+    */
+    DLLLOCAL AbstractAsyncAction* takeResponseAction(const std::string& sid, QoreHashNode* output, bool& buffered,
+            ExceptionSink* xsink);
+
     DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void cleanupPendingState();

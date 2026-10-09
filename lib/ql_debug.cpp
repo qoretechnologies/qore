@@ -56,6 +56,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
+#include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/NegotiatingConnectionPollOp.h"
 #include "qore/intern/RSection.h"
 #include "qore/intern/RSet.h"
@@ -1370,6 +1371,172 @@ public:
                 UT_ASSERT_EQ(c, 0, static_cast<int>(queue->size()), "close delivers exactly one completion");
             }
         }
+    }
+};
+
+//! An HTTP/3 response drained by the I/O thread while its request registers with the connection is delivered
+/** The I/O thread routes each response drained from the QUIC session with
+    Http3ClientPollOperationPriv::takeResponseAction(); the requesting thread registers its action with
+    registerStream() right after the request was sent.  When both run at the same time, the response must reach the
+    request exactly once: either the I/O thread finds the registered action, or the registration finds the buffered
+    response.  The check for a registered action and the buffering used to be in two critical sections, and a
+    registration between them found nothing buffered: the response stayed in the buffer and the request waited until
+    its timeout.
+
+    Each round runs both sides at the same time on two threads, released together, for a new stream.
+*/
+class Http3ClientResponseRegistrationTest {
+public:
+    //! Counts the responses delivered to a request
+    class CountingAction : public AbstractAsyncAction {
+    public:
+        DLLLOCAL CountingAction(std::atomic<int>& delivered, std::atomic<int>& errors)
+                : delivered(delivered), errors(errors) {
+        }
+
+        DLLLOCAL virtual void execute(QoreValue output, ExceptionSink* xsink) override {
+            ++delivered;
+            output.discard(xsink);
+        }
+
+        DLLLOCAL virtual void executeError(const char* err, const char* desc, ExceptionSink* xsink) override {
+            ++errors;
+        }
+
+        DLLLOCAL virtual void cleanup(ExceptionSink* xsink) override {
+        }
+
+    private:
+        std::atomic<int>& delivered;
+        std::atomic<int>& errors;
+    };
+
+    DLLLOCAL static void run(UnitTestCounters& c) {
+        static constexpr int Rounds = 20000;
+
+        ExceptionSink xsink;
+        Http3ClientPollOperationPriv* op = new Http3ClientPollOperationPriv(nullptr, nullptr, nullptr, nullptr);
+        op->h3_state.store(Http3ClientPollOperationPriv::H3State::READING, std::memory_order_release);
+
+        std::atomic<int> delivered{0};
+        std::atomic<int> errors{0};
+
+        // the two sides of a round start together: the main thread prepares the round, then releases both
+        std::mutex m;
+        std::condition_variable cond;
+        int round = -1;
+        int finished = 0;
+        bool quit = false;
+
+        // the I/O thread's side: routes the drained response like Http3ClientPollOperationPriv::handleReading()
+        auto io_side = [&](int r) {
+            ExceptionSink io_xsink;
+            std::string sid = std::to_string(r);
+            ReferenceHolder<QoreHashNode> output(new QoreHashNode(autoTypeInfo), &io_xsink);
+            output->setKeyValue("stream_id", (int64)r, &io_xsink);
+            output->setKeyValue("end_stream", true, &io_xsink);
+            bool buffered = false;
+            AbstractAsyncAction* action = op->takeResponseAction(sid, *output, buffered, &io_xsink);
+            if (action) {
+                op->completeStream(r, &io_xsink);
+                action->execute(output->refSelf(), &io_xsink);
+                action->deref(&io_xsink);
+            }
+            io_xsink.clear();
+        };
+
+        // the requesting thread's side: registers the request's action like
+        // Http3ClientPollOperationBase::registerStreamWithPromise()
+        auto request_side = [&](int r) {
+            ExceptionSink rq_xsink;
+            CountingAction* action = new CountingAction(delivered, errors);
+            bool need_cancel = false;
+            QoreListNode* buffered = op->registerStream(r, action, need_cancel, &rq_xsink);
+            if (need_cancel) {
+                action->deref(&rq_xsink);
+            }
+            if (buffered) {
+                if (!need_cancel) {
+                    op->dispatchBufferedResponses(r, action, buffered, &rq_xsink);
+                }
+                buffered->deref(&rq_xsink);
+            }
+            rq_xsink.clear();
+        };
+
+        auto side_thread = [&](bool io) {
+            int last = -1;
+            while (true) {
+                int r;
+                {
+                    std::unique_lock<std::mutex> l(m);
+                    cond.wait(l, [&] { return quit || round != last; });
+                    if (quit) {
+                        return;
+                    }
+                    r = last = round;
+                }
+                if (io) {
+                    io_side(r);
+                } else {
+                    request_side(r);
+                }
+                {
+                    std::lock_guard<std::mutex> l(m);
+                    ++finished;
+                }
+                cond.notify_all();
+            }
+        };
+
+        std::thread io_thread(side_thread, true);
+        std::thread request_thread(side_thread, false);
+
+        int lost = 0;
+        int duplicated = 0;
+        for (int r = 0; r < Rounds; ++r) {
+            // the request has been sent: the stream awaits its registration
+            op->beginSubmit();
+            op->endSubmitOk(r);
+            int before = delivered.load();
+            {
+                std::lock_guard<std::mutex> l(m);
+                finished = 0;
+                round = r;
+            }
+            cond.notify_all();
+            {
+                std::unique_lock<std::mutex> l(m);
+                cond.wait(l, [&] { return finished == 2; });
+            }
+            int got = delivered.load() - before;
+            if (got < 1) {
+                ++lost;
+            } else if (got > 1) {
+                ++duplicated;
+            }
+        }
+        {
+            std::lock_guard<std::mutex> l(m);
+            quit = true;
+        }
+        cond.notify_all();
+        io_thread.join();
+        request_thread.join();
+
+        UT_ASSERT_EQ(c, 0, lost, "H3: no response is left undelivered when it races its request's registration");
+        UT_ASSERT_EQ(c, 0, duplicated, "H3: no response is delivered twice");
+        UT_ASSERT_EQ(c, 0, errors.load(), "H3: no request fails");
+        {
+            AutoLocker al(op->stream_lock);
+            UT_ASSERT_EQ(c, 0, (int)op->pending_responses.size(), "H3: no response stays buffered");
+            UT_ASSERT_EQ(c, 0, (int)op->stream_actions.size(), "H3: every request's stream is completed");
+        }
+
+        op->cleanup(&xsink);
+        op->deref(&xsink);
+        UT_ASSERT(c, !xsink, "H3: the poll operation is released without an exception");
+        xsink.clear();
     }
 };
 #endif
@@ -5189,6 +5356,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoCloseTest::resize(c);
     AsyncIoCloseTest::run(c);
     ut_cond_wait_cancel_in_window(c);
+    Http3ClientResponseRegistrationTest::run(c);
 #endif
     ut_asyncio_autostop(c);
     ut_asyncio_start_stop(c);
