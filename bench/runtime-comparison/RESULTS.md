@@ -6260,3 +6260,105 @@ native stack-limit comparison, then inspect generated assembly and measure
 before/after. Preserve native/RSE limits, pending-context materialization,
 diagnostic publication and all existing call semantics. This is a hypothesis,
 not a promised gain or Java-parity claim.
+
+## Cold stack-check paths rejected (2026-10-09)
+
+Neither tested cold-overflow variant is retained. Baseline is the committed
+merged runtime at `688d20bb18a1ced15dee6ce262cb918d115d26ca`, including
+`origin/develop` at `2afa62e5b2172c47f214ec6294b17933931f2a9f`. Release SHA-256:
+`848219dc4e27e557ea209ef36476c8f08b160010802da06b088fab5a3b1c6e69`.
+[Full evidence](results-stack-check-outline-macos-arm64.json) preserves both
+uncommitted candidates, their source patches, raw samples and validation limits.
+
+The first candidate moved deferred-context materialization and exception
+construction into private cold, non-inlined helpers, retaining the native/RSE
+limit comparisons and diagnostics. Clang then inlined the smaller native stack
+check into dispatch helpers. Its standalone check shrank from 35 to 16 AArch64
+instructions, with no stack reservation on success (previously 48 bytes).
+However, the unary method helper grew from 751 to 764 instructions and from a
+400- to 416-byte frame; runtime text increased by 6,416 bytes. Total segment
+size stayed 21,790,720 bytes. No ABI or compiler-output change was needed.
+
+Five randomized forks, three warmups, five 500 ms samples per fork, five startup
+observations; identical AOT executable per before/after pair. All 1,050 windows
+across the three runs were collected without concurrent task builds, tests,
+profiles or evidence computation. Values are median fork means in ns/element
+for complete kernels. Range overlap is descriptive, not a significance test.
+
+Automatic-inlining candidate, count 1024, seed 810813, `run-97sdcjnc`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT
+|optional_method_call|12.089|11.863|-1.87%|yes|1.689
+|monomorphic_call|5.341|5.284|-1.08%|yes|1.683
+|polymorphic_call|49.478|50.211|+1.48%|yes|2.566
+|indirect_wide|8.497|8.220|-3.26%|yes|1.689
+|indirect_float|10.378|10.399|+0.20%|yes|1.665
+|arithmetic|2.485|2.461|-0.97%|yes|0.941
+
+Same candidate, count 4096, seed 810814, `run-u5inh_a_`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap
+|optional_method_call|10.773|10.649|-1.15%|yes
+|monomorphic_call|3.928|3.991|+1.61%|yes
+|polymorphic_call|48.600|48.978|+0.78%|yes
+|indirect_wide|7.215|7.105|-1.52%|yes
+|indirect_float|9.213|9.187|-0.28%|yes
+|arithmetic|1.383|1.389|+0.44%|yes
+
+The second candidate additionally kept `RuntimeConfigNativeAccess::checkStack`
+out of line. This restored the method helper's 400-byte frame (757 instructions)
+while retaining the compact stack check. Runtime text was 5,668 bytes above
+baseline, with unchanged total segment size. Its release-only screen at count
+1024, seed 810815 (`run-_59oe0if`), did not resolve the mixed result:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap
+|optional_method_call|12.186|12.049|-1.13%|no
+|monomorphic_call|5.459|5.474|+0.27%|yes
+|polymorphic_call|50.208|50.828|+1.23%|yes
+|indirect_wide|8.501|8.648|+1.72%|yes
+|indirect_float|10.441|10.480|+0.37%|yes
+|arithmetic|2.506|2.468|-1.49%|yes
+
+Its small nullable improvement is recorded, not discarded, but the adverse
+callback/polymorphic movement and incomplete debug validation do not justify
+retention. No 4096 repeat or new Java timing was collected for this variant.
+Neither variant establishes a broad speedup, startup gain or Java parity.
+
+Validation and retained work:
+
+- First candidate: release/debug each pass 35 selected files (27 QUnit files,
+  72 cases, 4,073 assertions plus eight standalones), six modes with 330
+  references each, 207 exception-location assertions and 11 harness tests.
+- Second candidate: seven targeted release files and six-mode references pass.
+  Debug native stack and compiled stack tests pass, but `NativeLeafContext`
+  fails its static-limit sweep assertion requiring both early and leaf errors;
+  a diagnostic retry observed zero leaf and 288 early errors. The remaining
+  debug files were not reached. This candidate is not validated for retention.
+  No assertion was weakened or disabled; all runtime edits and the diagnostic
+  probe were removed.
+- Retain the useful native stack regression improvement: compile its C++
+  fixture at both O0 and O3 and escape the padding array's address so O3 cannot
+  scalar-replace its intended 512-byte stack frame with two bytes. Both levels
+  pass on the unchanged merged baseline in release/debug, covering legacy,
+  explicit-context and live/null stack-limit views and foreign registration.
+- The merge's release/debug tools and relevant qmods build. Three targeted
+  upstream CMake cases pass 32 assertions with GNU touch; the new fixture uses
+  `touch -d`, unsupported by macOS's default touch. Four external-database
+  cases were deliberately skipped. No external database was contacted.
+
+Next: profile polymorphic receiver selection, checked local initialization,
+ownership and dispatch separately. The existing polymorphic kernel creates a
+runtime-backed class local each iteration; its approximately 50 ns/element is
+not an isolated virtual-call measurement. Investigate reducing repeated work
+with explicit-context or compiler-backed proofs, preserving runtime locals,
+private-inheritance access, weak normalization, reflective writes, ownership
+and debugger/exception behavior. An identical class annotation alone is not
+a valid reason to remove assignment checks.
+
+After removal, the restored release SHA-256 exactly matches the saved merged
+baseline. The separately rebuilt debug library is
+`45610ef92e04b019c6152af4ec7e5a32000a6eda608227d65a559f6edec33afe`.
+Both builds pass seven targeted files, 15 cases and 824 assertions, including
+the unchanged native-leaf sweep that rejected the second candidate. Four
+benchmark modes pass 330 references each. The retained changes pass all 62
+audit-changes checks (14 Pass, 48 N/A); no runtime speedup is claimed.

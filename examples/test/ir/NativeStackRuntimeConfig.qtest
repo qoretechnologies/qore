@@ -32,12 +32,14 @@ class NativeStackRuntimeConfigTest inherits QUnit::Test {
         if (target) {
             push args, target[0];
         }
-        int status;
-        string output = backquote((map quote($1), args).join(" ") + " 2>&1", \status);
-        assertEq(0, status, output);
-        output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
-            + " " + quote(executable) + " 2>&1", \status);
-        assertEq(0, status, output);
-        assertEq("native-stack-runtime-config: ok\n", output);
+        foreach string level in (("-O0", "-O3")) {
+            int status;
+            string output = backquote((map quote($1), args).join(" ") + " " + level + " 2>&1", \status);
+            assertEq(0, status, output);
+            output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+                + " " + quote(executable) + " 2>&1", \status);
+            assertEq(0, status, output);
+            assertEq("native-stack-runtime-config: ok\n", output);
+        }
     }
 }

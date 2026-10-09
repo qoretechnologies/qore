@@ -369,6 +369,16 @@ map replaces repeated registrations at the same native function base; old
 snapshot pointers remain valid after readers release the lock. The cache owns
 no Program and deduplicates equal values for the process lifetime.
 
+Separating cold stack-overflow construction from native limit checks was also
+measured and rejected. Automatic inlining removed the standalone check's hot
+frame but enlarged method dispatch; an out-of-line variant restored its frame
+size but produced mixed timings and incomplete debug validation. Neither
+runtime variant is retained. See
+`bench/runtime-comparison/results-stack-check-outline-macos-arm64.json`.
+The native stack regression now tests O0/O3 C++ frames with non-scalar-replaced
+padding. Polymorphic receiver-local initialization/ownership remains a separate
+target from dispatch and cannot be removed merely from a matching class type.
+
 Plain-class AOT parameters can avoid repeated reload-helper calls only with
 both a compiler proof and live invalidation. Admission excludes written,
 captured, reference/weak, AST-visible, self/top-level and parameterized

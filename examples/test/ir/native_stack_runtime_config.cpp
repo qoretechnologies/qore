@@ -23,6 +23,10 @@ static __attribute__((noinline)) unsigned exhaust(RuntimeConfig* rc, ExceptionSi
         unsigned guard, unsigned depth = 0) {
     volatile unsigned char padding[512];
     padding[0] = static_cast<unsigned char>(depth);
+    // O3 can otherwise scalar-replace the array with two bytes and hit the
+    // depth assertion before exhausting a large native stack. Escape its
+    // address so both optimization levels test actual 512-byte frames.
+    asm volatile("" : : "r"(padding) : "memory");
     int error;
     if (!guard) {
         error = qore_rt_check_stack(&xsink);

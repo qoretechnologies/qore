@@ -147,8 +147,10 @@ and the [optional-class follow-up](RESULTS.md#optional-class-freshness-2026-10-0
 An unrelated prepared **method** entry experiment was rejected after same-library
 compiler controls showed no benefit; it adds no supported flag or helper ABI.
 See [the negative result and retained diagnostic lifetime fix](RESULTS.md#prepared-method-entry-rejected-2026-10-09).
-The next call-cost hypothesis is cold overflow-path separation, not another
-receiver/PIC fact cache. Existing scalar callback preparation remains enabled.
+Cold overflow-path separation was also [measured and rejected](RESULTS.md#cold-stack-check-paths-rejected-2026-10-09):
+smaller checks did not establish a broad benefit. The next target is polymorphic
+receiver-local setup and ownership versus dispatch. Existing scalar callback
+preparation remains enabled.
 
 The prepared scalar callback v3 entrypoints currently request 64-byte alignment.
 Earlier class-check experiments used 16 bytes and also measured unaligned and
