@@ -442,6 +442,13 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Fault Signals Cannot Have Qore Signal Handlers
+    @parblock
+    \c SIGBUS, \c SIGILL, \c SIGFPE and \c SIGTRAP, like \c SIGSEGV, are no longer masked in %Qore threads and
+    can no longer have %Qore-language @ref signal_handling "signal handlers": they are raised by faults in the
+    faulting thread and are left to the operating system and to native handlers in the process.
+    @endparblock
+
     @par An Empty String Is Found in Every String
     @parblock
     An empty string is contained in every string and is found at every position from the start to the end of a
@@ -4201,6 +4208,10 @@ while (*binary chunk = input.read(65536)) {
       - new module providing a REST client for <a href="https://www.zoho.com/invoice/">Zoho Invoice</a>'s invoicing API
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
+
+    - Fixed a process hanging instead of terminating when a thread faulted with \c SIGBUS, \c SIGILL, \c SIGFPE or
+      \c SIGTRAP, as on a thread stack overflow on macOS: these signals were blocked in all %Qore threads, so they
+      could not be delivered and the thread executed the faulting instruction again for ever
 
     - Fixed deleting a @ref Qore::Program "Program" that shared a module's classes with other Programs: it released
       the Program the classes came from for all of them, while the other Programs, possibly in other threads, still

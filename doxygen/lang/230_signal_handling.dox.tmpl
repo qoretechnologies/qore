@@ -8,6 +8,8 @@
 
     Internally, %Qore masks (blocks) all signals in every thread except the signal handling thread. In the signal handling thread, all signals are unmasked, except those with %Qore-language handlers, then an internal call to <tt>sigwait() (3)</tt> is made to receive and process signals raised one at a time.
 
+    The signals that a fault raises synchronously in the thread that executes the faulting instruction - \c SIGSEGV, \c SIGBUS, \c SIGILL, \c SIGFPE and \c SIGTRAP - are never masked and cannot have %Qore-language handlers: a fault such as a stack overflow terminates the process with the operating system's default action, or is handled by a native component of the process that installs its own handler (a JVM, for example).
+
     When a process embeds a JVM through the \c jni module, and especially when it also loads other native runtimes that use synchronous signals such as \c SIGSEGV (for example JavaScript or Python runtimes), ensure that the JVM's signal-chaining library is active before the process starts. On Linux JVMs that provide \c libjsig.so, set \c LD_PRELOAD to the full path of \c libjsig.so in the process environment, for example:
     @code{.sh}
     export LD_PRELOAD=/path/to/libjvm/server/libjsig.so${LD_PRELOAD:+:$LD_PRELOAD}

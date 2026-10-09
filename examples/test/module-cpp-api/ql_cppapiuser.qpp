@@ -32,6 +32,7 @@
 #include <mutex>
 #include <poll.h>
 #include <pthread.h>
+#include <signal.h>
 #include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -508,6 +509,28 @@ bool cpp_api_wakeup_fd_readable() {
         return xsink->raiseErrnoException("POLL-ERROR", errno, "poll() failed");
     }
     return rc > 0;
+}
+
+//! returns the signals raised by a fault in the executing thread that are blocked in the calling thread
+/** A blocked fault signal cannot be delivered: the thread executes the faulting instruction again for ever.
+
+    @return the numbers of the blocked signals among \c SIGSEGV, \c SIGBUS, \c SIGILL, \c SIGFPE and \c SIGTRAP
+*/
+list<int> cpp_api_blocked_fault_signals() [flags=RET_VALUE_ONLY] {
+    sigset_t mask;
+    sigemptyset(&mask);
+    int rc = pthread_sigmask(SIG_BLOCK, nullptr, &mask);
+    if (rc) {
+        xsink->raiseErrnoException("SIGNAL-MASK-ERROR", rc, "pthread_sigmask() failed");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(bigIntTypeInfo), xsink);
+    for (int sig : {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTRAP}) {
+        if (sigismember(&mask, sig) == 1) {
+            rv->push(sig, xsink);
+        }
+    }
+    return rv.release();
 }
 
 ///@}
