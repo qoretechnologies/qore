@@ -161,8 +161,10 @@ class IRContainerStoreScalingTest inherits QUnit::Test {
     testDedupLoopScaling() {
         # warm up (JIT promotion, allocator)
         IRContainerStoreScalingTest::timeDedup(1000);
-        int t1 = IRContainerStoreScalingTest::timeDedup(8000);
-        int t2 = IRContainerStoreScalingTest::timeDedup(32000);
+        # the fastest of three runs of each size: a single run on a loaded CI runner can be stalled (a 32k run took
+        # 335ms against 16ms for 8k on an arm64 runner), while a quadratic loop is slow in every run
+        int t1 = min(map IRContainerStoreScalingTest::timeDedup(8000), xrange(3));
+        int t2 = min(map IRContainerStoreScalingTest::timeDedup(32000), xrange(3));
         # 4x the input must not cost more than ~8x the time (linear is ~4x,
         # quadratic is ~16x and hundreds of ms even on fast machines); the
         # absolute bound keeps timer noise from failing fast runs
