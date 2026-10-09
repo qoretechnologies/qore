@@ -191,6 +191,28 @@ public:
         return needs_eval_flag;
     }
 
+    //! returns true if evaluating this node checks the thread's stack first (internal use only)
+    /** see setEvalChecksStack()
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL bool evalChecksStack() const {
+        return eval_checks_stack;
+    }
+
+    //! makes evaluating this node check the thread's stack first (internal use only)
+    /** Evaluating an expression recurses with its nesting; parse initialization calls this for nodes at every
+        QORE_EVAL_STACK_CHECK_INTERVAL'th level of nesting, so that evaluation checks the stack at regular intervals
+        of nesting.  Called only while the node is parse-initialized, before any thread evaluates it.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setEvalChecksStack() {
+        if (!eval_checks_stack) {
+            eval_checks_stack = true;
+        }
+    }
+
     //! returns a copy of the object; the caller owns the reference count
     /**
         @return a copy of the object; the caller owns the reference count
@@ -402,8 +424,10 @@ protected:
     //! set to one for objects that need custom reference handlers
     bool custom_reference_handlers : 1;
 
-    //! explicitly initialize the final bit in the bitfield storage word
-    bool spare_flag : 1;
+    //! if true, evaluating this node checks the thread's stack first; see setEvalChecksStack()
+    /** @since %Qore 3.0; this bit was unused before
+    */
+    bool eval_checks_stack : 1;
 
     //! default destructor does nothing
     /**

@@ -565,6 +565,51 @@ int parse_check_stack(const QoreProgramLocation* loc) {
     return -1;
 }
 
+#ifndef NDEBUG
+thread_local const AbstractQoreNode* qore_parse_init_entry = nullptr;
+#endif
+
+namespace {
+//! The nesting depth of the expressions being parse-initialized in this thread; see QORE_EVAL_STACK_CHECK_INTERVAL
+thread_local unsigned parse_init_depth = 0;
+
+#ifndef NDEBUG
+//! Records the node whose parse initialization is made for its scope; see qore_parse_init_entry
+class ParseInitEntryHelper {
+public:
+    DLLLOCAL explicit ParseInitEntryHelper(const AbstractQoreNode* n) : old(qore_parse_init_entry) {
+        qore_parse_init_entry = n;
+    }
+
+    DLLLOCAL ~ParseInitEntryHelper() {
+        qore_parse_init_entry = old;
+    }
+
+private:
+    const AbstractQoreNode* old;
+};
+#endif
+
+//! Counts a level of nesting of parse initialization for its scope
+class ParseInitDepthHelper {
+public:
+    DLLLOCAL ParseInitDepthHelper() : depth(++parse_init_depth) {
+    }
+
+    DLLLOCAL ~ParseInitDepthHelper() {
+        --parse_init_depth;
+    }
+
+    //! Returns the nesting depth of this level
+    DLLLOCAL unsigned get() const {
+        return depth;
+    }
+
+private:
+    unsigned depth;
+};
+}
+
 int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.analysis.clear();
     if (val.hasNode()) {
@@ -575,7 +620,23 @@ int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
             const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
             return parse_check_stack(pn ? pn->loc : nullptr);
         }
-        return n->parseInit(val, parse_context);
+        // every nested expression is parse-initialized here, one level deeper than the expression containing it, so
+        // flagging the nodes at every QORE_EVAL_STACK_CHECK_INTERVAL'th level makes the evaluation of any chain of
+        // nested expressions check the stack at least that often; the node to flag is the one that parse
+        // initialization leaves in the value, which is the one evaluated at run time
+        ParseInitDepthHelper depth;
+#ifndef NDEBUG
+        ParseInitEntryHelper entry(n);
+#endif
+        int rc = n->parseInit(val, parse_context);
+        if (!(depth.get() % QORE_EVAL_STACK_CHECK_INTERVAL) && val.hasNode()) {
+            AbstractQoreNode* rn = val.getInternalNode();
+            // only expressions are evaluated; values may be shared with code that is already running
+            if (rn->needs_eval()) {
+                rn->setEvalChecksStack();
+            }
+        }
+        return rc;
     }
 
     parse_context.typeInfo = val.getFullTypeInfo();
@@ -586,6 +647,13 @@ int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
     }
     parse_context.analysis.known_type = parse_context.typeInfo;
     return 0;
+}
+
+int parse_init_same_level(AbstractQoreNode* n, QoreValue& val, QoreParseContext& parse_context) {
+#ifndef NDEBUG
+    ParseInitEntryHelper entry(n);
+#endif
+    return n->parseInit(val, parse_context);
 }
 
 void qore_set_result_parse_analysis(QoreParseContext& parse_context, const QoreTypeInfo* typeInfo) {

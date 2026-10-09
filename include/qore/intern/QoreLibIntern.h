@@ -369,6 +369,25 @@ constexpr size_t QORE_PARSE_STACK_RESERVE = 64 * 1024;
 */
 DLLLOCAL int parse_check_stack(const QoreProgramLocation* loc);
 
+//! Parse-initializes a node that is not a level of nesting of its own
+/** For a node that parse initialization replaces with another node in the same place, and for a node that the
+    expression containing it evaluates itself rather than through AbstractQoreNode::eval(), such as the method call
+    of a QoreDotEvalOperatorNode; every other node is parse-initialized with parse_init_value(), which counts the levels
+    of nesting (see QORE_EVAL_STACK_CHECK_INTERVAL)
+*/
+DLLLOCAL int parse_init_same_level(AbstractQoreNode* n, QoreValue& val, QoreParseContext& parse_context);
+
+//! The interval of nesting at which the evaluation of an expression checks the stack
+/** Evaluating an expression in the AST interpreter recurses with the nesting of the expression, which the parser
+    accepts up to QORE_MAX_PARSE_DEPTH levels whatever the stack of the thread that runs the code.  Parse
+    initialization (parse_init_value()) flags the nodes at every QORE_EVAL_STACK_CHECK_INTERVAL'th level of nesting
+    with AbstractQoreNode::setEvalChecksStack(), and evaluating a flagged node checks the stack, so that at most this
+    many levels of nesting are evaluated between two checks: their frames must fit in the stack guard
+    (QORE_STACK_GUARD), as the frames of the deepest native call between two checks do.  Checking every node instead
+    would cost several percent of the AST interpreter's time.
+*/
+constexpr unsigned QORE_EVAL_STACK_CHECK_INTERVAL = 16;
+
 // since Qore 0.9.5
 DLLLOCAL QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* class_name,
         const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink);

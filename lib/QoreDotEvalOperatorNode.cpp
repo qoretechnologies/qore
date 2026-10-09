@@ -179,7 +179,7 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         }
 
         QoreValue tmp = m;
-        if (m->parseInit(tmp, parse_context) && !err) {
+        if (parse_init_same_level(m, tmp, parse_context) && !err) {
             err = -1;
         }
         assert(tmp.getInternalNode() == m);
@@ -225,7 +225,7 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         // do not save method pointer for copy methods
         QoreValue tmp = m;
         parse_context.typeInfo = nullptr;
-        if (m->parseInit(tmp, parse_context) && !err) {
+        if (parse_init_same_level(m, tmp, parse_context) && !err) {
             err = -1;
         }
         assert(tmp.getInternalNode() == m);
@@ -286,7 +286,7 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 }
             }
             QoreValue tmp = m;
-            if (m->parseInit(tmp, parse_context) && !err) {
+            if (parse_init_same_level(m, tmp, parse_context) && !err) {
                 err = -1;
             }
             assert(tmp.getInternalNode() == m);

@@ -34,11 +34,14 @@ hashdecl StackCase {
     list<string> requires = ();
     #! the stack size of the thread that runs the operation
     int stack_size = 256 * 1024;
-    #! if set, the operation may return this value (formatted with %y) in modes other than "ast", whose execution
-    #! does not recurse with the nesting of the operation
-    *string native_value;
+    #! if set, the operation may return this value (formatted with %y) instead of raising the exception: for an
+    #! operation whose recursion is bounded, such as the evaluation of an expression nested as deeply as the parser
+    #! allows, which the stack of the thread may hold, and which IR and native code evaluate without recursing
+    *string value;
     #! if set, the case is skipped for this reason
     *string skip;
+    #! a regular expression for the exception that the operation must raise
+    string error = "STACK-LIMIT-EXCEEDED";
 }
 
 #! runs recursion paths in every execution mode and checks that each raises STACK-LIMIT-EXCEEDED
@@ -130,11 +133,11 @@ printf(\"HEALTHY: %d %d\\n\", q.get(), foldl $1 + $2, (1, 2, 3));
             string out = ExecModeHarness::run(sprintf("%s%s --enable-debug --exec-mode=%s %s; echo EXIT=$?",
                 prefix, qore_bin, mode, path), ExecModeHarness::NativeCheck::Jit);
             string label = sprintf("%s (%s)", name, mode);
-            if (c.native_value && mode != "ast") {
-                assertRegex(sprintf("RESULT: (STACK-LIMIT-EXCEEDED|VALUE: %s)\n", c.native_value), out,
+            if (c.value) {
+                assertRegex(sprintf("RESULT: (%s|VALUE: %s)\n", c.error, c.value), out,
                     label + ": exception raised or value returned");
             } else {
-                assertRegex("RESULT: STACK-LIMIT-EXCEEDED\n", out, label + ": exception raised");
+                assertRegex(sprintf("RESULT: (%s)\n", c.error), out, label + ": exception raised");
             }
             assertRegex("HEALTHY: 12 6\n", out, label + ": the process is healthy afterwards");
             assertRegex("EXIT=0\n", out, label + ": exit status");

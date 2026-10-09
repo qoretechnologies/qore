@@ -112,7 +112,7 @@ static QoreValue check_background_closure_capture(QoreValue v, ExceptionSink* xs
 AbstractQoreNode::AbstractQoreNode(qore_type_t t, bool n_value, bool n_needs_eval, bool n_there_can_be_only_one,
         bool n_custom_reference_handlers) : type(t), value(n_value), needs_eval_flag(n_needs_eval),
         there_can_be_only_one(n_there_can_be_only_one), custom_reference_handlers(n_custom_reference_handlers),
-        spare_flag(false) {
+        eval_checks_stack(false) {
 #if TRACK_REFS
    printd(REF_LVL, "AbstractQoreNode::ref() %p type: %d (0->1)\n", this, type);
 #endif
@@ -120,7 +120,7 @@ AbstractQoreNode::AbstractQoreNode(qore_type_t t, bool n_value, bool n_needs_eva
 
 AbstractQoreNode::AbstractQoreNode(const AbstractQoreNode& v) : type(v.type), value(v.value),
         needs_eval_flag(v.needs_eval_flag), there_can_be_only_one(v.there_can_be_only_one),
-        custom_reference_handlers(v.custom_reference_handlers), spare_flag(false) {
+        custom_reference_handlers(v.custom_reference_handlers), eval_checks_stack(false) {
 #if TRACK_REFS
    printd(REF_LVL, "AbstractQoreNode::ref() %p type: %d (0->1)\n", this, type);
 #endif
@@ -238,9 +238,28 @@ void AbstractQoreNode::deref(ExceptionSink* xsink) {
     }
 }
 
+// Returns -1 if the node checks the stack and the stack limit of the thread has been reached (exception raised)
+/** Evaluating an expression recurses with the nesting of the expression; statements and calls check the stack, but a
+    single expression can nest up to the parser's limit, which is more than a thread with a small stack can evaluate,
+    so parse initialization flags the nodes at every QORE_EVAL_STACK_CHECK_INTERVAL'th level of nesting to check the
+    stack (see parse_init_value())
+*/
+static inline int eval_check_stack(const AbstractQoreNode& node, ExceptionSink* xsink) {
+#ifdef QORE_MANAGE_STACK
+    return node.evalChecksStack() && xsink && check_stack(xsink);
+#else
+    return 0;
+#endif
+}
+
 QoreValue AbstractQoreNode::eval(ExceptionSink* xsink) const {
-    if (!needs_eval_flag)
+    if (!needs_eval_flag) {
         return refSelf();
+    }
+
+    if (eval_check_stack(*this, xsink)) {
+        return QoreValue();
+    }
 
     bool needs_deref = true;
     QoreValue rv = evalImpl(needs_deref, xsink);
@@ -251,6 +270,11 @@ QoreValue AbstractQoreNode::eval(bool& needs_deref, ExceptionSink* xsink) const 
     if (!needs_eval_flag) {
         needs_deref = false;
         return this;
+    }
+
+    if (eval_check_stack(*this, xsink)) {
+        needs_deref = false;
+        return QoreValue();
     }
 
     needs_deref = true;
@@ -292,6 +316,11 @@ QoreValue AbstractQoreNode::eval(RuntimeConfig& rc, bool& needs_deref, Exception
     if (!needs_eval_flag) {
         needs_deref = false;
         return this;
+    }
+
+    if (eval_check_stack(*this, xsink)) {
+        needs_deref = false;
+        return QoreValue();
     }
 
     needs_deref = true;

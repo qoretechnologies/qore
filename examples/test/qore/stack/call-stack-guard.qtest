@@ -40,6 +40,31 @@
 */
 class CallStackGuardTest inherits StackGuardCaseTest {
     public {
+        #! nested expressions by kind: the body of a function that evaluates one, and the value it returns
+        const NestedExpressions = {
+            "binary operator": ("return " + strmul("x + ", 900) + "x;", "901"),
+            "ternary operator": ("bool b = x == 1; return " + strmul("b ? ", 450) + "x" + strmul(" : 0", 450) + ";",
+                "1"),
+            "negation": ("return " + strmul("- ", 450) + "x;", "1"),
+            "logical not": ("bool b = x == 1; return (" + strmul("!", 450) + "b) ? 1 : 0;", "1"),
+            "complement": ("return " + strmul("~", 450) + "x;", "1"),
+            "exists": ("return " + strmul("exists ", 450) + "x;", "True"),
+            "assignment": ("int y; return " + strmul("y = ", 450) + "x;", "1"),
+            "null coalescing": ("*int y; return " + strmul("y ?? ", 450) + "x;", "1"),
+            "function call arguments": ("return " + strmul("id(", 450) + "x" + strmul(")", 450) + ";", "1"),
+            "method call arguments": ("return " + strmul("o.id(", 450) + "x" + strmul(")", 450) + ";", "1"),
+            "static method call arguments": ("return " + strmul("C::sid(", 450) + "x" + strmul(")", 450) + ";",
+                "1"),
+            "closure call arguments": ("return " + strmul("cid(", 450) + "x" + strmul(")", 450) + ";", "1"),
+            "constructor arguments": ("return " + strmul("new C(", 300) + "x" + strmul(")", 300) + " ? 1 : 0;",
+                "1"),
+            "list literal": ("return " + strmul("(x, ", 300) + "x" + strmul(")", 300) + ".size();", "2"),
+            "hash literal": ("return " + strmul("{\"a\": ", 220) + "x" + strmul("}", 220) + ".size();", "1"),
+            "hashdecl initializer": ("return " + strmul("<H>{\"a\": ", 220) + "x" + strmul("}", 220) + ".size();",
+                "1"),
+            "cast": ("return " + strmul("cast<int>(", 450) + "x" + strmul(")", 450) + ";", "1"),
+        };
+
         #! the cases, by name
         const Cases = {
             "function": <StackCase>{
@@ -149,12 +174,13 @@ our code cb = sub () { p.callFunction(\"r\", cb); };",
     p.callFunction(\"f\", \\r());
 }",
                 "op": "r()",
+                # parsing the child Program with little stack left raises a parse exception instead (see
+                # parse_check_stack())
+                "error": "STACK-LIMIT-EXCEEDED|PARSE-EXCEPTION",
             },
             "destructor": <StackCase>{
                 "setup": "class C { destructor() { C c(); } } sub del() { C c(); delete c; }",
                 "op": "del()",
-                "skip": "deleting objects beyond a depth of 16 is deferred to a loop, which turns the recursion into "
-                    "unbounded iteration and memory growth; enable this case with the fix that bounds it",
             },
             "function on a 96KB stack": <StackCase>{
                 "setup": "sub r() { r(); }",
@@ -164,7 +190,52 @@ our code cb = sub () { p.callFunction(\"r\", cb); };",
         };
     }
 
-    constructor() : StackGuardCaseTest("CallStackGuardTest", Cases) {
+    constructor() : StackGuardCaseTest("CallStackGuardTest", CallStackGuardTest::getCases()) {
         set_return_value(main());
+    }
+
+    #! returns the cases
+    /** The nested expression cases are parsed on the main thread and evaluated on a thread with a small stack: the
+        AST interpreter evaluates an expression recursively, with the nesting of the expression, which the parser
+        accepts up to 1000 nested elements whatever the stack of the thread that runs the code; IR and native code
+        evaluate it iteratively and return its value
+    */
+    static hash<string, hash<StackCase>> getCases() {
+        hash<string, hash<StackCase>> rv = Cases;
+        foreach hash<auto> i in (NestedExpressions.pairIterator()) {
+            rv{"nested " + i.key} = <StackCase>{
+                "setup": sprintf("class C {
+    constructor(auto x) {}
+    auto id(auto x) { return x; }
+    static auto sid(auto x) { return x; }
+}
+hashdecl H { auto a; }
+auto sub id(auto x) { return x; }
+our code cid = auto sub (auto x) { return x; };
+our C o(1);
+auto sub f(int x) { %s }", i.value[0]),
+                "op": "f(1)",
+                "stack_size": 128 * 1024,
+                "value": i.value[1],
+            };
+            # the expression evaluated at every depth of a recursion until the thread's stack is exhausted, so that
+            # it is evaluated with as little stack left as possible
+            rv{"nested " + i.key + " at every depth"} = <StackCase>{
+                "setup": rv{"nested " + i.key}.setup + "
+sub r() {
+    try {
+        f(1);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != \"STACK-LIMIT-EXCEEDED\") {
+            rethrow;
+        }
+    }
+    r();
+}",
+                "op": "r()",
+                "stack_size": 512 * 1024,
+            };
+        }
+        return rv;
     }
 }

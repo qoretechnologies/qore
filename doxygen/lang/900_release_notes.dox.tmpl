@@ -4250,6 +4250,14 @@ while (*binary chunk = input.read(65536)) {
       operator now block until the command exits, and a cancellation or interrupt ends the wait at once and kills
       the command
 
+    - Fixed a crash evaluating a deeply nested expression with the AST interpreter on a thread with a small stack, or
+      near the end of a thread's stack, such as nested arguments of function, method, static method and closure
+      calls, chained assignments and long arithmetic expressions: evaluation recursed once for each level of
+      nesting, which the parser accepts up to 1000 levels deep whatever the stack of the thread that runs the code,
+      and the stack was only checked by statements and calls; parse initialization now marks every 16th level of
+      nesting, whose evaluation checks the stack and raises \c STACK-LIMIT-EXCEEDED.  IR and native code evaluate
+      expressions without recursing and were not affected
+
     - Fixed @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()" accepting a stack size no
       larger than the stack reserved at the end of each thread's stack for the stack guard (80KB on x86_64 and
       aarch64): every thread then raised \c STACK-LIMIT-EXCEEDED as soon as it ran any code, reporting a limit of
