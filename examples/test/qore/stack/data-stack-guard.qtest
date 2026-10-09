@@ -108,6 +108,38 @@ Link sub deep_object(int n) {
                 "setup": "auto v = deep_object(Depth);",
                 "op": "sprintf(\"%N\", v)",
             },
+            "list ==": <StackCase>{
+                "setup": "auto v = (deep_list(Depth), deep_list(Depth));",
+                "op": "v[0] == v[1]",
+            },
+            "list !=": <StackCase>{
+                "setup": "auto v = (deep_list(Depth), deep_list(Depth));",
+                "op": "v[0] != v[1]",
+            },
+            "list ===": <StackCase>{
+                "setup": "auto v = (deep_list(Depth), deep_list(Depth));",
+                "op": "v[0] === v[1]",
+            },
+            "list !==": <StackCase>{
+                "setup": "auto v = (deep_list(Depth), deep_list(Depth));",
+                "op": "v[0] !== v[1]",
+            },
+            "hash ==": <StackCase>{
+                "setup": "auto v = (deep_hash(Depth), deep_hash(Depth));",
+                "op": "v[0] == v[1]",
+            },
+            "hash ===": <StackCase>{
+                "setup": "auto v = (deep_hash(Depth), deep_hash(Depth));",
+                "op": "v[0] === v[1]",
+            },
+            "list inlist()": <StackCase>{
+                "setup": "auto v = (deep_list(Depth), deep_list(Depth));",
+                "op": "inlist(v[0], (v[1],))",
+            },
+            "list inlist_hard()": <StackCase>{
+                "setup": "auto v = (deep_list(Depth), deep_list(Depth));",
+                "op": "inlist_hard(v[0], (v[1],))",
+            },
         };
     }
 

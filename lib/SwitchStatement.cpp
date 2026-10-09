@@ -52,8 +52,12 @@ bool qore_switch_case_equal(QoreValue lhs_value, QoreValue rhs_value, ExceptionS
     QoreValue lhs = lhs_value.isEnum() ? lhs_value.getEnumMember()->getValue() : lhs_value;
     QoreValue rhs = rhs_value.isEnum() ? rhs_value.getEnumMember()->getValue() : rhs_value;
 
-    if (lhs.isEqualHard(rhs)) {
+    // the sink is null when case values are compared at parse time
+    if (xsink ? lhs.isEqualHard(rhs, xsink) : lhs.isEqualHard(rhs)) {
         return true;
+    }
+    if (xsink && *xsink) {
+        return false;
     }
 
     qore_type_t lt = lhs.getType();

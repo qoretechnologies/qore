@@ -554,10 +554,14 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
                 return qore_buffer_binary_op(left, right, QoreBufferBinaryOperation::NotEqual, xsink);
             }
             return QoreValue(!QoreLogicalEqualsOperatorNode::softEqual(left, right, xsink));
-        case QoreIROpcode::EqHard:
-            return QoreValue(left.isEqualHard(right));
-        case QoreIROpcode::NeHard:
-            return QoreValue(!left.isEqualHard(right));
+        case QoreIROpcode::EqHard: {
+            bool eq = left.isEqualHard(right, xsink);
+            return *xsink ? QoreValue() : QoreValue(eq);
+        }
+        case QoreIROpcode::NeHard: {
+            bool eq = left.isEqualHard(right, xsink);
+            return *xsink ? QoreValue() : QoreValue(!eq);
+        }
         case QoreIROpcode::LtInt:
             return QoreValue(left.getAsBigInt() < right.getAsBigInt());
         case QoreIROpcode::LtFloat:

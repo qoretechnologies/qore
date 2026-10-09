@@ -1109,7 +1109,7 @@ bool inlist_hard(auto value, softlist<auto> values) [flags=RET_VALUE_ONLY,NAMED_
         } else if (arg_is_nothing) {
             b = false;
         } else {
-            b = value.isEqualHard(lp);
+            b = value.isEqualHard(lp, xsink);
             if (*xsink) {
                 return QoreValue();
             }

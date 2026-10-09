@@ -641,6 +641,16 @@ QoreValue QoreValue::getEnumBaseValue() const {
 // ============================================================================
 
 bool QoreValue::isEqualHard(const QoreValue& other) const {
+    return isEqualHardIntern(other, nullptr);
+}
+
+bool QoreValue::isEqualHard(const QoreValue& other, ExceptionSink* xsink) const {
+    assert(xsink);
+    return isEqualHardIntern(other, xsink);
+}
+
+// xsink is null when an exception raised while comparing nodes is to be discarded
+bool QoreValue::isEqualHardIntern(const QoreValue& other, ExceptionSink* xsink) const {
     // Fast path: identical bits (but not for floats due to NaN != NaN)
     if (bits == other.bits) {
         // Must check for NaN - two identical NaN values are not equal per IEEE 754
@@ -686,13 +696,14 @@ bool QoreValue::isEqualHard(const QoreValue& other) const {
             if (isShortString() && other.isShortString()) {
                 return false;
             }
-            ExceptionSink xsink;
+            // an encoding conversion error means that the strings are not equal
+            ExceptionSink str_xsink;
             QoreStringNodeValueHelper lhs(*this);
             QoreStringNodeValueHelper rhs(other);
             const QoreStringNode* lstr = *lhs;
             const QoreStringNode* rstr = *rhs;
-            bool rv = lstr && rstr && lstr->equalSoft(*rstr, &xsink);
-            xsink.clear();
+            bool rv = lstr && rstr && lstr->equalSoft(*rstr, &str_xsink);
+            str_xsink.clear();
             return rv;
         }
         case NT_NOTHING:
@@ -704,10 +715,18 @@ bool QoreValue::isEqualHard(const QoreValue& other) const {
 
     // Node comparison
     if (isPointer() && other.isPointer()) {
-        ExceptionSink xsink;
-        bool rv = !compareHard(getPointerUnsafe(), other.getPointerUnsafe(), &xsink);
-        xsink.clear();
-        return rv;
+        if (!xsink) {
+            // the values are not equal if an exception is raised
+            ExceptionSink local_xsink;
+            bool rv = !compareHard(getPointerUnsafe(), other.getPointerUnsafe(), &local_xsink);
+            if (local_xsink) {
+                local_xsink.clear();
+                return false;
+            }
+            return rv;
+        }
+        bool rv = !compareHard(getPointerUnsafe(), other.getPointerUnsafe(), xsink);
+        return rv && !*xsink;
     }
 
     return false;
