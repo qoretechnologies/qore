@@ -202,6 +202,14 @@ string sub write_yaml(auto v) {
                 "setup": "string v = strmul(\"[\", Depth) + strmul(\"]\", Depth);",
                 "op": "parse_yaml(v)",
             },
+            "MongoCollection::insertOne()": <StackCase>{
+                # the document is converted to BSON before the client connects; no server is needed
+                "requires": ("mongodb",),
+                "setup": "auto v = deep_hash(Depth);
+MongoClient client(\"mongodb://127.0.0.1:1/?serverSelectionTimeoutMS=1000\");
+our MongoCollection collection = client.getDatabase(\"test\").getCollection(\"test\");",
+                "op": "collection.insertOne(v)",
+            },
             "YamlDocumentIterator::getValue()": <StackCase>{
                 "requires": ("yaml",),
                 "setup": "string v = strmul(\"[\", Depth) + strmul(\"]\", Depth);

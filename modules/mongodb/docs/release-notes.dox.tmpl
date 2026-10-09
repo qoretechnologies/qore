@@ -14,4 +14,7 @@
     - a call blocked on the server (connecting, the TLS handshake, reading or writing) ends as soon as the thread
       is cancelled or its Program is interrupted, instead of within 500 ms: connections use a socket of the
       module's own whose waits are woken directly by the request
+    - converting a deeply nested hash or list to BSON, or a deeply nested BSON document to a hash, raises a
+      \c STACK-LIMIT-EXCEEDED exception instead of overflowing the thread's stack: each level of nesting was
+      converted recursively without checking the stack
 */

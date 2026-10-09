@@ -29,6 +29,10 @@
 #include "QC_ObjectId.h"
 
 QoreValue bson_value_to_qore(const bson_value_t* value, ExceptionSink* xsink) {
+    // conversion recurses with the nesting of the document, which only the size of the document bounds
+    if (q_check_stack(xsink)) {
+        return QoreValue();
+    }
     switch (value->value_type) {
         case BSON_TYPE_EOD:
             return QoreValue();
@@ -191,6 +195,10 @@ QoreHashNode* bson_to_qore_hash(const bson_t* doc, ExceptionSink* xsink) {
 }
 
 int qore_value_to_bson_append(bson_t* doc, const char* key, const QoreValue& v_in, ExceptionSink* xsink) {
+    // conversion recurses with the nesting of the value, which is unbounded
+    if (q_check_stack(xsink)) {
+        return -1;
+    }
     // a value read through the language unwraps itself, but walking a container gives the stored
     // representation, so a value assigned with ':=' or '@=' arrives here as the reference itself
     const QoreValue value = v_in.resolveIndirect();

@@ -111,6 +111,14 @@ printf(\"HEALTHY: %d %d\\n\", q.get(), foldl $1 + $2, (1, 2, 3));
         if (c.skip) {
             testSkip(c.skip);
         }
+        # modules that are built only when their dependencies are available, such as mongodb, may be missing
+        foreach string mod_name in (c.requires) {
+            try {
+                load_module(mod_name);
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip(sprintf("module %y is not available: %s: %s", mod_name, ex.err, ex.desc));
+            }
+        }
         string path = sprintf("%s/case-%s.q", tmp.path, regex_subst(name, "[^a-zA-Z0-9]+", "_", RE_Global));
         File f();
         f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
