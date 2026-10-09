@@ -457,6 +457,10 @@ int QoreYamlStreamWriter::writeAlias(const char* anchor, ExceptionSink* xsink) {
 }
 
 int QoreYamlStreamWriter::writeValueRecursive(QoreValue value, ExceptionSink* xsink) {
+    // writing recurses with the nesting of the value, which is unbounded
+    if (q_check_stack(xsink)) {
+        return -1;
+    }
     switch (value.getType()) {
         case NT_HASH: {
             if (startMapping(nullptr, xsink)) return -1;

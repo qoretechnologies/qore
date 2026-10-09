@@ -9,6 +9,12 @@
     - bundled the native YAML module and all twelve user modules with Qore
     - fixed overflow when parsing timestamps with more than six fractional-second digits
     - added cancellation checks to scalar scanning and merge expansion
+    - fixed a crash generating or parsing deeply nested YAML with @ref Qore::YAML::make_yaml() "make_yaml()",
+      @ref Qore::YAML::parse_yaml() "parse_yaml()",
+      @ref Qore::YAML::YamlStreamWriter::write() "YamlStreamWriter::write()" and
+      @ref Qore::YAML::YamlDocumentIterator "YamlDocumentIterator": each level of nesting was processed recursively
+      without checking the stack, so data or a document nested more deeply than the thread's stack allows
+      overflowed it; a \c STACK-LIMIT-EXCEEDED exception is now raised instead
 
     <b>New Features</b>
     - added @ref Qore::YAML::parse_yaml(string, int) "parse_yaml(string, int)" and the

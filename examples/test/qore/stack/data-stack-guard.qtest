@@ -173,6 +173,45 @@ for (int i = 0; i < Depth; ++i) {
 auto v = <SerializationInfo>{\"_data\": data};",
                 "op": "Serializable::deserialize(v)",
             },
+            "make_yaml() list": <StackCase>{
+                "requires": ("yaml",),
+                "setup": "auto v = deep_list(Depth);",
+                "op": "make_yaml(v)",
+            },
+            "make_yaml() hash": <StackCase>{
+                "requires": ("yaml",),
+                "setup": "auto v = deep_hash(Depth);",
+                "op": "make_yaml(v)",
+            },
+            "YamlStreamWriter::write()": <StackCase>{
+                "requires": ("yaml",),
+                "setup": "auto v = deep_list(Depth);
+string sub write_yaml(auto v) {
+    StringOutputStream sos();
+    YamlStreamWriter writer(sos);
+    writer.startDocument();
+    writer.write(v);
+    writer.endDocument();
+    writer.close();
+    return sos.getData();
+}",
+                "op": "write_yaml(v)",
+            },
+            "parse_yaml()": <StackCase>{
+                "requires": ("yaml",),
+                "setup": "string v = strmul(\"[\", Depth) + strmul(\"]\", Depth);",
+                "op": "parse_yaml(v)",
+            },
+            "YamlDocumentIterator::getValue()": <StackCase>{
+                "requires": ("yaml",),
+                "setup": "string v = strmul(\"[\", Depth) + strmul(\"]\", Depth);
+auto sub iterate_yaml(string v) {
+    YamlDocumentIterator i(v);
+    i.next();
+    return i.getValue();
+}",
+                "op": "iterate_yaml(v)",
+            },
         };
     }
 
