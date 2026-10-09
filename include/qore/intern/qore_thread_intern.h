@@ -1312,6 +1312,37 @@ DLLLOCAL int check_stack(ExceptionSink* xsink);
 */
 DLLLOCAL bool q_thread_stack_reserve_exceeded(size_t reserve);
 
+//! Accounts for the stack that the recursion replaced by a deferred deletion would have used
+/** A deletion nested too deeply is deferred to a loop that makes it from a shallower frame (see
+    RObject::deleteOrDefer()), so the frames of the recursion it replaces are not on the stack.  While this helper
+    exists, the current thread's stack limit is moved towards the current position by the size of those frames, so
+    that every stack check, such as the one made when a destructor is called, raises \c STACK-LIMIT-EXCEEDED at the
+    same logical depth as the recursion would have: a destructor that recurses without end raises an exception
+    instead of iterating without end.  Has no effect on a thread with no stack limit or where the stack is not
+    managed.
+*/
+class QoreElidedStackHelper {
+public:
+    //! Moves the stack limit by the given number of bytes
+    DLLLOCAL explicit QoreElidedStackHelper(size_t elided);
+
+    //! Restores the stack limit
+    DLLLOCAL ~QoreElidedStackHelper();
+
+    //! Returns the current stack position, or 0 where the stack is not managed
+    DLLLOCAL static size_t getStackPos();
+
+    //! Returns the number of stack bytes used since the given stack position, which getStackPos() returned
+    DLLLOCAL static size_t getStackUsedSince(size_t outer_pos);
+
+    QoreElidedStackHelper(const QoreElidedStackHelper&) = delete;
+    QoreElidedStackHelper& operator=(const QoreElidedStackHelper&) = delete;
+
+private:
+    size_t old_limit = 0;
+    bool shifted = false;
+};
+
 class ParseCodeInfoHelper {
 private:
     const char* parse_code;

@@ -905,7 +905,21 @@ depth-first order as with recursion, and the members retained by a collected rec
 deferred deletion. A deferred object stays allocated while its destructor is in progress; a closure-bound variable
 holds a weak reference from its dereference until its deletion is made (the initial weak reference when its last
 reference was released, or one taken for the deletion when it is collected with its recursive set). The deletion loop
-is per thread, so no lock is involved.
+is per thread, so no lock is involved. A queue that is empty when the loop takes a deletion from it receives the
+deletions deferred by that one, so a chain uses one queue however long it is.
+
+The loop does not change where a recursion through destructors stops. Each deferred deletion records the stack that
+the user code recursion it replaces would have used: the stack recorded for the deletion the loop was making when it
+was deferred, plus, when a destructor that started during that deletion was still running (counted by
+`RObject::DestructorRunHelper` around the destructor call), the stack used between the loop's frame and the point
+where it was deferred. A deletion deferred while releasing the data of an object whose destructor has returned adds
+nothing: that recursion is the one the loop makes iterative, so a chain of any length is deleted, destructors
+included. While the loop makes the deletion, `QoreElidedStackHelper`
+moves the thread's stack limit towards the current position by that amount, so every stack check, such as the one made
+when a destructor is called, raises `STACK-LIMIT-EXCEEDED` at the depth where the recursion would have raised it. A
+destructor that deletes a new object of its own class therefore raises the exception, as it did before deletions were
+deferred, instead of making the loop iterate and allocate without end
+(`examples/test/qore/misc/destructor-recursion/destructor-recursion.qtest`).
 
 ## `rrefs` / `realRef()`: when to use it
 

@@ -1231,7 +1231,11 @@ void qore_object_private::doDeleteIntern(ExceptionSink* xsink) {
     }
 
     RuntimeConfig& rc = rc_get_current_ref();
-    qore_class_private::get(*theclass)->execDestructor(obj, rc, xsink);
+    {
+        // deletions deferred while the destructor runs are bounded by the stack; see RObject::deleteOrDefer()
+        DestructorRunHelper drh;
+        qore_class_private::get(*theclass)->execDestructor(obj, rc, xsink);
+    }
 
     cdmap_t* cdm;
     QoreHashNode* td;

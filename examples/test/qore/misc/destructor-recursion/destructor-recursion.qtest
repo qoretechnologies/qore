@@ -1,0 +1,36 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../ExecModeHarness.qm
+
+%exec-class DestructorRecursionTest
+
+#! A destructor that recurses without end raises STACK-LIMIT-EXCEEDED in every execution mode
+/** Deletions of objects nested more than 16 deep are deferred to a loop that makes them from a shallow frame, so a
+    destructor that deletes a new object of its own class used to make the loop iterate without end, allocating
+    memory until the process ran out of it, instead of reaching the stack limit as the recursion did.  The loop now
+    accounts for the stack of the recursion it replaces, so the stack check of the destructor call raises the
+    exception at the same depth, and the process continues normally.  See design/dgc.md, "Deleting long chains".
+*/
+class DestructorRecursionTest inherits QUnit::Test {
+    constructor() : Test("DestructorRecursionTest", "1.0") {
+        addTestCase("a destructor recursing without end", \runawayTest());
+        set_return_value(main());
+    }
+
+    runawayTest() {
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string worker = get_script_dir() + "/destructor-recursion-worker.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("'%s' --exec-mode=%s '%s'", qore, mode, worker),
+                ExecModeHarness::NativeCheck::Jit);
+            assertEq("direct: STACK-LIMIT-EXCEEDED\nchain: STACK-LIMIT-EXCEEDED\nsmall stack: STACK-LIMIT-EXCEEDED\n"
+                "done\n", out, mode);
+        }
+    }
+}

@@ -101,6 +101,7 @@
 #include <sys/time.h>
 #include <vector>
 #include <climits>
+#include <cstdint>
 
 #ifdef HAVE_POLL
 #include <fcntl.h>
@@ -1403,6 +1404,57 @@ bool q_thread_stack_reserve_exceeded(size_t reserve) {
 #endif
 #else
     return false;
+#endif
+}
+
+QoreElidedStackHelper::QoreElidedStackHelper(size_t elided) {
+#ifdef QORE_MANAGE_STACK
+    ThreadData* td = thread_data.get();
+    // a thread with no stack guard has no limit (see QTF_NO_STACK_GUARD)
+    if (!elided || !td || !td->stack_limit) {
+        return;
+    }
+    old_limit = td->stack_limit;
+#ifdef STACK_DIRECTION_DOWN
+    // a limit beyond the stack's start makes every check fail, as the recursion would have
+    td->stack_limit = elided > SIZE_MAX - old_limit ? SIZE_MAX : old_limit + elided;
+#else
+    td->stack_limit = elided > old_limit ? 0 : old_limit - elided;
+    // a limit of zero means no limit: the recursion would have exceeded the limit anywhere
+    if (!td->stack_limit) {
+        td->stack_limit = 1;
+    }
+#endif
+    shifted = true;
+#endif
+}
+
+QoreElidedStackHelper::~QoreElidedStackHelper() {
+#ifdef QORE_MANAGE_STACK
+    if (shifted) {
+        thread_data.get()->stack_limit = old_limit;
+    }
+#endif
+}
+
+size_t QoreElidedStackHelper::getStackPos() {
+#ifdef QORE_MANAGE_STACK
+    return get_stack_pos();
+#else
+    return 0;
+#endif
+}
+
+size_t QoreElidedStackHelper::getStackUsedSince(size_t outer_pos) {
+#ifdef QORE_MANAGE_STACK
+    size_t pos = get_stack_pos();
+#ifdef STACK_DIRECTION_DOWN
+    return outer_pos > pos ? outer_pos - pos : 0;
+#else
+    return pos > outer_pos ? pos - outer_pos : 0;
+#endif
+#else
+    return 0;
 #endif
 }
 

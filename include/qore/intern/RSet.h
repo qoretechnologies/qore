@@ -535,6 +535,20 @@ public:
     */
     DLLLOCAL void deleteOrDefer(ExceptionSink* xsink, RSetDerefHelper& cleanup);
 
+    //! Counts a destructor running on this thread while it exists; see deleteOrDefer()
+    /** A deletion deferred while a destructor that started during the deletion the loop is making is still running
+        replaces recursion through user code, which the stack must still bound; see design/dgc.md, "Deleting long
+        chains".
+    */
+    class DestructorRunHelper {
+    public:
+        DLLLOCAL DestructorRunHelper();
+        DLLLOCAL ~DestructorRunHelper();
+
+        DestructorRunHelper(const DestructorRunHelper&) = delete;
+        DestructorRunHelper& operator=(const DestructorRunHelper&) = delete;
+    };
+
     //! Makes the deletion that deleteOrDefer() makes now or defers
     /** The object must stay allocated until this is called.
     */
