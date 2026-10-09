@@ -552,7 +552,7 @@ int quickOperation(ExceptionSink* xsink) {
 #### Pattern B: Waiting During a Blocking Operation
 
 Wait with `qore_cancellable_poll()`, which ends as soon as the thread is cancelled or its program is
-interrupted (see `doxygen/lang/interruptible-io-module-guide.md`); never poll in
+interrupted (see the `interruptible_io_module_guide` page, `doxygen/lang/228_interruptible_io_module_guide.dox.tmpl`); never poll in
 `QORE_IO_POLL_INTERVAL_MS` slices, which delays every cancellation by up to 500 ms:
 
 ```cpp

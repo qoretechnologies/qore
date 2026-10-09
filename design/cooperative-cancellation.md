@@ -1046,7 +1046,7 @@ do_io_operation();  # Works normally, no overhead
 - Performance regression test
 
 ### Phase 5: Documentation
-- Remove `safe-thread-cancellation.md` (replaced by this document); `doxygen/lang/interruptible-io-module-guide.md` is the module author's guide, and this document holds the design
+- Remove `safe-thread-cancellation.md` (replaced by this document); the module author's guide is the `interruptible_io_module_guide` page (`doxygen/lang/228_interruptible_io_module_guide.dox.tmpl`), and this document holds the design
 - Update module developer guide
 - Release notes for Qore 3.0
 
