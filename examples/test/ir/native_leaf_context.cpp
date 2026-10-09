@@ -238,8 +238,19 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     QoreProgram* caller = qore_get_call_program_context();
     QoreObject* old_object = rc->getObject();
     const qore_class_private* old_class = rc->getClass();
+    const auto* retained_status = static_cast<const std::atomic<int>*>(
+        qore_rt_get_object_status_view_v1(object->rawBits()));
     auto check_exact = [&](QoreValue receiver) {
         const QoreObject* obj = receiver.getType() == NT_OBJECT ? receiver.get<const QoreObject>() : nullptr;
+        const auto* status_view = static_cast<const std::atomic<int>*>(
+            qore_rt_get_object_status_view_v1(receiver.rawBits()));
+        bool supported = sizeof(int) == 4 && sizeof(std::atomic<int>) == 4
+            && alignof(std::atomic<int>) >= 4 && std::atomic<int>::is_always_lock_free
+            && !std::getenv("QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY");
+        assert(static_cast<bool>(status_view) == (supported && obj));
+        if (status_view) {
+            assert((status_view->load(std::memory_order_seq_cst) != -1) == obj->isValid());
+        }
         // Name-method sites need not carry a fixed class. This thread owns the
         // unshared Program: install a test target only for these non-calling
         // predicates, then restore it before invoking the real continuation.
@@ -353,6 +364,7 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     // still owned by both ordinary and opaque references.
     object->get<QoreObject>()->doDelete(&xsink);
     assert(!xsink);
+    assert(!retained_status || retained_status->load(std::memory_order_seq_cst) == -1);
     check(*object, false);
     check(*opaque, false);
     check(*weak, false);

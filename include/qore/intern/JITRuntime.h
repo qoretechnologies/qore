@@ -1643,6 +1643,17 @@ QoreAOTContext* qore_rt_try_get_aot_call_target_context(QoreAOTContext* ctx, int
 //! Returns true when an assigned object receiver is still valid.
 //! Used to guard receiver-independent AOT method fast entries.
 int qore_rt_object_is_valid(uint64_t value);
+
+//! Borrows the live deletion status of an already-owned strong receiver.
+/** @param value receiver kept alive by the caller for the entire view lifetime
+    @return address of a lock-free, four-byte atomic integer, or nullptr for a
+    non-object/unsupported representation; the caller then uses normal validation
+    @note Generated code must load with sequential consistency on every call.
+    Version 1 defines -1 as deleted; all other states retain isValid() semantics,
+    including a destructor in progress. This acquires no reference and must not
+    outlive the receiver owner. A changed receiver requires ordinary dispatch.
+*/
+const void* qore_rt_get_object_status_view_v1(uint64_t value);
 //! Raises OBJECT-ALREADY-DELETED unless the method-call receiver is valid.
 void qore_rt_check_valid_object_call_receiver(uint64_t value,
         ExceptionSink* xsink);

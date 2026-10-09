@@ -111,7 +111,8 @@ class NativeLeafContextTest inherits QUnit::Test {
                 output = backquote((map quote($1), args).join(" ") + " "
                     + (map quote($1), objects).join(" ") + " 2>&1", \status);
                 assertEq(0, status, output);
-                foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ")) {
+                foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ")) {
                     output = backquote(env + runtime + quote(executable) + (inline_callback ? " inline" : " eager")
                         + (inline_method ? " inline" : " eager")
                         + " 2>&1", \status);

@@ -9347,14 +9347,7 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         bool combined_exact_guard = require_exact_object_class
             && !stable_receiver
             && !std::getenv("QORE_DISABLE_AOT_COMBINED_EXACT_OBJECT_GUARD");
-        if (!combined_exact_guard) {
-            auto valid_helper = module.getOrInsertFunction("qore_rt_object_is_valid",
-                llvm::FunctionType::get(i32_type, {i64_type}, false));
-            llvm::Value* object_valid = builder->CreateCall(valid_helper, {object_base});
-            object_valid = builder->CreateICmpNE(object_valid,
-                llvm::ConstantInt::get(i32_type, 0));
-            can_use_fast_entry = builder->CreateAnd(can_use_fast_entry, object_valid);
-        }
+        llvm::Value* status_view = nullptr;
         if (require_exact_object_class) {
             llvm::Value* exact_class = nullptr;
             if (stable_receiver) {
@@ -9364,6 +9357,7 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
                 if (guard_it != guards.end()) {
                     entry_receiver = guard_it->second.receiver;
                     exact_class = guard_it->second.matches;
+                    status_view = guard_it->second.status_view;
                 } else {
                     auto alloca_it = local_allocas.find(stable_receiver);
                     auto entry_it = current_ir_func && !current_ir_func->blocks.empty()
@@ -9384,7 +9378,14 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
                         exact_class = entry_builder.CreateICmpNE(exact_class,
                             llvm::ConstantInt::get(i32_type, 0),
                             "stable_exact_class_ok");
-                        guards.emplace(stable_receiver, AotExactClassGuard{entry_receiver, exact_class});
+                        if (!std::getenv("QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY")) {
+                            auto status_helper = module.getOrInsertFunction("qore_rt_get_object_status_view_v1",
+                                llvm::FunctionType::get(ptr_type, {i64_type}, false));
+                            status_view = entry_builder.CreateCall(status_helper, {entry_receiver},
+                                "stable_receiver_status_view");
+                        }
+                        guards.emplace(stable_receiver,
+                            AotExactClassGuard{entry_receiver, exact_class, status_view});
                     }
                 }
                 if (exact_class) {
@@ -9407,6 +9408,43 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
                     llvm::ConstantInt::get(i32_type, 0));
             }
             can_use_fast_entry = builder->CreateAnd(can_use_fast_entry, exact_class);
+        }
+        if (!combined_exact_guard) {
+            auto valid_helper = module.getOrInsertFunction("qore_rt_object_is_valid",
+                llvm::FunctionType::get(i32_type, {i64_type}, false));
+            llvm::Value* object_valid;
+            if (status_view) {
+                // The existing entry owner pins the object and its private
+                // status word, even after reflection replaces the local. The
+                // identity guard above forbids using it for a new receiver.
+                // Null views retain the old helper on unsupported runtimes.
+                auto* live_bb = llvm::BasicBlock::Create(ctx, "receiver_validity_live", llvm_func);
+                auto* helper_bb = llvm::BasicBlock::Create(ctx, "receiver_validity_helper", llvm_func);
+                auto* valid_merge_bb = llvm::BasicBlock::Create(ctx, "receiver_validity_merge", llvm_func);
+                llvm::Value* has_view = builder->CreateICmpNE(status_view,
+                    llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)));
+                builder->CreateCondBr(has_view, live_bb, helper_bb);
+                builder->SetInsertPoint(live_bb);
+                auto* status = builder->CreateLoad(i32_type, status_view, "receiver_live_status");
+                status->setAlignment(llvm::Align(4));
+                status->setAtomic(llvm::AtomicOrdering::SequentiallyConsistent);
+                llvm::Value* live_valid = builder->CreateICmpNE(status,
+                    llvm::ConstantInt::getSigned(i32_type, -1));
+                builder->CreateBr(valid_merge_bb);
+                builder->SetInsertPoint(helper_bb);
+                llvm::Value* helper_valid = builder->CreateCall(valid_helper, {object_base});
+                helper_valid = builder->CreateICmpNE(helper_valid, llvm::ConstantInt::get(i32_type, 0));
+                builder->CreateBr(valid_merge_bb);
+                builder->SetInsertPoint(valid_merge_bb);
+                auto* valid_phi = builder->CreatePHI(llvm::Type::getInt1Ty(ctx), 2, "receiver_valid");
+                valid_phi->addIncoming(live_valid, live_bb);
+                valid_phi->addIncoming(helper_valid, helper_bb);
+                object_valid = valid_phi;
+            } else {
+                object_valid = builder->CreateCall(valid_helper, {object_base});
+                object_valid = builder->CreateICmpNE(object_valid, llvm::ConstantInt::get(i32_type, 0));
+            }
+            can_use_fast_entry = builder->CreateAnd(can_use_fast_entry, object_valid);
         }
     }
     for (unsigned i = 0; i < callee_info.num_params && i < boxed_args.size(); ++i) {

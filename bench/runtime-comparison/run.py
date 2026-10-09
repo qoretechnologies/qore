@@ -21,7 +21,8 @@ import urllib.request
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-KERNELS = ("arithmetic", "direct_call", "method_call", "indirect_call", "polymorphic_call", "monomorphic_call",
+KERNELS = ("arithmetic", "direct_call", "method_call", "indirect_call", "polymorphic_call",
+           "polymorphic_expression_call", "monomorphic_call",
            "optional_method_call",
            "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
            "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
@@ -95,7 +96,8 @@ def reference(name, count, seed):
         if name == "indirect_tagged_float":
             result += 6 if (seed + index) & 1 else 3
             continue
-        increment = (17, 19, 23)[index % 3] if name in ("polymorphic_call", "dispatch_control") else 17
+        increment = (17, 19, 23)[index % 3] if name in (
+            "polymorphic_call", "polymorphic_expression_call", "dispatch_control") else 17
         seed = (seed * 33 + increment) & 65535
         result += seed
         if name == "list_mutate":

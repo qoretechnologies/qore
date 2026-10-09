@@ -179,6 +179,16 @@ public class RuntimeBench {
         return sum;
     }
 
+    // Matched source-level decomposition; target methods retain DONT_INLINE.
+    static long polymorphicExpressionCall(int count, long seed, DynamicStep a, DynamicStep b, DynamicStep c) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            seed = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(seed);
+            sum += seed;
+        }
+        return sum;
+    }
+
     static long dispatchControl(int count, long seed) {
         long sum = 0;
         for (int i = 0; i < count; ++i) {
@@ -302,6 +312,9 @@ public class RuntimeBench {
     @Benchmark public long indirect_branch_float() { return floatIndirectCall(count, nextSeed(), branchCallback); }
     @Benchmark public long indirect_tagged_float() { return taggedFloatIndirectCall(count, nextSeed(), taggedCallback); }
     @Benchmark public long polymorphic_call() { return polymorphicCall(count, nextSeed(), a, b, c); }
+    @Benchmark public long polymorphic_expression_call() {
+        return polymorphicExpressionCall(count, nextSeed(), a, b, c);
+    }
     @Benchmark public long monomorphic_call() { return monomorphicCall(count, nextSeed(), a); }
     // Java references already permit null. Both workloads time a strong non-null receiver.
     @Benchmark public long optional_method_call() { return monomorphicCall(count, nextSeed(), a); }
@@ -334,7 +347,8 @@ public class RuntimeBench {
                 String[] names = {"arithmetic", "direct_call", "method_call", "indirect_call",
                     "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
                     "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
-                    "polymorphic_call", "monomorphic_call", "optional_method_call", "dispatch_control", "list_read",
+                    "polymorphic_call", "polymorphic_expression_call", "monomorphic_call",
+                    "optional_method_call", "dispatch_control", "list_read",
                     "list_build", "list_mutate", "temporary_list", "temporary_hash",
                     "closure_call", "closure_capture"};
                 long[] results = {arithmetic(count, seed), directCall(count, seed),
@@ -344,7 +358,8 @@ public class RuntimeBench {
                     floatIndirectCall(count, seed, branchCallback),
                     indirectCall(count, seed, affineCallback), wideIndirectCall(count, seed, affineCallback),
                     indirectCall(count, seed, branchIntCallback),
-                    polymorphicCall(count, seed, a, b, c), monomorphicCall(count, seed, a),
+                    polymorphicCall(count, seed, a, b, c), polymorphicExpressionCall(count, seed, a, b, c),
+                    monomorphicCall(count, seed, a),
                     monomorphicCall(count, seed, a), dispatchControl(count, seed),
                     listRead(values, seed), listBuild(count, seed),
                     listMutate(count, seed), temporaryList(count, seed), temporaryHash(count, seed),

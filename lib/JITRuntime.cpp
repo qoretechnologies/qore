@@ -535,6 +535,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_try_get_aot_call_target_context",
         reinterpret_cast<void*>(&qore_rt_try_get_aot_call_target_context) },
     { "qore_rt_object_is_valid", reinterpret_cast<void*>(&qore_rt_object_is_valid) },
+    { "qore_rt_get_object_status_view_v1", reinterpret_cast<void*>(&qore_rt_get_object_status_view_v1) },
     { "qore_rt_check_valid_object_call_receiver",
         reinterpret_cast<void*>(&qore_rt_check_valid_object_call_receiver) },
     { "qore_rt_object_has_exact_aot_target_class",
@@ -15692,6 +15693,23 @@ extern "C" DLLEXPORT int qore_rt_object_is_valid(uint64_t value) {
     // Preserve generic dispatch for indirect scalar representations such as
     // enums, rather than changing this helper's accepted-value contract.
     return receiver.getType() == NT_OBJECT && receiver.get<QoreObject>()->isValid();
+}
+
+extern "C" DLLEXPORT const void* qore_rt_get_object_status_view_v1(uint64_t value) {
+    static_assert(OS_DELETED == -1, "object status view v1 uses -1 for deletion");
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY");
+    // The caller already pins the entry receiver. Do not acquire another owner
+    // or snapshot validity: explicit deletion remains observable on every call.
+    if constexpr (sizeof(int) == 4 && sizeof(std::atomic<int>) == 4
+            && alignof(std::atomic<int>) >= 4 && std::atomic<int>::is_always_lock_free) {
+        if (enabled) {
+            const QoreObject* object = qore_rt_get_strong_object(fromBits(value));
+            if (object) {
+                return &qore_object_private::get(*object)->status;
+            }
+        }
+    }
+    return nullptr;
 }
 
 extern "C" DLLEXPORT void qore_rt_check_valid_object_call_receiver(

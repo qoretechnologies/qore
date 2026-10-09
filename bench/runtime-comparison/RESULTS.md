@@ -6528,3 +6528,106 @@ to distinguish receiver-local initialization/cleanup from dispatch work. Keep
 the existing kernel and its historical results intact. Any ownership elimination
 must preserve reflective local visibility and declaration-order destruction;
 the previously rejected native-only local lowering remains rejected.
+
+## Live receiver-status loads and polymorphic decomposition (2026-10-09)
+
+The separately named `polymorphic_expression_call` uses the same three receivers,
+selection, recurrence and checksum as `polymorphic_call`, but calls directly on
+the selection expression instead of assigning a typed local each iteration.
+The original benchmark and its historical results remain unchanged. This is a
+source-level diagnostic, not a runtime optimization or an isolated local-variable
+cost. Both Java forms keep DONT_INLINE on all three target methods.
+
+Fresh committed merged baseline: `fd6632de9`, incorporating upstream
+`f9be2f451`; release SHA256
+`438e4d9932b8abba3b60829ab6922c08965a89631e0a2535ae1639b76deabbda`.
+At count 4096, five forks, three warmups and five 500 ms windows, seed 810821,
+`run-zjvv3g09` measures:
+
+|!Kernel|!Qore IR|!Qore AOT|!Java JIT
+|polymorphic_call|1007.087|43.834|2.563
+|polymorphic_expression_call|763.809|10.327|2.564
+|monomorphic_call|430.589|4.079|1.692
+|dispatch_control|276.449|1.443|0.999
+
+Units are whole-kernel ns/element, median of fork means. The AOT expression form
+is about 76.4% lower than the typed-local form; IR is about 24.2% lower. Java is
+essentially unchanged. The gap includes lowering, local setup and ownership/
+cleanup effects, not just method dispatch. Even the expression form remains
+about 4.0x Java. These numbers motivate further receiver-local work without
+reviving the previously rejected cleanup-order-changing native-only lowering.
+
+The retained optimization borrows a live status address from an already-owned,
+stable exact-class receiver at function entry. Generated code replaces the
+per-call validity-helper call with a sequentially consistent atomic load.
+It still checks identity; changed receivers use normal dispatch. Validity is
+never snapshotted. Explicit deletion remains observable, while calls during
+destruction retain the existing isValid() semantics. No owner is added and no
+runtime slot, cleanup order, Program/access/observer/stack guard is removed.
+Null views and unsupported atomic representations retain the old helper.
+
+The new internal `qore_rt_get_object_status_view_v1` ABI requires separately
+compiled baseline/candidate executables. Do not reuse a candidate executable on
+the old runtime. The compile-time presence flag
+`QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1` omits the new view; setting it only
+at execution returns null and exercises the old helper. Candidate release SHA256:
+`39fdff511350b546ba6e82bad73d44d06bbca6c425220095c94827d908d1f00c`.
+Complete source patch, library/tool identities, normalized raw windows and
+recomputed statistics are in [the evidence](results-receiver-status-macos-arm64.json).
+
+Each paired run uses five forks, three warmups, five 500 ms samples, five startup
+samples and a randomized baseline/candidate/Java schedule. Together with the
+diagnostic: 300 jobs, 1,500 timing windows. No task builds, tests, profiling,
+disassembly or evidence computation ran during timing. Host background activity
+is uncontrolled. Startup has no claimed improvement.
+
+Count 4096, seed 810822, `run-80amfebq`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|monomorphic_call|3.954|3.286|-16.89%|no|1.681|1.95x
+|optional_method_call|10.767|10.773|+0.05%|yes|1.688|6.38x
+|polymorphic_call|43.857|43.642|-0.49%|yes|2.518|17.33x
+|polymorphic_expression_call|10.312|10.333|+0.20%|yes|2.549|4.05x
+|indirect_wide|7.333|7.208|-1.70%|yes|1.698|4.24x
+|indirect_float|9.078|9.026|-0.58%|yes|1.659|5.44x
+|arithmetic|1.370|1.375|+0.33%|yes|0.997|1.38x
+|dispatch_control|1.424|1.421|-0.18%|yes|1.008|1.41x
+
+Count 1024, seed 810823, `run-k3dgaifw`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|monomorphic_call|5.389|4.688|-13.00%|no|1.678|2.79x
+|optional_method_call|12.284|12.218|-0.54%|yes|1.687|7.24x
+|polymorphic_call|46.186|45.573|-1.33%|yes|2.556|17.83x
+|polymorphic_expression_call|11.764|11.830|+0.56%|yes|2.563|4.62x
+|indirect_wide|8.422|8.395|-0.31%|yes|1.690|4.97x
+|indirect_float|10.250|10.298|+0.47%|yes|1.656|6.22x
+|arithmetic|2.471|2.462|-0.36%|yes|0.930|2.65x
+|dispatch_control|2.605|2.590|-0.58%|yes|0.995|2.60x
+
+Monomorphic cost falls 16.89% and 13.00%; its fork ranges do not overlap in either
+run. All control ranges overlap, with small mixed movements. Range overlap is
+descriptive, not a significance test. Retain the targeted change, not a broad
+call-speed claim. At 4096, Qore is still about 1.95x Java for this monomorphic
+kernel, 6.38x nullable, 4.05x expression-polymorphic, 4.24x wide callbacks, 5.44x
+float callbacks and 17.33x for the typed-local polymorphic kernel. Qore may inline
+the exact-base branch; Java keeps its target uninlined, so this is not equal-
+inlining-policy retained-call latency or Java parity.
+
+Validation: release/debug each pass 35 selected files (27 QUnit files, 72 cases,
+4,295 assertions plus 8 standalones) and two context files (4 cases, 150 assertions).
+Six reference modes pass 345 checks each; 11 harness tests pass. Expanded fixtures
+cover reflective replacement, deletion, destructor-in-progress, null-view
+fallback and strong/opaque/weak/nonobject representations, with O0/O3, exception-
+handling, parallel compilation and context controls. The original runtime also
+passed AST/AOT reference semantics for the new deletion/destructor cases.
+QUnit/FsUtil/Util qmods were rebuilt sequentially for both trees after the runtime
+identity changed. No full-repository, sanitizer or cross-architecture claim.
+
+Arm64 inspection confirms one entry getter and an in-loop `ldar w` on the live
+path; the helper remains on the null-view branch. The monomorphic function grows
+from 614 to 616 static instructions. These are static counts, not dynamic costs.
+
+Next: optimize receiver-local setup/ownership while preserving reflective
+visibility and declaration-order destruction, and profile retained polymorphic
+native dispatch separately from that local-handling cost.

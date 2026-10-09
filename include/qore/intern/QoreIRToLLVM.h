@@ -308,6 +308,8 @@ private:
     struct AotExactClassGuard {
         llvm::Value* receiver;
         llvm::Value* matches;
+        // Borrowed from the same entry owner; validity is never snapshotted.
+        llvm::Value* status_view;
     };
     std::unordered_map<int32_t, std::unordered_map<const LocalVar*, AotExactClassGuard>>
         aot_exact_class_guards;

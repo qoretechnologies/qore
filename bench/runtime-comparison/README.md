@@ -147,6 +147,19 @@ and the [optional-class follow-up](RESULTS.md#optional-class-freshness-2026-10-0
 An unrelated prepared **method** entry experiment was rejected after same-library
 compiler controls showed no benefit; it adds no supported flag or helper ABI.
 See [the negative result and retained diagnostic lifetime fix](RESULTS.md#prepared-method-entry-rejected-2026-10-09).
+
+`QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1` at compilation keeps the per-call
+validity helper for stable exact-class receivers. Otherwise the existing entry
+owner can pin a borrowed, versioned live status view. Generated code still
+checks receiver identity and loads deletion status atomically with sequential
+consistency on every call; it does not cache validity or add a reference.
+Deleted receivers fall back, while calls during destruction retain `isValid()`
+semantics. Setting the flag only at execution makes the getter return null and
+exercises the helper fallback. Unsupported atomic representations also return
+null. This compiler/runtime change requires separate baseline compilation:
+new artifacts reference `qore_rt_get_object_status_view_v1`, absent in old runtimes.
+See [the measured benefit and limits](RESULTS.md#live-receiver-status-loads-and-polymorphic-decomposition-2026-10-09).
+
 Cold overflow-path separation was also [measured and rejected](RESULTS.md#cold-stack-check-paths-rejected-2026-10-09):
 smaller checks did not establish a broad benefit. The next target is polymorphic
 receiver-local setup and ownership versus dispatch. Existing scalar callback
@@ -300,7 +313,8 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |indirect_affine_wide|The same callback with values above the inline 48-bit integer range; checksum uses low 16 bits
 |indirect_branch_int|Integer comparison selecting one of two affine expressions
 |indirect_branch_float|Float comparison selecting between two affine expressions through a retained callback
-|polymorphic_call|Three receiver types selected cyclically, with different recurrence increments
+|polymorphic_call|Three receiver types selected cyclically into a typed receiver local each iteration, with different recurrence increments
+|polymorphic_expression_call|The same three targets and selection used directly as the call receiver, without a per-iteration receiver local
 |monomorphic_call|Non-final method with one unchanged exact-base receiver parameter; Qore may inline its arithmetic, while Java's target retains `DONT_INLINE`
 |optional_method_call|Same stable receiver with Qore's nullable `*DynamicStep` contract; Java references already permit null and use the same non-final target
 |dispatch_control|Same receiver-selection arithmetic and increments without method calls
@@ -309,6 +323,12 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |list_mutate|Build a growing list, then increment and read every element
 |temporary_list|Construct two elements per iteration and select with a runtime index
 |temporary_hash|Construct a two-key hash per iteration and select with a runtime key
+
+`polymorphic_expression_call` is a matched Java/Qore source-level decomposition,
+not a replacement for `polymorphic_call` or a measured runtime optimization.
+Their difference includes compiler lowering and ownership/cleanup effects; it
+does not isolate an exact local-variable cost. Both use the same targets, seeds,
+selection and recurrence. Java retains `DONT_INLINE` on all three target methods.
 
 `monomorphic_call` exercises the cached exact-class check for an unwritten
 receiver parameter. The generated AOT guard also checks receiver identity:
