@@ -9,6 +9,7 @@
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/VoyageRestClient.qm
+%requires ../../../../qlib/VoyageDataProvider
 %requires json
 
 %exec-class VoyageEmbedderRateLimitTest
@@ -48,11 +49,12 @@ class FakeVoyageHandler inherits AbstractHttpRequestHandler {
     }
 
     hash handleRequest(hash cx, hash hdr, *data body) {
-        hash<auto> req = parse_json(body);
+        hash<auto> req = body ? parse_json(body) : {};
         *hash<auto> step;
         {
             AutoLock al(m);
             push requests, {
+                "path": cx.raw_path,
                 "arrived_us": clock_get_monotonic_us(),
                 "input": req.input,
                 "body": req,
@@ -64,6 +66,14 @@ class FakeVoyageHandler inherits AbstractHttpRequestHandler {
         if (step.status) {
             return makeResponse(step.status, make_json(step.body ?? {"detail": "scripted failure"}),
                 {"Content-Type": MimeTypeJson} + (step.headers ?? {}));
+        }
+        if (cx.raw_path =~ /rerank$/) {
+            list<hash<auto>> ranked = ();
+            for (int i = 0; i < req.documents.size(); ++i) {
+                push ranked, {"index": i, "relevance_score": 1.0 - i * 0.1, "document": req.documents[i]};
+            }
+            return makeResponse(200, make_json({"data": ranked, "usage": {"total_tokens": 11}}),
+                {"Content-Type": MimeTypeJson});
         }
         list<hash<auto>> data = ();
         int tokens = 0;
@@ -78,7 +88,7 @@ class FakeVoyageHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-#! Voyage embedder with a test limiter and no jitter, so waits are exact
+#! Voyage embedder with a test limiter
 class TestVoyageEmbedder inherits VoyageEmbedder {
     private {
         *EmbedderRateLimiter test_limiter;
@@ -90,6 +100,12 @@ class TestVoyageEmbedder inherits VoyageEmbedder {
 
     private EmbedderRateLimiter getRateLimiter() {
         return test_limiter ?? VoyageEmbedder::getRateLimiter();
+    }
+}
+
+#! Limiter without jitter, so rate-limit waits are exact
+class ExactLimiter inherits EmbedderRateLimiter {
+    constructor(*int requests, *int tokens, int window_ms = 60000) : EmbedderRateLimiter(requests, tokens, window_ms) {
     }
 
     private int jitter(int limit_ms) {
@@ -129,6 +145,17 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
         addTestCase("rate limit: transient failures are still retried", \testTransientRetry());
         addTestCase("dimension: learned once per process", \testSharedDimension());
         addTestCase("connection: rate limit options", \testConnectionOptions());
+        addTestCase("limiter call: observer sees retries and long waits", \testCallObserver());
+        addTestCase("embedder: packs its own requests; waits reach the telemetry observer",
+            \testPacksAndWaitTelemetry());
+        addTestCase("reranker: shares a rerank bucket and retries 429 like the embedder", \testReranker());
+        addTestCase("reranker: exhausted retries raise RERANKER-RATE-LIMIT-ERROR", \testRerankerExhausted());
+        addTestCase("data provider: embeddings share the embedder's limiter and 429 policy",
+            \testDataProvider());
+        addTestCase("data provider: exhausted rerank retries raise RERANKER-RATE-LIMIT-ERROR",
+            \testDataProviderExhausted());
+        addTestCase("ping: counted by the limiter and never waits long", \testPing());
+        addTestCase("ping: a 429 is not retried and blocks the account", \testPing429());
         set_return_value(main());
     }
 
@@ -299,6 +326,9 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
         assertTrue(a == b, "one limiter per key");
         assertEq({"requests": 20, "tokens": 200}, a.getLimits(), "the latest configuration applies");
         assertFalse(a == EmbedderRateLimiter::getShared(key + "|other", 10, 100));
+        # a client without a configuration of its own does not override configured limits
+        EmbedderRateLimiter::getShared(key, 1900, 15200000, False);
+        assertEq({"requests": 20, "tokens": 200}, a.getLimits());
     }
 
     testPackInputs() {
@@ -411,7 +441,7 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
 
     testBackoff() {
         handler.setScript(({"status": 429}, {"status": 429}));
-        TestVoyageEmbedder emb(config());
+        TestVoyageEmbedder emb(config(), new ExactLimiter(100, NOTHING));
         assertOrdered(emb.encodeBatch(inputs(1)), 1);
         list<hash<auto>> requests = handler.getRequests();
         assertEq(3, requests.size());
@@ -548,6 +578,227 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
             "tokens-per-minute": 1000,
         });
         assertEq(100, conn.getRealOptions()."requests-per-minute");
+    }
+
+    #! A Voyage connection to the fake server
+    private VoyageRestClient::VoyageRestConnection connection(string key, *hash<auto> extra) {
+        return new VoyageRestClient::VoyageRestConnection("voyage-ping", "test", "http://localhost:" + port, {},
+            {"apikey": key} + (extra ?? {}));
+    }
+
+    testCallObserver() {
+        ExactLimiter limiter(1, NOTHING, 1500);
+        list<hash<RateLimitEventInfo>> events = ();
+        code observer = sub (hash<RateLimitEventInfo> event) { push events, event; };
+        int calls = 0;
+        hash<auto> rv = limiter.call(<RateLimitedCallInfo>{"tokens": 1,
+                "deadline_us": clock_get_monotonic_us() + 10000000, "observer": observer},
+            hash<auto> sub () {
+                if (!calls++) {
+                    throw "REST-RESPONSE-ERROR", "too many", {"status_code": 429, "headers": {"retry-after": "0"}};
+                }
+                return {"ok": True};
+            });
+        assertTrue(rv.ok);
+        # the retry is admitted only when the one-request window has room again: a long wait
+        assertEq(("retry", "wait"), map $1.type, events);
+        assertEq(429, events[0].status_code);
+        assertEq(0, events[0].retry_after_ms);
+        assertGe(1000, events[1].delay_ms);
+        assertEq(1, events[1].attempt);
+
+        # other failures propagate unchanged and are not retried
+        calls = 0;
+        assertThrows("REST-RESPONSE-ERROR", sub () {
+            limiter.call(<RateLimitedCallInfo>{"deadline_us": clock_get_monotonic_us() + 10000000},
+                auto sub () { ++calls; throw "REST-RESPONSE-ERROR", "bad", {"status_code": 400}; });
+        });
+        assertEq(1, calls);
+    }
+
+    testPacksAndWaitTelemetry() {
+        handler.setScript(());
+        assertTrue(new VoyageEmbedder(config()).packsRequests());
+        list<hash<RagTelemetryEvent>> events = ();
+        hash<EmbedderConfig> cfg = config({"telemetry_observer": <RagTelemetryObserver>{
+            "event_callback": sub (hash<RagTelemetryEvent> event) { push events, event; },
+        }});
+        ExactLimiter limiter(1, NOTHING, 1200);
+        TestVoyageEmbedder emb(cfg, limiter);
+        emb.encodeBatch(inputs(1));
+        emb.encodeBatch(inputs(1));
+        assertEq(1, events.size(), "the second request waited about a second for the window");
+        assertEq("wait", events[0].type);
+        assertTrue(events[0].attributes.rate_limited);
+        assertGe(1000, events[0].attributes.rate_limit_wait_ms);
+    }
+
+    private hash<RerankerConfig> rerankConfig(*hash<auto> extra) {
+        return cast<hash<RerankerConfig>>(<RerankerConfig>{
+            "backend": "voyage",
+            "url": "http://localhost:" + port,
+            "model": "rerank-2.5-lite",
+            "api_key": sprintf("rerank-key-%d-%d", getpid(), ++key_seq),
+        } + (extra ?? {}));
+    }
+
+    testReranker() {
+        hash<RerankerConfig> cfg = rerankConfig({"requests_per_minute": 1});
+        VoyageReranker rr(cfg);
+        assertEq({"requests_per_minute": 1, "tokens_per_minute": 3800000}, rr.getRateLimits());
+        assertEq({"requests_per_minute": 1900, "tokens_per_minute": 1900000},
+            new VoyageReranker(rerankConfig({"model": "rerank-2.5"})).getRateLimits());
+        handler.setScript(());
+        assertEq(2, rr.rerank("q", ("a", "b"), 2).size());
+        # the reranker's bucket is full; another reranker of the same account and model shares it
+        assertThrows("RERANKER-RATE-LIMIT-ERROR", sub () {
+            new VoyageReranker(cfg).rerank("q", ("a",), 1, {"rate_limit_timeout": 100ms});
+        });
+        # embeddings of the same account are limited separately
+        VoyageEmbedder emb(config({"api_key": cfg.api_key, "requests_per_minute": 1}));
+        emb.encodeBatch(inputs(1));
+        assertEq(("/v1/rerank", "/v1/embeddings"), map $1.path, handler.getRequests());
+
+        # a 429 with Retry-After is retried after the stated delay and reported to the observer
+        handler.setScript(({"status": 429, "headers": {"Retry-After": "1"}},));
+        list<hash<RagTelemetryEvent>> events = ();
+        VoyageReranker retried(rerankConfig({"telemetry_observer": <RagTelemetryObserver>{
+            "event_callback": sub (hash<RagTelemetryEvent> event) { push events, event; },
+        }}));
+        hash<RerankOutcome> outcome = retried.rerankEx("q", ("a", "b", "c"), 3);
+        assertEq(3, outcome.results.size());
+        assertEq(11, outcome.usage.total_tokens);
+        list<hash<auto>> requests = handler.getRequests();
+        assertEq(2, requests.size());
+        assertGe(1000000, requests[1].arrived_us - requests[0].arrived_us);
+        assertEq(1, events.size());
+        assertEq("rerank", events[0].operation);
+        assertEq(429, events[0].error.status_code);
+        assertTrue(events[0].attributes.rate_limited);
+    }
+
+    testRerankerExhausted() {
+        handler.setScript((), {"status": 429, "headers": {"Retry-After": "0"}});
+        VoyageReranker rr(rerankConfig({"rate_limit_max_retries": 1}));
+        try {
+            rr.rerank("q", ("a",), 1);
+            fail("expected RERANKER-RATE-LIMIT-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("RERANKER-RATE-LIMIT-ERROR", ex.err);
+            assertEq("provider_rate_limited", ex.arg.reason_code);
+            assertEq(2, ex.arg.attempts);
+            assertEq("rerank-2.5-lite", ex.arg.model);
+        }
+        assertEq(2, handler.getRequests().size());
+        handler.setScript(());
+    }
+
+    private AbstractDataProvider dataProvider(string key, string child) {
+        VoyageRestClient::VoyageRestClientIo rest({"url": "http://localhost:" + port, "apikey": key});
+        return new VoyageDataProvider::VoyageDataProvider(rest).getChildProvider(child);
+    }
+
+    testDataProvider() {
+        string key = sprintf("dp-key-%d-%d", getpid(), ++key_seq);
+        # the data provider and an embedder of the same account and model share one limiter: a Retry-After
+        # the embedder received holds the data provider too
+        handler.setScript(({"status": 429, "headers": {"Retry-After": "120"}},));
+        VoyageEmbedder emb(config({"api_key": key}));
+        assertThrows("EMBEDDER-RATE-LIMIT-ERROR", \emb.encodeBatch(), (inputs(1),));
+        handler.setScript(());
+        int t0 = clock_get_monotonic_us();
+        try {
+            dataProvider(key, "create-embeddings").doRequest({"model": "voyage-4-lite", "input": ("t0",)});
+            fail("expected the shared window to be full");
+        } catch (hash<ExceptionInfo> ex) {
+            # nothing is in flight, so the data provider fails at once rather than waiting a minute
+            assertEq("EMBEDDER-RATE-LIMIT-ERROR", ex.err);
+            assertEq("rate_limit_wait_deadline", ex.arg.reason_code);
+        }
+        assertLt(1000000, clock_get_monotonic_us() - t0);
+        assertEq(0, handler.getRequests().size());
+
+        # a 429 is retried after Retry-After, through the limiter
+        string other = sprintf("dp-key-%d-%d", getpid(), ++key_seq);
+        handler.setScript(({"status": 429, "headers": {"Retry-After": "1"}},));
+        hash<auto> resp = dataProvider(other, "create-embeddings").doRequest({"model": "voyage-4-lite",
+            "input": ("t0", "t1")});
+        assertEq(2, resp.data.size());
+        list<hash<auto>> requests = handler.getRequests();
+        assertEq(2, requests.size());
+        assertGe(1000000, requests[1].arrived_us - requests[0].arrived_us);
+
+        # transient failures are retried by the shared transient policy
+        handler.setScript(({"status": 503},));
+        resp = dataProvider(other, "create-embeddings").doRequest({"model": "voyage-4-lite", "input": ("t0",)});
+        assertEq(1, resp.data.size());
+        assertEq(2, handler.getRequests().size());
+    }
+
+    testDataProviderExhausted() {
+        handler.setScript((), {"status": 429, "headers": {"Retry-After": "60"}});
+        string key = sprintf("dp-key-%d-%d", getpid(), ++key_seq);
+        try {
+            dataProvider(key, "rerank").doRequest({"model": "rerank-2.5-lite", "query": "q",
+                "documents": ("a", "b")});
+            fail("expected RERANKER-RATE-LIMIT-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            # Retry-After 60s does not fit the request's 60s budget after the first attempt
+            assertEq("RERANKER-RATE-LIMIT-ERROR", ex.err);
+            assertEq("provider_rate_limited", ex.arg.reason_code);
+            assertEq(1, ex.arg.attempts);
+        }
+        assertEq(1, handler.getRequests().size());
+        handler.setScript(());
+    }
+
+    testPing() {
+        handler.setScript(());
+        string key = sprintf("ping-key-%d-%d", getpid(), ++key_seq);
+        VoyageRestClient::VoyageRestConnection conn = connection(key, {"requests-per-minute": 1});
+        hash<PingInfo> ok = conn.ping();
+        assertTrue(ok.ok, ok.info);
+        assertEq("/v1/embeddings", handler.getRequests()[0].path);
+        # the ping used the account's only request this minute: an embedder of the same account waits
+        VoyageEmbedder same_account(config({"api_key": key}));
+        assertThrows("EMBEDDER-RATE-LIMIT-ERROR", \same_account.encodeBatch(),
+            (inputs(1), {"rate_limit_timeout": 100ms}));
+        # and the next ping fails promptly as rate limited instead of blocking the monitor
+        int t0 = clock_get_monotonic_us();
+        hash<PingInfo> limited = conn.ping();
+        assertFalse(limited.ok);
+        assertRegex("VOYAGE-RATE-LIMITED", limited.info);
+        assertLt(2000000, clock_get_monotonic_us() - t0);
+        # the polling monitor's ping never waits
+        t0 = clock_get_monotonic_us();
+        assertThrows("VOYAGE-RATE-LIMITED", sub () { conn.startPollConnect(); });
+        assertLt(500000, clock_get_monotonic_us() - t0);
+        assertEq(1, handler.getRequests().size(), "no rate-limited ping reached the server");
+
+        # a ping that is not an embeddings request is not limited
+        VoyageRestClient::VoyageRestConnection plain = connection(key, {"requests-per-minute": 1,
+            "ping_path": "models", "ping_method": "GET"});
+        hash<PingInfo> plain_info = plain.ping();
+        assertTrue(plain_info.ok, plain_info.info);
+        assertEq(2, handler.getRequests().size());
+    }
+
+    testPing429() {
+        handler.setScript(({"status": 429, "headers": {"Retry-After": "30"}},));
+        string key = sprintf("ping-key-%d-%d", getpid(), ++key_seq);
+        VoyageRestClient::VoyageRestConnection conn = connection(key);
+        int t0 = clock_get_monotonic_us();
+        hash<PingInfo> info = conn.ping();
+        assertFalse(info.ok);
+        assertRegex("VOYAGE-RATE-LIMITED", info.info);
+        assertLt(2000000, clock_get_monotonic_us() - t0, "the ping is not retried");
+        assertEq(1, handler.getRequests().size());
+        # the 429 blocks every client of the account: an embedder fails at once instead of sending
+        handler.setScript(());
+        VoyageEmbedder same_account(config({"api_key": key}));
+        assertThrows("EMBEDDER-RATE-LIMIT-ERROR", \same_account.encodeBatch(),
+            (inputs(1), {"rate_limit_timeout": 1s}));
+        assertEq(0, handler.getRequests().size());
     }
 }
 

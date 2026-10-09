@@ -95,6 +95,10 @@ printf("%Y\n", ans.body);
       tokens-per-minute limiter (configurable with the new \c requests-per-minute and \c tokens-per-minute
       connection options), and retries HTTP 429 rejections with a shared, bounded backoff that honors
       \c Retry-After before failing with \c EMBEDDER-RATE-LIMIT-ERROR
+    - the Voyage reranker, the data provider and connection pings use the same limiter (reranking models
+      have their own limits, configurable with the \c rerank-requests-per-minute and
+      \c rerank-tokens-per-minute connection options); pings never wait long and report
+      \c VOYAGE-RATE-LIMITED instead of blocking the connection monitor
 */
 
 #! the VoyageRestClient namespace contains all the objects in the VoyageRestClient module
@@ -121,6 +125,53 @@ public class VoyageRestClientBase {
             "data": "json",
         };
 
+        #! Voyage's published tier-1 requests per minute for every embedding and reranking model
+        /** From https://docs.voyageai.com/docs/rate-limits */
+        const PublishedRequestsPerMinute = 2000;
+
+        #! Voyage's published tier-1 embedding tokens per minute by model
+        /** From https://docs.voyageai.com/docs/rate-limits */
+        const PublishedEmbeddingTokensPerMinuteByModel = {
+            "voyage-4-lite": 16000000,
+            "voyage-3.5-lite": 16000000,
+            "voyage-4": 8000000,
+            "voyage-3.5": 8000000,
+            "voyage-4-large": 3000000,
+            "voyage-3-large": 3000000,
+            "voyage-code-3": 3000000,
+        };
+
+        #! Embedding tokens per minute for a model not in @ref PublishedEmbeddingTokensPerMinuteByModel
+        /** The smallest published embedding limit */
+        const DefaultPublishedEmbeddingTokensPerMinute = 3000000;
+
+        #! Voyage's published tier-1 reranking tokens per minute by model
+        /** From https://docs.voyageai.com/docs/rate-limits */
+        const PublishedRerankTokensPerMinuteByModel = {
+            "rerank-3-lite": 4000000,
+            "rerank-2.5-lite": 4000000,
+            "rerank-2-lite": 4000000,
+            "rerank-lite-1": 4000000,
+            "rerank-3": 2000000,
+            "rerank-2.5": 2000000,
+            "rerank-2": 2000000,
+            "rerank-1": 2000000,
+        };
+
+        #! Reranking tokens per minute for a model not in @ref PublishedRerankTokensPerMinuteByModel
+        /** The smallest published reranking limit */
+        const DefaultPublishedRerankTokensPerMinute = 2000000;
+
+        #! Percentage of the published limits used when no limit is configured
+        /** Leaves room for requests that reach Voyage later than they were sent */
+        const DefaultRateLimitPercent = 95;
+
+        #! Rate-limit kind of embedding requests (\c /embeddings)
+        const RateLimitEmbed = "embed";
+
+        #! Rate-limit kind of reranking requests (\c /rerank)
+        const RateLimitRerank = "rerank";
+
         #! Default ping method
         const DefaultPingMethod = "POST";
 
@@ -137,6 +188,91 @@ public class VoyageRestClientBase {
             "model": DefaultEmbeddingModel,
             "input": ("ping",),
         };
+    }
+
+    #! Returns the default client-side rate limits for a model
+    /** @param kind @ref RateLimitEmbed or @ref RateLimitRerank
+        @param model the Voyage model
+
+        @return a hash with \c requests_per_minute and \c tokens_per_minute: @ref DefaultRateLimitPercent
+        percent of Voyage's published tier-1 limits for the model, or of the smallest published limit for a
+        model not listed
+    */
+    static hash<auto> getDefaultRateLimits(string kind, string model) {
+        int tpm = kind == RateLimitRerank
+            ? (PublishedRerankTokensPerMinuteByModel{model} ?? DefaultPublishedRerankTokensPerMinute)
+            : (PublishedEmbeddingTokensPerMinuteByModel{model} ?? DefaultPublishedEmbeddingTokensPerMinute);
+        return {
+            "requests_per_minute": PublishedRequestsPerMinute * DefaultRateLimitPercent / 100,
+            "tokens_per_minute": tpm * DefaultRateLimitPercent / 100,
+        };
+    }
+
+    #! Returns the process-wide limiter for one Voyage account, request kind, and model
+    /** Voyage limits each project per model, so every client of the same account and model shares one
+        limiter: embedders, rerankers, the data provider, and connection pings.  The account is identified by a
+        SHA-256 digest of the endpoint host and the API key; the key itself is never part of the limiter key.
+
+        @param kind @ref RateLimitEmbed or @ref RateLimitRerank
+        @param url the Voyage endpoint (any scheme and path; only the host and port identify it)
+        @param api_key the API key
+        @param model the Voyage model
+        @param requests_per_minute a configured limit; NOTHING uses the default (see @ref getDefaultRateLimits())
+        @param tokens_per_minute a configured limit; NOTHING uses the default
+
+        @note Configured limits apply to every client of the account and model in the process; a client
+            without configured limits creates the limiter with the defaults but never replaces configured ones
+
+        @return the shared limiter
+    */
+    static QoreRagUtils::EmbedderRateLimiter getRateLimiter(string kind, string url, string api_key,
+            string model, *int requests_per_minute, *int tokens_per_minute) {
+        hash<auto> defaults = getDefaultRateLimits(kind, model);
+        # a client without configured limits never overrides the limits another client configured
+        return QoreRagUtils::EmbedderRateLimiter::getShared(sprintf("voyage|%s|%s|%s", kind,
+                getRateLimitAccount(url, api_key), model),
+            requests_per_minute ?? defaults.requests_per_minute, tokens_per_minute ?? defaults.tokens_per_minute,
+            exists requests_per_minute || exists tokens_per_minute);
+    }
+
+    #! Returns the non-secret account identity used in limiter keys
+    /** @param url the Voyage endpoint
+        @param api_key the API key
+        @return the hex SHA-256 digest of the lower-case host, the port, and the API key
+    */
+    static string getRateLimitAccount(string url, string api_key) {
+        hash<auto> u = parse_url(url);
+        string host = tolower(u.host ?? url);
+        int port = u.port ?? (u.protocol == "http" ? 80 : 443);
+        return digest("sha256", sprintf("%s:%d\n%s", host, port, api_key)).toHex();
+    }
+
+    #! Estimates the tokens of one text without a tokenizer: its byte length, which no Voyage tokenization exceeds
+    static int estimateTokens(string text) {
+        return max(1, text.size());
+    }
+
+    #! Estimates the tokens of one rerank request
+    /** Voyage counts "the number of query tokens × the number of documents + sum of the number of tokens in
+        all documents" (https://docs.voyageai.com/reference/reranker-api).
+    */
+    static int estimateRerankTokens(string query, list<string> documents) {
+        int rv = estimateTokens(query) * documents.size();
+        foreach string doc in (documents) {
+            rv += estimateTokens(doc);
+        }
+        return rv;
+    }
+
+    #! Returns the API key from a REST client's \c Authorization header, if it is a bearer token
+    static *string getBearerKey(hash<auto> headers) {
+        foreach string key in (keys headers) {
+            if (tolower(key) == "authorization" && headers{key}.typeCode() == NT_STRING
+                    && headers{key} =~ /^Bearer /i) {
+                return headers{key}.substr(7);
+            }
+        }
+        return NOTHING;
     }
 
     #! returns options for the constructor
@@ -168,7 +304,8 @@ public class VoyageRestClientBase {
         rv.headers = headers;
         # these are connection-level options for downstream consumers (RAG embedder / reranker
         # configuration); they are not REST client options
-        remove rv{"embedding-model", "rerank-model", "requests-per-minute", "tokens-per-minute"};
+        remove rv{"embedding-model", "rerank-model", "requests-per-minute", "tokens-per-minute",
+            "rerank-requests-per-minute", "rerank-tokens-per-minute"};
         return rv;
     }
 }
@@ -205,6 +342,12 @@ public class VoyageRestConnection inherits RestClient::RestConnection {
     public {
         #! Default Voyage AI REST API URL
         const DefaultUrl = "voyage://api.voyageai.com";
+
+        #! Longest a blocking connection ping waits for rate-limit admission
+        /** A ping is diagnostic: it must report the account's state promptly rather than queue behind
+            embedding work.  The polling monitor's ping never waits (see @ref startPollConnect()).
+        */
+        const PingMaxWaitMs = 1000;
 
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
@@ -291,6 +434,25 @@ public class VoyageRestConnection inherits RestClient::RestConnection {
                         "its share when several processes use the same API key",
                     "type": "int",
                 },
+                "rerank-requests-per-minute": <ConnectionOptionInfo>{
+                    "display_name": "Reranking Requests Per Minute",
+                    "short_desc": "Client-side limit on reranking requests per minute",
+                    "desc": "The most reranking requests per minute that reranking clients in one process "
+                        "send for this connection's API key and reranking model; requests over the limit wait "
+                        "instead of failing with HTTP 429.\n\n"
+                        "When unset, 95% of Voyage's published tier-1 limit (2,000 requests per minute) is used. "
+                        "Reranking models are limited separately from embedding models",
+                    "type": "int",
+                },
+                "rerank-tokens-per-minute": <ConnectionOptionInfo>{
+                    "display_name": "Reranking Tokens Per Minute",
+                    "short_desc": "Client-side limit on reranking tokens per minute",
+                    "desc": "The most reranking tokens per minute that reranking clients in one process "
+                        "send for this connection's API key and reranking model.\n\n"
+                        "When unset, 95% of Voyage's published tier-1 limit for the model is used (4M tokens per "
+                        "minute for the `-lite` models, 2M for the others)",
+                    "type": "int",
+                },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": VoyageRestClientBase::DefaultPingHeaders,
                 },
@@ -327,6 +489,78 @@ public class VoyageRestConnection inherits RestClient::RestConnection {
     #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
     bool hasDataProvider() {
         return True;
+    }
+
+    #! Starts a non-blocking polling ping, after the embedding rate limiter admits it without waiting
+    /** A ping to the embeddings endpoint is an embedding request and counts against the account's limits like
+        any other (see @ref VoyageRestClient::VoyageRestClientBase::getRateLimiter() "getRateLimiter()"): one
+        request and a few tokens.  The polling monitor must never block, so a ping that does not fit the
+        limits at once fails immediately with \c VOYAGE-RATE-LIMITED instead of waiting; the connection is
+        then reported as rate limited rather than unreachable, and the next scheduled ping tries again.
+
+        @throw VOYAGE-RATE-LIMITED the account's limits are exhausted or blocked after an HTTP 429
+    */
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
+        if (*hash<auto> ping = getRateLimitedPing()) {
+            try {
+                ping.limiter.settle(ping.limiter.admit(ping.tokens, clock_get_monotonic_us()));
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "EMBEDDER-RATE-LIMIT-ERROR") {
+                    rethrow;
+                }
+                throw "VOYAGE-RATE-LIMITED", sprintf("ping not sent: %s", ex.desc), ex.arg;
+            }
+        }
+        return RestConnection::startPollConnect(logger);
+    }
+
+    #! Performs a blocking ping through the embedding rate limiter
+    /** The ping waits at most @ref PingMaxWaitMs for admission and is not retried after HTTP 429; a 429 still
+        blocks every client sharing the limiter for the provider's \c Retry-After or backoff, so a ping never
+        adds to an overload.  Either way the ping fails with \c VOYAGE-RATE-LIMITED.
+    */
+    private pingImpl() {
+        *hash<auto> ping = getRateLimitedPing();
+        if (!ping) {
+            RestConnection::pingImpl();
+            return;
+        }
+        ping.limiter.call(<QoreRagUtils::RateLimitedCallInfo>{
+            "tokens": ping.tokens,
+            "deadline_us": clock_get_monotonic_us() + PingMaxWaitMs * 1000,
+            "max_retries": 0,
+            "error_code": "VOYAGE-RATE-LIMITED",
+            "error_prefix": sprintf("ping model %y", ping.model),
+        }, bool sub () {
+            RestConnection::pingImpl();
+            return True;
+        });
+    }
+
+    #! Returns the limiter and estimate of a ping that sends an embeddings request, or NOTHING
+    private *hash<auto> getRateLimitedPing() {
+        *string path = getPingPath();
+        if (!opts.ping_method || !exists path || path !~ /embeddings$/ || !opts.apikey.val()) {
+            return NOTHING;
+        }
+        auto body = getPingBody();
+        string model = (body.typeCode() == NT_HASH && body.model.typeCode() == NT_STRING)
+            ? body.model
+            : VoyageRestClientBase::DefaultEmbeddingModel;
+        int tokens = 1;
+        if (body.typeCode() == NT_HASH) {
+            foreach auto input in (body.input) {
+                if (input.typeCode() == NT_STRING) {
+                    tokens += VoyageRestClientBase::estimateTokens(input);
+                }
+            }
+        }
+        return {
+            "model": model,
+            "tokens": tokens,
+            "limiter": VoyageRestClientBase::getRateLimiter(VoyageRestClientBase::RateLimitEmbed, url,
+                opts.apikey, model, opts."requests-per-minute", opts."tokens-per-minute"),
+        };
     }
 
     #! returns a data provider object for this connection
@@ -417,13 +651,14 @@ public namespace QoreRagUtils {
     Voyage limits requests and tokens per minute for each project and model.
     Every request passes a process-wide
     @ref QoreRagUtils::EmbedderRateLimiter "EmbedderRateLimiter" shared by
-    all embedders with the same endpoint, API key, and model, so independently
-    created embedders cannot together exceed the limits.  A caller whose request
-    does not fit waits (interruptibly) instead of failing.  The defaults are
-    @ref DefaultRateLimitPercent percent of Voyage's published tier-1 limits
-    (@ref PublishedRequestsPerMinute requests and
-    @ref PublishedTokensPerMinuteByModel tokens per minute), leaving room for
-    requests that arrive at Voyage later than they were sent; set
+    every client of the same Voyage account and model (see
+    @ref VoyageRestClient::VoyageRestClientBase::getRateLimiter() "getRateLimiter()"),
+    so independently created embedders, the data provider and connection pings
+    cannot together exceed the limits.  A caller whose request does not fit
+    waits (interruptibly) instead of failing.  The defaults are 95% of Voyage's
+    published tier-1 limits (see
+    @ref VoyageRestClient::VoyageRestClientBase::getDefaultRateLimits() "getDefaultRateLimits()"),
+    leaving room for requests that arrive at Voyage later than they were sent; set
     \c requests_per_minute and \c tokens_per_minute for a higher tier, or to
     give each process its share when several processes use one API key.
 
@@ -439,7 +674,11 @@ public namespace QoreRagUtils {
     \c EMBEDDER-RATE-LIMIT-ERROR (\c reason_code \c "provider_rate_limited" or
     \c "rate_limit_wait_deadline").  Each request sent gets a fresh
     transient-failure retry budget (see @ref AbstractEmbedder).  Rate-limit
-    retries are reported to the telemetry observer like other retries.
+    retries are reported to the telemetry observer like other retries (an
+    \c "error" event with \c status_code 429), and an admission wait of a second
+    or more as a \c "wait" event with \c rate_limit_wait_ms.
+    The rate-limit loop itself is
+    @ref QoreRagUtils::EmbedderRateLimiter::call() "EmbedderRateLimiter::call()".
 */
 public class VoyageEmbedder inherits AbstractEmbedder {
     public {
@@ -471,33 +710,6 @@ public class VoyageEmbedder inherits AbstractEmbedder {
         #! Total tokens per request for a model not in @ref MaxTokensPerRequestByModel (the smallest limit)
         const DefaultMaxTokensPerRequest = 120000;
 
-        #! Voyage's published tier-1 requests per minute for every embedding model
-        /** From https://docs.voyageai.com/docs/rate-limits */
-        const PublishedRequestsPerMinute = 2000;
-
-        #! Voyage's published tier-1 tokens per minute by model
-        /** From https://docs.voyageai.com/docs/rate-limits */
-        const PublishedTokensPerMinuteByModel = {
-            "voyage-4-lite": 16000000,
-            "voyage-3.5-lite": 16000000,
-            "voyage-4": 8000000,
-            "voyage-3.5": 8000000,
-            "voyage-4-large": 3000000,
-            "voyage-3-large": 3000000,
-            "voyage-code-3": 3000000,
-        };
-
-        #! Tokens per minute for a model not in @ref PublishedTokensPerMinuteByModel (the smallest limit)
-        const DefaultPublishedTokensPerMinute = 3000000;
-
-        #! Percentage of the published limits used when no limit is configured
-        const DefaultRateLimitPercent = 95;
-
-        #! Initial rate-limit backoff without \c Retry-After
-        const InitialRateLimitBackoffMs = 1000;
-
-        #! Maximum rate-limit backoff without \c Retry-After
-        const MaxRateLimitBackoffMs = 16000;
     }
 
     private {
@@ -613,31 +825,32 @@ public class VoyageEmbedder inherits AbstractEmbedder {
     }
 
     #! Returns the effective client-side rate limits
-    /** @return a hash with \c requests_per_minute and \c tokens_per_minute: the configured values, or
-        @ref DefaultRateLimitPercent percent of the published limits for the model
+    /** @return a hash with \c requests_per_minute and \c tokens_per_minute: the configured values, or the
+        defaults from @ref VoyageRestClient::VoyageRestClientBase::getDefaultRateLimits() "getDefaultRateLimits()"
     */
     hash<auto> getRateLimits() {
+        hash<auto> defaults = VoyageRestClient::VoyageRestClientBase::getDefaultRateLimits(
+            VoyageRestClient::VoyageRestClientBase::RateLimitEmbed, model_name);
         return {
-            "requests_per_minute": config.requests_per_minute
-                ?? (PublishedRequestsPerMinute * DefaultRateLimitPercent / 100),
-            "tokens_per_minute": config.tokens_per_minute
-                ?? ((PublishedTokensPerMinuteByModel{model_name} ?? DefaultPublishedTokensPerMinute)
-                    * DefaultRateLimitPercent / 100),
+            "requests_per_minute": config.requests_per_minute ?? defaults.requests_per_minute,
+            "tokens_per_minute": config.tokens_per_minute ?? defaults.tokens_per_minute,
         };
     }
 
-    #! Returns the process-wide limiter for this embedder's endpoint, API key, and model
-    /** The key contains a SHA-256 digest of the endpoint and API key, never the key itself.
-    */
+    #! Returns True: @ref encodeBatch() packs its inputs into requests within Voyage's per-request limits
+    bool packsRequests() {
+        return True;
+    }
+
+    #! Returns the process-wide limiter for this embedder's account and model
     private EmbedderRateLimiter getRateLimiter() {
         if (!rate_limiter) {
             AutoLock al(init_mutex);
             if (!rate_limiter) {
-                hash<auto> limits = getRateLimits();
-                rate_limiter = EmbedderRateLimiter::getShared(sprintf("voyage|%s|%s",
-                    digest("sha256", (config.url ?? VoyageRestClient::VoyageRestClientBase::DefaultUrl)
-                        + "\n" + config.api_key).toHex(), model_name),
-                    limits.requests_per_minute, limits.tokens_per_minute);
+                rate_limiter = VoyageRestClient::VoyageRestClientBase::getRateLimiter(
+                    VoyageRestClient::VoyageRestClientBase::RateLimitEmbed,
+                    config.url ?? VoyageRestClient::VoyageRestClientBase::DefaultUrl, config.api_key, model_name,
+                    config.requests_per_minute, config.tokens_per_minute);
             }
         }
         return rate_limiter;
@@ -658,7 +871,7 @@ public class VoyageEmbedder inherits AbstractEmbedder {
                 }
             }
         }
-        return max(1, text.size());
+        return VoyageRestClient::VoyageRestClientBase::estimateTokens(text);
     }
 
     #! Splits the inputs into requests within the per-request input and token limits, in order
@@ -693,83 +906,80 @@ public class VoyageEmbedder inherits AbstractEmbedder {
         hash<auto> request = {};
         request += body;
         request.input = input;
-        int deadline_us = clock_get_monotonic_us() + rate_limit_budget_ms * 1000;
-        int attempts = 0;
-        int rate_limit_retries = 0;
-        int backoff_ms = InitialRateLimitBackoffMs;
-        while (True) {
-            int ticket;
-            try {
-                ticket = limiter.admit(slice.tokens, deadline_us);
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "EMBEDDER-RATE-LIMIT-ERROR") {
-                    throw ex.err, sprintf("%s: model %y: %s", Backend, model_name, ex.desc),
-                        ex.arg + {"backend": Backend, "model": model_name, "attempts": attempts,
-                            "input_offset": slice.offset, "input_count": slice.count};
-                }
-                rethrow;
-            }
-            ++attempts;
-            hash<auto> resp;
-            try {
+        hash<auto> resp;
+        try {
+            resp = limiter.call(<RateLimitedCallInfo>{
+                "tokens": slice.tokens,
+                "deadline_us": clock_get_monotonic_us() + rate_limit_budget_ms * 1000,
+                "max_retries": max_rate_limit_retries,
+                "error_code": "EMBEDDER-RATE-LIMIT-ERROR",
+                "error_prefix": sprintf("%s: model %y", Backend, model_name),
+                "error_arg": {"backend": Backend, "model": model_name, "input_offset": slice.offset,
+                    "input_count": slice.count},
+                "observer": sub (hash<RateLimitEventInfo> event) {
+                    notifyRateLimitEvent(opts ?? {}, event, slice);
+                },
+            }, hash<auto> sub () {
                 # a fresh transient-failure budget for each request admitted
                 hash<auto> req_opts = embedderRequestOptions(config, opts, Backend);
-                resp = client.restPostWithRetry("/embeddings", request, NOTHING,
+                return client.restPostWithRetry("/embeddings", request, NOTHING,
                     req_opts._embedder_retry_policy);
-            } catch (hash<ExceptionInfo> ex) {
-                # a rejected request keeps its estimate: the provider may have counted it
-                limiter.settle(ticket);
-                if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 429) {
-                    *int advised_ms = retryAfterMs(ex.arg.headers);
-                    int delay_ms;
-                    if (exists advised_ms) {
-                        int advised = advised_ms;
-                        delay_ms = advised + jitter(advised / 10);
-                    } else {
-                        delay_ms = backoff_ms / 2 + jitter(backoff_ms / 2);
-                    }
-                    # every caller sharing this limit waits, so the provider is not asked again early
-                    limiter.block(delay_ms);
-                    if (rate_limit_retries >= max_rate_limit_retries
-                            || clock_get_monotonic_us() + delay_ms * 1000 > deadline_us) {
-                        throw "EMBEDDER-RATE-LIMIT-ERROR", sprintf("%s: model %y: the provider rejected the "
-                            "request with HTTP 429 after %d attempt(s): %s", Backend, model_name, attempts,
-                            ex.desc), {
-                            "reason_code": "provider_rate_limited",
-                            "retryable": True,
-                            "backend": Backend,
-                            "model": model_name,
-                            "status_code": 429,
-                            "attempts": attempts,
-                            "retry_after_ms": advised_ms,
-                            "body": ex.arg.body,
-                            "input_offset": slice.offset,
-                            "input_count": slice.count,
-                        };
-                    }
-                    ++rate_limit_retries;
-                    notifyEmbedderRetry(config, opts ?? {}, Backend, <RestClientIo::RestRetryEvent>{
-                        "attempt": attempts,
-                        "status_code": 429,
-                        "err": ex.err,
-                        "delay_ms": delay_ms,
-                    });
-                    backoff_ms = min(MaxRateLimitBackoffMs, backoff_ms * 2);
-                    continue;
-                }
-                if (ex.err == "REST-RESPONSE-ERROR" && isPermanentEmbedderConfigError(ex)) {
-                    throwEmbedderModelConfigError(ex, Backend, model_name);
-                }
-                if (inlist(ex.err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED"))) {
-                    rethrow;
-                }
-                hash<auto> arg = ex.arg.typeCode() == NT_HASH ? {} + ex.arg
-                    : (exists ex.arg ? {"original_arg": ex.arg} : {});
-                rethrow ex.err, ex.desc, arg + {"input_offset": slice.offset, "input_count": slice.count};
+            }, *int sub (hash<auto> resp) {
+                auto used = resp.body.usage.total_tokens;
+                return used.typeCode() == NT_INT ? used : NOTHING;
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && isPermanentEmbedderConfigError(ex)) {
+                throwEmbedderModelConfigError(ex, Backend, model_name);
             }
-            auto used = resp.body.usage.total_tokens;
-            limiter.settle(ticket, used.typeCode() == NT_INT ? used : NOTHING);
-            return parseResponse(resp.body, input.size(), slice);
+            if (inlist(ex.err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED", "EMBEDDER-RATE-LIMIT-ERROR"))) {
+                rethrow;
+            }
+            hash<auto> arg = ex.arg.typeCode() == NT_HASH ? {} + ex.arg
+                : (exists ex.arg ? {"original_arg": ex.arg} : {});
+            rethrow ex.err, ex.desc, arg + {"input_offset": slice.offset, "input_count": slice.count};
+        }
+        return parseResponse(resp.body, input.size(), slice);
+    }
+
+    #! Reports a rate-limit retry or a long limiter wait to the telemetry observer
+    /** A retry is reported like any other retry (an \c "error" event with \c status_code 429); a wait is a
+        \c "wait" event with \c rate_limit_wait_ms.  Both carry \c rate_limited @ref True.
+    */
+    private notifyRateLimitEvent(hash<auto> opts, hash<RateLimitEventInfo> event, hash<auto> slice) {
+        if (event.type == "retry") {
+            notifyEmbedderRetry(config, opts, Backend, <RestClientIo::RestRetryEvent>{
+                "attempt": event.attempt,
+                "status_code": event.status_code,
+                "err": event.err ?? "REST-RESPONSE-ERROR",
+                "delay_ms": event.delay_ms,
+            });
+            return;
+        }
+        *hash<RagTelemetryObserver> observer = opts.telemetry_observer ?? config.telemetry_observer;
+        if (!observer) {
+            return;
+        }
+        hash<RagTelemetryEvent> wait = <RagTelemetryEvent>{
+            "type": "wait",
+            "operation": "embed",
+            "timestamp": now_us(),
+            "backend": Backend,
+            "model": model_name,
+            "telemetry_context": opts.telemetry_context ?? config.telemetry_context,
+            "attributes": {"rate_limited": True, "rate_limit_wait_ms": event.delay_ms,
+                "input_count": slice.count, "attempt": event.attempt},
+        };
+        foreach *code<nothing(hash<RagTelemetryEvent>)> cb in ((observer.event_callback,)) {
+            if (cb) {
+                try {
+                    cb(wait);
+                } catch (hash<ExceptionInfo> observer_error) {
+                    if (inlist(observer_error.err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED"))) {
+                        rethrow;
+                    }
+                }
+            }
         }
     }
 
@@ -810,38 +1020,6 @@ public class VoyageEmbedder inherits AbstractEmbedder {
             push result, vec;
         }
         return result;
-    }
-
-    #! Reads Retry-After (seconds or HTTP date) in milliseconds; NOTHING when absent or malformed
-    private *int retryAfterMs(auto headers) {
-        if (headers.typeCode() != NT_HASH) {
-            return NOTHING;
-        }
-        foreach string key in (keys headers) {
-            if (tolower(key) != "retry-after") {
-                continue;
-            }
-            auto value = headers{key};
-            if (value.typeCode() != NT_STRING) {
-                return NOTHING;
-            }
-            string header = trim(value);
-            if (header =~ /^[0-9]+$/) {
-                # saturate an untrusted value before converting it
-                return int(min(number(header), 9223372036854n)) * 1000;
-            }
-            try {
-                return max(0, (date(header) - now_us()).durationMilliseconds());
-            } catch () {
-                return NOTHING;
-            }
-        }
-        return NOTHING;
-    }
-
-    #! Returns a random delay between 0 and the limit; overridable for deterministic tests
-    private int jitter(int limit_ms) {
-        return limit_ms > 0 ? rand() % (limit_ms + 1) : 0;
     }
 
     #! Does not retry HTTP 429 in the transient-failure policy; @ref sendRequest() paces those
@@ -994,6 +1172,25 @@ public class VoyageEmbedderFactory inherits AbstractEmbedderFactory {
     - \c url (optional): override the default Voyage URL
     - \c model (optional): model name, default
       @ref VoyageRestClient::VoyageRestClientBase::DefaultRerankModel "DefaultRerankModel"
+    - \c requests_per_minute, \c tokens_per_minute, \c rate_limit_max_retries,
+      \c rate_limit_timeout (optional): client-side rate limits and the bounds on
+      rate-limit retries
+
+    @par Rate limits
+
+    Every request passes the process-wide reranking limiter of its Voyage
+    account and model (see
+    @ref VoyageRestClient::VoyageRestClientBase::getRateLimiter() "getRateLimiter()";
+    reranking models have their own limits, separate from embedding models), and
+    an HTTP 429 is retried with the same shared, bounded backoff as the
+    embedder's (see @ref voyage_embedder_rate_limits and
+    @ref QoreRagUtils::EmbedderRateLimiter::call() "EmbedderRateLimiter::call()").
+    A request's tokens are estimated as Voyage counts them, the query times the
+    number of documents plus the documents, and replaced by the reported usage.
+    When the retries or \c rate_limit_timeout are exhausted the request fails
+    with \c RERANKER-RATE-LIMIT-ERROR.  Retries and admission waits of a second
+    or more are reported to the telemetry observer (\c "error" and \c "wait"
+    events with \c rate_limited @ref True).
 */
 public class VoyageReranker inherits AbstractReranker {
     public {
@@ -1004,6 +1201,7 @@ public class VoyageReranker inherits AbstractReranker {
         hash<RerankerConfig> config;
         string model_name;
         *VoyageRestClient::VoyageRestClientIo rest_client;
+        *EmbedderRateLimiter rate_limiter;
         Mutex init_mutex();
     }
 
@@ -1011,6 +1209,11 @@ public class VoyageReranker inherits AbstractReranker {
         if (!config.api_key.val()) {
             throw "RERANKER-CONFIG-ERROR",
                 "VoyageReranker requires 'api_key' in RerankerConfig";
+        }
+        if (config.requests_per_minute < 0 || config.tokens_per_minute < 0
+                || config.rate_limit_max_retries < 0 || config.rate_limit_timeout <= 0) {
+            throw "RERANKER-CONFIG-ERROR", "VoyageReranker rate limits and rate_limit_max_retries must not be "
+                "negative and rate_limit_timeout must be positive";
         }
         self.config = config;
         model_name = config.model ?? DefaultModel;
@@ -1059,7 +1262,22 @@ public class VoyageReranker inherits AbstractReranker {
             }
         }
 
-        hash<auto> resp = rest_client.restPost("/rerank", body);
+        hash<auto> resp = getRateLimiter().call(<RateLimitedCallInfo>{
+            "tokens": VoyageRestClient::VoyageRestClientBase::estimateRerankTokens(query, documents),
+            "deadline_us": clock_get_monotonic_us() + rateLimitBudgetMs(opts) * 1000,
+            "max_retries": opts.rate_limit_max_retries ?? config.rate_limit_max_retries,
+            "error_code": "RERANKER-RATE-LIMIT-ERROR",
+            "error_prefix": sprintf("voyage: rerank model %y", model_name),
+            "error_arg": {"backend": "voyage", "model": model_name},
+            "observer": sub (hash<RateLimitEventInfo> event) {
+                notifyRateLimitEvent(opts ?? {}, event, documents.size());
+            },
+        }, hash<auto> sub () {
+            return rest_client.restPost("/rerank", body);
+        }, *int sub (hash<auto> resp) {
+            auto used = resp.body.usage.total_tokens;
+            return used.typeCode() == NT_INT ? used : NOTHING;
+        });
 
         list<hash<auto>> data = resp.body.data ?? ();
         list<hash<RerankResult>> result = ();
@@ -1095,6 +1313,79 @@ public class VoyageReranker inherits AbstractReranker {
 
     *string getModel() {
         return model_name;
+    }
+
+    #! Returns the effective client-side rate limits
+    /** @return a hash with \c requests_per_minute and \c tokens_per_minute: the configured values, or the
+        defaults from @ref VoyageRestClient::VoyageRestClientBase::getDefaultRateLimits() "getDefaultRateLimits()"
+    */
+    hash<auto> getRateLimits() {
+        hash<auto> defaults = VoyageRestClient::VoyageRestClientBase::getDefaultRateLimits(
+            VoyageRestClient::VoyageRestClientBase::RateLimitRerank, model_name);
+        return {
+            "requests_per_minute": config.requests_per_minute ?? defaults.requests_per_minute,
+            "tokens_per_minute": config.tokens_per_minute ?? defaults.tokens_per_minute,
+        };
+    }
+
+    #! Returns the process-wide reranking limiter for this reranker's account and model
+    private EmbedderRateLimiter getRateLimiter() {
+        if (!rate_limiter) {
+            AutoLock al(init_mutex);
+            if (!rate_limiter) {
+                rate_limiter = VoyageRestClient::VoyageRestClientBase::getRateLimiter(
+                    VoyageRestClient::VoyageRestClientBase::RateLimitRerank,
+                    config.url ?? VoyageRestClient::VoyageRestClientBase::DefaultUrl, config.api_key, model_name,
+                    config.requests_per_minute, config.tokens_per_minute);
+            }
+        }
+        return rate_limiter;
+    }
+
+    #! Returns the rate-limit budget of one request in milliseconds
+    private int rateLimitBudgetMs(*hash<auto> opts) {
+        timeout budget = opts.rate_limit_timeout ?? config.rate_limit_timeout;
+        int rv = budget;
+        if (rv <= 0) {
+            throw "RERANKER-CONFIG-ERROR", "rate_limit_timeout must be positive";
+        }
+        return rv;
+    }
+
+    #! Reports a rate-limit retry or a long limiter wait to the telemetry observer
+    private notifyRateLimitEvent(hash<auto> opts, hash<RateLimitEventInfo> event, int document_count) {
+        *hash<RagTelemetryObserver> observer = opts.telemetry_observer ?? config.telemetry_observer;
+        if (!observer) {
+            return;
+        }
+        bool retry = event.type == "retry";
+        hash<RagTelemetryEvent> rv = <RagTelemetryEvent>{
+            "type": retry ? "error" : "wait",
+            "operation": "rerank",
+            "timestamp": now_us(),
+            "backend": "voyage",
+            "model": model_name,
+            "telemetry_context": opts.telemetry_context ?? config.telemetry_context,
+            "status": retry ? "error" : NOTHING,
+            "error": retry ? {"err": event.err, "retryable": True, "attempt": event.attempt,
+                "status_code": event.status_code} : NOTHING,
+            "attributes": retry
+                ? {"rate_limited": True, "attempt": event.attempt, "next_attempt": event.attempt + 1,
+                    "retry_delay_ms": event.delay_ms, "document_count": document_count}
+                : {"rate_limited": True, "rate_limit_wait_ms": event.delay_ms, "document_count": document_count},
+        };
+        foreach *code<nothing(hash<RagTelemetryEvent>)> cb in
+                ((observer.event_callback, retry ? observer.error_callback : NOTHING)) {
+            if (cb) {
+                try {
+                    cb(rv);
+                } catch (hash<ExceptionInfo> observer_error) {
+                    if (inlist(observer_error.err, ("THREAD-CANCELLED", "PROGRAM-INTERRUPTED"))) {
+                        rethrow;
+                    }
+                }
+            }
+        }
     }
 
     private ensureRestClient() {
