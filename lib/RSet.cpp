@@ -368,6 +368,13 @@ int64 q_get_scan_object_count() {
     return scan_object_count;
 }
 
+//! the number of regions whose dependencies scans in the current thread have walked
+static thread_local int64 region_walk_count = 0;
+
+int64 q_get_region_walk_count() {
+    return region_walk_count;
+}
+
 //! the number of recursive sets that scans in the current thread have created
 static thread_local int64 rset_create_count = 0;
 
@@ -453,7 +460,7 @@ static void region_unlock(std::atomic<uintptr_t>& word, RRegion* r) {
 void RObject::invalidateRegion() {
     RRegion* r = region_lock(region_word);
     if (r) {
-        r->invalid.store(true, std::memory_order_seq_cst);
+        r->invalidate();
     }
     region_unlock(region_word, r);
 }
@@ -477,7 +484,7 @@ void RObject::setRegion(RRegion* r, int comp) {
     region_unlock(region_word, r);
     if (old && old != r) {
         // the region's other objects can still reach this one, whose edges it no longer tracks
-        old->invalid.store(true, std::memory_order_seq_cst);
+        old->invalidate();
     }
     if (old) {
         RRegion::deref(old);
@@ -647,7 +654,10 @@ void RObject::setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen, u
     }
     rcount = rcnt;
     // set after the old set is invalidated, which clears this flag for every object of that set
-    rclosed.store(closed ? rs : nullptr, std::memory_order_relaxed);
+    if (rclosed.exchange(closed ? rs : nullptr, std::memory_order_relaxed) && !closed) {
+        // the regions that depend on the object's set being closed are no longer current
+        RRegion::closedSetLeft();
+    }
     // record the edge generation the scan read before following the object's edges; see edgesUnchangedSinceScan()
     scan_edge_gen.store(seen_edge_gen, std::memory_order_relaxed);
     // and the removal generation; see RSet::removalsUnchangedSinceScan()
@@ -1142,8 +1152,15 @@ void RSet::clearClosed() {
     if (!valid) {
         return;
     }
+    bool was_closed = false;
     for (rset_t::iterator i = begin(), e = end(); i != e; ++i) {
-        (*i)->rclosed.store(nullptr, std::memory_order_relaxed);
+        if ((*i)->rclosed.exchange(nullptr, std::memory_order_relaxed)) {
+            was_closed = true;
+        }
+    }
+    // the regions that depend on the set being closed are no longer current
+    if (was_closed) {
+        RRegion::closedSetLeft();
     }
 }
 
@@ -1173,6 +1190,7 @@ void RSet::dbg() {
 #endif
 
 std::atomic<unsigned> RSet::untracked_edge_epoch{0};
+std::atomic<uint64_t> RRegion::invalidations{1};
 
 bool RSet::keepNeedsRescan(bool rescanned) const {
     // A dereference that has already rescanned the set once trusts it: an edge added by another thread since
@@ -2088,11 +2106,17 @@ bool RSetHelper::regionCurrent(RRegion* r) {
     if (mi != region_memo.end()) {
         return mi->second;
     }
+    // read before anything that decides whether a region is current, so that an event made after this cannot be
+    // missed by a region recorded as current below; see RRegion::invalidations
+    uint64_t gen = RRegion::invalidations.load(std::memory_order_seq_cst);
     unsigned epoch = RSet::untracked_edge_epoch.load(std::memory_order_seq_cst);
     // records a decision; the memo takes its own reference
     auto decide = [&](RRegion* x, bool current) {
         x->ref();
         region_memo.emplace(x, current ? 1 : 0);
+        if (current) {
+            x->current_at.store(gen, std::memory_order_release);
+        }
         return current;
     };
     // decides the regions that need no traversal; -1 if the region's dependencies have to be checked
@@ -2103,6 +2127,10 @@ bool RSetHelper::regionCurrent(RRegion* r) {
         }
         if (x->invalid.load(std::memory_order_seq_cst) || x->epoch != epoch) {
             return decide(x, false) ? 1 : 0;
+        }
+        // found current since the last event that could have changed it: its dependencies are current too
+        if (x->current_at.load(std::memory_order_acquire) == gen) {
+            return decide(x, true) ? 1 : 0;
         }
         // a closed set the region reaches that is no longer closed can now reach anything
         for (RObject* o : x->closed_deps) {
@@ -2125,6 +2153,9 @@ bool RSetHelper::regionCurrent(RRegion* r) {
         size_t next;
     };
     std::vector<Frame> frames;
+#ifdef DEBUG
+    ++region_walk_count;
+#endif
     frames.push_back(Frame{r, 0});
     int child = -1;
     while (!frames.empty()) {
@@ -2145,6 +2176,9 @@ bool RSetHelper::regionCurrent(RRegion* r) {
         RRegion* d = f.x->deps[f.next++];
         int drc = shallow(d);
         if (drc < 0) {
+#ifdef DEBUG
+            ++region_walk_count;
+#endif
             frames.push_back(Frame{d, 0});
         } else {
             child = drc;
@@ -2559,6 +2593,8 @@ void qore_dgc_value_stored(RObject& holder, const QoreValue& v) {
                 // a reference: the variable or object it refers to is only found by evaluating it, so every set
                 // stops trusting its counts until it is scanned again
                 RSet::untracked_edge_epoch.fetch_add(1, std::memory_order_seq_cst);
+                // no region recorded before is current any more
+                RRegion::invalidations.fetch_add(1, std::memory_order_seq_cst);
                 break;
         }
     }

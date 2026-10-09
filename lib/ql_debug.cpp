@@ -5299,6 +5299,15 @@ static QoreValue f_dbg_get_scan_object_count(const QoreListNode* params, Runtime
     return q_get_scan_object_count();
 }
 
+//! returns the number of regions whose dependencies scans in the current thread have walked
+/** A scan that reaches an object of a closed region decides whether the region is current, which can mean walking
+    the regions it depends on; tests use this to verify that a region found current is not walked again while
+    nothing has changed.
+*/
+static QoreValue f_dbg_get_region_walk_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return q_get_region_walk_count();
+}
+
 //! returns the number of heap integers that exist in the process
 /** An integer outside the inline (48-bit) range of a value is a heap object; code that does not release one leaks
     it, so tests compare the count before and after the code under test, in every execution mode and on every
@@ -5977,6 +5986,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_region_walk_count", f_dbg_get_region_walk_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_bigint_count", f_dbg_get_live_bigint_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);

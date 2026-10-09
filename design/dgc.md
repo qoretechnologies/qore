@@ -456,6 +456,21 @@ a memo for the rest of the scan: the cost is the regions reached, not the object
 A **removed** edge never ends currency: it cannot make a node reach a root it could not reach before. An object that
 is destroyed releases its reference to the region without ending it.
 
+**Deciding currency once.** Every event that can make a current region stop being current increments the global
+count `RRegion::invalidations` after it is made: a region's `invalid` flag set for the first time
+(`RRegion::invalidate()`), an object of a closed set losing its `rclosed` flag (`RRegion::closedSetLeft()`, from
+`RObject::setRSet()`, `RSet::clearClosed()` and `RSet::invalidateIntern()`), and an untracked edge. `regionCurrent()`
+reads the count before it decides anything and stores it in the region's `current_at` when it finds the region
+current. A region whose `current_at` is the count read by a later scan, whose flag is clear and whose epoch is current
+is current without its `deps` being walked: nothing that could change that has happened since. Without this, a chain
+of objects built head first (`n.next = head; head = n;`) adds a region per object, depending on the previous one, and
+the scan made when the previous head is released walked the whole chain of regions every time, so building a chain of
+n objects took O(n^2) time (20000 objects: 14.8 s; 100000 objects now take about 0.2 s).
+`examples/test/qore/misc/dgc-region-chains.qtest` counts the regions walked (`dbg_get_region_walk_count()`, debug
+builds) and checks that changes inside such a chain are still seen. The count is a single global atomic, incremented
+at most once per region, closed-set change or untracked edge; any event anywhere makes every region be decided by
+walking again, which is the cost every scan paid before.
+
 **Skipping.** `RSetHelper::checkNode(RObject&)` does not enter an object whose region is current, unless the object
 is in the root's own component of the root's region: the root's region can be current when the scan is a rescan
 rather than a write, and the root's component has to be walked to find its cycles. An object of another component was

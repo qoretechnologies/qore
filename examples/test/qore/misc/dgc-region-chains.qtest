@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcRegionChainsTest
+
+#! a link of a chain; counts its destruction
+class Link {
+    public {
+        *Link next;
+        auto extra;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++Link::destroyed;
+    }
+}
+
+#! Tests chains of objects built head first, where each new object references the previous head
+/** Releasing the previous head when the new one is assigned scans the graph from it; the scan finds the rest of the
+    chain in closed regions recorded by the previous scans, each depending on the region of the next object.  Whether
+    a region is current depended on walking every region it depends on in every scan, so building a chain of n
+    objects walked O(n^2) regions; a region found current is now not walked again until an event that can change
+    that (see RRegion::invalidations in include/qore/intern/RSet.h).  Changes inside the chain must still be seen.
+*/
+class DgcRegionChainsTest inherits QUnit::Test {
+    public {
+        #! the length of the chains
+        const Length = 2000;
+    }
+
+    constructor() : QUnit::Test("dgc region chains", "1.0") {
+        addTestCase("a chain built head first walks each region once", \walkTest());
+        addTestCase("a chain built head first is collected when it is closed into a cycle", \cycleTest());
+        addTestCase("an edge added inside the chain is seen", \innerEdgeTest());
+        set_return_value(main());
+    }
+
+    walkTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("region walk counts require a debug build");
+        }
+        Link::destroyed = 0;
+        int start = regionWalkCount();
+        *Link head = buildChain(Length);
+        int walks = regionWalkCount() - start;
+        # each new region depends on the region of the previous head, which was found current by the previous scan
+        assertLe(2 * Length, walks, sprintf("%d regions walked for %d links", walks, Length));
+        remove head;
+        assertEq(Length, Link::destroyed);
+    }
+
+    cycleTest() {
+        Link::destroyed = 0;
+        Link tail();
+        *Link head = tail;
+        for (int i = 1; i < Length; ++i) {
+            Link l();
+            l.next = head;
+            head = l;
+        }
+        # the chain's regions are current; closing the cycle must be seen
+        tail.next = head;
+        remove tail;
+        assertEq(0, Link::destroyed);
+        remove head;
+        assertEq(Length, Link::destroyed);
+    }
+
+    innerEdgeTest() {
+        Link::destroyed = 0;
+        *Link head = buildChain(Length);
+        # an object deep in the chain gets an edge back to the head, which makes the whole chain a cycle
+        Link inner = head;
+        for (int i = 0; i < Length / 2; ++i) {
+            inner = inner.next;
+        }
+        inner.extra = head;
+        remove inner;
+        # a new head references the cycle, and its scan must not trust the regions the edge changed
+        Link newHead();
+        newHead.next = head;
+        remove head;
+        assertEq(0, Link::destroyed);
+        remove newHead;
+        assertEq(Length + 1, Link::destroyed);
+    }
+
+    #! builds a chain head first: each new link references the previous head
+    private static *Link buildChain(int length) {
+        *Link head;
+        for (int i = 0; i < length; ++i) {
+            Link l();
+            l.next = head;
+            head = l;
+        }
+        return head;
+    }
+
+    #! Returns the number of regions whose dependencies the scans of this thread have walked
+    private static int regionWalkCount() {
+        return call_function("dbg_get_region_walk_count");
+    }
+}

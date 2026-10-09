@@ -38,6 +38,7 @@
 #include "qore/vector_map"
 
 #include <atomic>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -58,6 +59,12 @@ DLLLOCAL int64 q_get_rset_create_count();
     of the scans a thread has made; see dbg_get_scan_object_count().
 */
 DLLLOCAL int64 q_get_scan_object_count();
+
+//! Returns the number of regions whose dependencies scans in the current thread have walked
+/** RSetHelper::regionCurrent() walks the regions a region depends on unless the region was found current since the
+    last event that could have changed that; see RRegion::invalidations and dbg_get_region_walk_count().
+*/
+DLLLOCAL int64 q_get_region_walk_count();
 
 //! Returns the number of times a scan in the current thread gave up a pass and waited to start over
 /** A pass is given up when the scan cannot take the r-section of an object it has to enter; it registers a
@@ -115,7 +122,34 @@ public:
     */
     std::vector<RObject*> closed_deps;
 
+    //! RRegion::invalidations as read by the RSetHelper::regionCurrent() call that last found the region current, or 0
+    std::atomic<uint64_t> current_at{0};
+
+    //! Counts the events that can make a current region no longer current
+    /** A region is current while it is not invalid, its epoch is RSet::untracked_edge_epoch, each of its closed
+        dependencies is in a closed set and each region it depends on is current.  Each event that can change one of
+        these increments the count after it is made: a region marked invalid (invalidate()), an object of a closed
+        set leaving it (closedSetLeft()) and an untracked edge.  A region found current when the count was N stays
+        current while the count is N, so RSetHelper::regionCurrent() decides it without walking the regions it
+        depends on again; a chain of objects built head first adds a region per object depending on the previous
+        one, and walking them in every scan made building the chain quadratic.  Starts at 1, so a region never
+        found current never matches.
+    */
+    DLLLOCAL static std::atomic<uint64_t> invalidations;
+
     DLLLOCAL explicit RRegion(unsigned epoch) : epoch(epoch) {
+    }
+
+    //! Marks the region invalid
+    DLLLOCAL void invalidate() {
+        if (!invalid.exchange(true, std::memory_order_seq_cst)) {
+            invalidations.fetch_add(1, std::memory_order_seq_cst);
+        }
+    }
+
+    //! Records that an object left a closed recursive set, after its flag is cleared; see invalidations
+    DLLLOCAL static void closedSetLeft() {
+        invalidations.fetch_add(1, std::memory_order_seq_cst);
     }
 
     DLLLOCAL void ref() {
@@ -827,10 +861,17 @@ protected:
         assert(valid);
         valid = false;
         // remove the weak references to all contained objects
+        bool was_closed = false;
         for (rset_t::iterator i = begin(), e = end(); i != e; ++i) {
             // the set is gone, so scans must enter its objects again
-            (*i)->rclosed.store(nullptr, std::memory_order_relaxed);
+            if ((*i)->rclosed.exchange(nullptr, std::memory_order_relaxed)) {
+                was_closed = true;
+            }
             (*i)->tDeref();
+        }
+        // the regions that depend on the set being closed are no longer current
+        if (was_closed) {
+            RRegion::closedSetLeft();
         }
         clear();
         releaseNodes();
