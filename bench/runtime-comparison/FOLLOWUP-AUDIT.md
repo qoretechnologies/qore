@@ -6956,3 +6956,100 @@ All 62 checks for the manual resolution/evidence delta: 6 Pass, 56 N/A, 0 Fail.
 |60. QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No manual runtime allocation, thread/type/error-handling or QPP change. Relevant imported runtime interactions were reviewed and integration-tested.
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|Documentation-only manual resolution adds no executable capability, unchecked input, credentials, buffer or format-string change.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Both builds pass 38 performance files (77 cases, 5097 assertions, eight standalones) plus 14 integration files (145 cases, 5413 release/5424 debug assertions, one standalone). Debug native units pass two assertions including zero failures. Six reference modes pass 345 checks each. Exact row-union verification, strict tables and diff checks pass; no full-suite or cross-platform claim.
+
+## Compact native-method diagnostic frame audit (2026-10-10)
+
+Scope: the uncommitted delta after `abb1e399b`: one private C++ frame and
+its use in the existing deferred native-method continuation; two qtest control
+legs; call-stack design, benchmark README/results and machine-readable evidence.
+Applied all 62 audit-changes checks. The module-structure, sandboxing,
+cooperative-cancellation and Qore-table guidance was reviewed; DataProvider
+checks are inapplicable to this delta.
+
+The ownership review follows the cache from full-key validation through
+release publication and `owned_entries`, then through the last-member helper's
+unpublication/reader wait. `UserVariantBase::getStatementBlock()` returns the
+constructor-initialized statement pointer; lazy source-stripped debug entry
+storage is separate. The frame borrows no new lifetime beyond the method context
+and the old frame's already-borrowed call name. No frame publication is removed.
+
+Release/debug matrices each pass 38 files, 77 cases, 5121 assertions and eight
+standalones, after core/qmod builds. Expanded reader/debugger controls also pass
+against the baseline. Both frozen runtimes have six reference modes with 345
+checks each. Eleven harness tests pass. The production patch SHA256 is
+`237bc2157ab38ac721804f562c6920a2056b1d003ad6d5a32a3d68d3f95d069e`.
+Release/debug binaries still match the measured frozen candidate hashes.
+
+Four runs contain 360 jobs/1800 windows. Retain only the repeatable 1.87–2.67%
+typed-polymorphic benefit. Expression repeats are effectively unchanged; every
+control range overlaps and small positive arithmetic/dispatch changes remain
+visible. Range overlap is not a significance test. No Java-parity or general-call
+claim. See [results](RESULTS.md#compact-native-method-diagnostic-frame-2026-10-10)
+and [complete evidence](results-compact-native-method-frame-macos-arm64.json).
+Strict Qore table conversion and `git diff --check` pass.
+
+All 62 checks: 19 Pass, 43 N/A, 0 Fail.
+
+|!Check|!Status|!Findings
+|1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, QPP class, registration, parse directive or module-layout change.
+|2. Entry exists in doxygen/lang/900_release_notes.dox.tmpl (for modules in the Qore repo; external modules have release notes in their .qm)|N/A|No new Qore module, QPP class, registration, parse directive or module-layout change.
+|3. qore_user_module() or qore_external_user_module() call in CMakeLists.txt|N/A|No new Qore module, QPP class, registration, parse directive or module-layout change.
+|4. Module added to QMOD list in CMakeLists.txt|N/A|No new Qore module, QPP class, registration, parse directive or module-layout change.
+|5. .qm file has @section <lowercasemodname>intro as first doc section — must be all lowercase (e.g., avrodataproviderintro, not AvroDataProviderintro)|N/A|No new Qore module, QPP class, registration, parse directive or module-layout change.
+|6. %modern in .qm file — no redundant %new-style, %require-types, %strict-args, %enable-all-warnings|N/A|No new Qore module, QPP class, registration, parse directive or module-layout change.
+|7. No parse directives (%requires, %modern, %new-style) in separated .qc files (check OUTSIDE of @code blocks only)|N/A|No new Qore module, QPP class, registration, parse directive or module-layout change.
+|8. No %include usage (deprecated for modules)|N/A|No new Qore module, QPP class, registration, parse directive or module-layout change.
+|9. Copyright 2026 on all new files|Pass|New evidence JSON carries copyright 2026 and MIT license fields; modified qtests already carry both.
+|10. Directory layout: .qm inside qlib/<ModuleName>/ directory (not at qlib/<ModuleName>.qm for multi-file modules)|N/A|No new Qore module, QPP class, registration, parse directive or module-layout change.
+|11. No second .qm for the same module at qlib/<ModuleName>.qm|N/A|No new Qore module, QPP class, registration, parse directive or module-layout change.
+|12. ns=Qore::XX matches the QoreNamespace constructor path|N/A|No new Qore module, QPP class, registration, parse directive or module-layout change.
+|13. %modern directive present|Pass|Both modified qtests retain %modern.
+|14. Executable permission set (chmod +x)|Pass|git ls-files --stage records both qtests as 100755.
+|15. Uses %prepend-module-path  before %requires for in-repo modules|Pass|Both qtests prepend ../../../qlib before requiring QUnit and FsUtil.
+|16. External module dependencies use %try-module — except modules delivered with Qore itself (DataProvider, ConnectionProvider, QUnit, etc.) which use hard %requires|Pass|Only in-repository QUnit/FsUtil are required; no new external dependency.
+|17. No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks|Pass|C++ delta adds no filesystem operation; it borrows metadata from an admitted immutable cache entry.
+|18. No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks|Pass|C++ delta adds no network operation.
+|19. If filesystem/network ops exist, verify QoreSandboxManagerHelper usage|N/A|No C++ filesystem or network operation added.
+|20. No File::, Dir::, Socket::, HTTPClient:: usage without justification|Pass|Added test legs only select an existing runtime control; existing FsUtil TmpDir usage isolates compiler outputs, and command arguments use the existing quote helper.
+|21. All for/while loops that could iterate >100 times have qore_check_cancel() checks|Pass|No new C++ loop. Existing bounded four-entry lookup and cancellation/stack checks are unchanged.
+|22. Uses qore_check_cancel() (NOT deprecated qore_check_io_interrupt())|N/A|No new C++ iteration or I/O cancellation point; existing bounded lookup and guards are unchanged.
+|23. Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations|N/A|No new C++ iteration or I/O cancellation point; existing bounded lookup and guards are unchanged.
+|24. No blocking operations without cancellation support|Pass|No new blocking operation. Existing frame pop still waits for stack readers under the unchanged publication protocol.
+|25. Every action has display_name, short_desc (plain text, <80 chars), desc (markdown)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|26. Every action has options populated via getActionOptionFromFields() — without this, the action shows an empty, unusable form|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|27. Every action has output_type set to a typed data type constant (e.g., MyResponseDataType) — not omitted|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|28. DPAT_API actions: provider has "supports_request": True and implements doRequestImpl()|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|29. DPAT_FIND actions: every option exists in SearchOptions, getRecordTypeImpl() returns hash<string, AbstractDataField>|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|30. Scheme-based apps (with "scheme" in registerApp): actions use "path" and do NOT use "cls" — having both scheme and cls causes a runtime error|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|31. Single-key hash slices use trailing comma: Fields{"key",} (without trailing comma, Fields{"key"} returns the value, not a hash)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|32. Typed data type classes exist for request and response types — inherit HashDataType, have const Fields hash, call addQoreFields(Fields) in constructor, export public constant at bottom (e.g., public const MyDataType = new MyDataType();)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|33. Request/input types use public Fields (enables ClassName::Fields in action registration)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|34. Response/output types use private Fields|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|35. Each field in data types has display_name, type, and desc (markdown-formatted)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|36. Input fields have example_value where useful (string fields, endpoint URIs, SQL queries, etc.)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|37. Fields with finite allowed values use allowed_values with AllowedValueInfo containing both value and display_name (Title Case, human-readable) — never bare values, never described only in text|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|38. Password/secret fields have "sensitive": True|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|39. groups uses AppGroup enum values from qlib/DataProvider/AppGroup.qc|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|40. App logo stored as separate file, loaded at module level in Priv namespace|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|41. App desc uses markdown: bullet list of capabilities, links to project website, business-language explanation of value|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|42. display_name is user-friendly ("Apache Avro" not "avro")|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|43. short_desc is plain text, under 80 chars, single sentence — no markdown|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|44. desc uses markdown: backticks for code/field refs ( field_name ,  True ,  pdf ), \n\n for paragraphs, -  bullet lists for enumerations, bold for caveats|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|45. Descriptions use plain business language relating to common challenges — not just technical "what" but "why" and "when to use"|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|46. No bare True/False/NOTHING — must be backtick-wrapped in desc|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|47. No bare field/option names in prose — must use backticks|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|48. Long descriptions (>500 chars) use bold section headers and bullet lists|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|49. Factory registration in Qore repo: every factory name registered in qlib/DataProvider/DataProvider.qc → FactoryMap (without this, module loads but doesn't appear in Qorus apps)|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|50. getRecordTypeImpl() signature: must be private hash<string, AbstractDataField> getRecordTypeImpl(hash<auto> search_options) — NOT returning AbstractDataProviderType|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|51. Dependency JARs committed (for JNI modules): JAR files in qlib//jar/ may be gitignored — use git add -f to ensure they're tracked, otherwise CI compilation fails|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|52. JAR install rules in CMakeLists.txt for all dependency JARs|N/A|No DataProvider action/type/app/factory/description or JNI/JAR change.
+|53. No workarounds: No TODOs, FIXMEs, stubs, or partially-implemented features|Pass|Complete private frame implementation, no TODO/FIXME/stub, no disabled observability or weakened fallback.
+|54. Exception safety: C++ uses ReferenceHolder for Qore allocations, std::unique_ptr for C++ allocations, xsink checked after every fallible operation|Pass|No new allocation or ownership transfer. Frame helper remains the last member, and RAII unpublishes/restores on normal and exceptional exits; existing sink checks and native exception handling are unchanged.
+|55. Thread safety: All mutable shared state protected by std::lock_guard<std::mutex> or documented as immutable-after-construction|Pass|PIC entries are fully initialized before release publication, immutable thereafter, and owned by the caller AOT context including retired entries. The variant statement block is stable for that lifetime. Caller location is set before publication. Pop waits for readers before members/base subobjects die; method context already borrows the same entry.
+|56. Type safety: Strongly-typed code<return(args)> instead of untyped code; static_cast instead of C casts; typed hashdecls for results; enums where appropriate|Pass|Typed const cache reference and existing virtual return types; no casts, untyped callbacks, serialization, public layout or helper ABI change.
+|57. Performance: No O(n²) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply|Pass|Three five-fork paired trials retain a 1.87–2.67% typed-polymorphic gain; no repeatable expression gain. All controls and overlap limits retained. No extra allocation, loop or ownership traffic; arm64 frame shrinks 16 bytes and continuation three static instructions.
+|58. Error handling: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable|Pass|All full dispatch-key/admission checks, object validity, Program/context, epoch, debugger, entry readiness, sink and stack guards are unchanged. Compact frame is constructed only after its cache pointers are validated. No new I/O or unchecked external input.
+|59. Documentation: Doxygen @param, @return, @throw on all public methods; @par Example with realistic business scenarios; @note for important caveats|Pass|Private frame comments and call-stack design document explain borrowed lifetimes, statement stability, publication order and retained observers. README/RESULTS/evidence distinguish targeted gain, mixed controls, identical artifacts and qualification limits. No new public method requiring API examples.
+|60. QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP method or flags changed.
+|61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No user-controlled formats, new buffers/indexing, credentials or new external capability. Existing bounded dispatch and input guards remain.
+|62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Both builds pass 38 files (77 cases, 5121 assertions, eight standalones); expanded baseline controls pass five cases/1148 assertions. Six reference modes per frozen runtime pass 345 checks each; eleven harness tests pass. All 360 jobs/1800 windows, hashes and statistics revalidated. No full-suite/new sanitizer/cross-platform claim.

@@ -254,6 +254,15 @@ sets `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` at both compilation and execution,
 so it uses a different executable from the enabled runs, but one identical
 executable within each before/after pair.
 
+The deferred unary-integer method frame now borrows its immutable admitted PIC
+entry for name, Program and statement metadata. It still publishes every call
+and waits for stack readers before destruction. No dispatch guard or generated
+ABI changes. The [compact-frame experiment](RESULTS.md#compact-native-method-diagnostic-frame-2026-10-10)
+reuses identical executables on frozen before/after runtimes: three trials show
+a 1.87–2.67% typed-polymorphic gain, but no repeatable expression-call gain.
+Its raw-derived evidence includes every control, a baseline-only Java comparison,
+and the runtime eager-frame reader/debugger controls.
+
 `QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1` selects eager private-context,
 object/class and empty variable-marker setup for the method-v2 scalar continuation
 at runtime. The native body, dispatch checks, published diagnostic frame

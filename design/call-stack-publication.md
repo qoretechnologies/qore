@@ -81,6 +81,32 @@ afterwards, and `QoreJITStackLocation::getProgram()` chooses between its explici
 `CodeEvaluationHelper` pushes from `init()`, called in its constructor body, and pops in its destructor body, so it
 satisfies the rule without the member helper.
 
+### Compact native-method frames
+
+The same-Program unary-integer AOT continuation uses
+`QoreCompactNativeMethodStackLocation` after the complete live PIC admission.
+It borrows the immutable admitted cache entry instead of copying three metadata
+pointers into each frame. The entry owns the call name and identifies the
+execution Program and user variant; the variant's statement block is immutable
+for this lifetime. Source-stripped entry/debug statements are separate and do
+not replace that block. The caller's AOT context owns the entry until after the
+call returns, including entries retired from PIC slots.
+
+The frame still stores the caller location and publishes on every call, even
+when the compiler has proven the body pure. A concurrent stack reader can
+observe that call. Its publishing helper is the last member: construction
+initializes the borrowed entry and location before publishing, and destruction
+unpublishes and waits for readers before either becomes invalid. Cold overflow
+materialization and context restoration are unchanged. Eager/native-v1 calls
+keep their existing frame. No generated-code ABI or public layout changes.
+
+`AOTNativeMethodEntry.qtest` and `AOTNameMethodContinuation.qtest` exercise the
+default frame and the eager control selected at runtime by
+`QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1`, including concurrent readers
+and debugger behavior. The compact-frame experiment is qualified in release
+and debug, not by a new sanitizer run; the earlier protocol validation below
+must not be read as sanitizer qualification of this change.
+
 ### Known limitation: external module frames
 
 `QoreExternalRuntimeStackLocationHelper` (public API, subclassed by binary modules such as jni and python) pushes

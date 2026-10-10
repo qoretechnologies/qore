@@ -116,6 +116,8 @@ class NameMethodContinuationTest inherits QUnit::Test {
                     assertEq(expected, run((executable,)), name + prefix + level);
                     assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 "),
                         name + " disabled " + prefix + level);
+                    assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "),
+                        name + " eager method frame " + prefix + level);
                 }
             }
         }

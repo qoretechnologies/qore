@@ -6938,3 +6938,109 @@ Next: commit the audited result, synchronize with develop, then profile the
 remaining checked initializer, real-reference cleanup and native continuation.
 Use those profiles to select the next same-Program fast-call optimization;
 do not replace access-sensitive acceptance with an incomplete epoch proof.
+
+## Compact native-method diagnostic frame (2026-10-10)
+
+The same-Program unary-integer continuation now borrows the already-admitted
+immutable PIC entry for diagnostic metadata, instead of copying three metadata
+pointers into every frame. The caller location remains per-call. Complete
+dispatch/admission checks, stack guards, publication, reader synchronization,
+cold context materialization and eager fallback are unchanged. Pure calls
+still publish frames because concurrent stack readers can observe them.
+The caller's AOT context retains the entry, and the last-member publishing
+helper waits for readers before frame members are destroyed.
+
+Baseline source is `abb1e399b`, after the develop merge, with release SHA256
+`01b61050e6de5f84684ff23444ba61b3ae6efcd83de2a4c0ac78beefcb1f1e47`.
+Candidate release SHA256 is
+`dd9faaedf83418c3d1f34ffc7d35bb3fa6afe49d1eeb8d5c145f5cc39e406600`.
+[Complete evidence](results-compact-native-method-frame-macos-arm64.json)
+records the production patch, binary identities, all raw-derived timing windows,
+references, test/log hashes and assembly. This is runtime-only: every paired
+run reuses one identical executable on frozen before/after libraries.
+
+All runs use five forks, three warmups, five 500 ms samples and five startup
+samples, with randomized job schedules. Values below are whole-kernel
+ns/element, median of fork means; startup is excluded. Java target methods
+retain DONT_INLINE, while Qore may inline its exact-base branch. These are not
+equal-inlining-policy isolated call latency comparisons.
+
+The pre-edit baseline-only run, `run-yf2kz96q`, count 4096, seed 810861:
+
+|!Kernel|!Baseline Qore|!Java JIT|!Qore/Java
+|polymorphic_call|35.588|2.593|13.72x
+|polymorphic_expression_call|10.720|2.589|4.14x
+|monomorphic_call|3.385|1.697|1.99x
+|optional_method_call|11.080|1.707|6.49x
+
+Paired trial, count 4096, seed 810862, `run-38do266a`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|polymorphic_call|36.314|35.501|-2.24%|yes|2.616|13.57x
+|polymorphic_expression_call|10.905|10.795|-1.01%|yes|2.629|4.11x
+|monomorphic_call|3.391|3.409|+0.54%|yes|1.713|1.99x
+|optional_method_call|11.242|11.170|-0.64%|yes|1.717|6.50x
+|indirect_wide|7.477|7.391|-1.16%|yes|1.721|4.29x
+|indirect_float|9.325|9.245|-0.87%|yes|1.707|5.41x
+|arithmetic|1.404|1.411|+0.51%|yes|1.016|1.39x
+|dispatch_control|1.463|1.464|+0.07%|yes|1.025|1.43x
+
+Paired trial, count 1024, seed 810863, `run-kiqj40bn`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|polymorphic_call|37.499|36.798|-1.87%|no|2.592|14.20x
+|polymorphic_expression_call|12.328|12.326|-0.02%|yes|2.590|4.76x
+|monomorphic_call|4.800|4.766|-0.71%|yes|1.708|2.79x
+|optional_method_call|12.430|12.357|-0.59%|yes|1.706|7.24x
+|indirect_wide|8.675|8.556|-1.37%|yes|1.707|5.01x
+|indirect_float|10.422|10.486|+0.61%|yes|1.696|6.18x
+|arithmetic|2.505|2.511|+0.26%|yes|0.995|2.52x
+|dispatch_control|2.653|2.662|+0.36%|yes|1.013|2.63x
+
+Confirmation, count 4096, seed 810864, `run-t9_iruez`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap
+|polymorphic_call|36.092|35.127|-2.67%|no
+|polymorphic_expression_call|10.843|10.837|-0.05%|yes
+|monomorphic_call|3.415|3.386|-0.85%|yes
+|optional_method_call|11.283|11.159|-1.11%|yes
+|indirect_wide|7.369|7.455|+1.17%|yes
+|indirect_float|9.241|9.254|+0.14%|yes
+|arithmetic|1.405|1.406|+0.08%|yes
+|dispatch_control|1.452|1.467|+1.00%|yes
+
+Retain the targeted typed-polymorphic gain: 1.87–2.67%, or 0.70–0.97 ns/element,
+in all three trials. Fork ranges are disjoint in the 1024 repeat and 4096
+confirmation, but overlap in the first paired trial. Expression calls improve
+1.01% initially, then only 0.02% and 0.05%; no repeatable benefit is established
+there. Nullable medians improve 0.59–1.11%, with overlapping ranges throughout.
+Every control range overlaps, including the small arithmetic/dispatch increases.
+Overlap is descriptive, not a significance test or proof of no regression.
+No general-call, isolated latency, IR, startup or Java-parity gain is claimed.
+Do not add this percentage to the earlier pre-merge slot optimization as an
+unmeasured cumulative result.
+
+All four completed runs contain 360 jobs and 1800 windows, independently
+recomputed from raw Qore/JMH output. No task builds, tests, profiling,
+disassembly or evidence computation overlapped timing; only progress reads.
+Host background activity and filesystem caches remain uncontrolled.
+The arm64 continuation shrinks from 752 to 749 static instructions and from
+416 to 400 stack bytes; the private frame also has a compile-time size check.
+Those assembly observations alone are not performance evidence.
+
+Release/debug each pass 38 files: 30 QUnit files, 77 cases, 5121 assertions plus
+eight standalones. The added eager-frame controls exercise native-method and
+nullable/name-dispatched concurrent readers and debugger behavior. Both expanded
+drivers also pass against the frozen baseline (five cases, 1148 assertions).
+Existing coverage includes foreign Programs, deleted receivers, overrides,
+generic/private contexts, stack overflow, exceptions, source stripping, O0/O3,
+native EH, parallel codegen and disabled paths. Both core and QUnit/FsUtil/Util
+qmod builds completed before tests. Each frozen runtime has six reference modes
+(release IR/AOT/Java interpreter/JIT, debug IR/AOT), 345 checks per mode.
+Eleven harness tests pass. No full-suite, new sanitizer or cross-architecture
+qualification is claimed.
+
+Next: audit and commit this bounded change, synchronize with develop, and
+investigate checked class-local initialization and repeated full native PIC
+admission. Preserve live validity, context, debugger and entry-readiness checks.
+Inheritance acceptance must not be cached against the incomplete method epoch.

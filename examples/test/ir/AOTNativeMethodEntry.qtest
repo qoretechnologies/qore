@@ -117,6 +117,8 @@ class NativeMethodEntryTest inherits QUnit::Test {
                     "fallback " + prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 "),
                     "uncached admission " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "),
+                    "eager method frame " + prefix + level);
             }
         }
     }

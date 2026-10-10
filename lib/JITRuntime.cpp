@@ -17252,6 +17252,33 @@ private:
     std::conditional_t<Deferred, RuntimeConfigNativeLeafCallHelperFor<true>, RuntimeConfigNativeCallHelper> helper;
 };
 
+// The admitted immutable PIC entry already identifies every reader-visible
+// field except the caller location. Borrow it rather than copying the name,
+// statement block and Program on each scalar call. The caller's AOT context
+// owns the entry, and the publishing helper waits for readers before exit.
+class QoreCompactNativeMethodStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
+public:
+    __attribute__((always_inline)) QoreCompactNativeMethodStackLocation(RuntimeConfig& rc,
+            const QoreAOTMethodDispatchCacheEntry& cache, ExceptionSink* xsink,
+            RuntimeConfigNativeMethodContext& context)
+        : cache(cache), helper(rc, this, loc, context, xsink) {
+    }
+    __attribute__((always_inline)) ~QoreCompactNativeMethodStackLocation() override = default;
+    const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+    bool isAOTFrame() const override { return true; }
+    const std::string& getCallName() const override { return cache.call_name; }
+    qore_call_t getCallType() const override { return CT_USER; }
+    QoreProgram* getProgram() const override { return cache.native_int_program; }
+    const AbstractStatement* getStatement() const override { return cache.native_int_uvb->getStatementBlock(); }
+
+private:
+    const QoreAOTMethodDispatchCacheEntry& cache;
+    const QoreProgramLocation* loc = nullptr;
+    // LAST: unpublish and wait before destroying reader-visible members.
+    RuntimeConfigNativeLeafCallHelperFor<true> helper;
+};
+static_assert(sizeof(QoreCompactNativeMethodStackLocation) < sizeof(QoreNativeMethodStackLocation<true>));
+
 template <bool CachedAdmission>
 static bool try_dispatch_native_int_method(QoreObject* object,
         const QoreAOTMethodDispatchCacheEntry& cache, const UserVariantBase* uvb,
@@ -18174,7 +18201,7 @@ extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v1(QoreAOTContext* caller_
         // Borrow the already-owned receiver; successful pure calls never alter
         // object/class state. Only the callee's failing guard materializes it.
         RuntimeConfigNativeMethodContext context(*rc, object, *cached);
-        QoreNativeMethodStackLocation<true> frame(*rc, *cached, uvb, pgm, xsink, &context);
+        QoreCompactNativeMethodStackLocation frame(*rc, *cached, xsink, context);
         invoke();
     } else {
         RuntimeConfigNativeObjectHelper context(*rc, object, cached->native_int_class_ctx);
