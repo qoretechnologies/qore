@@ -23,7 +23,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 KERNELS = ("arithmetic", "direct_call", "method_call", "indirect_call", "polymorphic_call",
            "polymorphic_expression_call", "monomorphic_call",
-           "optional_method_call",
+           "optional_method_call", "polymorphic_float_call", "polymorphic_float_expression_call",
+           "monomorphic_float_call", "optional_float_method_call",
            "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
            "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
            "dispatch_control", "list_read", "list_build",
@@ -81,7 +82,11 @@ def reference(name, count, seed):
         return result
     result = 0
     for index in range(count):
-        if name == "indirect_float":
+        if name in ("polymorphic_float_call", "polymorphic_float_expression_call"):
+            seed = (65535, 65537, 65541)[index % 3] - seed
+            result += seed
+            continue
+        if name in ("indirect_float", "monomorphic_float_call", "optional_float_method_call"):
             seed = 65535 - seed
             result += seed
             continue

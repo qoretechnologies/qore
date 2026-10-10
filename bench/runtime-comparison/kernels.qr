@@ -56,6 +56,17 @@ class DynamicStepC inherits DynamicStep {
     int next(int value) { return (value * 33 + 23) & 65535; }
 }
 
+# Exactly representable double recurrences, independently checked with integers.
+class DynamicFloatStep {
+    float next(float value) { return 65535.0 - value; }
+}
+class DynamicFloatStepB inherits DynamicFloatStep {
+    float next(float value) { return 65537.0 - value; }
+}
+class DynamicFloatStepC inherits DynamicFloatStep {
+    float next(float value) { return 65541.0 - value; }
+}
+
 int sub indirectCall(int count, int seed, code<int(int)> callback) {
     int sum = 0;
     for (int i = 0; i < count; ++i) {
@@ -132,6 +143,49 @@ int sub polymorphicExpressionCall(int count, int seed, DynamicStep a, DynamicSte
     for (int i = 0; i < count; ++i) {
         seed = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(seed);
         sum += seed;
+    }
+    return sum;
+}
+
+int sub monomorphicFloatCall(int count, int seed, DynamicFloatStep receiver) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = receiver.next(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+int sub optionalFloatMethodCall(int count, int seed, *DynamicFloatStep receiver) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = receiver.next(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+int sub polymorphicFloatCall(int count, int seed,
+        DynamicFloatStep a, DynamicFloatStep b, DynamicFloatStep c) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        DynamicFloatStep receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+        value = receiver.next(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+int sub polymorphicFloatExpressionCall(int count, int seed,
+        DynamicFloatStep a, DynamicFloatStep b, DynamicFloatStep c) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value);
+        sum += int(value);
     }
     return sum;
 }
@@ -242,7 +296,8 @@ int sub dispatch(string name, int count, int seed, list<int> data, Stepper recei
         code<int(int)> callback, DynamicStep a, DynamicStep b, DynamicStep c,
         code<int(int)> wideCallback, code<float(float)> floatCallback, code<float(float)> taggedCallback,
         code<float(float)> branchCallback, code<int(int)> affineCallback, code<int(int)> branchIntCallback,
-        code<int(int)> closureCallback, code<int(int)> capturedCallback) {
+        code<int(int)> closureCallback, code<int(int)> capturedCallback,
+        DynamicFloatStep fa, DynamicFloatStep fb, DynamicFloatStep fc) {
     switch (name) {
         case "arithmetic": return arithmetic(count, seed);
         case "direct_call": return directCall(count, seed);
@@ -261,6 +316,10 @@ int sub dispatch(string name, int count, int seed, list<int> data, Stepper recei
         case "polymorphic_expression_call": return polymorphicExpressionCall(count, seed, a, b, c);
         case "monomorphic_call": return monomorphicCall(count, seed, a);
         case "optional_method_call": return optionalMethodCall(count, seed, a);
+        case "polymorphic_float_call": return polymorphicFloatCall(count, seed, fa, fb, fc);
+        case "polymorphic_float_expression_call": return polymorphicFloatExpressionCall(count, seed, fa, fb, fc);
+        case "monomorphic_float_call": return monomorphicFloatCall(count, seed, fa);
+        case "optional_float_method_call": return optionalFloatMethodCall(count, seed, fa);
         case "dispatch_control": return dispatchControl(count, seed);
         case "list_read": return listRead(data, seed);
         case "list_build": return listBuild(count, seed);
@@ -301,6 +360,9 @@ sub main() {
         DynamicStep a();
         DynamicStepB b();
         DynamicStepC c();
+        DynamicFloatStep fa();
+        DynamicFloatStepB fb();
+        DynamicFloatStepC fc();
         foreach int count in ((0, 1, 17, 1024, 4096)) {
             list<int> data = makeData(count, 7);
             foreach int seed in ((0, 7, 65535)) {
@@ -308,13 +370,14 @@ sub main() {
                         "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
                         "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
                         "polymorphic_call", "polymorphic_expression_call", "monomorphic_call",
-                        "optional_method_call", "dispatch_control", "list_read",
+                        "optional_method_call", "polymorphic_float_call", "polymorphic_float_expression_call",
+                        "monomorphic_float_call", "optional_float_method_call", "dispatch_control", "list_read",
                         "list_build", "list_mutate", "temporary_list", "temporary_hash",
                         "closure_call", "closure_capture")) {
                     printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed,
                         dispatch(name, count, seed, data, receiver, callback, a, b, c,
                             wideCallback, floatCallback, taggedCallback, branchCallback, affineCallback, branchIntCallback,
-                            closureCallback, capturedCallback));
+                            closureCallback, capturedCallback, fa, fb, fc));
                 }
             }
         }
@@ -343,6 +406,9 @@ sub main() {
     DynamicStep a();
     DynamicStepB b();
     DynamicStepC c();
+    DynamicFloatStep fa();
+    DynamicFloatStepB fb();
+    DynamicFloatStepC fc();
     for (int sample = -warmup; sample < samples; ++sample) {
         int checksum = 0;
         int calls = 0;
@@ -352,7 +418,7 @@ sub main() {
             seed = (seed + 1) & 65535;
             checksum ^= dispatch(name, count, seed, data, receiver, callback, a, b, c,
                 wideCallback, floatCallback, taggedCallback, branchCallback, affineCallback, branchIntCallback,
-                closureCallback, capturedCallback);
+                closureCallback, capturedCallback, fa, fb, fc);
             ++calls;
             elapsed = clock_get_monotonic_us() - start;
         } while (elapsed < duration_us);

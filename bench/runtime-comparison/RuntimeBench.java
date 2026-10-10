@@ -34,6 +34,7 @@ public class RuntimeBench {
     private LongUnaryOperator affineCallback, branchIntCallback;
     private DoubleUnaryOperator floatCallback, taggedCallback, branchCallback;
     private DynamicStep a, b, c;
+    private DynamicFloatStep fa, fb, fc;
 
     @Setup
     public void setup() {
@@ -51,6 +52,9 @@ public class RuntimeBench {
         a = new DynamicStep();
         b = new DynamicStepB();
         c = new DynamicStepC();
+        fa = new DynamicFloatStep();
+        fb = new DynamicFloatStepB();
+        fc = new DynamicFloatStepC();
     }
 
     static long step(long value) {
@@ -121,6 +125,19 @@ public class RuntimeBench {
         long next(long value) { return (value * 33 + 23) & 65535; }
     }
 
+    static class DynamicFloatStep {
+        @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        double next(double value) { return 65535.0 - value; }
+    }
+    static class DynamicFloatStepB extends DynamicFloatStep {
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        double next(double value) { return 65537.0 - value; }
+    }
+    static class DynamicFloatStepC extends DynamicFloatStep {
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        double next(double value) { return 65541.0 - value; }
+    }
+
     static long indirectCall(int count, long seed, LongUnaryOperator callback) {
         long sum = 0;
         for (int i = 0; i < count; ++i) {
@@ -185,6 +202,39 @@ public class RuntimeBench {
         for (int i = 0; i < count; ++i) {
             seed = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(seed);
             sum += seed;
+        }
+        return sum;
+    }
+
+    static long monomorphicFloatCall(int count, long seed, DynamicFloatStep receiver) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = receiver.next(value);
+            sum += (long) value;
+        }
+        return sum;
+    }
+
+    static long polymorphicFloatCall(int count, long seed,
+            DynamicFloatStep a, DynamicFloatStep b, DynamicFloatStep c) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            DynamicFloatStep receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+            value = receiver.next(value);
+            sum += (long) value;
+        }
+        return sum;
+    }
+
+    static long polymorphicFloatExpressionCall(int count, long seed,
+            DynamicFloatStep a, DynamicFloatStep b, DynamicFloatStep c) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value);
+            sum += (long) value;
         }
         return sum;
     }
@@ -318,6 +368,14 @@ public class RuntimeBench {
     @Benchmark public long monomorphic_call() { return monomorphicCall(count, nextSeed(), a); }
     // Java references already permit null. Both workloads time a strong non-null receiver.
     @Benchmark public long optional_method_call() { return monomorphicCall(count, nextSeed(), a); }
+    @Benchmark public long polymorphic_float_call() {
+        return polymorphicFloatCall(count, nextSeed(), fa, fb, fc);
+    }
+    @Benchmark public long polymorphic_float_expression_call() {
+        return polymorphicFloatExpressionCall(count, nextSeed(), fa, fb, fc);
+    }
+    @Benchmark public long monomorphic_float_call() { return monomorphicFloatCall(count, nextSeed(), fa); }
+    @Benchmark public long optional_float_method_call() { return monomorphicFloatCall(count, nextSeed(), fa); }
     @Benchmark public long dispatch_control() { return dispatchControl(count, nextSeed()); }
     @Benchmark public long list_read() { return listRead(data, nextSeed()); }
     @Benchmark public long list_build() { return listBuild(count, nextSeed()); }
@@ -341,6 +399,7 @@ public class RuntimeBench {
         DoubleUnaryOperator floatCallback = RuntimeBench::floatStep, taggedCallback = RuntimeBench::taggedFloatStep;
         DoubleUnaryOperator branchCallback = RuntimeBench::branchFloatStep;
         DynamicStep a = new DynamicStep(), b = new DynamicStepB(), c = new DynamicStepC();
+        DynamicFloatStep fa = new DynamicFloatStep(), fb = new DynamicFloatStepB(), fc = new DynamicFloatStepC();
         for (int count : new int[] {0, 1, 17, 1024, 4096}) {
             ArrayList<Long> values = makeData(count, 7);
             for (long seed : new long[] {0, 7, 65535}) {
@@ -348,7 +407,8 @@ public class RuntimeBench {
                     "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
                     "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
                     "polymorphic_call", "polymorphic_expression_call", "monomorphic_call",
-                    "optional_method_call", "dispatch_control", "list_read",
+                    "optional_method_call", "polymorphic_float_call", "polymorphic_float_expression_call",
+                    "monomorphic_float_call", "optional_float_method_call", "dispatch_control", "list_read",
                     "list_build", "list_mutate", "temporary_list", "temporary_hash",
                     "closure_call", "closure_capture"};
                 long[] results = {arithmetic(count, seed), directCall(count, seed),
@@ -360,7 +420,11 @@ public class RuntimeBench {
                     indirectCall(count, seed, branchIntCallback),
                     polymorphicCall(count, seed, a, b, c), polymorphicExpressionCall(count, seed, a, b, c),
                     monomorphicCall(count, seed, a),
-                    monomorphicCall(count, seed, a), dispatchControl(count, seed),
+                    monomorphicCall(count, seed, a),
+                    polymorphicFloatCall(count, seed, fa, fb, fc),
+                    polymorphicFloatExpressionCall(count, seed, fa, fb, fc),
+                    monomorphicFloatCall(count, seed, fa), monomorphicFloatCall(count, seed, fa),
+                    dispatchControl(count, seed),
                     listRead(values, seed), listBuild(count, seed),
                     listMutate(count, seed), temporaryList(count, seed), temporaryHash(count, seed),
                     indirectCall(count, seed, closureCallback), indirectCall(count, seed, capturedCallback)};

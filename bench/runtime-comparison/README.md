@@ -363,6 +363,10 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |polymorphic_expression_call|The same three targets and selection used directly as the call receiver, without a per-iteration receiver local
 |monomorphic_call|Non-final method with one unchanged exact-base receiver parameter; Qore may inline its arithmetic, while Java's target retains `DONT_INLINE`
 |optional_method_call|Same stable receiver with Qore's nullable `*DynamicStep` contract; Java references already permit null and use the same non-final target
+|polymorphic_float_call|Three non-final floating-point targets selected into a typed receiver local, with integer-exact subtraction recurrences
+|polymorphic_float_expression_call|The same floating targets and selection directly in the receiver expression, without the per-iteration receiver local
+|monomorphic_float_call|One unchanged exact-base floating receiver; Java retains its target call and Qore may inline the base body
+|optional_float_method_call|Same floating receiver with Qore's nullable contract; only strong non-null inputs are timed
 |dispatch_control|Same receiver-selection arithmetic and increments without method calls
 |list_read|Indexed traversal of a list prepared outside timing; XOR each element with the invocation seed
 |list_build|Build a growing list, then read every element into the checksum
@@ -375,6 +379,16 @@ not a replacement for `polymorphic_call` or a measured runtime optimization.
 Their difference includes compiler lowering and ownership/cleanup effects; it
 does not isolate an exact local-variable cost. Both use the same targets, seeds,
 selection and recurrence. Java retains `DONT_INLINE` on all three target methods.
+
+The four floating-method kernels mirror these receiver shapes using
+`65535.0 - value`, `65537.0 - value` and `65541.0 - value`. Values remain exactly
+representable doubles throughout the supported count/seed range; the independent
+reference uses integer arithmetic and the checksum converts each result to an
+integer. Receivers are created outside timed loops. This adds measurement
+coverage, not a runtime optimization. The Java methods retain `DONT_INLINE`;
+Qore may inline its exact-base branch, so ratios are whole-kernel comparisons,
+not isolated call latency or an equal-inlining-policy comparison. Exceptional
+floating values and null receiver errors belong in separate correctness tests.
 
 `monomorphic_call` exercises the cached exact-class check for an unwritten
 receiver parameter. The generated AOT guard also checks receiver identity:

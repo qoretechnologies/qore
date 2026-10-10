@@ -7866,3 +7866,111 @@ binary is represented as having been timed in these two screens.
 The [full audit](FOLLOWUP-AUDIT.md#caller-reserved-native-method-frame-storage-rejection-audit-2026-10-10)
 covers the retained documentation/evidence. No full-suite, sanitizer or
 cross-architecture claim.
+
+
+## Floating-method baseline and next optimization (2026-10-10)
+
+Added four matched Qore/Java floating-method kernels after the audited develop
+merge `e6ebee141`. **No runtime/compiler optimization is included here.**
+This broadens coverage beyond the existing integer-method and float-callback
+cases and establishes a measured baseline for extending native method calls.
+The [complete evidence](results-float-method-baseline-macos-arm64.json) retains
+all settings, samples, fork statistics, binary/source identities and raw hashes.
+
+The kernels use three non-final receiver types and exactly representable double
+subtractions, with an independent integer reference. They distinguish a typed
+per-iteration receiver local, a direct receiver expression, a stable exact-base
+receiver and a nullable receiver. Objects are constructed outside timed loops.
+All Java targets retain `DONT_INLINE`; Qore can inline the exact-base case.
+Thus these are whole-kernel comparisons including selection, conversion and
+ownership work, **not isolated call latency or matched inlining policies**.
+The nullable cases time non-null strong objects only.
+
+### Fresh measurements on the unmodified merged runtime
+
+Apple M4 Pro / macOS arm64, Temurin 25.0.2, run `run-akzwimx2`, 4096 elements,
+three forks, three warmup and five measured 500 ms windows, randomized seed
+814001. Numbers are medians of fork means in ns/element, startup excluded.
+All 72 jobs / 360 measured windows were independently rechecked; nothing was
+discarded and no task build, test, profile or evidence work overlapped timing.
+
+|!Kernel|!Qore IR|!Qore AOT|!Java JIT|!AOT / Java
+|polymorphic_float_call|1022.49|140.16|2.60|54.01x
+|polymorphic_float_expression_call|782.64|124.10|2.58|48.03x
+|monomorphic_float_call|442.62|8.97|1.67|5.37x
+|optional_float_method_call|442.59|145.25|1.67|87.14x
+|polymorphic_call|977.82|24.28|2.56|9.48x
+|polymorphic_expression_call|740.79|10.31|2.55|4.04x
+|indirect_float|448.73|9.12|1.66|5.51x
+|arithmetic|94.99|1.45|1.00|1.45x
+
+Observed AOT fork-mean ranges for the four new kernels:
+
+|!Kernel|!Range (ns/element)
+|polymorphic_float_call|139.496–140.269
+|polymorphic_float_expression_call|122.417–125.072
+|monomorphic_float_call|8.816–8.967
+|optional_float_method_call|142.510–147.865
+
+The existing int-expression and float-callback controls are around 10.31 and
+9.12 ns in AOT. The new floating polymorphic/nullable kernels instead spend
+124–145 ns. This identifies a much larger extension opportunity than moving
+native-int frame storage, but does not establish the size of a future gain.
+The three new receiver arguments add outer-dispatch setup; do not compare these
+controls directly against historical harness revisions as a before/after result.
+This is one three-fork baseline, not a cross-count stability or startup claim.
+
+### Why this is the next target
+
+Precise LLVM function extraction finds no native-method attempt in any of the
+four floating caller bodies and no native-method binding in any of the three
+floating target bodies. Each caller retains a general dot-eval fallback plus
+float boxing/unboxing. The exact-base case can still use its existing typed
+body; the missing extension concerns dynamically resolved overrides and
+nullable/name-dispatched calls, not every floating call.
+
+A separate ten-second, 1 ms profile, completed before timing, records 7458
+inclusive samples in the top-level executor. At a dominant floating-expression
+callsite, 6706 samples include 6569 in the general object-method helper, with
+variant dispatch, generic invocation/context and local setup underneath.
+These are nested inclusive counts, not independent percentages or additive
+costs. Tail attribution and individual callsite visibility are incomplete.
+The profile supports bypassing repeated general invocation work with the
+existing compiler-proven scalar mechanism; it does not justify removing live
+receiver, context, debugger or stack-reader guarantees.
+
+### Qualification and execution plan
+
+All 12 Python harness tests pass. Release IR/AOT/Java-interpreted/Java-JIT,
+debug IR/AOT and the three timed modes each pass all 405 reference checks.
+The core binaries are unchanged from the fully qualified merged baseline:
+release `573bcf7d503983a1084f458676f2ac9820f1d7b0191009fdac4baa22ef5c651b`,
+debug `190caee0f81513e813a6ac36081d916abb6f7be1fe18ac90e1cc8cd1f8e3624a`.
+Both are frozen with tools and identities in
+`baseline-post-merge-5c31ca5c-glYWh9`. They embed d976c5f07 plus the merged
+source/audit adjustments now committed as e6ebee141; no future revision is
+represented as embedded in them.
+
+The next implementation steps are:
+
+1. Extend whole-body-proven native method companions from `int(int)` to
+   `float(float)`, retaining explicit RuntimeConfig and existing integer ABIs.
+   Reuse the complete dispatch key, deferred callee context, frame publication
+   and concurrent-reader handshake. Keep AOT context/body identity live:
+   registration can replace/delete it, so PIC lifetime alone is not sufficient.
+2. Preserve boxed fallback return contracts and ownership. Test O0/O3,
+   stripped/split/EH compilation, disable controls, exclusions for self/argv/
+   effectful bodies, same/cross-Program calls, debugger and stack readers,
+   null/override/error paths, signed zero, infinities, NaNs and tag-colliding
+   doubles. Requalify existing integer calls in release/debug.
+3. Compile before/after AOT artifacts separately against the frozen and new
+   libraries. Run isolated randomized multi-fork comparisons at 4096 and 1024
+   elements, with short-invocation checks if setup changes warrant them. Keep
+   integer-method and float-callback controls and all adverse results.
+4. Retain only measured, validated improvements, then audit and commit.
+   Investigate IR invocation costs separately: an AOT companion does not by
+   itself speed up the much slower interpreter measurements in this table.
+
+The [full audit](FOLLOWUP-AUDIT.md#floating-method-baseline-audit-2026-10-10)
+covers this benchmark-only change. No runtime improvement, full-suite rerun,
+sanitizer, cross-architecture or Java-parity claim.
