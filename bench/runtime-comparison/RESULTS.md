@@ -6747,3 +6747,86 @@ repeated class-admission work to guarded entry-time proofs and reducing native
 dispatch checks where Program, receiver identity, access and observability
 invariants genuinely permit it. Keep the runtime slot and destruction semantics;
 do not replace dynamic checks with unguarded parse-time assumptions.
+
+## Rejected native-method configuration aggregation (2026-10-10)
+
+After merging `origin/develop` at `f0b67f173`, test whether sharing one static
+initialization for native-method admission and deferred-context controls reduces
+retained-call cost. The candidate changes only `qore_rt_try_method_int_unary_v1`:
+one immutable flag word replaces two separately initialized booleans. No caller
+ABI, compiler, Program/access/type/epoch, frame, stack or exception check changes.
+It samples deferred-context configuration at the first helper invocation rather
+than the first admitted call. The experiment is **not retained**: fewer static
+instructions did not produce a repeatable measured benefit. The original runtime
+and configuration semantics are restored; two extra runtime-control test legs
+are retained.
+
+[Complete evidence](results-native-method-flags-macos-arm64.json) includes the
+rejected patch, binary/source hashes, all raw-derived samples, references and
+summaries. Frozen baseline release SHA256 is
+`ed38958bd81afcc8664141211839bbc106e9561e980b8b416e870ee61417586f`;
+candidate is `f942d877c4383310c353f7b3724345eb90e47657837033876a2fb62d966b891c`.
+Each paired run reuses one identical executable with the two compatible runtimes.
+All runs use five forks, three warmups, five 500 ms windows and five startup
+samples, with randomized schedules. Whole-kernel ns/element is the median of
+fork means, excluding startup. No task builds, tests, profiling, disassembly or
+evidence computation overlapped timing; only progress reads. Host background
+activity and filesystem caches remain uncontrolled. No sample is discarded.
+
+The first paired run (`run-vwcr3bme`, count 4096, seed 810842) has very large
+slowdowns in both versions: typed-polymorphic baseline fork means span
+34.60–237.67 ns and expression baseline fork means span 10.33–195.21 ns. A repeat
+at count 1024 (`run-fgntc20h`, seed 810843) and a cleaner confirmation at 4096
+(`run-7j4z_6vo`, seed 810844, Qore modes only) do not establish a consistent gain:
+
+|!Kernel|!First 4096 change|!1024 change|!Confirmation before|!Confirmation after|!Confirmation change
+|polymorphic_call|+11.00%|-0.98%|37.943|37.116|-2.18%
+|polymorphic_expression_call|-2.30%|-1.10%|10.518|10.572|+0.51%
+|monomorphic_call|-7.31%|-0.52%|3.391|3.319|-2.14%
+|optional_method_call|+10.05%|-1.71%|10.889|11.010|+1.11%
+|indirect_wide|+0.33%|+4.72%|7.278|7.338|+0.82%
+|indirect_float|-3.24%|-0.71%|9.084|9.273|+2.07%
+|arithmetic|+0.43%|+0.04%|1.367|1.371|+0.29%
+|dispatch_control|-6.67%|-0.18%|1.436|1.422|-0.98%
+
+All before/after fork ranges overlap, including the confirmation. Range overlap
+is descriptive, not a significance test; neither a proven regression nor a
+speedup is claimed. The baseline-only run before production edits (`run-x_wjqfy8`,
+count 4096, seed 810841) provides this post-merge Java comparison:
+
+|!Kernel|!Qore AOT|!Java JIT|!Qore/Java
+|polymorphic_call|38.829|2.613|14.86x
+|polymorphic_expression_call|10.578|2.597|4.07x
+|monomorphic_call|3.413|1.703|2.00x
+|optional_method_call|11.097|1.706|6.51x
+
+Java retains DONT_INLINE targets; Qore may inline its exact-base branch. These
+are whole-kernel comparisons, not equal-inlining-policy isolated call latency or
+Java parity. All four runs total 360 jobs/1800 measured windows, independently
+recomputed from raw Qore/JMH output with reference and identity checks.
+
+Arm64 inspection finds 752 to 743 static instructions in the native helper and
+one fewer static-initialization guard. The live `pc_loc_map_attached` atomic
+admission check remains. The baseline-only and first paired generated kernel
+bodies are relocation-normalized identical for typed polymorphic, expression
+polymorphic and monomorphic calls (1241, 982 and 616 instructions). This does not
+prove a cause for runtime/layout or host-dependent timing differences.
+
+Candidate validation passes 17 files in each build: 13 QUnit files, 37 cases,
+2695 assertions plus four standalones. Six candidate reference modes and six
+baseline reference modes each pass 345 checks; the 11 harness tests pass. The
+expanded name-method driver covers deferred-context disabled alone and together
+with native continuation disabled, across its existing optimization/EH/parallel
+matrix. After restoring and rebuilding both runtimes and QUnit/FsUtil/Util qmods,
+the name-method and native-context drivers pass again in each build (three cases,
+742 assertions). The restored release library matches the frozen baseline hash
+exactly. No full-repository, sanitizer or cross-architecture claim.
+
+Next: target repeated class admission and runtime-local cleanup. Preserve the
+runtime slot, access-sensitive acceptance and declaration-order destruction;
+measure any guarded proof/cache against this unchanged post-merge baseline.
+Inspection found that the existing method-dispatch epoch is not advanced by all
+base-class addition paths (`QoreClass::addBuiltinBaseClass` and
+`qore_class_private::addBaseClass`). Do not treat it as a complete inheritance
+invalidation mechanism. Any cached admission must establish a sufficient
+invariant or add the appropriate invalidation before it can replace a check.
