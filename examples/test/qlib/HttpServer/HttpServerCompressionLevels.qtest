@@ -1,0 +1,280 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# Response bodies are compressed on the fly for each request, so HttpServer compresses them with levels suited to
+# that (Brotli quality 5 and not the maximum quality 11, which takes seconds for a body of a few megabytes), set with
+# the compression_levels option.  Among the content encodings that a client accepts with the same weight, the
+# cheapest one to compress is used; weights and exclusions in Accept-Encoding are honored.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../.."
+%requires QUnit
+%requires json
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires TestCertificates
+
+%exec-class HttpServerCompressionLevelsTest
+
+class BodyHandler inherits AbstractHttpRequestHandler {
+    private {
+        string body;
+    }
+
+    constructor(string body) {
+        self.body = body;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        return <HttpResponseInfo>{"code": 200, "body": self.body, "hdr": {"Content-Type": MimeTypeJson}};
+    }
+}
+
+class HttpServerCompressionLevelsTest inherits QUnit::Test {
+    public {
+        #! the default level of each encoding
+        const DefaultLevels = {
+            "br": 5,
+            "zstd": 3,
+            "gzip": 6,
+            "deflate": 6,
+            "bzip2": 3,
+        };
+    }
+
+    private {
+        #! a JSON body for which each level of each encoding gives different output
+        string body;
+    }
+
+    constructor() : Test("HttpServerCompressionLevelsTest", "1.0", \ARGV) {
+        list<string> words = ("record", "action", "provider", "connection", "message", "option", "value", "type",
+            "field", "schema", "create", "update", "delete", "search", "event", "service");
+        list<auto> l = ();
+        for (int i = 0; i < 400; ++i) {
+            string d = "";
+            for (int j = 0; j < 30; ++j) {
+                d += words[(i * 7 + j * 13 + (i * j) % 11) % words.size()] + " " + ((i * 31 + j) % 97) + " ";
+            }
+            l += {"name": "app-" + i, "desc": d, "actions": (map ("action": "act-" + $1), xrange(3))};
+        }
+        body = make_json(l);
+
+        addTestCase("default levels", \testDefaultLevels());
+        addTestCase("configured levels", \testConfiguredLevels());
+        addTestCase("levels changed at runtime", \testSetLevels());
+        addTestCase("invalid levels", \testInvalidLevels());
+        addTestCase("encoding negotiation", \testNegotiation());
+        addTestCase("HTTP/2 negotiation and levels", \testHttp2());
+        addTestCase("encodeBody() levels", \testEncodeBody());
+        set_return_value(main());
+    }
+
+    #! returns the given data compressed with the given encoding and level
+    private static binary compressBody(string encoding, int level, string data) {
+        switch (encoding) {
+            case "br": return brotli(data, level);
+            case "zstd": return zstd(data, level);
+            case "gzip": return gzip(data, level);
+            case "deflate": return compress(data, level);
+            case "bzip2": return bzip2(data, level);
+        }
+        throw "UNKNOWN-ENCODING", encoding;
+    }
+
+    #! creates a server with a plain HTTP listener; returns the server and its port
+    private hash<auto> createServer(*hash<string, int> levels) {
+        Logger logger("compression-levels-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{"logger": logger};
+        if (levels) {
+            opts.compression_levels = levels;
+        }
+        HttpServer server(opts);
+        server.setHandler("body", "/body", NOTHING, new BodyHandler(body));
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        return {"server": server, "port": port};
+    }
+
+    #! sends a GET request on a new HTTP/1.1 connection and returns the response headers and the raw body
+    private hash<auto> rawRequest(int port, *string accept_encoding) {
+        Socket s();
+        s.connect("127.0.0.1:" + port, 10s);
+        on_exit s.close();
+        string req = "GET /body HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n";
+        if (exists accept_encoding) {
+            req += "Accept-Encoding: " + accept_encoding + "\r\n";
+        }
+        s.send(req + "\r\n");
+        hash<auto> hdr = s.readHTTPHeader(10s);
+        assertEq(200, hdr.status_code);
+        binary data = s.recvBinary(int(hdr."content-length"), 10s);
+        return {"hdr": hdr, "body": data};
+    }
+
+    testDefaultLevels() {
+        hash<auto> sh = createServer();
+        on_exit delete sh.server;
+        assertEq(DefaultLevels, sh.server.getCompressionLevels());
+        foreach hash<auto> i in (DefaultLevels.pairIterator()) {
+            hash<auto> resp = rawRequest(sh.port, i.key);
+            assertEq(i.key, resp.hdr."content-encoding");
+            assertEq(compressBody(i.key, i.value, body), resp.body, sprintf("%s level %d", i.key, i.value));
+        }
+        # the maximum Brotli quality is not used for a response compressed on the fly
+        assertNeq(brotli(body, BROTLI_MAX_QUALITY), rawRequest(sh.port, "br").body);
+    }
+
+    testConfiguredLevels() {
+        hash<string, int> levels = {"br": 9, "zstd": 7, "gzip": 1};
+        hash<auto> sh = createServer(levels);
+        on_exit delete sh.server;
+        assertEq(DefaultLevels + levels, sh.server.getCompressionLevels());
+        foreach hash<auto> i in ((DefaultLevels + levels).pairIterator()) {
+            hash<auto> resp = rawRequest(sh.port, i.key);
+            assertEq(i.key, resp.hdr."content-encoding");
+            assertEq(compressBody(i.key, i.value, body), resp.body, sprintf("%s level %d", i.key, i.value));
+        }
+    }
+
+    testSetLevels() {
+        hash<auto> sh = createServer();
+        on_exit delete sh.server;
+        sh.server.setCompressionLevels({"br": 4, "deflate": 9});
+        assertEq(DefaultLevels + {"br": 4, "deflate": 9}, sh.server.getCompressionLevels());
+        assertEq(brotli(body, 4), rawRequest(sh.port, "br").body);
+        assertEq(compress(body, 9), rawRequest(sh.port, "deflate").body);
+        # levels not given return to their defaults
+        sh.server.setCompressionLevels({});
+        assertEq(DefaultLevels, sh.server.getCompressionLevels());
+        assertEq(brotli(body, 5), rawRequest(sh.port, "br").body);
+    }
+
+    testInvalidLevels() {
+        foreach hash<string, int> levels in ({"br": 12}, {"br": -1}, {"zstd": 0}, {"zstd": ZSTD_MAX_LEVEL + 1},
+                {"gzip": 10}, {"gzip": 0}, {"gzip": -1}, {"deflate": 0}, {"deflate": 10}, {"bzip2": 0},
+                {"bzip2": 10}, {"lz4": 1},
+                {"identity": 1}) {
+            assertThrows("HTTP-SERVER-COMPRESSION-LEVEL-ERROR", sub () {
+                HttpServer server(<HttpServerOptionInfo>{"compression_levels": levels});
+            }, NOTHING, sprintf("constructor %y", levels));
+        }
+        hash<auto> sh = createServer({"br": 6});
+        on_exit delete sh.server;
+        assertThrows("HTTP-SERVER-COMPRESSION-LEVEL-ERROR", sub () {
+            sh.server.setCompressionLevels({"br": 12});
+        });
+        # a failed change leaves the levels unchanged
+        assertEq(DefaultLevels + {"br": 6}, sh.server.getCompressionLevels());
+        # the extreme valid levels
+        sh.server.setCompressionLevels({"br": 0, "zstd": ZSTD_MAX_LEVEL, "gzip": 1, "deflate": 9, "bzip2": 9});
+        assertEq(brotli(body, 0), rawRequest(sh.port, "br").body);
+        assertEq(zstd(body, ZSTD_MAX_LEVEL), rawRequest(sh.port, "zstd").body);
+        assertEq(gzip(body, 1), rawRequest(sh.port, "gzip").body);
+        assertEq(bzip2(body, 9), rawRequest(sh.port, "bzip2").body);
+    }
+
+    #! the encoding chosen for each Accept-Encoding header (NOTHING: not compressed)
+    private hash<string, *string> getNegotiationCases() {
+        return {
+            # Chrome and Firefox: the cheapest encoding of those with the same weight
+            "gzip, deflate, br, zstd": "zstd",
+            "gzip, deflate, br": "br",
+            "gzip, deflate": "gzip",
+            "deflate, gzip": "gzip",
+            "deflate": "deflate",
+            "x-gzip": "gzip",
+            "*": "zstd",
+            "bzip2, deflate": "deflate",
+            # weights take precedence over the cost
+            "br;q=0.5, gzip": "gzip",
+            "zstd;q=0.9, br": "br",
+            "gzip;q=0.8, br;q=0.8, deflate;q=0.9": "deflate",
+            "*;q=0.5, deflate": "deflate",
+            # exclusions
+            "zstd;q=0, gzip, deflate, br": "br",
+            "gzip;q=0, *;q=0.5": "zstd",
+            "*;q=0.5, zstd;q=0, br;q=0": "gzip",
+            # no compression
+            "identity": NOTHING,
+            "gzip;q=0": NOTHING,
+            "identity, gzip;q=0.5": NOTHING,
+            "unknown": NOTHING,
+            "": NOTHING,
+        };
+    }
+
+    testNegotiation() {
+        hash<auto> sh = createServer();
+        on_exit delete sh.server;
+        foreach hash<auto> i in (getNegotiationCases().pairIterator()) {
+            hash<auto> resp = rawRequest(sh.port, i.key);
+            assertEq(i.value, resp.hdr."content-encoding", sprintf("Accept-Encoding: %y", i.key));
+            if (i.value) {
+                assertEq(compressBody(i.value, DefaultLevels{i.value}, body), resp.body, i.key);
+            } else {
+                assertEq(binary(body), resp.body, i.key);
+            }
+        }
+        # no Accept-Encoding header
+        hash<auto> resp = rawRequest(sh.port);
+        assertNothing(resp.hdr."content-encoding");
+        assertEq(binary(body), resp.body);
+    }
+
+    testEncodeBody() {
+        # without a level: the default of each compression function
+        assertEq(brotli(body), AbstractHttpRequestHandler::encodeBody("br", body));
+        assertEq(gzip(body), AbstractHttpRequestHandler::encodeBody("gzip", body));
+        # with the level for compressing on the fly
+        foreach hash<auto> i in (DefaultLevels.pairIterator()) {
+            assertEq(compressBody(i.key, i.value, body), AbstractHttpRequestHandler::encodeBody(i.key, body, i.value),
+                i.key);
+        }
+        assertEq(binary(body), AbstractHttpRequestHandler::encodeBody("identity", body, 5));
+        assertThrows("BROTLI-LEVEL-ERROR", \AbstractHttpRequestHandler::encodeBody(), ("br", body, 12));
+        assertThrows("UNSUPPORTED-CONTENT-ENCODING", \AbstractHttpRequestHandler::encodeBody(), ("lz4", body, 1));
+    }
+
+    testHttp2() {
+        Logger logger("compression-levels-h2", LoggerLevel::getLevelInfo());
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger, "compression_levels": {"gzip": 2}});
+        on_exit delete server;
+        server.setHandler("body", "/body", NOTHING, new BodyHandler(body));
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": False,
+        }).port;
+        HTTPClient client({
+            "url": "https://127.0.0.1:" + port,
+            "ssl_verify_cert": False,
+            "http_version": "2",
+            "timeout": 20s,
+        });
+        on_exit client.disconnect();
+        foreach string ae in ("gzip, deflate, br, zstd", "gzip, deflate, br", "br;q=0.5, gzip", "identity") {
+            hash<auto> info;
+            hash<auto> resp = client.send(NOTHING, "GET", "/body", {"Accept-Encoding": ae}, NOTHING, \info);
+            assertEq(200, resp.status_code);
+            assertTrue(client.isHttp2Active(), ae);
+            *string expected = getNegotiationCases(){ae};
+            assertEq(expected, info."response-headers"."content-encoding", ae);
+            # the client decodes the body
+            assertEq(body, resp.body.typeCode() == NT_BINARY ? binary_to_string(resp.body) : resp.body, ae);
+        }
+        # the configured level is used over HTTP/2: the Content-Length is the size of the body compressed at
+        # level 2, which differs from its size at the default level for this body
+        assertNeq(gzip(body, 6).size(), gzip(body, 2).size());
+        hash<auto> info;
+        client.send(NOTHING, "GET", "/body", {"Accept-Encoding": "gzip"}, NOTHING, \info);
+        assertEq(gzip(body, 2).size(), int(info."response-headers"."content-length"));
+    }
+}

@@ -103,12 +103,13 @@ module HttpServerUtil {
     |\c char_encoding|string|the character encoding of the Socket object handling the request
     |\c client-cert|@ref Qore::SSLCertificate "SSLCertificate"|the client certificate if the server is configured to capture them and one is present in the request
     |\c close|*bool|set to @ref True "True" if the connection should be closed after responding (as derived from request headers)
+    |\c compression-levels|hash<string, int>|the compression level of each content encoding for response bodies compressed on the fly (see @ref HttpServer::HttpServerOptionInfo::compression_levels "compression_levels"); a handler that compresses its own response uses the level of the encoding it selects
     |\c debug|*bool|@ref True "True" if the debug flag is enabled on the HTTP server
     |\c handler_name|string|the name of the handler serving the request
     |\c hdr|hash|the header information as returned by @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"
     |\c id|int|the ID for this socket connection; note that socket connections may be reused by proxies, so this ID cannot be used to identify the peer
     |\c handler_name|string|the name of the handler serving the request
-    |\c header-info|hash|a hash of information as returned from the output \a info argument to @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"
+    |\c header-info|hash|a hash of information as returned from the output \a info argument to @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"; its \c accept-encoding key is a hash of the supported content encodings that the client accepts in the order of preference of the server (by weight, then by the cost of compression), and its \c accept-encoding-weights key gives the weight (\c q value) of each of them
     |\c listener-id|int|a unique ID for the listener serving the request
     |\c listener-name|string|a unique name for the listener serving the request
     |\c logger|@ref Qore::Logger::LoggerInterface "LoggerInterface"|a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for the HTTP server
@@ -130,6 +131,11 @@ module HttpServerUtil {
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
     @subsection httputil1_6 HttpServerUtil 1.6
+    - request handlers receive the compression level of each content encoding for response bodies compressed on the
+      fly in \c cx."compression-levels", and the weight of each acceptable content encoding in
+      \c cx."header-info"."accept-encoding-weights"; @ref HttpServer::AbstractHttpRequestHandler::encodeBody()
+      "AbstractHttpRequestHandler::encodeBody()" accepts a compression level, and returns a string body as binary
+      data for the \c identity encoding instead of raising a \c RUNTIME-TYPE-ERROR exception
     - generated response charset parameters canonicalize aliases such as \c utf8 to \c utf-8,
       allowing strict XML clients to parse the response; string stream bodies also receive
       a charset when their media type omits one
@@ -3862,20 +3868,34 @@ public class AbstractHttpRequestHandler {
     }
 
     #! encodes a message body with content-encoding
-    static binary encodeBody(string content_encoding, data body) {
+    /** @param content_encoding the content encoding
+        @param body the message body
+        @param level the compression level; if not given, the default level of the compression function is used (for
+        \c "br", the maximum quality, which is too slow for compressing response bodies on the fly: a handler that
+        compresses a response should pass the level from \c cx."compression-levels", see
+        @ref httpserverutil_request_context)
+
+        @return the encoded message body
+
+        @throw UNSUPPORTED-CONTENT-ENCODING the content encoding is not supported
+
+        @since HttpServerUtil 1.6 the \a level argument
+    */
+    static binary encodeBody(string content_encoding, data body, *int level) {
         switch (content_encoding) {
             case "br":
-                return brotli(body);
+                return exists level ? brotli(body, level) : brotli(body);
             case "zstd":
-                return zstd(body);
+                return exists level ? zstd(body, level) : zstd(body);
             case "deflate":
-                return compress(body);
+                return exists level ? compress(body, level) : compress(body);
             case "gzip":
-                return gzip(body);
+                return exists level ? gzip(body, level) : gzip(body);
             case "bzip2":
-                return bzip2(body);
+                return exists level ? bzip2(body, level) : bzip2(body);
             case "identity":
-                return body;
+                # a string body is returned as binary data, as the other encodings return
+                return binary(body);
         }
         throw "UNSUPPORTED-CONTENT-ENCODING", sprintf("don't know how to handle content-encoding %y",
             content_encoding);

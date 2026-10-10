@@ -66,6 +66,8 @@ class FileHandlerCachingTest inherits QUnit::Test {
         addTestCase("HEAD and interrupted compressed transfer", \headAndDisconnect());
         addTestCase("HTTP/2 and HTTP/3 compressed static streams", \multiplexedCompression());
         addTestCase("empty file, missing file, and invalid options", \negativeCases());
+        addTestCase("compression levels of the server", \compressionLevels());
+        addTestCase("pre-compressed variant by weight and size", \precompressedOrder());
         set_return_value(main());
     }
 
@@ -248,7 +250,8 @@ class FileHandlerCachingTest inherits QUnit::Test {
                 {"accept": "gzip;q=1, br;q=0.5", "encoding": "gzip"},
                 {"accept": "GZIP", "encoding": "gzip"},
                 {"accept": "x-gzip", "encoding": "gzip"},
-                {"accept": "gzip;q=0, *;q=0.5", "encoding": "br"},
+                # the cheapest encoding to compress among those with the same weight
+                {"accept": "gzip;q=0, *;q=0.5", "encoding": "zstd"},
                 {"accept": "gzip;q=0.001", "encoding": "gzip"})) {
             hash<auto> resp = request("/ide/asset.js", {"Accept-Encoding": entry.accept});
             assertEq(200, resp.code);
@@ -358,6 +361,81 @@ class FileHandlerCachingTest inherits QUnit::Test {
                 assertEq(Immutable, info."response-headers"."cache-control");
                 assertEq("Accept-Encoding", info."response-headers".vary);
             }
+        }
+    }
+
+    #! returns text that each compression level compresses differently
+    private static string getLevelText() {
+        list<string> words = ("static", "asset", "bundle", "module", "export", "import", "function", "return",
+            "const", "value", "render", "state", "props", "event", "handler", "style");
+        string text = "";
+        for (int i = 0; i < 3000; ++i) {
+            text += words[(i * 7 + (i * i) % 13) % words.size()] + (i % 9 ? " " : sprintf("(%d);\n", (i * 31) % 97));
+        }
+        return text;
+    }
+
+    #! returns the given file compressed as a stream, as FileHandler compresses a file that it does not buffer
+    private binary streamCompress(string name, string algorithm, int level) {
+        TransformInputStream ts(new FileInputStream(root + DirSep + name), get_compressor(algorithm, level));
+        binary rv;
+        while (*binary b = ts.read(65536)) {
+            rv += b;
+        }
+        return rv;
+    }
+
+    compressionLevels() {
+        string text = getLevelText();
+        write("levels.js", text);
+        client.setEncodingPassthru(True);
+        on_exit server.setCompressionLevels({});
+        # a buffered file is compressed by the server with its level
+        assertEq(brotli(text, 5), request("/ide/levels.js", {"Accept-Encoding": "br"}).body);
+        assertNeq(brotli(text, 5), brotli(text, BROTLI_MAX_QUALITY));
+        # a file that is not buffered is compressed by the handler with the level of the server
+        handler.max_compress_size = 0;
+        foreach hash<auto> levels in ({}, {"br": 2, "gzip": 1, "zstd": 9, "deflate": 9}) {
+            server.setCompressionLevels(levels);
+            hash<string, int> effective = server.getCompressionLevels();
+            foreach string encoding in ("br", "gzip", "zstd", "deflate") {
+                hash<auto> resp = request("/ide/levels.js", {"Accept-Encoding": encoding});
+                assertEq(encoding, resp.hdr."content-encoding");
+                string alg = encoding == "deflate" ? "zlib" : encoding;
+                assertEq(streamCompress("levels.js", alg, effective{encoding}), resp.body,
+                    sprintf("%s level %d", encoding, effective{encoding}));
+            }
+        }
+        # the maximum Brotli quality is not used
+        server.setCompressionLevels({});
+        assertNeq(streamCompress("levels.js", "br", BROTLI_MAX_QUALITY),
+            request("/ide/levels.js", {"Accept-Encoding": "br"}).body);
+    }
+
+    precompressedOrder() {
+        write("multi.js", Payload);
+        hash<string, binary> variants = {
+            "br": brotli(Payload),
+            "zstd": zstd(Payload),
+            "gzip": gzip(Payload),
+        };
+        write("multi.js.br", variants.br);
+        write("multi.js.zst", variants.zstd);
+        write("multi.js.gz", variants.gzip);
+        client.setEncodingPassthru(True);
+        foreach hash<auto> entry in ((
+                # the smallest variant among the encodings with the same weight
+                {"accept": "gzip, deflate, br, zstd", "encoding": "br"},
+                {"accept": "zstd, gzip", "encoding": "zstd"},
+                {"accept": "*", "encoding": "br"},
+                # weights take precedence over the size
+                {"accept": "zstd;q=1, br;q=0.5", "encoding": "zstd"},
+                {"accept": "gzip;q=1, br;q=0.9, zstd;q=0.9", "encoding": "gzip"},
+                {"accept": "br;q=0, *", "encoding": "zstd"})) {
+            hash<auto> resp = request("/ide/multi.js", {"Accept-Encoding": entry.accept});
+            assertEq(200, resp.code, entry.accept);
+            assertEq(entry.encoding, resp.hdr."content-encoding", entry.accept);
+            assertEq(variants{entry.encoding}, resp.body, entry.accept);
         }
     }
 
