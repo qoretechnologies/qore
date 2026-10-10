@@ -16,6 +16,9 @@ class ClassLocalValue {
 class ClassLocalDerived inherits ClassLocalValue {
     constructor(int id) : ClassLocalValue(id) { }
 }
+class ClassLocalGrandchild inherits ClassLocalDerived {
+    constructor(int id) : ClassLocalDerived(id) { }
+}
 class ClassLocalUnrelated {
 }
 class ClassLocalGenericDerived<T> inherits ClassLocalValue {
@@ -35,6 +38,26 @@ class ClassLocalPrivate inherits private ClassLocalValue {
         ClassLocalPrivate value();
         ClassLocalValue receiver = value;
         return receiver.id;
+    }
+}
+class ClassLocalInternalBase {
+}
+class ClassLocalInternal inherits private:internal ClassLocalInternalBase {
+    static bool accepted() {
+        ClassLocalInternal value();
+        ClassLocalInternalBase receiver = value;
+        return receiver.className() == "ClassLocalInternal";
+    }
+}
+class ClassLocalInternalChild inherits ClassLocalInternal {
+}
+
+string sub checkedInternalSource(auto input) {
+    try {
+        ClassLocalInternalBase receiver = input;
+        return receiver.className();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
     }
 }
 
@@ -223,6 +246,15 @@ for (int round = 0; round < 8; ++round) {
             || parameterizedClassSource(new ClassLocalRawAccept<string>("43")) != "RUNTIME-TYPE-ERROR"
             || ClassLocalPrivate::accepted() != 13) {
         throw "CLASS-LOCAL-ASSIGNMENT", "class access or generic acceptance changed";
+    }
+    # Identity at a base edge must still accumulate private access and reject
+    # a non-top-level internal edge before matching its exact class pointer.
+    if (checkedSource(new ClassLocalGrandchild(43)) != "43"
+            || checkedSource(new ClassLocalPrivate()) != "RUNTIME-TYPE-ERROR"
+            || checkedInternalSource(new ClassLocalInternal()) != "RUNTIME-TYPE-ERROR"
+            || checkedInternalSource(new ClassLocalInternalChild()) != "RUNTIME-TYPE-ERROR"
+            || !ClassLocalInternal::accepted()) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "exact class lookup bypassed an inheritance access edge";
     }
     int capture_before = destroyed;
     {

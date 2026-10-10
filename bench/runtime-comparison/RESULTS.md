@@ -7044,3 +7044,114 @@ Next: audit and commit this bounded change, synchronize with develop, and
 investigate checked class-local initialization and repeated full native PIC
 admission. Preserve live validity, context, debugger and entry-readiness checks.
 Inheritance acceptance must not be cached against the incomplete method epoch.
+
+## Exact class-definition lookup (2026-10-10)
+
+Runtime hierarchy lookup now tests exact class-definition identity before
+general structural/injected-class equivalence. Both `QoreClass::getClass()`
+and the matching `BCNode` edge return the canonical definition handle, including
+when either input is a copied `QoreClass` wrapper. Null-base and private/internal
+edge checks still run first; access accumulation still runs after a base match.
+Non-identical definitions retain the original lookup. Raw/parameterized-object
+gates, private-context validation, value ownership and dispatch guards are
+unchanged. This caches no inheritance fact and uses no epoch assumption.
+
+Baseline source `6cf499bbf` includes the compact frame and develop through
+`d3e549391`. Its release SHA256 is
+`db8499c10b2d47516ef50e0b3318d965b410de0a80bc6712b0e26b1c27ddc143`.
+Candidate release SHA256 is
+`a927fddaaa850b510d64b8ffbd88d00a26cf53b69b80391bf51fe0fb05140265`.
+[Complete evidence](results-class-definition-identity-macos-arm64.json)
+preserves the production patch, binary/source identities, every raw-derived
+window and summary, validation hashes and assembly. No generated ABI or
+compiler change: each before/after pair uses the identical AOT executable.
+
+All runs use five forks, three warmups, five 500 ms samples and five startup
+samples, with independently randomized schedules. Values are whole-kernel
+ns/element, median of fork means, excluding startup.
+
+Paired trial, count 4096, seed 810871, `run-o7t5jzk7`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|polymorphic_call|35.123|33.918|-3.43%|no|2.613|12.98x
+|polymorphic_expression_call|10.720|10.614|-0.99%|yes|2.618|4.05x
+|monomorphic_call|3.401|3.377|-0.71%|yes|1.718|1.97x
+|optional_method_call|11.159|11.004|-1.38%|yes|1.709|6.44x
+|indirect_wide|7.444|7.356|-1.18%|yes|1.706|4.31x
+|indirect_float|9.277|9.220|-0.62%|yes|1.706|5.41x
+|arithmetic|1.401|1.409|+0.59%|yes|1.016|1.39x
+|dispatch_control|1.466|1.454|-0.80%|yes|1.028|1.41x
+
+Paired trial, count 1024, seed 810872, `run-uyl4m3ur`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap
+|polymorphic_call|36.799|35.500|-3.53%|no
+|polymorphic_expression_call|12.339|12.303|-0.29%|yes
+|monomorphic_call|4.740|4.858|+2.51%|yes
+|optional_method_call|12.623|12.511|-0.89%|yes
+|indirect_wide|8.683|8.588|-1.10%|yes
+|indirect_float|10.529|10.590|+0.58%|yes
+|arithmetic|2.538|2.522|-0.63%|yes
+|dispatch_control|2.675|2.650|-0.92%|yes
+
+Focused confirmation, count 1024, seed 810873, `run-_ntv95gh`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap
+|polymorphic_call|37.388|35.862|-4.08%|no
+|polymorphic_expression_call|12.460|12.207|-2.03%|yes
+|monomorphic_call|4.843|4.892|+1.02%|yes
+|optional_method_call|12.554|12.612|+0.46%|yes
+
+Retain the targeted 3.43–4.08% typed-polymorphic gain (1.20–1.53 ns/element).
+Its fork ranges are disjoint in all three trials. Every control range overlaps,
+but this does not prove no regression: monomorphic medians change -0.71% at
+4096 and +2.51%/+1.02% in the two 1024 trials. The third run specifically checks
+that small-loop concern, and leaves a possible modest tradeoff, not a clean
+general-call win. Expression medians improve 0.29–2.03% with overlap; nullable
+changes are -1.38%, -0.89%, +0.46%. Wide/float/arithmetic/dispatch controls are
+preserved in both broader trials. Range overlap is descriptive, not a
+significance test.
+
+The 4096 trial's candidate remains 12.98x Java for typed polymorphism, 4.05x for
+expression polymorphism, 1.97x for monomorphic and 6.44x for nullable calls.
+Java retains DONT_INLINE targets and Qore may inline the exact-base branch:
+these are not equal-policy isolated call latency comparisons. No fresh Java
+timing was collected in the 1024 trials. No IR timing, startup improvement,
+universal call improvement or Java-parity claim is made. Do not add gains from
+different pre-merge experiments as an unmeasured cumulative result.
+
+All 240 jobs/1200 windows and their statistics were independently recomputed
+from raw Qore/JMH output. No task builds, tests, profiling, disassembly or
+evidence computation overlapped timing; only progress reads. Host background
+activity and filesystem caches remain uncontrolled. The arm64 public wrapper
+grows from 19 to 29 static instructions and the base-edge wrapper from 25 to 39;
+each retains its general fallback call but skips it on identity hits. This is
+a hot-path call reduction, not a static code-size reduction.
+
+Release/debug each pass 39 performance files (31 QUnit files, 78 cases, 5127
+assertions, eight standalones) and eleven class integration files (94 cases,
+1492 assertions). The new native driver has six assertions at host O0/O3,
+covering canonical results for copied handles, copied base edges and deeper
+inheritance. The expanded assignment fixture checks private/internal edge
+rejection and authorized access in AST/IR/JIT/tiered and AOT configurations.
+Class/generic/injection/import/deleted-Program/override regressions pass.
+The expanded assignment driver passes the frozen release baseline with 500
+assertions; the native driver passes frozen release and debug with six each.
+Each runtime has six reference modes with 345 checks each; eleven harness
+tests pass. No full-suite, sanitizer or cross-architecture qualification.
+
+Premeasurement review corrected the first draft to compare private definition
+identity and return its canonical handle. A debug compilation had already read
+the earlier source and finished after that edit, so an ordinary incremental
+rebuild incorrectly treated its object as current. The new native test caught
+the stale wrapper-identity result. Disassembly confirmed it; a forced fresh SCU
+build, new debug reference grid and complete debug rerun pass. The failed
+artifact, log, assembly and partial matrix are preserved separately. It supplied
+no timing data. Final debug SHA256 is
+`4662bc7ae9017db0dd230779abaac8cc15e2fe9d4a2dd1674c2e55592645fd3f`.
+
+Next: profile remaining checked class-local initialization, real-reference/
+ownership cleanup, native admission/frame costs and small-loop monomorphic
+entry overhead. Preserve runtime slots, destruction order and concurrent
+diagnostics; any further bookkeeping elimination needs a complete lifetime
+and observability proof.

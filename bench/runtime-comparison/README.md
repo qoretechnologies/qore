@@ -134,6 +134,13 @@ single unmapped class constraint with the ordinary raw/parameterized-object and
 inheritance/access validators; misses retain the original diagnostics. No
 compatibility/access result is cached. The compiler and helper ABI are unchanged,
 so runtime-only before/after comparisons can reuse the identical AOT executable.
+The shared hierarchy lookup also recognizes exact class-definition identity
+before entering general structural/injected-class comparison. Copied handles
+still return the canonical class; private/internal base-edge checks and access
+accumulation remain. No inheritance decision is cached. The
+[identity follow-up](RESULTS.md#exact-class-definition-lookup-2026-10-10) records
+three 3.43–4.08% typed-polymorphic gains and a possible small-loop monomorphic
+tradeoff, using identical-executable runtime comparisons.
 `QORE_DISABLE_AOT_CLASS_NODE_STORE=1` at runtime retains generic value storage
 after that positive check. Otherwise an accepted strong object uses the existing
 node-assignment overload, avoiding scalar/enum dispatch and generic value-holder
