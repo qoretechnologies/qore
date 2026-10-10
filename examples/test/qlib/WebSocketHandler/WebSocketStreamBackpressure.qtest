@@ -40,6 +40,7 @@
 %requires WebSocketUtil
 %requires WebSocketHandler
 %requires WebSocketClient
+%requires ../../TestCertificates.qm
 
 %exec-class WebSocketStreamBackpressureTest
 
@@ -83,57 +84,9 @@ class WebSocketStreamBackpressureTest inherits QUnit::Test {
         #! the time allowed for each message
         const RecvTimeout = 60s;
 
-        #! a self-signed certificate for localhost and 127.0.0.1, valid until 2126
-        const CertPem = "-----BEGIN CERTIFICATE-----
-MIIDADCCAeigAwIBAgIUXKr15b8sQMxcb9INtPg+H1wg/xIwDQYJKoZIhvcNAQEL
-BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MCAXDTI2MTAxMDAyNTc0OFoYDzIxMjYw
-OTE2MDI1NzQ4WjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3DQEB
-AQUAA4IBDwAwggEKAoIBAQDsD4V5ReaHFImLv0RPFqnYq8+FaElazijf4Gj+VhOS
-vTl1IfEYzc0aEQ6Fmkqi0I+vXQtEE0HFmghjXD3aIXhzD21Kzx1y8ercXl00ldzF
-6u3npLF6QMQBnDe8O1fUXOOcB2gKLMXxgpVv4B8B48LE77YL/wvUuxfeEi709xcZ
-SharxQn/wScUX3FKvuwiPLe6ah0qcLiBMWQ5F3V1B6ZFc/0H4zVS5rXo9Ta94lsR
-xaWK53tRL2pAmOq5rGYPDVc2juIeiVEJilmUPcvjC+KYF8DP5h/k0taSD8XqhMnh
-6llIdO7xjMTnBfOyYijFDz0uNIosz5P+7uslIhpj/v2PAgMBAAGjSDBGMBoGA1Ud
-EQQTMBGCCWxvY2FsaG9zdIcEfwAAATAJBgNVHRMEAjAAMB0GA1UdDgQWBBQ+3yAG
-w8JgUjtCFfxAh60AjihZ3DANBgkqhkiG9w0BAQsFAAOCAQEApXmiRxqHQQB6wxXB
-JF3Ad9KpUZedmGvHKoQpTBRsPFhV+EmoYJSySLD8Ammu2ocCqK0UrJr/wEMSSnSK
-DmwA6KMIYZhm6OOB+viPD/VTMs4N5jX33VD8lfOOkaMd0hbYeajnk9oNCQYVJ7jS
-8u9SvmPO3Mt+RkGO8bPsmgR+TbWB/hGt1RHRZ1ROOKR/nSmjNNAsZ+RUEX1IkIv1
-apls+SUxkGTu9+U6qrZuv8hNIOG7a15Atsi8An9HctzSrxePe7oUfOXBfFLjYMVK
-VeKZRiu7L7tYKMXBPGZgoL0xxxe42wQVm7mfZyE8BjIBIaKR+/FGGs9UCSx6nlD6
-rHP25A==
------END CERTIFICATE-----
-";
-
-        const KeyPem = "-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDsD4V5ReaHFImL
-v0RPFqnYq8+FaElazijf4Gj+VhOSvTl1IfEYzc0aEQ6Fmkqi0I+vXQtEE0HFmghj
-XD3aIXhzD21Kzx1y8ercXl00ldzF6u3npLF6QMQBnDe8O1fUXOOcB2gKLMXxgpVv
-4B8B48LE77YL/wvUuxfeEi709xcZSharxQn/wScUX3FKvuwiPLe6ah0qcLiBMWQ5
-F3V1B6ZFc/0H4zVS5rXo9Ta94lsRxaWK53tRL2pAmOq5rGYPDVc2juIeiVEJilmU
-PcvjC+KYF8DP5h/k0taSD8XqhMnh6llIdO7xjMTnBfOyYijFDz0uNIosz5P+7usl
-Ihpj/v2PAgMBAAECggEAbTZ3IZbh4y/wvOtWHqMVHG3MumN3wJ+t0HoCCV1oe9S4
-zwTPhxK75+npRo2OJ0qHl3HcIvgnz1SGufV0lkUy9US3Y0t0S/g5mQ+9XnVRKW4Z
-+Dg9dhqdtEMClD7+UP1Svp68lyyEvcoU+if+IIEv3K4skttCLX8LuU2/VM02bhdx
-8fJuR05rjxx4BBpz7/Zv1Xz0wE4nzmOaERErytnrsjrsKmhw+Ns2tKZuS5tf/KBQ
-Ae5GyAW2uOaZLN6Mdbkq8myzHN9XPvS1J7gzSNiwbJ8xPLdgJdKCeqiRytffmG5g
-4yjh8aCtIBpPCIDE8czVDC2xwS9V6iHrQgtjmZRJ2QKBgQD3bRlF3rl+axAVhI4I
-/JSc64phc5QGUAHQmdwdPL1tiTB4/uUhUo+DzfYk9zi7kXu89wQG/6Cn7zhMGbN6
-CLDtcBY3suK89+yGIn9VUCBZlZTmUDTG6J62+TYyR/HvX8L6NStX9bA6oFRy9U0m
-PbDQDD4+Zd32hNBSQTJoJ4E9VwKBgQD0PZmIAfhdgBYO3583s5l1JWJSOCk4Lheb
-YlAG+cRImUl8ZlWrDyK4nCQwrGCvrrCL23zy39h4Qgq/g/BzYxdBCVB8CZ0Yg4PH
-J+w1Qed52gz4wFYvHBrKnqd2gLTzn8kCHKYLoT2GNm/J8TDGi0EsEMlmdEfSqjEg
-aVHWhm/miQKBgFCtARWYJtGCpU7u1sU1XlvALXHTFsvsIHtc/7mEyZtCpUx+iEWS
-PvtSF9U7ywLV0AvwWx7RERhQ1wFxS+UZml8BMi1dJbNJ/5RJAU3W/4VWUaO7OUo2
-JTIyFirU7J0Jk3C0D3rxwFGNX5vQQiSa7uEXbOA5pOMxsR9w5LezUd+nAoGBALjI
-rhLPYsfis02XdE9hKxYNLaEE6nKdtLCTpfZRG2bNymI6zk+4CM3hHCRTFmd0ZA+8
-BIGAR7dcR+NzgATckGhdEq51W4yDW7zegIAel3GCPlQouEu2GLL5a7tlTwIO/rYB
-VMLxv6l+H/+J4hwkmS8smCNSkFBbAQYDiK4kUh75AoGAIw5bn5KYXG5pMYlK26lu
-9WEWhibcF0+mMfX9XHmJp2qSE8rF23ylTaGPwKv4dwK3Bz8GS/FXXCvC295YSJ/h
-z9lB1wmdOY5x7kbmzOH6s+veRkLlRsdZWjbeW3HPdDCST+p0f41qATav6fezD1gk
-fZL39HUu4YNGoEjMgHPIeMg=
------END PRIVATE KEY-----
-";
+        #! the tests' certificate and key
+        const CertPem = TestCertificates::CertPem;
+        const KeyPem = TestCertificates::KeyPem;
     }
 
     private {

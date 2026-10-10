@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-certificate-expiry.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Fails when a certificate embedded in or stored with the tests expires within five years, so that a test certificate
+# is replaced long before tests that check it start failing; new tests should use the certificate in
+# examples/test/TestCertificates.qm
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class TestCertificateExpiryTest
+
+class TestCertificateExpiryTest inherits QUnit::Test {
+    public {
+        #! the time that every test certificate must remain valid for
+        const MinRemainingValidity = 5Y;
+
+        #! the extensions of the files that are searched for certificates
+        const Extensions = ("qtest", "qr", "q", "ql", "qm", "qc", "qclass", "qfd", "pem", "crt", "cer", "key", "txt",
+            "json", "yaml", "yml", "js", "ts", "py", "java", "sh");
+
+        #! files larger than this are not searched
+        const MaxFileSize = 4 * 1024 * 1024;
+    }
+
+    constructor() : Test("TestCertificateExpiryTest", "1.0") {
+        addTestCase("test certificates remain valid for five years", \expiryTest());
+        addTestCase("certificate search", \searchTest());
+        set_return_value(main());
+    }
+
+    #! checks every certificate under examples/test
+    expiryTest() {
+        string root = normalize_dir(get_script_dir() + "/../..");
+        date limit = now_us() + MinRemainingValidity;
+        list<string> expiring = ();
+        int count = 0;
+        foreach string path in (findFiles(root)) {
+            foreach string pem in (findCertificates(ReadOnlyFile::readTextFile(path))) {
+                ++count;
+                SSLCertificate cert(pem);
+                date not_after = cert.getNotAfterDate();
+                if (not_after < limit) {
+                    expiring += sprintf("%s: %y expires %s", path.substr(root.size() + 1), cert.getInfo().subject,
+                        not_after.format("YYYY-MM-DD"));
+                }
+            }
+        }
+        # the shared test certificate is always found, so the search has run
+        assertGt(0, count, "certificates were found");
+        assertEq((), expiring, "certificates expiring before " + limit.format("YYYY-MM-DD") + "; use "
+            "examples/test/TestCertificates.qm instead");
+    }
+
+    #! checks the search on known content
+    searchTest() {
+        string pem = TestCertificateExpiryTest::pemOf(normalize_dir(get_script_dir() + "/../../TestCertificates.qm"));
+        assertEq(1, findCertificates("const C = \"" + pem + "\";").size(), "a certificate in a string literal");
+        assertEq(2, findCertificates(pem + "\n" + pem).size(), "two certificates");
+        # a pattern matching a certificate is not one
+        assertEq(0, findCertificates("x/(-----BEGIN CERTIFICATE-----[\\s\\S]+?-----END CERTIFICATE-----)/").size(),
+            "a regular expression");
+        assertEq(0, findCertificates("no certificate").size(), "no certificate");
+    }
+
+    #! returns the first certificate in the given file
+    private static string pemOf(string path) {
+        return TestCertificateExpiryTest::findCertificates(ReadOnlyFile::readTextFile(path))[0];
+    }
+
+    #! returns the PEM certificates in the given text
+    private static list<string> findCertificates(string text) {
+        list<string> rv = ();
+        *list<*string> bodies = (text =~ x/-----BEGIN CERTIFICATE-----(\s*[A-Za-z0-9+\/=][A-Za-z0-9+\/=\s]*)-----END CERTIFICATE-----/g);
+        foreach *string body in (bodies) {
+            rv += "-----BEGIN CERTIFICATE-----\n" + trim(body) + "\n-----END CERTIFICATE-----\n";
+        }
+        return rv;
+    }
+
+    #! returns the files under \a dir that can contain certificates
+    private list<string> findFiles(string dir) {
+        list<string> rv = ();
+        Dir d();
+        d.chdir(dir);
+        foreach string name in (d.listFiles()) {
+            string path = dir + "/" + name;
+            *string ext = (name =~ x/\.([^.]+)$/)[0];
+            if (!ext || !inlist(ext, Extensions) || hstat(path).size > MaxFileSize) {
+                continue;
+            }
+            rv += path;
+        }
+        foreach string name in (d.listDirs()) {
+            rv += findFiles(dir + "/" + name);
+        }
+        return rv;
+    }
+}
