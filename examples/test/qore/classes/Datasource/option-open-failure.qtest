@@ -35,6 +35,9 @@ class DatasourceOptionOpenFailureTest inherits QUnit::Test {
         addTestCase("an option set before the open", \testSetOptionBeforeOpen());
         addTestCase("a pool", \testPool());
         addTestCase("an option set on an open connection", \testSetOptionOpen());
+        addTestCase("option and configuration calls preserve transaction ownership", \testTransactionOwnership());
+        addTestCase("option failures preserve transaction ownership", \testTransactionOptionFailure());
+        addTestCase("metadata preserves a bound statement connection", \testBoundStatementOwnership());
         set_return_value(main());
     }
 
@@ -83,6 +86,73 @@ class DatasourceOptionOpenFailureTest inherits QUnit::Test {
             assertEq(base + 2, liveConnections(), "the pool's minimum connections");
         }
         assertEq(base, liveConnections(), "after the pool is destroyed");
+    }
+
+    testTransactionOwnership() {
+        Datasource ds(ConnStr);
+        on_exit { ds.rollback(); ds.close(); }
+        ds.open();
+        ds.setTransactionLockTimeout(50);
+        list<code<nothing()>> operations = (
+            sub () { ds.getConfigHash(); },
+            sub () { ds.getConfigString(); },
+            sub () { ds.getOptionHash(); },
+            sub () { ds.getOption("reject"); },
+            sub () { ds.setOption("reject", False); },
+        );
+        foreach code<nothing()> operation in (operations) {
+            operation();
+            assertFalse(ds.currentThreadInTransaction(), "an idle metadata call leaves no lock");
+            ds.beginTransaction();
+            operation();
+            assertTrue(ds.currentThreadInTransaction(), "the original transaction still owns its lock");
+            Queue result();
+            background sub () {
+                try { ds.getConfigHash(); result.push("entered"); }
+                catch (hash<ExceptionInfo> ex) { result.push(ex.err); }
+            }();
+            assertEq("TRANSACTION-LOCK-TIMEOUT", result.get(5s), "another thread cannot enter the transaction");
+            assertTrue(ds.currentThreadInTransaction(), "a failed competing acquisition leaves the owner intact");
+            ds.rollback();
+            assertFalse(ds.currentThreadInTransaction());
+            background sub () {
+                try { ds.getConfigHash(); result.push("entered"); }
+                catch (hash<ExceptionInfo> ex) { result.push(ex.err); }
+            }();
+            assertEq("entered", result.get(5s), "another thread can acquire after rollback");
+        }
+    }
+
+    testBoundStatementOwnership() {
+        Datasource ds(ConnStr);
+        on_exit { ds.rollback(); ds.close(); }
+        ds.open();
+        SQLStatement stmt(ds);
+        stmt.prepare("insert into t values (%v)");
+        stmt.bind(1);
+        assertTrue(ds.currentThreadInTransaction());
+        ds.getConfigHash();
+        ds.getConfigString();
+        ds.getOptionHash();
+        ds.getOption("reject");
+        ds.setOption("reject", False);
+        assertTrue(ds.currentThreadInTransaction(), "metadata cannot release an unexecuted statement's connection");
+        stmt.exec();
+        ds.rollback();
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    testTransactionOptionFailure() {
+        Datasource ds(ConnStr);
+        on_exit { ds.rollback(); ds.close(); }
+        ds.open();
+        ds.beginTransaction();
+        assertThrows("DBI-TEST-OPTION-ERROR", \ds.setOption(), ("reject", True));
+        assertTrue(ds.currentThreadInTransaction(), "a failed driver option must not release the owner");
+        assertThrows("DBI-OPTION-ERROR", \ds.getOption(), ("nonexistent-option",));
+        assertTrue(ds.currentThreadInTransaction(), "an invalid option must not release the owner");
+        ds.commit();
+        assertFalse(ds.currentThreadInTransaction());
     }
 
     testSetOptionOpen() {

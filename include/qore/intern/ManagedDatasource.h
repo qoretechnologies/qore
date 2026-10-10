@@ -61,7 +61,7 @@ protected:
 
     QoreCondition cond;             // condition when transaction lock is freed
 
-    DLLLOCAL int acquireLock(ExceptionSink *xsink);
+    DLLLOCAL int acquireLock(ExceptionSink* xsink, bool& new_lock);
     DLLLOCAL int startDBAction(ExceptionSink* xsink, bool& new_transaction);
     // returns true if we have the transaction lock, false if not
     DLLLOCAL bool endDBActionIntern(char cmd = DAH_NOCHANGE, bool new_transaction = false);
@@ -200,15 +200,13 @@ public:
 class DatasourceActionHelper {
 protected:
     ManagedDatasource& ds;
-    bool ok, new_transaction;
+    bool new_transaction = false;
+    bool ok;
     char cmd;
 
 public:
     DLLLOCAL DatasourceActionHelper(ManagedDatasource& n_ds, ExceptionSink* xsink, char n_cmd = DAH_NOCHANGE) :
-        ds(n_ds), ok(n_cmd == DAH_NOCONN ? !ds.acquireLock(xsink) : !ds.startDBAction(xsink, new_transaction)), cmd(n_cmd) {
-        if (cmd == DAH_NOCONN) {
-            new_transaction = false;
-        }
+        ds(n_ds), ok(n_cmd == DAH_NOCONN ? !ds.acquireLock(xsink, new_transaction) : !ds.startDBAction(xsink, new_transaction)), cmd(n_cmd) {
     }
 
     DLLLOCAL ~DatasourceActionHelper();
