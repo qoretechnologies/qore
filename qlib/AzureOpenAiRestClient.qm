@@ -429,10 +429,10 @@ public class AzureOpenAiRestConnection inherits RestClient::RestConnection {
                         "identity, supply its client ID. The host must provide Azure managed identity access.",
                     "depends_on": ("azure_auth_mode=entra_managed_identity",),
                 },
-                "ping_method": RestConnection::ConnectionScheme.options.ping_method
-                    + <ConnectionOptionInfo>{"default_value": "GET"},
-                "ping_path": RestConnection::ConnectionScheme.options.ping_path
-                    + <ConnectionOptionInfo>{"default_value": "/openai/v1/models"},
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options.ping_method,
+                    {"default_value": "GET"}),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options.ping_path,
+                    {"default_value": "/openai/v1/models"}),
             },
         };
     }

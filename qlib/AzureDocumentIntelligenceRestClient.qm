@@ -450,12 +450,12 @@ public class AzureDocumentIntelligenceRestConnection inherits RestClient::RestCo
                         "Use instead of a subscription key and replace it before expiration.",
                     "sensitive": True,
                 },
-                "headers": RestConnection::ConnectionScheme.options.headers
-                    + <ConnectionOptionInfo>{"sensitive": True},
-                "ping_method": RestConnection::ConnectionScheme.options.ping_method
-                    + <ConnectionOptionInfo>{"default_value": "GET"},
-                "ping_path": RestConnection::ConnectionScheme.options.ping_path
-                    + <ConnectionOptionInfo>{"default_value": DefaultPingPath},
+                "headers": connection_option_override(RestConnection::ConnectionScheme.options.headers,
+                    {"sensitive": True}),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options.ping_method,
+                    {"default_value": "GET"}),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options.ping_path,
+                    {"default_value": DefaultPingPath}),
             },
             "required_options": "apikey|entra_token|headers",
         };

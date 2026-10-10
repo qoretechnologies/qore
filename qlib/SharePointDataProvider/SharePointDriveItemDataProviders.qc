@@ -670,10 +670,10 @@ public class SharePointGetDriveInfoDataProvider inherits SharePointDataProviderB
 #! Search options for listing document library items
 public const SharePointDriveItemsSearchOptions = SiteIdSearchOption + DriveIdSearchOption
     + OneDriveDataProvider::OneDriveListItemsSearchOptions + {
-    "folder_id": OneDriveDataProvider::OneDriveListItemsSearchOptions."folder_id"
-            + <DataProviderOptionInfo>{
+    "folder_id": cast<hash<DataProviderOptionInfo>>(OneDriveDataProvider::OneDriveListItemsSearchOptions."folder_id"
+            + {
         "depends_on": DriveItemCascade,
-    },
+    }),
 };
 
 #! Data provider for listing and searching document library items (DPAT_FIND)

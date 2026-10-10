@@ -311,10 +311,9 @@ public class EasyPostRestConnection inherits RestClient::RestConnection {
                 "https": "easypostrests",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": EasyPostRestClientBase::DefaultData,
-                },
+                }),
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
                     "short_desc": "EasyPost API key for HTTP Basic Auth",
@@ -325,18 +324,15 @@ public class EasyPostRestConnection inherits RestClient::RestConnection {
                     "sensitive": True,
                     "preselected": True,
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": EasyPostRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": EasyPostRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": EasyPostRestClientBase::DefaultPingPath,
-                },
+                }),
             },
             "required_options": "apikey",
             "messages": (

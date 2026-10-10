@@ -529,12 +529,12 @@ public class EmpathicBuildingRestConnection inherits RestClient::RestConnection 
             },
             "options": (map {$1.key: $1.value}, RestConnection::ConnectionScheme.options.pairIterator(),
                 $1.key !~ /^oauth2_/) + {
-                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options.ping_method, {
                     "default_value": EmpathicBuildingRestClient::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options.ping_path, {
                     "default_value": EmpathicBuildingRestClient::DefaultPingPath,
-                },
+                }),
                 "refresh_token": <ConnectionOptionInfo>{
                     "display_name": "Refresh Token",
                     "short_desc": "Sets the Haltian refresh token",

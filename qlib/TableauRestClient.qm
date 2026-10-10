@@ -360,10 +360,9 @@ public class TableauRestConnection inherits RestClient::RestConnection {
                 "https": "tableaures",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": TableauRestClientBase::DefaultData,
-                },
+                }),
                 "subdomain": <ConnectionOptionInfo>{
                     "display_name": "Subdomain",
                     "short_desc": "Tableau Cloud pod name",
@@ -402,18 +401,15 @@ public class TableauRestConnection inherits RestClient::RestConnection {
                     "desc": "The Tableau REST API version (e.g., `3.27`)",
                     "default_value": TableauRestClientBase::DefaultApiVersion,
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": TableauRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": TableauRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": TableauRestClientBase::DefaultPingPath,
-                },
+                }),
             },
             "required_options": "subdomain,token_name,token_secret",
             "messages": (

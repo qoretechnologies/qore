@@ -138,6 +138,12 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @section connectionproviderrelnotes Release Notes
 
     @subsection connectionprovider_3_1 ConnectionProvider 3.1
+    - added @ref ConnectionProvider::connection_option_override() "connection_option_override()" (defined in the
+      @c DataProvider module with @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo") to derive a
+      connection option from the option of another connection scheme without resetting the members that are not
+      changed; adding a hash cast to @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo" to a base
+      option also set every member that the cast did not give to its default value (ex: \c sensitive to
+      @ref False "False")
     - made the default ping timings public so that connections monitored on a dedicated thread can bound
       their own pings with the same values:
       - @ref ConnectionProvider::PollingConnectionMonitor::DefaultPingTimeout

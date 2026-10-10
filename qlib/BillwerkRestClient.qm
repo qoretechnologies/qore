@@ -279,13 +279,14 @@ public class BillwerkRestConnection inherits RestClient::RestConnection {
                 "http": "billwerkrest",
             },
             "options": RestConnection::ConnectionScheme.options - (keys OAuth2DifferentOptionMap) + {
-                "client_id": RestConnection::ConnectionScheme.options.oauth2_client_id + <ConnectionOptionInfo>{
+                "client_id": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_client_id, {
                     "desc": "the Billwerk OAuth2 client ID",
-                },
-                "client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret + <ConnectionOptionInfo>{
-                    "desc": "the Billwerk OAuth2 client secret",
-                    "sensitive": True,
-                },
+                }),
+                "client_secret": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_client_secret, {
+                        "desc": "the Billwerk OAuth2 client secret",
+                        "sensitive": True,
+                    }),
             },
             "required_options": foldl $1 + "," + $2, BillwerkRestClientBase::RequiredOptions,
         };

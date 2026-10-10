@@ -338,18 +338,18 @@ public class MewsRestConnection inherits RestClient::RestConnection {
                     "desc": "The Mews client token for access to the given Mews instance",
                     "sensitive": True,
                 },
-                "ping_body": RestConnection::ConnectionScheme.options.ping_body + <ConnectionOptionInfo>{
+                "ping_body": connection_option_override(RestConnection::ConnectionScheme.options.ping_body, {
                     "default_value": DefaultMewsPingBody,
-                },
-                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                }),
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options.ping_headers, {
                     "default_value": DefaultMewsPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options.ping_method, {
                     "default_value": DefaultMewsPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options.ping_path, {
                     "default_value": DefaultMewsPingPath,
-                },
+                }),
             },
             "required_options": "client_token,access_token",
         };

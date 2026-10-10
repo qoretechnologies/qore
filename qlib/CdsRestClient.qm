@@ -967,18 +967,21 @@ public class CdsRestConnection inherits RestClient::RestConnection {
                     "desc": "Azure AD tenant ID for authentication",
                     "default_value": "common",
                 },
-                "data": RestConnection::ConnectionScheme.options."data" + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": "json",
-                },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url + <ConnectionOptionInfo>{
-                    "default_value": CdsRestClientBase::OAuth2AuthUrl,
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type + <ConnectionOptionInfo>{
-                    "default_value": "authorization_code",
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url + <ConnectionOptionInfo>{
-                    "default_value": CdsRestClientBase::OAuth2TokenUrl,
-                },
+                }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": CdsRestClientBase::OAuth2AuthUrl,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": "authorization_code",
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": CdsRestClientBase::OAuth2TokenUrl,
+                    }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
         };
@@ -1265,7 +1268,7 @@ public class DynamicsRestConnection inherits CdsRestConnection {
             "short_desc": "A connection to a Microsoft Dynamics REST server",
             "cls": Class::forName("DynamicsRestConnection"),
             "options": CdsRestConnection::ConnectionScheme.options + {
-                "api_profile": CdsRestConnection::ConnectionScheme.options.api_profile + <ConnectionOptionInfo>{
+                "api_profile": connection_option_override(CdsRestConnection::ConnectionScheme.options.api_profile, {
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "desc": "Set REST client options for the Dynamics API",
@@ -1273,7 +1276,7 @@ public class DynamicsRestConnection inherits CdsRestConnection {
                         },
                     ),
                     "default_value": "dynamics",
-                },
+                }),
                 "organization": <ConnectionOptionInfo>{
                     "display_name": "Environment",
                     "short_desc": "The Dataverse environment to work in",
@@ -1431,10 +1434,10 @@ public class BusinessCentralRestConnection inherits CdsRestConnection {
             },
             "auto_url": True,
             "options": CdsRestConnection::ConnectionScheme.options + {
-                "api": CdsRestConnection::ConnectionScheme.options.api + <ConnectionOptionInfo>{
+                "api": connection_option_override(CdsRestConnection::ConnectionScheme.options.api, {
                     "default_value": BusinessCentralProfile.default_api_version,
-                },
-                "api_profile": CdsRestConnection::ConnectionScheme.options.api_profile + <ConnectionOptionInfo>{
+                }),
+                "api_profile": connection_option_override(CdsRestConnection::ConnectionScheme.options.api_profile, {
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "desc": "Set REST client options for the Dynamics 365 Business Central API",
@@ -1442,8 +1445,8 @@ public class BusinessCentralRestConnection inherits CdsRestConnection {
                         },
                     ),
                     "default_value": BusinessCentralProfile.name,
-                },
-                "instance_type": CdsRestConnection::ConnectionScheme.options.instance_type + <ConnectionOptionInfo>{
+                }),
+                "instance_type": connection_option_override(CdsRestConnection::ConnectionScheme.options.instance_type, {
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "value": "sandbox",
@@ -1454,22 +1457,24 @@ public class BusinessCentralRestConnection inherits CdsRestConnection {
                             "display_name": "Production",
                         },
                     ),
-                },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url + <ConnectionOptionInfo>{
-                    "default_value": "auto",
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url + <ConnectionOptionInfo>{
-                    "default_value": "auto",
-                },
-                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": "auto",
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": "auto",
+                    }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options.ping_method, {
                     "default_value": BusinessCentralProfile.ping_method,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options.ping_path, {
                     "default_value": BusinessCentralProfile.ping_path,
-                },
-                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                }),
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options.ping_headers, {
                     "default_value": BusinessCentralProfile.ping_headers,
-                },
+                }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret,instance_type",
         };

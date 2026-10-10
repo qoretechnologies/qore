@@ -323,26 +323,25 @@ public class GoogleRestConnection inherits RestClient::RestConnection {
                         },
                     ),
                 },
-                "data": RestConnection::ConnectionScheme.options."data"
-                   + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": GoogleRestClientBase::DefaultData,
-                },
-                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
-                    + <ConnectionOptionInfo>{
-                    "default_value": GoogleRestClientBase::DefaultAuthArgs,
-                },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
-                    + <ConnectionOptionInfo>{
-                    "default_value": GoogleRestClientBase::DefaultAuthUrl,
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                    + <ConnectionOptionInfo>{
-                    "default_value": GoogleRestClientBase::DefaultGrantType,
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
-                    + <ConnectionOptionInfo>{
-                    "default_value": GoogleRestClientBase::DefaultTokenUrl,
-                },
+                }),
+                "oauth2_auth_args": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_args, {
+                        "default_value": GoogleRestClientBase::DefaultAuthArgs,
+                    }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": GoogleRestClientBase::DefaultAuthUrl,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": GoogleRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": GoogleRestClientBase::DefaultTokenUrl,
+                    }),
             },
             "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
                 "oauth2_client_id,oauth2_client_secret",
@@ -454,7 +453,7 @@ public class GoogleCalendarRestConnection inherits GoogleRestConnection {
             "desc": "A connection to the Google Calendar cloud REST API",
             "cls": Class::forName("GoogleCalendarRestConnection"),
             "options": GoogleRestConnection::ConnectionScheme.options + {
-                "api_profile": GoogleRestConnection::ConnectionScheme.options.api_profile + <ConnectionOptionInfo>{
+                "api_profile": connection_option_override(GoogleRestConnection::ConnectionScheme.options.api_profile, {
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "desc": "Set REST client options for the Google calendar API",
@@ -462,7 +461,7 @@ public class GoogleCalendarRestConnection inherits GoogleRestConnection {
                         },
                     ),
                     "default_value": "calendar",
-                },
+                }),
             },
             "required_options": GoogleRestConnection::ConnectionScheme.required_options,
             "auto_url": True,
@@ -582,7 +581,7 @@ public class GoogleDriveRestConnection inherits GoogleRestConnection {
             "desc": "A connection to the [Google Drive](https://www.google.com/drive/) cloud REST API",
             "cls": Class::forName("GoogleDriveRestConnection"),
             "options": GoogleRestConnection::ConnectionScheme.options + {
-                "api_profile": GoogleRestConnection::ConnectionScheme.options.api_profile + <ConnectionOptionInfo>{
+                "api_profile": connection_option_override(GoogleRestConnection::ConnectionScheme.options.api_profile, {
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "display_name": "Full Drive Access",
@@ -601,7 +600,7 @@ public class GoogleDriveRestConnection inherits GoogleRestConnection {
                         },
                     ),
                     "default_value": "drive",
-                },
+                }),
             },
             "required_options": GoogleRestConnection::ConnectionScheme.required_options,
             "auto_url": True,
@@ -746,7 +745,7 @@ public class GmailRestConnection inherits GoogleRestConnection {
             "desc": "A connection to the Gmail cloud REST API",
             "cls": Class::forName("GmailRestConnection"),
             "options": GoogleRestConnection::ConnectionScheme.options + {
-                "api_profile": GoogleRestConnection::ConnectionScheme.options.api_profile + <ConnectionOptionInfo>{
+                "api_profile": connection_option_override(GoogleRestConnection::ConnectionScheme.options.api_profile, {
                     "allowed_values": (
                         <AllowedValueInfo>{
                             "desc": "Set REST client options for the Gmail API",
@@ -754,7 +753,7 @@ public class GmailRestConnection inherits GoogleRestConnection {
                         },
                     ),
                     "default_value": "gmail",
-                },
+                }),
             },
             "required_options": GoogleRestConnection::ConnectionScheme.required_options,
             "auto_url": True,

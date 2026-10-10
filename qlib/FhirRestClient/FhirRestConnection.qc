@@ -47,15 +47,16 @@ public class FhirRestConnection inherits RestClient::RestConnection {
                 "http": "fhir",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data" + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": FhirRestClientBase::DefaultData,
-                },
-                "error_passthru": RestConnection::ConnectionScheme.options."error_passthru" + <ConnectionOptionInfo>{
-                    "default_value": True,
-                },
-                "headers": RestConnection::ConnectionScheme.options."headers" + <ConnectionOptionInfo>{
+                }),
+                "error_passthru": connection_option_override(
+                    RestConnection::ConnectionScheme.options."error_passthru", {
+                        "default_value": True,
+                    }),
+                "headers": connection_option_override(RestConnection::ConnectionScheme.options."headers", {
                     "default_value": FhirRestClientBase::DefaultHeaders,
-                },
+                }),
                 "no_charset": <ConnectionOptionInfo>{
                     "display_name": "No Charset in Content-Type?",
                     "short_desc": "Do not append a charset parameter to request Content-Type headers",
@@ -63,15 +64,15 @@ public class FhirRestConnection inherits RestClient::RestConnection {
                     "desc": "If `True`, no charset parameter is appended to request Content-Type headers",
                     "default_value": True,
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers" + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": FhirRestClientBase::DefaultHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method" + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": FhirRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path" + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": FhirRestClientBase::DefaultPingPath,
-                },
+                }),
             },
             "metadata": {
                 "standard": "HL7 FHIR",

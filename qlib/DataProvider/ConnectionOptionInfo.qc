@@ -53,4 +53,34 @@ public hashdecl ConnectionOptionInfo inherits DataProvider::BaseOptionInfo {
     #! Ignore types for backwards compatibility when an option changes type
     *hash<string, bool> ignore_types;
 }
+
+#! Returns a connection option that is the given option with the given members changed
+/** Use this function, and not <tt>base + <ConnectionOptionInfo>{...}</tt>, to derive an option from the option of
+    another connection scheme: a hash cast to @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo"
+    has every member that has a default value, so adding it to a base option also sets every member that it does
+    not give to its default value (ex: \c sensitive to @ref False "False", so a secret option of the base scheme
+    would no longer be masked).  This function changes only the members given.
+
+    @par Example:
+    @code{.py}
+"password": connection_option_override(RestConnection::ConnectionScheme.options."password", {
+    "desc": "An API token for the account",
+}),
+    @endcode
+
+    @param base the option to derive from
+    @param changes the members to change; every key must be a member of
+    @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo"
+
+    @return the option with the given members changed and all other members as in \a base
+
+    @throw HASHDECL-INIT-ERROR a key in \a changes is not a member of
+    @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo", or a value has the wrong type
+
+    @since %DataProvider 3.9
+*/
+public hash<ConnectionOptionInfo> sub connection_option_override(hash<ConnectionOptionInfo> base,
+        hash<auto> changes) {
+    return cast<hash<ConnectionOptionInfo>>(base + changes);
+}
 }

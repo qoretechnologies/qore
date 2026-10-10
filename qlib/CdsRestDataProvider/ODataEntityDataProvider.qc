@@ -51,7 +51,13 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
         };
 
         #! Static provider info for CDS (with groupby support)
-        const CdsProviderInfo = CdsRestDataProvider::ProviderInfo - "constructor_options" + <DataProviderInfo>{
+        # a plain hash is added, so that the members that are not given keep the values of the base info; an entity
+        # provider has no children
+        const CdsProviderInfo = cast<hash<DataProviderInfo>>(CdsRestDataProvider::ProviderInfo - "constructor_options"
+                + {
+            "supports_children": False,
+            "children_can_support_records": False,
+            "children_can_support_observers": False,
             "search_options": ODataSearchOptions + {
                 "groupby": <DataProviderOptionInfo>{
                     "display_name": "Group By",
@@ -61,7 +67,7 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
                         "`groupby` argument for the query expression",
                 },
             },
-        };
+        });
     }
 
     #! Creates the object for Dynamics 365 CDS (no company context)

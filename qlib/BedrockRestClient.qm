@@ -356,43 +356,43 @@ public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
             "options": AwsRestClient::AwsRestConnection::ConnectionScheme.options
                 - ("data", "aws_service", "aws_s3", "ping_body", "ping_headers",
                     "ping_method", "ping_path") + {
-                "aws_region": AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_region
-                    + <ConnectionOptionInfo>{
-                        "display_name": "AWS Region",
-                        "short_desc": "AWS region hosting the Bedrock resources",
-                        "desc": "AWS region used for Bedrock runtime and control-plane "
-                            "requests. The connection derives both service endpoints "
-                            "from this value.",
-                        "default_value": DefaultRegion,
-                        "allowed_values": AwsRestClient::AwsS3RestConnection::AwsRegions,
-                        "allowed_values_creatable": True,
-                        "preselected": True,
-                    },
-                "aws_keyid": AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_keyid
-                    + <ConnectionOptionInfo>{
-                        "display_name": "AWS Access Key ID",
-                        "short_desc": "Optional access key ID for SigV4 authentication",
-                        "desc": "AWS access key ID for explicit credentials. Leave this "
-                            "and `aws_secret` empty to use the AWS environment, ECS "
-                            "task-role, or IMDSv2 credential chain.",
-                        "sensitive": True,
-                    },
-                "aws_secret": AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_secret
-                    + <ConnectionOptionInfo>{
-                        "display_name": "AWS Secret Access Key",
-                        "short_desc": "Optional secret key for SigV4 authentication",
-                        "desc": "AWS secret access key paired with `aws_keyid`. Leave "
-                            "both fields empty to use the standard AWS credential chain.",
-                        "sensitive": True,
-                    },
-                "aws_token": AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_token
-                    + <ConnectionOptionInfo>{
-                        "display_name": "AWS Session Token",
-                        "short_desc": "Optional token for temporary AWS credentials",
-                        "desc": "AWS session token supplied with temporary access-key "
-                            "credentials.",
-                        "sensitive": True,
-                    },
+                "aws_region": connection_option_override(
+                    AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_region, {
+                            "display_name": "AWS Region",
+                            "short_desc": "AWS region hosting the Bedrock resources",
+                            "desc": "AWS region used for Bedrock runtime and control-plane "
+                                "requests. The connection derives both service endpoints "
+                                "from this value.",
+                            "default_value": DefaultRegion,
+                            "allowed_values": AwsRestClient::AwsS3RestConnection::AwsRegions,
+                            "allowed_values_creatable": True,
+                            "preselected": True,
+                        }),
+                "aws_keyid": connection_option_override(
+                    AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_keyid, {
+                            "display_name": "AWS Access Key ID",
+                            "short_desc": "Optional access key ID for SigV4 authentication",
+                            "desc": "AWS access key ID for explicit credentials. Leave this "
+                                "and `aws_secret` empty to use the AWS environment, ECS "
+                                "task-role, or IMDSv2 credential chain.",
+                            "sensitive": True,
+                        }),
+                "aws_secret": connection_option_override(
+                    AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_secret, {
+                            "display_name": "AWS Secret Access Key",
+                            "short_desc": "Optional secret key for SigV4 authentication",
+                            "desc": "AWS secret access key paired with `aws_keyid`. Leave "
+                                "both fields empty to use the standard AWS credential chain.",
+                            "sensitive": True,
+                        }),
+                "aws_token": connection_option_override(
+                    AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_token, {
+                            "display_name": "AWS Session Token",
+                            "short_desc": "Optional token for temporary AWS credentials",
+                            "desc": "AWS session token supplied with temporary access-key "
+                                "credentials.",
+                            "sensitive": True,
+                        }),
                 "aws_role_arn": <ConnectionOptionInfo>{
                     "display_name": "STS Role ARN",
                     "short_desc": "Optional AWS role to assume",

@@ -252,15 +252,15 @@ public class JinaRestConnection inherits RestClient::RestConnection {
                     "allowed_values": JinaRestClientBase::RerankModels,
                     "allowed_values_creatable": True,
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options.ping_headers, {
                     "default_value": DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options.ping_method, {
                     "default_value": DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options.ping_path, {
                     "default_value": DefaultPingPath,
-                },
+                }),
             },
             "required_options": "apikey",
         };

@@ -256,12 +256,13 @@ public class Sap4HanaRestConnection inherits RestClient::RestConnection {
                 },
                 "client_id": RestConnection::ConnectionScheme.options.oauth2_client_id,
                 "client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret,
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url + <ConnectionOptionInfo>{
-                    "default_value": Sap4HanaRestClientBase::OAuth2TokenUriPath,
-                },
-                "send_encoding": RestConnection::ConnectionScheme.options.send_encoding + <ConnectionOptionInfo>{
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": Sap4HanaRestClientBase::OAuth2TokenUriPath,
+                    }),
+                "send_encoding": connection_option_override(RestConnection::ConnectionScheme.options.send_encoding, {
                     "default_value": Sap4HanaRestClientBase::DefaultSendEncoding,
-                },
+                }),
             },
             "required_options": "client_id,client_secret|apikey",
         };

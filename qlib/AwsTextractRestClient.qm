@@ -136,8 +136,8 @@ public class AwsTextractRestConnection inherits AwsRestClient::AwsRestConnection
             "base_scheme_map": {"https": "aws-textract"},
             "options": AwsRestClient::AwsRestConnection::ConnectionScheme.options
                 - ("data", "aws_service", "aws_s3", "ping_body", "ping_headers", "ping_method", "ping_path") + {
-                "aws_keyid": AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_keyid
-                    + <ConnectionOptionInfo>{"sensitive": True},
+                "aws_keyid": connection_option_override(
+                    AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_keyid, {"sensitive": True}),
                 "aws_role_arn": <ConnectionOptionInfo>{
                     "display_name": "STS Role ARN", "type": "string",
                     "short_desc": "Optional AWS role to assume",

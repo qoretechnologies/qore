@@ -355,10 +355,9 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
                 "https": "customerio",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": CustomerIoRestClientBase::DefaultData,
-                },
+                }),
                 "app_api_key": <ConnectionOptionInfo>{
                     "display_name": "App API Key",
                     "short_desc": "Customer.io App API key for Bearer token authentication",
@@ -420,18 +419,15 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
                         },
                     ),
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": CustomerIoRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": CustomerIoRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": CustomerIoRestClientBase::DefaultPingPath,
-                },
+                }),
             },
             "required_options": "app_api_key,site_id,tracking_api_key",
             "messages": (

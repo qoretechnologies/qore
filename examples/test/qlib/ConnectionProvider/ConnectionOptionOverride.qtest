@@ -1,0 +1,202 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A connection scheme that derives an option from the option of the scheme it extends must keep every flag of the
+# base option that it does not change: "base + <ConnectionOptionInfo>{...}" set every flag that the override did
+# not give to its default value, so that a secret option of a REST scheme (ex: "password" or
+# "oauth2_client_secret") was no longer sensitive in a scheme derived from it.  Options are derived with
+# connection_option_override(), which changes only the members given.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ConnectionProvider
+%requires reflection
+%requires Util
+%requires DataProvider
+%requires OneDriveDataProvider
+%requires SharePointDataProvider
+%requires SalesforceRestDataProvider
+%requires CdsRestDataProvider
+%requires ServiceNowRestDataProvider
+
+%exec-class ConnectionOptionOverrideTest
+
+public class ConnectionOptionOverrideTest inherits QUnit::Test {
+    public {
+        #! the flags of a connection option that a derived scheme must not clear without changing them explicitly
+        const Flags = (
+            "sensitive", "required", "readonly", "disabled", "preselected", "has_dependents",
+            "server_expression_handling", "allowed_values_creatable", "element_allowed_values_creatable",
+            "subst_env_vars", "freeform",
+        );
+
+        #! "scheme.option.flag" keys of flags that a derived scheme clears on purpose, with the reason
+        const Allowed = {
+        };
+    }
+
+    constructor() : Test("Connection option overrides", "1.0", \ARGV) {
+        addTestCase("connection_option_override() changes only the members given", \overrideTest());
+        addTestCase("derived schemes keep the flags of the options they extend", \derivedSchemesTest());
+        addTestCase("no module derives an option with a hashdecl cast", \sourceTest());
+        addTestCase("derived data provider options and infos", \dataProviderTest());
+        set_return_value(main());
+    }
+
+    overrideTest() {
+        hash<ConnectionOptionInfo> base = <ConnectionOptionInfo>{
+            "type": "string",
+            "desc": "a secret",
+            "sensitive": True,
+            "required": True,
+            "preselected": True,
+        };
+        hash<ConnectionOptionInfo> o = connection_option_override(base, {"desc": "another secret"});
+        assertEq("another secret", o.desc);
+        assertEq(base - "desc", o - "desc", "the other members are unchanged");
+        assertTrue(o.sensitive);
+        assertTrue(o.required);
+        # a flag is changed when it is given
+        assertFalse(connection_option_override(base, {"sensitive": False}).sensitive);
+        # the result is typed and the keys are checked
+        assertEq("hash<ConnectionOptionInfo>", o.fullType());
+        assertThrows("HASHDECL-INIT-ERROR", \connection_option_override(), (base, {"no_such_member": 1}));
+        # the cast that the function replaces clears the flags that it does not give
+        hash<ConnectionOptionInfo> cast_override = base + <ConnectionOptionInfo>{"desc": "another secret"};
+        assertFalse(cast_override.sensitive);
+    }
+
+    derivedSchemesTest() {
+        hash<string, hash<ConnectionSchemeInfo>> schemes = ConnectionSchemeCache::getLoadAll();
+        # the schemes of each connection class
+        hash<string, list<string>> class_schemes = {};
+        foreach hash<auto> i in (schemes.pairIterator()) {
+            string path = i.value.cls.getPathName();
+            class_schemes{path} += (i.key,);
+        }
+
+        list<string> errors = ();
+        int compared = 0;
+        foreach hash<auto> i in (schemes.pairIterator()) {
+            if (!i.value.options) {
+                continue;
+            }
+            # the schemes of the closest ancestor class that has a scheme
+            *list<string> base_schemes = getBaseSchemes(i.value.cls, class_schemes);
+            foreach string base_scheme in (base_schemes) {
+                *hash<string, hash<ConnectionOptionInfo>> base_options = schemes{base_scheme}.options;
+                foreach hash<auto> opt in (i.value.options.pairIterator()) {
+                    *hash<ConnectionOptionInfo> base_opt = base_options{opt.key};
+                    if (!base_opt) {
+                        continue;
+                    }
+                    ++compared;
+                    foreach string flag in (Flags) {
+                        string key = sprintf("%s.%s.%s", i.key, opt.key, flag);
+                        if (base_opt{flag} && !opt.value{flag} && !Allowed{key}) {
+                            errors += sprintf("%s: %s is %y in the %y scheme but %y in %y", opt.key, flag,
+                                base_opt{flag}, base_scheme, opt.value{flag}, i.key);
+                        }
+                    }
+                }
+            }
+        }
+        assertGt(100, compared, "options of derived schemes are compared");
+        assertEq((), errors);
+    }
+
+    #! returns the schemes of the closest ancestor classes of the given class that have a scheme
+    private *list<string> getBaseSchemes(Class cls, hash<string, list<string>> class_schemes) {
+        list<Class> parents = map cast<Class>($1.cls), cls.getParentClasses();
+        while (parents) {
+            list<string> rv = ();
+            list<Class> next = ();
+            foreach Class parent in (parents) {
+                *list<string> l = class_schemes{parent.getPathName()};
+                if (l) {
+                    rv += l;
+                } else {
+                    next += map cast<Class>($1.cls), parent.getParentClasses();
+                }
+            }
+            if (rv) {
+                return rv;
+            }
+            parents = next;
+        }
+    }
+
+    sourceTest() {
+        string qlib = normalize_dir(get_script_dir() + "/../../../../qlib");
+        list<string> found = ();
+        foreach string path in (findSources(qlib)) {
+            # the documentation of connection_option_override() names the pattern it replaces
+            if (path =~ /\/ConnectionOptionInfo\.qc$/) {
+                continue;
+            }
+            string src = ReadOnlyFile::readTextFile(path);
+            if (src =~ /\+\s*<ConnectionOptionInfo>\{/) {
+                found += path;
+            }
+        }
+        assertGt(100, found.size() + findSources(qlib).size(), "the module sources are found");
+        assertEq((), found, "options are derived with connection_option_override()");
+    }
+
+    #! returns the paths of the module sources in the given directory and its subdirectories
+    private list<string> findSources(string dir) {
+        Dir d();
+        d.chdir(dir);
+        list<string> rv = map dir + "/" + $1, d.listFiles("\\.q[mc]$") ?? ();
+        foreach string subdir in (d.listDirs() ?? ()) {
+            if (subdir == "." || subdir == "..") {
+                continue;
+            }
+            rv += findSources(dir + "/" + subdir);
+        }
+        return rv;
+    }
+
+    dataProviderTest() {
+        # an option derived from another provider's option keeps the flags that it does not change
+        hash<auto> base = OneDriveDataProvider::OneDriveListItemsSearchOptions."folder_id";
+        hash<auto> derived = SharePointDataProvider::SharePointDriveItemsSearchOptions."folder_id";
+        assertTrue(base.preselected);
+        assertEq(base.preselected, derived.preselected, "folder_id is preselected as in OneDrive");
+        assertEq("hash<DataProviderOptionInfo>", derived.fullType());
+
+        # the info of a provider derived from the info of its parent provider: the support flags of the parent are
+        # kept, and a leaf provider has no children
+        list<string> errors = ();
+        foreach list<hash<auto>> l in ((
+                (SalesforceRestDataProvider::SalesforceRestDataProvider::ProviderInfo,
+                    SalesforceRestDataProvider::SalesforceRestObjectDataProvider::ProviderInfo),
+                (CdsRestDataProvider::CdsRestDataProvider::ProviderInfo,
+                    CdsRestDataProvider::ODataEntityDataProvider::CdsProviderInfo),
+                (ServiceNowRestDataProvider::ServiceNowRestDataProvider::ProviderInfo,
+                    ServiceNowRestDataProvider::ServiceNowTableDataProvider::ProviderInfo))) {
+            hash<auto> parent = l[0];
+            hash<auto> child = l[1];
+            assertEq("hash<DataProviderInfo>", child.fullType());
+            assertFalse(child.supports_children, child.name);
+            assertFalse(child.children_can_support_records, child.name);
+            assertFalse(child.children_can_support_observers, child.name);
+            foreach hash<auto> i in (parent.pairIterator()) {
+                if (i.key =~ /^children_can_support_/ || i.key == "supports_children"
+                        || i.value.typeCode() != NT_BOOLEAN || !i.value) {
+                    continue;
+                }
+                # a flag of the parent that the child does not change is kept, unless the child sets it explicitly
+                if (child{i.key} === False) {
+                    errors += sprintf("%s: %s", child.name, i.key);
+                }
+            }
+        }
+        assertEq((), errors);
+    }
+
+}

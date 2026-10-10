@@ -261,34 +261,30 @@ public class IntercomRestConnection inherits RestClient::RestConnection {
                 "https": "intercom",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": IntercomRestClientBase::DefaultData,
-                },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
-                + <ConnectionOptionInfo>{
-                    "default_value": IntercomRestClientBase::DefaultAuthUrl,
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                + <ConnectionOptionInfo>{
-                    "default_value": IntercomRestClientBase::DefaultGrantType,
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
-                + <ConnectionOptionInfo>{
-                    "default_value": IntercomRestClientBase::DefaultTokenUrl,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": IntercomRestClientBase::DefaultAuthUrl,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": IntercomRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": IntercomRestClientBase::DefaultTokenUrl,
+                    }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": IntercomRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": IntercomRestClientBase::DefaultPingPath,
-                },
-                "token_type": RestConnection::ConnectionScheme.options."token_type"
-                + <ConnectionOptionInfo>{
+                }),
+                "token_type": connection_option_override(RestConnection::ConnectionScheme.options."token_type", {
                     "default_value": IntercomRestClientBase::DefaultTokenType,
-                },
+                }),
             },
             # the OAuth2 alternative is named first because an app that can support OAuth2 makes the
             # authorization code flow the default; "token" is the fallback for a credential that is not

@@ -262,48 +262,41 @@ public class GitHubRestConnection inherits RestClient::RestConnection {
                 "https": "github",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": GitHubRestClientBase::DefaultData,
-                },
-                "headers": RestConnection::ConnectionScheme.options."headers"
-                + <ConnectionOptionInfo>{
+                }),
+                "headers": connection_option_override(RestConnection::ConnectionScheme.options."headers", {
                     "default_value": GitHubRestClientBase::DefaultHeaders,
                     "desc": "Headers sent with every request.\n\n"
                         "`X-GitHub-Api-Version` pins the REST API version and should be left alone unless "
                         "you mean to move to a different one: this application's actions describe the "
                         "fields and responses of **that** version.",
-                },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
-                + <ConnectionOptionInfo>{
-                    "default_value": GitHubRestClientBase::DefaultAuthUrl,
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                + <ConnectionOptionInfo>{
-                    "default_value": GitHubRestClientBase::DefaultGrantType,
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
-                + <ConnectionOptionInfo>{
-                    "default_value": GitHubRestClientBase::DefaultTokenUrl,
-                },
-                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
-                + <ConnectionOptionInfo>{
+                }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": GitHubRestClientBase::DefaultAuthUrl,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": GitHubRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": GitHubRestClientBase::DefaultTokenUrl,
+                    }),
+                "oauth2_scopes": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_scopes, {
                     "default_value": GitHubRestClientBase::DefaultScopes,
-                },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": GitHubRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": GitHubRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": GitHubRestClientBase::DefaultPingPath,
-                },
-                "token": RestConnection::ConnectionScheme.options."token"
-                + <ConnectionOptionInfo>{
+                }),
+                "token": connection_option_override(RestConnection::ConnectionScheme.options."token", {
                     "display_name": "Access Token",
                     "short_desc": "A GitHub personal access token",
                     "desc": "A GitHub personal access token, sent as a bearer token.\n\n"
@@ -313,11 +306,10 @@ public class GitHubRestConnection inherits RestClient::RestConnection {
                         "Leave this unset to use the OAuth2 flow instead.",
                     "sensitive": True,
                     "preselected": True,
-                },
-                "token_type": RestConnection::ConnectionScheme.options."token_type"
-                + <ConnectionOptionInfo>{
+                }),
+                "token_type": connection_option_override(RestConnection::ConnectionScheme.options."token_type", {
                     "default_value": GitHubRestClientBase::DefaultTokenType,
-                },
+                }),
             },
             # OAuth2 is named first because it is the flow this connection should default to whenever the
             # platform can supply a client; a personal access token is the fallback for a credential that

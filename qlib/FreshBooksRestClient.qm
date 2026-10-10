@@ -287,10 +287,9 @@ public class FreshBooksRestConnection inherits RestClient::RestConnection {
                 "https": "freshbooks",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": FreshBooksRestClientBase::DefaultData,
-                },
+                }),
                 "account_id": <ConnectionOptionInfo>{
                     "display_name": "Account ID",
                     "short_desc": "FreshBooks account ID",
@@ -310,34 +309,31 @@ public class FreshBooksRestConnection inherits RestClient::RestConnection {
                         "Find this by calling GET /auth/api/v1/users/me after authentication "
                         "- it appears as 'business.id' in the business_memberships array.",
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": FreshBooksRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": FreshBooksRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": FreshBooksRestClientBase::DefaultPingPath,
-                },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
-                + <ConnectionOptionInfo>{
-                    "default_value": FreshBooksRestClientBase::DefaultAuthUrl,
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
-                + <ConnectionOptionInfo>{
-                    "default_value": FreshBooksRestClientBase::DefaultTokenUrl,
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                + <ConnectionOptionInfo>{
-                    "default_value": FreshBooksRestClientBase::DefaultGrantType,
-                },
-                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
-                + <ConnectionOptionInfo>{
-                    "default_value": FreshBooksRestClientBase::DefaultAuthArgs,
-                },
+                }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": FreshBooksRestClientBase::DefaultAuthUrl,
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": FreshBooksRestClientBase::DefaultTokenUrl,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": FreshBooksRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_auth_args": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_args, {
+                        "default_value": FreshBooksRestClientBase::DefaultAuthArgs,
+                    }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
         };

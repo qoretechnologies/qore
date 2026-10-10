@@ -2332,7 +2332,7 @@ public class AwsS3RestConnection inherits AwsS3RestConnectionBase {
             # "path_style" is not offered: path-style addressing is currently the only mode the data provider
             # module implements, so it is not a choice the user can meaningfully make
             "options": AwsRestConnection::ConnectionScheme.options - ("aws_service", "aws_s3") + {
-                "aws_region": AwsRestConnection::ConnectionScheme.options.aws_region + <ConnectionOptionInfo>{
+                "aws_region": connection_option_override(AwsRestConnection::ConnectionScheme.options.aws_region, {
                     "desc": "The AWS region holding the buckets to be used; this also selects the endpoint the "
                         "connection is made to, so a region other than the one the buckets live in produces "
                         "redirects and signature errors",
@@ -2340,7 +2340,7 @@ public class AwsS3RestConnection inherits AwsS3RestConnectionBase {
                     "allowed_values": AwsRegions,
                     # AWS adds regions, so a region not in the list must still be accepted
                     "allowed_values_creatable": True,
-                },
+                }),
             },
             "required_options": "aws_keyid,aws_secret,aws_region",
         };
@@ -2450,11 +2450,11 @@ public class AwsS3CompatibleRestConnection inherits AwsS3RestConnectionBase {
                 "https": "s3compatibles",
             },
             "options": AwsRestConnection::ConnectionScheme.options - ("aws_service", "aws_s3") + {
-                "aws_region": AwsRestConnection::ConnectionScheme.options.aws_region + <ConnectionOptionInfo>{
+                "aws_region": connection_option_override(AwsRestConnection::ConnectionScheme.options.aws_region, {
                     "desc": "The region the service was configured with; most S3-compatible services default to "
                         "`us-east-1` and ignore the value beyond using it to sign requests",
                     "default_value": "us-east-1",
-                },
+                }),
                 "path_style": <ConnectionOptionInfo>{
                     "display_name": "Path-Style Addressing",
                     "short_desc": "Address buckets in the URI path rather than in the hostname",

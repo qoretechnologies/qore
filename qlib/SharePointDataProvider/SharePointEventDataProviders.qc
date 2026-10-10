@@ -173,17 +173,17 @@ public class SharePointWatchDataProviderBase inherits SharePointDataProviderBase
 
 #! Constructor options for the document library watch providers
 public const DriveWatchConstructorOptions = SharePointDataProviderBase::ConstructorOptions + {
-    "site_id": SharePointDataProviderBase::ConstructorOptions."site_id" + <DataProviderOptionInfo>{
+    "site_id": cast<hash<DataProviderOptionInfo>>(SharePointDataProviderBase::ConstructorOptions."site_id" + {
         "required": True,
         "ref_data": "sites",
         "has_dependents": True,
         "on_change": ("refetch",),
-    },
-    "drive_id": SharePointDataProviderBase::ConstructorOptions."drive_id" + <DataProviderOptionInfo>{
+    }),
+    "drive_id": cast<hash<DataProviderOptionInfo>>(SharePointDataProviderBase::ConstructorOptions."drive_id" + {
         "required": True,
         "ref_data": "drives",
         "depends_on": ("site_id",),
-    },
+    }),
     "poll_interval": <DataProviderOptionInfo>{
         "display_name": "Poll Interval",
         "short_desc": "Polling interval in seconds",
@@ -344,12 +344,12 @@ public class SharePointNewFolderDataProvider inherits SharePointWatchDataProvide
 
 #! Constructor options for the list watch provider
 public const ListWatchConstructorOptions = SharePointDataProviderBase::ConstructorOptions + {
-    "site_id": SharePointDataProviderBase::ConstructorOptions."site_id" + <DataProviderOptionInfo>{
+    "site_id": cast<hash<DataProviderOptionInfo>>(SharePointDataProviderBase::ConstructorOptions."site_id" + {
         "required": True,
         "ref_data": "sites",
         "has_dependents": True,
         "on_change": ("refetch",),
-    },
+    }),
     "list_id": <DataProviderOptionInfo>{
         "display_name": "List",
         "short_desc": "The list to watch",

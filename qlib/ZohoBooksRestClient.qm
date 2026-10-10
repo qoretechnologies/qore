@@ -387,10 +387,9 @@ public class ZohoBooksRestConnection inherits RestClient::RestConnection {
                 "https": "zohobooks",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": ZohoBooksRestClientBase::DefaultData,
-                },
+                }),
                 "subdomain": <ConnectionOptionInfo>{
                     "display_name": "Sub Domain",
                     "short_desc": "Zoho subdomain",
@@ -465,40 +464,36 @@ public class ZohoBooksRestConnection inherits RestClient::RestConnection {
                         },
                     ),
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": ZohoBooksRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": ZohoBooksRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": ZohoBooksRestClientBase::DefaultPingPath,
-                },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
-                + <ConnectionOptionInfo>{
-                    "default_value": sprintf("https://accounts.%s%s/oauth/v2/auth",
-                        ZohoBooksRestClientBase::DefaultSubdomain, ZohoBooksRestClientBase::DefaultDomain),
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
-                + <ConnectionOptionInfo>{
-                    "default_value": sprintf("https://accounts.%s%s/oauth/v2/token",
-                        ZohoBooksRestClientBase::DefaultSubdomain, ZohoBooksRestClientBase::DefaultDomain),
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                + <ConnectionOptionInfo>{
-                    "default_value": ZohoBooksRestClientBase::DefaultGrantType,
-                },
-                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
-                + <ConnectionOptionInfo>{
+                }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": sprintf("https://accounts.%s%s/oauth/v2/auth",
+                            ZohoBooksRestClientBase::DefaultSubdomain, ZohoBooksRestClientBase::DefaultDomain),
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": sprintf("https://accounts.%s%s/oauth/v2/token",
+                            ZohoBooksRestClientBase::DefaultSubdomain, ZohoBooksRestClientBase::DefaultDomain),
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": ZohoBooksRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_scopes": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_scopes, {
                     "default_value": ZohoBooksRestClientBase::DefaultScopes,
-                },
-                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
-                + <ConnectionOptionInfo>{
-                    "default_value": ZohoBooksRestClientBase::DefaultAuthArgs,
-                },
+                }),
+                "oauth2_auth_args": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_args, {
+                        "default_value": ZohoBooksRestClientBase::DefaultAuthArgs,
+                    }),
             },
             "required_options": "subdomain,domain,token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
                 "oauth2_client_id,oauth2_client_secret",

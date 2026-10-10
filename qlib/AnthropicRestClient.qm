@@ -295,15 +295,15 @@ public class AnthropicRestConnection inherits RestClient::RestConnection {
                     "type": "string",
                     "default_value": AnthropicRestClientBase::DefaultAnthropicVersion,
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options.ping_headers, {
                     "default_value": AnthropicRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options.ping_method, {
                     "default_value": AnthropicRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options.ping_path, {
                     "default_value": AnthropicRestClientBase::DefaultPingPath,
-                },
+                }),
             },
             "required_options": "apikey",
         };

@@ -258,36 +258,31 @@ public class BitbucketRestConnection inherits RestClient::RestConnection {
                 "https": "bitbucket",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": BitbucketRestClientBase::DefaultData,
-                },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
-                + <ConnectionOptionInfo>{
-                    "default_value": BitbucketRestClientBase::DefaultAuthUrl,
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                + <ConnectionOptionInfo>{
-                    "default_value": BitbucketRestClientBase::DefaultGrantType,
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
-                + <ConnectionOptionInfo>{
-                    "default_value": BitbucketRestClientBase::DefaultTokenUrl,
-                },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": BitbucketRestClientBase::DefaultAuthUrl,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": BitbucketRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": BitbucketRestClientBase::DefaultTokenUrl,
+                    }),
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": BitbucketRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": BitbucketRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": BitbucketRestClientBase::DefaultPingPath,
-                },
-                "token": RestConnection::ConnectionScheme.options."token"
-                + <ConnectionOptionInfo>{
+                }),
+                "token": connection_option_override(RestConnection::ConnectionScheme.options."token", {
                     "display_name": "Access Token",
                     "short_desc": "A Bitbucket repository, project or workspace access token",
                     "desc": "A Bitbucket access token, sent as a bearer token.\n\n"
@@ -298,24 +293,21 @@ public class BitbucketRestConnection inherits RestClient::RestConnection {
                         "instead.",
                     "sensitive": True,
                     "preselected": True,
-                },
-                "token_type": RestConnection::ConnectionScheme.options."token_type"
-                + <ConnectionOptionInfo>{
+                }),
+                "token_type": connection_option_override(RestConnection::ConnectionScheme.options."token_type", {
                     "default_value": BitbucketRestClientBase::DefaultTokenType,
-                },
-                "username": RestConnection::ConnectionScheme.options."username"
-                + <ConnectionOptionInfo>{
+                }),
+                "username": connection_option_override(RestConnection::ConnectionScheme.options."username", {
                     "desc": "The Atlassian account username to use with an app password.\n\n"
                         "**Not** the email address: Bitbucket rejects an email address here. The username "
                         "is shown under **Personal settings > Account settings**.",
-                },
-                "password": RestConnection::ConnectionScheme.options."password"
-                + <ConnectionOptionInfo>{
+                }),
+                "password": connection_option_override(RestConnection::ConnectionScheme.options."password", {
                     "desc": "An app password created under **Personal settings > App passwords**, used "
                         "with `username`.\n\n"
                         "This is not the account password, which Bitbucket does not accept for API "
                         "access.",
-                },
+                }),
             },
             # any one of the three credentials is enough
             # OAuth2 is named first because it is the flow this connection should default to whenever the

@@ -72,28 +72,25 @@ public class QdrantRestConnection inherits RestClient::RestConnection {
                     "desc": "The API key for authenticating with the Qdrant server; sent as the `api-key` header",
                     "sensitive": True,
                 },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                    + <ConnectionOptionInfo>{
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                    + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": DefaultPingPath,
                     "desc": "The URI path to use for pings; defaults to `/collections`, which requires "
                         "authentication and therefore verifies the credential as well as reachability.  "
                         "Do not use `/`: qdrant serves the root path outside its authentication layer, so "
                         "a ping against it succeeds even when the connection carries no credential at all "
                         "and no real operation can be performed",
-                },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                    + <ConnectionOptionInfo>{
+                }),
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": DefaultPingHeaders,
                     "desc": "HTTP headers to send with ping requests; defaults to "
                         "`{\"Connection\": \"close\"}` to force a fresh TCP connection on "
                         "each ping, preventing stale keep-alive connection failures against "
                         "qdrant's actix-web server (which closes idle keep-alive connections "
                         "after a short timeout)",
-                },
+                }),
             },
         };
     }
