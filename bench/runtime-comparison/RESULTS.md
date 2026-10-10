@@ -7278,3 +7278,117 @@ whether immutable local metadata and duplicate method admission work can be
 moved out of hot calls. Do not cache class acceptance without a complete
 invalidation proof or remove slot/root ownership without proving reflection,
 cycle collection and destruction order.
+
+## Fused method admission rejected (2026-10-10)
+
+Decision: do not retain the fused exact-class/native-admission implementation.
+Two complete comparisons show target median changes below 1%, with overlapping
+process ranges throughout. This is an investigated opportunity, not a new
+performance gain. Production, tests and positive implementation documentation
+are restored to `c41ca13e4`; the discarded patch and fixture are preserved in
+[the evidence](results-fused-method-admission-rejected-macos-arm64.json).
+
+### Experiment and code selection
+
+The preceding profile of expression-polymorphic execution has 7970 samples
+under the kernel: 4337 in disjoint native-method callsites/helper siblings and
+1297 in the exact guard callsite. Inclusive children are not added twice.
+This guided an attempt to combine receiver extraction and live validity checks
+into one exact-body/native-override/ordinary-fallback decision.
+
+The experimental versioned helper accepted only context-independent exact
+bodies and already-assigned native integer arguments. It retained full PIC-key,
+access context, Program, epoch, debugger, body/readiness, sink, stack and frame
+checks, with no receiver ownership or cache-layout change. Stable hoisted
+receivers and name dispatch retained their original compiler paths. A
+compilation-only control restored the separate probes. No runtime validity
+snapshot was cached.
+
+An initial unmeasured wrapper spilled 112 bytes because generic extraction
+kept native arguments live across cold calls. Isolating that cold branch made
+the measured strong-object wrapper frameless and its native transfer a tail
+call. The wrapper has 40 static instructions, the prepared native continuation
+816, and the old v1 helper changes from 749 to 784; native frames remain
+400 bytes. These are whole-function static counts, not executed hot-path
+instructions. Different inlining/register allocation accompanies the change;
+no causal explanation of the small timing movement is established.
+
+The measured `run-onbac2of/kernels-aot` actually calls the fused helper in
+both polymorphic kernels (verified with `otool`, not merely a linked symbol).
+A separate O3 LLVM probe confirms that each selected caller has the fused call
+and no separate exact or v1 probe at that callsite.
+
+### Measurements
+
+Apple M4 Pro/macOS arm64, release Qore/LLVM 22. The baseline is the final
+`candidate-initial-node-O9SDuM` runtime from the previous experiment, whose
+source became `c41ca13e4`. Candidate `candidate-fused-method-kvf3ya` adds
+production patch SHA-256
+`49e94ea19d51bfe00f15914d26ad3bddfdfe5583a899a8126328976d476974d9`.
+Both libraries, both compiler outputs and the host tools are frozen and hashed.
+Each AOT executable was compiled against and run with its respective runtime;
+identical-executable reuse would be invalid for the new helper symbol.
+
+Five processes per kernel/mode, three warmups, five measured 500 ms windows,
+five separately reported startup samples, shuffled single-job execution.
+`run-onbac2of` uses count 4096, seed 810901 and warmed Java controls;
+`run-elo9trao` uses count 1024, seed 810902 and the two Qore modes.
+All 200 jobs/1000 windows, raw records, summaries, source/tool/library/executable
+identities and 345 reference checks per mode were independently revalidated.
+No task build, test, profiling or analysis computation ran during timing.
+Host background work, core placement, clocks and filesystem caches remain
+uncontrolled. Values are ns/element, median of process means; lower is better.
+
+|!Kernel|!4096 before → candidate (change)|!1024 before → candidate (change)
+|polymorphic_call|32.054 → 31.831 (-0.70%)|33.440 → 33.374 (-0.20%)
+|polymorphic_expression_call|10.615 → 10.550 (-0.62%)|12.099 → 12.010 (-0.74%)
+|monomorphic_call|3.350 → 3.351 (+0.03%)|4.744 → 4.797 (+1.10%)
+|optional_method_call|11.253 → 11.250 (-0.03%)|12.773 → 12.754 (-0.15%)
+|indirect_wide|7.454 → 7.507 (+0.71%)|8.634 → 8.572 (-0.72%)
+|indirect_float|9.155 → 9.227 (+0.79%)|10.416 → 10.399 (-0.17%)
+|arithmetic|1.400 → 1.403 (+0.17%)|2.493 → 2.495 (+0.06%)
+|dispatch_control|1.458 → 1.452 (-0.40%)|2.669 → 2.648 (-0.79%)
+
+Every before/candidate process range overlaps. This is descriptive, not a
+significance test, an equivalence proof or a guarantee of no regression.
+Expression medians move -0.62%/-0.74%, typed-polymorphic -0.70%/-0.20%.
+Arithmetic medians are slightly higher in both trials; smaller-loop monomorphic
+execution is +1.10%. All control results and individual windows are retained.
+The evidence does not justify adding this helper/codegen complexity.
+
+The retained baseline's whole-kernel ratios to Java in the 4096 trial are
+about 12.3x typed polymorphic, 4.1x expression polymorphic, 2.0x monomorphic
+and 6.6x nullable method. Java callees remain DONT_INLINE while Qore can inline
+the exact-base case. These are not equal-policy isolated call latencies, and
+there is no Java parity, general-call, IR timing or startup-benefit claim.
+
+### Validation, restoration and next work
+
+Candidate release/debug each pass 57 selected files: 195 cases, 6951 assertions,
+eight standalones. The new experiment-only driver contributes 166 assertions;
+the native-method entry matrix has 522, assigned-method 98 and native-leaf
+context 132. Existing coverage includes wide integers, arbitrary override
+returns, deletion, side effects, exception merges, weak/opaque values,
+reflection, cycle roots, Program/module boundaries, debugger attachment and
+concurrent readers. Debug native units add one case/two assertions. Fresh
+candidate reference grids pass 345 checks in each of six modes; 11 harness
+tests pass. No full-suite, sanitizer or cross-architecture qualification.
+
+The first NativeLeafContext diagnostic was an old-helper-name IR assertion,
+not a semantic mismatch. It was updated to recognize either helper before the
+complete candidate matrix ran. The earlier unmeasured wrapper and that
+diagnostic are identified in the evidence rather than silently discarded.
+
+Candidate qmods were rebuilt for its compiler fingerprint. After removal,
+release/debug cores and QUnit/FsUtil/Util dependencies were rebuilt for the
+restored fingerprint. Each build then passed the three affected original drivers
+(five cases, 752 assertions) and both 345-check IR/AOT reference grids. Symbol
+checks confirm the experimental helper is absent. The final commit contains only this rejection report, evidence
+and the full [62-item audit](FOLLOWUP-AUDIT.md#fused-method-admission-rejection-audit-2026-10-10).
+
+Next: retain the proven baseline and prioritize the larger remaining class-local
+initialization/cleanup cost, then native frame/context setup. Any new
+same-Program fast path must retain real-reference bookkeeping, reflection,
+cycle roots, destruction order, live invalidation and stack observers.
+Do not reintroduce this fused helper unchanged or infer performance from
+fewer source-level checks alone.
