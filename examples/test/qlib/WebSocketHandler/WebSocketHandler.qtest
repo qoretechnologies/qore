@@ -268,7 +268,7 @@ class FakeBackpressureStreamContext inherits AsyncSocketIo::AbstractStreamContex
     }
 }
 
-#! a connection that records whether it was dropped (stop() called) without performing real teardown
+#! a connection that records whether it was dropped (forceStop() called) without performing real teardown
 class DropTrackingWsConnection inherits WebSocketConnection {
     public {
         bool dropped = False;
@@ -277,8 +277,76 @@ class DropTrackingWsConnection inherits WebSocketConnection {
     constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
     }
 
-    stop() {
+    forceStop() {
         dropped = True;
+    }
+}
+
+#! a connection that sends messages and then closes itself, to test what stop() and forceStop() deliver
+class StopTestWsConnection inherits WebSocketConnection {
+    private {
+        #! the size of the large message sent before closing
+        int payload_size;
+        #! True to send a message and stop from registered(), before direct sends are enabled
+        bool stop_in_registered;
+        #! a closed connection is reported here
+        Queue closed;
+    }
+
+    constructor(WebSocketHandler handler, int payload_size, bool stop_in_registered, Queue closed)
+            : WebSocketConnection(handler) {
+        self.payload_size = payload_size;
+        self.stop_in_registered = stop_in_registered;
+        self.closed = closed;
+    }
+
+    registered() {
+        if (stop_in_registered) {
+            # sent while the async transport is not yet registered, so the frame is buffered
+            send("hello");
+            stop();
+        }
+    }
+
+    gotMessage(string msg) {
+        switch (msg) {
+            case "STOP":
+                send(strmul("x", payload_size));
+                send("last");
+                stop();
+                # discarded: no message may follow the close
+                send("after-stop");
+                break;
+            case "FORCESTOP":
+                send(strmul("x", payload_size));
+                forceStop();
+                break;
+        }
+    }
+
+    connectionClosed() {
+        closed.push(True);
+    }
+}
+
+class StopTestWsHandler inherits WebSocketHandler {
+    public {
+        #! closed connections are reported here
+        Queue closed();
+    }
+
+    private {
+        int payload_size;
+        bool stop_in_registered;
+    }
+
+    constructor(int payload_size, bool stop_in_registered, *hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+        self.payload_size = payload_size;
+        self.stop_in_registered = stop_in_registered;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new StopTestWsConnection(self, payload_size, stop_in_registered, closed);
     }
 }
 
@@ -303,6 +371,13 @@ class MyWsClient inherits WebSocketClient {
 
 class WebSocketHandlerTest inherits QUnit::Test {
     public {
+        #! the size of the message sent before a stop(): written in many I/O cycles
+        const StopPayloadSize = 8 * 1024 * 1024;
+        #! the size of a message that a client never reads: larger than the socket buffers
+        const UnreadPayloadSize = 64 * 1024 * 1024;
+        #! the time allowed for each message or close
+        const StopRecvTimeout = 60s;
+
         HttpServer mServer;
         MyWsHandler wsHandler;
         Logger logger;
@@ -323,6 +398,10 @@ class WebSocketHandlerTest inherits QUnit::Test {
         addTestCase("H2/H3 stream backpressure drops slow client", \streamBackpressureDropsTest());
         addTestCase("idle_timeout closes idle connection", \idleTimeoutTest());
         addTestCase("HTTP/1.0 opening handshake is rejected", \http10HandshakeTest());
+        addTestCase("stop() delivers the messages sent before it", \stopDeliversSentMessagesTest());
+        addTestCase("stop() in registered() delivers the buffered messages", \stopInRegisteredTest());
+        addTestCase("stop() disconnects a client that does not read", \stopNonReadingClientTest());
+        addTestCase("forceStop() closes at once", \forceStopTest());
 
         logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
         if (m_options.verbose > 2) {
@@ -1141,6 +1220,110 @@ class WebSocketHandlerTest inherits QUnit::Test {
             ++retries;
         }
         return !h.getConnectionIds();
+    }
+
+    #! stop() delivers the messages sent before it, then the close; a message sent after it is discarded
+    /** The large message takes many I/O cycles to write, so a close that released the connection before its
+        frames were written discarded it, and the following message, every time.
+    */
+    stopDeliversSentMessagesTest() {
+        StopTestWsHandler h(StopPayloadSize, False, {"logger": logger});
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        on_exit hs.stop();
+        hs.setDefaultHandler("ws-handler", h);
+        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # the callback is called with no argument when the connection closes
+        Queue q();
+        WebSocketClient wsc(sub (*data msg) { q.push(msg); }, {"url": "ws://localhost:" + p});
+        wsc.connect();
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        wsc.send("STOP");
+        auto msg = q.get(StopRecvTimeout);
+        assertEq(StopPayloadSize, msg.size(), "the large message sent before stop() is delivered");
+        assertTrue(msg == strmul("x", StopPayloadSize), "the large message is delivered intact");
+        assertEq("last", q.get(StopRecvTimeout), "the last message sent before stop() is delivered");
+        # the close follows; the message sent after stop() is not delivered
+        assertNothing(q.get(StopRecvTimeout), "the connection closes after the messages sent before stop()");
+        assertTrue(h.closed.get(StopRecvTimeout), "the server-side connection is closed");
+    }
+
+    #! stop() from registered() delivers the message buffered before the transport was registered, then the close
+    stopInRegisteredTest() {
+        StopTestWsHandler h(0, True, {"logger": logger});
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        on_exit hs.stop();
+        hs.setDefaultHandler("ws-handler", h);
+        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        Queue q();
+        WebSocketClient wsc(sub (*data msg) { q.push(msg); }, {"url": "ws://localhost:" + p});
+        wsc.connect();
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        assertEq("hello", q.get(StopRecvTimeout), "the message buffered before stop() is delivered");
+        assertNothing(q.get(StopRecvTimeout), "the connection closes after the buffered message");
+        assertTrue(h.closed.get(StopRecvTimeout), "the server-side connection is closed");
+    }
+
+    #! stop() disconnects a client that does not read its messages within the send timeout
+    stopNonReadingClientTest() {
+        # a 1 second send timeout bounds the delivery of the messages that the client never reads
+        StopTestWsHandler h(UnreadPayloadSize, False, {"logger": logger, "send_timeout": 1s});
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        on_exit hs.stop();
+        hs.setDefaultHandler("ws-handler", h);
+        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        Socket s = connectNonReadingClient(p);
+        on_exit delete s;
+        s.send(ws_encode_message("STOP", WSOP_Text, True));
+        # the message is larger than the socket buffers, so it cannot be written until the client reads
+        assertTrue(h.closed.get(StopRecvTimeout), "the connection is closed after the send timeout");
+    }
+
+    #! forceStop() closes the connection at once, without waiting for its messages to be delivered
+    forceStopTest() {
+        # with a send timeout longer than the wait below, only a close that does not deliver the messages can
+        # close the connection in time
+        StopTestWsHandler h(UnreadPayloadSize, False, {"logger": logger, "send_timeout": 10m});
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        on_exit hs.stop();
+        hs.setDefaultHandler("ws-handler", h);
+        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        Socket s = connectNonReadingClient(p);
+        on_exit delete s;
+        s.send(ws_encode_message("FORCESTOP", WSOP_Text, True));
+        assertTrue(h.closed.get(StopRecvTimeout), "the connection is closed without delivering its messages");
+    }
+
+    #! performs the WebSocket opening handshake on a plain socket that the test then never reads from
+    private Socket connectNonReadingClient(int port) {
+        string key = get_random_string(16).toBase64();
+        Socket s();
+        s.connect("localhost:" + port);
+        s.sendHTTPMessage("GET", "/", "1.1", {
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+            "Sec-WebSocket-Key": key,
+            "Sec-WebSocket-Version": "13",
+        });
+        hash<auto> rh = s.readHTTPHeader();
+        assertEq(101, rh.status_code);
+        assertEq(ws_get_response_key(key), rh."sec-websocket-accept");
+        return s;
     }
 
     #! the opening handshake must be an HTTP/1.1 or higher request (RFC 6455 section 4.2.1)
