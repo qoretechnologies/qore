@@ -7974,3 +7974,189 @@ The next implementation steps are:
 The [full audit](FOLLOWUP-AUDIT.md#floating-method-baseline-audit-2026-10-10)
 covers this benchmark-only change. No runtime improvement, full-suite rerun,
 sanitizer, cross-architecture or Java-parity claim.
+
+## Native floating-method continuations (2026-10-10)
+
+Decision: retain the additive `float(float)` native method path. It substantially
+reduces the previously measured floating-method dispatch gap while preserving the
+existing integer ABI, same-program/runtime guards and observable frame behavior.
+This is an AOT improvement, not an IR speedup or Java-parity claim.
+
+[Complete evidence](results-native-float-method-macos-arm64.json) records frozen
+source/tool/library identities, all raw normalized samples and fork summaries,
+qualification logs, LLVM/profile hashes and the 62-item audit. The baseline is
+the merged runtime from e6ebee141 with the unchanged benchmark expansion from
+0fcbe8f00. Candidate binaries were built from 0fcbe8f00 plus the recorded patch,
+not from a prospective commit.
+
+### Implementation and scope
+
+The compiler reuses its complete non-throwing, context-independent scalar-body
+proof for exact homogeneous `float(float)` methods. It publishes typed v1/v2/v3
+companions and passes the live RuntimeConfig through the v2/v3 entries. Three
+atomic pointers are appended to QoreAOTContext; existing field offsets and integer
+function-pointer ABIs are unchanged. Shared PIC metadata is named for scalar
+admission, but the dispatcher must load a matching typed companion from the live
+context. It never reinterprets integer entrypoints as floating entrypoints.
+
+Typed and name-dispatched caller continuations carry arguments/results as doubles,
+including values whose bit patterns collide with NaN-box tags. A boxed input must
+actually be a boxed float to enter this path; coercible integers do not authorize
+a float-key cache hit. Successful native local stores avoid repeated boxing and
+unboxing. Unknown overrides retain their ordinary boxed return, assignment check,
+cleanup, invalidation and exception behavior.
+
+The fixed four-entry PIC retains the full receiver/type/access/Program/parse-policy/
+epoch/argument key. Body identity, metadata readiness, debugger, receiver deletion,
+stack guards, compact frame publication and concurrent-reader handshake remain
+live. AOT context lifetime is not inferred from PIC lifetime: registration can
+replace and delete the context. Deferred receiver/class state is materialized on
+the exceptional stack path and restored independently of RuntimeConfig's
+compatibility snapshot.
+
+The float v1 binding currently supplies admission proof; generic runtime-only
+v1 dispatch is still integer-only. Floating calls without a compiler continuation,
+or a PIC entry populated before companion publication, can remain general.
+Debugger-detach correctness is tested, not fast-path re-admission for that case.
+Methods using self/argv, throwing/effectful operations, incompatible signatures,
+cross-Program contexts or unsupported mixed int/float expression summaries retain
+their established fallback. `QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1`
+provides a float-only compilation/runtime control.
+
+### Measurements
+
+Apple M4 Pro / macOS arm64; release binaries; three independent forks per
+kernel/mode, three warmup windows then five 500 ms measurement windows. Jobs are
+randomized by the recorded seed. Before and after AOT executables are separately
+compiled against their frozen libraries; no AOT-reuse shortcut is used.
+No task build, test, profile or evidence work overlaps timing. All 264 jobs /
+1320 measurement windows are retained and independently revalidated.
+
+Count 4096, `run-vvtn2_cq`: median of fork means, ns/iteration; positive
+reduction means less elapsed time.
+
+|!Kernel|!Before|!After|!Reduction %|!Java JIT|!After / Java
+|polymorphic_float_call|138.860|24.749|82.18|2.560|9.67
+|polymorphic_float_expression_call|120.778|10.513|91.30|2.552|4.12
+|monomorphic_float_call|8.802|3.339|62.07|1.638|2.04
+|optional_float_method_call|142.958|11.139|92.21|1.667|6.68
+|polymorphic_call|24.052|23.644|1.70|2.330|10.15
+|polymorphic_expression_call|10.158|10.311|-1.51|2.523|4.09
+|indirect_float|9.219|9.023|2.13|1.672|5.40
+|arithmetic|1.434|1.439|-0.37|0.892|1.61
+
+All four floating-method before/after fork ranges are disjoint at counts 4096
+and 1024. The following repeats include every control, not just improved kernels.
+The same-runtime control compiles only its before executable with the float-only
+feature disabled; both measured processes use the same candidate library without
+a runtime disable flag.
+
+|!Kernel|!1024 before|!1024 after|!Reduction %|!Same-runtime 4096 before|!Same-runtime 4096 after|!Reduction %
+|polymorphic_float_call|143.597|26.329|81.66|143.216|24.760|82.71
+|polymorphic_float_expression_call|122.829|12.347|89.95|122.494|10.455|91.46
+|monomorphic_float_call|10.502|4.959|52.78|8.300|3.380|59.27
+|optional_float_method_call|144.122|12.682|91.20|142.622|11.311|92.07
+|polymorphic_call|25.636|25.626|0.04|24.152|23.795|1.48
+|polymorphic_expression_call|12.154|11.918|1.94|10.443|10.378|0.62
+|indirect_float|10.415|10.481|-0.63|9.054|9.104|-0.55
+|arithmetic|2.768|2.751|0.60|1.456|1.452|0.28
+
+Count 1024 is `run-wzn5iy4f`; same-runtime count 4096 is
+`run-pp38q5ar`. Typed float polymorphism reduces time by 81.66–82.71%,
+expression polymorphism by 89.95–91.46%, and nullable float methods by
+91.20–92.21%. Monomorphic float improves by 52.78–62.07%; its exact-base
+path also benefits from keeping the caller continuation native.
+
+The integer-expression control is 1.51% slower in the first 4096 trial with
+disjoint observed ranges, but 1.94% faster at 1024 and 0.62% faster in the
+same-runtime control. Indirect float changes from 2.13% faster to 0.63%/0.55%
+slower; the latter ranges overlap. These results remain in the evidence and
+do not establish either a new control optimization or a repeated steady-state
+regression. Observed fork ranges are not statistical confidence intervals.
+
+Count one, original before/after `run-j88ksnqk` and additional same-runtime
+control `run-3jfkf51h`:
+
+|!Kernel|!Before|!After|!Reduction %|!Same-runtime before|!Same-runtime after|!Reduction %
+|polymorphic_float_call|2435.220|2378.034|2.35|2414.888|2361.537|2.21
+|polymorphic_float_expression_call|2363.507|2376.432|-0.55|2379.798|2354.880|1.05
+|monomorphic_float_call|2193.121|2226.252|-1.51|2220.920|2214.487|0.29
+|optional_float_method_call|2387.735|2243.545|6.04|2387.576|2211.649|7.37
+|polymorphic_call|2324.349|2368.156|-1.88|2311.444|2311.432|0.00
+|polymorphic_expression_call|2301.464|2313.725|-0.53|2266.824|2292.451|-1.13
+|indirect_float|1892.230|1887.912|0.23|1893.633|1882.072|0.61
+|arithmetic|1801.014|1804.772|-0.21|1796.080|1797.346|-0.07
+
+These small-count kernels include roughly two microseconds of surrounding
+dispatch/harness/invocation work. Initial monomorphic-float +1.51% and typed-integer
++1.88% slowdowns have disjoint observed fork ranges; neither repeats in the
+same-runtime control (0.29% faster and effectively unchanged, respectively).
+The integer-expression short control remains +0.53%/+1.13%, with overlapping
+ranges in both runs. Nullable floats improve by 6.04%/7.37%, but the mixed results
+do not support a general single-call or startup improvement. Process-launch
+samples are recorded with uncontrolled filesystem caches and are not used to
+claim an optimization.
+
+Fresh Temurin 25.0.2 Java JIT measurements retain DONT_INLINE target methods;
+Qore can inline the exact-base branch. These are whole kernels including
+selection, local ownership and conversion, not isolated calls with equal
+inlining policy. The floating gap is now about 2.04x for monomorphic, 4.12x for
+expression-polymorphic, 6.68x for nullable and 9.67x for typed-polymorphic kernels.
+The prior IR baseline remains much slower and is not improved by these AOT
+entrypoints.
+
+### Qualification and observed code
+
+Release and debug builds each pass 76 selected files: 314 cases / 12502
+assertions in release and 321 / 12601 in debug, plus nine standalone files
+within each selection. The release short-string suite has its expected
+debug-only skip. The native-unit driver skips in release and passes one case /
+two assertions in debug; all 146 native debug checks pass.
+
+The float driver passes 706 assertions per build, covering O0/O3, stripped
+sources, split compilation, EH/no-debug-info modes, compiler/runtime disable
+controls, optional/string overrides, arguments, deletion, cross-Program calls,
+debugger event counts, concurrent first publication and stack readers.
+NativeLeafContext passes 174 QUnit assertions per build plus C++ host assertions
+for typed and opaque strong receivers, weak/scalar rejection, wrong argument keys,
+missing bindings, live body/readiness/Program checks and pending exceptions.
+The real generated v3 and v2 companions exercise null-limit fallback, forced
+stack overflow, private-context materialization and independent snapshot
+restoration. Signed zero, infinities, NaNs and tag-colliding finite values pass.
+
+An initial debugger fixture mixed a float parameter with integer literals, which
+does not satisfy the existing whole-body float proof. Its binding assertion
+failed. The fixture now uses explicit floating literals, and a separate mixed
+literal body is asserted to remain excluded. No production proof was weakened.
+
+Fresh release/debug IR/AOT grids and every measured mode each pass all 405
+independent references. All 12 Python harness tests pass. QUnit, FsUtil,
+HttpServer and HttpServerUtil qmods are rebuilt sequentially for each build.
+Only RecursiveClosureLocals uses the previously reproduced macOS deployment-target
+adjustment. No full-suite, sanitizer or cross-architecture claim is made.
+
+Generated LLVM contains one native float attempt and a double continuation in
+each of the four normal benchmark callers. A separate ten-second, 1 ms profile
+finished before timing: the new helper is visible, and general method dispatch no
+longer dominates the expression workload. Inclusive branches are nested and tail
+attribution is incomplete; they are not additive costs or precise guard timings.
+
+### Next optimizations
+
+1. Measure float method shapes still on general dispatch: runtime-only calls
+   without native assignments and first publication under a debugger. Extend
+   typed generic dispatch or re-admission only with complete ownership/body/
+   debugger proofs and a dedicated before/after benchmark.
+2. Extend mixed int/float whole-body proof where language conversion, overflow,
+   exceptions and signed-zero behavior can be preserved; keep division and
+   effectful bodies excluded unless separately proven.
+3. Profile the remaining approximately 25 ns typed-local versus 10.5 ns expression
+   cost. Investigate local ownership/assignment lowering and prepared dispatch,
+   without deleting real references, using stale context pointers or bypassing
+   virtual destruction and frame-reader guarantees.
+4. Profile IR invocation separately and target prepared same-program scalar
+   dispatch. An AOT-only result must not be presented as an interpreter gain.
+
+The [audit](FOLLOWUP-AUDIT.md#native-floating-method-audit-2026-10-10) reports
+19 Pass, 43 N/A and no failures. Java-level retained-call speed remains an open
+goal; this iteration closes a substantial floating-method gap.

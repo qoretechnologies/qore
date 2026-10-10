@@ -188,11 +188,12 @@ struct QoreAOTMethodDispatchCacheEntry {
     std::array<uint8_t, MAX_ARGS> arg_states{};
     uint8_t nargs = 0;
 
-    //! Immutable unary-int admission facts for this resolved variant and Program key.
+    //! Immutable homogeneous unary int/float admission facts for this resolved variant and Program key.
     //! A null variant keeps the ordinary path; body/readiness/debugger/value guards stay live.
-    const UserVariantBase* native_int_uvb = nullptr;
-    QoreProgram* native_int_program = nullptr;
-    const qore_class_private* native_int_class_ctx = nullptr;
+    //! Dispatch must also find the matching typed companion in the live, exact-body AOT context.
+    const UserVariantBase* native_scalar_uvb = nullptr;
+    QoreProgram* native_scalar_program = nullptr;
+    const qore_class_private* native_scalar_class_ctx = nullptr;
 };
 
 //! Bounded polymorphic cache owned by one AOT call target.
@@ -394,6 +395,17 @@ struct QoreAOTContext {
     using NativeIntUnaryMethodEntryV3 = int64_t (*)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*,
         const size_t*);
     std::atomic<NativeIntUnaryMethodEntryV3> native_int_unary_method_entry_v3{nullptr};
+
+    //! Additive float(float) companions; retain all existing generated field offsets and integer ABIs.
+    //! Published only for the exact normal body with a complete non-throwing, context-independent proof.
+    using NativeFloatUnaryMethodEntry = double (*)(double, QoreAOTContext*, ExceptionSink*);
+    std::atomic<NativeFloatUnaryMethodEntry> native_float_unary_method_entry{nullptr};
+    using NativeFloatUnaryMethodEntryV2 = double (*)(double, QoreAOTContext*, ExceptionSink*, RuntimeConfig*);
+    std::atomic<NativeFloatUnaryMethodEntryV2> native_float_unary_method_entry_v2{nullptr};
+    //! The inline stack guard must fall back to v2 before body execution on a null/failed limit view.
+    using NativeFloatUnaryMethodEntryV3 = double (*)(double, QoreAOTContext*, ExceptionSink*, RuntimeConfig*,
+        const size_t*);
+    std::atomic<NativeFloatUnaryMethodEntryV3> native_float_unary_method_entry_v3{nullptr};
 
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.

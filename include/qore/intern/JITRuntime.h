@@ -927,6 +927,43 @@ void qore_rt_bind_method_int_unary_v3(QoreAOTContext* ctx,
 int qore_rt_try_method_int_unary_v1(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
     int64_t arg, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc);
 
+//! Publish a whole-body-proven float(float) method companion, without changing integer bindings.
+//! @param ctx runtime-owned context identifying normal in its PC metadata
+//! @param normal exact compiled normal body, checked again before dispatch
+//! @param entry context-independent, non-throwing float(float) body with context and sink
+//! @note Publication is idempotent and thread-safe; context lifetime bounds this borrowed code pointer.
+void qore_rt_bind_method_float_unary_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    double (*entry)(double, QoreAOTContext*, ExceptionSink*));
+
+//! Publish a pure float(float) companion consuming the caller's live RuntimeConfig.
+//! @param ctx runtime-owned context whose body must match normal
+//! @param normal exact normal body identity, rechecked on every use
+//! @param entry scalar companion retaining the full native stack guard
+void qore_rt_bind_method_float_unary_v2(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    double (*entry)(double, QoreAOTContext*, ExceptionSink*, RuntimeConfig*));
+
+//! Publish an additive float(float) companion with the live inline stack-limit view.
+//! @param ctx runtime-owned context whose body must match normal
+//! @param normal exact normal body identity, rechecked on every use
+//! @param entry pure scalar body; a null/failed limit must use v2's full guard before body work
+void qore_rt_bind_method_float_unary_v3(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    double (*entry)(double, QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*));
+
+//! Try a warmed exact-signature float method cache entry with an unboxed argument/result.
+//! @param ctx caller context owning the call-target slot
+//! @param slot pre-resolved non-generic object method target
+//! @param base_bits borrowed strong receiver; ownership never changes here
+//! @param arg assigned native double, without coercion or representation restriction
+//! @param result scalar result initialized when handled; check xsink before use
+//! @param xsink exception sink, including stack exhaustion
+//! @param rc live same-thread invocation state, never a cached permission snapshot
+//! @return one when handled, zero for effect-free fallback without consuming arguments
+int qore_rt_try_method_float_unary_v1(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    double arg, double* result, ExceptionSink* xsink, RuntimeConfig* rc);
+
 //! Publish a pure dynamic int(int) closure companion, idempotently for this exact normal body.
 //! @param ctx runtime-owned context, without per-instance captured values
 //! @param normal body identity checked again at dispatch

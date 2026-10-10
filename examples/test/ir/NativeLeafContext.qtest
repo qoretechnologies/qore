@@ -48,6 +48,20 @@ class NativeLeafContextTest inherits QUnit::Test {
             "int sub methodArgumentProbe(NativeLeafMethodBase input, auto value) {\n"
             "    NativeLeafMethodBase receiver = input; return receiver.next(value);\n}\n"
             "int sub optionalMethodArgumentProbe(*NativeLeafMethodBase receiver, auto value) {\n"
+            "    return receiver.next(value);\n}\n"
+            "class NativeLeafFloatMethodBase { float next(float value) { return value + 7.0; } }\n"
+            "class NativeLeafFloatMethodDerived inherits NativeLeafFloatMethodBase {\n"
+            "    private { int leafContextMarker = 927; }\n"
+            "    float next(float value) { return value + 0.5; }\n}\n"
+            "class NativeLeafFloatMethodIdentity inherits NativeLeafFloatMethodBase {\n"
+            "    float next(float value) { return value; }\n}\n"
+            "NativeLeafFloatMethodBase sub makeFloatMethodProbe() { return new NativeLeafFloatMethodDerived(); }\n"
+            "NativeLeafFloatMethodBase sub makeFloatIdentityProbe() { return new NativeLeafFloatMethodIdentity(); }\n"
+            "float sub floatMethodProbe(NativeLeafFloatMethodBase input, float value) {\n"
+            "    NativeLeafFloatMethodBase receiver = input; value = receiver.next(value); return value;\n}\n"
+            "float sub optionalFloatMethodProbe(*NativeLeafFloatMethodBase receiver, float value) {\n"
+            "    value = receiver.next(value); return value;\n}\n"
+            "float sub floatMethodArgumentProbe(NativeLeafFloatMethodBase receiver, auto value) {\n"
             "    return receiver.next(value);\n}\n");
         file.close();
         string control = dir.path + "/control.qr";
@@ -87,6 +101,9 @@ class NativeLeafContextTest inherits QUnit::Test {
                     "guarded pure method-v2 binding");
                 assertEq(inline_method, output.find("qore_rt_bind_method_int_unary_v3") >= 0,
                     "method-v3 binding or method-only full-guard control");
+                assertRegex("qore_rt_bind_method_float_unary_v1[^\n]*NativeLeafFloatMethodDerived", output);
+                assertRegex("qore_rt_bind_method_float_unary_v2[^\n]*NativeLeafFloatMethodDerived", output);
+                assertEq(inline_method, output.find("qore_rt_bind_method_float_unary_v3") >= 0);
                 if (inline_method) {
                     *list<*string> entry = regex_extract(output,
                         "(?s)define [^\n]*@NativeLeafMethodDerived[^\n]*_method_v3\\([^\n]*\n(.*?)\n\\}");
@@ -103,6 +120,13 @@ class NativeLeafContextTest inherits QUnit::Test {
                     assertTrue(!!body, name + " normal LLVM entry");
                     assertRegex("call i32 @qore_rt_try_method_int_unary_v1", body[0] ?? "",
                         name + " must exercise the native continuation");
+                }
+                foreach string name in (("floatMethodProbe", "optionalFloatMethodProbe")) {
+                    *list<*string> body = regex_extract(output,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " normal LLVM entry");
+                    assertRegex("call i32 @qore_rt_try_method_float_unary_v1", body[0] ?? "",
+                        name + " must exercise the float continuation");
                 }
                 assertEq(inline_callback, output.find("qore_rt_bind_function_call_ref_typed_v3") >= 0,
                     "deferred eligible entry or eager control");

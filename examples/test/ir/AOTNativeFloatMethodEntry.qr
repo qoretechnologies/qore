@@ -1,0 +1,218 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+class NativeFloatMethodBase {
+    float next(float value) { return value * 3.0 + 7.0; }
+}
+class NativeFloatMethodDerived inherits NativeFloatMethodBase {
+    float next(float value) { return value * 5.0 + 11.0; }
+    nothing destroy() { delete self; }
+}
+class NativeFloatMethodOther inherits NativeFloatMethodBase {
+    float next(float value) { return value > 0.0 ? value + 19.0 : -value; }
+}
+class NativeFloatMethodThread inherits NativeFloatMethodBase {
+    float next(float value) { return value * 7.0 + 13.0; }
+}
+class NativeFloatMethodIdentity inherits NativeFloatMethodBase {
+    float next(float value) { return value; }
+}
+class NativeFloatMethodNegative inherits NativeFloatMethodBase {
+    float next(float value) { return -value; }
+}
+class NativeFloatMethodMixed inherits NativeFloatMethodBase {
+    # Mixed float/int expression summaries are not yet native-method eligible.
+    float next(float value) { return value + 19; }
+}
+class NativeFloatMethodOptional inherits NativeFloatMethodBase {
+    *float next(float value) { return NOTHING; }
+}
+class NativeFloatMethodString inherits NativeFloatMethodBase {
+    string next(float value) { return "override"; }
+}
+class NativeFloatMethodThrowing inherits NativeFloatMethodBase {
+    float next(float value) { throw "NATIVE-FLOAT-METHOD-ERROR", "override"; }
+}
+class NativeFloatMethodSelf inherits NativeFloatMethodBase {
+    private:internal { float offset = 23.0; }
+    float next(float value) { return value + offset; }
+    private:internal float privateValue() { return offset; }
+    float verifyContext(NativeFloatMethodBase other) {
+        return nativeFloatMethodStore(other, 2.0) + privateValue();
+    }
+}
+class NativeFloatMethodArgv inherits NativeFloatMethodBase {
+    float next(float value, ...) { return value + (argv ? argv[0] : 0.0); }
+}
+class NativeFloatMethodDivide inherits NativeFloatMethodBase {
+    float next(float value) { return 100.0 / value; }
+}
+class NativeFloatMethodEffect inherits NativeFloatMethodBase {
+    public { int calls = 0; }
+    float next(float value) { ++calls; return value + 29.0; }
+}
+
+auto sub nativeFloatMethodCall(NativeFloatMethodBase input, float value) {
+    NativeFloatMethodBase receiver = input;
+    return receiver.next(value);
+}
+auto sub nativeFloatMethodInvoke(NativeFloatMethodBase input, float value) {
+    NativeFloatMethodBase receiver = input;
+    try {
+        return receiver.next(value);
+    } catch (hash<ExceptionInfo> e) {
+        return e.err;
+    }
+}
+float sub nativeFloatMethodStore(NativeFloatMethodBase input, float value) {
+    NativeFloatMethodBase receiver = input;
+    value = receiver.next(value);
+    return value;
+}
+auto sub nativeFloatMethodStoreInvoke(NativeFloatMethodBase input, float value) {
+    NativeFloatMethodBase receiver = input;
+    try {
+        value = receiver.next(value);
+        return value;
+    } catch (hash<ExceptionInfo> e) {
+        return e.err;
+    }
+}
+auto sub nativeFloatOptionalStore(*NativeFloatMethodBase receiver, float value) {
+    try {
+        value = receiver.next(value);
+        return value;
+    } catch (hash<ExceptionInfo> e) {
+        return e.err;
+    }
+}
+# Dedicated sites keep special-value targets in the bounded PIC after warmup.
+float sub nativeFloatSpecialStore(NativeFloatMethodBase receiver, float value) {
+    value = receiver.next(value);
+    return value;
+}
+float sub nativeFloatSpecialOptional(*NativeFloatMethodBase receiver, float value) {
+    value = receiver.next(value);
+    return value;
+}
+auto sub nativeFloatMethodArgs(NativeFloatMethodBase receiver, auto value) {
+    try {
+        return receiver.next(value);
+    } catch (hash<ExceptionInfo> e) {
+        return e.err == "RUNTIME-OVERLOAD-ERROR" || e.err == "RUNTIME-TYPE-ERROR" ? "REJECTED" : e.err;
+    }
+}
+auto sub nativeFloatMethodExcess(auto receiver, float value) {
+    try {
+        return receiver.next(value, 29.0);
+    } catch (hash<ExceptionInfo> e) {
+        return e.err;
+    }
+}
+sub expectFloat(float expected, float actual) {
+    if (expected.nanp() ? !actual.nanp()
+            : expected != actual || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual))) {
+        throw "NATIVE-FLOAT-SPECIAL", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+int sub nativeFloatMethodWorkload() {
+    NativeFloatMethodBase base();
+    NativeFloatMethodDerived derived();
+    NativeFloatMethodThread other();
+    int result = 0;
+    for (int i = 0; i < 256; ++i) {
+        NativeFloatMethodBase receiver = i % 3 == 0 ? base : i % 3 == 1 ? derived : other;
+        result += int(receiver.next(float(i)));
+    }
+    return result;
+}
+
+NativeFloatMethodDerived derived();
+NativeFloatMethodOther other();
+NativeFloatMethodIdentity identity();
+NativeFloatMethodNegative negative();
+NativeFloatMethodMixed mixed();
+NativeFloatMethodOptional optional();
+NativeFloatMethodString text();
+NativeFloatMethodThrowing throwing();
+NativeFloatMethodSelf self_context();
+NativeFloatMethodArgv argv_context();
+NativeFloatMethodDivide divide();
+NativeFloatMethodEffect effect();
+for (int round = 0; round < 16; ++round) {
+    if (nativeFloatMethodCall(derived, 2.0) != 21.0
+            || nativeFloatMethodInvoke(derived, 2.0) != 21.0
+            || nativeFloatMethodStore(derived, 2.0) != 21.0
+            || nativeFloatMethodStoreInvoke(derived, 2.0) != 21.0
+            || nativeFloatMethodCall(other, -2.0) != 2.0
+            || nativeFloatMethodStore(other, 2.0) != 21.0
+            || nativeFloatMethodStore(mixed, 2.0) != 21.0
+            || nativeFloatMethodStoreInvoke(optional, 2.0) != "RUNTIME-TYPE-ERROR"
+            || nativeFloatMethodStoreInvoke(text, 2.0) != "RUNTIME-TYPE-ERROR"
+            || nativeFloatMethodStoreInvoke(throwing, 2.0) != "NATIVE-FLOAT-METHOD-ERROR"
+            || nativeFloatMethodStore(effect, 2.0) != 31.0
+            || effect.calls != round + 1
+            || exists nativeFloatMethodCall(optional, 2.0)
+            || nativeFloatMethodCall(text, 2.0) != "override"
+            || nativeFloatMethodInvoke(throwing, 2.0) != "NATIVE-FLOAT-METHOD-ERROR"
+            || nativeFloatMethodCall(self_context, 2.0) != 25.0
+            || self_context.verifyContext(derived) != 44.0
+            || nativeFloatMethodExcess(argv_context, 2.0) != 31.0
+            || nativeFloatMethodExcess(derived, 2.0) != "RUNTIME-OVERLOAD-ERROR"
+            || nativeFloatMethodArgs(derived, "wrong") != "REJECTED"
+            || nativeFloatMethodArgs(derived, NOTHING) != "REJECTED"
+            || nativeFloatMethodInvoke(divide, 0.0) != "DIVISION-BY-ZERO"
+            || nativeFloatMethodStore(divide, 2.0) != 50.0
+            || nativeFloatOptionalStore(derived, 2.0) != 21.0
+            || nativeFloatOptionalStore(optional, 2.0) != "RUNTIME-TYPE-ERROR") {
+        throw "NATIVE-FLOAT-METHOD-CONTRACT", "argument, override or context mismatch";
+    }
+    foreach float value in ((0.0, -0.0, 1.25, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@)) {
+        expectFloat(value, nativeFloatSpecialStore(identity, value));
+        expectFloat(-value, nativeFloatSpecialStore(negative, value));
+        expectFloat(value, nativeFloatSpecialOptional(identity, value));
+        expectFloat(-value, nativeFloatSpecialOptional(negative, value));
+        expectFloat(value, nativeFloatMethodCall(identity, value));
+    }
+}
+if (type(nativeFloatOptionalStore(NOTHING, 2.0)) != "string") {
+    throw "NATIVE-FLOAT-NULL", "nullable method accepted NOTHING";
+}
+NativeFloatMethodDerived doomed();
+for (int i = 0; i < 16; ++i) { expectFloat(21.0, nativeFloatSpecialStore(doomed, 2.0)); }
+doomed.destroy();
+if (nativeFloatMethodStoreInvoke(doomed, 2.0) != "OBJECT-ALREADY-DELETED") {
+    throw "NATIVE-FLOAT-DELETION", "deleted receiver accepted";
+}
+Program foreign(PO_NO_INHERIT_USER_CLASSES | PO_NO_CHILD_PO_RESTRICTIONS);
+foreign.importClass("NativeFloatMethodBase");
+foreign.importClass("NativeFloatMethodDerived");
+foreign.setExecMode(EM_IR);
+foreign.parse("%modern\nNativeFloatMethodDerived sub make() { return new NativeFloatMethodDerived(); }\n"
+    "float sub invoke(NativeFloatMethodBase receiver, float value) { return receiver.next(value); }\n",
+    "native-float-method-foreign");
+NativeFloatMethodBase imported = foreign.callFunction("make");
+for (int i = 0; i < 16; ++i) {
+    expectFloat(float(i * 5 + 11), nativeFloatMethodStore(imported, float(i)));
+    expectFloat(float(i * 5 + 11), foreign.callFunction("invoke", derived, float(i)));
+    expectFloat(float(i * 5 + 11), nativeFloatMethodStore(derived, float(i)));
+}
+Counter gate(1);
+Counter running(8);
+Queue results();
+for (int i = 0; i < 8; ++i) {
+    background sub () {
+        on_exit running.dec();
+        gate.waitForZero();
+        results.push(nativeFloatMethodWorkload());
+    }();
+}
+gate.dec();
+running.waitForZero();
+int expected = nativeFloatMethodWorkload();
+for (int i = 0; i < 8; ++i) {
+    if (results.get() != expected) { throw "NATIVE-FLOAT-CONCURRENCY", "checksum mismatch"; }
+}
+printf("native-float-method-entry: ok\n");

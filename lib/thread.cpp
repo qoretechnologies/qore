@@ -2383,8 +2383,8 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
         : td(RuntimeConfigNativeAccess::getThreadData(rc)), method_context(&context),
           previous(td->native_leaf_context), state(ContextState::DeferredMarkers), target_kind(TargetKind::Method) {
     const auto& cache = context.cache;
-    assert(cache.native_int_uvb && td->current_pgm == cache.native_int_program);
-    call_loc = td->runtime_loc ? td->runtime_loc : cache.native_int_uvb->getUserSignature()->getParseLocation();
+    assert(cache.native_scalar_uvb && td->current_pgm == cache.native_scalar_program);
+    call_loc = td->runtime_loc ? td->runtime_loc : cache.native_scalar_uvb->getUserSignature()->getParseLocation();
     td->native_leaf_context = this;
     old_stack = publish_pushed_stack_location(td, stack_loc);
     // Method-v2 has always re-emitted the complete non-throwing scalar proof,
@@ -2401,8 +2401,8 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
     QoreProgram* pgm;
     const QoreProgramLocation* parse_loc;
     if (target_kind == TargetKind::Method) {
-        uvb = method_context->cache.native_int_uvb;
-        pgm = method_context->cache.native_int_program;
+        uvb = method_context->cache.native_scalar_uvb;
+        pgm = method_context->cache.native_scalar_program;
         parse_loc = uvb->getUserSignature()->getParseLocation();
     } else {
         uvb = callback_cache->uvb;
@@ -2500,9 +2500,9 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::materiali
     old_rc_object = rc.getObject();
     old_rc_class = rc.getClass();
     td->current_obj = object;
-    td->current_class = cache.native_int_class_ctx;
+    td->current_class = cache.native_scalar_class_ctx;
     rc.setObject(object);
-    rc.setClass(cache.native_int_class_ctx);
+    rc.setClass(cache.native_scalar_class_ctx);
 }
 
 __attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::restore(ThreadData* td) {

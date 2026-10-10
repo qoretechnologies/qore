@@ -14,9 +14,11 @@ extern "C" void init_NATIVE_LEAF_CONTEXT_qo(QoreProgram*);
 #undef NDEBUG
 #endif
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
+#include <limits>
 #include <string>
 #include <thread>
 
@@ -109,6 +111,76 @@ public:
     }
 private:
     QoreAOTContext* ctx;
+};
+
+struct FloatMethodProbeState {
+    QoreAOTContext::NativeFloatUnaryMethodEntryV3 target;
+    QoreObject* object;
+    bool null_view;
+    bool overflow;
+    unsigned calls = 0;
+};
+static thread_local FloatMethodProbeState* float_method_probe = nullptr;
+
+static double floatMethodStackAdapter(double arg, QoreAOTContext* ctx, ExceptionSink* xsink,
+        RuntimeConfig* rc, const size_t* view) {
+    assert(float_method_probe);
+    auto& probe = *float_method_probe;
+    ++probe.calls;
+    struct RestoreLimit {
+        size_t* limit = nullptr;
+        size_t saved = 0;
+        ~RestoreLimit() {
+            if (limit) {
+                *limit = saved;
+            }
+        }
+    } restore;
+    if (probe.overflow) {
+#if defined(__aarch64__) || defined(__x86_64__)
+        restore.limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
+        assert(restore.limit && restore.limit == view);
+        restore.saved = *restore.limit;
+        *restore.limit = get_stack_pos() + 4096;
+#else
+        assert(false && "forced float method limit requires native stack view");
+#endif
+    }
+    double result = probe.target(arg, ctx, xsink, rc, probe.null_view ? nullptr : view);
+    if (probe.overflow) {
+        assert(*xsink && result == 0.0 && probe.object);
+        *restore.limit = restore.saved;
+        assert(rc->getObject() == probe.object);
+        assert(rc->getClass() == qore_class_private::get(*probe.object->getClass()));
+        ExceptionSink probe_sink;
+        uint64_t bits = qore_rt_load_self_member("leafContextMarker", &probe_sink);
+        QoreValue value;
+        std::memcpy(&value, &bits, sizeof(value));
+        ValueHolder marker(value, &probe_sink);
+        assert(!probe_sink && marker->getAsBigInt() == 927);
+    }
+    return result;
+}
+
+// Test-only replacement of one unshared Program's binding. The real compiler
+// companion still runs and the original entry is restored before state dies.
+class FloatMethodStackProbe {
+public:
+    FloatMethodStackProbe(QoreAOTContext* ctx, QoreObject* object, bool null_view, bool overflow)
+        : ctx(ctx), state{ctx->native_float_unary_method_entry_v3.load(std::memory_order_acquire),
+            object, null_view, overflow} {
+        assert(state.target && !float_method_probe);
+        float_method_probe = &state;
+        ctx->native_float_unary_method_entry_v3.store(floatMethodStackAdapter, std::memory_order_release);
+    }
+    ~FloatMethodStackProbe() {
+        assert(state.calls);
+        ctx->native_float_unary_method_entry_v3.store(state.target, std::memory_order_release);
+        float_method_probe = nullptr;
+    }
+private:
+    QoreAOTContext* ctx;
+    FloatMethodProbeState state;
 };
 
 // Rejected signatures and NOTHING must neither populate an empty slot nor
@@ -334,8 +406,8 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     auto* cache = ctx->call_targets[slot].method_dispatch_cache.load(std::memory_order_acquire);
     assert(cache);
     const auto* admitted = cache->entries[0].load(std::memory_order_acquire);
-    assert(admitted && admitted->native_int_uvb);
-    auto* callee = admitted->native_int_uvb->getCachedAOTContext();
+    assert(admitted && admitted->native_scalar_uvb);
+    auto* callee = admitted->native_scalar_uvb->getCachedAOTContext();
     // Publication readiness remains live even after a successful lookup.
     bool map_attached = callee->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
     check(*object, false);
@@ -428,10 +500,10 @@ static void checkMethodArgumentKeys(QoreProgram* program, const char* caller_nam
     warm(QoreValue(int64_t{7}));
     const auto* second = cache->entries[1].load(std::memory_order_acquire);
     assert(second && second->nargs == 1 && second->arg_types[0] == bigIntTypeInfo
-        && second->arg_states[0] == 0 && second->native_int_uvb);
+        && second->arg_states[0] == 0 && second->native_scalar_uvb);
     assert(cache->entries[0].load(std::memory_order_acquire) == first);
     check(true);
-    auto* target_ctx = second->native_int_uvb->getCachedAOTContext();
+    auto* target_ctx = second->native_scalar_uvb->getCachedAOTContext();
     if (target_ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire)
             && qore_rt_get_stack_limit_v1(rc)) {
         ValueHolder other(program->callFunction("makeMethodProbe", nullptr, &xsink), &xsink);
@@ -459,6 +531,157 @@ static void checkMethodArgumentKeys(QoreProgram* program, const char* caller_nam
     check(true);
 }
 
+static void checkFloatMethodReceivers(QoreProgram* program, const char* caller_name, bool inline_method) {
+    ExceptionSink xsink;
+    ValueHolder object(program->callFunction("makeFloatMethodProbe", nullptr, &xsink), &xsink);
+    assert(!xsink && object->getType() == NT_OBJECT);
+    auto warm = [&](QoreValue receiver, QoreValue value, double expected) {
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+        args->push(receiver.refSelf(), &xsink);
+        assert(!xsink);
+        args->push(value.refSelf(), &xsink);
+        assert(!xsink);
+        for (unsigned i = 0; i < 16; ++i) {
+            ValueHolder result(program->callFunction(caller_name, *args, &xsink), &xsink);
+            assert(!xsink && result->getType() == NT_FLOAT && result->getAsFloat() == expected);
+        }
+    };
+    // The auto-argument caller first publishes an int argument key for a float
+    // signature through ordinary coercion. It must not authorize a double-key hit.
+    bool mixed_key = !std::strcmp(caller_name, "floatMethodArgumentProbe");
+    warm(*object, mixed_key ? QoreValue(int64_t{7}) : QoreValue(1.25), mixed_key ? 7.5 : 1.75);
+    int slot;
+    QoreAOTContext* caller_ctx = getMethodProbeContext(program, caller_name, slot);
+    RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    QoreProgram* caller = qore_get_call_program_context();
+    QoreObject* old_object = rc->getObject();
+    const auto* old_class = rc->getClass();
+    auto call = [&](QoreValue receiver, double arg, bool handled, double expected) {
+        double result = -123.0;
+        assert(qore_rt_try_method_float_unary_v1(caller_ctx, slot, receiver.rawBits(), arg, &result, &xsink, rc)
+            == static_cast<int>(handled));
+        assert(!xsink && (std::isnan(expected) ? std::isnan(result) : result == expected));
+        if (handled && !expected) {
+            assert(std::signbit(result) == std::signbit(expected));
+        }
+        assert(qore_get_call_program_context() == caller);
+        assert(rc->getObject() == old_object && rc->getClass() == old_class);
+    };
+    if (mixed_key) {
+        call(*object, 1.25, false, -123.0);
+        warm(*object, QoreValue(1.25), 1.75);
+    }
+    call(*object, 1.25, true, 1.75);
+    int64_t wrong_result = -123;
+    assert(!qore_rt_try_method_int_unary_v1(caller_ctx, slot, object->rawBits(), 7,
+        &wrong_result, &xsink, rc));
+    assert(!xsink && wrong_result == -123);
+    ValueHolder opaque(QoreValue::makeOpaqueObject(object->get<QoreObject>()), &xsink);
+    call(*opaque, 1.25, true, 1.75);
+    uint64_t weak_bits = qore_rt_make_weak_value(object->rawBits(), &xsink);
+    assert(!xsink);
+    QoreValue weak_value;
+    std::memcpy(&weak_value, &weak_bits, sizeof(weak_value));
+    ValueHolder weak(weak_value, &xsink);
+    for (QoreValue value : {QoreValue(), QoreValue::makeNull(), QoreValue(true), QoreValue(int64_t{7}),
+            QoreValue(1.25), *weak}) {
+        call(value, 1.25, false, -123.0);
+    }
+    const auto* method = object->get<QoreObject>()->getClass()->findMethod("next");
+    assert(method);
+    const auto* uvb = qore_method_private::get(*method)->getFunction()->first()->getUserVariantBase();
+    assert(uvb);
+    auto* ctx = uvb->getCachedAOTContext();
+    assert(ctx && ctx->native_float_unary_method_entry_v2.load(std::memory_order_acquire));
+    assert(static_cast<bool>(ctx->native_float_unary_method_entry_v3.load(std::memory_order_acquire))
+        == inline_method);
+    bool ready = ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
+    call(*object, 1.25, false, -123.0);
+    ctx->pc_loc_map_attached.store(ready, std::memory_order_release);
+    auto normal = ctx->pc_loc_fn;
+    ctx->pc_loc_fn = nullptr;
+    call(*object, 1.25, false, -123.0);
+    ctx->pc_loc_fn = normal;
+    assert(!ctx->uses_self && !ctx->uses_argv);
+    ctx->uses_self = true;
+    call(*object, 1.25, false, -123.0);
+    ctx->uses_self = false;
+    ctx->uses_argv = true;
+    call(*object, 1.25, false, -123.0);
+    ctx->uses_argv = false;
+    auto* pgm = ctx->pgm;
+    ctx->pgm = nullptr;
+    call(*object, 1.25, false, -123.0);
+    ctx->pgm = pgm;
+    call(*object, 1.25, true, 1.75);
+    auto saved_v2 = ctx->native_float_unary_method_entry_v2.exchange(nullptr, std::memory_order_acq_rel);
+    auto saved_v3 = ctx->native_float_unary_method_entry_v3.exchange(nullptr, std::memory_order_acq_rel);
+    call(*object, 1.25, false, -123.0);
+    ctx->native_float_unary_method_entry_v2.store(saved_v2, std::memory_order_release);
+    ctx->native_float_unary_method_entry_v3.store(saved_v3, std::memory_order_release);
+    xsink.raiseException("FLOAT-METHOD-PENDING", "pre-existing exception");
+    double pending_result = -123.0;
+    assert(qore_rt_try_method_float_unary_v1(caller_ctx, slot, object->rawBits(), 1.25,
+        &pending_result, &xsink, rc) == 1);
+    assert(pending_result == 0.0 && xsink.getExceptionErr().get<const QoreStringNode>()->equal("FLOAT-METHOD-PENDING"));
+    xsink.clear();
+    call(*object, 1.25, true, 1.75);
+    ValueHolder snapshot(program->callFunction("makeFloatIdentityProbe", nullptr, &xsink), &xsink);
+    assert(!xsink && snapshot->getType() == NT_OBJECT);
+    if (inline_method && qore_rt_get_stack_limit_v1(rc)) {
+        for (bool null_view : {false, true}) {
+            for (bool overflow : {false, true}) {
+                {
+                    // RuntimeConfig's compatibility snapshot can differ from
+                    // live thread context; preserve each independently.
+                    rc->setObject(snapshot->get<QoreObject>());
+                    const auto* snapshot_class = qore_class_private::get(*snapshot->get<QoreObject>()->getClass());
+                    rc->setClass(snapshot_class);
+                    FloatMethodStackProbe probe(ctx, object->get<QoreObject>(), null_view, overflow);
+                    double result = -123.0;
+                    assert(qore_rt_try_method_float_unary_v1(caller_ctx, slot, object->rawBits(), 1.25,
+                        &result, &xsink, rc) == 1);
+                    assert(static_cast<bool>(xsink) == overflow && result == (overflow ? 0.0 : 1.75));
+                    assert(rc->getObject() == snapshot->get<QoreObject>() && rc->getClass() == snapshot_class);
+                    if (overflow) {
+                        assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+                        ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+                        assert(!xsink && info);
+                        const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+                        assert(stack);
+                        bool published = false;
+                        for (size_t i = 0; i < stack->size(); ++i) {
+                            const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                            assert(frame);
+                            const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                            published |= name && std::strstr(name->c_str(), "NativeLeafFloatMethodDerived");
+                            if (!(i % 100)) {
+                                assert(!qore_check_cancel(&xsink, "float method frame inspection"));
+                            }
+                        }
+                        assert(published);
+                    }
+                    rc->setObject(old_object);
+                    rc->setClass(old_class);
+                }
+                call(*object, 1.25, true, 1.75);
+            }
+        }
+    }
+    ValueHolder identity(program->callFunction("makeFloatIdentityProbe", nullptr, &xsink), &xsink);
+    assert(!xsink);
+    warm(*identity, QoreValue(1.25), 1.25);
+    for (double value : {0.0, -0.0, 1.25, -3.0e307, -6.0e307,
+            std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity(),
+            std::numeric_limits<double>::quiet_NaN()}) {
+        call(*identity, value, true, value);
+    }
+    object->get<QoreObject>()->doDelete(&xsink);
+    assert(!xsink);
+    call(*object, 1.25, false, -123.0);
+    call(*opaque, 1.25, false, -123.0);
+}
+
 // Enter through a normal compiled function so probes inherit the same real
 // source parse policy as the warmed callers; the external host's policy differs.
 static QoreValue methodReceiverProbes(const void* ptr, const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
@@ -467,6 +690,9 @@ static QoreValue methodReceiverProbes(const void* ptr, const QoreListNode*, Runt
     checkMethodReceivers(invocation.program, "optionalMethodProbe");
     checkMethodArgumentKeys(invocation.program, "methodArgumentProbe");
     checkMethodArgumentKeys(invocation.program, "optionalMethodArgumentProbe");
+    checkFloatMethodReceivers(invocation.program, "floatMethodProbe", invocation.inline_method);
+    checkFloatMethodReceivers(invocation.program, "optionalFloatMethodProbe", invocation.inline_method);
+    checkFloatMethodReceivers(invocation.program, "floatMethodArgumentProbe", invocation.inline_method);
     return QoreValue(int64_t{24});
 }
 

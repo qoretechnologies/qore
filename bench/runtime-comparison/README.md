@@ -211,7 +211,7 @@ helper ABI or frame lifetime; it is not a portable performance guarantee.
 
 `QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1` disables the pure scalar method binding
 at compilation and its polymorphic-cache native path at runtime. Eligible
-`int(int)` overrides bypass parameter TLS binding but retain receiver, Program,
+`int(int)` and homogeneous `float(float)` overrides bypass parameter TLS binding but retain receiver, Program,
 debugger, body-identity, stack and observer guards. Use separate before/after
 compilation: the additive helper is absent from older runtimes. The original v1
 caller uses boxed arguments/results; neither that measurement nor the scalar
@@ -220,7 +220,7 @@ continuation below isolates a native call instruction or proves Java retained-ca
 `QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1` disables the optional method v2
 binding and scalar caller continuation at compilation, and its try-helper at
 runtime. It retains the original v1 method path. Use separate before/after
-compilation for this compiler/runtime change. Eligible unary integer calls pass
+compilation for this compiler/runtime change. Eligible unary integer/float calls pass
 the live `RuntimeConfig` and scalar argument/result through a warmed full-key PIC;
 a sole exact native local assignment can consume the result without boxing.
 Unknown overrides still preserve arbitrary boxed returns and ordinary coercion,
@@ -234,9 +234,27 @@ native-result continuation for unresolved name-dispatched calls, including
 nullable-class and dynamic receivers. Compile separate artifacts: this flag is
 not a runtime switch. A warmed full-key PIC supplies the checked target; the
 compiler does not change AST/IR resolution or the unknown return contract.
-Only an already-native integer argument and sole native-int local assignment
+Only an already-native integer/float argument and matching sole native-scalar local assignment
 qualify. Every miss retains original dispatch, boxed return checks and cleanup.
 The broader native-method entry/continuation controls also disable this path.
+
+`QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1` disables only the floating-method
+bindings and caller continuations at compilation, and their native admission/
+try-helper at runtime. Compile separate artifacts for this additive ABI change;
+older runtimes do not provide the floating helpers. Eligible bodies have an exact
+`float(float)` signature and a complete non-throwing, context-independent proof.
+Native arguments/results remain doubles, including tag-colliding values; boxed
+misses retain ordinary argument/return checking, ownership and exceptions.
+Methods using self/argv, side effects, throwing operations or currently unsupported
+mixed int/float expression summaries stay general. Existing integer bindings and
+generated context offsets are preserved; three typed atomic pointers are appended.
+
+The floating v1 binding currently supplies the admission proof; only the v2/v3
+caller continuation invokes floating companions. Generic runtime-only method
+dispatch is still integer-only, and an immutable PIC entry populated before
+companion publication may remain general after debugger detach. Correctness is
+preserved in these fallbacks; faster re-admission is a separate follow-up.
+See the [measured float-method follow-up](RESULTS.md#native-floating-method-continuations-2026-10-10).
 
 `QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1` disables caching immutable
 eligibility/signature/Program/class facts in polymorphic method entries without
@@ -384,8 +402,9 @@ The four floating-method kernels mirror these receiver shapes using
 `65535.0 - value`, `65537.0 - value` and `65541.0 - value`. Values remain exactly
 representable doubles throughout the supported count/seed range; the independent
 reference uses integer arithmetic and the checksum converts each result to an
-integer. Receivers are created outside timed loops. This adds measurement
-coverage, not a runtime optimization. The Java methods retain `DONT_INLINE`;
+integer. Receivers are created outside timed loops. Their initial addition was
+measurement-only; the follow-up above implements the native floating path.
+The Java methods retain `DONT_INLINE`;
 Qore may inline its exact-base branch, so ratios are whole-kernel comparisons,
 not isolated call latency or an equal-inlining-policy comparison. Exceptional
 floating values and null receiver errors belong in separate correctness tests.

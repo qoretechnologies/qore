@@ -465,6 +465,14 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_bind_method_int_unary_v3) },
     { "qore_rt_try_method_int_unary_v1",
         reinterpret_cast<void*>(&qore_rt_try_method_int_unary_v1) },
+    { "qore_rt_bind_method_float_unary_v1",
+        reinterpret_cast<void*>(&qore_rt_bind_method_float_unary_v1) },
+    { "qore_rt_bind_method_float_unary_v2",
+        reinterpret_cast<void*>(&qore_rt_bind_method_float_unary_v2) },
+    { "qore_rt_bind_method_float_unary_v3",
+        reinterpret_cast<void*>(&qore_rt_bind_method_float_unary_v3) },
+    { "qore_rt_try_method_float_unary_v1",
+        reinterpret_cast<void*>(&qore_rt_try_method_float_unary_v1) },
     { "qore_rt_bind_closure_int_unary_v1",
         reinterpret_cast<void*>(&qore_rt_bind_closure_int_unary_v1) },
     { "qore_rt_try_load_closure_int_v1",
@@ -10317,6 +10325,39 @@ extern "C" DLLEXPORT void qore_rt_bind_method_int_unary_v3(QoreAOTContext* ctx,
         std::memory_order_release, std::memory_order_relaxed);
 }
 
+extern "C" DLLEXPORT void qore_rt_bind_method_float_unary_v1(QoreAOTContext* ctx,
+        uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+        double (*entry)(double, QoreAOTContext*, ExceptionSink*)) {
+    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal) {
+        return;
+    }
+    QoreAOTContext::NativeFloatUnaryMethodEntry expected = nullptr;
+    ctx->native_float_unary_method_entry.compare_exchange_strong(expected, entry,
+        std::memory_order_release, std::memory_order_relaxed);
+}
+
+extern "C" DLLEXPORT void qore_rt_bind_method_float_unary_v2(QoreAOTContext* ctx,
+        uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+        double (*entry)(double, QoreAOTContext*, ExceptionSink*, RuntimeConfig*)) {
+    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal) {
+        return;
+    }
+    QoreAOTContext::NativeFloatUnaryMethodEntryV2 expected = nullptr;
+    ctx->native_float_unary_method_entry_v2.compare_exchange_strong(expected, entry,
+        std::memory_order_release, std::memory_order_relaxed);
+}
+
+extern "C" DLLEXPORT void qore_rt_bind_method_float_unary_v3(QoreAOTContext* ctx,
+        uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+        double (*entry)(double, QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*)) {
+    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal) {
+        return;
+    }
+    QoreAOTContext::NativeFloatUnaryMethodEntryV3 expected = nullptr;
+    ctx->native_float_unary_method_entry_v3.compare_exchange_strong(expected, entry,
+        std::memory_order_release, std::memory_order_relaxed);
+}
+
 extern "C" DLLEXPORT void qore_rt_bind_closure_int_unary_v1(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
         QoreAOTContext::NativeIntUnaryClosureEntry entry) {
@@ -17336,8 +17377,8 @@ public:
     bool isAOTFrame() const override { return true; }
     const std::string& getCallName() const override { return cache.call_name; }
     qore_call_t getCallType() const override { return CT_USER; }
-    QoreProgram* getProgram() const override { return cache.native_int_program; }
-    const AbstractStatement* getStatement() const override { return cache.native_int_uvb->getStatementBlock(); }
+    QoreProgram* getProgram() const override { return cache.native_scalar_program; }
+    const AbstractStatement* getStatement() const override { return cache.native_scalar_uvb->getStatementBlock(); }
 
 private:
     const QoreAOTMethodDispatchCacheEntry& cache;
@@ -17373,7 +17414,7 @@ static bool try_dispatch_native_int_method(QoreObject* object,
     }
     RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
     QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(rc);
-    QoreProgram* exec_pgm = CachedAdmission ? cache.native_int_program
+    QoreProgram* exec_pgm = CachedAdmission ? cache.native_scalar_program
         : qore_rt_method_execution_program(cache.method, uvb);
     if (pgm != ctx->pgm || pgm != object->getProgram()
             || pgm != exec_pgm
@@ -17396,7 +17437,7 @@ static bool try_dispatch_native_int_method(QoreObject* object,
     }
     // Even a pure body must preserve method context on error/stack observation.
     // No self/argv/parameter TLS slots are needed by this whole-body proof.
-    RuntimeConfigNativeObjectHelper context(rc, object, CachedAdmission ? cache.native_int_class_ctx
+    RuntimeConfigNativeObjectHelper context(rc, object, CachedAdmission ? cache.native_scalar_class_ctx
         : METHV_const(cache.variant)->getClassPriv());
     QoreValue value;
     {
@@ -18168,14 +18209,18 @@ qore_rt_find_aot_method_dispatch_cache_entry(
     return nullptr;
 }
 
-extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v1(QoreAOTContext* caller_ctx,
-        int32_t slot, uint64_t base_bits, int64_t arg, int64_t* result,
+template <typename Scalar>
+__attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContext* caller_ctx,
+        int32_t slot, uint64_t base_bits, Scalar arg, Scalar* result,
         ExceptionSink* xsink, RuntimeConfig* rc) {
+    static_assert(std::is_same_v<Scalar, int64_t> || std::is_same_v<Scalar, double>);
+    constexpr bool floating = std::is_same_v<Scalar, double>;
     static const bool enabled = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION")
         && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")
         && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE")
         && !std::getenv("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE")
-        && !std::getenv("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY");
+        && !std::getenv("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY")
+        && (!floating || !std::getenv("QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY"));
     assert(caller_ctx && slot >= 0 && slot < caller_ctx->num_exprs && result && xsink && rc);
     if (!enabled) {
         return 0;
@@ -18225,26 +18270,41 @@ extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v1(QoreAOTContext* caller_
                 && candidate->receiver_type_info == receiver_type && candidate->class_ctx == class_ctx
                 && candidate->caller_program == pgm && candidate->object_program == object_program
                 && candidate->parse_options == parse_options && candidate->dispatch_epoch == epoch
-                && candidate->nargs == 1 && candidate->arg_types[0] == bigIntTypeInfo
+                && candidate->nargs == 1 && candidate->arg_types[0] == (floating ? floatTypeInfo : bigIntTypeInfo)
                 && candidate->arg_states[0] == 0) {
             cached = candidate;
             break;
         }
     }
-    if (!cached || !cached->native_int_uvb) {
+    if (!cached || !cached->native_scalar_uvb) {
         return 0;
     }
-    const UserVariantBase* uvb = cached->native_int_uvb;
+    const UserVariantBase* uvb = cached->native_scalar_uvb;
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
     if (!ctx || !uvb->hasCachedAOT() || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
             || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)
             || ctx->uses_self || ctx->uses_argv || !pgm || pgm != ctx->pgm
-            || pgm != cached->native_int_program || pgm != object->getProgram()
+            || pgm != cached->native_scalar_program || pgm != object->getProgram()
             || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return 0;
     }
-    auto inline_entry = ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire);
-    auto entry = inline_entry ? nullptr : ctx->native_int_unary_method_entry_v2.load(std::memory_order_acquire);
+    // The common PIC descriptor proves one homogeneous scalar signature; only
+    // a matching typed companion for the live body authorizes this invocation.
+    // Never reinterpret an integer binding as a floating entry (or vice versa).
+    auto inline_entry = [&]() {
+        if constexpr (floating) {
+            return ctx->native_float_unary_method_entry_v3.load(std::memory_order_acquire);
+        } else {
+            return ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire);
+        }
+    }();
+    auto entry = [&]() {
+        if constexpr (floating) {
+            return inline_entry ? nullptr : ctx->native_float_unary_method_entry_v2.load(std::memory_order_acquire);
+        } else {
+            return inline_entry ? nullptr : ctx->native_int_unary_method_entry_v2.load(std::memory_order_acquire);
+        }
+    }();
     if (!inline_entry && !entry) {
         return 0;
     }
@@ -18272,11 +18332,23 @@ extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v1(QoreAOTContext* caller_
         QoreCompactNativeMethodStackLocation frame(*rc, *cached, xsink, context);
         invoke();
     } else {
-        RuntimeConfigNativeObjectHelper context(*rc, object, cached->native_int_class_ctx);
+        RuntimeConfigNativeObjectHelper context(*rc, object, cached->native_scalar_class_ctx);
         QoreNativeMethodStackLocation<> frame(*rc, *cached, uvb, pgm, xsink);
         invoke();
     }
     return 1;
+}
+
+extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v1(QoreAOTContext* caller_ctx,
+        int32_t slot, uint64_t base_bits, int64_t arg, int64_t* result,
+        ExceptionSink* xsink, RuntimeConfig* rc) {
+    return qore_rt_try_method_unary(caller_ctx, slot, base_bits, arg, result, xsink, rc);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_method_float_unary_v1(QoreAOTContext* caller_ctx,
+        int32_t slot, uint64_t base_bits, double arg, double* result,
+        ExceptionSink* xsink, RuntimeConfig* rc) {
+    return qore_rt_try_method_unary(caller_ctx, slot, base_bits, arg, result, xsink, rc);
 }
 
 static void qore_rt_prepare_aot_native_method_admission(QoreAOTMethodDispatchCacheEntry& entry) {
@@ -18295,14 +18367,22 @@ static void qore_rt_prepare_aot_native_method_admission(QoreAOTMethodDispatchCac
     const UserVariantBase* uvb = variant->getUserVariantBase();
     const UserSignature* sig = uvb->getUserSignature();
     if (!uvb->hasCachedAOT() || sig->numParams() != 1
-            || sig->getParamTypeInfo(0) != bigIntTypeInfo
-            || sig->getReturnTypeInfo() != bigIntTypeInfo
             || sig->needsTypeParameterSubstitution()) {
         return;
     }
+    const QoreTypeInfo* scalar_type = sig->getParamTypeInfo(0);
+    const bool floating = scalar_type == floatTypeInfo;
+    static const bool float_enabled = !std::getenv("QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY");
+    if ((scalar_type != bigIntTypeInfo && !floating) || sig->getReturnTypeInfo() != scalar_type
+            || (floating && !float_enabled)) {
+        return;
+    }
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
-    if (!ctx || !ctx->native_int_unary_method_entry.load(std::memory_order_acquire)
-            || ctx->uses_self || ctx->uses_argv) {
+    if (!ctx || ctx->uses_self || ctx->uses_argv) {
+        return;
+    }
+    if (floating ? !ctx->native_float_unary_method_entry.load(std::memory_order_acquire)
+            : !ctx->native_int_unary_method_entry.load(std::memory_order_acquire)) {
         return;
     }
     QoreProgram* pgm = qore_rt_method_execution_program(entry.method, uvb);
@@ -18312,9 +18392,9 @@ static void qore_rt_prepare_aot_native_method_admission(QoreAOTMethodDispatchCac
     // These facts belong to the exact resolved variant and full PIC key. Entry
     // identity/readiness remain live. A cache populated before publication keeps
     // the ordinary path, which can discover the companion after debugger detach.
-    entry.native_int_uvb = uvb;
-    entry.native_int_program = pgm;
-    entry.native_int_class_ctx = variant->getClassPriv();
+    entry.native_scalar_uvb = uvb;
+    entry.native_scalar_program = pgm;
+    entry.native_scalar_class_ctx = variant->getClassPriv();
 }
 
 static void qore_rt_add_aot_method_dispatch_cache_entry(
@@ -18417,8 +18497,8 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
                 uint64_t result;
                 static const bool use_fast_entry = !std::getenv(
                     "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY");
-                if (use_fast_entry && entry->native_int_uvb
-                        && try_dispatch_native_int_method<true>(object, *entry, entry->native_int_uvb,
+                if (use_fast_entry && entry->native_scalar_uvb
+                        && try_dispatch_native_int_method<true>(object, *entry, entry->native_scalar_uvb,
                             args, arg_cleanups, nargs, xsink, result)) {
                     return result;
                 }
