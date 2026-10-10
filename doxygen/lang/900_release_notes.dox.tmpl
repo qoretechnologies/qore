@@ -206,6 +206,14 @@
     deadlines of its operations take one entry per operation instead of one per event, and a socket that is already
     non-blocking is not set again on every read or write.
 
+    @ref Qore::Socket::getSSLCipherName() "Socket::getSSLCipherName()" and
+    @ref Qore::Socket::getSSLCipherVersion() "Socket::getSSLCipherVersion()" read the cipher from the socket's I/O
+    thread once for each TLS connection and handshake instead of on every call, and setting a body size limit of a
+    socket to the value it already has
+    (@ref Qore::Socket::setMaxChunkedBodySize() "Socket::setMaxChunkedBodySize()",
+    @ref Qore::Socket::setHttp2MaxRequestBodySize() "Socket::setHttp2MaxRequestBodySize()") returns at once, so the
+    HTTP server no longer waits for the I/O thread four times for every HTTPS request it logs.
+
     An object that several threads use at the same time is deleted when its last reference is released, also when
     two of its method calls return at the same moment: the second release could find the reference count at zero
     without deleting the object, so its destructor never ran and its memory was not freed (debug builds aborted with

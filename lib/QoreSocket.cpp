@@ -3465,10 +3465,13 @@ public:
         qore_socket_private* priv = qore_socket_private::get(*sock);
         switch (action) {
             case Action::GetCipherName:
+                // other threads read the cipher from the cache until the TLS state changes
+                priv->cacheTlsCipher();
                 setStringValue(priv->ssl ? priv->ssl->getCipherName() : nullptr);
                 break;
 
             case Action::GetCipherVersion:
+                priv->cacheTlsCipher();
                 setStringValue(priv->ssl ? priv->ssl->getCipherVersion() : nullptr);
                 break;
 
@@ -3659,6 +3662,17 @@ static QoreValue qore_socket_exec_poll(QoreSocket* s, SocketPollOperationBase* p
 
 static QoreStringNode* qore_socket_exec_tls_state_string(QoreSocket* s,
         QoreSocketControllerTlsStatePollOperation::Action action, const char* owner_name, ExceptionSink* xsink) {
+    // the cipher can only change with the socket's TLS state, so it is read on the socket's I/O thread once per
+    // state (see qore_socket_private::tls_state_gen)
+    if (action == QoreSocketControllerTlsStatePollOperation::Action::GetCipherName
+            || action == QoreSocketControllerTlsStatePollOperation::Action::GetCipherVersion) {
+        bool found;
+        QoreStringNode* cached = qore_socket_private::get(*s)->getCachedTlsCipher(
+            action == QoreSocketControllerTlsStatePollOperation::Action::GetCipherVersion, found);
+        if (found) {
+            return cached;
+        }
+    }
     ValueHolder rv(qore_socket_exec_poll(s, new QoreSocketControllerTlsStatePollOperation(s, action), -1,
         owner_name, "tls-state", xsink), xsink);
     if (*xsink || rv->isNothing()) {
@@ -5593,6 +5607,7 @@ qore_socket_op_helper::~qore_socket_op_helper() {
 SSLSocketHelperHelper::SSLSocketHelperHelper(qore_socket_private* sock, bool set_thread_context) : s(sock) {
     assert(!s->ssl);
     ssl = s->ssl = new SSLSocketHelper(*sock);
+    s->advanceTlsStateGen();
 
     //printd(5, "SSLSocketHelperHelper::SSLSocketHelperHelper() priv: %p STC: %d CR: %d\n", s, set_thread_context, s->ssl_capture_remote_cert);
 
@@ -5616,6 +5631,7 @@ void SSLSocketHelperHelper::error() {
     if (s->ssl) {
         ssl->deref();
         s->ssl = nullptr;
+        s->advanceTlsStateGen();
     }
 }
 
@@ -5676,6 +5692,8 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
     }
 
     SSL_set_ex_data(ssl, qore_ssl_data_index, &qs);
+    // a handshake can change the cipher of the connection
+    SSL_set_info_callback(ssl, infoCallback);
 
     // turn on SSL_MODE_ENABLE_PARTIAL_WRITE
     SSL_set_mode(ssl, SSL_MODE_ENABLE_PARTIAL_WRITE);
@@ -5918,6 +5936,16 @@ void SSLSocketHelper::setServerAlpnProtocols(const std::vector<std::string>& pro
     if (ctx && !protocols.empty()) {
         // Set the ALPN selection callback for server
         SSL_CTX_set_alpn_select_cb(ctx, alpnSelectCallback, this);
+    }
+}
+
+void SSLSocketHelper::infoCallback(const SSL* ssl, int where, int ret) {
+    if (!(where & (SSL_CB_HANDSHAKE_START | SSL_CB_HANDSHAKE_DONE))) {
+        return;
+    }
+    qore_socket_private* qs = reinterpret_cast<qore_socket_private*>(SSL_get_ex_data(ssl, qore_ssl_data_index));
+    if (qs) {
+        qs->advanceTlsStateGen();
     }
 }
 
@@ -8384,6 +8412,7 @@ SocketConnectLayeredSslPollState::SocketConnectLayeredSslPollState(ExceptionSink
     }
     // the socket's reference to the outer connection is now held by the new connection
     sock->ssl = inner;
+    sock->advanceTlsStateGen();
     outer->deref();
     sock->do_start_ssl_event();
 }
@@ -12748,6 +12777,11 @@ int QoreSocket::getRecvTimeout() const {
 }
 
 void QoreSocket::setMaxChunkedBodySize(int64 size) {
+    // the limit is only read by the socket's operations, so setting the value it has changes nothing and needs no
+    // round trip to the socket's I/O thread
+    if (priv->max_chunked_body_size.load(std::memory_order_relaxed) == size) {
+        return;
+    }
     qore_socket_exec_setup_no_exception(this,
         new QoreSocketControllerSetupPollOperation(this,
             QoreSocketControllerSetupPollOperation::ConfigAction::SetMaxChunkedBodySize, size),
@@ -12759,6 +12793,12 @@ int64 QoreSocket::getMaxChunkedBodySize() const {
 }
 
 void QoreSocket::setHttp2MaxRequestBodySize(int64 size) {
+    // the limit of the socket's HTTP/2 session, if any, always has the effect of the socket's limit (see
+    // qore_socket_private::max_http2_body_size), so setting the value the socket has changes nothing and needs no
+    // round trip to the socket's I/O thread
+    if (priv->max_http2_body_size.load(std::memory_order_relaxed) == size) {
+        return;
+    }
     qore_socket_exec_setup_no_exception(this,
         new QoreSocketControllerSetupPollOperation(this,
             QoreSocketControllerSetupPollOperation::ConfigAction::SetHttp2MaxRequestBodySize, size),

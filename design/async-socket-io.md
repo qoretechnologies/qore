@@ -1042,6 +1042,20 @@ Representative bridges:
   from the controller I/O thread.
 - `Socket::poll()` maps each list entry to a controller-backed poll operation and waits
   for controller processing/cancellation instead of running a raw caller-thread `poll()`.
+- The TLS cipher name and version (`getSSLCipherName()`, `getSSLCipherVersion()`) are read on the
+  socket's I/O thread, where the TLS connection may be used, and cached in `qore_socket_private` for
+  other threads together with the TLS state generation (`tls_state_gen`) they were read in.  The
+  generation advances after every change of `qore_socket_private::ssl` (created, replaced by a layered
+  connection, released) and when a handshake on the connection starts or completes
+  (`SSLSocketHelper::infoCallback()`, installed on every `SSL` object), so a cached value is used only
+  while the TLS state it was read in is current, and a call on another thread makes a controller round
+  trip once per TLS connection and handshake instead of on every call.
+- Setting a body size limit to the value the socket already has (`setMaxChunkedBodySize()`,
+  `setHttp2MaxRequestBodySize()`) returns without a controller round trip: the limits are atomics that
+  only the socket's operations read, and the limit of the socket's HTTP/2 session always has the effect
+  of the socket's limit.  The HTTP server sets both limits for every request so a changed listener
+  limit applies to the next request; a request on a connection whose limits did not change costs no
+  round trip.
 - Object-backed and raw `QoreSocket` multi-step sync helpers that submit several
   controller operations in sequence (`readHTTPChunkedBody*`, SSE reads, HTTP
   chunked send callbacks/input streams, `sendFromInputStream`, and

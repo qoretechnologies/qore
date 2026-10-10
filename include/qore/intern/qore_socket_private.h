@@ -980,6 +980,28 @@ struct qore_socket_private : public QoreReferenceCounter {
     mutable QoreThreadLock tls_state_cache_m;
     mutable std::string ssl_cipher_name_cache;
     mutable std::string ssl_cipher_version_cache;
+
+    //! The generation of the socket's TLS state: advanced whenever the cipher of the connection can change
+    /** Advanced after the TLS connection is created, replaced or released (@ref ssl changes) and when a TLS handshake
+        on it starts or completes (see SSLSocketHelper::infoCallback()), so the cipher name and version cached by
+        cacheTlsCipher() for threads other than the socket's I/O thread are valid as long as it does not change.
+
+        @since %Qore 3.0
+    */
+    std::atomic<uint64_t> tls_state_gen{1};
+
+    //! The TLS state generation that the cached cipher name and version were read in; 0 = none
+    /** Guarded by @ref tls_state_cache_m.
+    */
+    mutable uint64_t tls_cipher_gen = 0;
+    //! The cached cipher name; guarded by @ref tls_state_cache_m
+    mutable std::string tls_cipher_name;
+    //! The cached cipher version; guarded by @ref tls_state_cache_m
+    mutable std::string tls_cipher_version;
+    //! True if the connection had a cipher name when it was cached; guarded by @ref tls_state_cache_m
+    mutable bool tls_cipher_name_set = false;
+    //! True if the connection had a cipher version when it was cached; guarded by @ref tls_state_cache_m
+    mutable bool tls_cipher_version_set = false;
     //! Serialises releasing the descriptor with every other use of it that is made without the outer lock
     /** Two paths can reach close_internal() on the same socket without holding any shared lock: the I/O thread
         running an H2 client abort → current_op->abort → socket->close, and an app-thread disconnect / HTTPClient
@@ -1265,6 +1287,10 @@ struct qore_socket_private : public QoreReferenceCounter {
     //! Maximum request body size for HTTP/2 streams (0 = unlimited)
     /** Propagated to Http2Session when created; DATA frame accumulation exceeding
         this limit causes the stream to be reset with REFUSED_STREAM.
+
+        The limit of the socket's HTTP/2 session always has the effect of this value: setting it also sets the
+        limit of an existing session, and a new session gets it when it is positive; the session's default of 0 and
+        any other value that is not positive both mean no limit.
     */
     std::atomic<int64> max_http2_body_size{0};
 
@@ -1860,6 +1886,7 @@ struct qore_socket_private : public QoreReferenceCounter {
                     ssl->shutdown();
                     ssl->deref();
                     ssl = nullptr;
+                    advanceTlsStateGen();
                 }
 
                 if (!socketname.empty()) {
@@ -3618,6 +3645,47 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     DLLLOCAL bool pendingHttpChunkedBody() const {
         return http_exp_chunked_body && sock != QORE_INVALID_SOCKET;
+    }
+
+    //! Advances the TLS state generation; called after every change of the TLS state (see @ref tls_state_gen)
+    DLLLOCAL void advanceTlsStateGen() {
+        tls_state_gen.fetch_add(1, std::memory_order_acq_rel);
+    }
+
+    //! Reads the cipher name and version of the TLS connection and caches them for other threads
+    /** Called where the TLS connection may be used: on the socket's I/O thread.
+    */
+    DLLLOCAL void cacheTlsCipher() {
+        // the generation is read first: a change of the TLS state while the cipher is read advances it, so the
+        // values cached here are not used
+        uint64_t gen = tls_state_gen.load(std::memory_order_acquire);
+        const char* name = ssl ? ssl->getCipherName() : nullptr;
+        const char* version = ssl ? ssl->getCipherVersion() : nullptr;
+        AutoLocker al(tls_state_cache_m);
+        tls_cipher_gen = gen;
+        tls_cipher_name_set = name != nullptr;
+        tls_cipher_name = name ? name : "";
+        tls_cipher_version_set = version != nullptr;
+        tls_cipher_version = version ? version : "";
+    }
+
+    //! Returns the cached cipher name or version if they were cached in the current TLS state
+    /** @param version true for the cipher version, false for the cipher name
+        @param found set to true if the cached values belong to the current TLS state
+
+        @return a new string with the value, or nullptr if the connection has none or \a found is false
+    */
+    DLLLOCAL QoreStringNode* getCachedTlsCipher(bool version, bool& found) const {
+        uint64_t gen = tls_state_gen.load(std::memory_order_acquire);
+        AutoLocker al(tls_state_cache_m);
+        found = tls_cipher_gen == gen;
+        if (!found) {
+            return nullptr;
+        }
+        if (version) {
+            return tls_cipher_version_set ? new QoreStringNode(tls_cipher_version) : nullptr;
+        }
+        return tls_cipher_name_set ? new QoreStringNode(tls_cipher_name) : nullptr;
     }
 
     DLLLOCAL void setSslVerifyMode(int mode) {
