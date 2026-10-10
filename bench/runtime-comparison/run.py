@@ -27,7 +27,8 @@ KERNELS = ("arithmetic", "direct_call", "method_call", "indirect_call", "polymor
            "monomorphic_float_call", "optional_float_method_call",
            "boxed_float_method_call", "dynamic_int_result_call", "dynamic_int_result_fallback",
            "dynamic_float_result_call",
-           "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
+           "indirect_wide", "indirect_float", "indirect_int_result", "indirect_float_result",
+           "indirect_tagged_float", "indirect_branch_float",
            "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
            "dispatch_control", "list_read", "list_build",
            "list_mutate", "temporary_list", "temporary_hash", "closure_call", "closure_capture")
@@ -96,7 +97,11 @@ def reference(name, count, seed):
             result += (seed * 33 + (17, 19, 23)[index % 3]) & 65535
             seed = 65535 - seed
             continue
-        if name in ("indirect_float", "monomorphic_float_call", "optional_float_method_call"):
+        if name == "indirect_int_result":
+            result += (seed * 33 + 17) & 65535
+            seed = 65535 - seed
+            continue
+        if name in ("indirect_float", "indirect_float_result", "monomorphic_float_call", "optional_float_method_call"):
             seed = 65535 - seed
             result += seed
             continue

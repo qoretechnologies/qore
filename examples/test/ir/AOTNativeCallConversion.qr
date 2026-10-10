@@ -1,0 +1,216 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+%allow-weak-references
+
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "NATIVE-CONVERSION-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+sub expectFloat(float expected, float actual) {
+    if (expected.nanp() ? !actual.nanp() : expected != actual
+            || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual))) {
+        throw "NATIVE-CONVERSION-FLOAT", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+int sub referenceInt(auto value) { return int(value); }
+float sub referenceFloat(auto value) { return float(value); }
+auto sub observe(code<auto()> operation) {
+    try { return operation(); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+int sub intIdentity(int value) { return value; }
+float sub floatIdentity(float value) { return value; }
+bool sub boolIdentity(bool value) { return value; }
+int sub zeroInt() { return 1125899906842624; }
+float sub zeroFloat() { return -3.0e307; }
+bool sub zeroBool() { return True; }
+int sub throwingInt(int value) { throw "CONVERSION-ERROR", "callback"; }
+float sub throwingFloat(float value) { throw "CONVERSION-ERROR", "callback"; }
+thread_local auto fallbackValue;
+thread_local int destroyed = 0;
+class ConversionOwned { destructor() { ++destroyed; } }
+auto sub fallbackInt(int value) { return fallbackValue; }
+auto sub fallbackFloat(float value) { return fallbackValue; }
+auto sub ownedInt(int value) { return new ConversionOwned(); }
+
+class ConversionInt { int next(int value) { return value; } }
+class ConversionIntChild inherits ConversionInt { int next(int value) { return value; } }
+class ConversionIntFallback inherits ConversionInt { auto next(int value) { return fallbackValue; } }
+class ConversionIntOwned inherits ConversionInt { object next(int value) { return new ConversionOwned(); } }
+class ConversionIntThrow inherits ConversionInt { int next(int value) { throw "CONVERSION-ERROR", "method"; } }
+class ConversionFloat { float next(float value) { return value; } }
+class ConversionFloatChild inherits ConversionFloat { float next(float value) { return value; } }
+class ConversionFloatFallback inherits ConversionFloat { auto next(float value) { return fallbackValue; } }
+class ConversionFloatThrow inherits ConversionFloat { float next(float value) { throw "CONVERSION-ERROR", "method"; } }
+
+int sub callbackInt(code<int(int)> fn, int value) { return int(fn(value)); }
+float sub callbackIntFloat(code<int(int)> fn, int value) { return float(fn(value)); }
+int sub callbackFloatInt(code<float(float)> fn, float value) { return int(fn(value)); }
+float sub callbackFloat(code<float(float)> fn, float value) { return float(fn(value)); }
+int sub callbackBoolInt(code<bool(bool)> fn, bool value) { return int(fn(value)); }
+float sub callbackBoolFloat(code<bool(bool)> fn, bool value) { return float(fn(value)); }
+int sub callbackZeroInt(code<int()> fn) { return int(fn()); }
+float sub callbackZeroFloat(code<float()> fn) { return float(fn()); }
+float sub callbackZeroBool(code<bool()> fn) { return float(fn()); }
+int sub methodInt(auto receiver, int value) { return int(receiver.next(value)); }
+float sub methodIntFloat(auto receiver, int value) { return float(receiver.next(value)); }
+int sub methodFloatInt(auto receiver, float value) { return int(receiver.next(value)); }
+float sub methodFloat(auto receiver, float value) { return float(receiver.next(value)); }
+int sub typedMethodInt(ConversionInt receiver, int value) { return int(receiver.next(value)); }
+float sub typedMethodIntFloat(ConversionInt receiver, int value) { return float(receiver.next(value)); }
+int sub typedMethodFloatInt(ConversionFloat receiver, float value) { return int(receiver.next(value)); }
+float sub typedMethodFloat(ConversionFloat receiver, float value) { return float(receiver.next(value)); }
+auto sub methodIntInvoke(auto receiver, int value) {
+    try { return int(receiver.next(value)); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+auto sub methodFloatInvoke(auto receiver, float value) {
+    try { return float(receiver.next(value)); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+int sub conditionalInt(auto receiver, int value, bool first) {
+    return first ? int(receiver.next(value)) : int(receiver.next(value + 1));
+}
+float sub conditionalFloat(code<float(float)> fn, float value, bool first) {
+    return first ? float(fn(value)) : float(fn(value + 1.0));
+}
+# Escaping and multiply consumed values must remain ordinarily boxed.
+auto sub escapeResult(code<int(int)> fn, int value) { return fn(value); }
+list<auto> sub multipleConsumers(auto receiver, int value) {
+    auto result = receiver.next(value);
+    return (result, int(result), float(result));
+}
+int sub boxedArgument(auto receiver, auto value) { return int(receiver.next(value)); }
+
+ConversionInt integer();
+ConversionIntChild child();
+ConversionFloat floating();
+ConversionFloatChild float_child();
+ConversionIntFallback generic();
+ConversionFloatFallback float_generic();
+ConversionIntThrow throwing();
+ConversionFloatThrow float_throwing();
+ConversionIntOwned owned();
+*ConversionInt weak := child;
+for (int round = 0; round < 12; ++round) {
+    foreach int value in ((0, 1, -1, 140737488355327, 140737488355328,
+            -140737488355328, -140737488355329, 1125899906842624,
+            9223372036854775807, -9223372036854775807 - 1)) {
+        expect(value, callbackInt(\intIdentity(), value));
+        expectFloat(referenceFloat(value), callbackIntFloat(\intIdentity(), value));
+        expect(value, methodInt(integer, value));
+        expect(value, methodInt(child, value));
+        expect(value, methodInt(weak, value));
+        expectFloat(referenceFloat(value), methodIntFloat(child, value));
+        expect(value, typedMethodInt(integer, value));
+        expect(value, typedMethodInt(child, value));
+        expectFloat(referenceFloat(value), typedMethodIntFloat(child, value));
+        expect(value, escapeResult(\intIdentity(), value));
+        expect(value, methodIntInvoke(child, value));
+        expect(value, boxedArgument(child, value));
+    }
+    foreach float value in ((0.0, -0.0, 1.25, -1.25, 1.0e308, -3.0e307, -6.0e307,
+            9223372036854775808.0, -9223372036854775808.0, @inf@, -@inf@, @nan@, -@nan@)) {
+        expectFloat(value, callbackFloat(\floatIdentity(), value));
+        expect(referenceInt(value), callbackFloatInt(\floatIdentity(), value));
+        expectFloat(value, methodFloat(floating, value));
+        expectFloat(value, methodFloat(float_child, value));
+        expect(referenceInt(value), methodFloatInt(float_child, value));
+        expectFloat(value, typedMethodFloat(floating, value));
+        expectFloat(value, typedMethodFloat(float_child, value));
+        expect(referenceInt(value), typedMethodFloatInt(float_child, value));
+        expectFloat(value, methodFloatInvoke(float_child, value));
+    }
+    foreach bool value in ((False, True)) {
+        expect(value ? 1 : 0, callbackBoolInt(\boolIdentity(), value));
+        expectFloat(value ? 1.0 : 0.0, callbackBoolFloat(\boolIdentity(), value));
+    }
+    expect(1125899906842624, callbackZeroInt(\zeroInt()));
+    expectFloat(-3.0e307, callbackZeroFloat(\zeroFloat()));
+    expectFloat(1.0, callbackZeroBool(\zeroBool()));
+    expect(7, conditionalInt(child, 7, True));
+    expect(8, conditionalInt(child, 7, False));
+    expectFloat(1.25, conditionalFloat(\floatIdentity(), 1.25, True));
+    expectFloat(2.25, conditionalFloat(\floatIdentity(), 1.25, False));
+    foreach auto value in ((NOTHING, "42", "not a number", True, False, 1.25,
+            1125899906842624, -3.0e307)) {
+        fallbackValue = value;
+        expect(referenceInt(value), callbackInt(\fallbackInt(), 7));
+        expectFloat(referenceFloat(value), callbackIntFloat(\fallbackInt(), 7));
+        expect(referenceInt(value), callbackFloatInt(\fallbackFloat(), 1.25));
+        expectFloat(referenceFloat(value), callbackFloat(\fallbackFloat(), 1.25));
+        expect(referenceInt(value), methodInt(generic, 7));
+        expectFloat(referenceFloat(value), methodIntFloat(generic, 7));
+        expect(referenceInt(value), methodFloatInt(float_generic, 1.25));
+        expectFloat(referenceFloat(value), methodFloat(float_generic, 1.25));
+        expect(referenceInt(value), typedMethodInt(generic, 7));
+        expectFloat(referenceFloat(value), typedMethodIntFloat(generic, 7));
+        expect(referenceInt(value), typedMethodFloatInt(float_generic, 1.25));
+        expectFloat(referenceFloat(value), typedMethodFloat(float_generic, 1.25));
+        list<auto> result = multipleConsumers(generic, 7);
+        expect(value, result[0]);
+        expect(referenceInt(value), result[1]);
+        expectFloat(referenceFloat(value), result[2]);
+    }
+    fallbackValue = NOTHING;
+    # AST rejects object/list conversion while existing IR/AOT return zero.
+    # Compare each backend to its ordinary boxed conversion, preserving that
+    # baseline behavior without claiming to fix the pre-existing discrepancy.
+    auto expected_int;
+    auto expected_float;
+    {
+        ConversionOwned reference_object();
+        expected_int = observe(auto sub () { return referenceInt(reference_object); });
+        expected_float = observe(auto sub () { return referenceFloat(reference_object); });
+    }
+    int before = destroyed;
+    expect(expected_int, observe(auto sub () { return callbackInt(\ownedInt(), 7); }));
+    expect(expected_float, observe(auto sub () { return callbackIntFloat(\ownedInt(), 7); }));
+    expect(expected_int, observe(auto sub () { return methodInt(owned, 7); }));
+    expect(expected_float, observe(auto sub () { return methodIntFloat(owned, 7); }));
+    expect(expected_int, observe(auto sub () { return typedMethodInt(owned, 7); }));
+    expect(expected_float, observe(auto sub () { return typedMethodIntFloat(owned, 7); }));
+    expect(before + 6, destroyed);
+    fallbackValue = (1, 2);
+    expected_int = observe(auto sub () { return referenceInt(fallbackValue); });
+    expected_float = observe(auto sub () { return referenceFloat(fallbackValue); });
+    expect(expected_int, observe(auto sub () { return callbackInt(\fallbackInt(), 7); }));
+    expect(expected_float, observe(auto sub () { return callbackFloat(\fallbackFloat(), 1.25); }));
+    expect(expected_int, observe(auto sub () { return methodInt(generic, 7); }));
+    expect(expected_float, observe(auto sub () { return methodFloat(float_generic, 1.25); }));
+    expect(expected_int, observe(auto sub () { return typedMethodInt(generic, 7); }));
+    expect(expected_float, observe(auto sub () { return typedMethodFloat(float_generic, 1.25); }));
+    fallbackValue = NOTHING;
+    expect("CONVERSION-ERROR", methodIntInvoke(throwing, 7));
+    expect("CONVERSION-ERROR", methodFloatInvoke(float_throwing, 1.25));
+    expect("PSEUDO-METHOD-DOES-NOT-EXIST", methodIntInvoke(NOTHING, 7));
+    try {
+        callbackInt(\throwingInt(), 7);
+        throw "NATIVE-CONVERSION-TEST", "callback exception missing";
+    } catch (hash<ExceptionInfo> ex) { expect("CONVERSION-ERROR", ex.err); }
+    try {
+        callbackFloat(\throwingFloat(), 1.25);
+        throw "NATIVE-CONVERSION-TEST", "float callback exception missing";
+    } catch (hash<ExceptionInfo> ex) { expect("CONVERSION-ERROR", ex.err); }
+    expect(7, callbackInt(\intIdentity(), 7));
+    expectFloat(1.25, callbackFloat(\floatIdentity(), 1.25));
+}
+Program foreign(PO_NO_INHERIT_USER_CLASSES | PO_NO_CHILD_PO_RESTRICTIONS);
+foreign.importClass("ConversionIntChild");
+foreign.setExecMode(EM_IR);
+foreign.parse("%modern\nConversionIntChild sub make() { return new ConversionIntChild(); }\n"
+    "int sub identity(int value) { return value; }\ncode<int(int)> sub callback() { return \\identity(); }\n",
+    "native-conversion-foreign");
+auto imported = foreign.callFunction("make");
+code<int(int)> imported_callback = foreign.callFunction("callback");
+for (int i = 0; i < 16; ++i) {
+    expect(i, methodInt(imported, i));
+    expect(i, callbackInt(imported_callback, i));
+    expect(i, methodInt(child, i));
+    expect(i, callbackInt(\intIdentity(), i));
+}
+printf("native-call-conversion: ok\n");

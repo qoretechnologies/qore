@@ -169,6 +169,25 @@ public class RuntimeBench {
         return sum;
     }
 
+    static long intIndirectResult(int count, long seed, LongUnaryOperator callback) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            sum += callback.applyAsLong(seed);
+            seed = 65535 - seed;
+        }
+        return sum;
+    }
+
+    static long floatIndirectResult(int count, long seed, DoubleUnaryOperator callback) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            sum += (long) callback.applyAsDouble(value);
+            value = 65535.0 - value;
+        }
+        return sum;
+    }
+
     static long taggedFloatIndirectCall(int count, long seed, DoubleUnaryOperator callback) {
         double value = (seed & 1) != 0 ? -3.0e307 : -6.0e307;
         long sum = 0;
@@ -395,6 +414,8 @@ public class RuntimeBench {
     @Benchmark public long indirect_affine_wide() { return wideIndirectCall(count, nextSeed(), affineCallback); }
     @Benchmark public long indirect_branch_int() { return indirectCall(count, nextSeed(), branchIntCallback); }
     @Benchmark public long indirect_float() { return floatIndirectCall(count, nextSeed(), floatCallback); }
+    @Benchmark public long indirect_int_result() { return intIndirectResult(count, nextSeed(), callback); }
+    @Benchmark public long indirect_float_result() { return floatIndirectResult(count, nextSeed(), floatCallback); }
     @Benchmark public long indirect_branch_float() { return floatIndirectCall(count, nextSeed(), branchCallback); }
     @Benchmark public long indirect_tagged_float() { return taggedFloatIndirectCall(count, nextSeed(), taggedCallback); }
     @Benchmark public long polymorphic_call() { return polymorphicCall(count, nextSeed(), a, b, c); }
@@ -452,7 +473,8 @@ public class RuntimeBench {
             ArrayList<Long> values = makeData(count, 7);
             for (long seed : new long[] {0, 7, 65535}) {
                 String[] names = {"arithmetic", "direct_call", "method_call", "indirect_call",
-                    "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
+                    "indirect_wide", "indirect_float", "indirect_int_result", "indirect_float_result",
+                    "indirect_tagged_float", "indirect_branch_float",
                     "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
                     "polymorphic_call", "polymorphic_expression_call", "monomorphic_call",
                     "optional_method_call", "polymorphic_float_call", "polymorphic_float_expression_call",
@@ -465,6 +487,7 @@ public class RuntimeBench {
                 long[] results = {arithmetic(count, seed), directCall(count, seed),
                     methodCall(count, seed, receiver), indirectCall(count, seed, callback),
                     wideIndirectCall(count, seed, wideCallback), floatIndirectCall(count, seed, floatCallback),
+                    intIndirectResult(count, seed, callback), floatIndirectResult(count, seed, floatCallback),
                     taggedFloatIndirectCall(count, seed, taggedCallback),
                     floatIndirectCall(count, seed, branchCallback),
                     indirectCall(count, seed, affineCallback), wideIndirectCall(count, seed, affineCallback),

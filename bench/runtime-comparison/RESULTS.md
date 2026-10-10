@@ -8463,3 +8463,139 @@ Next experiments, each requiring fresh before/after measurement and audit:
 
 The [audit](FOLLOWUP-AUDIT.md#boxed-result-method-audit-2026-10-10) records all
 62 checks: 15 Pass, 47 N/A, no outstanding failures.
+
+## Native call-result conversions (2026-10-10)
+
+Decision: retain the single-use scalar-conversion continuation for its repeated
+floating-result gains. Dynamic floating calls improve by 14–17% and typed floating
+callbacks by 20–23%. Small-integer results show no consistent benefit. Some controls
+are slower, including floating-polymorphic calls in every trial; those costs are
+retained and remain unexplained, not dismissed as noise. This is not Java parity.
+
+[Complete evidence](results-native-call-conversion-macos-arm64.json) records
+360 randomized jobs / 1800 measurement windows: 90 baseline jobs, 90 main
+before/after/Java jobs, two 60-job repeats/controls and a 60-job five-fork control
+repeat. No task build, test, profile or evidence work overlapped timing.
+
+### Source and correctness boundary
+
+Source parent 738a26661 already contains the preceding boxed-result optimization;
+origin/develop 1800de49a was already merged. The frozen baseline copies previously
+qualified binaries whose compiler/runtime source hashes match that commit. Its
+identity retains the original pre-commit build provenance, rather than claiming a
+new post-commit build. Only the benchmark gains two callback-result kernels.
+The candidate is the stated parent plus its saved implementation patch. All AOT
+comparisons compile separate executables. No runtime ABI/helper signature changes.
+
+The compiler counts all IR uses, including return/PHI uses, and requires producer
+lowering before a sole ToInt/ToFloat consumer. Typed function references and
+resolved/unresolved native scalar methods expose an unboxed side channel.
+Native bool conversions use unsigned widening. Float-to-int retains
+qore_rt_float_to_int for NaN, infinity and out-of-range values; no new LLVM
+fptosi poison is introduced. A miss retains arbitrary owned boxed results,
+conversion, exceptions, invoke routing, local invalidation and cleanup.
+Escaping/multiple consumers remain boxed. Existing Program/access, receiver,
+body/readiness, stack, debugger and concurrent frame-publication checks remain.
+
+The compile-only QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 control restores the
+boxed conversion path while leaving the preceding native-store and boxed-result
+optimizations enabled. Existing broader controls retain their scope.
+
+The regression fixture exposed a pre-existing discrepancy: AST rejects int(list)
+with RUNTIME-OVERLOAD-ERROR, while baseline IR/AOT return zero. Object conversions
+also differ. Tests compare these fallbacks with each backend's independent ordinary
+boxed conversion and verify owned-result destruction; they do not claim AST/IR
+semantic parity. The minimal list reproducer and baseline logs are retained.
+The final fixture passes baseline AST/IR/JIT/tiered and stripped AOT O0/O3.
+
+### Measurements
+
+Apple M4 Pro, macOS arm64 release build; median of fork means in ns/iteration,
+startup excluded. Three warmup and five 500 ms measurement windows per fork.
+Java is local Temurin 25.0.2 JIT with retained target calls. These whole workloads
+have unequal representation/inlining contracts and are not isolated call latencies.
+
+Main count 4096, three forks, run-x1nr0572:
+
+|!Kernel|!Before ns|!After ns|!Reduction %|!Java JIT ns|!After / Java
+|dynamic_int_result_call|13.639|13.618|0.15|3.107|4.38
+|dynamic_float_result_call|17.199|14.298|16.87|3.517|4.07
+|indirect_int_result|6.940|7.199|-3.72|1.909|3.77
+|indirect_float_result|11.445|8.826|22.88|2.778|3.18
+|dynamic_int_result_fallback|306.050|304.814|0.40|3.028|100.66
+|boxed_float_method_call|64.791|65.081|-0.45|2.584|25.18
+|polymorphic_expression_call|10.482|10.638|-1.49|2.552|4.17
+|polymorphic_float_expression_call|10.802|10.886|-0.78|2.590|4.20
+|indirect_float|9.201|9.210|-0.10|1.658|5.56
+|arithmetic|1.471|1.481|-0.64|0.999|1.48
+
+Count 1024 is run-fqmsqhya; same-runtime count 4096 is run-9kz3f84c.
+Both use three forks. The same-runtime trial changes only before compilation,
+setting the new disable flag; both executable runs use the same candidate library.
+
+|!Kernel|!1024 before|!1024 after|!Reduction %|!Same-runtime before|!Same-runtime after|!Reduction %
+|dynamic_int_result_call|14.890|14.862|0.19|13.720|13.327|2.87
+|dynamic_float_result_call|18.565|16.005|13.79|16.945|14.070|16.97
+|indirect_int_result|8.460|8.321|1.65|6.826|6.982|-2.28
+|indirect_float_result|12.978|10.325|20.44|11.428|8.871|22.37
+|dynamic_int_result_fallback|306.444|313.093|-2.17|304.065|304.039|0.01
+|boxed_float_method_call|66.740|66.906|-0.25|64.840|65.021|-0.28
+|polymorphic_expression_call|12.170|12.245|-0.62|10.324|10.542|-2.12
+|polymorphic_float_expression_call|12.526|12.710|-1.47|10.594|11.030|-4.12
+|indirect_float|10.699|10.647|0.49|9.072|9.170|-1.09
+|arithmetic|2.850|2.860|-0.36|1.462|1.476|-0.94
+
+The two floating-result workloads have disjoint before/after fork ranges in all
+three trials. Integer callback results vary from a 3.73% slowdown to a 1.65% gain;
+there is no consistent benefit. The unsupported fallback's 2.17% slowdown at
+count 1024 has disjoint observed ranges, but does not repeat at count 4096.
+The main boxed-floating and integer-polymorphic controls also have small
+disjoint-range slowdowns. All raw samples are retained.
+
+Five-fork same-runtime adverse-control repeat, run-5dwy9189:
+
+|!Kernel|!Before ns|!After ns|!Reduction %|!Before fork range|!After fork range
+|indirect_int_result|6.969|6.900|1.00|6.919–9.270|6.787–7.081
+|polymorphic_expression_call|10.474|10.431|0.41|10.290–10.588|10.180–10.517
+|polymorphic_float_expression_call|10.660|10.881|-2.08|10.577–10.835|10.740–11.007
+|dynamic_int_result_fallback|308.666|309.181|-0.17|302.295–313.134|302.047–322.045
+|boxed_float_method_call|64.844|64.726|0.18|63.779–65.721|64.244–65.214
+|arithmetic|1.456|1.476|-1.41|1.453–1.480|1.454–1.477
+
+All repeat ranges overlap; these ranges are not confidence intervals. The integer
+callback slowdown reverses, with an unusually slow before fork retained. The
+floating-polymorphic median remains 2.08% slower (0.78–4.12% across all trials);
+arithmetic remains 1.41% slower in this repeat. The five unchanged control
+functions have identical normalized LLVM bodies for every emitted entry, including
+fast entries where present. That does not prove equal final instruction placement
+or explain the observed costs. Retention is a scoped tradeoff for the larger,
+repeatable floating-result gains, not a universal speedup claim.
+
+### Qualification and next work
+
+Release passes 78 selected files, 317 cases / 15680 assertions, with one known
+release-only skip; debug passes 78 files, 324 cases / 15779 assertions, no skips.
+Both have nine standalone files. The new driver passes 1142 assertions and the
+updated boxed-result/debugger/reader driver 1774 per build. Four supporting qmod
+targets and their dependencies were rebuilt before each build's tests.
+The 33-kernel grid has 495 references per mode: release IR/AOT/Java-int/Java-JIT
+and debug IR/AOT pass. All 15 harness tests and 146 native debug checks pass.
+No full-suite, sanitizer, cross-platform or new IR-speedup claim is made.
+
+A separate ten-second 1 ms profile after the three primary timing trials records
+7655 top-level inclusive samples. Native-entry dispatch/frame/stack work and
+receiver dereferencing remain prominent; the existing float-to-int helper is
+still visible. Inclusive/nested counts are not additive and tail attribution is
+incomplete. The profile is qualitative, not another timing result.
+
+Next priorities are guarded strong-object receiver dereferencing, repeated failed
+native admission, and explicit-context/frame costs for same-Program calls. Preserve
+weak/reference resolution, receiver lifetime, live metadata and diagnostic readers.
+Measure wide-result and mixed scalar-conversion workloads before claiming any
+integer advantage. Investigate the persistent small control costs, and separately
+profile IR and context-using/cross-Program calls; the generic fallback here remains
+roughly 101 times Java's whole-workload time. The improved floating-result kernels
+still take 3.18–4.07 times Java's time.
+
+The [audit](FOLLOWUP-AUDIT.md#native-call-conversion-audit-2026-10-10) records every
+check: 18 Pass, 44 N/A, 0 Fail.

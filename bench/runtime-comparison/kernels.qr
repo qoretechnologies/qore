@@ -98,6 +98,26 @@ int sub floatIndirectCall(int count, int seed, code<float(float)> callback) {
     return sum;
 }
 
+# Consume callback results directly, independently advancing the native argument.
+int sub intIndirectResult(int count, int seed, code<int(int)> callback) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        sum += int(callback(seed));
+        seed = 65535 - seed;
+    }
+    return sum;
+}
+
+int sub floatIndirectResult(int count, int seed, code<float(float)> callback) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        sum += int(callback(value));
+        value = 65535.0 - value;
+    }
+    return sum;
+}
+
 int sub taggedFloatIndirectCall(int count, int seed, code<float(float)> callback) {
     float value = seed & 1 ? -3.0e307 : -6.0e307;
     int sum = 0;
@@ -354,6 +374,8 @@ int sub dispatch(string name, int count, int seed, list<int> data, Stepper recei
         case "indirect_affine_wide": return wideIndirectCall(count, seed, affineCallback);
         case "indirect_branch_int": return indirectCall(count, seed, branchIntCallback);
         case "indirect_float": return floatIndirectCall(count, seed, floatCallback);
+        case "indirect_int_result": return intIndirectResult(count, seed, callback);
+        case "indirect_float_result": return floatIndirectResult(count, seed, floatCallback);
         case "indirect_branch_float": return floatIndirectCall(count, seed, branchCallback);
         case "indirect_tagged_float": return taggedFloatIndirectCall(count, seed, taggedCallback);
         case "polymorphic_call": return polymorphicCall(count, seed, a, b, c);
@@ -415,7 +437,8 @@ sub main() {
             list<int> data = makeData(count, 7);
             foreach int seed in ((0, 7, 65535)) {
                 foreach string name in (("arithmetic", "direct_call", "method_call", "indirect_call",
-                        "indirect_wide", "indirect_float", "indirect_tagged_float", "indirect_branch_float",
+                        "indirect_wide", "indirect_float", "indirect_int_result", "indirect_float_result",
+                        "indirect_tagged_float", "indirect_branch_float",
                         "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
                         "polymorphic_call", "polymorphic_expression_call", "monomorphic_call",
                         "optional_method_call", "polymorphic_float_call", "polymorphic_float_expression_call",

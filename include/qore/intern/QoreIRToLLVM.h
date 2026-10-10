@@ -423,10 +423,12 @@ private:
     std::unordered_set<uint32_t> fixed_typed_list_outputs;
     std::unordered_set<uint32_t> reserve_typed_list_outputs;
     std::unordered_map<uint32_t, BatchCalleeReturnKind> native_call_result_kinds;
-    // Single-use callback/method results assigned to an exact native scalar local.
+    // Single-use callback/method results assigned to an exact native scalar local
+    // or consumed by an explicit scalar conversion after the producer is lowered.
     // The boxed value remains the fallback's owned result (NOTHING on the native
-    // edge); only the proven StoreLocal consumer may read this side channel.
+    // edge); only the proven StoreLocal/ToInt/ToFloat consumer reads this side channel.
     std::unordered_map<uint32_t, const QoreTypeInfo*> native_funcref_store_types;
+    std::unordered_set<uint32_t> native_call_conversion_results;
     struct NativeFunctionRefResult {
         llvm::Value* handled;
         llvm::Value* value;
@@ -890,12 +892,17 @@ private:
             bool require_exact_object_class = false);
 
     // Try a cached scalar method entry without resolving an unknown target or
-    // narrowing its return contract. An exact native-scalar store consumes the
-    // native result; other consumers own a boxed result. A miss retains the
+    // narrowing its return contract. A proven scalar store or conversion consumes
+    // the native result; other consumers own a boxed result. A miss retains the
     // original boxed name-dispatch path and arbitrary override return type.
     bool tryEmitAotNameMethodNativeContinuation(const QoreIRInstruction* inst,
             llvm::Value* base, llvm::Module& module, llvm::Function* llvm_func,
             std::string& error);
+
+    // Consume the single-use native result on a hit, retaining ordinary boxed
+    // conversion and ownership on a miss. Returns nullptr without a continuation.
+    llvm::Value* tryEmitNativeCallConversion(const QoreIRInstruction* inst,
+            llvm::Value* boxed, llvm::Module& module, llvm::Function* llvm_func);
 
     // Emit an imported pure scalar leaf body. Returns nullptr when the summary
     // is absent, disabled, or not valid for the supplied native arguments.

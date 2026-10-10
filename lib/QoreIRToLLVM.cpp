@@ -912,8 +912,9 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
         return nullptr;
     }
     auto native_store = native_funcref_store_types.find(inst->result.id);
-    bool native_continuation = native_store != native_funcref_store_types.end()
-        && native_store->second == callable->getReturnType();
+    bool native_continuation = (native_store != native_funcref_store_types.end()
+        && native_store->second == callable->getReturnType())
+        || native_call_conversion_results.count(inst->result.id);
     llvm::Value* arg = nullptr;
     llvm::Value* compatible = llvm::ConstantInt::getTrue(ctx);
     if (nargs) {
@@ -1034,8 +1035,8 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
     // The reference's *actual* return is not statically fixed on the fallback:
     // preserve NOTHING and arbitrary boxed results there, rather than coercing
     // them merely because the reference has a typed declaration.
-    // A sole, exact native StoreLocal can consume the native value without an
-    // allocation even for wide integers and tag-colliding doubles. Its ordinary
+    // A sole exact native store or scalar conversion consumes the native value
+    // without boxing, even for wide integers and tag-colliding doubles. Ordinary
     // boxed cleanup tracks only the fallback value, never this side channel.
     llvm::Value* fast_result = native_continuation ? llvm::ConstantInt::get(i64_type, VAL_NOTHING)
         : ret_kind == 1 ? boxIntInline(native_result)
@@ -9652,8 +9653,9 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")
         && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION");
     auto native_store = native_funcref_store_types.find(inst->result.id);
-    bool native_continuation = native_method && native_store != native_funcref_store_types.end()
-        && native_store->second == method_scalar_type;
+    bool native_continuation = native_method
+        && ((native_store != native_funcref_store_types.end() && native_store->second == method_scalar_type)
+            || native_call_conversion_results.count(inst->result.id));
     llvm::Value* exact_native_result = native_continuation ? fast_result : nullptr;
     if (native_continuation) {
         fast_result = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
@@ -9910,6 +9912,7 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
     if (!native_continuation && std::getenv("QORE_DISABLE_AOT_NAME_METHOD_BOXED_RESULT")) {
         return false;
     }
+    native_continuation |= native_call_conversion_results.count(inst->result.id) != 0;
     // The operand is already an assigned native scalar. Do not reinterpret
     // an arbitrary boxed value or coerce NOTHING for admission.
     uint64_t bits;
@@ -9940,8 +9943,8 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
         fast, fallback);
     builder->SetInsertPoint(fast);
     llvm::Value* payload = builder->CreateLoad(native_type, output);
-    // Only an exact native store may consume the unboxed side channel. Other
-    // consumers still own a regular boxed value, including wide integers and
+    // Only a proven exact native store or scalar conversion may consume the
+    // unboxed side channel. Other consumers own boxed values, including wide integers and
     // tag-colliding doubles; a miss can return any type through the same merge.
     llvm::Value* fast_result = native_continuation ? llvm::ConstantInt::get(i64_type, VAL_NOTHING)
         : floating ? boxFloat(payload) : boxIntInline(payload);
@@ -10013,6 +10016,57 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
             exception->second, normal->second);
     }
     return true;
+}
+
+llvm::Value* QoreIRToLLVM::tryEmitNativeCallConversion(const QoreIRInstruction* inst,
+        llvm::Value* boxed, llvm::Module& module, llvm::Function* llvm_func) {
+    auto continuation = native_funcref_results.find(inst->operands[0].id);
+    if (continuation == native_funcref_results.end()) {
+        return nullptr;
+    }
+    assert(native_call_conversion_results.count(inst->operands[0].id));
+    assert(inst->opcode == QoreIROpcode::ToInt || inst->opcode == QoreIROpcode::ToFloat);
+    bool floating = inst->opcode == QoreIROpcode::ToFloat;
+    auto* fast = llvm::BasicBlock::Create(ctx, "native_call_convert", llvm_func);
+    auto* fallback = llvm::BasicBlock::Create(ctx, "native_call_convert_fallback", llvm_func);
+    auto* merge = llvm::BasicBlock::Create(ctx, "native_call_convert_merge", llvm_func);
+    builder->CreateCondBr(continuation->second.handled, fast, fallback);
+    builder->SetInsertPoint(fast);
+    llvm::Value* native = continuation->second.value;
+    if (floating) {
+        if (native->getType() == i1_type) {
+            native = builder->CreateUIToFP(native, double_type);
+        } else if (native->getType() == i64_type) {
+            native = builder->CreateSIToFP(native, double_type);
+        } else {
+            assert(native->getType() == double_type);
+        }
+    } else if (native->getType() == double_type) {
+        // Match the runtime conversion even for NaN, infinity and values outside
+        // the signed integer range; do not introduce LLVM fptosi poison here.
+        auto helper = module.getOrInsertFunction("qore_rt_float_to_int",
+            llvm::FunctionType::get(i64_type, {double_type}, false));
+        native = builder->CreateCall(helper, {native});
+    } else if (native->getType() == i1_type) {
+        native = builder->CreateZExt(native, i64_type);
+    } else {
+        assert(native->getType() == i64_type);
+    }
+    builder->CreateBr(merge);
+    fast = builder->GetInsertBlock();
+    builder->SetInsertPoint(fallback);
+    // The fallback can return any type. Keep the existing language conversion
+    // and owned boxed cleanup; it is not constrained by the native companion.
+    llvm::Value* converted = floating
+        ? ensureFloatType(boxed, inst->operands[0].id, module)
+        : ensureIntTypeInline(boxed, inst->operands[0].id);
+    builder->CreateBr(merge);
+    fallback = builder->GetInsertBlock();
+    builder->SetInsertPoint(merge);
+    auto* result = builder->CreatePHI(floating ? double_type : i64_type, 2, "native_call_converted_value");
+    result->addIncoming(native, fast);
+    result->addIncoming(converted, fallback);
+    return result;
 }
 
 bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
@@ -11591,6 +11645,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     reserve_typed_list_outputs.clear();
     native_call_result_kinds.clear();
     native_funcref_store_types.clear();
+    native_call_conversion_results.clear();
     native_funcref_results.clear();
     direct_typed_list_read_sources.clear();
     elided_typed_foreach_refself_values.clear();
@@ -12248,6 +12303,45 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                                 || def->second->opcode == QoreIROpcode::InvokeDotEvalMethodDirect)
                             && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION"))) {
                     native_funcref_store_types.emplace(id, type);
+                }
+            }
+        }
+    }
+    if (aot_mode && !std::getenv("QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION")) {
+        // Count every use, including Return/Phi's non-operand uses above. Also
+        // require producer-before-consumer lowering order so its native SSA
+        // side channel exists when a conversion in another block is emitted.
+        std::unordered_set<uint32_t> available_calls;
+        size_t conversion_count = 0;
+        bool callbacks = !std::getenv("QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION");
+        bool methods = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION");
+        for (const auto& block : func.blocks) {
+            if (conversion_count++ && !(conversion_count % 100)
+                    && qore_check_cancel(nullptr, "LLVM native call conversion analysis")) {
+                error = "cancelled during LLVM native call conversion analysis";
+                return false;
+            }
+            for (const auto& inst : block->instructions) {
+                if (conversion_count++ && !(conversion_count % 100)
+                        && qore_check_cancel(nullptr, "LLVM native call conversion analysis")) {
+                    error = "cancelled during LLVM native call conversion analysis";
+                    return false;
+                }
+                if (!inst) {
+                    continue;
+                }
+                if (inst->result.isValid()
+                        && ((callbacks && inst->opcode == QoreIROpcode::CallClosureDirect)
+                            || (methods && (inst->opcode == QoreIROpcode::DotEvalMethodDirect
+                                || inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect)))) {
+                    available_calls.insert(inst->result.id);
+                } else if ((inst->opcode == QoreIROpcode::ToInt || inst->opcode == QoreIROpcode::ToFloat)
+                        && inst->operands.size() == 1) {
+                    uint32_t id = inst->operands[0].id;
+                    auto uses = operand_remaining_uses.find(id);
+                    if (available_calls.count(id) && uses != operand_remaining_uses.end() && uses->second == 1) {
+                        native_call_conversion_results.insert(id);
+                    }
                 }
             }
         }
@@ -14838,6 +14932,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::ToInt: {
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
+            if (auto* converted = tryEmitNativeCallConversion(inst, val, module, llvm_func)) {
+                values[inst->result.id] = converted;
+                return true;
+            }
             if (val->getType() == i64_type) {
                 values[inst->result.id] = nanboxed_values.count(inst->operands[0].id)
                     ? ensureIntTypeInline(val, inst->operands[0].id)
@@ -14860,6 +14958,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::ToFloat: {
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
+            if (auto* converted = tryEmitNativeCallConversion(inst, val, module, llvm_func)) {
+                values[inst->result.id] = converted;
+                return true;
+            }
             values[inst->result.id] = ensureFloatType(val, inst->operands[0].id, module);
             return true;
         }

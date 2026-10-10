@@ -235,18 +235,34 @@ nullable-class and dynamic receivers. Compile separate artifacts: this flag is
 not a runtime switch. A warmed full-key PIC supplies the checked target; the
 compiler does not change AST/IR resolution or the unknown return contract.
 An already-native integer/float argument qualifies. A matching sole native-scalar
-local assignment consumes the unboxed result; other consumers receive an owned
-boxed result. Wide integers and tag-colliding doubles retain their ordinary heap
-encoding. Boxed and optional arguments remain excluded. Every miss retains original
+local assignment or proven sole scalar conversion consumes the unboxed result;
+other consumers receive an owned boxed result. Wide integers and tag-colliding
+doubles retain their ordinary heap encoding when boxed. Boxed and optional
+arguments remain excluded. Every miss retains original
 dispatch, arbitrary boxed returns, return checks, caller-local invalidation and cleanup.
 The broader native-method entry/continuation controls also disable this path.
 
-`QORE_DISABLE_AOT_NAME_METHOD_BOXED_RESULT=1` disables only the additional
-boxed-result consumers at compilation, preserving exact native-local continuations.
+`QORE_DISABLE_AOT_NAME_METHOD_BOXED_RESULT=1` disables the additional non-store
+consumers at compilation, including direct scalar conversions of name-method
+results, while preserving exact native-local continuations.
 Compile separate artifacts; this is not a runtime control. The new path reuses
 existing scalar helpers and the caller's hoisted RuntimeConfig; no runtime ABI or
 whole-body eligibility change is needed. Unsupported targets can pay an unsuccessful
 native attempt before fallback, so include `dynamic_int_result_fallback` in comparisons.
+
+`QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1` disables native result consumption by
+a sole `ToInt`/`ToFloat` instruction at compilation. Compile separate executables;
+this is not a runtime switch. Typed function references and resolved/unresolved
+scalar methods reuse the existing native-entry proofs and result side channel.
+The compiler counts all uses, including returns and PHIs, and requires the producer
+to be lowered before its consumer. Escaping and multiply consumed results stay boxed.
+Native float-to-int conversion uses the existing runtime helper, preserving its
+NaN/infinity/out-of-range behavior instead of introducing LLVM `fptosi` poison.
+Arbitrary boxed fallbacks retain the original conversion, ownership, exceptions,
+caller-local invalidation and diagnostic-frame behavior. No runtime ABI changes.
+The measured gains are for floating-result workloads; small-integer results do not
+show a consistent benefit, and some unchanged-code controls show small slowdowns.
+See [results and limitations](RESULTS.md#native-call-result-conversions-2026-10-10).
 
 `QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1` disables only the floating-method
 bindings and caller continuations at compilation, and their native admission/
@@ -392,6 +408,8 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |closure_capture|Qore closure reading a captured integer / Java functional object reading a non-final integer field; no timed capture mutation
 |indirect_wide|Same low-bit recurrence with bit 50 retained across the callback boundary; checksum uses low 16 bits
 |indirect_float|Double callback with bounded addition/subtraction and an integer checksum
+|indirect_int_result|Typed integer callback whose result is converted directly; native arguments advance independently of the result
+|indirect_float_result|Typed double callback whose result is converted directly to an integer checksum; native arguments advance independently
 |indirect_tagged_float|Double callback alternating -3e307 and -6e307, which require heap encoding when boxed in Qore
 |indirect_affine|Integer callback adding 17, exercising the simple scalar-leaf summary
 |indirect_affine_wide|The same callback with values above the inline 48-bit integer range; checksum uses low 16 bits

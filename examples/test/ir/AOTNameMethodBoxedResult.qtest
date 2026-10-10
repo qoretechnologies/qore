@@ -46,6 +46,7 @@ class NameMethodBoxedResultTest inherits QUnit::Test {
         assertEq(expected, run((qore, "--exec-mode=ast", source, "reflection")), "AST reflection reference");
         TmpDir dir("qore-boxed-method-result-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 ",
                 "QORE_DISABLE_AOT_NAME_METHOD_BOXED_RESULT=1 ",
                 "QORE_DISABLE_AOT_NAME_METHOD_NATIVE_CONTINUATION=1 ",
                 "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
@@ -62,11 +63,16 @@ class NameMethodBoxedResultTest inherits QUnit::Test {
                         "boxedFloatConvert", "boxedSpecialFloat")) {
                     bool floating = name.startsWith("boxedFloat") || name == "boxedSpecialFloat";
                     bool enabled = !prefix.startsWith("QORE_DISABLE_")
+                        || prefix == "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 "
                         || (!floating && prefix == "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ");
                     string entry = body(ir, name);
                     assertEq(enabled, regex(entry, "call i32 @qore_rt_try_method_"
                         + (floating ? "float" : "int") + "_unary_v1"), name + prefix + level);
-                    assertFalse(regex(entry, "name_method_native_value"), name + " no native-store side channel");
+                    bool conversion = enabled && prefix != "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 "
+                        && (name == "boxedIntConvert" || name == "boxedFloatConvert"
+                            || name == "boxedMutation" || name == "boxedMutationInvoke");
+                    assertEq(conversion, regex(entry, "name_method_native_value"), name + " native conversion selection");
+                    assertEq(conversion, regex(entry, "native_call_converted_value"), name + " conversion consumer");
                     assertRegex("(?:call|invoke) i64 @qore_rt_dot_eval_method_direct_aot", entry,
                         name + " retains ordinary boxed fallback");
                 }
@@ -110,10 +116,16 @@ class NameMethodBoxedResultTest inherits QUnit::Test {
                 source = replace(source, "value = receiver.next(value);", "value = int(receiver.next(value));");
             } else if (floating) {
                 caller = "nativeFloatGenericDebugCall";
+                string original = "auto sub nativeFloatGenericDebugCall(auto receiver, float value) {\n"
+                    "    return receiver.next(value);\n}";
+                assertTrue(source.find(original) >= 0);
+                source = replace(source, original, replace(original, "return receiver.next(value);",
+                    "return float(receiver.next(value));"));
             } else {
                 caller = "nativeDebugCall";
                 assertTrue(source.find("NativeDebugBase receiver =") >= 0);
                 source = replace(source, "NativeDebugBase receiver =", "auto receiver =");
+                source = replace(source, "return receiver.next(value);", "return int(receiver.next(value));");
             }
             string fixture = dir.path + "/" + name + ".qr";
             File file();
@@ -122,14 +134,16 @@ class NameMethodBoxedResultTest inherits QUnit::Test {
             file.close();
             string expected = floating ? "native-float-method-" : "native-method-";
             expected += readers ? "frame-readers: ok\n" : "debugger: ok\n";
-            foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 ")) {
                 foreach string level in (("-O0", "-O3")) {
                     string executable = dir.path + "/fixture";
                     string ir = run((qcc, level, "--strip-source", "-o", executable, fixture),
                         prefix + "QORE_DUMP_LLVM_IR=1 ");
                     string entry = body(ir, caller);
                     assertRegex("call i32 @qore_rt_try_method_" + (floating ? "float" : "int") + "_unary_v1", entry);
-                    assertFalse(regex(entry, "name_method_native_value"), caller + " keeps boxed return");
+                    bool conversion = prefix != "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 ";
+                    assertEq(conversion, regex(entry, "name_method_native_value"), caller + " native result");
+                    assertEq(conversion, regex(entry, "native_call_converted_value"), caller + " conversion consumer");
                     list<string> args = floating && readers ? (executable, "generic") : (executable,);
                     foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
                             "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ")) {

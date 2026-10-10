@@ -78,6 +78,16 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual(196627, run.reference(name, 6, 7))
             self.assertEqual(131065, run.reference(name, 3, 65535))
 
+    def test_indirect_result_reference(self):
+        self.assertEqual(248, run.reference("indirect_int_result", 1, 7))
+        self.assertEqual(65537, run.reference("indirect_int_result", 2, 7))
+        self.assertEqual(65785, run.reference("indirect_int_result", 3, 7))
+        self.assertEqual(131057, run.reference("indirect_int_result", 3, 65535))
+        self.assertEqual(65528, run.reference("indirect_float_result", 1, 7))
+        self.assertEqual(65535, run.reference("indirect_float_result", 2, 7))
+        self.assertEqual(131063, run.reference("indirect_float_result", 3, 7))
+        self.assertEqual(65535, run.reference("indirect_float_result", 3, 65535))
+
     def test_checks(self):
         run.validate_checks(self.checks())
 
