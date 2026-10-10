@@ -204,8 +204,9 @@
     @ref Qore::AsyncIoController::setMaxIoThreads() "AsyncIoController::setMaxIoThreads()" still set any count, and
     <tt>setMaxIoThreads(0)</tt> restores the default.  An I/O thread also does less work per I/O event: the
     deadlines of its operations take one entry per operation instead of one per event, a socket that is already
-    non-blocking is not set again on every read or write, and the poll info that a native poll operation returns for
-    the next event reuses the previous one instead of being created anew.
+    non-blocking is not set again on every read or write, the poll info that a native poll operation returns for the
+    next event reuses the previous one instead of being created anew, and operations are looked up by an integer ID
+    instead of by their key.
 
     @ref Qore::Socket::getSSLCipherName() "Socket::getSSLCipherName()" and
     @ref Qore::Socket::getSSLCipherVersion() "Socket::getSSLCipherVersion()" read the cipher from the socket's I/O

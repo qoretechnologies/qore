@@ -312,7 +312,7 @@ thread than the other operations on its socket.
 ### Timeout Heap
 
 Each I/O thread keeps the deadlines of its operations in a min-heap (`IoThreadContext::timeout_heap`) of
-`{deadline, key}` entries: the operation timeout (`PollInfo::timeout_date_us`, armed when the operation is first
+`{deadline, operation ID}` entries (see [Operation IDs](#operation-ids)): the operation timeout (`PollInfo::timeout_date_us`, armed when the operation is first
 polled) and the protocol-level poll timeout (`PollInfo::poll_timeout_deadline_us`, from a `poll_timeout_ms` in the
 poll info, used by QUIC timers and heartbeats).  Phase 1 Step C pops the entries that are due and decides from the
 operation's current deadlines whether it timed out, its protocol timer fired, or the entry is stale.
@@ -326,6 +326,30 @@ operation's current deadlines whether it timed out, its protocol timer fired, or
   with the entry of each operation that has a deadline armed.  An operation queued for continuePoll() at that point
   has none and is re-armed with its result, so no deadline is lost.
 - `getInfo()` reports each thread's heap size (`threads[].timeouts`).
+
+### Operation IDs
+
+The operation cache of an I/O thread (`IoThreadContext::cache`, an `OpCache`) gives each operation an integer ID
+when it is inserted, and keeps an index by ID next to the map by cache key.  The I/O loop refers to operations by ID
+only: Phase 1 queues them by ID, Phase 2 and Phase 3 look them up again by ID, the timeout heap, the list of new
+operations and the per-iteration ready events of extra fds hold IDs, and the event loop registrations of an operation
+(`registered_sockets`, `key_events`, `key_extra_fds`, `extra_fd_to_key_events`, and the per-socket sets of
+`sock_hash_to_ops`) are made for its ID.  A lookup hashes an integer instead of a key string, and no copy of a key or
+owner is made per I/O event.  The key is kept for the APIs that take one (`submit()`, `cancelByKey()`, commands) and
+for diagnostics (`getInfo()`, traces).
+
+- **IDs are not reused**, so a lookup by ID never finds another operation that took over the key of a removed one:
+  Phase 2 skips, and Phase 3 drops the result of, an operation that an earlier `continuePoll()` in the batch removed
+  or replaced with another poll operation (the key-based lookups applied that result to the replacing operation).
+- **An operation that replaces itself keeps its ID** (`OpCache::emplaceWithId()`): the same poll operation submitted
+  again for its key, and a direct submit with `replace` on the I/O thread, keep the event loop registrations of the
+  replaced entry, as they did when the registrations were made for the key.  A different poll operation submitted
+  for the key through a command has its predecessor's registrations released first and gets a new ID.
+- **Every removal releases the operation's registrations**, as no later operation can take them over by its key:
+  the cancels made directly on the I/O thread (`cancelByKey()`, `cancelByOwner()`, the cancel by program) release
+  them like the Cancel commands do.
+- `OpCache::erase()` finds the ID of an entry by its node, so an entry whose `PollInfo` was reset before it is removed
+  (as several removal paths do) leaves no stale index entry.
 
 ### Poll Info Reuse
 

@@ -1128,6 +1128,65 @@ QoreObject* ut_new_notifier_object(ExceptionSink& xsink) {
 }
 }
 
+#ifdef DEBUG
+//! Tests the operation cache of an I/O thread: IDs, lookups by ID, and the removal paths
+class AsyncIoOpCacheTest {
+public:
+    static void run(UnitTestCounters& c) {
+        using OpCache = AsyncIoControllerPriv::OpCache;
+        using PollInfo = AsyncIoControllerPriv::PollInfo;
+        OpCache cache;
+        uint64_t ida = cache["a"].op_id;
+        uint64_t idb = cache["b"].op_id;
+        UT_ASSERT(c, ida && idb && ida != idb, "operations get distinct IDs");
+        OpCache::node_t* node = cache.findId(ida);
+        UT_ASSERT(c, node && node->first == "a" && node->second.op_id == ida, "an operation is found by its ID");
+        UT_ASSERT_EQ(c, static_cast<int64>(ida), static_cast<int64>(cache["a"].op_id), "an operation keeps its ID");
+
+        // several removal paths reset an entry's PollInfo before removing it
+        auto it = cache.find("a");
+        it->second = PollInfo();
+        cache.erase(it);
+        UT_ASSERT(c, !cache.findId(ida), "a removed operation is not found by its ID");
+        uint64_t ida2 = cache["a"].op_id;
+        UT_ASSERT(c, ida2 && ida2 != ida && ida2 != idb,
+            "an operation with the key of a removed one gets a new ID");
+
+        // a replacing operation keeps the ID it is given
+        cache.erase(cache.find("a"));
+        PollInfo& a3 = cache.emplaceWithId("a", ida2);
+        node = cache.findId(ida2);
+        UT_ASSERT(c, a3.op_id == ida2 && node && &node->second == &a3, "a replacing operation keeps the given ID");
+
+        cache.eraseId(idb);
+        UT_ASSERT(c, !cache.findId(idb) && cache.find("b") == cache.end(), "an operation is removed by its ID");
+
+        // node memory is reused by later operations: an old ID never finds them
+        std::vector<uint64_t> old_ids;
+        for (int i = 0; i < 100; ++i) {
+            std::string key = "k" + std::to_string(i % 4);
+            auto kit = cache.find(key);
+            if (kit != cache.end()) {
+                old_ids.push_back(kit->second.op_id);
+                cache.erase(kit);
+            }
+            cache[key];
+        }
+        bool found_old = false;
+        for (uint64_t id : old_ids) {
+            if (cache.findId(id)) {
+                found_old = true;
+            }
+        }
+        UT_ASSERT(c, !found_old, "the ID of a removed operation does not find a later one");
+        UT_ASSERT_EQ(c, 5, static_cast<int64>(cache.size()), "the cache holds the remaining operations");
+
+        cache.clear();
+        UT_ASSERT(c, cache.empty() && !cache.findId(ida2), "clear() removes all operations and their IDs");
+    }
+};
+#endif
+
 //! Tests that the poll info hash lent to a continuePoll() call is reused only when nothing else references it
 /** The I/O thread lends an operation's previous poll info hash to the C++ continuePoll() call it makes for it, as
     the result replaces it; getSocketPollInfoHash() then updates the lent hash instead of creating a new one.  The
@@ -5583,6 +5642,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_cond_wait_cancel_in_window(c);
     Http3ClientResponseRegistrationTest::run(c);
     ut_fast_real_deref_releases_last(c);
+    AsyncIoOpCacheTest::run(c);
 #endif
     ut_asyncio_autostop(c);
     ut_asyncio_start_stop(c);

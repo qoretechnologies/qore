@@ -513,6 +513,7 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
 class AsyncIoControllerPriv : public AbstractPrivateData {
 #ifdef DEBUG
     friend class AsyncIoCloseTest;
+    friend class AsyncIoOpCacheTest;
 #endif
     friend class QoreCallDispatcher;  // for enqueueContinuePollResult from worker thread
 
@@ -973,6 +974,8 @@ private:
         */
         QoreObject* cached_sock_obj = nullptr;
         uint64_t last_queued_gen = 0;   //!< Phase 1 generation when last queued (duplicate prevention)
+        //! The ID the operation cache gave this operation; see OpCache
+        uint64_t op_id = 0;
         //! Back-ref to the owning controller (not ref'd; outlives pinfo).
         //! Used by cleanup() to erase the submit-time obj_to_sock_hash entry
         //! before deref'ing sock_obj — without this the map can accumulate
@@ -1120,6 +1123,91 @@ private:
         zero lock contention during normal I/O processing.
         @since %Qore 3.0
     */
+    //! The operation cache of an I/O thread: operations by cache key, with an index by operation ID
+    /** The I/O loop refers to an operation by the ID the cache gives it when it is inserted, not by its key: looking
+        up an integer instead of hashing the key, and keeping no copies of the key.  IDs are not reused, so a lookup
+        by ID cannot find another operation that has taken over the key of a removed one; an operation that replaces
+        itself (the same poll operation submitted again for its key) keeps its ID (see emplaceWithId()).
+
+        Only the I/O thread that owns the cache uses it.
+    */
+    class OpCache {
+    public:
+        using map_t = std::unordered_map<std::string, PollInfo>;
+        using iterator = map_t::iterator;
+        using const_iterator = map_t::const_iterator;
+        using node_t = map_t::value_type;
+
+        DLLLOCAL iterator begin() { return map.begin(); }
+        DLLLOCAL iterator end() { return map.end(); }
+        DLLLOCAL const_iterator begin() const { return map.begin(); }
+        DLLLOCAL const_iterator end() const { return map.end(); }
+        DLLLOCAL iterator find(const std::string& key) { return map.find(key); }
+        DLLLOCAL const_iterator find(const std::string& key) const { return map.find(key); }
+        DLLLOCAL size_t size() const { return map.size(); }
+        DLLLOCAL bool empty() const { return map.empty(); }
+
+        //! Returns the operation with the given key, inserting it with a new ID if there is none
+        DLLLOCAL PollInfo& operator[](const std::string& key) {
+            return emplaceWithId(key, 0);
+        }
+
+        //! Returns the operation with the given key, inserting it with the given ID (or a new one if 0) if there is none
+        DLLLOCAL PollInfo& emplaceWithId(const std::string& key, uint64_t id) {
+            auto [it, inserted] = map.try_emplace(key);
+            if (inserted) {
+                if (!id) {
+                    id = ++last_id;
+                }
+                assert(by_id.find(id) == by_id.end());
+                it->second.op_id = id;
+                by_id.emplace(id, &*it);
+                node_ids.emplace(&*it, id);
+            }
+            return it->second;
+        }
+
+        //! Removes an operation
+        DLLLOCAL iterator erase(iterator it) {
+            // the ID is looked up by node: the entry's PollInfo can have been reset before it is removed
+            auto nit = node_ids.find(&*it);
+            assert(nit != node_ids.end());
+            by_id.erase(nit->second);
+            node_ids.erase(nit);
+            return map.erase(it);
+        }
+
+        //! Removes the operation with the given ID, if it is in the cache
+        DLLLOCAL void eraseId(uint64_t id) {
+            node_t* node = findId(id);
+            if (node) {
+                erase(map.find(node->first));
+            }
+        }
+
+        //! Removes all operations
+        DLLLOCAL void clear() {
+            by_id.clear();
+            node_ids.clear();
+            map.clear();
+        }
+
+        //! Returns the operation with the given ID, or nullptr if there is none
+        DLLLOCAL node_t* findId(uint64_t id) {
+            auto i = by_id.find(id);
+            return i == by_id.end() ? nullptr : i->second;
+        }
+
+    private:
+        map_t map;
+        //! Operations by ID; the nodes of an unordered_map stay where they are until they are removed
+        std::unordered_map<uint64_t, node_t*> by_id;
+        //! The ID of each operation's node
+        std::unordered_map<const node_t*, uint64_t> node_ids;
+        //! The last ID given to an operation
+        uint64_t last_id = 0;
+    };
+
     struct IoThreadContext {
         //! Release the event loop and notifier on resize, failed setup, or destruction
         DLLLOCAL ~IoThreadContext();
@@ -1135,7 +1223,7 @@ private:
 
 
         //! Operation cache — fully owned by this I/O thread
-        std::unordered_map<std::string, PollInfo> cache;
+        OpCache cache;
         std::atomic<int> cache_size{0};   //!< Atomic cache size for lock-free getCacheSize()
 
         //! Per-thread submit counter — incremented at every cmdq.push() targeting
@@ -1159,13 +1247,13 @@ private:
         //! Socket hashes that need re-polling
         std::unordered_set<std::string> wake_socket_hashes;
 
-        //! Keys needing first continuePoll (empty cached_sock_hash)
-        std::vector<std::string> new_entry_keys;
+        //! IDs of the operations needing their first continuePoll (empty cached_sock_hash)
+        std::vector<uint64_t> new_entry_ids;
 
         //! Timeout min-heap entry
         struct TimeoutEntry {
             int64 deadline_us;
-            std::string key;
+            uint64_t op_id;
             bool operator>(const TimeoutEntry& o) const { return deadline_us > o.deadline_us; }
         };
         //! Min-heap for operation/protocol timeouts (lazy deletion)
@@ -1175,16 +1263,20 @@ private:
         //! Generation counter for Phase 1 duplicate prevention
         uint64_t phase1_gen = 0;
 
-        // Registered socket tracking
-        std::unordered_map<std::string, QoreObject*> registered_sockets;
+        // Registered socket tracking; operations are identified by their ID (see OpCache), sockets by their hash
+        //! The socket each operation is registered for, by operation ID (referenced)
+        std::unordered_map<uint64_t, QoreObject*> registered_sockets;
         std::unordered_map<std::string, int> registered_events;
         std::unordered_map<std::string, int> registered_fds;
-        std::unordered_map<std::string, int> key_events;
-        std::unordered_map<std::string, std::unordered_set<std::string>> sock_hash_to_keys;
+        //! The events each operation waits for, by operation ID
+        std::unordered_map<uint64_t, int> key_events;
+        //! The IDs of the operations registered for each socket
+        std::unordered_map<std::string, std::unordered_set<uint64_t>> sock_hash_to_ops;
         std::unordered_map<int, std::string> fd_to_sock_hash;
-        std::unordered_map<std::string, std::unordered_set<int>> key_extra_fds;
-        //! Extra fd readiness is key-scoped; primary socket event masks can be zero.
-        std::unordered_map<int, std::unordered_map<std::string, int>> extra_fd_to_key_events;
+        //! The extra fds of each operation, by operation ID
+        std::unordered_map<uint64_t, std::unordered_set<int>> key_extra_fds;
+        //! Extra fd readiness is operation-scoped (by operation ID); primary socket event masks can be zero.
+        std::unordered_map<int, std::unordered_map<uint64_t, int>> extra_fd_to_key_events;
 
         //! Tombstone record: TTL (memory-hygiene bound) + sequence gate
         /** The sequence gate is authoritative: a SubmitOp whose @c seq_at_push
@@ -1272,10 +1364,15 @@ private:
         @param route_key the route key of a socket; see @ref getRouteKey()
     */
     DLLLOCAL int getThreadIndex(const std::string& route_key) const {
+        return getThreadIndexForHash(std::hash<std::string>{}(route_key));
+    }
+
+    //! Get the I/O thread index for the hash of a route key; see getThreadIndex()
+    DLLLOCAL int getThreadIndexForHash(size_t route_hash) const {
         if (io_threads.size() <= 1) {
             return 0;
         }
-        return std::hash<std::string>{}(route_key) % io_threads.size();
+        return route_hash % io_threads.size();
     }
 
     //! Get the I/O thread context for a route key
@@ -1283,6 +1380,11 @@ private:
     */
     DLLLOCAL IoThreadContext& getThreadForKey(const std::string& route_key) {
         return *io_threads[getThreadIndex(route_key)];
+    }
+
+    //! Get the I/O thread context for the hash of a route key; see getThreadIndex()
+    DLLLOCAL IoThreadContext& getThreadForHash(size_t route_hash) {
+        return *io_threads[getThreadIndexForHash(route_hash)];
     }
 
     //! Get the I/O thread context of a controller timer; timers are spread over the I/O threads by ID
@@ -1342,11 +1444,10 @@ private:
         I/O-thread-only.
 
         @param t the I/O thread context holding the operation
-        @param pinfo the operation
-        @param key the operation key
+        @param pinfo the operation, in the cache of \a t (its entries are pushed with its ID)
         @return the operation's next deadline, or 0 if it has none
     */
-    DLLLOCAL int64 armTimeoutHeap(IoThreadContext& t, PollInfo& pinfo, const std::string& key);
+    DLLLOCAL int64 armTimeoutHeap(IoThreadContext& t, PollInfo& pinfo);
 
     //! cancelByKey() on one of this controller's I/O threads; never waits for another I/O thread
     /** @param uh the operation key
@@ -1499,13 +1600,16 @@ private:
     DLLLOCAL static bool refreshSocketWaitGeneration(PollInfo& pinfo, QoreHashNode* poll_info);
 
     //! Update EventLoop registration for an operation
-    DLLLOCAL void updateEventLoopRegistration(IoThreadContext& t, const std::string& key,
+    /** @param op_id the operation's ID; see OpCache
+    */
+    DLLLOCAL void updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
         QoreObject* socket, const std::string& sock_hash, int events, bool force_fd_reregister,
         ExceptionSink* xsink);
 
     //! Unregister an operation from the EventLoop
-    DLLLOCAL void unregisterFromEventLoop(IoThreadContext& t, const std::string& key,
-        ExceptionSink* xsink);
+    /** @param op_id the operation's ID; see OpCache
+    */
+    DLLLOCAL void unregisterFromEventLoop(IoThreadContext& t, uint64_t op_id, ExceptionSink* xsink);
 
     //! Publish a socket wake route
     /** @return true if this call created a provisional route that must be
@@ -1525,10 +1629,10 @@ private:
     //! Update extra fd registrations for an operation
     /** @since %Qore 3.0
     */
-    DLLLOCAL void updateExtraFds(IoThreadContext& t, const std::string& key, QoreObject* socket,
+    DLLLOCAL void updateExtraFds(IoThreadContext& t, uint64_t op_id, QoreObject* socket,
         QoreHashNode* poll_info, ExceptionSink* xsink);
 
-    //! Returns True if \a poll_info's extra fd set differs from what is registered for \a key
+    //! Returns True if \a poll_info's extra fd set differs from what is registered for the operation
     /** The primary socket registration (socket object, events, fd generation) can be
         completely unchanged while an operation's auxiliary fd set changes underneath
         it — Happy Eyeballs starts an additional racing connect fd when the RFC 8305
@@ -1538,29 +1642,29 @@ private:
         path.
 
         @param t the I/O thread context
-        @param key the operation key
+        @param op_id the operation's ID; see OpCache
         @param poll_info the poll info hash returned by continuePoll()
 
         @return True if the extra fd set or its event mask changed
 
         @since %Qore 3.0
     */
-    DLLLOCAL bool extraFdsChanged(const IoThreadContext& t, const std::string& key,
+    DLLLOCAL bool extraFdsChanged(const IoThreadContext& t, uint64_t op_id,
         const QoreHashNode* poll_info) const;
 
     //! Unregister extra fds for an operation
     /** @since %Qore 3.0
     */
-    DLLLOCAL void unregisterExtraFds(IoThreadContext& t, const std::string& key, ExceptionSink* xsink);
+    DLLLOCAL void unregisterExtraFds(IoThreadContext& t, uint64_t op_id, ExceptionSink* xsink);
 
     //! Compute the event union for an extra fd, preserving primary socket events if the fd is also a socket fd
     DLLLOCAL int computeExtraFdEventUnion(const IoThreadContext& t, int fd) const;
 
-    //! Remove one key from an extra fd and return the remaining event union
-    DLLLOCAL int removeExtraFdKey(IoThreadContext& t, int fd, const std::string& key) const;
+    //! Remove one operation from an extra fd and return the remaining event union
+    DLLLOCAL int removeExtraFdKey(IoThreadContext& t, int fd, uint64_t op_id) const;
 
-    //! Remove one key from an extra fd registration and either modify or release the fd
-    DLLLOCAL void removeExtraFdKeyRegistration(IoThreadContext& t, int fd, const std::string& key,
+    //! Remove one operation from an extra fd registration and either modify or release the fd
+    DLLLOCAL void removeExtraFdKeyRegistration(IoThreadContext& t, int fd, uint64_t op_id,
         const std::string& expected_hash, ExceptionSink* xsink);
 
     //! Release an old fd from event loop tracking, if still owned by expected_hash
@@ -1611,7 +1715,9 @@ public:
 private:
 
     //! Get the unique hash from a pollable I/O object
-    DLLLOCAL static std::string getSocketHash(AbstractPollableIoObjectBase* sock);
+    /** @return the object's I/O identity hash; valid as long as \a sock is
+    */
+    DLLLOCAL static const std::string& getSocketHash(AbstractPollableIoObjectBase* sock);
 
     //! Returns the route key of an I/O object: the key that selects the I/O thread of all of its operations
     /** Normally the object's I/O identity hash; a wrapper around a socket that other operations use routes with the
