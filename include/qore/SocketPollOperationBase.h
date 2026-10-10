@@ -260,34 +260,24 @@ public:
     QoreObjectWeakRefHolder self;
 
     //! Returns a SocketPollInfo hash for the given events
-    DLLEXPORT QoreHashNode* getSocketPollInfoHash(ExceptionSink* xsink, int events) const {
-        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
-        info->setKeyValue("events", events, xsink);
-        info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
-        return info.release();
-    }
+    /** When the async I/O controller calls continuePoll() on its I/O thread, the poll info hash the operation
+        returned the last time is reused for the result if nothing else references it, as the controller replaces
+        it with the result; the hash has the same members as a new one.
+
+        @param xsink exception sink
+        @param events the poll events; see @ref socket_poll_constants
+
+        @return a SocketPollInfo hash for the operation's \c sock member
+    */
+    DLLEXPORT QoreHashNode* getSocketPollInfoHash(ExceptionSink* xsink, int events) const;
 
     //! Returns a SocketPollInfo hash with extra file descriptors to monitor
-    /** @since %Qore 3.0
+    /** See getSocketPollInfoHash(ExceptionSink*, int) const
+
+        @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* getSocketPollInfoHash(ExceptionSink* xsink, int events,
-            const std::vector<std::pair<int, int>>& extra_fds) const {
-        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
-        info->setKeyValue("events", events, xsink);
-        info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
-        if (!extra_fds.empty()) {
-            ReferenceHolder<QoreListNode> list(
-                new QoreListNode(hashdeclExtraPollFdInfo->getTypeInfo()), xsink);
-            for (auto& [fd, ev] : extra_fds) {
-                ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclExtraPollFdInfo, xsink), xsink);
-                h->setKeyValue("fd", fd, xsink);
-                h->setKeyValue("events", ev, xsink);
-                list->push(h.release(), xsink);
-            }
-            info->setKeyValue("extra_fds", list.release(), xsink);
-        }
-        return info.release();
-    }
+            const std::vector<std::pair<int, int>>& extra_fds) const;
 
     //! Returns the human-readable state string (subclasses must implement)
     DLLEXPORT virtual const char* getStateImpl() const = 0;

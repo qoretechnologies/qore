@@ -327,6 +327,21 @@ operation's current deadlines whether it timed out, its protocol timer fired, or
   has none and is re-armed with its result, so no deadline is lost.
 - `getInfo()` reports each thread's heap size (`threads[].timeouts`).
 
+### Poll Info Reuse
+
+A C++ operation's `continuePoll()` returns a new `SocketPollInfo` hash for every I/O event it waits for, which
+replaces the operation's previous one (`PollInfo::poll_info`) in Phase 3.  Creating the hash and releasing the
+previous one allocated and freed the hash and its members on every event, which for small HTTP/2 requests took about
+a tenth of the I/O thread.  Phase 2 therefore lends the previous hash to the call (`SocketPollInfoLender`): when
+nothing but the operation references it and it is a `SocketPollInfo` hash, it is moved out of the operation, and
+`SocketPollOperationBase::getSocketPollInfoHash()` takes it and sets its members as a new hash has them (the events,
+the operation's socket, the extra fds if any, no poll timeout) instead of creating one.  A hash that the call does
+not take is released when the call returns, as Phase 3 would have released it; the operation's poll info is replaced
+or the operation finishes after every such call, so nothing reads it in between.  A hash that anything else
+references - one passed to `submit()` that the caller still holds, for example - is never lent, and calls outside
+the I/O thread's Phase 2 (Qore-language operations on workers, `continuePoll()` called by a program) always get a new
+hash.
+
 ### I/O threads never wait for each other
 
 An I/O thread must never block waiting for another I/O thread: two I/O threads waiting for each other would

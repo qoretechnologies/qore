@@ -80,6 +80,45 @@ public:
     DLLLOCAL virtual const std::string& getAsyncIoRouteKey() const = 0;
 };
 
+//! Lends the previous poll info hash of an operation to the C++ continuePoll() call the I/O thread makes for it
+/** The controller replaces an operation's poll info with the hash that continuePoll() returns, so a previous hash
+    that nothing else references can be reused for the result: SocketPollOperationBase::getSocketPollInfoHash()
+    takes the lent hash and sets its members as a new hash has them, instead of creating a new hash while the
+    previous one is released.  The hash is moved out of the operation for the call; a hash that continuePoll() does
+    not take is released when the lender goes out of scope.
+
+    @since %Qore 3.0
+*/
+class SocketPollInfoLender {
+public:
+    //! Lends \a poll_info if it is a SocketPollInfo hash that only the operation references
+    /** @param poll_info the operation's poll info; set to nullptr when it is lent
+        @param xsink for releasing a hash that is not taken
+    */
+    DLLLOCAL SocketPollInfoLender(QoreHashNode*& poll_info, ExceptionSink* xsink);
+
+    //! Releases the lent hash if continuePoll() did not take it
+    DLLLOCAL ~SocketPollInfoLender();
+
+    //! Takes the hash lent to the current thread, if any
+    /** @return the hash, whose only reference the caller takes over, or nullptr
+    */
+    DLLLOCAL static QoreHashNode* take();
+
+    //! Returns true if the hash lent by this lender was taken
+    DLLLOCAL bool taken() const {
+        return lent && !isLent();
+    }
+
+private:
+    QoreHashNode* lent = nullptr;
+    //! The hash lent by an enclosing lender on this thread, restored when this one goes out of scope
+    QoreHashNode* prev = nullptr;
+    ExceptionSink* xsink;
+
+    DLLLOCAL bool isLent() const;
+};
+
 //! Converts an absolute microsecond deadline to the millisecond timeout expected by the OS poll API
 /** @param deadline_us the absolute deadline in microseconds
     @param now_us the current absolute time in microseconds

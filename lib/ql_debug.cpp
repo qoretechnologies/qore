@@ -1092,6 +1092,176 @@ static void ut_fast_real_deref_releases_last(UnitTestCounters& c) {
 }
 #endif
 
+namespace {
+//! A poll operation whose continuePoll() returns the poll info for its socket and the given events
+class UtPollInfoOp : public SocketPollOperationBase {
+public:
+    int events = SOCK_POLLIN;
+    std::vector<std::pair<int, int>> extra_fds;
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return false;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        return extra_fds.empty()
+            ? getSocketPollInfoHash(xsink, events)
+            : getSocketPollInfoHash(xsink, events, extra_fds);
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return "test";
+    }
+};
+
+//! Returns a new EventNotifier object, or nullptr on error
+QoreObject* ut_new_notifier_object(ExceptionSink& xsink) {
+    QoreEventNotifier* notifier = new QoreEventNotifier(&xsink);
+    if (xsink) {
+        notifier->deref(&xsink);
+        return nullptr;
+    }
+    return new QoreObject(QC_EVENTNOTIFIER, getProgram(), notifier);
+}
+}
+
+//! Tests that the poll info hash lent to a continuePoll() call is reused only when nothing else references it
+/** The I/O thread lends an operation's previous poll info hash to the C++ continuePoll() call it makes for it, as
+    the result replaces it; getSocketPollInfoHash() then updates the lent hash instead of creating a new one.  The
+    result must have the members of a new hash, and a hash that anything else references must never be changed.
+*/
+static void ut_lent_poll_info_reuse(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreObject> sock1(ut_new_notifier_object(xsink), &xsink);
+    ReferenceHolder<QoreObject> sock2(ut_new_notifier_object(xsink), &xsink);
+    UT_ASSERT(c, !xsink && sock1 && sock2, "the test sockets are created");
+    if (xsink || !sock1 || !sock2) {
+        xsink.clear();
+        return;
+    }
+
+    UtPollInfoOp* op = new UtPollInfoOp;
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+    op->setSelf(*op_obj);
+    op_obj->setValue("sock", sock2->objectRefSelf(), &xsink);
+    UT_ASSERT(c, !xsink, "the test operation is created");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // the previous poll info of an operation: another socket, other events, a poll timeout and extra fds
+    auto make_prev = [&]() -> QoreHashNode* {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclSocketPollInfo, &xsink), &xsink);
+        h->setKeyValue("events", SOCK_POLLOUT, &xsink);
+        h->setKeyValue("socket", sock1->objectRefSelf(), &xsink);
+        h->setKeyValue("poll_timeout_ms", 50, &xsink);
+        ReferenceHolder<QoreListNode> fds(new QoreListNode(hashdeclExtraPollFdInfo->getTypeInfo()), &xsink);
+        ReferenceHolder<QoreHashNode> fd(new QoreHashNode(hashdeclExtraPollFdInfo, &xsink), &xsink);
+        fd->setKeyValue("fd", (int64)0, &xsink);
+        fd->setKeyValue("events", SOCK_POLLIN, &xsink);
+        fds->push(fd.release(), &xsink);
+        h->setKeyValue("extra_fds", fds.release(), &xsink);
+        return h.release();
+    };
+
+    auto check_new = [&](const QoreHashNode* h, int events, const char* what) {
+        UT_ASSERT(c, h && h->getHashDecl() == hashdeclSocketPollInfo, what);
+        if (!h) {
+            return;
+        }
+        UT_ASSERT_EQ(c, events, (int)h->getKeyValue("events").getAsBigInt(), what);
+        UT_ASSERT(c, h->getKeyValue("socket").getInternalNode() == *sock2, what);
+        UT_ASSERT(c, h->getKeyValue("poll_timeout_ms").isNothing(), what);
+        UT_ASSERT(c, h->getKeyValue("extra_fds").isNothing(), what);
+    };
+
+    // a hash that only the operation references is reused for the result
+    {
+        QoreHashNode* prev = make_prev();
+        QoreHashNode* slot = prev;
+        QoreHashNode* rv;
+        {
+            SocketPollInfoLender lender(slot, &xsink);
+            UT_ASSERT(c, !slot, "the operation's poll info is lent for the call");
+            rv = op->continuePoll(&xsink);
+        }
+        ReferenceHolder<QoreHashNode> holder(rv, &xsink);
+        UT_ASSERT(c, rv == prev, "the lent hash is the result");
+        UT_ASSERT(c, rv && rv->is_unique(), "the result has a single reference");
+        check_new(rv, SOCK_POLLIN, "the reused hash has the members of a new one");
+    }
+
+    // a hash that something else also references is never changed
+    {
+        ReferenceHolder<QoreHashNode> prev(make_prev(), &xsink);
+        prev->ref();
+        QoreHashNode* slot = *prev;
+        QoreHashNode* rv;
+        {
+            SocketPollInfoLender lender(slot, &xsink);
+            UT_ASSERT(c, slot == *prev, "a shared hash is not lent");
+            rv = op->continuePoll(&xsink);
+        }
+        slot->deref(&xsink);
+        ReferenceHolder<QoreHashNode> holder(rv, &xsink);
+        UT_ASSERT(c, rv && rv != *prev, "a new hash is the result");
+        check_new(rv, SOCK_POLLIN, "the new hash has its members");
+        UT_ASSERT_EQ(c, SOCK_POLLOUT, (int)prev->getKeyValue("events").getAsBigInt(), "the shared hash is unchanged");
+        UT_ASSERT(c, prev->getKeyValue("socket").getInternalNode() == *sock1, "the shared hash keeps its socket");
+        UT_ASSERT(c, !prev->getKeyValue("extra_fds").isNothing(), "the shared hash keeps its extra fds");
+    }
+
+    // a hash of another type is not lent
+    {
+        QoreHashNode* untyped = new QoreHashNode(autoTypeInfo);
+        QoreHashNode* slot = untyped;
+        {
+            SocketPollInfoLender lender(slot, &xsink);
+            UT_ASSERT(c, slot == untyped, "an untyped hash is not lent");
+        }
+        slot->deref(&xsink);
+    }
+
+    // extra fds are set on the reused hash as on a new one
+    {
+        op->extra_fds = {{0, SOCK_POLLIN}, {1, SOCK_POLLOUT}};
+        QoreHashNode* prev = make_prev();
+        QoreHashNode* slot = prev;
+        QoreHashNode* rv;
+        {
+            SocketPollInfoLender lender(slot, &xsink);
+            rv = op->continuePoll(&xsink);
+        }
+        ReferenceHolder<QoreHashNode> holder(rv, &xsink);
+        UT_ASSERT(c, rv == prev, "the lent hash is the result with extra fds");
+        if (rv) {
+            QoreValue v = rv->getKeyValue("extra_fds");
+            UT_ASSERT(c, v.getType() == NT_LIST && v.get<const QoreListNode>()->size() == 2,
+                "the result has the new extra fds");
+            UT_ASSERT(c, rv->getKeyValue("poll_timeout_ms").isNothing(), "the result has no poll timeout");
+        }
+        op->extra_fds.clear();
+    }
+
+    // a lent hash that the call does not take is released
+    {
+        QoreHashNode* prev = make_prev();
+        prev->weakRef();
+        QoreHashNode* slot = prev;
+        {
+            SocketPollInfoLender lender(slot, &xsink);
+        }
+        UT_ASSERT(c, prev->weakDeref(), "a lent hash that is not taken is released");
+    }
+
+    UT_ASSERT(c, !xsink, "no exception is raised");
+    xsink.clear();
+}
+
 //! Fills in a socket address for the network policy tests and returns its size
 static socklen_t ut_net_addr(struct sockaddr_storage& ss, int family, const char* addr, int port) {
     ss = {};
@@ -5406,6 +5576,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_network_security_rules(c);
     ut_asyncio_construction(c);
     ut_asyncio_poll_timeout_rounding(c);
+    ut_lent_poll_info_reuse(c);
 #ifdef DEBUG
     AsyncIoCloseTest::resize(c);
     AsyncIoCloseTest::run(c);

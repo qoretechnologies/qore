@@ -329,6 +329,133 @@ void SocketPollOperationBase::wakeIoThread(ExceptionSink* xsink) {
     }
 }
 
+// --- SocketPollInfoLender / SocketPollOperationBase::getSocketPollInfoHash ---
+
+//! The poll info hash lent to the C++ continuePoll() call the calling I/O thread is making, if any
+static thread_local QoreHashNode* lent_poll_info = nullptr;
+
+SocketPollInfoLender::SocketPollInfoLender(QoreHashNode*& poll_info, ExceptionSink* xsink)
+        : prev(lent_poll_info), xsink(xsink) {
+    // a hash that something else references could be seen changing, and only a SocketPollInfo hash has the members
+    // of the result
+    if (poll_info && poll_info->is_unique() && poll_info->getHashDecl() == hashdeclSocketPollInfo) {
+        lent = poll_info;
+        poll_info = nullptr;
+    }
+    // an enclosing lender's hash is not for this call
+    lent_poll_info = lent;
+}
+
+SocketPollInfoLender::~SocketPollInfoLender() {
+    if (lent && lent_poll_info == lent) {
+        // not taken: released as the operation's previous poll info would have been
+        lent->deref(xsink);
+    }
+    lent_poll_info = prev;
+}
+
+QoreHashNode* SocketPollInfoLender::take() {
+    QoreHashNode* h = lent_poll_info;
+    lent_poll_info = nullptr;
+    return h;
+}
+
+//! Sets the members of a SocketPollInfo hash taken from take_lent_poll_info() to those of a new hash
+/** A new hash has the given events and socket, no poll timeout, and the given extra fds, if any.
+
+    @param info the hash; its only reference is the caller's
+    @param events the poll events
+    @param sock the socket object; the reference is taken over
+    @param extra_fds the extra fds list or nullptr; the reference is taken over
+*/
+static void reset_socket_poll_info(QoreHashNode* info, int events, QoreObject* sock, QoreListNode* extra_fds,
+        ExceptionSink* xsink) {
+    assert(info->is_unique());
+    bool events_set = false;
+    bool socket_set = false;
+    bool extra_fds_set = false;
+    HashIterator hi(info);
+    while (hi.next()) {
+        const char* key = hi.getKey();
+        if (!strcmp(key, "events")) {
+            // the events are mostly the same as for the previous wait; an assignment checks the member's type
+            QoreValue cur = hi.get();
+            if (cur.getType() != NT_INT || cur.getAsBigInt() != events) {
+                hi.assign(events, xsink);
+            }
+            events_set = true;
+        } else if (!strcmp(key, "socket")) {
+            if (hi.get().getInternalNode() == sock) {
+                // the same socket: drop the extra reference
+                if (sock) {
+                    sock->deref(xsink);
+                }
+            } else {
+                hi.assign(sock, xsink);
+            }
+            sock = nullptr;
+            socket_set = true;
+        } else if (!strcmp(key, "extra_fds")) {
+            if (extra_fds || !hi.get().isNothing()) {
+                hi.assign(extra_fds, xsink);
+            }
+            extra_fds = nullptr;
+            extra_fds_set = true;
+        } else if (!hi.get().isNothing()) {
+            // poll_timeout_ms
+            hi.assign(QoreValue(), xsink);
+        }
+    }
+    // all members of a SocketPollInfo hash are normally present; set any that are not
+    if (!events_set) {
+        info->setKeyValue("events", events, xsink);
+    }
+    if (!socket_set) {
+        info->setKeyValue("socket", sock, xsink);
+    }
+    if (!extra_fds_set && extra_fds) {
+        info->setKeyValue("extra_fds", extra_fds, xsink);
+    }
+}
+
+QoreHashNode* SocketPollOperationBase::getSocketPollInfoHash(ExceptionSink* xsink, int events) const {
+    QoreHashNode* info = SocketPollInfoLender::take();
+    if (info) {
+        reset_socket_poll_info(info, events, getReferencedSocketObject(xsink), nullptr, xsink);
+        return info;
+    }
+    ReferenceHolder<QoreHashNode> new_info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+    new_info->setKeyValue("events", events, xsink);
+    new_info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+    return new_info.release();
+}
+
+QoreHashNode* SocketPollOperationBase::getSocketPollInfoHash(ExceptionSink* xsink, int events,
+        const std::vector<std::pair<int, int>>& extra_fds) const {
+    ReferenceHolder<QoreListNode> list(xsink);
+    if (!extra_fds.empty()) {
+        list = new QoreListNode(hashdeclExtraPollFdInfo->getTypeInfo());
+        for (auto& [fd, ev] : extra_fds) {
+            ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclExtraPollFdInfo, xsink), xsink);
+            h->setKeyValue("fd", fd, xsink);
+            h->setKeyValue("events", ev, xsink);
+            list->push(h.release(), xsink);
+        }
+    }
+    QoreHashNode* info = SocketPollInfoLender::take();
+    if (info) {
+        reset_socket_poll_info(info, events, getReferencedSocketObject(xsink), list.release(), xsink);
+        return info;
+    }
+    ReferenceHolder<QoreHashNode> new_info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+    new_info->setKeyValue("events", events, xsink);
+    new_info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+    if (list) {
+        new_info->setKeyValue("extra_fds", list.release(), xsink);
+    }
+    return new_info.release();
+}
+
 // --- PollInfo implementation ---
 
 void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
@@ -4934,7 +5061,15 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     op.spop_base->setReadyEvents(
                         qore_socket_poll_events_from_controller_events(op.ready_events));
                 }
-                QoreHashNode* new_info = op.spop_base->continuePoll(&poll_xsink);
+                QoreHashNode* new_info;
+                {
+                    // the result replaces the operation's poll info, so a previous hash that only the operation
+                    // references is lent to the call for reuse (see SocketPollInfoLender)
+                    QoreHashNode* no_poll_info = nullptr;
+                    SocketPollInfoLender lender(wait_it != t.cache.end() ? wait_it->second.poll_info : no_poll_info,
+                        xsink);
+                    new_info = op.spop_base->continuePoll(&poll_xsink);
+                }
                 ASYNC_IO_TRACE("Phase2 C++ continuePoll key='%s' -> %s goal=%d\n",
                     op.key.c_str(), new_info ? "poll_info" : "null",
                     op.spop_base->goalReached());
