@@ -149,6 +149,55 @@ public class Http2StreamContext inherits AbstractStreamContext {
         }
     }
 
+    #! Sends DATA frames on the HTTP/2 stream, waiting at most the given time for a full send buffer to drain
+    /** @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()" refuses data while more than the stream's
+        backpressure threshold is still waiting to be sent; this method then wakes the I/O controller to send it and
+        waits for the stream to drain before trying again, so a peer that reads more slowly than data is sent slows
+        the sender down instead of losing the data.
+
+        @param data the binary payload to send
+        @param timeout_ms the maximum time to wait for the stream send buffer to drain; a value less than or equal to
+        zero waits without a limit
+        @param end_stream if @ref True, signals end of stream after this data
+
+        @throw STREAM-SEND-TIMEOUT the stream send buffer did not drain in time; the data was not sent
+        @throw SOCKET-SYNC-ON-IO-THREAD-ERROR the stream send buffer is full and this method was called on the async
+        I/O controller's I/O path, where it cannot wait
+
+        @note other exceptions are thrown as by @ref sendData()
+
+        @since AsyncSocketIo 1.0
+    */
+    sendDataWithTimeout(binary data, timeout timeout_ms, bool end_stream = False) {
+        int deadline = timeout_ms > 0 ? clock_getmillis() + timeout_ms : 0;
+        while (True) {
+            try {
+                sock.sendHttp2StreamData(stream_id, data, end_stream);
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "HTTP2-FLOW-CONTROL") {
+                    rethrow;
+                }
+            }
+            # the data already queued must be sent before the stream can drain
+            if (wake_callback) {
+                wake_callback();
+            }
+            int wait_ms = -1;
+            if (deadline) {
+                wait_ms = deadline - clock_getmillis();
+                if (wait_ms <= 0) {
+                    throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/2 stream %d: the send buffer did not drain within %d "
+                        "ms; %d bytes were not sent", stream_id, timeout_ms, data.size());
+                }
+            }
+            sock.waitForHttp2StreamDrain(stream_id, wait_ms);
+        }
+        if (wake_callback) {
+            wake_callback();
+        }
+    }
+
     #! Attempts to send data on the HTTP/2 stream without blocking on backpressure
     /** @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()" discards the frame and throws
         @c HTTP2-FLOW-CONTROL when the stream send buffer is full; this method maps that condition to a @ref False

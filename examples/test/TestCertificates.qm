@@ -1,0 +1,107 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file TestCertificates.qm the TLS certificate and key that the tests use
+
+/*  TestCertificates.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module TestCertificates {
+    version = "1.0";
+    desc    = "the TLS certificate and key that the tests use";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+}
+
+/** Tests that need a TLS server certificate use this one instead of embedding their own, so that no test certificate
+    expires unnoticed: examples/test/qlib/SSL/test-certificate-expiry.qtest fails when any certificate under
+    examples/test expires within five years.
+
+    The certificate is self-signed for \c localhost, \c 127.0.0.1 and \c ::1 and valid until 2126.  Its key is public:
+    never use either outside tests.
+
+    @par Example:
+    @code{.py}
+%requires ../../TestCertificates.qm
+
+int port = server.addListener(<HttpListenerOptionInfo>{
+    "service": 0,
+    "cert": new SSLCertificate(TestCertificates::CertPem),
+    "key": new SSLPrivateKey(TestCertificates::KeyPem),
+}).port;
+    @endcode
+*/
+public namespace TestCertificates {
+    #! a self-signed certificate for localhost, 127.0.0.1 and ::1, valid until 2126
+    public const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDOjCCAiKgAwIBAgIUDyz8y/4RaCanjKzBqdrePieOeOcwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MCAXDTI2MTAxMDAzNTAwM1oYDzIxMjYw
+OTE2MDM1MDAzWjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3DQEB
+AQUAA4IBDwAwggEKAoIBAQCl+4VM3ggr05G+eIQcHBWt7WE+/BxkAJ01hsFWnnyH
+b7gfp3p+P5imun78maOaDrmVpZTG/kY21AZ/mWYWgyZP4AODjd+cR9GeupwQEwaL
+iJD0+9dzyYOGCPDAlObyuwmSgjs2emOgZkNW66UPerpV9AsK5KvEfbGugZrDfskL
+j3ccxapoeraeHO2wMuTJJ7GQGsMJubbiWKY4LB11jifoDuvJs6NEGAmYIYj2+VGC
+5tSnBl/Ao/3t11trIiYQ887W2vaqNlxH1KJQrcbLM7hJRRC2AZC1E/7VyKO1d/73
+YpC9+7pOb+1TxV2nMWoNJCJJGlIi6RjQBzGOjWxXdL/XAgMBAAGjgYEwfzAdBgNV
+HQ4EFgQUYJEUos+sGkgiQURgJUcEDRjfvY8wHwYDVR0jBBgwFoAUYJEUos+sGkgi
+QURgJUcEDRjfvY8wDwYDVR0TAQH/BAUwAwEB/zAsBgNVHREEJTAjgglsb2NhbGhv
+c3SHBH8AAAGHEAAAAAAAAAAAAAAAAAAAAAEwDQYJKoZIhvcNAQELBQADggEBAI0m
+TgOBL4DJNg1VVVwwW8j2zBYOWhKFmJbi3wlCDjiOGWMnsr9SSSwf2A0nle81u/10
+1Dy1hiAneKhMaoTp6ul18Rodd1A2ArvNgBKAjJWcgTh5GrSSvfonXGLQSNPulQWH
+X3GLLeB6zbBpFGpwFklkcdNdAvEpMkp0pkTI+ZuAEv5n5uHz7kYvP48oPKOypzK5
+OHrpyVf9Nt4FQUFPmH/3ZtoIJNqasCx9AaMR42DyP+m5slYwdTEWctDXNYsde5KP
+SAPFhYee1vBq4lYRsEtHHlCGgOCSvoQHdT2YbFhQJAKfI1WjYacd6pTGQfwHSuy0
+X1j1hVsLXDfvYHG3Dnk=
+-----END CERTIFICATE-----
+";
+
+    #! the private key of @ref CertPem
+    public const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCl+4VM3ggr05G+
+eIQcHBWt7WE+/BxkAJ01hsFWnnyHb7gfp3p+P5imun78maOaDrmVpZTG/kY21AZ/
+mWYWgyZP4AODjd+cR9GeupwQEwaLiJD0+9dzyYOGCPDAlObyuwmSgjs2emOgZkNW
+66UPerpV9AsK5KvEfbGugZrDfskLj3ccxapoeraeHO2wMuTJJ7GQGsMJubbiWKY4
+LB11jifoDuvJs6NEGAmYIYj2+VGC5tSnBl/Ao/3t11trIiYQ887W2vaqNlxH1KJQ
+rcbLM7hJRRC2AZC1E/7VyKO1d/73YpC9+7pOb+1TxV2nMWoNJCJJGlIi6RjQBzGO
+jWxXdL/XAgMBAAECggEAIVemTmunvo4Qj++Lsk3d+QNfbpSca2ZILlF0kx7hKx/B
+H/K3w5ao5o0+JyYB3Feq5inN+i9oEWmEKKu6+zi7QH5illGwoqc2r6kS4pO/09XK
+MLxKaoMHfaxcGIOQ5R+3a4vnsyjgzH7edh5+GN7xgYS1lymaa61IPSLh4PWeE0ka
+M5j1zHiuGCoH6GmJMp6lBEVXd+V6lIX9n70T/w2QrzUOeAxTz9EnZrKl4RZntjud
+RzvFvdUEhBJ2QQ55Aw8LVkd/45oV6XvVI4/MVoRO/C4GZ0zdaO9Nunxm8zxkFgRy
+EaDo8x0tVgrlScrFTX6b5G00hZ0bxMsfauAMW6/NmQKBgQDmTpz/9Epq5g9wDFIQ
+Z/MBvQjXX4covdLzNDpa4mulRghyWGVlYERgDSBPuly64rQyrh/vCrM4p4YikS1J
+Z1uFKwEc57+2vOfRZL5XSlBjy0MQVzz9arFaSSGxeV+OmTuKLAiykIV17JC9CDv4
+ZZ4Txj4BTw90AgB+u+1iKlEYIwKBgQC4f9lDHLGs1TL1+s947KwH6gwwcF4amPNo
+bYAWOgtHLEmvMBvcdxaW5ct8BIt19uElaEhyMj2mvlXYALJ+PobgWSIMacXlgd5R
+LS0ZZIYeNdhqZnGRcnfTUeedDRHSOqJ2yeT6toEy/Vb7L0g4u3T+1mCLzyvGLNgz
+QqRBQEo6vQKBgQCTd8r36YitIlrIOFtjvevQNSawIa79225z5AFpqImc7lcCQK/M
+VfPyPPVvl7lAwWD5Ap3YBlXz9PDiuWryEYh8oKi5xXrwm80kOwnWAvOusrxifjnD
+WsntMd6tMTaKrHt/Yeq/y+JpO+0B3X/o8chiiRGy7NjMQ2vlupepv8blWQKBgGiX
+EXMaMR7pPZp0NGk4wc06wO40xSQO0O3CJXp0LTCLyrmlbCXu3L9uRYxohya4bann
+FCqokIqWG9P3kTg/+fX0kXi3/Ze9p2odUhOzCNTXcXff20G4wnTpWYOOhSvIUZFF
+oqj+DP/63fRHOYnvusM8hD69kvMlOOrWPIdBCtOBAoGACpNbicoQBNd9loOijiNP
+RGAn1CZwa9bsLHTQh+pbMAJuJvW+mzaCPdOFLDYsRe76pvZTzIjA52lpEJVc5VAo
+LbX001IMIhlFp24LQm1K3aIHAFNIunULRjRNULJJ0pdGfCMse19JBPLfcRV61iK3
+f6Z+wP2EbLH5nx9iOFjeZCM=
+-----END PRIVATE KEY-----
+";
+}

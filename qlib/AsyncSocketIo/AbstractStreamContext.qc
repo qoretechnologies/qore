@@ -63,6 +63,24 @@ public class AbstractStreamContext {
     */
     abstract sendData(binary data, bool end_stream = False);
 
+    #! Sends data on the stream, waiting at most the given time for a full stream send buffer to drain
+    /** Transports with a bounded stream send buffer (HTTP/2 and HTTP/3) override this to wait for the buffer to
+        drain when it is full, which happens when the peer does not read as fast as data is sent, instead of
+        failing; the default implementation calls @ref sendData().
+
+        @param data the binary payload to send
+        @param timeout_ms the maximum time to wait for the stream send buffer to drain; a value less than or equal to
+        zero waits without a limit
+        @param end_stream if @ref True, signals end of stream after this data
+
+        @throw STREAM-SEND-TIMEOUT the stream send buffer did not drain in time; the data was not sent
+
+        @since AsyncSocketIo 1.0
+    */
+    sendDataWithTimeout(binary data, timeout timeout_ms, bool end_stream = False) {
+        sendData(data, end_stream);
+    }
+
     #! Attempts to send data without blocking on outbound backpressure
     /** Transports that can detect a full stream send buffer without blocking (HTTP/2 and HTTP/3) override this to
         return @ref False when the buffer is full instead of blocking or waiting for it to drain.  This lets a

@@ -468,16 +468,28 @@ sub run_listener(string target, Queue q, Queue stop) {
         string tmpdir = tmp_location();
         string key_file = tmpdir + "/mllp_key_" + getpid() + ".pem";
         string cert_file = tmpdir + "/mllp_cert_" + getpid() + ".pem";
+        string config_file = tmpdir + "/mllp_req_" + getpid() + ".cnf";
 
         on_exit {
             unlink(key_file);
             unlink(cert_file);
+            unlink(config_file);
         }
 
-        int rc = system("OPENSSL_CONF=/dev/null openssl req -x509 -newkey rsa:2048 -keyout " + key_file
-            + " -out " + cert_file + " -days 1 -nodes -subj '/CN=localhost' 2>/dev/null");
+        # the request is made with its own minimal configuration so that the system's OpenSSL configuration does not
+        # apply; LibreSSL (the macOS system openssl) requires the distinguished_name section even when the subject is
+        # given, so an empty configuration (OPENSSL_CONF=/dev/null) makes it fail
+        File f();
+        f.open2(config_file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("[req]\ndistinguished_name = req_dn\nprompt = no\n\n[req_dn]\nCN = localhost\n");
+        f.close();
+
+        int rc;
+        string output = backquote("openssl req -x509 -newkey rsa:2048 -keyout " + key_file + " -out " + cert_file
+            + " -days 1 -nodes -config " + config_file + " 2>&1", \rc);
         if (rc != 0) {
-            throw "CERT-GEN-ERROR", "failed to generate self-signed TLS certificate";
+            throw "CERT-GEN-ERROR", sprintf("failed to generate self-signed TLS certificate (exit code %d): %s", rc,
+                trim(output));
         }
 
         return {

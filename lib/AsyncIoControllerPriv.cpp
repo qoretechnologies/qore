@@ -45,13 +45,17 @@
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/qore_thread_intern.h"
 
+#include <algorithm>
+#include <cerrno>
 #include <cstdarg>
 #include <cstdint>
+#include <fcntl.h>
 #if defined(__linux__)
 #include <sched.h>
 #endif
 #include <limits>
 #include <memory>
+#include <unistd.h>
 
 extern qore_classid_t CID_QUEUE;
 extern QoreClass* QC_QUEUE;
@@ -1955,6 +1959,250 @@ AsyncIoControllerPriv::IoThreadContext::~IoThreadContext() {
     }
 }
 
+namespace {
+//! parses a non-negative decimal integer that is the whole of \a str
+bool cgroup_parse_int(const std::string& str, long long& val) {
+    // at most 18 digits, so the value cannot overflow
+    if (str.empty() || str.size() > 18) {
+        return false;
+    }
+    long long rv = 0;
+    for (char c : str) {
+        if (c < '0' || c > '9') {
+            return false;
+        }
+        rv = rv * 10 + (c - '0');
+    }
+    val = rv;
+    return true;
+}
+
+//! splits \a str at \a sep; with \a sep ' ', any run of whitespace separates fields and no field is empty
+std::vector<std::string> cgroup_split(const std::string& str, char sep) {
+    std::vector<std::string> rv;
+    std::string field;
+    bool ws = (sep == ' ');
+    for (char c : str) {
+        bool is_sep = ws ? (c == ' ' || c == '\t' || c == '\n' || c == '\r') : (c == sep);
+        if (is_sep) {
+            if (!ws || !field.empty()) {
+                rv.push_back(field);
+            }
+            field.clear();
+        } else {
+            field += c;
+        }
+    }
+    if (!ws || !field.empty()) {
+        rv.push_back(field);
+    }
+    return rv;
+}
+
+//! returns the number of CPUs a quota of CPU time per period allows, rounded up; -1 if the values are invalid
+int cgroup_cpus(long long quota, long long period) {
+    if (quota <= 0 || period <= 0) {
+        return -1;
+    }
+    long long cpus = (quota + period - 1) / period;
+    return cpus > std::numeric_limits<int>::max() ? std::numeric_limits<int>::max() : static_cast<int>(cpus);
+}
+
+//! decodes the octal escapes (for example \\040 for a space) of a path in /proc/self/mountinfo
+std::string cgroup_unescape(const std::string& str) {
+    std::string rv;
+    for (size_t i = 0; i < str.size(); ++i) {
+        if (str[i] == '\\' && i + 3 < str.size()
+                && str[i + 1] >= '0' && str[i + 1] <= '3' && str[i + 2] >= '0' && str[i + 2] <= '7'
+                && str[i + 3] >= '0' && str[i + 3] <= '7') {
+            rv += static_cast<char>(((str[i + 1] - '0') << 6) | ((str[i + 2] - '0') << 3) | (str[i + 3] - '0'));
+            i += 3;
+        } else {
+            rv += str[i];
+        }
+    }
+    return rv;
+}
+
+//! a cgroup file system mount from /proc/self/mountinfo
+struct cgroup_mount {
+    //! the path in the cgroup hierarchy that is mounted
+    std::string root;
+    //! where it is mounted
+    std::string point;
+    //! "cgroup2" or "cgroup"
+    std::string fstype;
+    //! the super options: the controllers of a cgroup v1 hierarchy
+    std::vector<std::string> options;
+};
+
+//! returns the cgroup mounts in the contents of /proc/self/mountinfo
+std::vector<cgroup_mount> cgroup_mounts(const std::string& mountinfo) {
+    std::vector<cgroup_mount> rv;
+    for (const std::string& line : cgroup_split(mountinfo, '\n')) {
+        // <id> <parent> <major:minor> <root> <mount point> <options> [<optional fields>...] - <fstype> <source>
+        // <super options>
+        std::vector<std::string> fields = cgroup_split(line, ' ');
+        size_t sep = 0;
+        while (sep < fields.size() && fields[sep] != "-") {
+            ++sep;
+        }
+        if (sep < 6 || sep + 3 >= fields.size()) {
+            continue;
+        }
+        const std::string& fstype = fields[sep + 1];
+        if (fstype != "cgroup2" && fstype != "cgroup") {
+            continue;
+        }
+        rv.push_back({cgroup_unescape(fields[3]), cgroup_unescape(fields[4]), fstype,
+            cgroup_split(fields[sep + 3], ',')});
+    }
+    return rv;
+}
+
+//! returns the directories of the cgroup \a path and of its parents up to the mount point, innermost first
+/** The list is empty if the cgroup is not under the root of the mount, which then shows other cgroups.
+*/
+std::vector<std::string> cgroup_dirs(const cgroup_mount& mount, const std::string& path) {
+    std::vector<std::string> rv;
+    if (path.empty() || path[0] != '/') {
+        return rv;
+    }
+    // the cgroup's path below the mount's root
+    std::string rel;
+    if (mount.root == "/") {
+        rel = path;
+    } else if (path == mount.root) {
+        rel = "/";
+    } else if (path.size() > mount.root.size() && !path.compare(0, mount.root.size(), mount.root)
+            && path[mount.root.size()] == '/') {
+        rel = path.substr(mount.root.size());
+    } else {
+        return rv;
+    }
+    std::string point = mount.point;
+    while (point.size() > 1 && point.back() == '/') {
+        point.pop_back();
+    }
+    while (rel.size() > 1 && rel.back() == '/') {
+        rel.pop_back();
+    }
+    while (true) {
+        rv.push_back(rel == "/" ? point : (point == "/" ? rel : point + rel));
+        if (rel == "/") {
+            break;
+        }
+        size_t pos = rel.rfind('/');
+        rel = pos ? rel.substr(0, pos) : std::string("/");
+    }
+    return rv;
+}
+
+#ifdef __linux__
+//! reads a small file; returns false if it cannot be read
+bool cgroup_read_file(const std::string& path, std::string& contents) {
+    int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        return false;
+    }
+    ON_BLOCK_EXIT(close, fd);
+    contents.clear();
+    char buf[4096];
+    while (true) {
+        ssize_t rc = read(fd, buf, sizeof(buf));
+        if (rc < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return false;
+        }
+        if (!rc) {
+            break;
+        }
+        contents.append(buf, static_cast<size_t>(rc));
+        // the files read here are small; a file this large is not one of them
+        if (contents.size() > 4 * 1024 * 1024) {
+            return false;
+        }
+    }
+    return true;
+}
+#endif
+}
+
+int AsyncIoControllerPriv::parseCgroupV2CpuMax(const std::string& cpu_max) {
+    std::vector<std::string> fields = cgroup_split(cpu_max, ' ');
+    if (fields.size() != 2 || fields[0] == "max") {
+        return -1;
+    }
+    long long quota, period;
+    if (!cgroup_parse_int(fields[0], quota) || !cgroup_parse_int(fields[1], period)) {
+        return -1;
+    }
+    return cgroup_cpus(quota, period);
+}
+
+int AsyncIoControllerPriv::parseCgroupV1CpuQuota(const std::string& quota, const std::string& period) {
+    std::vector<std::string> q = cgroup_split(quota, ' ');
+    std::vector<std::string> p = cgroup_split(period, ' ');
+    // a quota of -1 sets no limit
+    long long qv, pv;
+    if (q.size() != 1 || p.size() != 1 || !cgroup_parse_int(q[0], qv) || !cgroup_parse_int(p[0], pv)) {
+        return -1;
+    }
+    return cgroup_cpus(qv, pv);
+}
+
+int AsyncIoControllerPriv::getCgroupCpuLimit(const std::string& proc_cgroup, const std::string& mountinfo,
+        const file_reader_t& reader) {
+    std::vector<cgroup_mount> mounts = cgroup_mounts(mountinfo);
+    int limit = -1;
+    auto apply = [&limit](int cpus) {
+        if (cpus > 0 && (limit < 0 || cpus < limit)) {
+            limit = cpus;
+        }
+    };
+    for (const std::string& line : cgroup_split(proc_cgroup, '\n')) {
+        // <hierarchy id>:<controllers>:<path>; the path can contain ':'
+        size_t c1 = line.find(':');
+        size_t c2 = c1 == std::string::npos ? c1 : line.find(':', c1 + 1);
+        if (c2 == std::string::npos) {
+            continue;
+        }
+        std::string id = line.substr(0, c1);
+        std::vector<std::string> controllers = cgroup_split(line.substr(c1 + 1, c2 - c1 - 1), ',');
+        std::string path = line.substr(c2 + 1);
+        bool v2 = (id == "0" && line.substr(c1 + 1, c2 - c1 - 1).empty());
+        if (!v2 && std::find(controllers.begin(), controllers.end(), "cpu") == controllers.end()) {
+            continue;
+        }
+        for (const cgroup_mount& mount : mounts) {
+            if (v2) {
+                if (mount.fstype != "cgroup2") {
+                    continue;
+                }
+            } else if (mount.fstype != "cgroup"
+                    || std::find(mount.options.begin(), mount.options.end(), "cpu") == mount.options.end()) {
+                continue;
+            }
+            for (const std::string& dir : cgroup_dirs(mount, path)) {
+                if (v2) {
+                    std::string cpu_max;
+                    if (reader(dir + "/cpu.max", cpu_max)) {
+                        apply(parseCgroupV2CpuMax(cpu_max));
+                    }
+                } else {
+                    std::string quota, period;
+                    if (reader(dir + "/cpu.cfs_quota_us", quota) && reader(dir + "/cpu.cfs_period_us", period)) {
+                        apply(parseCgroupV1CpuQuota(quota, period));
+                    }
+                }
+            }
+        }
+    }
+    return limit;
+}
+
 int AsyncIoControllerPriv::getDefaultIoThreadCount() {
     int cpus = 0;
 #if defined(__linux__) && defined(CPU_COUNT)
@@ -1968,6 +2216,20 @@ int AsyncIoControllerPriv::getDefaultIoThreadCount() {
     if (cpus <= 0) {
         cpus = (int)std::thread::hardware_concurrency();
     }
+#ifdef __linux__
+    // the CPU time the process's cgroups allow: a container started with a CPU limit (for example "--cpus=2")
+    // keeps the host's CPUs in its affinity mask but cannot use more CPU time than its quota
+    {
+        std::string proc_cgroup, mountinfo;
+        if (cgroup_read_file("/proc/self/cgroup", proc_cgroup)
+                && cgroup_read_file("/proc/self/mountinfo", mountinfo)) {
+            int limit = getCgroupCpuLimit(proc_cgroup, mountinfo, cgroup_read_file);
+            if (limit > 0 && (cpus <= 0 || limit < cpus)) {
+                cpus = limit;
+            }
+        }
+    }
+#endif
     if (cpus <= 0) {
         return 1;
     }

@@ -38,6 +38,8 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+
+#include <map>
 #include "qore/intern/QC_Counter.h"
 #include "qore/intern/QC_Datasource.h"
 #include "qore/intern/QC_DatasourcePool.h"
@@ -301,6 +303,108 @@ struct UnitTestCounters {
             (long long)(expected), (long long)(actual), __LINE__); \
     } \
 } while (0)
+
+//! the I/O thread count of a process in a container with a CPU limit: the cgroup CPU quota files
+static void ut_cgroup_cpu_limit(UnitTestCounters& c) {
+    // cgroup v2 cpu.max: "<quota> <period>" or "max <period>"
+    UT_ASSERT_EQ(c, -1, AsyncIoControllerPriv::parseCgroupV2CpuMax("max 100000\n"), "cpu.max: max is no limit");
+    UT_ASSERT_EQ(c, 2, AsyncIoControllerPriv::parseCgroupV2CpuMax("200000 100000\n"), "cpu.max: 2 CPUs");
+    UT_ASSERT_EQ(c, 2, AsyncIoControllerPriv::parseCgroupV2CpuMax("150000 100000"), "cpu.max: 1.5 CPUs round up");
+    UT_ASSERT_EQ(c, 1, AsyncIoControllerPriv::parseCgroupV2CpuMax("50000 100000"), "cpu.max: half a CPU is 1");
+    UT_ASSERT_EQ(c, 1, AsyncIoControllerPriv::parseCgroupV2CpuMax("100000 100000"), "cpu.max: 1 CPU");
+    UT_ASSERT_EQ(c, 24, AsyncIoControllerPriv::parseCgroupV2CpuMax("2400000 100000"), "cpu.max: 24 CPUs");
+    for (const char* bad : {"", "\n", "abc", "100000", "max", "-5 100000", "100 0", "0 100000", "1 2 3",
+            "100000 abc", "1e5 100000", " 200000 100000x"}) {
+        UT_ASSERT_EQ(c, -1, AsyncIoControllerPriv::parseCgroupV2CpuMax(bad), "cpu.max: a malformed value is no limit");
+    }
+
+    // cgroup v1 cpu.cfs_quota_us and cpu.cfs_period_us
+    UT_ASSERT_EQ(c, -1, AsyncIoControllerPriv::parseCgroupV1CpuQuota("-1\n", "100000\n"), "cfs: -1 is no limit");
+    UT_ASSERT_EQ(c, 2, AsyncIoControllerPriv::parseCgroupV1CpuQuota("200000\n", "100000\n"), "cfs: 2 CPUs");
+    UT_ASSERT_EQ(c, 2, AsyncIoControllerPriv::parseCgroupV1CpuQuota("150000", "100000"), "cfs: 1.5 CPUs round up");
+    UT_ASSERT_EQ(c, -1, AsyncIoControllerPriv::parseCgroupV1CpuQuota("x", "100000"), "cfs: malformed quota");
+    UT_ASSERT_EQ(c, -1, AsyncIoControllerPriv::parseCgroupV1CpuQuota("100000", "0"), "cfs: zero period");
+    UT_ASSERT_EQ(c, -1, AsyncIoControllerPriv::parseCgroupV1CpuQuota("100000", ""), "cfs: empty period");
+
+    // the cgroup files of a process, from /proc/self/cgroup and /proc/self/mountinfo
+    std::map<std::string, std::string> files;
+    AsyncIoControllerPriv::file_reader_t reader = [&files](const std::string& path, std::string& contents) {
+        auto i = files.find(path);
+        if (i == files.end()) {
+            return false;
+        }
+        contents = i->second;
+        return true;
+    };
+    const char* v2_mount = "12480 12260 0:29 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup2 rw\n";
+
+    // a container with "--cpus=2" in its own cgroup namespace
+    files = {{"/sys/fs/cgroup/cpu.max", "200000 100000\n"}};
+    UT_ASSERT_EQ(c, 2, AsyncIoControllerPriv::getCgroupCpuLimit("0::/\n", v2_mount, reader), "v2: container limit");
+
+    // no limit
+    files = {{"/sys/fs/cgroup/cpu.max", "max 100000\n"}};
+    UT_ASSERT_EQ(c, -1, AsyncIoControllerPriv::getCgroupCpuLimit("0::/\n", v2_mount, reader), "v2: max");
+
+    // a file that cannot be read sets no limit
+    files.clear();
+    UT_ASSERT_EQ(c, -1, AsyncIoControllerPriv::getCgroupCpuLimit("0::/\n", v2_mount, reader), "v2: unreadable");
+
+    // a limit set on a parent cgroup applies; the lowest limit on the path counts
+    files = {
+        {"/sys/fs/cgroup/user.slice/app.scope/cpu.max", "max 100000\n"},
+        {"/sys/fs/cgroup/user.slice/cpu.max", "300000 100000\n"},
+        {"/sys/fs/cgroup/cpu.max", "800000 100000\n"},
+    };
+    UT_ASSERT_EQ(c, 3, AsyncIoControllerPriv::getCgroupCpuLimit("0::/user.slice/app.scope\n", v2_mount, reader),
+        "v2: a parent's limit");
+
+    // a cgroup that is not under the root of the mount sets no limit
+    files = {{"/sys/fs/cgroup/cpu.max", "200000 100000\n"}};
+    UT_ASSERT_EQ(c, -1, AsyncIoControllerPriv::getCgroupCpuLimit("0::/other\n",
+        "1 0 0:29 /docker/abc /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n", reader), "v2: not under the mount root");
+
+    // a mount whose root is the cgroup's path (no cgroup namespace) shows the cgroup at the mount point
+    UT_ASSERT_EQ(c, 2, AsyncIoControllerPriv::getCgroupCpuLimit("0::/docker/abc\n",
+        "1 0 0:29 /docker/abc /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n", reader), "v2: mount root is the cgroup");
+
+    // cgroup v1: the cpu controller's hierarchy
+    const char* v1_mounts =
+        "30 25 0:27 / /sys/fs/cgroup/cpu,cpuacct rw,nosuid shared:10 - cgroup cgroup rw,cpu,cpuacct\n"
+        "31 25 0:28 / /sys/fs/cgroup/memory rw,nosuid shared:11 - cgroup cgroup rw,memory\n";
+    files = {
+        {"/sys/fs/cgroup/cpu,cpuacct/docker/abc/cpu.cfs_quota_us", "150000\n"},
+        {"/sys/fs/cgroup/cpu,cpuacct/docker/abc/cpu.cfs_period_us", "100000\n"},
+        {"/sys/fs/cgroup/cpu,cpuacct/docker/cpu.cfs_quota_us", "-1\n"},
+        {"/sys/fs/cgroup/cpu,cpuacct/docker/cpu.cfs_period_us", "100000\n"},
+    };
+    UT_ASSERT_EQ(c, 2, AsyncIoControllerPriv::getCgroupCpuLimit(
+        "5:memory:/docker/abc\n4:cpu,cpuacct:/docker/abc\n", v1_mounts, reader), "v1: cfs quota");
+    // only the cpu controller's hierarchy counts
+    UT_ASSERT_EQ(c, -1, AsyncIoControllerPriv::getCgroupCpuLimit("5:memory:/docker/abc\n", v1_mounts, reader),
+        "v1: not the cpu controller");
+
+    // both hierarchies (a hybrid layout): the lower limit counts
+    std::string hybrid_mounts = std::string(v1_mounts)
+        + "40 25 0:30 / /sys/fs/cgroup/unified rw - cgroup2 cgroup2 rw,nsdelegate\n";
+    files["/sys/fs/cgroup/unified/docker/abc/cpu.max"] = "400000 100000\n";
+    UT_ASSERT_EQ(c, 2, AsyncIoControllerPriv::getCgroupCpuLimit("0::/docker/abc\n4:cpu,cpuacct:/docker/abc\n",
+        hybrid_mounts, reader), "hybrid: the lower limit");
+
+    // a mount point with an escaped space
+    files = {{"/sys/fs/my cgroup/cpu.max", "300000 100000\n"}};
+    UT_ASSERT_EQ(c, 3, AsyncIoControllerPriv::getCgroupCpuLimit("0::/\n",
+        "1 0 0:29 / /sys/fs/my\\040cgroup rw - cgroup2 cgroup2 rw\n", reader), "an escaped mount point");
+
+    // malformed contents set no limit
+    UT_ASSERT_EQ(c, -1, AsyncIoControllerPriv::getCgroupCpuLimit("garbage", "garbage - cgroup2", reader),
+        "malformed /proc files");
+    UT_ASSERT_EQ(c, -1, AsyncIoControllerPriv::getCgroupCpuLimit("", "", reader), "empty /proc files");
+
+    // the default thread count is at least 1 and at most the default maximum
+    int count = AsyncIoControllerPriv::getDefaultIoThreadCount();
+    UT_ASSERT(c, count >= 1 && count <= AsyncIoControllerPriv::DEFAULT_MAX_IO_THREADS, "default I/O thread count");
+}
 
 static void ut_qorevalue_operator_bool_null(UnitTestCounters& c) {
     QoreValue nothing;
@@ -5691,6 +5795,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_httpclient_conn_mgr_post(c);
     ut_httpclient_conn_mgr_error_passthru(c);
     ut_asyncio_logger(c);
+    ut_cgroup_cpu_limit(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);
 #ifdef DEBUG

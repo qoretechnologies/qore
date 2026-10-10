@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires ../../../../../qlib/QUnit.qm
+%requires Util
 
 %exec-class AsyncIoThreadCountTest
 
@@ -24,16 +25,131 @@ class AsyncIoThreadCountTest inherits QUnit::Test {
     }
 
     #! Returns the default thread count expected for this process, or NOTHING if it cannot be determined here
+    /** On Linux: the CPUs of the process's affinity mask, at most the CPU limit of its cgroups, at most
+        @ref DefaultMaxIoThreads.  This is worked out here from /proc and the cgroup files rather than with
+        \c nproc, whose answer depends on the implementation: uutils \c nproc honors a cgroup CPU limit, GNU and
+        BusyBox \c nproc do not.
+    */
     private *int expectedDefault() {
         if (PlatformOS != "Linux") {
             return;
         }
-        # nproc counts the CPUs in the process's affinity mask, as the controller does
-        string out = trim(`nproc`);
-        if (out !~ /^[0-9]+$/) {
+        *int cpus = affinityCount();
+        if (!cpus) {
             return;
         }
-        return min(out.toInt(), DefaultMaxIoThreads);
+        *int limit = cgroupCpuLimit();
+        if (limit && limit < cpus) {
+            cpus = limit;
+        }
+        return min(cpus, DefaultMaxIoThreads);
+    }
+
+    #! Returns the number of CPUs in the process's affinity mask
+    private static *int affinityCount() {
+        *string cpus = (ReadOnlyFile::readTextFile("/proc/self/status") =~ x/Cpus_allowed_list:\s*(\S+)/)[0];
+        if (!cpus) {
+            return;
+        }
+        int count = 0;
+        foreach string range in (cpus.split(",")) {
+            list<string> ends = range.split("-");
+            count += ends.size() == 2 ? ends[1].toInt() - ends[0].toInt() + 1 : 1;
+        }
+        return count;
+    }
+
+    #! Returns the lowest CPU limit of the process's cgroups and their parents, or NOTHING if they set none
+    private static *int cgroupCpuLimit() {
+        # the cgroup mounts
+        list<hash<auto>> mounts = ();
+        foreach string line in (ReadOnlyFile::readTextFile("/proc/self/mountinfo").split("\n")) {
+            list<string> fields = line.split(" ");
+            *int sep;
+            for (int i = 6; i < fields.size(); ++i) {
+                if (fields[i] == "-") {
+                    sep = i;
+                    break;
+                }
+            }
+            if (!exists sep || sep + 3 >= fields.size()
+                    || (fields[sep + 1] != "cgroup2" && fields[sep + 1] != "cgroup")) {
+                continue;
+            }
+            push mounts, {
+                "root": fields[3],
+                "point": fields[4],
+                "fstype": fields[sep + 1],
+                "options": fields[sep + 3].split(","),
+            };
+        }
+        *int limit;
+        foreach string line in (ReadOnlyFile::readTextFile("/proc/self/cgroup").split("\n")) {
+            *list<*string> parts = (line =~ x/^([0-9]+):([^:]*):(.*)$/);
+            if (!parts) {
+                continue;
+            }
+            bool v2 = parts[0] == "0" && !parts[1];
+            if (!v2 && !inlist("cpu", parts[1].split(","))) {
+                continue;
+            }
+            foreach hash<auto> mount in (mounts) {
+                if (v2 ? mount.fstype != "cgroup2" : (mount.fstype != "cgroup" || !inlist("cpu", mount.options))) {
+                    continue;
+                }
+                foreach string dir in (cgroupDirs(mount.root, mount.point, parts[2])) {
+                    *int cpus = v2
+                        ? cpusOf(readCgroupFile(dir + "/cpu.max"))
+                        : cpusOf(readCgroupFile(dir + "/cpu.cfs_quota_us") + " "
+                            + readCgroupFile(dir + "/cpu.cfs_period_us"));
+                    if (cpus && (!limit || cpus < limit)) {
+                        limit = cpus;
+                    }
+                }
+            }
+        }
+        return limit;
+    }
+
+    #! Returns the directories of a cgroup and of its parents up to the mount point
+    private static list<string> cgroupDirs(string root, string point, string path) {
+        string rel;
+        if (root == "/") {
+            rel = path;
+        } else if (path == root) {
+            rel = "/";
+        } else if (path.substr(0, root.size() + 1) == root + "/") {
+            rel = path.substr(root.size());
+        } else {
+            return ();
+        }
+        list<string> dirs = ();
+        while (True) {
+            dirs += rel == "/" ? point : (point == "/" ? rel : point + rel);
+            if (rel == "/") {
+                break;
+            }
+            rel = dirname(rel);
+        }
+        return dirs;
+    }
+
+    #! Returns a cgroup file's contents, or an empty string if it cannot be read
+    private static string readCgroupFile(string path) {
+        try {
+            return trim(ReadOnlyFile::readTextFile(path));
+        } catch (hash<ExceptionInfo> ex) {
+            return "";
+        }
+    }
+
+    #! Returns the CPUs that "<quota> <period>" allow, rounded up, or NOTHING for no limit ("max" or -1)
+    private static *int cpusOf(string value) {
+        *list<*string> parts = (value =~ x/^([0-9]+)\s+([0-9]+)$/);
+        if (!parts || !parts[0].toInt() || !parts[1].toInt()) {
+            return;
+        }
+        return (parts[0].toInt() + parts[1].toInt() - 1) / parts[1].toInt();
     }
 
     defaultCountTest() {

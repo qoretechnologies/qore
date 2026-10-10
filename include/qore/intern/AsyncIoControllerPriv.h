@@ -50,6 +50,7 @@
 #include <memory>
 #include <queue>
 #include <set>
+#include <functional>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -533,12 +534,48 @@ public:
     static constexpr int DEFAULT_MAX_IO_THREADS = 8;
 
     //! Returns the default number of I/O threads
-    /** One per CPU available to the process (its CPU affinity mask where supported, otherwise
-        std::thread::hardware_concurrency()), at most @ref DEFAULT_MAX_IO_THREADS, and at least 1.
+    /** One per CPU available to the process, at most @ref DEFAULT_MAX_IO_THREADS, and at least 1.  The CPUs
+        available are those of the process's CPU affinity mask where supported (otherwise
+        std::thread::hardware_concurrency()), and on Linux at most the CPU time its cgroups allow (see
+        @ref getCgroupCpuLimit()), as in a container started with a CPU limit.
 
         @since %Qore 3.0
     */
     DLLLOCAL static int getDefaultIoThreadCount();
+
+    //! Reads a file's contents; returns false if it cannot be read
+    typedef std::function<bool(const std::string& path, std::string& contents)> file_reader_t;
+
+    //! Returns the number of CPUs that a cgroup v2 \c cpu.max value allows, or -1 if it sets no limit
+    /** @param cpu_max the contents of a \c cpu.max file: \c "<quota> <period>", or \c "max <period>" for no limit
+
+        @return the quota divided by the period, rounded up, and at least 1; -1 for no limit or a value that cannot
+        be parsed
+    */
+    DLLLOCAL static int parseCgroupV2CpuMax(const std::string& cpu_max);
+
+    //! Returns the number of CPUs that cgroup v1 \c cpu.cfs_quota_us and \c cpu.cfs_period_us values allow
+    /** @param quota the contents of a \c cpu.cfs_quota_us file; \c -1 means no limit
+        @param period the contents of a \c cpu.cfs_period_us file
+
+        @return the quota divided by the period, rounded up, and at least 1; -1 for no limit or values that cannot
+        be parsed
+    */
+    DLLLOCAL static int parseCgroupV1CpuQuota(const std::string& quota, const std::string& period);
+
+    //! Returns the number of CPUs that the cgroups of a process allow, or -1 if they set no limit
+    /** The limit is the lowest set by the process's cgroup or any of its parents in the cgroup v2 hierarchy
+        (\c cpu.max) and the cgroup v1 \c cpu hierarchy (\c cpu.cfs_quota_us / \c cpu.cfs_period_us); a file that
+        cannot be read or parsed sets no limit.
+
+        @param proc_cgroup the contents of \c /proc/self/cgroup
+        @param mountinfo the contents of \c /proc/self/mountinfo
+        @param reader reads the cgroup files
+
+        @return the lowest limit, or -1 if no cgroup sets one
+    */
+    DLLLOCAL static int getCgroupCpuLimit(const std::string& proc_cgroup, const std::string& mountinfo,
+            const file_reader_t& reader);
 
     //! Entries the timeout heap can hold beyond twice the number of operations before it is compacted
     /** See the timeout heap compaction in ioThread(): stale entries of finished operations are only removed

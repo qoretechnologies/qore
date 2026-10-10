@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+/*  WebSocketStreamBackpressure.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    WebSocket over HTTP/2 and HTTP/3: messages sent while the stream send buffer is full are delivered.
+
+    The HTTP/2 stream refuses data while more than 1 MB sent before it is still waiting to be delivered; without an
+    outbound queue limit, a WebSocket send then waits for the stream to drain (for at most the handler's send
+    timeout) instead of losing the message and the connection.
+*/
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketStreamBackpressureTest
+
+#! Sends a large message and then a short one when the client asks for them
+class LargeSendWsConnection inherits WebSocketConnection {
+    private {
+        int payload_size;
+    }
+
+    constructor(WebSocketHandler handler, int payload_size) : WebSocketConnection(handler) {
+        self.payload_size = payload_size;
+    }
+
+    gotMessage(string msg) {
+        if (msg == "SEND") {
+            # the large message fills the stream send buffer, so the next send finds it full
+            send(strmul("x", payload_size));
+            send("last");
+        }
+    }
+}
+
+class LargeSendWsHandler inherits WebSocketHandler {
+    private {
+        int payload_size;
+    }
+
+    constructor(int payload_size, *hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+        self.payload_size = payload_size;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new LargeSendWsConnection(self, payload_size);
+    }
+}
+
+class WebSocketStreamBackpressureTest inherits QUnit::Test {
+    public {
+        #! the size of the large message: many times the 1 MB HTTP/2 stream backpressure threshold
+        const PayloadSize = 8 * 1024 * 1024;
+        #! the time allowed for each message
+        const RecvTimeout = 60s;
+
+        #! the tests' certificate and key
+        const CertPem = TestCertificates::CertPem;
+        const KeyPem = TestCertificates::KeyPem;
+    }
+
+    private {
+        HttpServer server;
+        int port;
+        Logger logger;
+        #! messages received by the current client
+        Queue queue;
+    }
+
+    constructor() : Test("WebSocketStreamBackpressureTest", "1.0") {
+        addTestCase("HTTP/2: a message sent while the stream send buffer is full is delivered", \h2Test());
+        addTestCase("HTTP/3: a message sent while the stream send buffer is full is delivered", \h3Test());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("ws-stream-backpressure", m_options.verbose > 2
+            ? LoggerLevel::getLevelInfo()
+            : LoggerLevel::getLevelWarn());
+        logger.addAppender(new StdoutAppender());
+        # no outbound queue limit: a full stream send buffer is waited for
+        LargeSendWsHandler handler(PayloadSize, {"logger": logger});
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        server.setDefaultHandler("ws", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    h2Test() {
+        WebSocketClient wsc = connect({
+            "url": "wss://localhost:" + port,
+            "http_version": "2.0",
+        });
+        assertTrue(wsc.isHttp2(), "the client is connected over HTTP/2");
+        receiveLargeThenLast(wsc);
+    }
+
+    h3Test() {
+        WebSocketClient wsc = connect({
+            "url": "wss://127.0.0.1:" + port,
+            "http3_mode": "required",
+        });
+        assertTrue(wsc.isHttp3(), "the client is connected over HTTP/3");
+        receiveLargeThenLast(wsc);
+    }
+
+    #! connects a client whose messages are pushed to its queue
+    private WebSocketClient connect(hash<auto> opts) {
+        queue = new Queue();
+        Queue q = queue;
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                q.push(msg);
+            }
+        }, opts + {"ssl_verify_cert": False, "logger": logger});
+        wsc.connect();
+        return wsc;
+    }
+
+    #! asks the server for the large message and the short one and checks that both arrive intact and in order
+    private receiveLargeThenLast(WebSocketClient wsc) {
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        wsc.send("SEND");
+        auto msg = queue.get(RecvTimeout);
+        assertEq(PayloadSize, msg.size(), "the large message is delivered");
+        assertTrue(msg == strmul("x", PayloadSize), "the large message is delivered intact");
+        assertEq("last", queue.get(RecvTimeout), "the message sent while the stream send buffer was full is "
+            "delivered");
+    }
+}

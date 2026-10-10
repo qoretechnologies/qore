@@ -198,8 +198,9 @@
     than that of the other operations on its socket, as with readiness polls of
     @ref Qore::Socket::poll() "Socket::poll()".
 
-    The async I/O controller runs one I/O thread per CPU available to the process by default (its CPU affinity mask on
-    Linux), at most 8; it ran a single I/O thread unless \c QORE_IO_THREADS was set, so all network I/O of a process
+    The async I/O controller runs one I/O thread per CPU available to the process by default (on Linux, the CPUs of its
+    CPU affinity mask, and at most the CPU time its cgroup CPU quota allows, as in a container started with a CPU
+    limit), at most 8; it ran a single I/O thread unless \c QORE_IO_THREADS was set, so all network I/O of a process
     was limited to one CPU.  Sockets are spread over the threads; \c QORE_IO_THREADS and
     @ref Qore::AsyncIoController::setMaxIoThreads() "AsyncIoController::setMaxIoThreads()" still set any count, and
     <tt>setMaxIoThreads(0)</tt> restores the default.  An I/O thread also does less work per I/O event: the
