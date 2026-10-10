@@ -142,10 +142,14 @@ accumulation remain. No inheritance decision is cached. The
 three 3.43–4.08% typed-polymorphic gains and a possible small-loop monomorphic
 tradeoff, using identical-executable runtime comparisons.
 `QORE_DISABLE_AOT_CLASS_NODE_STORE=1` at runtime retains generic value storage
-after that positive check. Otherwise an accepted strong object uses the existing
-node-assignment overload, avoiding scalar/enum dispatch and generic value-holder
-handling. Slot guards, two owned references, real-reference accounting, weak
-normalization, and cleanup order remain unchanged. This presence flag is sampled
+after that positive check. Otherwise an accepted strong object uses a narrow
+node initializer for the proven-empty, nonfixed owning slot, avoiding generic
+replacement/conversion work and empty temporary-owner cleanup. Slot guards,
+the slot's owner (plus a second owner when an owned result is requested),
+real-reference accounting, weak normalization, and cleanup order remain unchanged.
+The [initialization follow-up](RESULTS.md#empty-class-local-node-initialization-2026-10-10)
+records three 4.19–5.44% typed-polymorphic gains, all controls and one unexplained
+floating-point callback outlier. No general-call gain is claimed. This presence flag is sampled
 once; the helper ABI is unchanged and identical-executable comparisons are valid.
 The measured disabled path has a small adverse cost; see `RESULTS.md` rather
 than assuming the control path is performance-neutral.

@@ -19,6 +19,10 @@ class ClassLocalDerived inherits ClassLocalValue {
 class ClassLocalGrandchild inherits ClassLocalDerived {
     constructor(int id) : ClassLocalDerived(id) { }
 }
+class ClassLocalCycle inherits ClassLocalValue {
+    public { *ClassLocalCycle peer; }
+    constructor(int id) : ClassLocalValue(id) { self.peer = self; }
+}
 class ClassLocalUnrelated {
 }
 class ClassLocalGenericDerived<T> inherits ClassLocalValue {
@@ -221,6 +225,30 @@ int sub classLocalOwnedAlias(bool throwing) {
     return destroyed - before;
 }
 
+# Reuse the empty runtime slot after both ordinary and exceptional exits. The
+# initializer must be a real root for cycle collection, not just a strong owner.
+sub classLocalRepeatedCycleRoot() {
+    int before = destroyed;
+    for (int i = 0; i < 4; ++i) {
+        *ClassLocalValue observer;
+        try {
+            ClassLocalCycle source(i);
+            ClassLocalValue receiver = source;
+            observer := receiver;
+            remove source;
+            if (destroyed != before + i || receiver.id != i || observer.id != i) {
+                throw "CLASS-LOCAL-ASSIGNMENT", "initializer lost its cycle root";
+            }
+            if (i & 1) { throw "CLASS-LOCAL-EXPECTED", "unwind the cycle root"; }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "CLASS-LOCAL-EXPECTED") { rethrow; }
+        }
+        if (observer || destroyed != before + i + 1) {
+            throw "CLASS-LOCAL-ASSIGNMENT", "cleared initializer retained its cycle root";
+        }
+    }
+}
+
 code<int()> sub escapedTarget(ClassLocalValue input) {
     ClassLocalValue receiver = input;
     return int sub () { return receiver.id; };
@@ -229,6 +257,7 @@ code<int()> sub escapedTarget(ClassLocalValue input) {
 ClassLocalValue left(3);
 ClassLocalDerived right(5);
 for (int round = 0; round < 8; ++round) {
+    classLocalRepeatedCycleRoot();
     foreach auto rejected in ((NULL, True, 7, 1.25, 9223372036854775807, -3.0e307,
             "short", "not a class-local object", (1, 2), {"key": 1}, ClassLocalScalar::Sample)) {
         if (checkedSource(rejected) != "RUNTIME-TYPE-ERROR") {

@@ -7155,3 +7155,126 @@ ownership cleanup, native admission/frame costs and small-loop monomorphic
 entry overhead. Preserve runtime slots, destruction order and concurrent
 diagnostics; any further bookkeeping elimination needs a complete lifetime
 and observability proof.
+
+## Empty class-local node initialization (2026-10-10)
+
+Retain a narrower storage operation for an already-admitted required-class
+initializer. Three randomized trials reduce the typed-polymorphic kernel by
+4.19–5.44% (1.48–1.92 ns/element), with disjoint baseline/candidate fork ranges
+in each trial. This is an initialization improvement, not a general call-speed
+or Java-parity result.
+
+Fresh pre-change sampling found 3339 initialization and 1473 cleanup samples
+under an 8193-sample typed-kernel parent, about 59% combined. Native-method
+helper callsites accounted for another 1429 samples. These are disjoint
+inclusive callsites plus helper siblings; nested child samples are not added
+again. The sample guides selection, not exact cost attribution.
+
+### Change and invariants
+
+`LocalVar::tryAssignInitialClassValue()` already excludes captured/self,
+substituted, finalized, assigned and static slots, positively accepts the
+strong object's class/access constraint, and rejects fixed storage for its
+node path. The new internal `QoreLValue::assignInitialNode()` consumes one
+reference directly into that proven-empty slot. It preserves assignment order,
+`tracksRealRefs()` and `check_lvalue_object_in_out()`, with no replaced value,
+conversion, allocation or Qore callback in the storage operation. There is no
+temporary owner left to clean up. An optional owned result still receives
+its second reference; the pinned-result path still omits only that extra cache
+owner. All ordinary fallback, weak normalization, lexical cleanup, GC rooting,
+type/private/internal/generic acceptance and reflective mutation behavior remain.
+
+Release disassembly shows 212 → 204 static instructions in the complete
+initializer wrapper, with its stack frame unchanged at 96 bytes. Its storage
+callee changes from the general 153-instruction node assignment to a
+21-instruction initializer; the latter has no call instruction. Those are
+static function sizes, not executed instruction counts. The empty
+`ReferenceHolder<QoreObject>` destructor call is absent.
+
+The baseline is clean `8622be389` (embedded revision `6cf499bbf`); candidate
+is that source plus production patch
+`5169b4623a4eef356aa58f515c22c24320221b879cad6651fb4fc0ea0a965d4e`.
+Release hashes are
+`a927fddaaa850b510d64b8ffbd88d00a26cf53b69b80391bf51fe0fb05140265`
+and
+`a768e5b62ff1e7b37154071f57661ec8365f5efacb3e61719b4a396ebd540748`.
+No public/helper ABI or class layout changed. Because `LocalVar.h` is a
+conservative qmod-fingerprint input, the module runtime identity changes;
+QUnit/FsUtil/Util and dependencies were rebuilt for both builds. The frozen
+debug baseline test driver consequently loads those unchanged module sources
+through the loader's explicit identity-mismatch fallback. The module-free
+benchmark uses one identical AOT executable against both compatible libraries,
+and each mode passes all 345 reference checks before timing.
+
+### Measurements and controls
+
+Apple M4 Pro/macOS arm64, release Qore/LLVM 22, unchanged benchmark source and
+Java/JMH settings. Five independent processes per kernel/mode; three warmups,
+five measured 500 ms windows and five separately reported startup samples.
+Run `run-6mtmtlgj` uses count 4096 and seed 810881, with Java; the two
+count-1024 runs `run-e_hmd4or` and `run-tin3qowc` use seeds 810882/810883,
+without Java. All eight kernels remain in each run. The 280 jobs and 1400
+measurement windows were independently re-parsed and their summaries,
+combinations, source/tool/library/executable identities and references checked.
+No task build, test, profiling or analysis computation ran during timing;
+host background activity, core placement, clocks and filesystem caches remain
+uncontrolled. Values are ns/element, median of five process means; lower is better.
+
+|!Kernel|!4096 before → after (change)|!1024 repeat|!1024 confirmation
+|polymorphic_call|33.815 → 32.269 (-4.57%)|35.360 → 33.436 (-5.44%)|35.413 → 33.929 (-4.19%)
+|polymorphic_expression_call|10.668 → 10.666 (-0.01%)|12.240 → 12.137 (-0.84%)|12.250 → 12.251 (+0.00%)
+|monomorphic_call|3.404 → 3.429 (+0.74%)|4.821 → 4.838 (+0.36%)|4.839 → 4.787 (-1.07%)
+|optional_method_call|10.980 → 11.064 (+0.77%)|12.461 → 12.447 (-0.11%)|12.792 → 12.360 (-3.37%)
+|indirect_wide|7.453 → 7.306 (-1.97%)|8.549 → 8.606 (+0.67%)|8.685 → 8.558 (-1.47%)
+|indirect_float|9.169 → 9.296 (+1.39%)|10.413 → 10.479 (+0.63%)|10.599 → 10.520 (-0.75%)
+|arithmetic|1.400 → 1.415 (+1.09%)|2.525 → 2.526 (+0.05%)|2.511 → 2.533 (+0.90%)
+|dispatch_control|1.461 → 1.445 (-1.06%)|2.637 → 2.690 (+1.99%)|2.678 → 2.663 (-0.54%)
+
+Target fork ranges:
+
+|!Run|!Baseline fork range|!Candidate fork range
+|run-6mtmtlgj|33.567–34.181|31.386–32.356
+|run-e_hmd4or|35.136–35.779|33.142–34.130
+|run-tin3qowc|35.104–35.882|33.798–34.341
+
+All nontarget fork ranges overlap. Overlap is descriptive, not a significance
+test or proof of no regression. The +1.99% dispatch-control median in the first
+1024 run repeats as -0.54%; monomorphic changes are +0.74%, +0.36%, -1.07%.
+Arithmetic medians are slightly higher in all three trials (+0.05–1.09%).
+One candidate `indirect_float` process in the confirmation has a 20.527
+ns/element mean (all five windows 20.224–20.795), while the other candidate
+processes are 10.438–10.609. Its cause is not established, and it is retained
+unchanged in all raw data and summaries. No floating-point improvement or
+absence-of-regression guarantee is claimed.
+
+At count 4096, candidate/Java whole-kernel ratios are 12.41x typed polymorphic,
+4.12x expression polymorphic, 2.01x monomorphic and 6.47x nullable method.
+Java callees remain DONT_INLINE; Qore may inline an exact-base branch.
+These are not equal-policy isolated call latencies. There is no IR timing,
+startup speedup, cross-architecture or cumulative-across-commits gain claim.
+
+### Correctness and follow-up
+
+Release and debug each pass 56 files: 194 cases, 6785 assertions, eight
+standalones. The expanded assignment fixture checks a repeated class-local
+cycle root after its source owner is removed, both ordinary and exception
+cleanup, weak observation, and slot reuse. The full driver passes 500 assertions
+on each frozen baseline as well as each candidate. Existing matrices cover
+reflection, recursive locals, class access/generics, debugger/readers, weak and
+opaque values, Program/module boundaries and dense/concurrent cycle collection.
+Debug native units pass another case/two assertions. Fresh six-mode grids for
+both candidate and baseline pass 345 checks per mode, in addition to the paired
+AOT checks before each timing run. Baseline checks use the saved compatible
+release host executables with each saved release/debug library; candidate
+debug checks use separately archived debug host executables.
+Eleven harness tests pass. No full-suite or sanitizer qualification is claimed.
+
+The full 62-item audit is recorded in
+[FOLLOWUP-AUDIT.md](FOLLOWUP-AUDIT.md#empty-class-local-node-initialization-audit-2026-10-10).
+[Complete evidence](results-initial-class-node-macos-arm64.json) retains every
+run, control, outlier, raw window, identity, validation log hash and the production
+patch. Next: profile the remaining initialization/cleanup split, and investigate
+whether immutable local metadata and duplicate method admission work can be
+moved out of hot calls. Do not cache class acceptance without a complete
+invalidation proof or remove slot/root ownership without proving reflection,
+cycle collection and destruction order.

@@ -1167,6 +1167,22 @@ public:
         return rv;
     }
 
+    //! Consumes a node into an admitted empty, nonfixed, owning slot.
+    /** The caller must have checked the three state preconditions. There is no
+        replaced value, conversion or fallible operation; real-reference tracking
+        and publication order are the same as assign(AbstractQoreNode*).
+        @param n already-referenced node, whose ownership passes to this slot
+    */
+    DLLLOCAL void assignInitialNode(AbstractQoreNode* n) {
+        assert(!assigned && !fixed_type && !static_assignment);
+        assigned = true;
+        v.n = n;
+        if (tracksRealRefs()) {
+            check_lvalue_object_in_out(v.n, nullptr);
+        }
+        type = QV_Node;
+    }
+
     // Assign from QoreValue - delegates to the appropriate typed assign method
     DLLLOCAL AbstractQoreNode* assign(QoreValue val) {
         return assignAssume(val);

@@ -957,16 +957,12 @@ public:
         bool accepted = fast_class_accept && ti->acceptsRequiredClassValueWithoutFilter(value);
         if (accepted && class_node_store && !slot->val.fixed_type) {
             // Acceptance proves a strong object, not just a pointer-tagged value.
-            // Use the existing node assignment overload to avoid scalar/enum
-            // dispatch. It keeps the same real-reference bookkeeping; the slot
-            // receives its owner, and an optional result receives a second one.
+            // The checks above also prove an empty, nonfixed, owning slot. Its
+            // infallible initializer consumes the reference directly; there is
+            // no old value or temporary owner to discard. Keep real-reference
+            // bookkeeping and the optional second owner for the result.
             QoreObject* object = value.get<QoreObject>();
-            ReferenceHolder<QoreObject> stored(object->objectRefSelf(), xsink);
-            AbstractQoreNode* removed = slot->val.assign(stored.release());
-            assert(!removed);
-            if (removed) {
-                removed->deref(xsink);
-            }
+            slot->val.assignInitialNode(object->objectRefSelf());
             if (!*xsink && result) {
                 // This is initialization, not replacement: the result holder
                 // contains NOTHING. Keep its RAII ownership without discarding
