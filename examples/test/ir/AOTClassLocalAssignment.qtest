@@ -98,6 +98,8 @@ class ClassLocalAssignmentTest inherits QUnit::Test {
                     "owned-cache control " + prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1 "),
                     "runtime local-slot control " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_STRONG_CLASS_LOCAL_CLEAR=1 "),
+                    "generic class-local cleanup control " + prefix + level);
             }
         }
     }

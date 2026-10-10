@@ -12598,6 +12598,21 @@ extern "C" DLLEXPORT void qore_rt_clear_class_local_slot_aot_v1(QoreAOTContext* 
     assert(ctx && idx >= 0 && idx < ctx->num_locals && xsink);
     if (auto* slot = static_cast<LocalVarValue*>(prepared_slot)) {
         assert(slot->local_var == ctx->locals[idx] && !slot->frame_boundary);
+        static const bool enabled = !std::getenv("QORE_DISABLE_AOT_STRONG_CLASS_LOCAL_CLEAR");
+        auto& value = slot->val;
+        if (enabled && value.assigned && !value.static_assignment && value.type == QV_Node
+                && value.v.n && value.v.n->getType() == NT_OBJECT) {
+            // The slot is storage, not a cached ownership/type decision. Only a currently owned
+            // strong object can skip removeValue(true)'s temporary QoreValue box and discard.
+            slot->block_cleared = true;
+            value.assigned = false;
+            if (value.tracksRealRefs()) {
+                check_lvalue_object_in_out(nullptr, value.v.n);
+            }
+            value.v.n->deref(xsink);
+            // Final release can reenter cleanup; do not touch the slot or object afterwards.
+            return;
+        }
         slot->del(xsink);
     } else {
         qore_rt_clear_local(ctx->locals[idx], xsink);

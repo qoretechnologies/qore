@@ -5000,6 +5000,10 @@ while (*binary chunk = input.read(65536)) {
       additionally avoid generic scalar/enum storage dispatch while retaining the runtime slot's
       and caller cache's references, real-reference bookkeeping, and destructor ordering;
       positively identified strong inputs also bypass empty weak-normalization holder setup/cleanup
+    - Specialized cleanup of prepared AOT class-local slots that still own a strong object, avoiding
+      temporary tagged-value cleanup dispatch while preserving real-reference bookkeeping, virtual
+      release, destructor exceptions, and reentrant cleanup; weak, opaque, borrowed, and empty slots
+      retain the ordinary path
     - Added guarded native scalar AOT method entries on polymorphic cache hits, avoiding parameter TLS
       binding for proven non-throwing <tt>int(int)</tt> bodies while retaining context, stack, ownership,
       receiver, Program, and debugger checks

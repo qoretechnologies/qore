@@ -7518,3 +7518,122 @@ Restored debug passes all 109 focused native checks plus the native-unit driver
 the rejected candidate; no timing benefit is claimed for the restored libraries.
 The [full audit](FOLLOWUP-AUDIT.md#direct-local-value-discard-rejection-audit-2026-10-10)
 records 14 Pass, 48 N/A and zero Fail across all 62 checklist items.
+
+## Strong-object AOT class-local cleanup (2026-10-10)
+
+Retained a narrowly guarded specialization of the existing
+qore_rt_clear_class_local_slot_aot_v1 helper. Typed-polymorphic kernel medians
+improve **3.83–4.74%** across three five-fork trials, with disjoint before/after
+fork-mean ranges each time. This is a measured incremental gain, not Java parity.
+Floating-callback medians are **0.39–1.19% slower** in all three trials, with
+overlapping ranges; that small unresolved median tradeoff is accepted and
+documented, not dismissed as noise or proof of no regression.
+
+[Complete evidence](results-strong-class-clear-macos-arm64.json) contains
+frozen identities and source patch, all 280 jobs / 1400 timing windows,
+independently recomputed statistics and raw-window hashes, qualification logs,
+LLVM selection, assembly counts and separate sampling-profile hashes.
+
+### Implementation and invariants
+
+The prepared slot caches invocation-local storage, not a type or ownership
+decision. Only a currently assigned, nonstatic QV_Node containing a strong
+NT_OBJECT takes the specialization. It marks block cleanup and clears assigned
+state before the existing real-reference removal and ordinary virtual node
+release. Nothing accesses the slot after final release, which can reenter
+cleanup and propagate a destructor exception.
+
+Weak, opaque, empty, scalar and borrowed/static slots retain VarValueBase::del;
+missing prepared slots retain the original local lookup. No owner, real-reference
+mark, runtime-visible local, custom virtual release, exception check or
+destruction-order requirement is removed. The generic deletion implementation
+and compiler lowering are unchanged. QORE_DISABLE_AOT_STRONG_CLASS_LOCAL_CLEAR,
+sampled once on first use, provides a runtime control without recompilation.
+
+The helper grows from 8 to 134 static arm64 instructions because the new branch
+inlines ordinary node release; the unchanged generic deletion routine has
+68 instructions in both libraries. These are static sizes, not dynamic-path
+counts or evidence of a whole-path instruction reduction.
+
+### Repeated measurements
+
+Apple M4 Pro, macOS arm64. Five forks, three warmups and five 500-ms measurement
+windows per fork; shuffled order seeds 811001–811003. One identical executable
+loads the frozen baseline and candidate runtime within each trial. Runtime
+identity is unchanged (371edf33cd7c9979a5ab6de514e5ab771505b74a0737ae5281a5038f33450105).
+Baseline source is 14cf060cb (binary revision 54c5d1bbd before its audit-only
+amendment); candidate binaries contain 14cf060cb plus the frozen runtime patch.
+No task builds, regression tests, profiles or evidence generation overlap timing.
+
+Typed-polymorphic values are median fork means in ns/element; lower is better:
+
+|!Trial|!Count|!Before|!After|!Change|!Before / after fork-mean ranges
+|1: run-5btsj_pi|4096|31.489780|30.084395|-4.46%|30.735–31.680 / 29.803–30.449
+|2: run-9q5_y339|1024|32.487804|31.241940|-3.83%|32.457–32.602 / 30.938–31.521
+|3: run-rhzqjvnf|4096|31.521123|30.027402|-4.74%|31.230–31.735 / 29.820–30.192
+
+All eight kernels are retained below. Parenthesized disjoint means the observed
+fork-mean ranges do not overlap; other ranges overlap. These are not confidence
+intervals.
+
+|!Kernel|!4096 first|!1024 repeat|!4096 repeat
+|polymorphic_call|-4.46% (disjoint)|-3.83% (disjoint)|-4.74% (disjoint)
+|polymorphic_expression_call|-1.52%|-0.84% (disjoint)|-1.18%
+|monomorphic_call|-0.06%|-1.77%|+0.83%
+|optional_method_call|-1.89% (disjoint)|-1.35%|-1.31%
+|indirect_wide|-0.01%|-0.12%|-0.41%
+|indirect_float|+1.19%|+0.39%|+0.66%
+|arithmetic|-0.25%|-0.34% (disjoint)|-1.72%
+|dispatch_control|+0.13%|-0.64%|-0.09%
+
+Expression and nullable methods have smaller favorable median changes, but
+ranges generally overlap. Monomorphic methods are mixed. The floating control
+retains two first-trial candidate fork means of 10.196 and 10.355 ns and a
+repeat baseline fork mean of 10.449 ns, including all their windows. Floating
+means across all forks therefore move differently from medians: the first
+trial is 9.262 → 9.595 ns and the last is 9.316 → 9.043 ns.
+Neither outliers nor entire forks were removed. Code-layout effects are a
+hypothesis, not an established explanation. No blanket no-regression claim.
+
+The first trial puts the candidate at approximately **11.8x Java** for typed
+polymorphism, **4.1x** for expression receivers, **2.0x** for monomorphic calls,
+and **6.5x** for nullable methods. These are whole-kernel ratios; Java retained
+methods use DONT_INLINE while Qore can inline an exact-base branch. There is
+no equal-policy isolated-call, IR-timing, startup-gain or Java-parity claim.
+
+### Qualification and next work
+
+Both builds pass 73 selected files: release 260 reported cases / 11282
+assertions / nine standalones, with one expected debug-only short-string skip;
+debug 267 cases / 11381 assertions / nine standalones, no skips. The new
+destructor-exception and weak/opaque retagging fixtures pass 528 assertions on
+both candidates and on the unchanged release baseline. They cover AST, IR,
+JIT/tiered, AOT O0/O3, EH, split builds and runtime disable controls. Inspected
+LLVM confirms both new functions use prepared-slot getters and clear helpers.
+
+The native-unit driver passes one case / two assertions; all 109 focused native
+checks pass. Fresh release IR/AOT/Java-interpreted/Java-JIT and debug IR/AOT
+grids pass 345 reference checks per mode. All 11 harness tests pass. QUnit,
+FsUtil, HttpServer and HttpServerUtil qmods were rebuilt before each build's
+tests. Only the warning-strict RecursiveClosureLocals fixture uses the previously
+established MACOSX_DEPLOYMENT_TARGET=28.0 link/object alignment; benchmarks do not.
+
+Separate profiles use the same saved executable before and after. Within the
+typed kernel's inclusive parent (7537 before / 7501 after samples), the cleanup
+callsite falls from 1370 to 880 samples, with separate cleanup-helper siblings
+of 52 / 68. Tail-call attribution is incomplete; unrelated customDeref siblings
+are not assigned to that callsite, and descendants are not added to parents.
+These profile fractions are not isolated timing measurements. Class-local
+initialization remains the largest callsite block (2774 / 2941 samples);
+native-method dispatch callsites account for 1327 / 1346.
+
+Next, investigate preparing immutable class-local type/admission metadata once
+per invocation, while retaining live representation/ownership checks and
+runtime private-access behavior. A caller-accepted parameter annotation alone
+does not prove assignment acceptance in the callee. Follow with native
+frame/context work that preserves concurrent stack readers and debugger events.
+Do not combine real-reference removal with ordinary virtual release without a
+separate correctness proof. Java parity remains unachieved.
+
+The [full audit](FOLLOWUP-AUDIT.md#strong-object-aot-class-local-cleanup-audit-2026-10-10)
+records all 62 checks. No full-suite, sanitizer or cross-architecture claim.

@@ -23,6 +23,12 @@ class ClassLocalCycle inherits ClassLocalValue {
     public { *ClassLocalCycle peer; }
     constructor(int id) : ClassLocalValue(id) { self.peer = self; }
 }
+class ClassLocalThrowing {
+    destructor() {
+        ++destroyed;
+        throw "CLASS-LOCAL-DESTRUCTOR", "final owning local release";
+    }
+}
 class ClassLocalUnrelated {
 }
 class ClassLocalGenericDerived<T> inherits ClassLocalValue {
@@ -249,6 +255,41 @@ sub classLocalRepeatedCycleRoot() {
     }
 }
 
+# Cleanup must propagate destructor exceptions after the other owner is removed.
+sub classLocalThrowingCleanup() {
+    int before = destroyed;
+    bool caught = False;
+    try {
+        ClassLocalThrowing source();
+        ClassLocalThrowing receiver = source;
+        remove source;
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "CLASS-LOCAL-DESTRUCTOR") { rethrow; }
+        caught = True;
+    }
+    if (!caught || destroyed != before + 1) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "final cleanup lost a destructor or its exception";
+    }
+}
+
+# A prepared slot is storage, not a promise that its live value is still strong.
+sub classLocalRetaggedCleanup(bool opaque) {
+    int before = destroyed;
+    {
+        ClassLocalValue owner(61);
+        ClassLocalValue receiver = owner;
+        if (opaque) { receiver @= owner; }
+        else { receiver := owner; }
+        if (receiver.id != 61) {
+            throw "CLASS-LOCAL-ASSIGNMENT", "retagged class local lost its value";
+        }
+        remove owner;
+    }
+    if (destroyed != before + 1) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "retagged class-local cleanup retained an owner";
+    }
+}
+
 code<int()> sub escapedTarget(ClassLocalValue input) {
     ClassLocalValue receiver = input;
     return int sub () { return receiver.id; };
@@ -257,6 +298,9 @@ code<int()> sub escapedTarget(ClassLocalValue input) {
 ClassLocalValue left(3);
 ClassLocalDerived right(5);
 for (int round = 0; round < 8; ++round) {
+    classLocalThrowingCleanup();
+    classLocalRetaggedCleanup(False);
+    classLocalRetaggedCleanup(True);
     classLocalRepeatedCycleRoot();
     foreach auto rejected in ((NULL, True, 7, 1.25, 9223372036854775807, -3.0e307,
             "short", "not a class-local object", (1, 2), {"key": 1}, ClassLocalScalar::Sample)) {
