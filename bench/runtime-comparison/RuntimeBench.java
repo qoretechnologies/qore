@@ -115,6 +115,8 @@ public class RuntimeBench {
     static class DynamicStep {
         @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         long next(long value) { return (value * 33 + 17) & 65535; }
+        @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long viaContext(long value) { return next(value); }
     }
     static class DynamicStepB extends DynamicStep {
         @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
@@ -239,7 +241,29 @@ public class RuntimeBench {
         return sum;
     }
 
-    // Java can retain a native double even where the matched Qore variable is auto.
+    static long dynamicIntResultCall(int count, long seed,
+            DynamicStep a, DynamicStep b, DynamicStep c) {
+        long value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            sum += (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value);
+            value = 65535 - value;
+        }
+        return sum;
+    }
+
+    static long dynamicIntResultFallback(int count, long seed,
+            DynamicStep a, DynamicStep b, DynamicStep c) {
+        long value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            sum += (i % 3 == 0 ? a : i % 3 == 1 ? b : c).viaContext(value);
+            value = 65535 - value;
+        }
+        return sum;
+    }
+
+    // Java retains native results where the matched Qore result has a dynamic contract.
     static long dynamicFloatResultCall(int count, long seed,
             DynamicFloatStep a, DynamicFloatStep b, DynamicFloatStep c) {
         double value = seed;
@@ -394,6 +418,12 @@ public class RuntimeBench {
     @Benchmark public long dynamic_float_result_call() {
         return dynamicFloatResultCall(count, nextSeed(), fa, fb, fc);
     }
+    @Benchmark public long dynamic_int_result_call() {
+        return dynamicIntResultCall(count, nextSeed(), a, b, c);
+    }
+    @Benchmark public long dynamic_int_result_fallback() {
+        return dynamicIntResultFallback(count, nextSeed(), a, b, c);
+    }
     @Benchmark public long dispatch_control() { return dispatchControl(count, nextSeed()); }
     @Benchmark public long list_read() { return listRead(data, nextSeed()); }
     @Benchmark public long list_build() { return listBuild(count, nextSeed()); }
@@ -427,7 +457,9 @@ public class RuntimeBench {
                     "polymorphic_call", "polymorphic_expression_call", "monomorphic_call",
                     "optional_method_call", "polymorphic_float_call", "polymorphic_float_expression_call",
                     "monomorphic_float_call", "optional_float_method_call",
-                    "boxed_float_method_call", "dynamic_float_result_call", "dispatch_control", "list_read",
+                    "boxed_float_method_call", "dynamic_int_result_call", "dynamic_int_result_fallback",
+                    "dynamic_float_result_call",
+                    "dispatch_control", "list_read",
                     "list_build", "list_mutate", "temporary_list", "temporary_hash",
                     "closure_call", "closure_capture"};
                 long[] results = {arithmetic(count, seed), directCall(count, seed),
@@ -444,6 +476,8 @@ public class RuntimeBench {
                     polymorphicFloatExpressionCall(count, seed, fa, fb, fc),
                     monomorphicFloatCall(count, seed, fa), monomorphicFloatCall(count, seed, fa),
                     polymorphicFloatExpressionCall(count, seed, fa, fb, fc),
+                    dynamicIntResultCall(count, seed, a, b, c),
+                    dynamicIntResultFallback(count, seed, a, b, c),
                     dynamicFloatResultCall(count, seed, fa, fb, fc),
                     dispatchControl(count, seed),
                     listRead(values, seed), listBuild(count, seed),

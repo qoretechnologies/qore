@@ -8309,3 +8309,157 @@ Next experiments, in order:
 
 The [62-item audit](FOLLOWUP-AUDIT.md#generic-floating-method-audit-2026-10-10)
 reports 19 Pass, 43 N/A, zero failures. Java-level call efficiency remains open.
+
+## Native name-method calls with boxed results (2026-10-10)
+
+Decision: retain the compiler extension for already-native integer/float arguments
+whose unknown method results do not feed an exact native-local assignment. The
+measured direct-result workloads improve repeatedly by roughly 50–65%. This is
+an AOT improvement, not an IR speedup or Java parity. Unsupported targets can pay
+a small extra failed-attempt cost before ordinary dispatch.
+
+[Complete evidence](results-boxed-result-method-macos-arm64.json) records 270
+randomized jobs / 1350 measurement windows, including 72 baseline jobs and 198
+candidate/control jobs. Source, binary and raw-output identities and all adverse
+controls are retained. No task build, test, profile or evidence work overlaps
+timing. A separate qualitative profile was captured between completed trials.
+
+### Scope and baseline
+
+The source parent is f7c9da741, the clean merge of origin/develop 1800de49a after
+the preceding cf3f68118 optimization. That upstream change affected connection
+option modules, not the compiler/runtime. Both builds and 109 affected/support
+qmod targets were rebuilt. The upstream connection-option test passes four cases
+and 28 assertions per build with the restricted local module search. The first
+unrestricted attempt failed on an installed external ABI-1 qmod; a temporary
+external-module rebuild attempt also failed. These attempts and remaining
+external-provider fallback warnings are recorded, not represented as clean
+full-environment qualification. No installed module was overwritten.
+
+The frozen baseline contains the expanded benchmark and initial new regression
+fixtures but unchanged compiler/runtime sources. The candidate is that source
+parent plus the recorded implementation patch. Its binaries were built before
+commit; no prospective commit hash is assigned to them. The runtime compatibility
+identity changes with the source build, while the runtime ABI layout and helper
+signatures do not change. All comparisons compile separate AOT executables.
+
+Two new integer kernels distinguish a useful hit from a deliberate miss:
+`dynamic_int_result_call` passes a native integer and converts the unknown result
+directly; `dynamic_int_result_fallback` calls a context-using wrapper that delegates
+to the selected virtual target and has no native leaf companion. Java retains
+both the wrapper and target calls with `DONT_INLINE`. The existing floating
+direct-result kernel has the corresponding native-double argument shape.
+All 31 kernels have independent integer-exact references: 465 checks per mode.
+
+### Lowering and correctness boundary
+
+The compiler selects the integer or floating helper from the actual native
+argument representation. A matching sole native-local store still receives its
+unboxed continuation. Other consumers receive an owned boxed result, including
+wide integers and tag-colliding doubles. The existing warmed full-key PIC,
+hoisted RuntimeConfig, native companions and live guards are reused. Boxed and
+optional arguments remain excluded; no whole-body proof is broadened.
+
+Ordinary fallback still permits arbitrary return types, side effects, caller-local
+mutation and exceptions. Argument consumption, result ownership, pending-sink and
+invoke handling, stack guards, receiver deletion, Program/access context, debugger
+checks and concurrent diagnostic-frame publication remain. The compiler-only
+`QORE_DISABLE_AOT_NAME_METHOD_BOXED_RESULT=1` control preserves the older native-local
+continuation while disabling the new boxed-result consumers.
+
+The new suite covers numeric encoding boundaries, conversions, string/NOTHING/
+object/throwing/self/generic/private/gate overrides, weak/null/deleted receivers,
+owned result destruction, cross-Program recovery, debugger and concurrent readers.
+Normal and exceptional reflective receiver mutation are checked through ordinary
+AOT function entries with nullable class locals, plus the AST reference. Existing
+IR/JIT caller-frame visibility and reflected non-class/native-local freshness
+limitations are not fixed or claimed covered. An initial fixture assertion
+incorrectly assumed a catch-visible parameter had native storage; explicit
+integer conversion supplies the intended native operand, and the final fixture
+also passes on the frozen baseline. No compiler proof was relaxed.
+
+### Measurements
+
+Apple M4 Pro, macOS arm64 release build; median of independent fork means in
+ns/iteration, excluding startup. Each fork uses three warmup and five 500 ms
+measurement windows. Java is the recorded local Temurin 25.0.2 JIT. These are
+whole workloads with unequal dynamic representation/inlining contracts, not
+isolated call latency.
+
+Main trial, count 4096, three forks, `run-_w73c0g2`:
+
+|!Kernel|!Before|!After|!Reduction %|!Java JIT|!After / Java
+|dynamic_int_result_call|38.404|13.412|65.08|3.070|4.37
+|dynamic_float_result_call|35.881|16.832|53.09|3.471|4.85
+|dynamic_int_result_fallback|298.429|300.077|-0.55|3.000|100.02
+|boxed_float_method_call|63.885|64.433|-0.86|2.554|25.23
+|polymorphic_expression_call|10.380|10.294|0.83|2.334|4.41
+|polymorphic_float_expression_call|10.234|10.438|-2.00|2.554|4.09
+|indirect_float|9.069|9.093|-0.26|1.640|5.54
+|arithmetic|1.428|1.429|-0.12|0.892|1.60
+
+Count 1024 is `run-279_d2wb`. Same-runtime `run-kobhnoqv` uses count 4096
+and identical candidate libraries, but separately compiled executables; only
+before compilation receives the new disable flag. Both use three forks.
+
+|!Kernel|!1024 before|!1024 after|!Reduction %|!Same-runtime before|!Same-runtime after|!Reduction %
+|dynamic_int_result_call|39.375|14.936|62.07|38.313|13.673|64.31
+|dynamic_float_result_call|37.373|18.614|50.19|36.501|17.165|52.97
+|dynamic_int_result_fallback|303.208|303.129|0.03|301.892|306.029|-1.37
+|boxed_float_method_call|66.299|65.465|1.26|64.668|64.988|-0.49
+|polymorphic_expression_call|12.247|12.150|0.79|10.501|10.407|0.89
+|polymorphic_float_expression_call|12.114|12.289|-1.45|10.609|10.476|1.25
+|indirect_float|10.463|10.659|-1.88|9.145|9.242|-1.07
+|arithmetic|2.829|2.801|1.01|1.471|1.471|0.04
+
+The targeted kernels have disjoint before/after fork ranges in all three trials.
+The unsupported-body workload is not improved: a failed native attempt precedes
+ordinary dispatch. Its observed change is -0.03% to +1.37% elapsed time across
+these trials. The 1.37% same-runtime slowdown has disjoint observed fork ranges;
+this is a measured tradeoff, not dismissed as noise.
+
+A five-fork same-runtime repeat, `run-k6zd83oj`, examines the adverse controls:
+
+|!Kernel|!Before|!After|!Reduction %|!Before fork range|!After fork range
+|dynamic_int_result_fallback|300.633|303.002|-0.79|297.018–302.095|299.536–312.272
+|polymorphic_float_expression_call|10.529|10.371|1.50|10.395–10.655|10.284–10.516
+|indirect_float|9.025|9.065|-0.44|8.971–9.101|9.028–9.125
+
+Ranges overlap in this repeat; they are not confidence intervals. The floating
+expression's initial 1.45–2% slowdown reverses in both same-runtime trials.
+All five unchanged control functions have identical normal-entry LLVM after
+debug-ID removal and branch-profile-ID resolution. This supports unchanged
+lowering, not a proof of identical final machine-code placement or zero cost.
+Small adverse changes are retained. The large direct-result gains justify this
+scoped change, with unsuccessful admission an explicit next target.
+
+### Qualification and next optimizations
+
+Both builds pass 77 selected files: release 316 cases / 14075 assertions, debug
+323 / 14174, with nine standalone files each. Release skips the debug-only native
+unit assertion group; debug runs it. The new driver has 1311 assertions per build.
+Fresh IR/AOT grids pass all 465 references per mode; every measured mode also
+passes its complete grid. Four support qmods are rebuilt sequentially per build.
+The harness passes 14 tests and focused native debug tests pass 146/146.
+No full-suite, sanitizer, cross-architecture or single-iteration claim is made.
+
+A separate ten-second, 1 ms profile of the floating direct-result workload shows
+the native helper, receiver `qore_rt_deref_if_reference`, `qore_rt_to_int`, and
+result `qore_rt_decref` among the remaining work. Sampled branches are nested and
+tail attribution is incomplete; they are not additive or precise guard timings.
+
+Next experiments, each requiring fresh before/after measurement and audit:
+
+1. Avoid boxing/conversion/cleanup on native hits when the sole consumer is an
+   explicit scalar conversion, preserving arbitrary fallback values and Qore's
+   NaN/infinity/out-of-range conversion behavior.
+2. Specialize receiver dereferencing using proven representation or guarded
+   strong-object checks, retaining weak/reference ownership and deletion behavior.
+3. Reduce repeated failed admission for unsupported targets without stale
+   body/context pointers or assumptions that all hierarchy changes bump an epoch.
+4. Profile prepared same-Program IR dispatch separately; this AOT-only change
+   does not narrow the interpreter gap. Context-using and cross-Program calls
+   still need separate calling-convention work and remain far from Java here.
+
+The [audit](FOLLOWUP-AUDIT.md#boxed-result-method-audit-2026-10-10) records all
+62 checks: 15 Pass, 47 N/A, no outstanding failures.

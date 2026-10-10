@@ -48,6 +48,8 @@ final class Stepper {
 # Three runtime receiver types prevent this from being a final-method benchmark.
 class DynamicStep {
     int next(int value) { return (value * 33 + 17) & 65535; }
+    # Context-using nested call deliberately excludes the native leaf companion.
+    int viaContext(int value) { return self.next(value); }
 }
 class DynamicStepB inherits DynamicStep {
     int next(int value) { return (value * 33 + 19) & 65535; }
@@ -212,6 +214,26 @@ int sub boxedFloatMethodCall(int count, int seed, auto a, auto b, auto c) {
 }
 
 # Consume an unknown method result directly; there is no native result assignment.
+int sub dynamicIntResultCall(int count, int seed, auto a, auto b, auto c) {
+    int value = seed;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        sum += int((i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value));
+        value = 65535 - value;
+    }
+    return sum;
+}
+
+int sub dynamicIntResultFallback(int count, int seed, auto a, auto b, auto c) {
+    int value = seed;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        sum += int((i % 3 == 0 ? a : i % 3 == 1 ? b : c).viaContext(value));
+        value = 65535 - value;
+    }
+    return sum;
+}
+
 int sub dynamicFloatResultCall(int count, int seed, auto a, auto b, auto c) {
     float value = float(seed);
     int sum = 0;
@@ -343,6 +365,8 @@ int sub dispatch(string name, int count, int seed, list<int> data, Stepper recei
         case "monomorphic_float_call": return monomorphicFloatCall(count, seed, fa);
         case "optional_float_method_call": return optionalFloatMethodCall(count, seed, fa);
         case "boxed_float_method_call": return boxedFloatMethodCall(count, seed, fa, fb, fc);
+        case "dynamic_int_result_call": return dynamicIntResultCall(count, seed, a, b, c);
+        case "dynamic_int_result_fallback": return dynamicIntResultFallback(count, seed, a, b, c);
         case "dynamic_float_result_call": return dynamicFloatResultCall(count, seed, fa, fb, fc);
         case "dispatch_control": return dispatchControl(count, seed);
         case "list_read": return listRead(data, seed);
@@ -396,7 +420,9 @@ sub main() {
                         "polymorphic_call", "polymorphic_expression_call", "monomorphic_call",
                         "optional_method_call", "polymorphic_float_call", "polymorphic_float_expression_call",
                         "monomorphic_float_call", "optional_float_method_call",
-                        "boxed_float_method_call", "dynamic_float_result_call", "dispatch_control", "list_read",
+                        "boxed_float_method_call", "dynamic_int_result_call", "dynamic_int_result_fallback",
+                        "dynamic_float_result_call",
+                        "dispatch_control", "list_read",
                         "list_build", "list_mutate", "temporary_list", "temporary_hash",
                         "closure_call", "closure_capture")) {
                     printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed,

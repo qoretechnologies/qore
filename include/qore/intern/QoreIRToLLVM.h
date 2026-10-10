@@ -890,8 +890,9 @@ private:
             bool require_exact_object_class = false);
 
     // Try a cached scalar method entry without resolving an unknown target or
-    // narrowing its return contract. Only a sole native-int store consumes the
-    // native result; a miss retains the original boxed name-dispatch path.
+    // narrowing its return contract. An exact native-scalar store consumes the
+    // native result; other consumers own a boxed result. A miss retains the
+    // original boxed name-dispatch path and arbitrary override return type.
     bool tryEmitAotNameMethodNativeContinuation(const QoreIRInstruction* inst,
             llvm::Value* base, llvm::Module& module, llvm::Function* llvm_func,
             std::string& error);

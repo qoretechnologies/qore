@@ -68,7 +68,7 @@ auto sub nativeFloatGenericInvoke(auto receiver, auto value) {
         return e.err;
     }
 }
-auto sub nativeFloatGenericSpecial(auto receiver, float value) {
+auto sub nativeFloatGenericSpecial(auto receiver, auto value) {
     return receiver.next(value);
 }
 auto sub nativeFloatMethodInvoke(NativeFloatMethodBase input, float value) {

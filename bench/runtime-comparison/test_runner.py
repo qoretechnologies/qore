@@ -70,6 +70,14 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(196621, run.reference("dynamic_float_result_call", 6, 7))
         self.assertEqual(65543, run.reference("dynamic_float_result_call", 3, 65535))
 
+    def test_dynamic_int_result_reference(self):
+        for name in ("dynamic_int_result_call", "dynamic_int_result_fallback"):
+            self.assertEqual(248, run.reference(name, 1, 7))
+            self.assertEqual(65539, run.reference(name, 2, 7))
+            self.assertEqual(65793, run.reference(name, 3, 7))
+            self.assertEqual(196627, run.reference(name, 6, 7))
+            self.assertEqual(131065, run.reference(name, 3, 65535))
+
     def test_checks(self):
         run.validate_checks(self.checks())
 

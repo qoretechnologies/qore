@@ -234,9 +234,19 @@ native-result continuation for unresolved name-dispatched calls, including
 nullable-class and dynamic receivers. Compile separate artifacts: this flag is
 not a runtime switch. A warmed full-key PIC supplies the checked target; the
 compiler does not change AST/IR resolution or the unknown return contract.
-Only an already-native integer/float argument and matching sole native-scalar local assignment
-qualify. Every miss retains original dispatch, boxed return checks and cleanup.
+An already-native integer/float argument qualifies. A matching sole native-scalar
+local assignment consumes the unboxed result; other consumers receive an owned
+boxed result. Wide integers and tag-colliding doubles retain their ordinary heap
+encoding. Boxed and optional arguments remain excluded. Every miss retains original
+dispatch, arbitrary boxed returns, return checks, caller-local invalidation and cleanup.
 The broader native-method entry/continuation controls also disable this path.
+
+`QORE_DISABLE_AOT_NAME_METHOD_BOXED_RESULT=1` disables only the additional
+boxed-result consumers at compilation, preserving exact native-local continuations.
+Compile separate artifacts; this is not a runtime control. The new path reuses
+existing scalar helpers and the caller's hoisted RuntimeConfig; no runtime ABI or
+whole-body eligibility change is needed. Unsupported targets can pay an unsuccessful
+native attempt before fallback, so include `dynamic_int_result_fallback` in comparisons.
 
 `QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1` disables only the floating-method
 bindings and caller continuations at compilation, and their native admission/
@@ -396,6 +406,8 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |monomorphic_float_call|One unchanged exact-base floating receiver; Java retains its target call and Qore may inline the base body
 |optional_float_method_call|Same floating receiver with Qore's nullable contract; only strong non-null inputs are timed
 |boxed_float_method_call|Three auto receivers and an auto floating recurrence in Qore; Java retains native doubles and the same three non-final targets
+|dynamic_int_result_call|Three auto receivers with native integer arguments and directly converted unknown results; the native recurrence is independent of each result
+|dynamic_int_result_fallback|The same checksum through a context-using nested method excluded from native-leaf admission; measures failed-attempt overhead
 |dynamic_float_result_call|Three auto receivers with a native float argument; each unknown method result is consumed directly by int conversion, with an independent native recurrence
 |dispatch_control|Same receiver-selection arithmetic and increments without method calls
 |list_read|Indexed traversal of a list prepared outside timing; XOR each element with the invocation seed
@@ -421,14 +433,19 @@ Qore may inline its exact-base branch, so ratios are whole-kernel comparisons,
 not isolated call latency or an equal-inlining-policy comparison. Exceptional
 floating values and null receiver errors belong in separate correctness tests.
 
-The two generic floating kernels deliberately have no native result assignment
-contract. LLVM inspection confirms ordinary boxed method dispatch, with no native
-method try-helper in either caller. The boxed recurrence reuses the polymorphic
-float reference; the direct-result kernel independently computes the selected
-target minus the current value and then advances `value = 65535.0 - value`.
-All results are integer-exact; the full reference grid has 29 kernels and 435 rows
-per mode. Java uses native doubles and retained `DONT_INLINE` targets, so these
-comparisons include Qore's broader dynamic representation and dispatch contract.
+The generic-result kernels deliberately have no native result assignment contract.
+The boxed floating recurrence stays on ordinary dispatch. Already-native integer
+and floating arguments now permit a native try-helper followed by result boxing;
+LLVM inspection verifies both that path and its retained ordinary fallback. The
+boxed recurrence reuses the polymorphic float reference; the floating direct-result
+kernel independently computes the selected target minus the current value and
+advances `value = 65535.0 - value`. The integer direct-result kernels compute the
+selected affine/masked result and independently advance `value = 65535 - value`.
+The context-using variant delegates to the selected virtual target and has no native
+companion. Java marks both the wrapper and targets `DONT_INLINE`.
+All results are integer-exact; the full reference grid has 31 kernels and 465 rows
+per mode. Java retains native scalar results, so these whole-workload comparisons
+include Qore's broader dynamic representation and dispatch contract.
 
 `monomorphic_call` exercises the cached exact-class check for an unwritten
 receiver parameter. The generated AOT guard also checks receiver identity:

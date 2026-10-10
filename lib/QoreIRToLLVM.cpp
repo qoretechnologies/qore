@@ -9867,16 +9867,6 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
             || std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION")) {
         return false;
     }
-    auto store = native_funcref_store_types.find(inst->result.id);
-    if (store == native_funcref_store_types.end()
-            || (store->second != bigIntTypeInfo && store->second != floatTypeInfo)) {
-        return false;
-    }
-    bool floating = store->second == floatTypeInfo;
-    if (floating && std::getenv("QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY")) {
-        return false;
-    }
-    llvm::Type* native_type = floating ? double_type : i64_type;
     const QoreValue* expr = nullptr;
     bool has_ref_args;
     const QoreIRInvokeDotEvalMethodDirectInstruction* invoke = nullptr;
@@ -9904,8 +9894,20 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
     }
     uint32_t arg_id = inst->operands[1].id;
     llvm::Value* arg = getVal(arg_id, error);
-    if (!arg || arg->getType() != native_type || nanboxed_values.count(arg_id)
+    if (!arg || nanboxed_values.count(arg_id)
             || native_boxed_sources.count(arg_id)) {
+        return false;
+    }
+    bool floating = arg->getType() == double_type;
+    if ((!floating && arg->getType() != i64_type)
+            || (floating && std::getenv("QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY"))) {
+        return false;
+    }
+    llvm::Type* native_type = floating ? double_type : i64_type;
+    auto store = native_funcref_store_types.find(inst->result.id);
+    bool native_continuation = store != native_funcref_store_types.end()
+        && store->second == (floating ? floatTypeInfo : bigIntTypeInfo);
+    if (!native_continuation && std::getenv("QORE_DISABLE_AOT_NAME_METHOD_BOXED_RESULT")) {
         return false;
     }
     // The operand is already an assigned native scalar. Do not reinterpret
@@ -9938,6 +9940,11 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
         fast, fallback);
     builder->SetInsertPoint(fast);
     llvm::Value* payload = builder->CreateLoad(native_type, output);
+    // Only an exact native store may consume the unboxed side channel. Other
+    // consumers still own a regular boxed value, including wide integers and
+    // tag-colliding doubles; a miss can return any type through the same merge.
+    llvm::Value* fast_result = native_continuation ? llvm::ConstantInt::get(i64_type, VAL_NOTHING)
+        : floating ? boxFloat(payload) : boxIntInline(payload);
     if (has_cleanups) {
         emitArgCleanupClear(module, cleanups, 1, false);
     }
@@ -9972,15 +9979,17 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
     fallback = builder->GetInsertBlock();
     builder->SetInsertPoint(merge);
     auto* result = builder->CreatePHI(i64_type, 2, "name_method_boxed_result");
-    result->addIncoming(llvm::ConstantInt::get(i64_type, VAL_NOTHING), fast);
+    result->addIncoming(fast_result, fast);
     result->addIncoming(boxed, fallback);
-    auto* used_native = builder->CreatePHI(i1_type, 2, "name_method_native_handled");
-    used_native->addIncoming(llvm::ConstantInt::getTrue(ctx), fast);
-    used_native->addIncoming(llvm::ConstantInt::getFalse(ctx), fallback);
-    auto* value = builder->CreatePHI(native_type, 2, "name_method_native_value");
-    value->addIncoming(payload, fast);
-    value->addIncoming(llvm::Constant::getNullValue(native_type), fallback);
-    native_funcref_results.emplace(inst->result.id, NativeFunctionRefResult{used_native, value});
+    if (native_continuation) {
+        auto* used_native = builder->CreatePHI(i1_type, 2, "name_method_native_handled");
+        used_native->addIncoming(llvm::ConstantInt::getTrue(ctx), fast);
+        used_native->addIncoming(llvm::ConstantInt::getFalse(ctx), fallback);
+        auto* value = builder->CreatePHI(native_type, 2, "name_method_native_value");
+        value->addIncoming(payload, fast);
+        value->addIncoming(llvm::Constant::getNullValue(native_type), fallback);
+        native_funcref_results.emplace(inst->result.id, NativeFunctionRefResult{used_native, value});
+    }
     // The unknown fallback may mutate caller locals or return any value. Keep
     // its full invalidation, ownership and assignment-check behavior on merge.
     reloadAllLocalsFromRuntime(module, llvm_func, !has_ref_args);
