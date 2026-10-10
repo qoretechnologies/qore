@@ -689,9 +689,10 @@ static nothing AsyncIoController::setMaxCallbackWorkers(int max_workers = 0)
     the same I/O thread, so throughput scales with the number of threads for many concurrent connections, while
     each connection is handled as with a single I/O thread.
 
-    By default the controller runs one I/O thread per CPU available to the process (its CPU affinity mask on
-    Linux), at most 8; the \c QORE_IO_THREADS environment variable, read when the controller is created, sets
-    another count.
+    By default the controller runs one I/O thread per CPU available to the process, at most 8: on Linux, the CPUs of
+    its CPU affinity mask, and at most the CPU time its cgroup CPU quota allows (\c cpu.max, or
+    \c cpu.cfs_quota_us and \c cpu.cfs_period_us with cgroup v1), as in a container started with a CPU limit; the
+    \c QORE_IO_THREADS environment variable, read when the controller is created, sets another count.
 
     @throw ASYNC-IO-ERROR the controller is running; the thread count can only be changed while the controller is
     stopped, for example before its first operation is submitted

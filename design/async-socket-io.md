@@ -1463,7 +1463,13 @@ per-program state must maintain this ordering contract.
 A controller runs one I/O thread per CPU available to the process by default, at most
 `AsyncIoControllerPriv::DEFAULT_MAX_IO_THREADS` (8): `getDefaultIoThreadCount()` counts the CPUs in the process's
 CPU affinity mask on Linux (so a `taskset` or cpuset limit counts) and uses `std::thread::hardware_concurrency()`
-elsewhere.  I/O threads are CPU-bound (epoll/kqueue + continuePoll), so more threads than CPUs adds context
+elsewhere.  On Linux the count is also at most the CPU time the process's cgroups allow
+(`getCgroupCpuLimit()`): a container started with a CPU limit (`--cpus=2`) keeps all of the host's CPUs in its
+affinity mask but cannot use more CPU time than its quota, so more I/O threads would only add context switches.
+The limit is the quota divided by the period, rounded up, of the process's cgroup and each of its parents up to the
+mount point, the lowest one counting: `cpu.max` in the cgroup v2 hierarchy and `cpu.cfs_quota_us` /
+`cpu.cfs_period_us` in the cgroup v1 `cpu` hierarchy, found through `/proc/self/cgroup` and
+`/proc/self/mountinfo`; `max`, `-1` or a file that cannot be read or parsed sets no limit.  I/O threads are CPU-bound (epoll/kqueue + continuePoll), so more threads than CPUs adds context
 switching overhead without benefit; beyond a few threads the gain for one process is small, while operations that
 involve every I/O thread (`cancelByOwner()`, `cancelByProgram()`, `cancelBySocketHash()`, `cancelByKey()`,
 `getInfo()`, the global `waitForProcessing()`, `Quit`) cost more with each thread, and a host often runs several
