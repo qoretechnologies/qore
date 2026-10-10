@@ -32,6 +32,7 @@
 #include "qore/intern/ForEachStatement.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/AbstractIteratorHelper.h"
+#include "qore/intern/VarRefNode.h"
 
 #include <memory>
 #include "qore/intern/QoreDeferredRelease.h"
@@ -418,7 +419,12 @@ int ForEachStatement::parseInitImpl(QoreParseContext& parse_context) {
     int err = 0;
 
     parse_context.typeInfo = nullptr;
-    err = parse_init_value(var, parse_context);
+    {
+        // the loop variable is the target of the loop's assignment of each element, not a read
+        QoreParseContextFlagHelper fh0(parse_context);
+        fh0.setFlags(PF_FOR_ASSIGNMENT);
+        err = parse_init_value(var, parse_context);
+    }
 
     qore_type_t t = var.getType();
     if (!err && t != NT_VARREF && t != NT_SELF_VARREF) {
@@ -438,6 +444,13 @@ int ForEachStatement::parseInitImpl(QoreParseContext& parse_context) {
         AssignedStateHelper ash;
         nth.saveState();
         ash.saveState();
+
+        // every iteration of the body runs with the loop variable assigned to the current element; it is
+        // marked after the state is saved, so that after the loop (which may run zero times) a variable
+        // declared before the loop is still only as assigned as it was before it
+        if (!err && t == NT_VARREF) {
+            reinterpret_cast<VarRefNode*>(var.getInternalNode())->parseAssigned();
+        }
 
         QoreParseContextFlagHelper fh0(parse_context);
         fh0.setFlags(PF_BREAK_OK | PF_CONTINUE_OK);
