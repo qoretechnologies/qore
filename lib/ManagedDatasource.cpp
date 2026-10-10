@@ -39,7 +39,11 @@
 DatasourceActionHelper::~DatasourceActionHelper() {
     if (ok) {
         if (cmd == DAH_NOCONN) {
-            ds.releaseLock();
+            // Metadata/option calls may borrow an existing transaction's lock. Only release a lock
+            // acquired by this helper; otherwise another thread can enter the owner's transaction.
+            if (new_transaction) {
+                ds.releaseLock();
+            }
         } else {
             bool keep_lock = qore_ds_private::get(ds)->keepLock();
 
@@ -199,9 +203,11 @@ ManagedDatasource* ManagedDatasource::copy() {
    return new ManagedDatasource(*this);
 }
 
-int ManagedDatasource::acquireLock(ExceptionSink *xsink) {
-   AutoLocker al(&ds_lock);
-   return grabLock(xsink);
+int ManagedDatasource::acquireLock(ExceptionSink* xsink, bool& new_lock) {
+    AutoLocker al(&ds_lock);
+    // Observe ownership under the same mutex that protects acquisition and release.
+    new_lock = tid != q_gettid();
+    return grabLock(xsink);
 }
 
 int ManagedDatasource::startDBAction(ExceptionSink *xsink, bool &new_transaction) {

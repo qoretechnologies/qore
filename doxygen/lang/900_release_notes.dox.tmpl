@@ -4,6 +4,10 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Reading datasource configuration or getting or setting connection options now preserves an active
+    transaction's thread ownership. These calls can no longer allow another thread to enter the
+    transaction before its owner commits or rolls back.
+
     Assigning a function or method result to a typed hash no longer changes the types of values in
     hash arguments passed to that call. Previously, dynamically supplied strings could be rejected
     as incompatible with the result's value type or silently converted to numbers. Recompile existing
