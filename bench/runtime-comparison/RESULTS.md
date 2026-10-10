@@ -7763,3 +7763,106 @@ that fails to cover every inheritance mutation.
 
 The [full audit](FOLLOWUP-AUDIT.md#prepared-aot-class-local-declaration-metadata-audit-2026-10-10)
 records all 62 checks. No full-suite, sanitizer or cross-architecture claim.
+
+## Caller-reserved native-method frame storage rejected (2026-10-10)
+
+Rejected moving native-method diagnostic-frame storage into the generated
+caller. Two three-fork screens show **3.09–4.23% slower expression-receiver
+calls**, with disjoint observed fork-mean ranges. Typed calls improve in neither
+screen. The runtime/compiler change and all associated test adaptations were
+removed; the accepted class-local preparation optimization remains.
+
+[Complete evidence](results-native-method-frame-storage-rejected-macos-arm64.json)
+archives the rejected nine-file patch, frozen release/debug identities,
+qualification, all 72 jobs / 360 measured windows and independently recomputed
+statistics. This is a negative experiment, not a shipped ABI change.
+
+### Experiment and qualification
+
+One aligned 256-byte scratch buffer was reserved in each LLVM caller's entry
+block and reused only after the preceding synchronous helper returned. The new
+v2 helper placement-constructed and destroyed the ordinary context/frame on
+every admitted call. It did not cache a published frame, receiver acceptance or
+live context. The existing v1 entry remained available.
+
+Receiver validity, the full dispatch-cache key, Program and parse-options
+checks, dispatch epoch, debugger/body readiness, both stack guards and explicit
+RuntimeConfig remained. Frame publication, exception materialization,
+restoration and the concurrent-reader unpublication handshake were unchanged.
+The eager-context diagnostic control delegated to v1 after repeating admission;
+it did not promise the same physical stack depth as an original v1 call.
+
+The helper's arm64 stack reservation shrank from 400 to 128 bytes, but the caller
+added 256 bytes per invocation. Its static instruction count fell from 749 to
+438, partly by delegating the cold eager path. Neither figure demonstrates a
+dynamic-cost reduction or a 272-byte total-stack saving. LLVM inspection
+confirmed a single entry-block scratch allocation and v2 selection for the
+typed, expression and nullable callers; scalar cleanup guards were preserved.
+
+Both builds passed 73 selected test files: release 260 cases / 12028 assertions
+and debug 267 cases / 12127 assertions, with nine standalones each. Release had
+the expected debug-only short-string skip; debug had no skips. The expanded
+native-leaf driver passed 276 assertions per build, covering legacy/caller
+storage, O0/O3, inline/eager guards and compile/runtime controls. Existing native
+method tests covered concurrent stack readers. The native-unit driver, 109
+focused native checks and 11 harness tests passed. Fresh release IR/AOT/Java
+interpreted/Java JIT and debug IR/AOT grids passed 345 checks per mode.
+
+The runtime-class-context driver initially required the old helper spelling;
+its assertion was adapted and the failing final release file rerun successfully.
+The initial release compile's undeclared LLVM byte-type name was fixed before
+the qualified build. Only those final binaries were measured. QUnit, FsUtil,
+HttpServer and HttpServerUtil qmods were rebuilt for each build's qualification.
+Only RecursiveClosureLocals used the previously established macOS deployment
+target alignment; benchmark environments were unchanged.
+
+### Measurements and decision
+
+Apple M4 Pro, macOS arm64; three forks, three warmups, five 500-ms measurement
+windows per fork, and separately compiled baseline/candidate AOT executables.
+Baseline source was 2a0631a2a, using its qualified frozen binaries; candidate
+source was that revision plus the archived experiment patch. Counts were 4096
+and 1024, with shuffled order seeds 813001 and 813002. No task builds, tests,
+profiles or evidence generation overlapped timing.
+
+Median fork means are ns/element, lower is better. Positive changes are slower.
+Disjoint refers to observed fork-mean ranges, not confidence intervals.
+
+|!Kernel|!4096 before → candidate|!Change|!1024 before → candidate|!Change
+|polymorphic_call|24.300830 → 24.461884|+0.66%|25.555659 → 26.038245|+1.89% (disjoint)
+|polymorphic_expression_call|10.132406 → 10.560793|+4.23% (disjoint)|11.763918 → 12.127439|+3.09% (disjoint)
+|monomorphic_call|3.278187 → 3.352819|+2.28%|4.616671 → 4.778673|+3.51%
+|optional_method_call|11.115213 → 11.401107|+2.57% (disjoint)|12.616731 → 12.763833|+1.17%
+|indirect_float|9.756125 → 9.931689|+1.80%|10.197007 → 11.326914|+11.08% (disjoint)
+|arithmetic|1.326286 → 1.331768|+0.41%|2.408262 → 2.439493|+1.30%
+
+All samples and outliers remain, including the first trial's wide typed and
+floating-control ranges. The second trial's adverse floating-control change
+is not discarded or causally attributed to method frames without evidence.
+There is no startup, new IR-timing, fresh Java comparison or speedup claim.
+
+Moving storage alone leaves per-call frame initialization/publication, live
+admission and register spills. The smaller static helper did not translate into
+a useful result. Do not repeat this implementation unchanged. Next, examine
+which native admission facts are immutable after publication and which still
+need live guards; establish their lifetime and invalidation rules before
+attempting to move more checks into linking or compilation. Keep receiver
+validity, debugger behavior and concurrent stack observability intact.
+Initial follow-up inspection found that AOT registration can replace and delete
+the old context, and lazy registration can clear it (Function.cpp,
+registerPrecompiledAOTFunction and registerLazyPrecompiledAOTFunction). An
+unconditionally cached context pointer therefore needs a separate lifetime and
+invalidation proof; the dispatch-cache entry's own lifetime is not sufficient.
+Compiler-proven body facts and live context identity must be treated separately.
+Java parity remains unachieved.
+
+After removal, both core builds and the four qualification qmods were rebuilt.
+The original native-method, name-method and native-leaf drivers passed again
+in each build (1280 assertions each), as did fresh IR/AOT 345-check grids.
+Runtime identity returned to the accepted baseline's value. Rebuilt binary
+hashes differ because they embed the later source revision; neither restored
+binary is represented as having been timed in these two screens.
+
+The [full audit](FOLLOWUP-AUDIT.md#caller-reserved-native-method-frame-storage-rejection-audit-2026-10-10)
+covers the retained documentation/evidence. No full-suite, sanitizer or
+cross-architecture claim.
