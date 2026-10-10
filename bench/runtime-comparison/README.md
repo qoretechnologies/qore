@@ -264,6 +264,16 @@ The measured gains are for floating-result workloads; small-integer results do n
 show a consistent benefit, and some unchanged-code controls show small slowdowns.
 See [results and limitations](RESULTS.md#native-call-result-conversions-2026-10-10).
 
+Untyped LLVM local loads use `qore_rt_deref_if_reference` to resolve reference
+nodes while returning all other representations unchanged. The helper checks
+ordinary/opaque pointer tags and the node tag directly; it no longer invokes
+generic scalar/enum classification. Reference evaluation, exception propagation
+and ownership are unchanged. This is a runtime-only optimization without a new
+switch or ABI change. The before/after library control uses the exact same AOT
+executable after verifying matching runtime compatibility identities. Dynamic
+call workloads improve, but the interpreter and generic fallback remain separate
+optimization targets. See [measurements](RESULTS.md#direct-reference-tag-loads-2026-10-10).
+
 `QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1` disables only the floating-method
 bindings and caller continuations at compilation, and their native admission/
 try-helper at runtime. Compile separate artifacts for this additive ABI change;

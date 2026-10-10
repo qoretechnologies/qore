@@ -2017,12 +2017,17 @@ extern "C" DLLEXPORT void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t*
 
 extern "C" DLLEXPORT uint64_t qore_rt_deref_if_reference(uint64_t val, ExceptionSink* xsink) {
     QoreValue v = fromBits(val);
-    if (v.hasNode() && v.getType() == NT_REFERENCE) {
+    // hasNode() accepts only non-null pointer representations. For those,
+    // getType() is the node tag; avoid its generic scalar/enum classification
+    // on every untyped local load. isPointer() also preserves opaque pointers,
+    // while inline values (including enums) remain untouched as before.
+    AbstractQoreNode* node = v.isPointer() ? v.getPtr() : nullptr;
+    if (node && node->getType() == NT_REFERENCE) {
         // Dereference the reference like VarRefNode::evalImpl() does.
         // The reference node stays in the alloca (not deref'd here);
         // only the target value is returned with an extra reference.
         bool needs_deref = true;
-        QoreValue result = v.getInternalNode()->eval(needs_deref, xsink);
+        QoreValue result = node->eval(needs_deref, xsink);
         if (!needs_deref && result.hasNode()) {
             result = result.refSelf();
         }

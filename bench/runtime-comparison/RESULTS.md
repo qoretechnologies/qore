@@ -8599,3 +8599,134 @@ still take 3.18–4.07 times Java's time.
 
 The [audit](FOLLOWUP-AUDIT.md#native-call-conversion-audit-2026-10-10) records every
 check: 18 Pass, 44 N/A, 0 Fail.
+
+## Direct reference-tag loads (2026-10-10)
+
+Decision: retain the runtime-only untyped-load optimization. Across three trials,
+dynamic integer calls improve by 12.6–14.7%, dynamic floating calls by 11.3–12.7%,
+and boxed floating calls by 2.8–4.3%. These are whole-workload gains, not isolated
+call latencies or Java parity.
+
+[Complete evidence](results-reference-tag-load-macos-arm64.json) records
+300 randomized jobs / 1500 measurement windows: 90 fresh baseline jobs, 90 main
+before/after/Java jobs, 60 count-1024 jobs and 60 same-AOT runtime-library-control
+jobs. No task build, test, profile or evidence work overlapped timing.
+
+### Source and correctness boundary
+
+Source parent d3a29966b contains the preceding native-result conversion change;
+origin/develop 1800de49a was already merged. The frozen baseline copies qualified
+binaries whose source hashes match that commit, preserving original pre-commit
+build provenance. The candidate is that parent plus the saved implementation patch.
+No benchmark, compiler, runtime ABI, helper signature or compatibility identity
+changes in this iteration.
+
+The old hasNode() predicate already admitted only non-null ordinary/opaque pointer
+representations. For those values, generic QoreValue::getType() returns the same
+immutable node tag. Reading it directly avoids scalar/enum classification without
+changing reference resolution, ownership or exception propagation. Inline values,
+including enums, remain untouched; weak wrappers keep their existing handling.
+Generated arm64 assembly returns on non-reference paths before creating a C++
+stack frame; only the reference path retains its frame and evaluation work.
+
+All 129 non-bootstrap emitted LLVM entry bodies are identical after debug/profile
+metadata normalization. Only main's bootstrap metadata length differs (27936 to
+27934 bytes); the serialization cause is not established. A separate control uses
+the exact same compiled executable with each runtime library, verified by SHA-256
+and matching RUID. It repeats the principal gains without that bootstrap difference.
+
+The fixture exposed existing baseline limitations, not new failures. An expired
+weak reference retains a distinct deleted-object representation, not plain NOTHING;
+calling fullType() on it works in AST but raises OBJECT-ALREADY-DELETED in baseline
+IR. Tests compare the expired weak value directly. Storing an iterator's raw
+reference into an IR-only auto local raises LVALUE-ERROR in baseline IR/tiered.
+The default parameter form passes all four modes; raw-local mode remains tested
+in AST/JIT/AOT and is retained as a baseline IR reproducer. Neither discrepancy is
+claimed fixed. Initial diagnostics and final baseline passes are preserved.
+
+### Measurements
+
+Apple M4 Pro, macOS arm64 release build; median of fork means in ns/iteration,
+startup excluded. Each fork uses three warmup and five 500 ms measurement windows.
+Java is local Temurin 25.0.2 JIT with retained target calls. Representation and
+inlining contracts remain unequal.
+
+Main count 4096, three forks, run-6xkx_o7r:
+
+|!Kernel|!Before ns|!After ns|!Reduction %|!Java JIT ns|!After / Java
+|dynamic_int_result_call|13.630|11.654|14.49|3.091|3.77
+|dynamic_float_result_call|14.147|12.381|12.48|3.473|3.56
+|indirect_int_result|6.886|6.828|0.84|1.909|3.58
+|indirect_float_result|9.141|8.732|4.47|2.937|2.97
+|dynamic_int_result_fallback|304.024|298.017|1.98|3.026|98.50
+|boxed_float_method_call|64.135|61.412|4.25|2.549|24.09
+|polymorphic_expression_call|10.545|10.402|1.36|2.513|4.14
+|polymorphic_float_expression_call|10.754|10.508|2.29|2.555|4.11
+|indirect_float|9.174|9.234|-0.65|1.629|5.67
+|arithmetic|1.419|1.427|-0.61|0.888|1.61
+
+Count 1024 is run-p_jc14_r; same-AOT count 4096 is run-iev9jcc1. Both have
+three forks. Main and count-1024 trials compile separate AOT executables;
+the same-AOT trial changes only the loaded runtime library.
+
+|!Kernel|!1024 before|!1024 after|!Reduction %|!Same-AOT before|!Same-AOT after|!Reduction %
+|dynamic_int_result_call|14.876|13.000|12.61|13.274|11.328|14.66
+|dynamic_float_result_call|15.756|13.972|11.32|14.035|12.252|12.70
+|indirect_int_result|8.387|8.295|1.10|6.834|6.828|0.10
+|indirect_float_result|10.591|10.104|4.60|8.879|8.616|2.96
+|dynamic_int_result_fallback|305.783|301.058|1.55|300.444|303.089|-0.88
+|boxed_float_method_call|65.623|63.795|2.79|64.772|61.968|4.33
+|polymorphic_expression_call|12.127|12.214|-0.72|10.296|10.357|-0.59
+|polymorphic_float_expression_call|12.515|12.302|1.70|10.671|10.685|-0.13
+|indirect_float|10.572|10.585|-0.12|9.077|8.979|1.08
+|arithmetic|2.803|2.818|-0.52|1.435|1.435|-0.02
+
+The three targeted call workloads have disjoint before/after fork ranges in
+every trial. Observed fork ranges are not confidence intervals. The typed floating
+callback-result workload also improves 3.0–4.6%, but neither its normal nor fast
+LLVM entry calls the changed helper: that control effect remains unexplained
+and is not attributed to direct reference-tag checking.
+
+Unsupported-body fallback improves 1.5–2.0% in the separate-executable trials but
+slows 0.88% in the same-AOT control (before 299.168–304.287 ns, after
+296.818–303.338 ns). There is no reliable fallback speedup claim. Every adverse
+control here has overlapping fork ranges, including small indirect-float,
+polymorphic and arithmetic slowdowns; all samples and costs are retained.
+Identical LLVM or shared executable bytes do not prove identical library layout
+effects or eliminate environmental variation.
+
+### Qualification and next work
+
+Release passes 90 selected files, 372 cases / 16254 assertions, with one known
+release-only skip; debug passes 90 files, 379 cases / 16353 assertions, no skips.
+Each includes 12 standalone files. The new driver has 196 assertions per build
+and checks actual helper emission, O0/O3 stripped AOT, EH/no-debug/parallel codegen,
+runtime disable controls, scalar/enum representations, raw references, weak/opaque
+values and destruction counts. Four supporting qmod targets and dependencies were
+rebuilt sequentially for each build.
+
+All 495 reference checks per mode pass: release IR/AOT/Java-int/Java-JIT and
+debug IR/AOT. The harness passes 15 tests; focused native debug checks pass 146/146.
+No full-suite, sanitizer, cross-platform or IR-speedup claim is made.
+
+A separate ten-second 1 ms profile after all timing records 7613 top-level inclusive
+samples. The top-of-stack summary includes 3774 native floating helper samples,
+464 reference-dereference helper samples plus 391 at its dynamic-linker stub,
+364 popped-frame publication samples and 301 stack-check samples. Nested inclusive
+branches are not additive, and tail attribution is incomplete; these are qualitative
+priorities, not exact guard timings.
+
+Next experiments:
+
+1. Remove redundant native-admission work using parse/compile-time facts and
+   existing live metadata checks; preserve Program/access, debugger and body readiness.
+2. Reduce explicit-context/frame and stack-guard costs without losing concurrent
+   frame-reader visibility or receiver lifetime.
+3. Investigate repeated unsuccessful native admission separately: the fallback
+   still takes about 98.5 times Java's whole-workload time in the main trial.
+4. Profile prepared same-Program IR and context-using/cross-Program calls separately.
+   Dynamic native call workloads here still take 3.56–3.77 times Java's time,
+   and boxed floating calls 24.1 times. Faster loads alone cannot close those gaps.
+
+The [audit](FOLLOWUP-AUDIT.md#reference-tag-load-audit-2026-10-10) records every
+check: 15 Pass, 47 N/A, 0 Fail.
