@@ -229,22 +229,18 @@ public class CircleRestConnection inherits RestClient::RestConnection {
                         "Rate limit: 2,000 requests per 5 minutes per IP",
                     "sensitive": True,
                 },
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": CircleRestClientBase::DefaultData,
-                },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": CircleRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": CircleRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": CircleRestClientBase::DefaultPingPath,
-                },
+                }),
             },
         };
     }

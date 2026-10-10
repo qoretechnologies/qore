@@ -277,10 +277,9 @@ public class PaddleRestConnection inherits RestClient::RestConnection {
                 "https": "paddle",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": PaddleRestClientBase::DefaultData,
-                },
+                }),
                 "instance_type": <ConnectionOptionInfo>{
                     "display_name": "Instance Type",
                     "short_desc": "The Paddle environment to connect to",
@@ -308,20 +307,16 @@ public class PaddleRestConnection inherits RestClient::RestConnection {
                     ),
                     "preselected": True,
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": PaddleRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": PaddleRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": PaddleRestClientBase::DefaultPingPath,
-                },
-                "token": RestConnection::ConnectionScheme.options."token"
-                + <ConnectionOptionInfo>{
+                }),
+                "token": connection_option_override(RestConnection::ConnectionScheme.options."token", {
                     "display_name": "API Key",
                     "short_desc": "A Paddle API key",
                     "desc": "A Paddle API key (`pdl_live_apikey_…` or `pdl_sdbx_apikey_…`), sent as "
@@ -335,11 +330,10 @@ public class PaddleRestConnection inherits RestClient::RestConnection {
                         "by production and the other way round. Set `instance_type` to match.",
                     "sensitive": True,
                     "preselected": True,
-                },
-                "token_type": RestConnection::ConnectionScheme.options."token_type"
-                + <ConnectionOptionInfo>{
+                }),
+                "token_type": connection_option_override(RestConnection::ConnectionScheme.options."token_type", {
                     "default_value": PaddleRestClientBase::DefaultTokenType,
-                },
+                }),
             },
         };
     }

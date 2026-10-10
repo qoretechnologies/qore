@@ -301,10 +301,9 @@ public class InstantlyRestConnection inherits RestClient::RestConnection {
                 "https": "instantly",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": InstantlyRestClientBase::DefaultData,
-                },
+                }),
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
                     "short_desc": "Instantly API key for Bearer token authentication",
@@ -318,18 +317,15 @@ public class InstantlyRestConnection inherits RestClient::RestConnection {
                     "sensitive": True,
                     "preselected": True,
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": InstantlyRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": InstantlyRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": InstantlyRestClientBase::DefaultPingPath,
-                },
+                }),
             },
             "required_options": "apikey",
             "messages": (

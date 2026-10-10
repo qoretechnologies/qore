@@ -202,10 +202,9 @@ public class PdfCoRestConnection inherits RestClient::RestConnection {
                 "https": "pdfco",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": PdfCoRestClientBase::DefaultData,
-                },
+                }),
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
                     "short_desc": "PDF.co API key",
@@ -216,18 +215,15 @@ public class PdfCoRestConnection inherits RestClient::RestConnection {
                     "sensitive": True,
                     "preselected": True,
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": PdfCoRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": PdfCoRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": PdfCoRestClientBase::DefaultPingPath,
-                },
+                }),
             },
             "required_options": "apikey",
             "messages": (

@@ -365,10 +365,9 @@ public class GitLabRestConnection inherits RestClient::RestConnection {
                 "https": "gitlab",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": GitLabRestClientBase::DefaultData,
-                },
+                }),
                 "hostname": <ConnectionOptionInfo>{
                     "display_name": "GitLab Hostname",
                     "short_desc": "The GitLab instance to work against",
@@ -382,43 +381,38 @@ public class GitLabRestConnection inherits RestClient::RestConnection {
                         "A bare host is given `https`.",
                     "preselected": True,
                 },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                + <ConnectionOptionInfo>{
-                    "default_value": GitLabRestClientBase::DefaultGrantType,
-                },
-                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
-                + <ConnectionOptionInfo>{
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": GitLabRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_scopes": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_scopes, {
                     "default_value": GitLabRestClientBase::DefaultScopes,
-                },
-                "oauth2_client_id": RestConnection::ConnectionScheme.options.oauth2_client_id
-                + <ConnectionOptionInfo>{
-                    "desc": "The client ID of an OAuth application registered in this GitLab "
-                        "instance.\n\n"
-                        "Only needed for the OAuth2 flow; an access token in `token` needs neither this "
-                        "nor `oauth2_client_secret`. Register the application under **Admin > "
-                        "Applications** (or **User Settings > Applications**) with "
-                        "`https://api.qoretechnologies.com/qorus-oauth2-redirect` as the redirect URI.",
-                },
-                "oauth2_client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret
-                + <ConnectionOptionInfo>{
-                    "desc": "The client secret of an OAuth application registered in this GitLab "
-                        "instance.\n\n"
-                        "Only needed for the OAuth2 flow; see `oauth2_client_id`.",
-                },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                }),
+                "oauth2_client_id": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_client_id, {
+                        "desc": "The client ID of an OAuth application registered in this GitLab "
+                            "instance.\n\n"
+                            "Only needed for the OAuth2 flow; an access token in `token` needs neither this "
+                            "nor `oauth2_client_secret`. Register the application under **Admin > "
+                            "Applications** (or **User Settings > Applications**) with "
+                            "`https://api.qoretechnologies.com/qorus-oauth2-redirect` as the redirect URI.",
+                    }),
+                "oauth2_client_secret": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_client_secret, {
+                        "desc": "The client secret of an OAuth application registered in this GitLab "
+                            "instance.\n\n"
+                            "Only needed for the OAuth2 flow; see `oauth2_client_id`.",
+                    }),
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": GitLabRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": GitLabRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": GitLabRestClientBase::DefaultPingPath,
-                },
-                "token": RestConnection::ConnectionScheme.options."token"
-                + <ConnectionOptionInfo>{
+                }),
+                "token": connection_option_override(RestConnection::ConnectionScheme.options."token", {
                     "display_name": "Access Token",
                     "short_desc": "A GitLab personal, project or group access token",
                     "desc": "A GitLab access token, sent as a bearer token.\n\n"
@@ -430,11 +424,10 @@ public class GitLabRestConnection inherits RestClient::RestConnection {
                         "Leave this unset to use the OAuth2 flow instead.",
                     "sensitive": True,
                     "preselected": True,
-                },
-                "token_type": RestConnection::ConnectionScheme.options."token_type"
-                + <ConnectionOptionInfo>{
+                }),
+                "token_type": connection_option_override(RestConnection::ConnectionScheme.options."token_type", {
                     "default_value": GitLabRestClientBase::DefaultTokenType,
-                },
+                }),
             },
             # OAuth2 is named first because it is the flow this connection should default to whenever the
             # platform can supply a client; an access token is the fallback for a credential that is not

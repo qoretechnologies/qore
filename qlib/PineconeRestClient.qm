@@ -427,22 +427,35 @@ public class PineconeAdminRestConnection inherits RestClient::RestConnection {
             "base_scheme_map": {"https": "pinecone-admin"},
             "required_options": "oauth2_grant_type,oauth2_token_url,oauth2_client_id,oauth2_client_secret",
             "options": RestConnection::ConnectionScheme.options + {
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                    + <ConnectionOptionInfo>{"default_value": "client_credentials", "allowed_values": (
-                        <AllowedValueInfo>{"value": "client_credentials", "display_name": "Client Credentials"},)},
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
-                    + <ConnectionOptionInfo>{"default_value": PineconeAdminRestClientBase::TokenUrl},
-                "oauth2_client_id": RestConnection::ConnectionScheme.options.oauth2_client_id
-                    + <ConnectionOptionInfo>{"display_name": "Client ID", "preselected": True, "sensitive": True,
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": "client_credentials",
+                        "allowed_values": (
+                            <AllowedValueInfo>{"value": "client_credentials", "display_name": "Client Credentials"},
+                        ),
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url,
+                    {"default_value": PineconeAdminRestClientBase::TokenUrl}),
+                "oauth2_client_id": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_client_id, {
+                        "display_name": "Client ID",
+                        "preselected": True,
+                        "sensitive": True,
                         "desc": "The OAuth2 client ID of a service account in your Pinecone organization. "
-                            "This differs from the service account's resource ID."},
-                "oauth2_client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret
-                    + <ConnectionOptionInfo>{"display_name": "Client Secret", "preselected": True, "sensitive": True,
-                        "desc": "The secret issued when the service account is created or rotated."},
-                "ping_method": RestConnection::ConnectionScheme.options.ping_method
-                    + <ConnectionOptionInfo>{"default_value": "GET"},
-                "ping_path": RestConnection::ConnectionScheme.options.ping_path
-                    + <ConnectionOptionInfo>{"default_value": PingPath},
+                            "This differs from the service account's resource ID.",
+                    }),
+                "oauth2_client_secret": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_client_secret, {
+                        "display_name": "Client Secret",
+                        "preselected": True,
+                        "sensitive": True,
+                        "desc": "The secret issued when the service account is created or rotated.",
+                    }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options.ping_method,
+                    {"default_value": "GET"}),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options.ping_path,
+                    {"default_value": PingPath}),
             },
         };
     }

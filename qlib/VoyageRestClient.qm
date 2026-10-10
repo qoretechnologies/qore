@@ -521,18 +521,18 @@ public class VoyageRestConnection inherits RestClient::RestConnection {
                         "minute for the `-lite` models, 2M for the others)",
                     "type": "int",
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options.ping_headers, {
                     "default_value": VoyageRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options.ping_method, {
                     "default_value": VoyageRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options.ping_path, {
                     "default_value": VoyageRestClientBase::DefaultPingPath,
-                },
-                "ping_body": RestConnection::ConnectionScheme.options.ping_body + <ConnectionOptionInfo>{
+                }),
+                "ping_body": connection_option_override(RestConnection::ConnectionScheme.options.ping_body, {
                     "default_value": VoyageRestClientBase::DefaultPingBody,
-                },
+                }),
             },
             "required_options": "apikey",
         };

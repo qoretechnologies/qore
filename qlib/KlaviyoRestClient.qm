@@ -302,47 +302,40 @@ public class KlaviyoRestConnection inherits RestClient::RestConnection {
                 "https": "klaviyo",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": KlaviyoRestClientBase::DefaultData,
-                },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
-                + <ConnectionOptionInfo>{
-                    "default_value": KlaviyoRestClientBase::DefaultAuthUrl,
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                + <ConnectionOptionInfo>{
-                    "default_value": KlaviyoRestClientBase::DefaultGrantType,
-                },
-                "oauth2_pkce": RestConnection::ConnectionScheme.options.oauth2_pkce
-                + <ConnectionOptionInfo>{
+                }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": KlaviyoRestClientBase::DefaultAuthUrl,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": KlaviyoRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_pkce": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_pkce, {
                     "default_value": KlaviyoRestClientBase::DefaultPkce,
-                },
-                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
-                + <ConnectionOptionInfo>{
+                }),
+                "oauth2_scopes": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_scopes, {
                     "default_value": KlaviyoRestClientBase::DefaultScopes,
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
-                + <ConnectionOptionInfo>{
-                    "default_value": KlaviyoRestClientBase::DefaultTokenUrl,
-                },
+                }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": KlaviyoRestClientBase::DefaultTokenUrl,
+                    }),
                 "oauth2_token_use_basic_auth":
-                    RestConnection::ConnectionScheme.options.oauth2_token_use_basic_auth
-                + <ConnectionOptionInfo>{
+                    connection_option_override(RestConnection::ConnectionScheme.options.oauth2_token_use_basic_auth, {
                     "default_value": True,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": KlaviyoRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": KlaviyoRestClientBase::DefaultPingPath,
-                },
-                "token_type": RestConnection::ConnectionScheme.options."token_type"
-                + <ConnectionOptionInfo>{
+                }),
+                "token_type": connection_option_override(RestConnection::ConnectionScheme.options."token_type", {
                     "default_value": KlaviyoRestClientBase::DefaultTokenType,
-                },
+                }),
             },
             # the OAuth2 alternative is named first because it is the one to prefer: it is scoped to what
             # the registered app holds and revocable per install, where a private API key carries the whole

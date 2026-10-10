@@ -245,10 +245,9 @@ public class Cin7CoreRestConnection inherits RestClient::RestConnection {
                 "https": "cin7core",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": Cin7CoreRestClientBase::DefaultData,
-                },
+                }),
                 "account_id": <ConnectionOptionInfo>{
                     "display_name": "Account ID",
                     "short_desc": "Cin7Core Account ID for authentication",
@@ -275,18 +274,15 @@ public class Cin7CoreRestConnection inherits RestClient::RestConnection {
                     "sensitive": True,
                     "preselected": True,
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": Cin7CoreRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": Cin7CoreRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": Cin7CoreRestClientBase::DefaultPingPath,
-                },
+                }),
             },
             "messages": (
                 <UiMessageInfo>{

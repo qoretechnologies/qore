@@ -1374,6 +1374,14 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_9 DataProvider v3.9
+    - added @ref ConnectionProvider::connection_option_override() "connection_option_override()" to derive a
+      connection option from the option of another connection scheme: adding a hash cast to
+      @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo" to a base option also set every member
+      that the cast did not give to its default value, so that an option derived from a sensitive option (ex: a
+      password or a client secret) was no longer sensitive; the connection schemes of the modules delivered with
+      %Qore derive their options with the new function
+    - @ref DataProvider::QoreDataType::getInfo() "QoreDataType::getInfo()" keeps the members of the base type info
+      that it does not set
     - fixed DPQL serialization (@ref DataProvider::DataProvider::serializeDpqlExpression() "serializeDpqlExpression()")
       of a \c + or \c * expression with more than two arguments, such as a text concatenation of three values:
       only the first two were written, so text saved from the serialized form lost the others; all arguments are

@@ -192,18 +192,18 @@ public class HueRestConnection inherits RestClient::RestConnection {
                 "https": "hue",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
-                + <ConnectionOptionInfo>{
-                    "default_value": HueRestClientBase::DefaultAuthUrl,
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                + <ConnectionOptionInfo>{
-                    "default_value": HueRestClientBase::DefaultGrantType,
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
-                + <ConnectionOptionInfo>{
-                    "default_value": HueRestClientBase::DefaultTokenUrl,
-                },
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": HueRestClientBase::DefaultAuthUrl,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": HueRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": HueRestClientBase::DefaultTokenUrl,
+                    }),
             },
             "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
                 "oauth2_client_id,oauth2_client_secret",

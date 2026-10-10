@@ -364,39 +364,44 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
                     "desc": "the REST API key header",
                     "default_value": ServiceNowRestClientBase::DefaultApiKeyHeader,
                 },
-                "oauth2_client_id": RestConnection::ConnectionScheme.options.oauth2_client_id + <ConnectionOptionInfo>{
-                    "desc": "the ServiceNow OAuth2 client ID",
-                },
-                "oauth2_client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret + <ConnectionOptionInfo>{
-                    "desc": "the ServiceNow OAuth2 client secret",
-                    "sensitive": True,
-                },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url + <ConnectionOptionInfo>{
-                    "default_value": ServiceNowRestClientBase::OAuth2AuthUriPathSuffix,
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type + <ConnectionOptionInfo>{
-                    "allowed_values": RestConnection::ConnectionScheme.options.oauth2_grant_type.allowed_values,
-                    "default_value": ServiceNowRestClientBase::OAuth2DefaultGrantType,
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url + <ConnectionOptionInfo>{
-                    "default_value": ServiceNowRestClientBase::OAuth2TokenUriPathSuffix,
-                },
-                "password": RestConnection::ConnectionScheme.options.password + <ConnectionOptionInfo>{
+                "oauth2_client_id": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_client_id, {
+                        "desc": "the ServiceNow OAuth2 client ID",
+                    }),
+                "oauth2_client_secret": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_client_secret, {
+                        "desc": "the ServiceNow OAuth2 client secret",
+                        "sensitive": True,
+                    }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": ServiceNowRestClientBase::OAuth2AuthUriPathSuffix,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "allowed_values": RestConnection::ConnectionScheme.options.oauth2_grant_type.allowed_values,
+                        "default_value": ServiceNowRestClientBase::OAuth2DefaultGrantType,
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": ServiceNowRestClientBase::OAuth2TokenUriPathSuffix,
+                    }),
+                "password": connection_option_override(RestConnection::ConnectionScheme.options.password, {
                     "desc": "the ServiceNow password",
                     "sensitive": True,
-                },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers" + <ConnectionOptionInfo>{
+                }),
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": DefaultServiceNowPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method" + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": DefaultServiceNowPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path" + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": DefaultServiceNowPingPath,
-                },
-                "username": RestConnection::ConnectionScheme.options.username + <ConnectionOptionInfo>{
+                }),
+                "username": connection_option_override(RestConnection::ConnectionScheme.options.username, {
                     "desc": "the ServiceNow username",
-                },
+                }),
             },
             "required_options": "apikey|token|oauth2_client_id,oauth2_client_secret",
         };

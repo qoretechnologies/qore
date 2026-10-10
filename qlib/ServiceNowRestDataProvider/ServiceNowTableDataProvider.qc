@@ -55,9 +55,12 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
         hash<auto> meta;
 
         #! Provider info
-        const ProviderInfo = ServiceNowRestDataProvider::ProviderInfo - "constructor_options"
-                + <DataProviderInfo>{
+        # a plain hash is added, so that the members that are not given keep the values of the base info; a table
+        # provider has no children
+        const ProviderInfo = cast<hash<DataProviderInfo>>(ServiceNowRestDataProvider::ProviderInfo - "constructor_options"
+                + {
             "supports_children": False,
+            "children_can_support_records": False,
             "search_options": GenericRecordSearchOptions{"requires_result", "max_records"} + {
                 "columns": <DataProviderOptionInfo>{
                     "display_name": "Columns",
@@ -98,7 +101,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
                         "the query expression",
                 },
             },
-        };
+        });
 
         #! System columns
         const SysColumns = {

@@ -241,10 +241,9 @@ public class FreshsalesRestConnection inherits RestClient::RestConnection {
                     "sensitive": True,
                     "preselected": True,
                 },
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": FreshsalesRestClientBase::DefaultData,
-                },
+                }),
                 "domain": <ConnectionOptionInfo>{
                     "display_name": "Freshsales Domain",
                     "short_desc": "Your Freshsales subdomain or full domain",
@@ -257,18 +256,15 @@ public class FreshsalesRestConnection inherits RestClient::RestConnection {
                         "The subdomain or domain is extracted automatically",
                     "preselected": True,
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": FreshsalesRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": FreshsalesRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": FreshsalesRestClientBase::DefaultPingPath,
-                },
+                }),
             },
         };
     }

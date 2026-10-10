@@ -412,22 +412,18 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
                 "https": "bigcommerceres",
             },
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": BigCommerceRestClientBase::DefaultData,
-                },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": BigCommerceRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": BigCommerceRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": BigCommerceRestClientBase::DefaultPingPath,
-                },
+                }),
                 "store_hash": <ConnectionOptionInfo>{
                     "display_name": "Store Hash",
                     "short_desc": "BigCommerce store hash",
@@ -438,26 +434,25 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
                         "https://api.bigcommerce.com/stores/<store_hash>/v3)",
                     "preselected": True,
                 },
-                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
-                + <ConnectionOptionInfo>{
-                    "default_value": BigCommerceRestClientBase::DefaultAuthArgs,
-                },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
-                + <ConnectionOptionInfo>{
-                    "default_value": BigCommerceRestClientBase::DefaultAuthUrl,
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                + <ConnectionOptionInfo>{
-                    "default_value": BigCommerceRestClientBase::DefaultGrantType,
-                },
-                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
-                + <ConnectionOptionInfo>{
+                "oauth2_auth_args": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_args, {
+                        "default_value": BigCommerceRestClientBase::DefaultAuthArgs,
+                    }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": BigCommerceRestClientBase::DefaultAuthUrl,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": BigCommerceRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_scopes": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_scopes, {
                     "default_value": BigCommerceRestClientBase::DefaultScopes,
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
-                + <ConnectionOptionInfo>{
-                    "default_value": BigCommerceRestClientBase::DefaultTokenUrl,
-                },
+                }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": BigCommerceRestClientBase::DefaultTokenUrl,
+                    }),
             },
             "required_options": "store_hash",
             "messages": (

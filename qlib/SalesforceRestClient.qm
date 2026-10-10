@@ -1382,17 +1382,19 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
                         "version",
                     "default_value": SalesforceRestClientBase::Defaults.api,
                 },
-                "oauth2_client_id": RestConnection::ConnectionScheme.options.oauth2_client_id + <ConnectionOptionInfo>{
-                    "desc": "The OAuth2 client_id and also the Salesforce \"consumer key\" for the Connected App",
-                },
-                "oauth2_client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret + <ConnectionOptionInfo>{
-                    "desc": "The OAuth2 client_secret and also the Salesforce \"consumer secret\" for the Connected "
-                        "App",
-                    "sensitive": True,
-                },
-                "data": RestConnection::ConnectionScheme.options."data" + <ConnectionOptionInfo>{
+                "oauth2_client_id": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_client_id, {
+                        "desc": "The OAuth2 client_id and also the Salesforce \"consumer key\" for the Connected App",
+                    }),
+                "oauth2_client_secret": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_client_secret, {
+                        "desc": "The OAuth2 client_secret and also the Salesforce \"consumer secret\" for the "
+                            "Connected App",
+                        "sensitive": True,
+                    }),
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": "json",
-                },
+                }),
                 "id_service_url": <ConnectionOptionInfo>{
                     "display_name": "ID Service URL",
                     "short_desc": "The Salesforce.com identity service URL",
@@ -1407,12 +1409,14 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
                     "desc": "The Salesforce.com instance URL returned in the OAuth2 login process (set automatically "
                         "on login)",
                 },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url + <ConnectionOptionInfo>{
-                    "default_value": SalesforceRestClientBase::Defaults.oauth2_auth_url,
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url + <ConnectionOptionInfo>{
-                    "default_value": SalesforceRestClientBase::Defaults.oauth2_token_url,
-                },
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": SalesforceRestClientBase::Defaults.oauth2_auth_url,
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": SalesforceRestClientBase::Defaults.oauth2_token_url,
+                    }),
                 "oauth2_logout_url": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Revocation URL",
                     "short_desc": "The OAuth logout / revoke token URL",
@@ -1420,27 +1424,26 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
                     "desc": "The OAuth logout / revoke token URL",
                     "default_value": SalesforceRestClientBase::Defaults.oauth2_logout_url,
                 },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                    + <ConnectionOptionInfo>{
-                    "default_value": SalesforceRestClientBase::Defaults.oauth2_grant_type,
-                },
-                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
-                    + <ConnectionOptionInfo>{
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": SalesforceRestClientBase::Defaults.oauth2_grant_type,
+                    }),
+                "oauth2_scopes": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_scopes, {
                     "default_value": SalesforceRestClientBase::Defaults.oauth2_scopes,
-                },
-                "password": RestConnection::ConnectionScheme.options."password" + <ConnectionOptionInfo>{
+                }),
+                "password": connection_option_override(RestConnection::ConnectionScheme.options."password", {
                     "desc": "the Salesforce.com password (will override any password in the URL)",
                     "sensitive": True,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method" + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": "GET",
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path" + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": "auto",
-                },
-                "username": RestConnection::ConnectionScheme.options."username" + <ConnectionOptionInfo>{
+                }),
+                "username": connection_option_override(RestConnection::ConnectionScheme.options."username", {
                     "desc": "the Salesforce.com username (will override any username in the URL)",
-                },
+                }),
             },
             # FIXME: username and password are currently optional for backwards compatibility with URL auth options
             "required_options": "oauth2_client_id,oauth2_client_secret",

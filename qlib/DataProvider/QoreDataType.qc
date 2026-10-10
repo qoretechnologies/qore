@@ -378,12 +378,13 @@ public class QoreDataType inherits AbstractDataProviderType {
 
     #! returns a description of the type as a hash
     hash<DataTypeInfo> getInfo(*bool simple) {
-        hash<DataTypeInfo> rv = AbstractDataProviderType::getInfo(simple) + <DataTypeInfo>{
+        # a plain hash is added, so that the members that are not given keep the values of the base info
+        hash<DataTypeInfo> rv = cast<hash<DataTypeInfo>>(AbstractDataProviderType::getInfo(simple) + {
             "allowed_values": allowed_values,
             "allowed_values_creatable": allowed_values_creatable ?? False,
             "element_allowed_values": element_allowed_values,
             "element_allowed_values_creatable": element_allowed_values_creatable ?? False,
-        };
+        });
         if ((base_type_hash{NT_HASH} || base_type_hash{NT_ALL}) && !rv.fields) {
             rv.can_manage_fields = True;
         }

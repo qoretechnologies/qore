@@ -183,9 +183,9 @@ public class TogetherRestConnection inherits RestClient::RestConnection {
             "schemes": {"together": True},
             "base_scheme_map": {"https": "together"},
             "options": RestConnection::ConnectionScheme.options + {
-                "data": RestConnection::ConnectionScheme.options.data + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options.data, {
                     "default_value": "json",
-                },
+                }),
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
                     "short_desc": "Together AI API key for authentication",
@@ -215,15 +215,15 @@ public class TogetherRestConnection inherits RestClient::RestConnection {
                     "type": "string",
                     "default_value": TogetherRestClientBase::DefaultChatModel,
                 },
-                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options.ping_headers, {
                     "default_value": DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options.ping_method, {
                     "default_value": DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options.ping_path, {
                     "default_value": DefaultPingPath,
-                },
+                }),
             },
             "required_options": "apikey",
         };

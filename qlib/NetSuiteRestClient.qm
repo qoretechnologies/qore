@@ -292,14 +292,14 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
                     "type": "string",
                     "desc": "The NetSuite account ID or company ID; if not provided, its value is auto-determined",
                 },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
-                        + <ConnectionOptionInfo>{
-                    "default_value": "auto",
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                        + <ConnectionOptionInfo>{
-                    "default_value": NetSuiteRestClientBase::DefaultGrantType,
-                },
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": "auto",
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": NetSuiteRestClientBase::DefaultGrantType,
+                    }),
                 "oauth2_logout_url": <ConnectionOptionInfo>{
                     "display_name": "OAuth2 Logout URL",
                     "short_desc": "The logout / deauthorize URL for OAuth2 tokens",
@@ -307,14 +307,13 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
                     "desc": "The logout / deauthorize URL for OAuth2 tokens",
                     "default_value": "auto",
                 },
-                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
-                        + <ConnectionOptionInfo>{
+                "oauth2_scopes": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_scopes, {
                     "default_value": NetSuiteRestClientBase::DefaultOAuth2Scopes,
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
-                    + <ConnectionOptionInfo>{
-                    "default_value": "auto",
-                },
+                }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": "auto",
+                    }),
             },
             "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
                 "oauth2_client_id,oauth2_client_secret",

@@ -27,10 +27,10 @@ public namespace LinkedInOrganizationsDataProvider {
 #! Constructor options for the new-post watch provider
 public const NewPostWatchConstructorOptions = LinkedInOrganizationsDataProviderBase::ConstructorOptions
     + LinkedInOrganizationField + {
-    "organization": LinkedInOrganizationField."organization" + <DataProviderOptionInfo>{
+    "organization": cast<hash<DataProviderOptionInfo>>(LinkedInOrganizationField."organization" + {
         "required": True,
         "ref_data": "organizations",
-    },
+    }),
     "poll_interval": <DataProviderOptionInfo>{
         "display_name": "Poll Interval",
         "short_desc": "Polling interval in seconds",

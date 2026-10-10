@@ -537,52 +537,44 @@ public class ConfluenceRestConnection inherits RestClient::RestConnection {
                         "Set this **or** `cloud_id`, not both.",
                     "preselected": True,
                 },
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": ConfluenceRestClientBase::DefaultData,
-                },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
-                + <ConnectionOptionInfo>{
-                    "default_value": ConfluenceRestClientBase::DefaultAuthUrl,
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                + <ConnectionOptionInfo>{
-                    "default_value": ConfluenceRestClientBase::DefaultGrantType,
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
-                + <ConnectionOptionInfo>{
-                    "default_value": ConfluenceRestClientBase::DefaultTokenUrl,
-                },
-                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
-                + <ConnectionOptionInfo>{
+                }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": ConfluenceRestClientBase::DefaultAuthUrl,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": ConfluenceRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": ConfluenceRestClientBase::DefaultTokenUrl,
+                    }),
+                "oauth2_scopes": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_scopes, {
                     "default_value": ConfluenceRestClientBase::DefaultScopes,
-                },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": ConfluenceRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": ConfluenceRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": ConfluenceRestClientBase::DefaultPingPath,
-                },
-                "username": RestConnection::ConnectionScheme.options."username"
-                + <ConnectionOptionInfo>{
+                }),
+                "username": connection_option_override(RestConnection::ConnectionScheme.options."username", {
                     "desc": "The Atlassian account email address, used with an API token in `password`",
-                },
-                "password": RestConnection::ConnectionScheme.options."password"
-                + <ConnectionOptionInfo>{
+                }),
+                "password": connection_option_override(RestConnection::ConnectionScheme.options."password", {
                     "desc": "An API token created at **id.atlassian.com > Security > API tokens**, used "
                         "with the account email in `username`.\n\n"
                         "This is not the account password, which Confluence Cloud does not accept.",
-                },
-                "token_type": RestConnection::ConnectionScheme.options."token_type"
-                + <ConnectionOptionInfo>{
+                }),
+                "token_type": connection_option_override(RestConnection::ConnectionScheme.options."token_type", {
                     "default_value": ConfluenceRestClientBase::DefaultTokenType,
-                },
+                }),
             },
             # the OAuth2 flow is what discovers \c cloud_id, so requiring it up front would require a
             # value that cannot exist yet; the OAuth2 group therefore asks only for what the user really

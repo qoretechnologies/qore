@@ -240,38 +240,34 @@ public class BitlyRestConnection inherits RestClient::RestConnection {
                     "sensitive": True,
                     "preselected": True,
                 },
-                "data": RestConnection::ConnectionScheme.options."data"
-                + <ConnectionOptionInfo>{
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
                     "default_value": BitlyRestClientBase::DefaultData,
-                },
-                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": BitlyRestClientBase::DefaultPingHeaders,
-                },
-                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
                     "default_value": BitlyRestClientBase::DefaultPingMethod,
-                },
-                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
-                + <ConnectionOptionInfo>{
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
                     "default_value": BitlyRestClientBase::DefaultPingPath,
-                },
-                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
-                + <ConnectionOptionInfo>{
-                    "default_value": BitlyRestClientBase::DefaultAuthArgs,
-                },
-                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
-                + <ConnectionOptionInfo>{
-                    "default_value": BitlyRestClientBase::DefaultAuthUrl,
-                },
-                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
-                + <ConnectionOptionInfo>{
-                    "default_value": BitlyRestClientBase::DefaultGrantType,
-                },
-                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
-                + <ConnectionOptionInfo>{
-                    "default_value": BitlyRestClientBase::DefaultTokenUrl,
-                },
+                }),
+                "oauth2_auth_args": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_args, {
+                        "default_value": BitlyRestClientBase::DefaultAuthArgs,
+                    }),
+                "oauth2_auth_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_auth_url, {
+                        "default_value": BitlyRestClientBase::DefaultAuthUrl,
+                    }),
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": BitlyRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": BitlyRestClientBase::DefaultTokenUrl,
+                    }),
             },
         };
     }
