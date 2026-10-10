@@ -75,9 +75,36 @@ public class CompressionTest inherits QUnit::Test {
         addTestCase("decompressor transform size limits", \transformLimitTest());
         addTestCase("raw deflate data ending with a sync flush", \rawDeflateSyncFlushTest());
         addTestCase("zstd data with several frames", \zstdMultiFrameTest());
+        addTestCase("compression level ranges", \levelRangeTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    #! every compression function accepts exactly its documented levels
+    levelRangeTest() {
+        string text = strmul("compressible text ", 100);
+        # zlib: 1 - 9 or -1 (the default)
+        foreach int level in (-1, 1, 9) {
+            assertEq(text, gunzip_to_string(gzip(text, level)), "gzip level " + level);
+            assertEq(text, gunzip_to_string(gzip(binary(text), level)), "gzip binary level " + level);
+            assertEq(text, uncompress_to_string(compress(text, level)), "compress level " + level);
+        }
+        foreach int level in (-5, -2, 0, 10) {
+            assertThrows("ZLIB-LEVEL-ERROR", "1 - 9 or -1", \gzip(), (text, level), "gzip level " + level);
+            assertThrows("ZLIB-LEVEL-ERROR", "1 - 9 or -1", \gzip(), (binary(text), level),
+                "gzip binary level " + level);
+            assertThrows("ZLIB-LEVEL-ERROR", "1 - 9 or -1", \compress(), (text, level), "compress level " + level);
+        }
+        # bzip2: 1 - 9
+        foreach int level in (1, 9) {
+            assertEq(text, bunzip2_to_string(bzip2(text, level)), "bzip2 level " + level);
+        }
+        foreach int level in (-3, -1, 0, 10) {
+            assertThrows("BZLIB2-LEVEL-ERROR", "1 - 9", \bzip2(), (text, level), "bzip2 level " + level);
+            assertThrows("BZLIB2-LEVEL-ERROR", "1 - 9", \bzip2(), (binary(text), level),
+                "bzip2 binary level " + level);
+        }
     }
 
     zlibTest() {

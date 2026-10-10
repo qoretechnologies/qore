@@ -4274,6 +4274,10 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::gzip() "gzip()" accepting a negative level other than \c -1, which failed in zlib with an
+      unclear error, and @ref Qore::bzip2() "bzip2()" accepting a negative level; they raise \c ZLIB-LEVEL-ERROR and
+      \c BZLIB2-LEVEL-ERROR, as documented
+
     - Fixed a data race when a binary module loaded at runtime with @ref Qore::load_module() "load_module()" registered
       classes that other threads used while a @ref Qore::Program "Program" parsed a subclass of one of them: the
       parse resolved the shared builtin class's hierarchy and initialized it then; builtin classes are now resolved

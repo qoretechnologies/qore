@@ -1464,8 +1464,8 @@ binary data = gzip(str);
     @throw ZLIB-ERROR The zlib library returned an error during processing (should not normally happen during compression)
 */
 binary gzip(string data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
-   if (!level || level > 9)
-      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 0 - 9 (value passed: %d)", level);
+   if ((level < 1 && level != -1) || level > 9)
+      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
 
    if (!data->strlen())
       return new BinaryNode;
@@ -1489,8 +1489,8 @@ binary data = gzip(bin);
     @throw ZLIB-ERROR The zlib library returned an error during processing (should not normally happen during compression)
 */
 binary gzip(binary data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
-   if (!level || level > 9)
-      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 0 - 9 (value passed: %d)", level);
+   if ((level < 1 && level != -1) || level > 9)
+      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
 
    if (!data->size())
       return new BinaryNode;
@@ -1589,7 +1589,7 @@ binary bin = bzip2(data);
     @throw BZIP2-COMPRESS-ERROR the bzip2 library returned an error during processing
 */
 binary bzip2(binary data, softint level = BZ2_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
-   if (!level || level > 9)
+   if (level < 1 || level > 9)
       return xsink->raiseException("BZLIB2-LEVEL-ERROR", "level must be between 1 - 9 (value passed: %d)", level);
 
    return qore_bzip2(data->getPtr(), data->size(), level, xsink);
@@ -1612,7 +1612,7 @@ binary bin = bzip2(str);
     @throw BZIP2-COMPRESS-ERROR the bzip2 library returned an error during processing
 */
 binary bzip2(string data, softint level = BZ2_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
-   if (!level || level > 9)
+   if (level < 1 || level > 9)
       return xsink->raiseException("BZLIB2-LEVEL-ERROR", "level must be between 1 - 9 (value passed: %d)", level);
 
    return qore_bzip2(data->getBuffer(), data->strlen(), level, xsink);
