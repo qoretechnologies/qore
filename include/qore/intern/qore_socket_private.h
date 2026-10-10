@@ -800,6 +800,9 @@ private:
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
     size_t size;
+    //! the receive buffer, allocated on first use with the size of one read; on the heap rather than the stack of
+    //! the thread that drives the operation (an I/O thread or a handler thread with a small stack)
+    std::unique_ptr<char[]> rbuf;
     bool io = false;
 };
 

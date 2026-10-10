@@ -48,7 +48,9 @@
 #include "qore/intern/qore_socket_private.h"
 
 #include <atomic>
+#include <memory>
 #include <mutex>
+#include <new>
 #include <vector>
 #include <cerrno>
 #include <cstdlib>
@@ -344,10 +346,19 @@ static int qore_ftp_write_temp_file_to_local_path(const char* tmp_path, const ch
         return -1;
     }
 
-    char buf[65536];
+    // the copy buffer is on the heap rather than the stack of the calling thread, which can be a small one
+    constexpr size_t buf_size = 65536;
+    std::unique_ptr<char[]> buf_holder(new (std::nothrow) char[buf_size]);
+    if (!buf_holder) {
+        ::close(ifd);
+        ::close(ofd);
+        xsink->raiseException("FTP-FILE-WRITE-ERROR", "cannot allocate a copy buffer of %zu bytes", buf_size);
+        return -1;
+    }
+    char* buf = buf_holder.get();
     unsigned cancel_check = 0;
     while (true) {
-        ssize_t nr = ::read(ifd, buf, sizeof(buf));
+        ssize_t nr = ::read(ifd, buf, buf_size);
         if (nr < 0) {
             if (errno == EINTR) {
                 continue;

@@ -8947,7 +8947,14 @@ int SocketRecvSomePollState::continuePollIntern(ExceptionSink* xsink) {
     }
 
     size_t read_size = QORE_MIN(size, (size_t)DEFAULT_SOCKET_BUFSIZE);
-    char buf[DEFAULT_SOCKET_BUFSIZE];
+    if (!rbuf) {
+        rbuf.reset(new (std::nothrow) char[read_size]);
+        if (!rbuf) {
+            xsink->raiseException("SOCKET-RECV-ERROR", "cannot allocate a receive buffer of %zu bytes", read_size);
+            return -1;
+        }
+    }
+    char* buf = rbuf.get();
 
     ssize_t rc;
     if (sock->ssl) {
