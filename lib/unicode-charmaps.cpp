@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 
 #include "qore/intern/unicode-case-data.h"
+#include "qore/intern/qore_encoding_private.h"
 
 #include <cctype>
 
@@ -904,9 +905,45 @@ static int concat_charmap_replacement(QoreString& str, const char* repl, Excepti
    return *xsink ? -1 : 0;
 }
 
+//! applies a transformation of the characters of a string in a stateful encoding to its text in UTF-8
+/** A stateful encoding (ex: UTF-7, ISO-2022-JP) has no byte sequence per character, so its characters cannot be
+    transformed one at a time; the result is converted back to the encoding of the string
+
+    @param str the empty target string, in the encoding of \a src
+    @param src the source string
+    @param xsink for exceptions
+    @param transform the transformation, which appends the transformed UTF-8 text of its second argument to its first
+    argument and returns 0 for OK or -1 if an exception was raised
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+template <typename F>
+static int apply_stateful_transformation(QoreString& str, const QoreString& src, ExceptionSink* xsink, F transform) {
+   assert(str.empty());
+   assert(qore_encoding_private::isStateful(src.getEncoding()));
+   TempEncodingHelper utf8(src, QCS_UTF8, xsink);
+   if (!utf8) {
+      return -1;
+   }
+   QoreString result(QCS_UTF8);
+   if (transform(result, **utf8)) {
+      return -1;
+   }
+   // the target is empty, so it gets the text converted on its own, ending in the initial shift state
+   str.concat(&result, xsink);
+   return *xsink ? -1 : 0;
+}
+
 static int apply_unicode_charmap(const unicodecharmap_t& umap, QoreString& str, const QoreString& src, ExceptionSink* xsink) {
    assert(str.empty());
    assert(str.getEncoding() == src.getEncoding());
+
+   if (qore_encoding_private::isStateful(src.getEncoding())) {
+      return apply_stateful_transformation(str, src, xsink,
+         [&umap, xsink](QoreString& targ, const QoreString& utf8) -> int {
+            return apply_unicode_charmap(umap, targ, utf8, xsink);
+         });
+   }
 
    //printd(5, "apply_unicode_map() source: '%s' (%s)\n", src.getBuffer(), src.getEncoding()->getCode());
 
@@ -1156,6 +1193,13 @@ static int concat_case_mapped(QoreString& str, const QoreString& src, size_t pos
 static int apply_case_map(bool upper, QoreString& str, const QoreString& src, ExceptionSink* xsink) {
     assert(str.empty());
     assert(str.getEncoding() == src.getEncoding());
+
+    if (qore_encoding_private::isStateful(src.getEncoding())) {
+        return apply_stateful_transformation(str, src, xsink,
+            [upper, xsink](QoreString& targ, const QoreString& utf8) -> int {
+                return apply_case_map(upper, targ, utf8, xsink);
+            });
+    }
 
     const char* buf = src.getBuffer();
     size_t size = src.size();

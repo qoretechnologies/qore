@@ -36,6 +36,7 @@
 #include "qore/intern/QC_StringRegexSplitIterator.h"
 #include "qore/intern/QC_StringCharIterator.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
+#include "qore/intern/qore_string_private.h"
 
 #include <cctype>
 
@@ -45,6 +46,20 @@ static const QoreStringNode* get_pseudo_string_arg(const QoreValue& v) {
 }
 
 static QoreStringNode* qore_pseudo_regex_escape_string(const QoreStringNode* str, ExceptionSink* xsink) {
+    // the text of a string in an encoding that is not ASCII-compatible is escaped in UTF-8: a backslash is not the
+    // byte 0x5c in such an encoding (UTF-16*, EBCDIC), and the characters of a stateful encoding (ex: ISO-2022-JP)
+    // have no bytes of their own
+    if (!str->getEncoding()->isAsciiCompat()) {
+        SimpleRefHolder<QoreStringNode> utf8(str->convertEncoding(QCS_UTF8, xsink));
+        if (!utf8) {
+            return nullptr;
+        }
+        SimpleRefHolder<QoreStringNode> escaped(qore_pseudo_regex_escape_string(*utf8, xsink));
+        if (!escaped) {
+            return nullptr;
+        }
+        return escaped->convertEncoding(str->getEncoding(), xsink);
+    }
     SimpleRefHolder<QoreStringNode> result(new QoreStringNode("", str->getEncoding()));
     size_t pos = 0;
     size_t count = 0;
@@ -530,7 +545,7 @@ list<string> <string>::split(string separator, bool with_separator = False, bool
         return QoreValue();
 
     return split_intern(temp->c_str(), temp->strlen(), str->c_str(), str->strlen(), str->getEncoding(),
-        with_separator, keep_trailing_empty);
+        with_separator, keep_trailing_empty, xsink);
 }
 
 //! Returns a lazy @ref Qore::StringSplitIterator iterator yielding zero-copy views of each piece.
@@ -1346,11 +1361,25 @@ int <string>::comparePartial(string other_string) [const;flags=RET_VALUE_ONLY,NA
     if (*xsink)
         return QoreValue();
 
+    // a character has no bytes of its own in a stateful encoding (ex: ISO-2022-JP), so the text is compared in
+    // UTF-8
+    TempEncodingHelper utf8_str;
+    TempEncodingHelper utf8_other;
+    const QoreString* cmp_str = str;
+    const QoreString* cmp_other = *temp;
+    if (qore_string_private::get(*str)->isStateful()) {
+        if (!utf8_str.set(str, QCS_UTF8, xsink) || !utf8_other.set(*temp, QCS_UTF8, xsink)) {
+            return QoreValue();
+        }
+        cmp_str = *utf8_str;
+        cmp_other = *utf8_other;
+    }
+
     // memcmp() and not strncmp(): strings can contain embedded nulls, either because the encoding uses
     // them (UTF-16*) or because the string data itself contains them
-    size_t tsize = temp->size();
-    size_t ssize = str->size();
-    int rc = memcmp(str->c_str(), temp->c_str(), QORE_MIN(tsize, ssize));
+    size_t tsize = cmp_other->size();
+    size_t ssize = cmp_str->size();
+    int rc = memcmp(cmp_str->c_str(), cmp_other->c_str(), QORE_MIN(tsize, ssize));
     if (!rc && tsize > ssize) {
         // the argument matches the entire current string but is longer than it
         rc = -1;
@@ -1523,9 +1552,10 @@ bool <string>::contains(string substring) [const;flags=RET_VALUE_ONLY,NAMED_ARGS
     if (*xsink) {
         return QoreValue();
     }
-    // note: bindex() and not find(const char*), which determines the argument's length with strlen()
-    // and therefore cannot handle encodings with embedded nulls such as UTF-16*
-    return str->bindex(**temp, 0) >= 0;
+    // note: not find(const char*), which determines the argument's length with strlen() and therefore cannot handle
+    // encodings with embedded nulls such as UTF-16*; a string in a stateful encoding is searched by characters
+    bool rv = qore_string_private::get(*str)->containsText(**temp, xsink);
+    return *xsink ? QoreValue() : QoreValue(rv);
 }
 
 //! returns a string for the next line in the string buffer starting at the given offset (or at the beginning if no offset is given)
@@ -1567,6 +1597,11 @@ bool <string>::contains(string substring) [const;flags=RET_VALUE_ONLY,NAMED_ARGS
         eolstr.set(line_separator, str->getEncoding(), xsink);
         if (*xsink)
             return QoreValue();
+        // the bytes that iconv writes at the start of text in a stateful encoding are not in the middle of the text
+        if (qore_string_private::get(*str)->isStateful()) {
+            eolstr.makeTemp();
+            qore_string_private::get(const_cast<QoreString&>(**eolstr))->removeStatefulPrefix();
+        }
 
         if (eolstr->size() > str->size())
             return QoreValue();
@@ -1614,6 +1649,9 @@ bool <string>::contains(string substring) [const;flags=RET_VALUE_ONLY,NAMED_ARGS
                 "encoding \"%s\"", str->getEncoding()->getCode());
             return QoreValue();
         }
+        // the bytes that iconv writes at the start of text in a stateful encoding are not in the middle of the text
+        qore_string_private::get(cr)->removeStatefulPrefix();
+        qore_string_private::get(lf)->removeStatefulPrefix();
 
         const char* crp = qore_string_private::memmem_aligned(start, avail, cr.c_str(), cr.size(),
             align, offset);

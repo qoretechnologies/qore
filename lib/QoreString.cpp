@@ -692,7 +692,8 @@ void QoreAsciiCompatStringHelper::decodeToUtf8(const QoreEncoding* enc, const ch
     }
 }
 
-// FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
+// the target must be ASCII-compatible; QoreString::concatDecodeUrl() and QoreString::concatDecodeUriRequest()
+// decode to a target in another encoding through UTF-8
 int qore_string_private::concatDecodeUriIntern(ExceptionSink* xsink, const qore_string_private& str,
         bool detect_query) {
     if (!getEncoding()->isAsciiCompat()) {
@@ -820,7 +821,8 @@ int qore_string_private::concatDecodeUriIntern(ExceptionSink* xsink, const qore_
     return 0;
 }
 
-// FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
+// the target must be ASCII-compatible; QoreString::concatEncodeUriRequest() encodes to a target in another
+// encoding through UTF-8
 int qore_string_private::concatEncodeUriRequest(ExceptionSink* xsink, const qore_string_private& str) {
     assert(str.len);
 
@@ -1022,12 +1024,19 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
 }
 
 unsigned int qore_string_private::getUnicodePointFromBytePos(size_t offset, unsigned& clen, ExceptionSink* xsink) const {
+    if (isStateful()) {
+        // the bytes at an offset are a character only in the shift state at that offset; every function that walks
+        // the characters of a string walks the text of a string in a stateful encoding in UTF-8
+        raiseStatefulByteOffsetError(xsink);
+        // guarantees the progress of a loop over the characters
+        clen = offset < len ? static_cast<unsigned>(len - offset) : 1;
+        return static_cast<unsigned int>(-1);
+    }
     // gets the unicode code point (source may be a view)
     const char* b = effective_buf();
     return getEncoding()->getUnicode(b + offset, b + len, clen, xsink);
 }
 
-// FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 int qore_string_private::concatEncode(ExceptionSink* xsink, const QoreString& str, unsigned code) {
     //printd(5, "qore_string_private::concatEncode() '%s' code: 0x%x\n", str.c_str(), code);
 
@@ -1042,9 +1051,15 @@ int qore_string_private::concatEncode(ExceptionSink* xsink, const QoreString& st
     }
 
     if (!getEncoding()->isAsciiCompat()) {
-        xsink->raiseException("UNSUPPORTED-ENCODING", "cannot encode to non-ASCII-compatible encoding \"%s\"",
-            getEncoding()->getCode());
-        return -1;
+        // the result is made in UTF-8 and converted to the encoding of this string: the characters that the operation
+        // writes are not ASCII bytes in an encoding that is not ASCII-compatible (UTF-16*, EBCDIC), and the
+        // characters of a stateful encoding (ex: ISO-2022-JP) have no bytes of their own
+        QoreString utf8(QCS_UTF8);
+        if (utf8.priv->concatEncode(xsink, str, code)) {
+            return -1;
+        }
+        concat(&utf8, xsink);
+        return *xsink ? -1 : 0;
     }
 
     qore_string_private* p = 0;
@@ -1057,11 +1072,14 @@ int qore_string_private::concatEncode(ExceptionSink* xsink, const QoreString& st
         p = cstr->priv;
     } else {
         if (!str.priv->getEncoding()->isAsciiCompat()) {
-            xsink->raiseException("UNSUPPORTED-ENCODING", "cannot encode from non-ASCII-compatible encoding \"%s\"",
-                str.priv->getEncoding()->getCode());
-            return -1;
+            // the characters of text in an encoding that is not ASCII-compatible are read from its text in UTF-8
+            if (!cstr.set(&str, QCS_UTF8, xsink)) {
+                return -1;
+            }
+            p = cstr->priv;
+        } else {
+            p = str.priv;
         }
-        p = str.priv;
     }
 
     //printd(5, "qore_string_private::concatEncode() p: %p '%s' len: %d\n", p, p->buf, p->len);
@@ -1120,7 +1138,6 @@ int qore_string_private::concatEncode(ExceptionSink* xsink, const QoreString& st
     return 0;
 }
 
-// FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 int qore_string_private::concatDecode(ExceptionSink* xsink, const QoreString& str, unsigned code) {
    // if it's not a null string
    if (!str.priv->len)
@@ -1134,8 +1151,15 @@ int qore_string_private::concatDecode(ExceptionSink* xsink, const QoreString& st
 
    const QoreEncoding* enc = getEncoding();
    if (!enc->isAsciiCompat()) {
-       xsink->raiseException("UNSUPPORTED-ENCODING", "cannot decode to non-ASCII-compatible encoding \"%s\"", enc->getCode());
-       return -1;
+       // the result is made in UTF-8 and converted to the encoding of this string: the characters that the operation
+       // writes are not ASCII bytes in an encoding that is not ASCII-compatible (UTF-16*, EBCDIC), and the
+       // characters of a stateful encoding (ex: ISO-2022-JP) have no bytes of their own
+       QoreString utf8(QCS_UTF8);
+       if (utf8.priv->concatDecode(xsink, str, code)) {
+           return -1;
+       }
+       concat(&utf8, xsink);
+       return *xsink ? -1 : 0;
    }
 
    TempEncodingHelper cstr(str, enc, xsink);
@@ -1269,9 +1293,29 @@ int qore_string_private::concatUnicode(unsigned code) {
     return 0;
 }
 
+int qore_string_private::statefulTrim(ExceptionSink* xsink, const intvec_t& cvec, bool leading) {
+    assert(isStateful());
+    QoreString utf8(QCS_UTF8);
+    if (statefulToUtf8(utf8, xsink)) {
+        return -1;
+    }
+    if (leading ? utf8.priv->trimLeading(xsink, cvec) : utf8.priv->trimTrailing(xsink, cvec)) {
+        return -1;
+    }
+    QoreString result(getEncoding());
+    if (statefulFromUtf8(utf8, result, xsink)) {
+        return -1;
+    }
+    swapText(*result.priv);
+    return 0;
+}
+
 int qore_string_private::trimLeading(ExceptionSink* xsink, const intvec_t& cvec) {
     if (!len) {
         return 0;
+    }
+    if (isStateful()) {
+        return statefulTrim(xsink, cvec, true);
     }
     if (view_parent) {
         materialize();
@@ -1314,6 +1358,9 @@ int qore_string_private::trimLeading(ExceptionSink* xsink, const qore_string_pri
 int qore_string_private::trimTrailing(ExceptionSink* xsink, const intvec_t& cvec) {
     if (!len) {
         return 0;
+    }
+    if (isStateful()) {
+        return statefulTrim(xsink, cvec, false);
     }
     if (view_parent) {
         materialize();
@@ -1551,6 +1598,110 @@ void qore_string_private::splice_simple(size_t offset, size_t num, const char* s
     len = len - num + str_len;
     // set last entry to NULL
     buf[len] = '\0';
+}
+
+int qore_string_private::statefulToUtf8(QoreString& utf8, ExceptionSink* xsink) const {
+    assert(isStateful());
+    assert(utf8.getEncoding() == QCS_UTF8);
+    if (!len) {
+        return 0;
+    }
+    return convert_encoding_intern(effective_buf(), len, getEncoding(), utf8, QCS_UTF8, xsink);
+}
+
+int qore_string_private::statefulFromUtf8(const QoreString& utf8, QoreString& targ, ExceptionSink* xsink) const {
+    assert(isStateful());
+    assert(utf8.getEncoding() == QCS_UTF8);
+    assert(targ.getEncoding() == getEncoding());
+    if (!utf8.priv->len) {
+        return 0;
+    }
+    return convert_encoding_intern(utf8.priv->effective_buf(), utf8.priv->len, QCS_UTF8, targ, getEncoding(), xsink);
+}
+
+int qore_string_private::statefulSplice(qore_offset_t offset, qore_offset_t num, bool to_end, const QoreString* repl,
+        QoreString* extract, ExceptionSink* xsink) {
+    assert(xsink);
+    QoreString utf8(QCS_UTF8);
+    if (statefulToUtf8(utf8, xsink)) {
+        return -1;
+    }
+    QoreString utf8_extract(QCS_UTF8);
+    QoreString* ext = extract ? &utf8_extract : nullptr;
+    if (to_end) {
+        if (utf8.priv->len) {
+            utf8.priv->splice_complex(offset, xsink, ext);
+        }
+    } else if (repl) {
+        TempEncodingHelper utf8_repl(repl, QCS_UTF8, xsink);
+        if (!utf8_repl) {
+            return -1;
+        }
+        utf8.priv->splice_complex(offset, num, *utf8_repl, xsink, ext);
+    } else if (utf8.priv->len) {
+        utf8.priv->splice_complex(offset, num, xsink, ext);
+    }
+    if (*xsink) {
+        return -1;
+    }
+
+    // the text is converted back before the string is changed, so that it is not changed if an exception is raised
+    QoreString result(getEncoding());
+    if (statefulFromUtf8(utf8, result, xsink)) {
+        return -1;
+    }
+    if (extract && statefulFromUtf8(utf8_extract, *extract, xsink)) {
+        return -1;
+    }
+    swapText(*result.priv);
+    return 0;
+}
+
+int qore_string_private::concatStateful(const qore_string_private& str, qore_offset_t pos, const qore_offset_t* plen,
+        ExceptionSink* xsink) {
+    assert(xsink);
+    assert(str.getEncoding() == getEncoding());
+    assert(isStateful());
+    QoreString utf8(QCS_UTF8);
+    if (str.statefulToUtf8(utf8, xsink)) {
+        return -1;
+    }
+    QoreString part(QCS_UTF8);
+    if (plen) {
+        if (part.priv->concat(*utf8.priv, pos, *plen, xsink)) {
+            return -1;
+        }
+    } else if (part.priv->concat(*utf8.priv, pos, xsink)) {
+        return -1;
+    }
+    // the characters are converted on their own, so that they end in the initial shift state
+    QoreString tmp(getEncoding());
+    if (statefulFromUtf8(part, tmp, xsink)) {
+        return -1;
+    }
+    concat(tmp.priv);
+    return 0;
+}
+
+bool qore_string_private::containsText(const QoreString& needle, ExceptionSink* xsink) const {
+    assert(needle.getEncoding() == getEncoding());
+    if (isStateful()) {
+        ExceptionSink local_xsink;
+        ExceptionSink* xs = xsink ? xsink : &local_xsink;
+        qore_offset_t i = index(needle, 0, xs);
+        local_xsink.clear();
+        return i >= 0;
+    }
+    return bindex(needle, 0) >= 0;
+}
+
+void qore_string_private::raiseStatefulByteOffsetError(ExceptionSink* xsink) const {
+    assert(isStateful());
+    if (xsink) {
+        xsink->raiseException("UNSUPPORTED-ENCODING", "cannot get the byte position of a character in a string in "
+            "the stateful encoding \"%s\", where a character has no byte sequence of its own; convert the string "
+            "to UTF-8 to work with the byte positions of its characters", getEncoding()->getCode());
+    }
 }
 
 void qore_string_private::splice_complex(qore_offset_t offset, ExceptionSink* xsink, QoreString* extract) {
@@ -1935,6 +2086,65 @@ QoreListNode* QoreString::split(ExceptionSink* xsink, const char* sep, const cha
 }
 
 // NULL values sorted at end
+namespace {
+//! the text of two strings in UTF-8, for comparing strings of which at least one is in a stateful encoding
+/** The same text can have more than one byte sequence in a stateful encoding (ex: ISO-2022-JP text concatenated from
+    two strings shifts to JIS X 0208 twice, where converted text shifts once), and the bytes of a stateful encoding
+    are not in the order of the characters, so such strings are compared with their text in UTF-8
+*/
+class StatefulCompareHelper {
+public:
+    //! converts both strings to UTF-8; if \a xsink is nullptr, an invalid text leaves the helper invalid
+    DLLLOCAL StatefulCompareHelper(const QoreString& a, const QoreString& b, ExceptionSink* xsink) {
+        ExceptionSink local_xsink;
+        ExceptionSink* xs = xsink ? xsink : &local_xsink;
+        if (!ua.set(&a, QCS_UTF8, xs) || !ub.set(&b, QCS_UTF8, xs)) {
+            local_xsink.clear();
+            ok = false;
+            return;
+        }
+        a_utf8 = *ua;
+        b_utf8 = *ub;
+    }
+
+    //! returns true if both strings were converted
+    DLLLOCAL explicit operator bool() const {
+        return ok;
+    }
+
+    //! compares the text: < 0, 0, or > 0 as the text of the first string is before, the same as, or after the second
+    /** UTF-8 text in byte order is in the order of its code points
+    */
+    DLLLOCAL int compare() const {
+        size_t al = a_utf8->size();
+        size_t bl = b_utf8->size();
+        int rc = memcmp(a_utf8->c_str(), b_utf8->c_str(), QORE_MIN(al, bl));
+        if (rc) {
+            return rc < 0 ? -1 : 1;
+        }
+        return al < bl ? -1 : (al > bl ? 1 : 0);
+    }
+
+    //! returns true if the text of the first string starts with the text of the second
+    DLLLOCAL bool startsWith() const {
+        return a_utf8->size() >= b_utf8->size() && !memcmp(a_utf8->c_str(), b_utf8->c_str(), b_utf8->size());
+    }
+
+    //! returns true if the text of the first string ends with the text of the second
+    DLLLOCAL bool endsWith() const {
+        return a_utf8->size() >= b_utf8->size() && !memcmp(a_utf8->c_str() + a_utf8->size() - b_utf8->size(), b_utf8->c_str(), b_utf8->size());
+    }
+
+private:
+    TempEncodingHelper ua;
+    TempEncodingHelper ub;
+    //! the text of the strings in UTF-8, if converted
+    const QoreString* a_utf8 = nullptr;
+    const QoreString* b_utf8 = nullptr;
+    bool ok = true;
+};
+}
+
 int QoreString::compare(const QoreString* str) const {
     // empty strings are always equal even if the character encoding is different
     if (!priv->len) {
@@ -1945,6 +2155,14 @@ int QoreString::compare(const QoreString* str) const {
 
     if (str->priv->getEncoding() != priv->getEncoding())
         return 1;
+
+    if (priv->isStateful()) {
+        StatefulCompareHelper ch(*this, *str, nullptr);
+        if (ch) {
+            return ch.compare();
+        }
+        // text that is not valid in its encoding is compared byte by byte, as this function cannot raise an exception
+    }
 
     int rc = memcmp(priv->effective_buf(), str->priv->effective_buf(), QORE_MIN(priv->len, str->size()));
     if (rc == 0) {
@@ -2040,6 +2258,11 @@ bool QoreString::equalSoft(const QoreString& str, ExceptionSink* xsink) const {
     if (!str.priv->len)
         return false;
 
+    if (priv->isStateful() || str.priv->isStateful()) {
+        StatefulCompareHelper ch(*this, str, xsink);
+        return ch && !ch.compare();
+    }
+
     // if the encodings are equal or equivalent and the lenghts are different then the strings are not equal
     if ((priv->getEncoding() == str.priv->getEncoding() || (!priv->getEncoding()->isMultiByte() && !str.priv->getEncoding()->isMultiByte())) && priv->len != str.priv->len)
         return false;
@@ -2070,6 +2293,11 @@ bool QoreString::equalPartialSoft(const QoreString& str, ExceptionSink* xsink) c
     }
     if (!str.priv->len)
         return false;
+
+    if (priv->isStateful() || str.priv->isStateful()) {
+        StatefulCompareHelper ch(*this, str, xsink);
+        return ch && ch.startsWith();
+    }
 
     // if the encodings are equal or equivalent and the lengths are different then the strings are not equal
     if ((priv->getEncoding() == str.priv->getEncoding() || (!priv->getEncoding()->isMultiByte()
@@ -2400,6 +2628,10 @@ void QoreString::replaceChar(size_t offset, char c) {
 
 void QoreString::splice(qore_offset_t offset, ExceptionSink* xsink) {
     QORE_ASSERT_MUTABLE(this);
+    if (priv->isStateful()) {
+        priv->statefulSplice(offset, 0, true, nullptr, nullptr, xsink);
+        return;
+    }
     if (!priv->getEncoding()->isMultiByte()) {
         size_t n_offset = priv->check_offset(offset);
         if (n_offset == priv->len)
@@ -2413,6 +2645,10 @@ void QoreString::splice(qore_offset_t offset, ExceptionSink* xsink) {
 
 void QoreString::splice(qore_offset_t offset, qore_offset_t num, ExceptionSink* xsink) {
     QORE_ASSERT_MUTABLE(this);
+    if (priv->isStateful()) {
+        priv->statefulSplice(offset, num, false, nullptr, nullptr, xsink);
+        return;
+    }
     if (!priv->getEncoding()->isMultiByte()) {
         size_t n_offset, n_num;
         priv->check_offset(offset, num, n_offset, n_num);
@@ -2427,6 +2663,10 @@ void QoreString::splice(qore_offset_t offset, qore_offset_t num, ExceptionSink* 
 
 void QoreString::splice(qore_offset_t offset, qore_offset_t num, const QoreString& str, ExceptionSink* xsink) {
     QORE_ASSERT_MUTABLE(this);
+    if (priv->isStateful()) {
+        priv->statefulSplice(offset, num, false, &str, nullptr, xsink);
+        return;
+    }
     TempEncodingHelper tmp(&str, priv->getEncoding(), xsink);
     if (!tmp)
         return;
@@ -2461,6 +2701,10 @@ void QoreString::splice(qore_offset_t offset, qore_offset_t num, QoreValue strn,
 QoreString* QoreString::extract(qore_offset_t offset, ExceptionSink* xsink) {
     QORE_ASSERT_MUTABLE(this);
     QoreString* str = new QoreString(priv->getEncoding());
+    if (priv->isStateful()) {
+        priv->statefulSplice(offset, 0, true, nullptr, str, xsink);
+        return str;
+    }
     if (!priv->getEncoding()->isMultiByte()) {
         size_t n_offset = priv->check_offset(offset);
         if (n_offset != priv->len)
@@ -2473,6 +2717,10 @@ QoreString* QoreString::extract(qore_offset_t offset, ExceptionSink* xsink) {
 QoreString* QoreString::extract(qore_offset_t offset, qore_offset_t num, ExceptionSink* xsink) {
     QORE_ASSERT_MUTABLE(this);
     QoreString* str = new QoreString(priv->getEncoding());
+    if (priv->isStateful()) {
+        priv->statefulSplice(offset, num, false, nullptr, str, xsink);
+        return str;
+    }
     if (!priv->getEncoding()->isMultiByte()) {
         size_t n_offset, n_num;
         priv->check_offset(offset, num, n_offset, n_num);
@@ -2494,6 +2742,10 @@ QoreString* QoreString::extract(qore_offset_t offset, qore_offset_t num, QoreVal
         return extract(offset, num, xsink);
 
     QoreString* rv = new QoreString(priv->getEncoding());
+    if (priv->isStateful()) {
+        priv->statefulSplice(offset, num, false, *tmp, rv, xsink);
+        return rv;
+    }
     if (!priv->getEncoding()->isMultiByte()) {
         size_t n_offset, n_num;
         priv->check_offset(offset, num, n_offset, n_num);
@@ -2580,6 +2832,8 @@ static bool qore_chomp_char(QoreString& str, unsigned cp, size_t& removed) {
         // the character cannot be represented in the string's encoding, so it cannot be present
         return false;
     }
+    // the bytes written at the start of text in a stateful encoding are not at the end of the string
+    qore_string_private::get(eol)->removeStatefulPrefix();
     removed = eol.size();
     if (!removed || str.size() < removed
         || memcmp(str.c_str() + str.size() - removed, eol.c_str(), removed)) {
@@ -2843,6 +3097,17 @@ void QoreString::concatDecodeUrl(const char* url) {
 int QoreString::concatDecodeUrl(const QoreString& url_str, ExceptionSink* xsink) {
     QORE_ASSERT_MUTABLE(this);
    assert(xsink);
+   if (!priv->getEncoding()->isAsciiCompat()) {
+       // the result is made in UTF-8 and converted to the encoding of this string: the characters that the operation
+       // writes are not ASCII bytes in an encoding that is not ASCII-compatible (UTF-16*, EBCDIC), and the
+       // characters of a stateful encoding (ex: ISO-2022-JP) have no bytes of their own
+       QoreString utf8(QCS_UTF8);
+       if (utf8.concatDecodeUrl(url_str, xsink)) {
+           return -1;
+       }
+       concat(&utf8, xsink);
+       return *xsink ? -1 : 0;
+   }
 
    TempEncodingHelper str(url_str, priv->getEncoding(), xsink);
    if (*xsink)
@@ -2859,8 +3124,15 @@ int QoreString::concatEncodeUrl(ExceptionSink* xsink, const QoreString& url, boo
         return 0;
 
     if (!priv->getEncoding()->isAsciiCompat()) {
-        xsink->raiseException("UNSUPPORTED-ENCODING", "cannot encode a URI to non-ASCII-compatible encoding \"%s\"", priv->getEncoding()->getCode());
-        return -1;
+        // the result is made in UTF-8 and converted to the encoding of this string: the characters that the operation
+        // writes are not ASCII bytes in an encoding that is not ASCII-compatible (UTF-16*, EBCDIC), and the
+        // characters of a stateful encoding (ex: ISO-2022-JP) have no bytes of their own
+        QoreString utf8(QCS_UTF8);
+        if (utf8.concatEncodeUrl(xsink, url, encode_all)) {
+            return -1;
+        }
+        concat(&utf8, xsink);
+        return *xsink ? -1 : 0;
     }
 
     TempEncodingHelper str(url, QCS_UTF8, xsink);
@@ -2908,16 +3180,40 @@ int QoreString::concatEncodeUriRequest(ExceptionSink* xsink, const QoreString& u
     if (!url.size())
         return 0;
 
+    if (!priv->getEncoding()->isAsciiCompat()) {
+        // the result is made in UTF-8 and converted to the encoding of this string: the characters that the operation
+        // writes are not ASCII bytes in an encoding that is not ASCII-compatible (UTF-16*, EBCDIC), and the
+        // characters of a stateful encoding (ex: ISO-2022-JP) have no bytes of their own
+        QoreString utf8(QCS_UTF8);
+        if (utf8.concatEncodeUriRequest(xsink, url)) {
+            return -1;
+        }
+        concat(&utf8, xsink);
+        return *xsink ? -1 : 0;
+    }
+
+    // non-ASCII characters are percent-encoded in UTF-8
     TempEncodingHelper str(url, QCS_UTF8, xsink);
     if (*xsink)
         return -1;
 
-    return priv->concatEncodeUriRequest(xsink, *url.priv);
+    return priv->concatEncodeUriRequest(xsink, *str->priv);
 }
 
 int QoreString::concatDecodeUriRequest(const QoreString& url_str, ExceptionSink* xsink) {
     QORE_ASSERT_MUTABLE(this);
     assert(xsink);
+    if (!priv->getEncoding()->isAsciiCompat()) {
+        // the result is made in UTF-8 and converted to the encoding of this string: the characters that the operation
+        // writes are not ASCII bytes in an encoding that is not ASCII-compatible (UTF-16*, EBCDIC), and the
+        // characters of a stateful encoding (ex: ISO-2022-JP) have no bytes of their own
+        QoreString utf8(QCS_UTF8);
+        if (utf8.concatDecodeUriRequest(url_str, xsink)) {
+            return -1;
+        }
+        concat(&utf8, xsink);
+        return *xsink ? -1 : 0;
+    }
     TempEncodingHelper str(url_str, priv->getEncoding(), xsink);
     if (*xsink)
         return -1;
@@ -2982,16 +3278,28 @@ void QoreString::concat(const QoreString* str, size_t size, ExceptionSink* xsink
         if (*xsink)
             return;
 
+        if (priv->isStateful()) {
+            // the first characters are taken from the text in UTF-8
+            if (size) {
+                qore_offset_t num = static_cast<qore_offset_t>(size);
+                priv->concatStateful(*cstr->priv, 0, &num, xsink);
+            }
+            return;
+        }
+
         // adjust size for number of characters if this is a multi-byte character set
         const char* src = cstr->priv->effective_buf();
         if (priv->getEncoding()->isMultiByte()) {
             size = priv->getEncoding()->getByteLen(src, src + cstr->priv->len, size, xsink);
             if (*xsink)
                 return;
+        } else if (size > cstr->priv->len) {
+            // there are no more characters than bytes
+            size = cstr->priv->len;
         }
 
-        // if priv->buffer needs to be resized
-        priv->check_char(cstr->priv->len + size + STR_CLASS_EXTRA);
+        // if priv->buffer needs to be resized; the new length is the current length plus the bytes appended
+        priv->check_char(priv->len + size + STR_CLASS_EXTRA);
         // concatenate new string (source may be a view)
         memcpy(priv->buf + priv->len, src, size);
         priv->len += size;
@@ -3051,12 +3359,18 @@ int QoreString::sprintf(const char* fmt, ...) {
 
 // NULL values sorted at end
 int QoreString::compareSoft(const QoreString* str, ExceptionSink* xsink) const {
-    // empty strings are always equal even if the character encoding is different
+    // empty strings are always equal even if the character encoding is different; an empty string is less than any
+    // other string
     if (!priv->len) {
-        if (!str->priv->len)
-            return 0;
-        else
-            return 1;
+        return str->priv->len ? -1 : 0;
+    }
+    if (!str->priv->len) {
+        return 1;
+    }
+
+    if (priv->isStateful() || str->priv->isStateful()) {
+        StatefulCompareHelper ch(*this, *str, xsink);
+        return ch ? ch.compare() : 1;
     }
 
     TempEncodingHelper t(str, priv->getEncoding(), xsink);
@@ -3064,9 +3378,11 @@ int QoreString::compareSoft(const QoreString* str, ExceptionSink* xsink) const {
         return 1;
 
     int rc = memcmp(priv->effective_buf(), t->priv->effective_buf(), QORE_MIN(priv->len, t->size()));
-    if (rc < 0)
-        return -1;
-    return !rc ? 0 : 1;
+    if (rc) {
+        return rc < 0 ? -1 : 1;
+    }
+    // a string that is a prefix of the other is less than it
+    return priv->len < t->size() ? -1 : (priv->len > t->size() ? 1 : 0);
 }
 
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
@@ -3093,12 +3409,17 @@ void QoreString::concatEscape(const char* str, char c, char esc_char) {
     }
 }
 
-// FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 void QoreString::concatEscape(const QoreString* str, char c, char esc_char, ExceptionSink* xsink) {
     QORE_ASSERT_MUTABLE(this);
     if (!priv->getEncoding()->isAsciiCompat()) {
-        xsink->raiseException("UNSUPPORTED-ENCODING", "cannot process escapes for non-ASCII-compatible encoding "
-            "\"%s\"", priv->getEncoding()->getCode());
+        // the result is made in UTF-8 and converted to the encoding of this string: the characters that the operation
+        // writes are not ASCII bytes in an encoding that is not ASCII-compatible (UTF-16*, EBCDIC), and the
+        // characters of a stateful encoding (ex: ISO-2022-JP) have no bytes of their own
+        QoreString utf8(QCS_UTF8);
+        utf8.concatEscape(str, c, esc_char, xsink);
+        if (!*xsink) {
+            concat(&utf8, xsink);
+        }
         return;
     }
 
@@ -3116,6 +3437,18 @@ void QoreString::concatEscape(const QoreString* str, char c, char esc_char, Exce
 }
 
 QoreString* QoreString::substr(qore_offset_t offset, ExceptionSink* xsink) const {
+    if (priv->isStateful()) {
+        QoreString utf8(QCS_UTF8);
+        if (priv->statefulToUtf8(utf8, xsink)) {
+            return nullptr;
+        }
+        TempString part(utf8.substr(offset, xsink));
+        if (!part) {
+            return nullptr;
+        }
+        TempString str(new QoreString(priv->getEncoding()));
+        return priv->statefulFromUtf8(**part, **str, xsink) ? nullptr : str.release();
+    }
     TempString str(new QoreString(priv->getEncoding()));
 
     int rc;
@@ -3128,6 +3461,18 @@ QoreString* QoreString::substr(qore_offset_t offset, ExceptionSink* xsink) const
 }
 
 QoreString* QoreString::substr(qore_offset_t offset, qore_offset_t length, ExceptionSink* xsink) const {
+    if (priv->isStateful()) {
+        QoreString utf8(QCS_UTF8);
+        if (priv->statefulToUtf8(utf8, xsink)) {
+            return nullptr;
+        }
+        TempString part(utf8.substr(offset, length, xsink));
+        if (!part) {
+            return nullptr;
+        }
+        TempString str(new QoreString(priv->getEncoding()));
+        return priv->statefulFromUtf8(**part, **str, xsink) ? nullptr : str.release();
+    }
     TempString str(new QoreString(priv->getEncoding()));
 
     int rc;
@@ -3140,6 +3485,17 @@ QoreString* QoreString::substr(qore_offset_t offset, qore_offset_t length, Excep
 }
 
 size_t QoreString::length() const {
+    if (priv->isStateful() && priv->len) {
+        // the number of characters of the text in UTF-8; text that is not valid in the encoding has one character per
+        // byte, as this function cannot raise an exception
+        ExceptionSink xsink;
+        QoreString utf8(QCS_UTF8);
+        if (priv->statefulToUtf8(utf8, &xsink)) {
+            xsink.clear();
+            return priv->len;
+        }
+        return utf8.length();
+    }
     if (priv->getEncoding()->isMultiByte() && priv->len) {
         bool invalid;
         const char* b = priv->effective_buf();
@@ -3492,6 +3848,13 @@ unsigned int QoreString::getUnicodePointFromUTF8(qore_offset_t offset) const {
 }
 
 unsigned int QoreString::getUnicodePoint(qore_offset_t offset, ExceptionSink* xsink) const {
+    if (priv->isStateful()) {
+        QoreString utf8(QCS_UTF8);
+        if (priv->statefulToUtf8(utf8, xsink)) {
+            return -1;
+        }
+        return utf8.getUnicodePoint(offset, xsink);
+    }
     const char* b = priv->effective_buf();
     if (offset < 0) {
         // get string length in characters
@@ -3518,6 +3881,27 @@ QoreString* QoreString::reverse() const {
     QoreString* str = new QoreString(priv->getEncoding());
     priv->concat_reverse(*str->priv);
     return str;
+}
+
+int qore_string_private::concat_reverse_stateful(qore_string_private& targ) const {
+    assert(isStateful());
+    assert(targ.getEncoding() == getEncoding());
+    assert(!targ.len);
+    // the characters of the text in UTF-8 are reversed; text that is not valid in the encoding is reversed byte by
+    // byte, as the reverse functions cannot raise an exception
+    ExceptionSink xsink;
+    QoreString utf8(QCS_UTF8);
+    if (!statefulToUtf8(utf8, &xsink)) {
+        QoreString rev(QCS_UTF8);
+        utf8.priv->concat_reverse(*rev.priv);
+        QoreString tmp(getEncoding());
+        if (!statefulFromUtf8(rev, tmp, &xsink)) {
+            targ.swapText(*tmp.priv);
+            return 0;
+        }
+    }
+    xsink.clear();
+    return -1;
 }
 
 // remove trailing char
@@ -3815,6 +4199,12 @@ bool QoreString::startsWith(const QoreString& str) const {
     if (priv->getEncoding() != str.priv->getEncoding()) {
         return false;
     }
+    if (priv->isStateful()) {
+        // a character has no bytes of its own in a stateful encoding; the text is compared in UTF-8, and text that is
+        // not valid in the encoding is not a prefix, as this function cannot raise an exception
+        StatefulCompareHelper ch(*this, str, nullptr);
+        return ch && ch.startsWith();
+    }
     return priv->startsWith(str.c_str(), str.size());
 }
 
@@ -3835,6 +4225,11 @@ bool QoreString::endsWith(const QoreString& str) const {
     // matches the behavior of equal() and equalPartial() rather than asserting on a public API
     if (priv->getEncoding() != str.priv->getEncoding()) {
         return false;
+    }
+    if (priv->isStateful()) {
+        // see startsWith()
+        StatefulCompareHelper ch(*this, str, nullptr);
+        return ch && ch.endsWith();
     }
     return priv->endsWith(str.c_str(), str.size());
 }
@@ -3865,6 +4260,13 @@ size_t QoreString::removeBytes(size_t len) {
 }
 
 size_t QoreString::getCharWidth(ExceptionSink* xsink) const {
+    if (priv->isStateful()) {
+        QoreString utf8(QCS_UTF8);
+        if (priv->statefulToUtf8(utf8, xsink)) {
+            return 0;
+        }
+        return utf8.getCharWidth(xsink);
+    }
     if (!priv->getEncoding()->isMultiByte()) {
         return priv->len;
     }

@@ -94,6 +94,9 @@ private:
 
     // true once iteration has reached end-of-string.
     bool exhausted = false;
+
+    // true once the source has been checked for a stateful encoding, whose text is walked in UTF-8
+    bool source_checked = false;
 };
 
 //! Lazy forward iterator over a string's Unicode characters as char values.
@@ -127,6 +130,8 @@ private:
     unsigned int current_cp = 0;
     bool m_valid = false;
     bool exhausted = false;
+    // true once the source has been checked for a stateful encoding, whose text is walked in UTF-8
+    bool source_checked = false;
 };
 
 #endif

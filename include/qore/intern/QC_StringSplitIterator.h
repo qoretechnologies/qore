@@ -90,6 +90,11 @@ public:
     QORE_NATIVE_FAST_PATH_NEXT_XSINK()
 
 private:
+    //! walks the source in UTF-8 if necessary; see value_encoding
+    /** @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int checkSource(ExceptionSink* xsink);
+
     // Source string (ref'd on construction, deref'd in dtor).  Declared as the
     // non-const storage we actually hold; the ctor accepts const and casts
     // away for ref() per the Qore convention that refcount is conceptually
@@ -107,6 +112,17 @@ private:
     // we instead treat empty as "yield the whole string once" for symmetry
     // with QoreString::split(), which does the same).
     std::string sep;
+
+    // The encoding of the delimiter, or nullptr if there is none
+    const QoreEncoding* sep_encoding = nullptr;
+
+    // The encoding of the pieces, if the source is walked in UTF-8: a source in a stateful encoding (ex: ISO-2022-JP),
+    // whose characters have no bytes of their own, or a source that is not ASCII-compatible with a delimiter in
+    // another encoding (the "\n" of <string>::splitLines()); nullptr if pieces are views of the source
+    const QoreEncoding* value_encoding = nullptr;
+
+    // true once the source has been checked for walking in UTF-8; see value_encoding
+    bool source_checked = false;
 
     // Byte position of the start of the next piece (initialised to 0).
     size_t cursor = 0;

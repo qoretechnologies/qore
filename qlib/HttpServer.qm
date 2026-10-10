@@ -210,6 +210,15 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_7 HttpServer 1.7
+    - response bodies are compressed on the fly with levels suited to compressing them for each request, set with the
+      new \c compression_levels server option and @ref HttpServer::HttpServer::setCompressionLevels()
+      "setCompressionLevels()" (defaults: Brotli quality 5, Zstandard level 3, gzip and deflate level 6, bzip2 level
+      3; see @ref HttpServer::HttpServer::DefaultCompressionLevels "DefaultCompressionLevels"); a body was compressed
+      with the default level of each algorithm, which for Brotli is the maximum quality 11: a JSON response or a
+      static file of a few megabytes took 5 - 10 seconds to compress, for each request
+    - among the content encodings that a client accepts with the same weight, the cheapest one to compress is used
+      (Zstandard, then Brotli, gzip, deflate, and bzip2; see @ref HttpServer::HttpServer::ContentEncodingPreference
+      "ContentEncodingPreference"); weights and exclusions in \c Accept-Encoding are honored as before
     - generated response charset parameters use canonical encoding names such as \c utf-8,
       including default content types and error responses
     - text is sent in the character encoding that the response declares: a string or a
@@ -714,6 +723,24 @@ public hashdecl HttpServerOptionInfo {
     */
     int max_decoded_body_size = 0;
 
+    #! The compression level of each content encoding for response bodies compressed on the fly
+    /** A response body is compressed for each request in which the client accepts a supported content encoding
+        (unless the handler sets the \c Content-Encoding or \c no_content_encoding), so the levels trade a little
+        compression for speed; see @ref HttpServer::HttpServer::DefaultCompressionLevels "DefaultCompressionLevels"
+        for the defaults.  The keys are content encodings: \c "br" (quality 0 - 11), \c "zstd" (level 1 -
+        @ref Qore::ZSTD_MAX_LEVEL "ZSTD_MAX_LEVEL"), \c "gzip" and \c "deflate" (level 1 - 9), and \c "bzip2"
+        (level 1 - 9); an encoding that is not given has its default level, and an unknown encoding or a level out of
+        range raises an \c HTTP-SERVER-COMPRESSION-LEVEL-ERROR exception.
+
+        The levels also apply to static files that @ref WebUtil::FileHandler "FileHandler" compresses on the fly;
+        precompressed files are served as they are.
+
+        @see @ref HttpServer::HttpServer::setCompressionLevels() "HttpServer::setCompressionLevels()"
+
+        @since HttpServer 1.7
+    */
+    hash<string, int> compression_levels = {};
+
     #! Enable automatic HTTP/3 (QUIC) listener creation for TLS listeners
     /** When \c True (the default), QUIC listeners are automatically created alongside TLS TCP listeners.
         The server advertises HTTP/3 availability via the \c Alt-Svc response header.
@@ -863,6 +890,48 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             "x-bzip2": "bzip2",
         };
 
+        #! The content encodings in the order of preference among those that a client accepts with the same weight
+        /** The order is that of the cost of compressing a response body on the fly with the default levels (see
+            @ref DefaultCompressionLevels): a client that accepts several encodings with the same weight (ex: the
+            \c "gzip, deflate, br, zstd" of a browser) gets the cheapest one to compress.  For a JSON body or a
+            JavaScript bundle of 5 - 7 MB, Zstandard at level 3 takes about 0.02 s, Brotli at quality 5 about 0.1 s,
+            and gzip at level 6 about 0.15 s.
+
+            @since HttpServer 1.7
+        */
+        const ContentEncodingPreference = ("zstd", "br", "gzip", "deflate", "bzip2");
+
+        #! The default compression level of each content encoding for response bodies compressed on the fly
+        /** A response body is compressed for each request, so the levels are lower than the maximum: for a JSON body
+            or a JavaScript bundle of 5 - 7 MB, Brotli at quality 5 compresses about 100 times faster than at the
+            maximum quality 11 (the default of @ref Qore::brotli() "brotli()", which takes 5 - 10 seconds for such a
+            body), with an output 10 - 30% larger.
+
+            @see
+            - @ref HttpServerOptionInfo::compression_levels
+            - @ref setCompressionLevels()
+
+            @since HttpServer 1.7
+        */
+        const DefaultCompressionLevels = {
+            "br": 5,
+            "zstd": 3,
+            "gzip": 6,
+            "deflate": 6,
+            "bzip2": BZ2_DEFAULT_COMPRESSION,
+        };
+
+        #! The range of the compression level of each content encoding: the minimum and maximum levels
+        /** @since HttpServer 1.7
+        */
+        const CompressionLevelRanges = {
+            "br": (BROTLI_MIN_QUALITY, BROTLI_MAX_QUALITY),
+            "zstd": (ZSTD_MIN_LEVEL, ZSTD_MAX_LEVEL),
+            "gzip": (1, 9),
+            "deflate": (1, 9),
+            "bzip2": (1, 9),
+        };
+
         #! default number of idle threads to have waiting for new connections (accross all listeners)
         const DefaultIdleThreads = 10;
 
@@ -978,6 +1047,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! Maximum size in bytes of a decompressed request body (0 = default, negative = unlimited)
         int max_decoded_body_size = 0;
+
+        #! The compression level of each content encoding for response bodies compressed on the fly
+        /** Replaced as a whole, so a request reads a consistent set of levels; see setCompressionLevels()
+        */
+        hash<string, int> compression_levels = DefaultCompressionLevels;
 
         #! Enable automatic HTTP/3 (QUIC) listener creation
         bool enable_h3 = True;
@@ -1182,6 +1256,56 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
     #! Returns default response headers
     *hash<auto> getDefaultResponseHeaders() {
         return hdr;
+    }
+
+    #! Sets the compression level of each content encoding for response bodies compressed on the fly
+    /** @param levels the level of each content encoding (see @ref HttpServerOptionInfo::compression_levels); an
+        encoding that is not given has its default level (see @ref DefaultCompressionLevels), so an empty hash
+        restores the defaults
+
+        The levels apply to responses compressed after the call.
+
+        @throw HTTP-SERVER-COMPRESSION-LEVEL-ERROR an unknown content encoding or a level out of the range of the
+        encoding (see @ref CompressionLevelRanges); the levels are not changed in this case
+
+        @par Example:
+        @code{.py}
+server.setCompressionLevels({"br": 4, "zstd": 3});
+        @endcode
+
+        @since HttpServer 1.7
+    */
+    setCompressionLevels(hash<string, int> levels) {
+        compression_levels = checkCompressionLevels(levels);
+    }
+
+    #! Returns the compression level of each content encoding for response bodies compressed on the fly
+    /** @return the compression level of each supported content encoding
+
+        @see setCompressionLevels()
+
+        @since HttpServer 1.7
+    */
+    hash<string, int> getCompressionLevels() {
+        return compression_levels;
+    }
+
+    #! Returns the default compression levels with the given levels, after checking them
+    /** @throw HTTP-SERVER-COMPRESSION-LEVEL-ERROR an unknown content encoding or a level out of range
+    */
+    private static hash<string, int> checkCompressionLevels(hash<string, int> levels) {
+        foreach hash<auto> i in (levels.pairIterator()) {
+            *list<int> range = CompressionLevelRanges{i.key};
+            if (!range) {
+                throw "HTTP-SERVER-COMPRESSION-LEVEL-ERROR", sprintf("cannot set a compression level for unknown "
+                    "content encoding %y; supported content encodings: %y", i.key, keys CompressionLevelRanges);
+            }
+            if (i.value < range[0] || i.value > range[1]) {
+                throw "HTTP-SERVER-COMPRESSION-LEVEL-ERROR", sprintf("compression level %d for content encoding %y "
+                    "is out of range; it must be from %d to %d", i.value, i.key, range[0], range[1]);
+            }
+        }
+        return DefaultCompressionLevels + levels;
     }
 
     #! Returns the TTL value
@@ -2668,7 +2792,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         self.maskfunc = maskfunc;
     }
 
-    #! Returns supported encodings in decreasing quality order, preserving server preference on ties
+    #! Returns supported encodings in decreasing quality order, by ContentEncodingPreference on ties
     private static hash<string, float> getContentEncodingPreferences(*string header) {
         hash<string, float> weights;
         foreach string item in ((header ?? "").split(",")) {
@@ -2689,11 +2813,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             name = ContentEncodings{name} ?? name;
             weights{name} = weights.hasKey(name) ? min(weights{name}, quality) : quality;
         }
+        # the candidates in the order of preference for the same weight
         hash<string, float> candidates;
-        foreach string encoding in (keys ContentEncodings) {
-            if (encoding != ContentEncodings{encoding}) {
-                continue;
-            }
+        foreach string encoding in (ContentEncodingPreference) {
             candidates{encoding} = weights{encoding} ?? weights."*" ?? 0.0;
         }
         # Unspecified identity is a fallback, not a preference above explicitly accepted encodings.
@@ -2838,6 +2960,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
     #! Common constructor code
     private init(hash<HttpServerOptionInfo> opts) {
+        # checked before anything is created
+        compression_levels = checkCompressionLevels(opts.compression_levels ?? {});
         int idle_threads = opts.idle_threads;
         if (idle_threads <= 0) {
             # auto-detect: 2 × CPU count (or the fixed fallback when sysconf is
@@ -3520,6 +3644,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             acceptable{encoding} = True;
         }
         cx."header-info"."accept-encoding" = acceptable;
+        # the weight of each acceptable encoding, and the levels for a handler that compresses its own stream
+        cx."header-info"."accept-encoding-weights" = map {$1: preferences{$1}}, keys acceptable;
+        cx."compression-levels" = compression_levels;
 
         # the effective maximum request body size of the listener, read once per request so a change made with
         # setMaxRequestBodySize() applies to the next request; handlers that read the body as a stream enforce the
@@ -4363,21 +4490,23 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 && !rv.no_content_encoding && !rv.hdr."Content-Encoding"
                 && rv.body.size() > CompressionThreshold) {
                 int orig_size = rv.body.size();
+                # the levels are read once, as they can be changed concurrently
+                hash<string, int> levels = compression_levels;
                 if (cx.encoding == "br") {
                     rv.hdr."Content-Encoding" = "br";
-                    rv.body = brotli(rv.body);
+                    rv.body = brotli(rv.body, levels.br);
                 } else if (cx.encoding == "zstd") {
                     rv.hdr."Content-Encoding" = "zstd";
-                    rv.body = zstd(rv.body);
+                    rv.body = zstd(rv.body, levels.zstd);
                 } else if (cx.encoding == "deflate") {
                     rv.hdr."Content-Encoding" = "deflate";
-                    rv.body = compress(rv.body);
+                    rv.body = compress(rv.body, levels.deflate);
                 } else if (cx.encoding == "gzip") {
                     rv.hdr."Content-Encoding" = "gzip";
-                    rv.body = gzip(rv.body);
+                    rv.body = gzip(rv.body, levels.gzip);
                 } else if (cx.encoding == "bzip2") {
                     rv.hdr."Content-Encoding" = "bzip2";
-                    rv.body = bzip2(rv.body);
+                    rv.body = bzip2(rv.body, levels.bzip2);
                 }
                 if (rv.hdr."Content-Encoding") {
                     listener.log("cid %d: %s compressed %s: %d -> %d bytes (type: %s)", cx.id,

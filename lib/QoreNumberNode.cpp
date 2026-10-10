@@ -402,7 +402,16 @@ int qore_number_private::roundUp(QoreString& str, qore_offset_t pos) {
 
 int qore_number_private::formatNumberString(QoreString& num, const QoreString& fmt, ExceptionSink* xsink) {
     assert(!num.empty());
-    assert(num.getEncoding() == fmt.getEncoding());
+    // the format is processed in the encoding of the number string, the default encoding, which is ASCII-compatible;
+    // a format in another encoding is converted (the characters of a format in a stateful encoding such as UTF-7 or
+    // ISO-2022-JP have no bytes of their own, and the separators of a format in UTF-16 are not single bytes)
+    if (fmt.getEncoding() != num.getEncoding()) {
+        TempEncodingHelper tfmt(fmt, num.getEncoding(), xsink);
+        if (!tfmt) {
+            return -1;
+        }
+        return formatNumberString(num, **tfmt, xsink);
+    }
     // get the length of the format string in characters (not bytes)
     size_t fl = fmt.length();
     if (fmt.empty()) {

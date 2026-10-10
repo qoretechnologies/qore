@@ -74,6 +74,13 @@ module WebUtil {
     @section webutil_relnotes Release Notes
 
     @subsection webutil_v1_8_1 WebUtil v1.8.1
+    - Static files compressed on the fly use the compression level of the server for responses compressed on the
+      fly (see @ref HttpServer::HttpServerOptionInfo::compression_levels "compression_levels"); a large file was
+      compressed with the default level of the algorithm, which for Brotli is the maximum quality and takes
+      seconds for a file of a few megabytes.
+    - Among the encodings that a client accepts with the same weight, the pre-compressed variant served is the
+      smallest one (Brotli, then Zstandard, gzip, and bzip2), as documented; the variant was chosen in the order of
+      preference of the server.
     - Large static files are compressed while streaming, with bounded memory use. The
       \c max_compress_size option now controls the buffering limit, not compression eligibility.
     - Conditional responses preserve the selected file's cache policy and encoding variation.
@@ -1443,7 +1450,12 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         }
 
         if (encoding) {
-            stream = new TransformInputStream(stream, get_compressor(encoding == "deflate" ? "zlib" : encoding));
+            # the level for compressing on the fly that the server gives (see
+            # HttpServer::HttpServerOptionInfo::compression_levels), or the default of the algorithm with an older
+            # server
+            int level = cx."compression-levels"{encoding} ?? COMPRESSION_LEVEL_DEFAULT;
+            stream = new TransformInputStream(stream, get_compressor(encoding == "deflate" ? "zlib" : encoding,
+                level));
             respHdr."Content-Encoding" = encoding;
             remove respHdr."Content-Length";
         } else {
@@ -1624,10 +1636,16 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
     private *hash<HttpResponseInfo> tryServePrecompressed(string path, hash<StatInfo> orig_stat,
             hash<auto> cx, hash<auto> hdr, hash<auto> respHdr) {
         hash<auto> accept = cx."header-info"."accept-encoding";
-        foreach string encoding in (keys accept) {
-            if (!accept{encoding} || !PrecompressedExtensions{encoding}) {
-                continue;
-            }
+        # the acceptable encodings with a pre-compressed variant in decreasing weight, and in PrecompressedOrder (the
+        # smallest variant first) for the same weight; the weights are given by the server
+        list<string> encodings = select PrecompressedOrder, accept{$1};
+        *hash<auto> weights = cx."header-info"."accept-encoding-weights";
+        if (weights) {
+            encodings = sort_stable(encodings, int sub (string left, string right) {
+                return (weights{right} ?? 0.0) <=> (weights{left} ?? 0.0);
+            });
+        }
+        foreach string encoding in (encodings) {
             string comp_path = path + PrecompressedExtensions{encoding};
             *hash<StatInfo> comp_stat = hstat(comp_path);
             if (!comp_stat || comp_stat.type != "REGULAR" || comp_stat.mtime < orig_stat.mtime) {

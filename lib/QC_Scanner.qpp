@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QC_Scanner.h"
+#include "qore/intern/qore_string_private.h"
 
 #include <cstring>
 
@@ -286,9 +287,23 @@ qclass Scanner [arg=QoreScanner* s; ns=Qore];
 //! Creates a scanner over the given string.
 /** @param source the source string to scan.  A reference is held for the
     lifetime of the scanner; subsequent mutations to the original string
-    do not affect the scanner.
+    do not affect the scanner.  A source in a stateful encoding (ex:
+    \c "UTF-7", \c "ISO-2022-JP"), whose characters have no bytes of their
+    own, is scanned in UTF-8: byte positions refer to its text in UTF-8, and
+    getString() and extractRange() return UTF-8 strings.
+
+    @throw ENCODING-CONVERSION-ERROR the source is in a stateful encoding and
+    is not valid in it
  */
 Scanner::constructor(string source) [flags=NAMED_ARGS] {
+    SimpleRefHolder<QoreStringNode> utf8;
+    if (qore_string_private::get(*source)->isStateful()) {
+        utf8 = source->convertEncoding(QCS_UTF8, xsink);
+        if (!utf8) {
+            return;
+        }
+        source = *utf8;
+    }
     self->setPrivate(CID_SCANNER, new QoreScanner(source));
 }
 

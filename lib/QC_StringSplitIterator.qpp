@@ -40,6 +40,7 @@ StringSplitIterator::StringSplitIterator(const QoreStringNode* s, const QoreStri
           src_size(s ? s->size() : 0),
           ascii_compat(s && s->getEncoding()->isAsciiCompat()),
           sep(separator ? separator->c_str() : "", separator ? separator->size() : 0),
+          sep_encoding(separator ? separator->getEncoding() : nullptr),
           mode(m) {
     if (src) {
         src->ref();
@@ -52,6 +53,9 @@ StringSplitIterator::StringSplitIterator(const StringSplitIterator& old)
           src_size(old.src_size),
           ascii_compat(old.ascii_compat),
           sep(old.sep),
+          sep_encoding(old.sep_encoding),
+          value_encoding(old.value_encoding),
+          source_checked(old.source_checked),
           mode(old.mode) {
     // Fresh iterator over the same source + delimiter, positioned at the start.
     // cursor / piece_off / piece_len / m_valid / exhausted default-initialise.
@@ -75,6 +79,14 @@ bool StringSplitIterator::next(ExceptionSink* xsink) {
         exhausted = true;
         m_valid = false;
         return false;
+    }
+    if (!source_checked) {
+        if (checkSource(xsink)) {
+            exhausted = true;
+            m_valid = false;
+            return false;
+        }
+        source_checked = true;
     }
     // SPLIT_CHARS: yield one character (codepoint) at a time.
     if (mode & SPLIT_CHARS) {
@@ -155,6 +167,36 @@ bool StringSplitIterator::next(ExceptionSink* xsink) {
     return true;
 }
 
+int StringSplitIterator::checkSource(ExceptionSink* xsink) {
+    const QoreEncoding* enc = src->getEncoding();
+    // a source in a stateful encoding has no bytes per character, and a source that is not ASCII-compatible cannot be
+    // searched for a delimiter in another encoding (the "\n" of <string>::splitLines() in a UTF-16 string); such a
+    // source is walked in UTF-8, and the pieces are converted back to its encoding
+    if (!qore_string_private::get(*src)->isStateful()
+            && (!sep_encoding || sep_encoding == enc || enc->isAsciiCompat())) {
+        return 0;
+    }
+    std::string utf8_sep;
+    if (!sep.empty()) {
+        QoreString s(sep.data(), sep.size(), sep_encoding);
+        TempEncodingHelper u(s, QCS_UTF8, xsink);
+        if (!u) {
+            return -1;
+        }
+        utf8_sep.assign(u->c_str(), u->size());
+    }
+    if (qore_string_private::replaceWithUtf8(src, xsink)) {
+        return -1;
+    }
+    sep = std::move(utf8_sep);
+    sep_encoding = QCS_UTF8;
+    value_encoding = enc;
+    src_buf = src->c_str();
+    src_size = src->size();
+    ascii_compat = true;
+    return 0;
+}
+
 QoreValue StringSplitIterator::getValue(ExceptionSink* xsink) {
     if (!m_valid) {
         xsink->raiseException("INVALID-ITERATOR", "the iterator is not pointing at a valid element");
@@ -168,6 +210,12 @@ QoreValue StringSplitIterator::getValue(ExceptionSink* xsink) {
         if (sb[piece_off + eff_len - 1] == '\r') {
             --eff_len;
         }
+    }
+    if (value_encoding) {
+        // the piece is converted from the text of the source in UTF-8 to the encoding of the source
+        SimpleRefHolder<QoreStringNode> piece(new QoreStringNode(qore_string_private::get(src)->effective_buf()
+            + piece_off, eff_len, QCS_UTF8));
+        return piece->convertEncoding(value_encoding, xsink);
     }
     return QoreValue(QoreStringNode::makeView(src, piece_off, eff_len));
 }
