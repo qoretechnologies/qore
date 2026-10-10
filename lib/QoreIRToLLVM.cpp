@@ -5609,6 +5609,28 @@ llvm::Value* QoreIRToLLVM::getAOTClassLocalSlot(const LocalVar* local, llvm::Mod
     return slot;
 }
 
+llvm::Value* QoreIRToLLVM::getAOTClassLocalConstraint(const LocalVar* local, llvm::Value* slot,
+        llvm::Module& module) {
+    if (!slot || std::getenv("QORE_DISABLE_AOT_CLASS_LOCAL_PREPARE")) {
+        return nullptr;
+    }
+    auto found = aot_class_local_constraints.find(local);
+    if (found != aot_class_local_constraints.end()) {
+        return found->second;
+    }
+    // The slot getter already follows this invocation's instantiation prologue.
+    // Its metadata preparation must also precede the loop, never the recursive caller's entry.
+    auto* acquire = llvm::cast<llvm::Instruction>(slot);
+    llvm::IRBuilder<> eb(acquire->getParent(), std::next(acquire->getIterator()));
+    auto prepare = module.getOrInsertFunction("qore_rt_get_class_local_constraint_aot_v1",
+        llvm::FunctionType::get(ptr_type, {ptr_type, i32_type, ptr_type}, false));
+    int32_t index = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(local);
+    llvm::Value* constraint = eb.CreateCall(prepare,
+        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, index), slot}, "class_local_constraint");
+    aot_class_local_constraints.emplace(local, constraint);
+    return constraint;
+}
+
 void QoreIRToLLVM::clearLocalCachedValue(const void* key, llvm::Module& module,
         llvm::Function* llvm_func, LocalCacheClearMode mode) {
     const LocalVar* var_ptr = reinterpret_cast<const LocalVar*>(key);
@@ -11550,6 +11572,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     stable_exact_receiver_loads.clear();
     aot_pinned_entry_values.clear();
     aot_class_local_slots.clear();
+    aot_class_local_constraints.clear();
     aot_class_local_slot_entry = nullptr;
     aot_class_local_slot_anchor = nullptr;
     aot_class_local_runtime_config = nullptr;
@@ -16048,6 +16071,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         builder->CreateCondBr(pinned, probe_bb, owned_bb);
                         builder->SetInsertPoint(probe_bb);
                         llvm::Value* local_slot = getAOTClassLocalSlot(linst->local, module, llvm_func);
+                        llvm::Value* constraint = getAOTClassLocalConstraint(linst->local, local_slot, module);
                         std::vector<llvm::Type*> probe_types{ptr_type, i32_type, i64_type};
                         std::vector<llvm::Value*> probe_args{aot_ctx_arg,
                             llvm::ConstantInt::get(i32_type, slot), boxed};
@@ -16055,15 +16079,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             probe_types.push_back(ptr_type);
                             probe_args.push_back(local_slot);
                         }
+                        if (constraint) {
+                            probe_types.push_back(ptr_type);
+                            probe_args.push_back(constraint);
+                        }
                         probe_types.push_back(ptr_type);
                         probe_args.push_back(xsink_arg);
                         auto probe_ft = llvm::FunctionType::get(i32_type, probe_types, false);
                         llvm::Value* handled = emitMaybeInvoke(
-                            module.getOrInsertFunction(local_slot ? "qore_rt_try_assign_pinned_class_local_aot_v2"
-                                : "qore_rt_try_assign_pinned_class_local_aot_v1", probe_ft),
-                            module.getOrInsertFunction(local_slot
-                                ? "qore_rt_try_assign_pinned_class_local_aot_throwing_v2"
-                                : "qore_rt_try_assign_pinned_class_local_aot_throwing_v1", probe_ft),
+                            module.getOrInsertFunction(constraint ? "qore_rt_try_assign_pinned_class_local_aot_v3"
+                                : (local_slot ? "qore_rt_try_assign_pinned_class_local_aot_v2"
+                                    : "qore_rt_try_assign_pinned_class_local_aot_v1"), probe_ft),
+                            module.getOrInsertFunction(constraint
+                                ? "qore_rt_try_assign_pinned_class_local_aot_throwing_v3"
+                                : (local_slot ? "qore_rt_try_assign_pinned_class_local_aot_throwing_v2"
+                                    : "qore_rt_try_assign_pinned_class_local_aot_throwing_v1"), probe_ft),
                             probe_args,
                             module, llvm_func, inst);
                         emitExceptionCheck(module, llvm_func, inst);

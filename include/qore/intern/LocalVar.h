@@ -922,6 +922,25 @@ public:
             : LocalVarLValueLookup::Found;
     }
 
+    //! Prepares only fixed declaration metadata for an ordinary AOT class-local initializer.
+    /** Called after parsing, within the owning Program invocation. The returned
+        constraint is borrowed and immutable; neither slot state nor object acceptance
+        is cached. Substituted, captured, reference and special locals are excluded.
+        @return single unfiltered required-class constraint, or nullptr for ordinary fallback
+    */
+    DLLLOCAL const QoreClass* getAOTClassLocalConstraint() const {
+        if (closure_use || is_self || is_top_level || name == "self"
+                || type_info_needs_substitution || ref_type_info_needs_substitution) {
+            return nullptr;
+        }
+        const QoreTypeInfo* ti = getTypeInfoForLValue();
+        if (!QoreTypeInfo::getUniqueReturnClass(ti) || QoreTypeInfo::isComplex(ti)
+                || QoreTypeInfo::isReference(ti)) {
+            return nullptr;
+        }
+        return ti->getUnfilteredRequiredClassConstraint();
+    }
+
     //! Attempts an admitted required-class initializer without generic lvalue setup.
     /** The compiler must have proved a normal initial required-class assignment.
         Captured, self, substituted, finalized, static and already-assigned slots

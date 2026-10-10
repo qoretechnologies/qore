@@ -7637,3 +7637,129 @@ separate correctness proof. Java parity remains unachieved.
 
 The [full audit](FOLLOWUP-AUDIT.md#strong-object-aot-class-local-cleanup-audit-2026-10-10)
 records all 62 checks. No full-suite, sanitizer or cross-architecture claim.
+
+## Prepared AOT class-local declaration metadata (2026-10-10)
+
+Retained invocation-local preparation of immutable class-local declaration
+metadata. Typed-polymorphic kernel medians improve **18.25–18.55%** in two
+five-fork trials at counts 1024 and 4096, with disjoint before/after fork-mean
+ranges. A single-iteration workload is **0.31% slower**, with overlapping ranges:
+there is no short-call speedup claim. This is an incremental AOT improvement,
+not Java parity or an improvement to every call kind.
+
+[Complete evidence](results-class-local-prepare-macos-arm64.json) records the
+frozen source patch and binaries, qualification, all 280 jobs / 1400 measured
+windows, recomputed statistics, raw-window hashes and separate profiles.
+
+### Implementation and invariants
+
+The compiler prepares a borrowed required-class constraint immediately after
+this invocation's prepared body-slot getter, outside the loop. LocalVar name,
+capture/self/top-level/substitution flags and the immutable type's single
+unfiltered QTS_CLASS shape are examined once per invocation. This is preparation
+of declaration metadata, not caching an object's acceptance or private access.
+
+The new v3 initializer still checks the exception sink, finalized/assigned/static/
+fixed slot state and the live strong-object representation at every store.
+It invokes the same class-acceptance implementation for raw/parameterized
+compatibility, current inheritance and private access, then acquires the
+ordinary slot owner and real-reference mark. It does not remove runtime-visible
+locals, ownership, destruction, reflection or stack-reader behavior.
+Unsupported metadata or missing prepared storage uses the existing v2/v1 and
+ordinary assignment paths. The old ABI entrypoints remain available.
+
+QORE_DISABLE_AOT_CLASS_LOCAL_PREPARE disables selection at compile time and
+preparation at runtime; runtime admission also respects all existing pinned,
+fresh, strong-store, class-acceptance and node-store controls. The prepared
+constraint belongs to this ctx/index/slot and owning Program invocation; it
+must not be shared with another Program or recursive invocation's storage.
+Substituted, captured, reference and special locals are excluded.
+
+Inspected LLVM has one constraint getter in the typed kernel's entry block and
+one v3 initializer in its loop probe. The new helper has 107 static arm64
+instructions; the old probe and separate LocalVar initializer have 98 and 204.
+Those are complete static function sizes, not executed instruction counts;
+branches and callees must not be summed into a dynamic-cost claim.
+
+### Measurements and tradeoffs
+
+Apple M4 Pro, macOS arm64; five forks, three warmups and five 500-ms measurement
+windows per fork, shuffled order seeds 812001–812003. Baseline source is
+9d5a49fe6 (its previously qualified binary embeds 14cf060cb plus the committed
+cleanup patch); the candidate embeds 9d5a49fe6 plus this frozen production patch.
+Generated code and runtime identity change, so each trial compiles separate
+before/after AOT executables against their matching frozen runtimes.
+No task builds, tests, profiles or evidence generation overlap timing.
+
+Typed-polymorphic values are median fork means in ns/element, lower is better:
+
+|!Trial|!Count|!Before|!After|!Change|!Before / after fork-mean ranges
+|1: run-gpik3mx5|4096|29.654411|24.154478|-18.55%|29.560–30.909 / 24.045–25.018
+|2: run-klc4onwy|1024|31.177462|25.488943|-18.25%|30.964–31.279 / 25.314–25.906
+|3: run-ym0lbofq|1|1953.293683|1959.271737|+0.31%|1935.968–1966.881 / 1938.894–1980.965
+
+At count one, the loop selects only its first receiver and surrounding dispatch/
+invocation costs dominate. This checks setup amortization in that workload,
+not isolated fast-call latency or all possible short functions.
+
+All eight kernels are retained below. Disjoint identifies non-overlapping
+observed fork-mean ranges, not confidence intervals; other ranges overlap.
+
+|!Kernel|!4096|!1024|!1
+|polymorphic_call|-18.55% (disjoint)|-18.25% (disjoint)|+0.31%
+|polymorphic_expression_call|-1.68%|-0.77%|-0.47%
+|monomorphic_call|+0.36%|-0.98%|+0.04%
+|optional_method_call|-0.57%|-1.19% (disjoint)|+0.64%
+|indirect_wide|-2.41%|-0.15%|+0.31%
+|indirect_float|+0.06%|-1.55% (disjoint)|+1.11%
+|arithmetic|+0.31%|+0.49%|-0.44%
+|dispatch_control|+0.31%|+0.44%|+0.13%
+
+The smaller adverse median changes are accepted and disclosed, not dismissed
+as noise or asserted absent. In particular, the short floating-callback ranges
+overlap only narrowly (baseline 1517.860–1539.494 ns; candidate
+1539.182–1550.117 ns). The first long trial retains a 19.707-ns baseline floating
+fork mean; all windows and outliers remain in the evidence. Different code layout
+is a possible explanation for changes outside the targeted path, not proof.
+
+OpenJDK 25.0.2 Temurin provides the first trial's Java comparison. Candidate
+whole-kernel ratios are **9.58x** for typed polymorphism (24.154 vs 2.521 ns),
+**4.44x** for expression receivers, **1.97x** for monomorphic calls and **6.57x**
+for nullable methods. Java retained methods use DONT_INLINE; Qore can inline
+an exact-base branch. These are not equal-inlining-policy isolated-call costs.
+There is no new IR-timing, startup-gain, universal no-regression or Java-parity claim.
+
+### Qualification, profiles and next work
+
+Release/debug each pass 73 selected files: release 260 reported cases / 11614
+assertions / nine standalones and the expected debug-only short-string skip;
+debug 267 cases / 11713 assertions / nine standalones, no skips. Expanded pinned
+and class-assignment drivers pass 614 and 634 assertions in each build, including
+compile/runtime disable controls, AST references, O0/O3, EH and split compilation.
+Their existing fixtures cover private callee context, reflection, recursion,
+parameterized/raw types, weak/opaque values, lifetime and destructor exceptions.
+
+The native-unit driver passes one case / two assertions; all 109 focused native
+checks and 11 harness tests pass. Fresh release IR/AOT/Java-interpreted/Java-JIT
+and debug IR/AOT grids pass 345 reference checks per mode. QUnit, FsUtil,
+HttpServer and HttpServerUtil qmods were rebuilt before each build's tests.
+Only the warning-strict RecursiveClosureLocals test uses the previously
+established MACOSX_DEPLOYMENT_TARGET=28.0 alignment; timing does not.
+
+Sequential ten-second profiles of the separately compiled typed executables
+show initialization callsites of 2943 before / 1850 after within inclusive
+parents of 7501 / 7497 samples. Native-method callsites are 1289 / 1533 and
+cleanup callsites 909 / 1256. Their larger fractions after initialization is
+faster do not establish regressions. Tail attribution is incomplete; descendants
+are not added to parents and unrelated release siblings are not reassigned.
+
+Next, investigate remaining native-method admission/frame-publication costs,
+preserving concurrent readers, debugger events and current RuntimeConfig
+semantics. Consider preparing fixed declaration metadata at Program linking
+rather than every invocation only after proving metadata lifetime and retargeting
+rules; repeat short-invocation measurements for that change. Live class
+compatibility still costs time, but must not be cached using a dispatch epoch
+that fails to cover every inheritance mutation.
+
+The [full audit](FOLLOWUP-AUDIT.md#prepared-aot-class-local-declaration-metadata-audit-2026-10-10)
+records all 62 checks. No full-suite, sanitizer or cross-architecture claim.

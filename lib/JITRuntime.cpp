@@ -396,6 +396,12 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_v2) },
     { "qore_rt_try_assign_pinned_class_local_aot_throwing_v2",
         reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_throwing_v2) },
+    { "qore_rt_get_class_local_constraint_aot_v1",
+        reinterpret_cast<void*>(&qore_rt_get_class_local_constraint_aot_v1) },
+    { "qore_rt_try_assign_pinned_class_local_aot_v3",
+        reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_v3) },
+    { "qore_rt_try_assign_pinned_class_local_aot_throwing_v3",
+        reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_throwing_v3) },
     { "qore_rt_clear_class_local_slot_aot_v1", reinterpret_cast<void*>(&qore_rt_clear_class_local_slot_aot_v1) },
     { "qore_rt_assign_local_no_coerce_aot", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot) },
     { "qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing) },
@@ -12587,6 +12593,53 @@ extern "C" DLLEXPORT int qore_rt_try_assign_pinned_class_local_aot_v2(QoreAOTCon
 extern "C" DLLEXPORT int qore_rt_try_assign_pinned_class_local_aot_throwing_v2(QoreAOTContext* ctx,
         int32_t idx, uint64_t value, void* prepared_slot, ExceptionSink* xsink) {
     int handled = qore_rt_try_assign_pinned_class_local_aot_v2(ctx, idx, value, prepared_slot, xsink);
+    if (*xsink) {
+        throw QoreJITException();
+    }
+    return handled;
+}
+
+extern "C" DLLEXPORT const QoreClass* qore_rt_get_class_local_constraint_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, void* prepared_slot) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_CLASS_LOCAL_PREPARE")
+        && !std::getenv("QORE_DISABLE_AOT_PINNED_CLASS_LOCAL")
+        && !std::getenv("QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE")
+        && !std::getenv("QORE_DISABLE_AOT_CLASS_STRONG_STORE")
+        && !std::getenv("QORE_DISABLE_AOT_CLASS_ACCEPT_FAST_PATH")
+        && !std::getenv("QORE_DISABLE_AOT_CLASS_NODE_STORE");
+    if (!enabled || !prepared_slot || !ctx->locals[idx]) {
+        return nullptr;
+    }
+    auto* slot = static_cast<LocalVarValue*>(prepared_slot);
+    assert(slot->local_var == ctx->locals[idx] && !slot->frame_boundary);
+    return ctx->locals[idx]->getAOTClassLocalConstraint();
+}
+
+extern "C" DLLEXPORT int qore_rt_try_assign_pinned_class_local_aot_v3(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, void* prepared_slot, const QoreClass* constraint, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals && xsink);
+    if (!constraint) {
+        return qore_rt_try_assign_pinned_class_local_aot_v2(ctx, idx, value, prepared_slot, xsink);
+    }
+    auto* slot = static_cast<LocalVarValue*>(prepared_slot);
+    assert(slot && slot->local_var == ctx->locals[idx] && !slot->frame_boundary);
+    if (*xsink || slot->finalized || slot->val.assigned || slot->val.static_assignment || slot->val.fixed_type) {
+        return 0;
+    }
+    const QoreObject* object = qore_rt_get_strong_object(fromBits(value));
+    if (!object || !QoreTypeInfo::acceptsRequiredClassObject(*constraint, *object)) {
+        return 0;
+    }
+    // Only declaration shape was prepared: acceptance and ownership remain live.
+    // Preserve the ordinary runtime-slot owner and its real-reference mark.
+    slot->val.assignInitialNode(object->objectRefSelf());
+    return 1;
+}
+
+extern "C" DLLEXPORT int qore_rt_try_assign_pinned_class_local_aot_throwing_v3(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, void* prepared_slot, const QoreClass* constraint, ExceptionSink* xsink) {
+    int handled = qore_rt_try_assign_pinned_class_local_aot_v3(ctx, idx, value, prepared_slot, constraint, xsink);
     if (*xsink) {
         throw QoreJITException();
     }

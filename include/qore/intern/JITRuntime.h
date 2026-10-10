@@ -1499,6 +1499,30 @@ int qore_rt_try_assign_pinned_class_local_aot_v2(QoreAOTContext* ctx, int32_t id
 //! Throwing counterpart; throws QoreJITException on a populated sink.
 int qore_rt_try_assign_pinned_class_local_aot_throwing_v2(QoreAOTContext* ctx, int32_t idx,
     uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+//! Prepare immutable declaration metadata once after acquiring this invocation's body-local slot.
+/** @param ctx current AOT context, owning the local and its type metadata
+    @param idx compiler-proven ordinary required-class body-local index
+    @param prepared_slot same-invocation handle from qore_rt_get_class_local_slot_aot_v1
+    @return borrowed required-class constraint, or nullptr to retain the v2 initializer
+    @note No object acceptance, access-context result or live slot state is cached.
+*/
+const QoreClass* qore_rt_get_class_local_constraint_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    void* prepared_slot);
+//! Pinned initializer with prepared storage and immutable declaration constraint.
+/** @param ctx current AOT context
+    @param idx compiler-proven initial ordinary required-class body-local slot
+    @param value borrowed input independently pinned until every cached/SSA use ends
+    @param prepared_slot same-invocation storage handle
+    @param constraint result of qore_rt_get_class_local_constraint_aot_v1 for this ctx/idx/slot
+    @param xsink exception sink
+    @return 1 if stored unchanged, 0 for ordinary fallback; nullptr constraint uses v2
+    @note Live slot state, object representation and current class/access checks remain at each store.
+*/
+int qore_rt_try_assign_pinned_class_local_aot_v3(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, const QoreClass* constraint, ExceptionSink* xsink);
+//! Throwing counterpart; throws QoreJITException on a populated sink.
+int qore_rt_try_assign_pinned_class_local_aot_throwing_v3(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, const QoreClass* constraint, ExceptionSink* xsink);
 //! Clear the live slot value at the original source scope exit; nullptr uses ordinary lookup.
 /** @param ctx current AOT context
     @param idx compiler-proven ordinary class body-local index

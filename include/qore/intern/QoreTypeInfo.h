@@ -146,6 +146,23 @@ public:
     */
     DLLLOCAL bool acceptsRequiredClassValueWithoutFilter(const QoreValue& n) const;
 
+    //! Returns this immutable type's single unfiltered required-class constraint, if any.
+    /** The borrowed class remains owned by the type's defining Program. This is
+        a constraint, not proof that any particular object satisfies it.
+    */
+    DLLLOCAL const QoreClass* getUnfilteredRequiredClassConstraint() const {
+        return accept_vec.size() == 1 && !accept_vec[0].map
+            && accept_vec[0].spec.getTypeSpec() == QTS_CLASS ? accept_vec[0].spec.getClass() : nullptr;
+    }
+
+    //! Tests a live strong object against a previously prepared class constraint.
+    /** Retains ordinary raw/parameterized compatibility and current inheritance/private-access checks.
+        @param constraint borrowed constraint from getUnfilteredRequiredClassConstraint()
+        @param object live borrowed strong object
+        @return true if accepted without filtering; false requires normal assignment fallback
+    */
+    DLLLOCAL static bool acceptsRequiredClassObject(const QoreClass& constraint, const QoreObject& object);
+
     DLLLOCAL const QoreAcceptSpec& getFirstAcceptSpec() const {
         assert(!accept_vec.empty());
         return accept_vec[0];

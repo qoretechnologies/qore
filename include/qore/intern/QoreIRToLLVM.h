@@ -318,6 +318,8 @@ private:
     std::unordered_map<const LocalVar*, llvm::Value*> aot_pinned_entry_values;
     // Borrowed storage, not a value/owner: ordinary body slots survive until function exit.
     std::unordered_map<const LocalVar*, llvm::Value*> aot_class_local_slots;
+    // Immutable declaration constraints only; object acceptance is checked at every store.
+    std::unordered_map<const LocalVar*, llvm::Value*> aot_class_local_constraints;
     llvm::BasicBlock* aot_class_local_slot_entry = nullptr;
     llvm::Instruction* aot_class_local_slot_anchor = nullptr;
     llvm::Value* aot_class_local_runtime_config = nullptr;
@@ -1502,6 +1504,8 @@ private:
     // Resolve eligible pre-instantiated body-local storage once after the native entry guard.
     llvm::Value* getAOTClassLocalSlot(const LocalVar* local, llvm::Module& module,
         llvm::Function* llvm_func);
+    llvm::Value* getAOTClassLocalConstraint(const LocalVar* local, llvm::Value* slot,
+        llvm::Module& module);
 
     enum class LocalCacheClearMode {
         DuplicateRefsOnly,

@@ -3055,6 +3055,11 @@ bool QoreTypeInfo::acceptsRequiredClassValueWithoutFilter(const QoreValue& n) co
     return type_spec_accept_class_object(*accept_vec[0].spec.getClass(), *object, priv_error);
 }
 
+bool QoreTypeInfo::acceptsRequiredClassObject(const QoreClass& constraint, const QoreObject& object) {
+    bool priv_error = false;
+    return type_spec_accept_class_object(constraint, object, priv_error);
+}
+
 // Decides whether a container element type that the target element type does not already accept may
 // still be converted into it, one element at a time, by the fold loops in the two callers below.
 //
