@@ -268,8 +268,15 @@ string fstr = f.format(".,3"); # returns "-48.392.093.894,235"
     - %Qore 2.0 implemented support for supressing the thousands separator with the \c ? character
  */
 string <number>::format(string format) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
-   SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(format->getEncoding()));
-   return qore_number_private::get(*n)->format(**rv, *format, xsink) ? 0 : rv.release();
+   // see <int>::format(string)
+   SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(QCS_DEFAULT));
+   if (qore_number_private::get(*n)->format(**rv, *format, xsink)) {
+      return QoreValue();
+   }
+   if (format->getEncoding() == QCS_DEFAULT) {
+      return rv.release();
+   }
+   return rv->convertEncoding(format->getEncoding(), xsink);
 }
 
 //! Returns a formatted string of the number according to format arguments

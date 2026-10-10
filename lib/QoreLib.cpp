@@ -31,6 +31,7 @@
 
 #include "qore/Qore.h"
 #include "qore/intern/qore_number_private.h"
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreObjectIntern.h"
@@ -722,7 +723,17 @@ static void process_opt_string(QoreString& tbuf, QoreValue qv, int type, int opt
         if (char_width && type) {
             // count of positions
             int c = 0;
-            UnicodeCharacterIterator i(**astr);
+            // the characters of a string in a stateful encoding are walked in its text in UTF-8, as they have no
+            // bytes of their own
+            TempEncodingHelper walk_str;
+            const QoreString* walk = *astr;
+            if (qore_string_private::get(**astr)->isStateful()) {
+                if (!walk_str.set(*astr, QCS_UTF8, xsink)) {
+                    return;
+                }
+                walk = *walk_str;
+            }
+            UnicodeCharacterIterator i(*walk);
             while (i.next(xsink) && c < width) {
                 int ucs = i.getValue();
                 int w = qore_get_unicode_character_width(ucs);
@@ -938,6 +949,21 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
 static QoreStringNode* qore_sprintf_intern(ExceptionSink* xsink, const QoreStringNode* fmt,
     const QoreListNode* arg_list, size_t arg_offset, int field, int last_arg = -1,
     bool ignore_broken_sprintf = false) {
+    // a format string in an encoding that is not ASCII-compatible is processed in UTF-8, and the result is converted
+    // back to its encoding: a conversion specification is not ASCII bytes in such an encoding (UTF-16*, EBCDIC), and
+    // a "%" can be part of a shifted run in a stateful encoding (ex: "+ACU-" in UTF-7)
+    if (!fmt->getEncoding()->isAsciiCompat()) {
+        SimpleRefHolder<QoreStringNode> utf8_fmt(fmt->convertEncoding(QCS_UTF8, xsink));
+        if (!utf8_fmt) {
+            return nullptr;
+        }
+        SimpleRefHolder<QoreStringNode> rv(qore_sprintf_intern(xsink, *utf8_fmt, arg_list, arg_offset, field,
+            last_arg, ignore_broken_sprintf));
+        if (!rv) {
+            return nullptr;
+        }
+        return rv->convertEncoding(fmt->getEncoding(), xsink);
+    }
     SimpleRefHolder<QoreStringNode> buf(new QoreStringNode(fmt->getEncoding()));
 
     // the current program can be nullptr when formatting is performed on a native thread that never
@@ -1240,6 +1266,20 @@ QoreStringNode* q_format_bounded(const QoreValue val, int foff, const QoreFormat
 static QoreStringNode* qore_sprintf_bounded_intern(ExceptionSink* xsink, const QoreString& fmt,
         const QoreListNode* args, size_t arg_offset, int field, const QoreFormatBounds& bounds) {
     assert(xsink);
+
+    // see qore_sprintf_intern()
+    if (!fmt.getEncoding()->isAsciiCompat()) {
+        TempEncodingHelper utf8_fmt(fmt, QCS_UTF8, xsink);
+        if (!utf8_fmt) {
+            return nullptr;
+        }
+        SimpleRefHolder<QoreStringNode> rv(qore_sprintf_bounded_intern(xsink, **utf8_fmt, args, arg_offset, field,
+            bounds));
+        if (!rv) {
+            return nullptr;
+        }
+        return rv->convertEncoding(fmt.getEncoding(), xsink);
+    }
 
     // the value-formatting conversions are rendered here subject to the bounds given and are replaced by "%s"
     // conversions taking the rendered string; all other conversions are passed through to the standard formatter
@@ -3451,11 +3491,25 @@ QoreStringNode* q_read_string_all(ExceptionSink* xsink, const QoreEncoding* enc,
     return str.release();
 }
 
+int q_check_char_read_encoding(const QoreEncoding* enc, ExceptionSink* xsink) {
+    if (!qore_encoding_private::isStateful(enc)) {
+        return 0;
+    }
+    xsink->raiseException("UNSUPPORTED-ENCODING", "cannot read characters one at a time or a number of characters of "
+        "text in the stateful encoding \"%s\", as the bytes of a character depend on the shift state left by the "
+        "characters before it; read the text in lines, read all of it, or read bytes and convert them",
+        enc->getCode());
+    return -1;
+}
+
 QoreStringNode* q_read_string(ExceptionSink* xsink, int64 size, const QoreEncoding* enc, f_read_t my_read) {
     if (!size)
         return nullptr;
     if (size < 0)
         return q_read_string_all(xsink, enc, my_read);
+    if (q_check_char_read_encoding(enc, xsink)) {
+        return nullptr;
+    }
 
     // original number of characters requested
     size_t orig_size = size;
@@ -3547,6 +3601,10 @@ QoreStringNode* q_read_string(ExceptionSink* xsink, int64 size, const QoreEncodi
 
 QoreStringNode* q_read_string_short(ExceptionSink* xsink, int64 size, const QoreEncoding* enc, f_read_t my_read) {
     if (!size) {
+        return nullptr;
+    }
+    // a single block of data can end in a shifted run, so it is not a string of its own in a stateful encoding
+    if (q_check_char_read_encoding(enc, xsink)) {
         return nullptr;
     }
 

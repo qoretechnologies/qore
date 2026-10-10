@@ -39,6 +39,7 @@
 #include "qore/InputStream.h"
 #include "qore/intern/StringReaderHelper.h"
 #include "qore/intern/qore_encoding_private.h"
+#include "qore/intern/qore_string_private.h"
 
 DLLLOCAL extern qore_classid_t CID_STREAMREADER;
 DLLLOCAL extern QoreClass* QC_STREAMREADER;
@@ -154,6 +155,12 @@ public:
             return nullptr;
         }
         eolstr.removeBom();
+        // the bytes that iconv writes at the start of text in a stateful encoding are not in the middle of the text
+        if (qore_encoding_private::isStateful(enc)) {
+            // the helper's own copy is changed
+            eolstr.makeTemp();
+            qore_string_private::get(const_cast<QoreString&>(**eolstr))->removeStatefulPrefix();
+        }
 
         SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
 

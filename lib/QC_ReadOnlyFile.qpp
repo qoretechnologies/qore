@@ -350,6 +350,7 @@ int ReadOnlyFile::close() {
     on the next call to this method.
 
     @throw READONLYFILE-READ-PARAMETER-ERROR zero size argument passed
+    @throw UNSUPPORTED-ENCODING \a size is positive and the text is in a stateful @ref character_encoding "character encoding" (ex: \c "UTF-7", \c "ISO-2022-JP"), in which the bytes of the characters after the ones read depend on the shift state at their end, which a following read would not have; such text can be read in lines, all at once, or as bytes (support for keeping the shift state between reads is planned: qoretechnologies/qorus#709)
     @throw FILE-READ-ERROR file is not open
     @throw FILE-READ-TIMEOUT timeout limit exceeded
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin,
@@ -775,7 +776,8 @@ while (exists (*string line = f.readLine(False))) {
     if (eol && eol->empty())
         eol = 0;
 
-    return eol ? f->readUntil(eol->c_str(), include_eol, xsink) : f->readLine(include_eol, xsink);
+    // the marker is converted to the file's encoding
+    return eol ? f->readUntilText(*eol, include_eol, xsink) : f->readLine(include_eol, xsink);
 }
 
 //! Sets the @ref character_encoding "character encoding" for the %ReadOnlyFile; if called with no argument, the @ref default_encoding "default encoding" is set
@@ -862,6 +864,7 @@ int ReadOnlyFile::getPos() [flags=RET_VALUE_ONLY] {
 
     @throw FILE-READ-ERROR file is not open
     @throw FILE-GETCHAR-ERROR invalid multi-byte character read or EOF received while reading a multi-byte character
+    @throw UNSUPPORTED-ENCODING the text is in a stateful @ref character_encoding "character encoding" (ex: \c "UTF-7", \c "ISO-2022-JP"), in which the bytes of the characters after the ones read depend on the shift state at their end, which a following read would not have; such text can be read in lines, all at once, or as bytes (support for keeping the shift state between reads is planned: qoretechnologies/qorus#709)
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
  */
 *string ReadOnlyFile::getchar() {

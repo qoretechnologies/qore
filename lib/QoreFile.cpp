@@ -669,6 +669,10 @@ QoreStringNode* QoreFile::readUntil(const char* bytes, bool incl_bytes, Exceptio
     return priv->readUntil(bytes, incl_bytes, xsink);
 }
 
+QoreStringNode* QoreFile::readUntilText(const QoreString& eol, bool incl_eol, ExceptionSink* xsink) {
+    return priv->readUntilText(eol, incl_eol, xsink);
+}
+
 int QoreFile::readUntil(char byte, QoreString& str, bool incl_byte) {
     return priv->readUntil(byte, str, incl_byte);
 }
@@ -709,6 +713,9 @@ size_t QoreFile::getPos() const {
 }
 
 QoreStringNode* QoreFile::getchar(ExceptionSink* xsink) {
+    if (q_check_char_read_encoding(priv->charset, xsink)) {
+        return nullptr;
+    }
     SimpleRefHolder<QoreStringNode> str(new QoreStringNode(priv->charset));
 
     int c;

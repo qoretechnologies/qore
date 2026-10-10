@@ -97,6 +97,7 @@ string str = sr.read(len);
     @return a @ref string value or @ref nothing if there is no more data available in the stream
 
     @throw STREAM-ENCODING-ERROR this exception is thrown if invalid character data is detected on the stream; this exception is not thrown when \a limit is negative, in such cases the input data is not verified
+    @throw UNSUPPORTED-ENCODING \a limit is positive and the text is in a stateful @ref character_encoding "character encoding" (ex: \c "UTF-7", \c "ISO-2022-JP"), in which the bytes of the characters after the ones read depend on the shift state at their end, which a following read would not have; such text can be read in lines, all at once, or as bytes (support for keeping the shift state between reads is planned: qoretechnologies/qorus#709)
 
     @note
     - a short read (a string returned with fewer characters than requested) indicates that there is no more data left in the stream

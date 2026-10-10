@@ -54,6 +54,9 @@ protected:
     size_t byte_pos = 0;
 
 private:
+    //! returns the next character of a string in a stateful encoding
+    DLLLOCAL bool nextStateful(ExceptionSink* xsink);
+
     UnicodeCharacterIterator(const UnicodeCharacterIterator&) = delete;
     UnicodeCharacterIterator& operator=(const UnicodeCharacterIterator&) = delete;
 };

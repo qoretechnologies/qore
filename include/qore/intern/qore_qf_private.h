@@ -38,6 +38,7 @@
 #endif
 
 #include "qore/intern/StringReaderHelper.h"
+#include "qore/intern/qore_string_private.h"
 #include "qore/AbstractPollState.h"
 #include <qore/QoreSandboxManager.h>
 
@@ -754,6 +755,113 @@ struct qore_qf_private {
         return rc == -1 ? 0 : str.release();
     }
 
+    //! returns the bytes of a character in the file's encoding as they are in the middle of text in it
+    /** Without the bytes that iconv writes at the start of text in a stateful encoding; empty if the character
+        cannot be represented in the encoding
+    */
+    DLLLOCAL std::string getCharBytes(unsigned cp) const {
+        QoreString s(charset);
+        if (s.concatUnicode(cp)) {
+            return std::string();
+        }
+        qore_string_private::get(s)->removeStatefulPrefix();
+        return std::string(s.c_str(), s.size());
+    }
+
+    //! reads until the given marker in the file's encoding is read at a character boundary; the lock must be held
+    /** In an encoding with characters of a minimum width of more than one byte (UTF-16, UTF-32), a marker is only
+        found at a character boundary
+
+        @param marker the marker, in the encoding of the file
+        @param str the string read
+        @param include_marker if true, the marker is included in the string
+        @param cr_marker if not empty, a carriage return in the encoding of the file that also ends the line, followed
+        or not by the marker
+        @param xsink for exceptions; may be nullptr
+
+        @return 0 if data was read, -1 if no data was read (end of file) or an exception was raised
+    */
+    DLLLOCAL int readUntilMarker(const std::string& marker, QoreString& str, bool include_marker, const std::string& cr_marker,
+            ExceptionSink* xsink) {
+        assert(!marker.empty());
+        const size_t width = charset->getMinCharWidth();
+        const bool tty = (bool)isatty(fd);
+        // true if the string ends with the given marker at a character boundary
+        auto ends_with = [&str, width](const std::string& m) -> bool {
+            size_t sz = str.size();
+            return !m.empty() && sz >= m.size() && !((sz - m.size()) % width)
+                && !memcmp(str.c_str() + sz - m.size(), m.data(), m.size());
+        };
+        int ch, rc = -1;
+        int char_count = 0;
+        while ((ch = readChar()) >= 0) {
+            if (xsink && ++char_count >= 100) {
+                char_count = 0;
+                if (qore_check_cancel(xsink, "file readLine")) {
+                    return -1;
+                }
+            }
+            str.concat(static_cast<char>(ch));
+            rc = 0;
+            if (ends_with(marker)) {
+                if (!include_marker) {
+                    str.terminate(str.size() - marker.size());
+                }
+                break;
+            }
+            if (ends_with(cr_marker)) {
+                size_t cr_end = str.size();
+                // a following marker is part of the end of the line if the file is not a terminal
+                if (!tty) {
+                    std::string next;
+                    while (next.size() < marker.size() && (ch = readChar()) >= 0) {
+                        next.push_back(static_cast<char>(ch));
+                    }
+                    if (next == marker) {
+                        str.concat(next.data(), next.size());
+                    } else if (!next.empty()) {
+                        lseek(fd, -static_cast<off_t>(next.size()), SEEK_CUR);
+                    }
+                }
+                if (!include_marker) {
+                    str.terminate(cr_end - cr_marker.size());
+                }
+                break;
+            }
+        }
+        return rc;
+    }
+
+    //! reads until the given end-of-line marker, converted to the file's encoding, is read
+    DLLLOCAL QoreStringNode* readUntilText(const QoreString& eol, bool incl_eol, ExceptionSink* xsink) {
+        TempEncodingHelper teol(eol, charset, xsink);
+        if (!teol) {
+            return nullptr;
+        }
+        // the bytes that iconv writes at the start of text in a stateful encoding are not in the middle of the text
+        teol.makeTemp();
+        qore_string_private::get(const_cast<QoreString&>(**teol))->removeStatefulPrefix();
+        if (!teol->size()) {
+            return readLine(incl_eol, xsink);
+        }
+        std::string marker(teol->c_str(), teol->size());
+        QoreStringNodeHolder str(new QoreStringNode(charset));
+        int rc;
+        {
+            AutoLocker al(m);
+            assert(!in_non_block);
+            if (!is_open) {
+                xsink->raiseException("FILE-READLINE-ERROR", "file has not been opened");
+                return nullptr;
+            }
+            rc = readUntilMarker(marker, **str, incl_eol, std::string(), xsink);
+        }
+        if (*xsink) {
+            return nullptr;
+        }
+        return rc == -1 ? nullptr : str.release();
+    }
+
     DLLLOCAL int readLine(QoreString& str, bool incl_eol = true, ExceptionSink* xsink = nullptr) {
         str.clear();
 
@@ -762,6 +870,16 @@ struct qore_qf_private {
 
         if (!is_open)
             return -2;
+
+        // the end-of-line characters are not single ASCII bytes in an encoding that is not ASCII-compatible
+        // (UTF-16, EBCDIC); they are searched for in the encoding of the file
+        if (!charset->isAsciiCompat()) {
+            std::string lf = getCharBytes('\n');
+            // an encoding that cannot represent a line feed is read byte by byte below
+            if (!lf.empty()) {
+                return readUntilMarker(lf, str, incl_eol, getCharBytes('\r'), xsink);
+            }
+        }
 
         bool tty = (bool)isatty(fd);
 

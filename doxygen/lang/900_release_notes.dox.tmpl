@@ -1103,6 +1103,23 @@ val = "string";      # OK
     the proxy's certificate is verified against the proxy's host name.
     @endparblock
 
+    @par Strings in Stateful Encodings Are Handled by Their Characters
+    @parblock
+    A string in a stateful encoding, in which the bytes of a character depend on the characters before it (such as
+    UTF-7, ISO-2022-JP, ISO-2022-KR, and the mixed EBCDIC code pages IBM930 and IBM939), is now handled by its
+    characters: character operations (length(), substr(), index(), case conversion, searching, splitting, trimming,
+    comparison, iteration, formatting) are made on its text in UTF-8, and text results are converted back.  Before,
+    such strings were handled one byte per character, so lengths and offsets counted bytes, substrings and
+    reversed strings were invalid, \c upr() changed Japanese text in ISO-2022-JP, and hash keys kept the escape
+    sequences.  Such an encoding is no longer compatible with ASCII (ISO-2022-JP was before).  Functions that work
+    with the byte positions of characters now raise an \c UNSUPPORTED-ENCODING exception for such a string, as do
+    reading characters one at a time or a number of characters at a time from a stream or file
+    (@ref Qore::StreamReader::readString() "StreamReader::readString()" with a positive count,
+    @ref Qore::ReadOnlyFile::read() "ReadOnlyFile::read()" with a positive count, and
+    @ref Qore::ReadOnlyFile::getchar() "ReadOnlyFile::getchar()"), since the next read would not have the shift
+    state of the previous one (qoretechnologies/qorus#709); read such text in lines, all at once, or as bytes.
+    @endparblock
+
     @par A Default Character Encoding That Is Not Compatible With ASCII Is Refused
     @parblock
     The @ref default_encoding "default character encoding" must be compatible with ASCII.  An encoding that is not
@@ -4274,9 +4291,37 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed functions that format, escape, or encode text in an encoding that is not compatible with ASCII (UTF-16,
+      EBCDIC): @ref Qore::sprintf() "sprintf()" and related functions with such a format string,
+      @ref Qore::regex_escape() "regex_escape()" and @ref <string>::regexEscape() "<string>::regexEscape()" wrote a
+      single-byte backslash, @ref <string>::splitLines() "<string>::splitLines()" searched for a single-byte line
+      feed, a quoted field that continues on the next line of a line iterator was joined with a single-byte line
+      feed, and @ref Qore::html_encode() "html_encode()", @ref Qore::html_decode() "html_decode()",
+      @ref Qore::encode_url() "encode_url()", and @ref Qore::encode_uri_request() "encode_uri_request()" raised
+      \c UNSUPPORTED-ENCODING; such text is now processed in UTF-8
+
+    - Fixed @ref Qore::ReadOnlyFile::readLine() "ReadOnlyFile::readLine()" for a file in an encoding that is not
+      compatible with ASCII (UTF-16, EBCDIC): lines were ended at single-byte line feeds, which split UTF-16
+      characters and never matched the EBCDIC line feed, and an end-of-line marker given as an argument was not
+      converted to the file's encoding, as documented
+
+    - Fixed number formats in an encoding that is not compatible with ASCII:
+      @ref Qore::format_number() "format_number()" and @ref <float>::format() "<float>::format()" failed an internal
+      check, and @ref <int>::format() "<int>::format()" and @ref <number>::format() "<number>::format()" wrote the
+      digits as single bytes; and @ref Qore::strmul() "strmul()" labeled the text of a string in another encoding
+      with the default encoding
+
+    - Fixed @ref Qore::encode_uri_request() "encode_uri_request()" percent-encoding the bytes of a string in its own
+      encoding instead of its characters in UTF-8 (ex: \c "é" in ISO-8859-1 as \c "%E9" instead of \c "%C3%A9")
+
     - Fixed @ref Qore::gzip() "gzip()" accepting a negative level other than \c -1, which failed in zlib with an
       unclear error, and @ref Qore::bzip2() "bzip2()" accepting a negative level; they raise \c ZLIB-LEVEL-ERROR and
       \c BZLIB2-LEVEL-ERROR, as documented
+
+    - Fixed the C++ API \c QoreString::concat() of the first characters of a string writing past the end of the
+      buffer of a string with no spare room and reading past the end of a shorter string, and
+      \c QoreString::compareSoft() returning \c 0 for a string and its prefix and \c 1 for an empty string and a
+      non-empty one
 
     - Fixed a data race when a binary module loaded at runtime with @ref Qore::load_module() "load_module()" registered
       classes that other threads used while a @ref Qore::Program "Program" parsed a subclass of one of them: the

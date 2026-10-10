@@ -248,7 +248,15 @@ FunctionalOperatorInterface* QoreIterateOperatorNode::getFunctionalIterator(
             value_type = FunctionalOperator::list;
             {
                 QoreStringNodeValueHelper str(*marg);
-                return new QoreFunctionalStringCharOperator(str.getReferencedValue(), xsink);
+                QoreStringNode* s = str.getReferencedValue();
+                // the characters of a string in a stateful encoding have no bytes of their own; its text is walked
+                // in UTF-8
+                if (s && qore_string_private::get(*s)->isStateful()
+                        && qore_string_private::replaceWithUtf8(s, xsink)) {
+                    s->deref();
+                    return nullptr;
+                }
+                return new QoreFunctionalStringCharOperator(s, xsink);
             }
         case NT_OBJECT: {
             AbstractIteratorHelper h(xsink, who, const_cast<QoreObject*>(marg->get<const QoreObject>()));

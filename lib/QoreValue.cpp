@@ -225,6 +225,18 @@ QoreValue QoreValue::makeCharFromString(const QoreString& str, ExceptionSink* xs
         return QoreValue();
     }
 
+    // a character has no bytes of its own in a stateful encoding (ex: ISO-2022-JP), so the character is decoded
+    // from the text in UTF-8
+    if (qore_string_private::get(str)->isStateful()) {
+        ExceptionSink local_xsink;
+        QoreString utf8(QCS_UTF8);
+        if (qore_string_private::get(str)->statefulToUtf8(utf8, xsink ? xsink : &local_xsink)) {
+            local_xsink.clear();
+            return QoreValue();
+        }
+        return makeCharFromString(utf8, xsink);
+    }
+
     unsigned clen = 0;
     unsigned codepoint = str.getUnicodePointFromBytePos(0, clen, xsink);
     if (xsink && *xsink) {

@@ -32,6 +32,9 @@
 #ifndef _QORE_INTERN_QORE_ENCODING_PRIVATE_H
 #define _QORE_INTERN_QORE_ENCODING_PRIVATE_H
 
+#include <functional>
+#include <string>
+
 struct form_functions;
 
 struct qore_encoding_private {
@@ -93,6 +96,23 @@ struct qore_encoding_private {
     */
     bool utf7_final_dash_literal = false;
 
+    //! true for a stateful encoding: one whose bytes for a character depend on the characters before it
+    /** (ex: UTF-7, ISO-2022-JP, ISO-2022-KR, the mixed EBCDIC code pages such as IBM930); a character has no byte
+        sequence of its own, as shift sequences switch between character sets, so text in the encoding cannot be
+        decoded, cut, or searched one byte or character at a time.  Character operations on a string in such an
+        encoding are made on its text in UTF-8, and text results are converted back to the encoding; see
+        qore_string_private::isStateful().  Such an encoding is not ASCII-compatible.
+    */
+    bool stateful = false;
+
+    //! the bytes that iconv writes at the start of text converted to a stateful encoding, if any
+    /** (ex: the designation of the character set that glibc writes at the start of ISO-2022-KR text); a character
+        or a separator converted on its own has them, but they are not in the middle of text in the encoding, so they
+        are removed from a sequence that is searched for in text (an end-of-line marker); see
+        qore_string_private::removeStatefulPrefix()
+    */
+    std::string stateful_prefix;
+
     DLLLOCAL qore_encoding_private(const char* code, const char* desc = nullptr, unsigned char minwidth = 1,
             unsigned char maxwidth = 1, mbcs_length_t flength = nullptr, mbcs_end_t fend = nullptr,
             mbcs_pos_t fpos = nullptr, mbcs_charlen_t fcharlen = nullptr, mbcs_get_unicode_t get_unicode = nullptr,
@@ -109,6 +129,16 @@ struct qore_encoding_private {
         return ascii_compat;
     }
 
+    //! returns true if the encoding is stateful; see \c stateful
+    DLLLOCAL bool isStateful() const {
+        return stateful;
+    }
+
+    //! returns true if the given encoding is stateful; see \c stateful
+    DLLLOCAL static bool isStateful(const QoreEncoding* enc) {
+        return enc->priv->stateful;
+    }
+
     //! returns the name to pass to iconv to convert text to this encoding
     DLLLOCAL const char* getIconvTargetCode() const {
         return iconv_target_code.empty() ? code.c_str() : iconv_target_code.c_str();
@@ -119,12 +149,21 @@ struct qore_encoding_private {
         return iconv_source_code.empty() ? code.c_str() : iconv_source_code.c_str();
     }
 
+    //! converts UTF-8 text to the encoding when it is probed; returns false if the text cannot be represented in it
+    typedef std::function<bool(const std::string&, std::string&)> probe_convert_t;
+
     //! sets the properties of an encoding created on the fly from its name from the encoding itself
     /** The properties are determined by converting sample text to the encoding with iconv; see
         lib/charset.cpp.  If iconv does not know the encoding, the properties are not changed: text in the encoding
         cannot be converted, so it is handled as single-byte, ASCII-compatible text, as before.
     */
     DLLLOCAL void probe();
+
+    //! sets the properties of an encoding that is not stateful; see probe()
+    DLLLOCAL void probeProperties(const probe_convert_t& convert);
+
+    //! marks the encoding as stateful; see probe()
+    DLLLOCAL void setStateful(const probe_convert_t& convert);
 
     //! returns the encoding given by a byte order mark at the start of text in an encoding created on the fly
     /** @param enc the encoding of the text; this object must be its private implementation

@@ -1138,9 +1138,9 @@ class StringTest inherits QUnit::Test {
         # than UTF-8, because the temporary string holder was converted to bool and then to char
         assertEq(<61e962>, binary(html_decode(convert_encoding("a&eacute;b", "ISO-8859-1"))));
 
-        # entity encoding and decoding are still not supported with non-ASCII-compatible encodings
-        assertThrows("UNSUPPORTED-ENCODING", \html_decode(), convert_encoding("a&eacute;b", "UTF-16BE"));
-        assertThrows("UNSUPPORTED-ENCODING", \html_encode(), convert_encoding("a<b", "UTF-16BE"));
+        # entity encoding and decoding with encodings that are not ASCII-compatible are made in UTF-8
+        assertEq("aéb", convert_encoding(html_decode(convert_encoding("a&eacute;b", "UTF-16BE")), "UTF-8"));
+        assertEq("a&lt;b", convert_encoding(html_encode(convert_encoding("a<b", "UTF-16BE")), "UTF-8"));
     }
 
     testUtf16() {
@@ -1324,11 +1324,18 @@ class StringTest inherits QUnit::Test {
         assertThrows("SPLIT-ERROR", \split(), (",", "a,''ad", "'"));
         assertThrows("SPLIT-ERROR", \split(), (",", "a,'ad'x,b", "'"));
 
+        # entity and URL encoding are made in UTF-8, and the result is converted to the encoding of the string
+        {
+            string t = convert_encoding("x<é> y&z", "UTF16BE");
+            assertEq("UTF-16BE", html_encode(t).encoding());
+            assertEq(html_encode("x<é> y&z"), convert_encoding(html_encode(t), "UTF-8"));
+            assertEq("x<é> y&z", convert_encoding(html_decode(convert_encoding(html_encode("x<é> y&z"), "UTF16BE")),
+                "UTF-8"));
+            assertEq(encode_url("x<é> y&z"), convert_encoding(encode_url(t), "UTF-8"));
+            assertEq(encode_uri_request("x<é> y&z"), convert_encoding(encode_uri_request(t), "UTF-8"));
+            assertEq("x<é> y&z", decode_url(convert_encoding(encode_url("x<é> y&z"), "UTF16BE")));
+        }
         # test currently unsupported operations
-        assertThrows("UNSUPPORTED-ENCODING", \html_encode(), a);
-        assertThrows("UNSUPPORTED-ENCODING", \html_decode(), a);
-        assertThrows("UNSUPPORTED-ENCODING", \encode_url(), a);
-        assertThrows("UNSUPPORTED-ENCODING", \encode_uri_request(), a);
         assertThrows("UNSUPPORTED-ENCODING", sub (string str) { str.equalPartialPath(str); }, a);
 
         # a string in an encoding that is not ASCII-compatible converts to an integer as the same string in UTF-8

@@ -1,0 +1,521 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# A stateful encoding (UTF-7, ISO-2022-*, HZ, the mixed EBCDIC code pages) has no fixed byte sequence per
+# character: what a byte means depends on the shift sequences before it.  Strings in such an encoding must have the
+# same characters as the same text in UTF-8 for every character operation, and no operation may change characters
+# by treating a byte inside a shifted run as a character of its own.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class StatefulEncodingCharacterTest
+
+class StatefulEncodingCharacterTest inherits QUnit::Test {
+    public {
+        #! the stateful encodings tested, with text that each one can represent
+        const Encodings = {
+            "UTF-7": "Grüße wörld 日本 + -",
+            "ISO-2022-JP": "hello 日本語 world 12",
+            "ISO-2022-KR": "hello 한국어 world 12",
+            "IBM930": "HELLO 日本語 WORLD 12",
+            "IBM939": "hello 日本語 world 12",
+            "ISO-2022-CN": "hello 中文字 world 12",
+            "HZ": "hello 中文字 world 12",
+        };
+    }
+
+    constructor() : Test("StatefulEncodingCharacterTest", "1.0", \ARGV) {
+        addTestCase("length and characters", \testCharacters());
+        addTestCase("substrings and splicing", \testSubstrings());
+        addTestCase("searching", \testSearching());
+        addTestCase("splitting", \testSplitting());
+        addTestCase("case and transformation", \testTransformations());
+        addTestCase("regular expressions", \testRegex());
+        addTestCase("trimming", \testTrimming());
+        addTestCase("keys, comparisons and numbers", \testKeysAndComparisons());
+        addTestCase("iteration", \testIteration());
+        addTestCase("formatting and replacement", \testFormatting());
+        addTestCase("encoding text for HTML and URLs", \testEncodingFunctions());
+        addTestCase("reading text from streams and files", \testReading());
+        addTestCase("scanning", \testScanner());
+        addTestCase("encodings that are not ASCII-compatible", \testNonAsciiCompatible());
+        set_return_value(main());
+    }
+
+    #! the stateful encodings that iconv supports on this platform, with their text in UTF-8
+    private hash<string, string> getEncodings() {
+        hash<string, string> rv = {};
+        foreach hash<auto> i in (Encodings.pairIterator()) {
+            try {
+                string s = convert_encoding(i.value, i.key);
+                if (convert_encoding(s, "UTF-8") == i.value) {
+                    rv{i.key} = i.value;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # not supported here
+            }
+        }
+        if (!rv) {
+            testSkip("iconv supports none of the stateful encodings tested on this platform");
+        }
+        return rv;
+    }
+
+    #! returns True if the given text can be represented in the given encoding
+    private static bool representable(string text, string enc) {
+        try {
+            return convert_encoding(convert_encoding(text, enc), "UTF-8") == text;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    #! returns the given string in UTF-8
+    private static string utf8(string s) {
+        return convert_encoding(s, "UTF-8");
+    }
+
+    testCharacters() {
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            string text = i.value;
+            string s = convert_encoding(text, i.key);
+            string enc = i.key;
+            assertEq(enc, s.encoding(), enc + ": the encoding is kept");
+            assertEq(text.length(), s.length(), enc + ": length()");
+            assertEq(text.length(), length(s), enc + ": length(string)");
+            for (int c = 0; c < text.length(); ++c) {
+                # a character of a string is a char value, a code point
+                assertEq(text[c], s[c], sprintf("%s: character %d", enc, c));
+                assertEq(text.getUnicode(c), s.getUnicode(c), sprintf("%s: getUnicode(%d)", enc, c));
+            }
+            assertEq(text.getUnicode(-1), s.getUnicode(-1), enc + ": getUnicode(-1)");
+            assertEq((map $1, text.splitChars()), (map utf8($1), s.splitChars()), enc + ": splitChars()");
+            assertEq(enc, (map $1, s.splitChars())[0].encoding(), enc + ": splitChars() keeps the encoding");
+            assertEq(text.width(), s.width(), enc + ": width()");
+        }
+    }
+
+    testSubstrings() {
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            string text = i.value;
+            string s = convert_encoding(text, i.key);
+            string enc = i.key;
+            foreach list<int> args in ((0, 3), (2, 5), (6, 3), (6, -2), (-4, 2), (-4,), (3,)) {
+                string expected = args.size() == 2 ? text.substr(args[0], args[1]) : text.substr(args[0]);
+                string got = args.size() == 2 ? s.substr(args[0], args[1]) : s.substr(args[0]);
+                assertEq(enc, got.encoding(), sprintf("%s: substr%y keeps the encoding", enc, args));
+                assertEq(expected, utf8(got), sprintf("%s: substr%y", enc, args));
+                assertEq(expected, utf8(substr(s, args[0], args.size() == 2 ? args[1] : NOTHING)),
+                    sprintf("%s: substr(string)%y", enc, args));
+            }
+
+            # the splice operator and extract
+            string a = text;
+            string b = s;
+            splice a, 2, 4, "XY";
+            splice b, 2, 4, "XY";
+            assertEq(enc, b.encoding(), enc + ": splice keeps the encoding");
+            assertEq(a, utf8(b), enc + ": splice");
+            a = text;
+            b = s;
+            string ea = extract a, 3, 4;
+            string eb = extract b, 3, 4;
+            assertEq(ea, utf8(eb), enc + ": extracted text");
+            assertEq(a, utf8(b), enc + ": text after extract");
+
+            # concatenation of slices gives the whole text
+            assertEq(text, utf8(s.substr(0, 5) + s.substr(5)), enc + ": slices concatenate");
+        }
+    }
+
+    testSearching() {
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            string text = i.value;
+            string s = convert_encoding(text, i.key);
+            string enc = i.key;
+            foreach string needle in (" ", "o", "1", "l", text.substr(6, 2), text.substr(-3)) {
+                assertEq(text.find(needle), s.find(needle), sprintf("%s: find(%y)", enc, needle));
+                assertEq(text.rfind(needle), s.rfind(needle), sprintf("%s: rfind(%y)", enc, needle));
+                assertEq(index(text, needle), index(s, needle), sprintf("%s: index(%y)", enc, needle));
+                assertEq(rindex(text, needle), rindex(s, needle), sprintf("%s: rindex(%y)", enc, needle));
+                assertEq(text.find(needle, 3), s.find(needle, 3), sprintf("%s: find(%y, 3)", enc, needle));
+                assertEq(text.contains(needle), s.contains(needle), sprintf("%s: contains(%y)", enc, needle));
+            }
+            # a needle in the encoding itself is found the same way
+            string needle = convert_encoding(text.substr(6, 2), enc);
+            assertEq(text.find(text.substr(6, 2)), s.find(needle), enc + ": find() with a needle in the encoding");
+            assertTrue(s.startsWith(convert_encoding(text.substr(0, 3), enc)), enc + ": startsWith()");
+            assertTrue(s.endsWith(convert_encoding(text.substr(-3), enc)), enc + ": endsWith()");
+            # a byte of a shift sequence is not a character of the text
+            assertEq(text.find("B"), s.find("B"), enc + ": find(\"B\")");
+            assertEq(text.find("$"), s.find("$"), enc + ": find(\"$\")");
+            assertEq(text.find("A"), s.find("A"), enc + ": find(\"A\")");
+        }
+    }
+
+    testSplitting() {
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            string text = i.value;
+            string s = convert_encoding(text, i.key);
+            string enc = i.key;
+            assertEq(text.split(" "), (map utf8($1), s.split(" ")), enc + ": split(\" \")");
+            assertEq(split(" ", text), (map utf8($1), split(" ", s)), enc + ": split(string, string)");
+            assertEq(text.split(" ", "\""), (map utf8($1), s.split(" ", "\"")), enc + ": split() with a quote");
+            string sep = text.substr(7, 1);
+            assertEq(text.split(sep), (map utf8($1), s.split(sep)), sprintf("%s: split(%y)", enc, sep));
+            string lines = convert_encoding(text + "\n" + text + "\r\n", enc);
+            assertEq((map $1, (text + "\n" + text + "\r\n").splitLines()), (map utf8($1), lines.splitLines()),
+                enc + ": splitLines()");
+            assertEq((text, text, ""), (map utf8($1), lines.splitLines()), enc + ": splitLines() pieces");
+            assertEq(enc, (map $1, lines.splitLines())[0].encoding(), enc + ": splitLines() keeps the encoding");
+            string sep2 = text.substr(6, 1);
+            assertEq((map $1, text.splitString(sep2)), (map utf8($1), s.splitString(sep2)),
+                sprintf("%s: splitString(%y)", enc, sep2));
+            string nl = convert_encoding(text + "\n", enc);
+            chomp nl;
+            assertEq(text, utf8(nl), enc + ": chomp");
+        }
+    }
+
+    testTransformations() {
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            string text = i.value;
+            string s = convert_encoding(text, i.key);
+            string enc = i.key;
+            assertEq(text.upr(), utf8(s.upr()), enc + ": upr()");
+            assertEq(text.lwr(), utf8(s.lwr()), enc + ": lwr()");
+            assertEq(enc, s.upr().encoding(), enc + ": upr() keeps the encoding");
+            assertEq(toupper(text), utf8(toupper(s)), enc + ": toupper()");
+            assertEq(tolower(text), utf8(tolower(s)), enc + ": tolower()");
+            assertEq(reverse(text), utf8(reverse(s)), enc + ": reverse()");
+            assertEq(text.unaccent(), utf8(s.unaccent()), enc + ": unaccent()");
+            assertEq(text.toBase64(), convert_encoding(s, "UTF-8").toBase64(), enc + ": the text is unchanged");
+        }
+    }
+
+    testRegex() {
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            string text = i.value;
+            string s = convert_encoding(text, i.key);
+            string enc = i.key;
+            foreach string re in ("o", "[0-9]+", "\\w+", "\\s", text.substr(6, 2)) {
+                assertEq(regex(text, re), regex(s, re), sprintf("%s: regex(%y)", enc, re));
+                assertEq(text.regexCount(re), s.regexCount(re), sprintf("%s: regexCount(%y)", enc, re));
+                assertEq(regex_extract(text, "(" + re + ")") ?? (),
+                    map utf8($1), regex_extract(s, "(" + re + ")") ?? (), sprintf("%s: regex_extract(%y)", enc, re));
+                assertEq(text.splitRegex(re), (map utf8($1), s.splitRegex(re)), sprintf("%s: splitRegex(%y)", enc, re));
+            }
+            string a = text;
+            string b = s;
+            a =~ s/o/0/g;
+            b =~ s/o/0/g;
+            assertEq(a, utf8(b), enc + ": regex substitution");
+            a = text;
+            b = s;
+            a =~ tr/a-z/A-Z/;
+            b =~ tr/a-z/A-Z/;
+            assertEq(a, utf8(b), enc + ": transliteration");
+        }
+    }
+
+    testTrimming() {
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            string text = "  " + i.value + "  ";
+            string s = convert_encoding(text, i.key);
+            string enc = i.key;
+            assertEq(trim(text), utf8(trim(s)), enc + ": trim()");
+            string a = text;
+            string b = s;
+            trim a;
+            trim b;
+            assertEq(a, utf8(b), enc + ": the trim operator");
+            # trimming characters that are also bytes of shift sequences
+            foreach string chars in ("B", "( ", "$B", "+-", "A") {
+                assertEq(trim(text, chars), utf8(trim(s, chars)), sprintf("%s: trim(%y)", enc, chars));
+            }
+        }
+    }
+
+    testKeysAndComparisons() {
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            string text = i.value;
+            string s = convert_encoding(text, i.key);
+            string enc = i.key;
+            assertEq((text,), keys {s: 1}, enc + ": hash key");
+            hash<auto> h = {text: 1};
+            assertEq(1, h{s}, enc + ": hash lookup");
+            assertTrue(s == text, enc + ": ==");
+            assertFalse(s != text, enc + ": !=");
+            # the same text concatenated from two strings has other bytes, as it shifts twice
+            string cat = convert_encoding(text.substr(0, 8), enc) + convert_encoding(text.substr(8), enc);
+            assertEq(enc, cat.encoding());
+            assertTrue(cat == s, enc + ": == compares the text");
+            assertTrue(cat == text, enc + ": == compares the text with text in UTF-8");
+            assertEq((text,), keys {cat: 1}, enc + ": hash key of concatenated text");
+            assertEq(text, utf8(cat), enc + ": concatenated text");
+            # ordering is by the characters
+            list<string> words = map convert_encoding($1, enc), ("z", text.substr(6, 2), "a", text.substr(0, 3));
+            assertEq(sort(map utf8($1), words), map utf8($1), sort(words), enc + ": sort()");
+            assertTrue(convert_encoding("a", enc) < convert_encoding(text.substr(6, 1), enc), enc + ": <");
+            assertEq(12, int(convert_encoding("12", enc)), enc + ": int()");
+            assertEq(12, convert_encoding(" 12", enc).toInt(), enc + ": toInt()");
+            assertEq(1.5, float(convert_encoding("1.5", enc)), enc + ": float()");
+        }
+    }
+
+    testIteration() {
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            string text = i.value;
+            string s = convert_encoding(text, i.key);
+            string enc = i.key;
+            list<int> expected = ();
+            for (int c = 0; c < text.length(); ++c) {
+                expected += text.getUnicode(c);
+            }
+            list<int> got = ();
+            foreach int cp in (s.codePointIterator()) {
+                got += cp;
+            }
+            assertEq(expected, got, enc + ": codePointIterator()");
+            # the iterator gives char values
+            list<string> chars = ();
+            foreach char c in (s.iterator()) {
+                chars += string(c);
+            }
+            assertEq((map $1, text.splitChars()), chars, enc + ": iterator()");
+            # the iterate operator
+            assertEq((map $1.ord(), iterate text), (map $1.ord(), iterate s), enc + ": iterate");
+            # a single character is a char value
+            assertEq(text[6], cast<char>(convert_encoding(text.substr(6, 1), enc)), enc + ": cast<char>()");
+        }
+    }
+
+    testFormatting() {
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            string text = i.value;
+            string s = convert_encoding(text, i.key);
+            string enc = i.key;
+            # %w field widths count the display width of the characters
+            assertEq(sprintf("[%-30w]", text), sprintf("[%-30w]", s), enc + ": sprintf() %w field width");
+            assertEq(sprintf("[%30w]", text), sprintf("[%30w]", s), enc + ": sprintf() %w right-aligned");
+            assertEq(sprintf("[%-8w]", text), sprintf("[%-8w]", s), enc + ": sprintf() %w truncation");
+            # a format string in the encoding
+            string fmt = convert_encoding(text.substr(0, 6) + "%s|%d", enc);
+            assertEq(text.substr(0, 6) + "x|5", utf8(sprintf(fmt, "x", 5)), enc + ": format string in the encoding");
+            assertEq(enc, sprintf(fmt, "x", 5).encoding(), enc + ": sprintf() keeps the encoding of the format");
+            assertEq(text.substr(0, 6) + "x|5", utf8(vsprintf(fmt, ("x", 5))), enc + ": vsprintf()");
+            # number formats
+            assertEq(format_number(".,2", 1234567.891), utf8(format_number(convert_encoding(".,2", enc), 1234567.891)),
+                enc + ": format_number()");
+            assertEq(1234567.89, parse_float(convert_encoding("1.234.567,89", enc), convert_encoding(".,", enc)),
+                enc + ": parse_float()");
+            assertEq((1234567).format(",."), utf8((1234567).format(convert_encoding(",.", enc))), enc + ": <int>::format()");
+            assertEq(enc, (1234567).format(convert_encoding(",.", enc)).encoding(),
+                enc + ": <int>::format() keeps the encoding of the format");
+            assertEq((1234567.5n).format(",.2"), utf8((1234567.5n).format(convert_encoding(",.2", enc))),
+                enc + ": <number>::format()");
+            assertEq((1234567.5).format(",.2"), utf8((1234567.5).format(convert_encoding(",.2", enc))),
+                enc + ": <float>::format()");
+            # repetition, with characters removed from the end
+            assertEq(strmul(text, 3, 2), utf8(strmul(s, 3, 2)), enc + ": strmul()");
+            assertEq(enc, strmul(s, 2).encoding(), enc + ": strmul() keeps the encoding");
+            # replacement by characters
+            assertEq(replace(text, "o", "0"), utf8(replace(s, "o", "0")), enc + ": replace()");
+            assertEq(replace(text, text.substr(6, 1), "_"), utf8(replace(s, text.substr(6, 1), "_")),
+                enc + ": replace() of a shifted character");
+            assertEq(replace(text, "l", "L", 3, -3), utf8(replace(s, "l", "L", 3, -3)), enc + ": replace() range");
+            assertEq(enc, replace(s, "o", "0").encoding(), enc + ": replace() keeps the encoding");
+            # truncation to a byte length keeps whole characters and the bytes that end in the initial state
+            for (int n = 1; n <= s.size(); ++n) {
+                string t = trunc_str(s, n);
+                assertEq(enc, t.encoding());
+                assertLe(n, t.size(), sprintf("%s: trunc_str(%d) size", enc, n));
+                string tu = utf8(t);
+                assertEq(text.substr(0, tu.length()), tu, sprintf("%s: trunc_str(%d) is a prefix", enc, n));
+                if (tu.length() < text.length()) {
+                    # one more character does not fit
+                    assertGt(n, convert_encoding(text.substr(0, tu.length() + 1), enc).size(),
+                        sprintf("%s: trunc_str(%d) is the longest prefix", enc, n));
+                }
+            }
+            assertEq(text, utf8(trunc_str(text, s.size(), enc)), enc + ": trunc_str() with a target encoding");
+        }
+    }
+
+    testEncodingFunctions() {
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            string text = i.value + " <a&\"b\"> 1+1 x%y";
+            string s = convert_encoding(text, i.key);
+            string enc = i.key;
+            assertEq(html_encode(text), utf8(html_encode(s)), enc + ": html_encode()");
+            assertEq(text, utf8(html_decode(convert_encoding(html_encode(text), enc))), enc + ": html_decode()");
+            assertEq(encode_url(text), utf8(encode_url(s)), enc + ": encode_url()");
+            assertEq(encode_url(text, True), utf8(encode_url(s, True)), enc + ": encode_url() all");
+            assertEq(text, decode_url(convert_encoding(encode_url(text), enc)), enc + ": decode_url()");
+            assertEq(encode_uri_request(text), utf8(encode_uri_request(s)), enc + ": encode_uri_request()");
+            # a backslash is not a character of some encodings or of some of their states (ex: IBM930, where its byte
+            # is the yen sign, or ISO-2022-JP with Apple's iconv after Japanese characters)
+            if (representable(regex_escape(text), enc)) {
+                assertEq(regex_escape(text), utf8(regex_escape(s)), enc + ": regex_escape()");
+                assertEq(text.regexEscape(), utf8(s.regexEscape()), enc + ": <string>::regexEscape()");
+            } else {
+                # iconv raises an error or maps the backslash to another character
+                try {
+                    assertEq(enc, regex_escape(s).encoding(), enc + ": regex_escape() keeps the encoding");
+                } catch (hash<ExceptionInfo> ex) {
+                    assertEq("ENCODING-CONVERSION-ERROR", ex.err, enc + ": regex_escape()");
+                }
+            }
+            assertTrue(regex(text, regex_escape(text)), enc + ": the escaped text matches");
+        }
+        # non-ASCII characters are percent-encoded in UTF-8 in any encoding
+        assertEq(encode_uri_request("é x?q=é 1"), encode_uri_request(convert_encoding("é x?q=é 1", "ISO-8859-1")),
+            "encode_uri_request() of text in ISO-8859-1");
+    }
+
+    testReading() {
+        string dir = tmp_location() + DirSep + "stateful-" + getpid();
+        mkdir(dir);
+        on_exit remove_tree(dir);
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            list<string> lines = (i.value, "2: " + i.value.substr(3), "");
+            string data = lines.join("\n") + "\n";
+            string s = convert_encoding(data, i.key);
+            string enc = i.key;
+            # streams: lines and all of the text
+            {
+                StreamReader sr(new BinaryInputStream(binary(s)), enc);
+                list<string> got = ();
+                *string l;
+                while (exists (l = sr.readLine())) {
+                    assertEq(enc, l.encoding());
+                    got += utf8(l);
+                }
+                assertEq(lines, got, enc + ": StreamReader::readLine()");
+            }
+            assertEq(data, utf8(new StreamReader(new BinaryInputStream(binary(s)), enc).readString(-1)),
+                enc + ": StreamReader::readString(-1)");
+            # a number of characters cannot be read without the shift state
+            assertThrows("UNSUPPORTED-ENCODING", sub () {
+                new StreamReader(new BinaryInputStream(binary(s)), enc).readString(3);
+            }, NOTHING, enc + ": StreamReader::readString(3)");
+            # files
+            string path = dir + DirSep + "text-" + enc;
+            {
+                File f(enc);
+                f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+                f.write(data);
+            }
+            assertEq(binary(s), ReadOnlyFile::readBinaryFile(path), enc + ": File::write() converts the text");
+            {
+                ReadOnlyFile f(path, enc);
+                list<string> got = ();
+                *string l;
+                while (exists (l = f.readLine(False))) {
+                    got += utf8(l);
+                }
+                assertEq(lines, got, enc + ": ReadOnlyFile::readLine()");
+            }
+            assertEq(data, utf8(new ReadOnlyFile(path, enc).read(-1)), enc + ": ReadOnlyFile::read(-1)");
+            assertThrows("UNSUPPORTED-ENCODING", sub () { new ReadOnlyFile(path, enc).read(3); }, NOTHING,
+                enc + ": ReadOnlyFile::read(3)");
+            assertThrows("UNSUPPORTED-ENCODING", sub () { new ReadOnlyFile(path, enc).getchar(); }, NOTHING,
+                enc + ": ReadOnlyFile::getchar()");
+            assertEq(lines, (map utf8($1), new FileLineIterator(path, enc)), enc + ": FileLineIterator");
+            assertEq(lines, (map utf8($1), new DataLineIterator(s)), enc + ": DataLineIterator");
+            # a quoted field that continues on the next line
+            string csv = convert_encoding("a,\"" + i.value + "\n2\",b\n", enc);
+            DataLineIterator dli(csv);
+            assertTrue(dli.next());
+            assertEq(("a", i.value + "\n2", "b"), (map utf8($1), dli.getSplitLine(",", "\"")),
+                enc + ": quoted field on two lines");
+        }
+    }
+
+    testScanner() {
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            string text = i.value;
+            string enc = i.key;
+            Scanner sc(convert_encoding(text, enc));
+            # the source is scanned in UTF-8
+            assertEq(text, sc.getString(), enc + ": Scanner::getString()");
+            list<int> got = ();
+            while (!sc.atEnd()) {
+                got += sc.peek();
+                sc.advance();
+            }
+            assertEq((map $1.ord(), iterate text), got, enc + ": Scanner characters");
+        }
+    }
+
+    #! encodings that are not ASCII-compatible, but not stateful, for functions that handled them byte by byte
+    testNonAsciiCompatible() {
+        foreach string enc in ("UTF-16LE", "UTF-16BE", "IBM037") {
+            string text = "a.b (é) 1+1 <x>";
+            string s;
+            try {
+                s = convert_encoding(text, enc);
+            } catch (hash<ExceptionInfo> ex) {
+                continue;
+            }
+            assertEq(regex_escape(text), utf8(regex_escape(s)), enc + ": regex_escape()");
+            assertEq(text.regexEscape(), utf8(s.regexEscape()), enc + ": <string>::regexEscape()");
+            assertEq(html_encode(text), utf8(html_encode(s)), enc + ": html_encode()");
+            assertEq(encode_url(text), utf8(encode_url(s)), enc + ": encode_url()");
+            assertEq("a=1 x", utf8(sprintf(convert_encoding("%s=%d x", enc), "a", 1)), enc + ": sprintf()");
+            assertEq(strmul(text, 3, 2), utf8(strmul(s, 3, 2)), enc + ": strmul()");
+            assertEq("1,234,567.50", utf8(format_number(convert_encoding(",.2", enc), 1234567.5)),
+                enc + ": format_number()");
+            assertEq("1,234,567", utf8((1234567).format(convert_encoding(",.", enc))), enc + ": <int>::format()");
+            assertEq("1,234,567.50", utf8((1234567.5n).format(convert_encoding(",.2", enc))),
+                enc + ": <number>::format()");
+            string lines = convert_encoding("a\nb\r\nc", enc);
+            assertEq(("a", "b", "c"), (map utf8($1), lines.splitLines()), enc + ": splitLines()");
+            assertEq(enc, (map $1, lines.splitLines())[0].encoding(), enc + ": splitLines() keeps the encoding");
+            DataLineIterator dli(convert_encoding("x,\"y\nz\",w\n", enc));
+            assertTrue(dli.next());
+            assertEq(("x", "y\nz", "w"), (map utf8($1), dli.getSplitLine(",", "\"")),
+                enc + ": quoted field on two lines");
+            # lines of a file in the encoding
+            string path = tmp_location() + DirSep + sprintf("lines-%s-%d", enc, getpid());
+            on_exit unlink(path);
+            {
+                File f(enc);
+                f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+                f.write("line 1\nline 2\r\n\nlast|part\n");
+            }
+            {
+                ReadOnlyFile f(path, enc);
+                list<string> got = ();
+                *string l;
+                while (exists (l = f.readLine(False))) {
+                    assertEq(enc, l.encoding());
+                    got += utf8(l);
+                }
+                assertEq(("line 1", "line 2", "", "last|part"), got, enc + ": ReadOnlyFile::readLine()");
+            }
+            {
+                ReadOnlyFile f(path, enc);
+                list<string> got = ();
+                *string l;
+                while (exists (l = f.readLine(True))) {
+                    got += utf8(l);
+                }
+                assertEq(("line 1\n", "line 2\r\n", "\n", "last|part\n"), got,
+                    enc + ": ReadOnlyFile::readLine() with the end of line");
+            }
+            {
+                # the end-of-line marker is converted to the encoding of the file
+                ReadOnlyFile f(path, enc);
+                assertEq("line 1\nline 2\r\n\nlast", utf8(f.readLine(False, "|")), enc + ": readLine() with a marker");
+                assertEq("part\n", utf8(f.readLine(False, "|")), enc + ": readLine() with a marker at the end");
+            }
+            assertEq(("line 1", "line 2", "", "last|part"), (map utf8($1), new FileLineIterator(path, enc)),
+                enc + ": FileLineIterator");
+        }
+    }
+}

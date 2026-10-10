@@ -215,6 +215,17 @@ QoreStringNode* QoreStringNode::createAndConvertEncoding(const char* str, const 
     return *xsink ? nullptr : rv.release();
 }
 
+int qore_string_private::replaceWithUtf8(QoreStringNode*& src, ExceptionSink* xsink) {
+    assert(src);
+    QoreStringNode* utf8 = src->convertEncoding(QCS_UTF8, xsink);
+    if (!utf8) {
+        return -1;
+    }
+    src->deref();
+    src = utf8;
+    return 0;
+}
+
 // static function
 QoreStringNode* QoreStringNode::makeView(QoreStringNode* parent, size_t byte_offset, size_t byte_len) {
     assert(parent);
@@ -265,7 +276,24 @@ QoreStringNode* QoreStringNode::copy() const {
 // front.  4096 was chosen for measurable break-even and one-page alignment.
 constexpr size_t QORE_VIEW_SUBSTR_THRESHOLD = 4096;
 
+// returns the substring of a string in a stateful encoding, taken from its text in UTF-8
+static QoreStringNode* stateful_substr(const QoreStringNode& str, qore_offset_t offset, const qore_offset_t* length,
+        ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> utf8(str.convertEncoding(QCS_UTF8, xsink));
+    if (!utf8) {
+        return nullptr;
+    }
+    SimpleRefHolder<QoreStringNode> part(length ? utf8->substr(offset, *length, xsink) : utf8->substr(offset, xsink));
+    if (!part) {
+        return nullptr;
+    }
+    return part->convertEncoding(str.getEncoding(), xsink);
+}
+
 QoreStringNode* QoreStringNode::substr(qore_offset_t offset, ExceptionSink* xsink) const {
+    if (priv->isStateful()) {
+        return stateful_substr(*this, offset, nullptr, xsink);
+    }
     size_t byte_offset, byte_len;
     if (priv->compute_substr_range(offset, byte_offset, byte_len, xsink)) {
         return nullptr;
@@ -279,6 +307,9 @@ QoreStringNode* QoreStringNode::substr(qore_offset_t offset, ExceptionSink* xsin
 }
 
 QoreStringNode* QoreStringNode::substr(qore_offset_t offset, qore_offset_t length, ExceptionSink* xsink) const {
+    if (priv->isStateful()) {
+        return stateful_substr(*this, offset, &length, xsink);
+    }
     size_t byte_offset, byte_len;
     if (priv->compute_substr_range(offset, length, byte_offset, byte_len, xsink)) {
         return nullptr;
@@ -379,6 +410,10 @@ int QoreStringNode::parseInit(QoreValue& val, QoreParseContext& parse_context) {
 
 QoreStringNode* QoreStringNode::extract(qore_offset_t offset, ExceptionSink* xsink) {
     QoreStringNode* str = new QoreStringNode(priv->encoding);
+    if (priv->isStateful()) {
+        priv->statefulSplice(offset, 0, true, nullptr, str, xsink);
+        return str;
+    }
     if (!priv->getEncoding()->isMultiByte()) {
         size_t n_offset = priv->check_offset(offset);
         if (n_offset != priv->len)
@@ -391,6 +426,10 @@ QoreStringNode* QoreStringNode::extract(qore_offset_t offset, ExceptionSink* xsi
 
 QoreStringNode* QoreStringNode::extract(qore_offset_t offset, qore_offset_t num, ExceptionSink* xsink) {
     QoreStringNode* str = new QoreStringNode(priv->encoding);
+    if (priv->isStateful()) {
+        priv->statefulSplice(offset, num, false, nullptr, str, xsink);
+        return str;
+    }
     if (!priv->getEncoding()->isMultiByte()) {
         size_t n_offset, n_num;
         priv->check_offset(offset, num, n_offset, n_num);
@@ -413,6 +452,10 @@ QoreStringNode* QoreStringNode::extract(qore_offset_t offset, qore_offset_t num,
         return extract(offset, num, xsink);
 
     QoreStringNode* rv = new QoreStringNode(priv->encoding);
+    if (priv->isStateful()) {
+        priv->statefulSplice(offset, num, false, *tmp, rv, xsink);
+        return rv;
+    }
     if (!priv->getEncoding()->isMultiByte()) {
         size_t n_offset, n_num;
         priv->check_offset(offset, num, n_offset, n_num);

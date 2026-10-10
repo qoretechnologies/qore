@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 
 UnicodeCharacterIterator::UnicodeCharacterIterator(const QoreString& str) : str(str) {
 }
@@ -41,6 +42,9 @@ bool UnicodeCharacterIterator::next(ExceptionSink* xsink) {
     if (!str.size()) {
         return false;
     }
+    if (qore_string_private::get(str)->isStateful()) {
+        return nextStateful(xsink);
+    }
     // if at the end of the string, reset to the beginning and return false
     if (byte_pos == str.size()) {
         byte_pos = 0;
@@ -50,6 +54,33 @@ bool UnicodeCharacterIterator::next(ExceptionSink* xsink) {
     unsigned len;
     current_code = str.getUnicodePointFromBytePos(byte_pos, len, xsink);
     //printd(5, "UnicodeCharacterIterator::next(): c: %d bp: %zu len: %d x: %d\n", current_code, byte_pos, len, *xsink ? true : false);
+    if (*xsink) {
+        byte_pos = 0;
+        current_code = -1;
+        return false;
+    }
+    byte_pos += len;
+    return true;
+}
+
+// a character has no bytes of its own in a stateful encoding (ex: ISO-2022-JP): byte_pos is the byte offset of the
+// next character in the text of the string in UTF-8, which is converted for each character, as the layout of this
+// public class cannot hold the converted text; functions in the library that walk the characters of a string in a
+// stateful encoding walk its text in UTF-8 instead of using this class
+bool UnicodeCharacterIterator::nextStateful(ExceptionSink* xsink) {
+    QoreString utf8(QCS_UTF8);
+    if (qore_string_private::get(str)->statefulToUtf8(utf8, xsink)) {
+        byte_pos = 0;
+        current_code = -1;
+        return false;
+    }
+    if (byte_pos >= utf8.size()) {
+        byte_pos = 0;
+        current_code = -1;
+        return false;
+    }
+    unsigned len;
+    current_code = utf8.getUnicodePointFromBytePos(byte_pos, len, xsink);
     if (*xsink) {
         byte_pos = 0;
         current_code = -1;

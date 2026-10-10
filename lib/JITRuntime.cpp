@@ -8580,7 +8580,7 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
         case 1:
             return string->endsWith(**pattern) ? 1 : 0;
         case 2:
-            return string->bindex(**pattern, 0) >= 0 ? 1 : 0;
+            return qore_string_private::get(**string)->containsText(**pattern, xsink) ? 1 : 0;
         case 3:
             return static_cast<int64_t>(
                 string->index(**pattern, offset, xsink));
@@ -8698,7 +8698,7 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_pipeline_search(
         case 1:
             return source->endsWith(**pattern) ? 1 : 0;
         case 2:
-            return source->bindex(**pattern, 0) >= 0 ? 1 : 0;
+            return qore_string_private::get(*source)->containsText(**pattern, xsink) ? 1 : 0;
         case 3: {
             qore_offset_t result =
                 source->index(**pattern, offset, xsink);
@@ -18459,6 +18459,18 @@ static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_predicate_native_impl(ui
     if (xsink && *xsink) {
         return 0;
     }
+    // a character has no bytes of its own in a stateful encoding (ex: ISO-2022-JP), so its text is compared and
+    // searched by characters
+    if (qore_string_private::get(**str)->isStateful()) {
+        switch (predicate) {
+            case 0:
+                return str->startsWith(**pattern) ? 1 : 0;
+            case 1:
+                return str->endsWith(**pattern) ? 1 : 0;
+            case 2:
+                return qore_string_private::get(**str)->containsText(**pattern, xsink) ? 1 : 0;
+        }
+    }
     return eval_predicate(pattern->c_str(), pattern->size());
 }
 
@@ -18615,7 +18627,7 @@ extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_consume_native_noguard(
         case QoreStringCaseConsumer::EndsWith:
             return transformed.endsWith(**pattern) ? 1 : 0;
         case QoreStringCaseConsumer::Contains:
-            return transformed.bindex(**pattern, 0) >= 0 ? 1 : 0;
+            return qore_string_private::get(transformed)->containsText(**pattern, xsink) ? 1 : 0;
         case QoreStringCaseConsumer::Find: {
             qore_offset_t result =
                 transformed.index(**pattern, offset, xsink);

@@ -87,6 +87,20 @@ static int fix_num(QoreString& tmp, const QoreString& fmt, ExceptionSink* xsink)
 }
 
 static QoreStringNode* qore_regex_escape_string(const QoreStringNode* str, ExceptionSink* xsink) {
+    // the text of a string in an encoding that is not ASCII-compatible is escaped in UTF-8: a backslash is not the
+    // byte 0x5c in such an encoding (UTF-16*, EBCDIC), and the characters of a stateful encoding (ex: ISO-2022-JP)
+    // have no bytes of their own
+    if (!str->getEncoding()->isAsciiCompat()) {
+        SimpleRefHolder<QoreStringNode> utf8(str->convertEncoding(QCS_UTF8, xsink));
+        if (!utf8) {
+            return nullptr;
+        }
+        SimpleRefHolder<QoreStringNode> escaped(qore_regex_escape_string(*utf8, xsink));
+        if (!escaped) {
+            return nullptr;
+        }
+        return escaped->convertEncoding(str->getEncoding(), xsink);
+    }
     SimpleRefHolder<QoreStringNode> result(new QoreStringNode("", str->getEncoding()));
     size_t pos = 0;
     size_t count = 0;
@@ -112,6 +126,106 @@ static QoreStringNode* qore_regex_escape_string(const QoreStringNode* str, Excep
         ++count;
     }
     return result.release();
+}
+
+// replaces each occurrence of the source string in the string with the target string; returns a new reference or
+// nullptr if an exception was raised
+static QoreStringNode* q_replace_string(const QoreStringNode* str, const QoreStringNode* source,
+        const QoreStringNode* target, int64 start, int64 end, ExceptionSink* xsink) {
+    const QoreEncoding* ccs = str->getEncoding();
+
+    TempEncodingHelper t1(source, ccs, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    if (t1->empty() || str->empty()) {
+        return str->stringRefSelf();
+    }
+
+    TempEncodingHelper t2(target, ccs, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    SimpleRefHolder<QoreStringNode> nstr(new QoreStringNode(ccs));
+
+    const char* cstr = str->c_str();
+    size_t plen = t1->size();
+
+    // only execute the replace logic if there is a pattern
+    if (plen) {
+        const char* pattern = t1->c_str();
+
+        bool has_length = false;
+        size_t length = 0;
+
+        if (start) {
+            if (start < 0) {
+                length = str->length();
+                has_length = true;
+                start = length + start;
+            }
+            const char* cn = cstr + str->size();
+            size_t i = ccs->getByteLen(cstr, cn, start, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (i == str->size()) {
+                return str->stringRefSelf();
+            }
+            // add skipped beginning bytes to target string
+            nstr->concat(cstr, i);
+            // reposition source ptr
+            cstr += i;
+        }
+
+        size_t size = str->size();
+
+        if (end) {
+            if (end < 0) {
+                if (!has_length) {
+                    length = str->length();
+                }
+                end = length + end;
+            }
+            const char* cn = str->c_str() + str->size();
+            // get the byte length to the character after the requested one
+            size_t i = ccs->getByteLen(str->c_str(), cn, end + 1, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (start > 0 && end < start) {
+                return str->stringRefSelf();
+            }
+            //printd(5, "end: %d\n", (int)i);
+
+            size = i;
+        }
+
+        //printd(5, "cstr: %p str: %p size: %d cstr - str: %d\n", cstr, str->c_str(), (int)size, (int)(cstr - str->c_str()));
+        assert(static_cast<size_t>(cstr - str->c_str()) < size);
+        const qore_char_boundary align = qore_string_private::get_char_alignment(ccs);
+        while (const char* p = qore_string_private::memmem_aligned(cstr, size - (cstr - str->c_str()),
+            pattern, plen, align, cstr - str->c_str())) {
+            //printd(5, "str: %p p: %p '%s' '%s'->'%s'\n", cstr, p, cstr, pattern, t2->c_str());
+            if (p != cstr) {
+                nstr->concat(cstr, p - cstr);
+            }
+            qore_string_private::get(*nstr)->concat(*t2);
+            cstr = p + plen;
+        }
+    }
+
+    // add last field; the byte length has to be used here and not a NUL-terminated concatenation,
+    // since strings can contain embedded nulls, either because the encoding uses them (UTF-16*) or
+    // because the string data itself contains them
+    size_t tail = str->size() - (cstr - str->c_str());
+    if (tail) {
+        nstr->concat(cstr, tail);
+    }
+
+    return nstr.release();
 }
 
 // finds the first occurrence of "pattern" (length "pl") in "str" (length "len") that starts at a
@@ -174,8 +288,52 @@ static void split_add_element(QoreListNode* l, const char* str, unsigned len, co
     }
 }
 
+// returns a list of the strings in the given list converted to the given encoding, or nullptr if an exception was
+// raised
+static QoreListNode* convert_list_encoding(const QoreListNode* l, const QoreEncoding* enc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    ConstListIterator li(l);
+    while (li.next()) {
+        if (li.index() && !(li.index() % 100) && qore_check_cancel(xsink, "converting split fields")) {
+            return nullptr;
+        }
+        QoreValue v = li.getValue();
+        assert(v.getType() == NT_STRING);
+        QoreStringNodeValueHelper piece(v);
+        QoreStringNode* conv = piece->convertEncoding(enc, xsink);
+        if (!conv) {
+            return nullptr;
+        }
+        rv->push(conv, xsink);
+    }
+    return rv.release();
+}
+
 QoreListNode* split_intern(const char* pattern, size_t pl, const char* str, size_t sl, const QoreEncoding* enc,
-        bool with_separator, bool keep_trailing_empty) {
+        bool with_separator, bool keep_trailing_empty, ExceptionSink* xsink) {
+    if (enc && qore_encoding_private::isStateful(enc)) {
+        // a character has no bytes of its own in a stateful encoding (ex: ISO-2022-JP; the bytes of a separator
+        // can be part of a shifted run): the text is split in UTF-8, and the pieces are converted back; text that is
+        // not valid in the encoding is split byte by byte if the caller cannot receive an exception
+        ExceptionSink local_xsink;
+        ExceptionSink* xs = xsink ? xsink : &local_xsink;
+        QoreString utf8_str(QCS_UTF8);
+        QoreString utf8_pattern(QCS_UTF8);
+        if ((!sl || !qore_string_private::convert_encoding_intern(str, sl, enc, utf8_str, QCS_UTF8, xs))
+                && (!pl || !qore_string_private::convert_encoding_intern(pattern, pl, enc, utf8_pattern, QCS_UTF8,
+                    xs))) {
+            ReferenceHolder<QoreListNode> l(split_intern(utf8_pattern.c_str(), utf8_pattern.size(), utf8_str.c_str(),
+                utf8_str.size(), QCS_UTF8, with_separator, keep_trailing_empty), xs);
+            QoreListNode* rv = convert_list_encoding(*l, enc, xs);
+            if (rv) {
+                return rv;
+            }
+        }
+        if (xsink) {
+            return nullptr;
+        }
+        local_xsink.clear();
+    }
     QoreListNode* l = new QoreListNode(enc ? stringTypeInfo : binaryTypeInfo);
     const char* ostr = str;
     const qore_char_boundary align = qore_string_private::get_char_alignment(enc);
@@ -233,6 +391,31 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const QoreString* sep, cons
 QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t patlen, const QoreString* str,
         const char* quote, size_t quotelen, bool trim_unquoted, AbstractIteratorHelper* h, const QoreString* eol,
         bool keep_trailing_empty) {
+    const QoreEncoding* enc = str->getEncoding();
+    if (!enc->isAsciiCompat()) {
+        // the fields of text in an encoding that is not ASCII-compatible are split in its text in UTF-8, and
+        // converted back: the line separator added for a field that continues on the next line of a line iterator is
+        // not an ASCII byte in such an encoding (UTF-16*, EBCDIC), and the characters of a stateful encoding (ex:
+        // ISO-2022-JP) have no bytes of their own
+        TempEncodingHelper utf8_str(str, QCS_UTF8, xsink);
+        if (!utf8_str) {
+            return nullptr;
+        }
+        QoreString utf8_pat(QCS_UTF8);
+        QoreString utf8_quote(QCS_UTF8);
+        if ((patlen && qore_string_private::convert_encoding_intern(pat, patlen, enc, utf8_pat, QCS_UTF8, xsink))
+                || (quotelen && qore_string_private::convert_encoding_intern(quote, quotelen, enc, utf8_quote,
+                    QCS_UTF8, xsink))) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreListNode> l(split_with_quote(xsink, utf8_pat.c_str(), utf8_pat.size(), *utf8_str,
+            utf8_quote.c_str(), utf8_quote.size(), trim_unquoted, h, eol, keep_trailing_empty), xsink);
+        if (!l) {
+            return nullptr;
+        }
+        return convert_list_encoding(*l, enc, xsink);
+    }
+
     // in case the eol string needs encoding conversion
     TempEncodingHelper teol;
 
@@ -346,25 +529,29 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
                         // get ostr offset so we can recalculate after concatenating
                         size_t offset = ststr - ostr;
                         QoreStringNodeValueHelper new_line(*v);
+                        // the byte length of the buffer before the line separator and the line are added; the line
+                        // is converted to the encoding of the buffer, so its length there can differ
+                        size_t old_size = buf->size();
                         // add line separator
-                        size_t eol_len;
                         if (!eol) {
-                            eol_len = 1;
                             buf->concat('\n');
                         } else {
                             if (!teol && !teol.set(eol, str->getEncoding(), xsink)) {
                                 assert(*xsink);
                                 return nullptr;
                             }
-                            buf->concat(teol->c_str());
-                            eol_len = teol->size();
+                            buf->concat(*teol, xsink);
+                            if (*xsink) {
+                                return nullptr;
+                            }
                         }
                         buf->concat(*new_line, xsink);
                         if (*xsink) {
                             return nullptr;
                         }
-                        len += (new_line->size() + eol_len);
-                        sl += (new_line->size() + eol_len);
+                        size_t added = buf->size() - old_size;
+                        len += added;
+                        sl += added;
                         str = *buf;
                         ostr = buf->c_str();
                         ststr = ostr + offset;
@@ -1322,7 +1509,7 @@ list<string> split(string separator, string str, bool with_separator = False, bo
     }
 
     return split_intern(temp->c_str(), temp->strlen(), str->c_str(), str->strlen(), str->getEncoding(),
-        with_separator, keep_trailing_empty);
+        with_separator, keep_trailing_empty, xsink);
 }
 
 //! Splits a string into a list of components based on a separator string and a quote character
@@ -1798,100 +1985,20 @@ string str = replace("hello there", "there", "you"); # returns "hello you"
     @see regex_subst()
  */
 string replace(string str, string source, string target, int start = 0, int end = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    const QoreEncoding* ccs = str->getEncoding();
-
-    TempEncodingHelper t1(source, ccs, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    if (t1->empty() || str->empty()) {
-        return str->refSelf();
-    }
-
-    TempEncodingHelper t2(target, ccs, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    SimpleRefHolder<QoreStringNode> nstr(new QoreStringNode(ccs));
-
-    const char* cstr = str->c_str();
-    size_t plen = t1->size();
-
-    // only execute the replace logic if there is a pattern
-    if (plen) {
-        const char* pattern = t1->c_str();
-
-        bool has_length = false;
-        size_t length = 0;
-
-        if (start) {
-            if (start < 0) {
-                length = str->length();
-                has_length = true;
-                start = length + start;
-            }
-            const char* cn = cstr + str->size();
-            size_t i = ccs->getByteLen(cstr, cn, start, xsink);
-            if (*xsink) {
-                return QoreValue();
-            }
-            if (i == str->size()) {
-                return str->refSelf();
-            }
-            // add skipped beginning bytes to target string
-            nstr->concat(cstr, i);
-            // reposition source ptr
-            cstr += i;
+    // the characters of a string in a stateful encoding (ex: ISO-2022-JP) have no bytes of their own, so the
+    // replacement is made in its text in UTF-8, and the result is converted back to its encoding
+    if (qore_string_private::get(*str)->isStateful()) {
+        SimpleRefHolder<QoreStringNode> utf8(str->convertEncoding(QCS_UTF8, xsink));
+        if (!utf8) {
+            return QoreValue();
         }
-
-        size_t size = str->size();
-
-        if (end) {
-            if (end < 0) {
-                if (!has_length) {
-                    length = str->length();
-                }
-                end = length + end;
-            }
-            const char* cn = str->c_str() + str->size();
-            // get the byte length to the character after the requested one
-            size_t i = ccs->getByteLen(str->c_str(), cn, end + 1, xsink);
-            if (*xsink) {
-                return QoreValue();
-            }
-            if (start > 0 && end < start) {
-                return str->refSelf();
-            }
-            //printd(5, "end: %d\n", (int)i);
-
-            size = i;
+        SimpleRefHolder<QoreStringNode> rv(q_replace_string(*utf8, source, target, start, end, xsink));
+        if (!rv) {
+            return QoreValue();
         }
-
-        //printd(5, "cstr: %p str: %p size: %d cstr - str: %d\n", cstr, str->c_str(), (int)size, (int)(cstr - str->c_str()));
-        assert(static_cast<size_t>(cstr - str->c_str()) < size);
-        const qore_char_boundary align = qore_string_private::get_char_alignment(ccs);
-        while (const char* p = qore_string_private::memmem_aligned(cstr, size - (cstr - str->c_str()),
-            pattern, plen, align, cstr - str->c_str())) {
-            //printd(5, "str: %p p: %p '%s' '%s'->'%s'\n", cstr, p, cstr, pattern, t2->c_str());
-            if (p != cstr) {
-                nstr->concat(cstr, p - cstr);
-            }
-            qore_string_private::get(*nstr)->concat(*t2);
-            cstr = p + plen;
-        }
+        return rv->convertEncoding(str->getEncoding(), xsink);
     }
-
-    // add last field; the byte length has to be used here and not a NUL-terminated concatenation,
-    // since strings can contain embedded nulls, either because the encoding uses them (UTF-16*) or
-    // because the string data itself contains them
-    size_t tail = str->size() - (cstr - str->c_str());
-    if (tail) {
-        nstr->concat(cstr, tail);
-    }
-
-    return nstr.release();
+    return q_replace_string(str, source, target, start, end, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -2171,6 +2278,43 @@ string trunc_str(softstring str, softint length, *string encoding) [flags=RET_VA
       return new QoreStringNode(tmp.giveBuffer(), length, length + 1, enc);
    }
 
+   if (qore_encoding_private::isStateful(enc)) {
+      // the bytes of the characters of a stateful encoding (ex: ISO-2022-JP) depend on the characters before them,
+      // and the text ends with the bytes that return to the initial shift state, so the longest prefix of whole
+      // characters whose text fits in the length is found by converting prefixes of the text; the byte length of
+      // the text of a prefix grows with the number of characters
+      QoreString utf8(QCS_UTF8);
+      if (qore_string_private::get(**tmp)->statefulToUtf8(utf8, xsink)) {
+         return QoreValue();
+      }
+      // the prefix of "lo" characters fits; the one of "hi" + 1 characters does not
+      size_t lo = 0;
+      size_t hi = utf8.length();
+      SimpleRefHolder<QoreStringNode> best(new QoreStringNode(enc));
+      while (lo < hi) {
+         if (qore_check_cancel(xsink, "truncating string")) {
+            return QoreValue();
+         }
+         size_t mid = lo + (hi - lo + 1) / 2;
+         TempString part(utf8.substr(0, static_cast<qore_offset_t>(mid), xsink));
+         if (!part) {
+            return QoreValue();
+         }
+         SimpleRefHolder<QoreStringNode> prefix(new QoreStringNode(enc));
+         prefix->concat(*part, xsink);
+         if (*xsink) {
+            return QoreValue();
+         }
+         if (prefix->size() <= static_cast<size_t>(length)) {
+            lo = mid;
+            best = prefix.release();
+         } else {
+            hi = mid - 1;
+         }
+      }
+      return best.release();
+   }
+
    if (!enc->isMultiByte())
       return new QoreStringNode(tmp->c_str(), length, enc);
 
@@ -2213,7 +2357,8 @@ string strmul(softstring str, softint count, *softint offset) [flags=RET_VALUE_O
    if (count < 0)
       return xsink->raiseException("STRMUL-ERROR", "Multiple argument has to be >= 0; value: " QLLD, count);
 
-   QoreStringNodeHolder ret(new QoreStringNode);
+   // the result is in the encoding of the string; the bytes of the string are repeated
+   QoreStringNodeHolder ret(new QoreStringNode(str->getEncoding()));
    int64 i = 0;
    while (count > 0) {
       if (i && !(i % 100) && qore_check_cancel(xsink, "multiplying string")) {

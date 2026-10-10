@@ -1409,6 +1409,57 @@ const multibyte_family* get_multibyte_family(F& convert) {
     }
     return nullptr;
 }
+
+// returns true if the encoding is stateful: if a sample character that it can represent, converted twice, is not
+// its conversion on its own repeated after a constant prefix (a byte order mark, or the designation that ISO-2022-KR
+// writes at the start of its output); in a stateful encoding, the bytes that shift to the character set of a
+// character (ISO-2022-*, the SO and SI bytes of the mixed EBCDIC code pages) or the bits of a base64 run (UTF-7) are
+// shared by the characters of a run, so a character has no byte sequence of its own
+template <typename F>
+bool is_stateful_encoding(F& convert) {
+    auto check = [&convert](const probe_char* chars, size_t num) -> bool {
+        for (size_t i = 0; i < num; ++i) {
+            std::string one, two;
+            std::string in(chars[i].utf8);
+            if (!convert(in, one) || !convert(in + in, two)) {
+                // the character cannot be represented in the encoding
+                continue;
+            }
+            if (two.size() <= one.size() || (two.size() - one.size()) > one.size()) {
+                return true;
+            }
+            size_t width = two.size() - one.size();
+            std::string unit = one.substr(one.size() - width);
+            if (two != one.substr(0, one.size() - width) + unit + unit) {
+                return true;
+            }
+        }
+        return false;
+    };
+    return check(probe_chars, sizeof(probe_chars) / sizeof(probe_chars[0]))
+        || check(multibyte_probe_chars, sizeof(multibyte_probe_chars) / sizeof(multibyte_probe_chars[0]));
+}
+
+// returns true if a sample character that the encoding can represent has more than one byte, after any constant
+// prefix that iconv writes at the start of its output
+template <typename F>
+bool has_multibyte_units(F& convert) {
+    auto check = [&convert](const probe_char* chars, size_t num) -> bool {
+        for (size_t i = 0; i < num; ++i) {
+            std::string one, two;
+            std::string in(chars[i].utf8);
+            if (!convert(in, one) || !convert(in + in, two) || two.size() <= one.size()) {
+                continue;
+            }
+            if (two.size() - one.size() > 1) {
+                return true;
+            }
+        }
+        return false;
+    };
+    return check(probe_chars, sizeof(probe_chars) / sizeof(probe_chars[0]))
+        || check(multibyte_probe_chars, sizeof(multibyte_probe_chars) / sizeof(multibyte_probe_chars[0]));
+}
 }
 
 const QoreEncoding* qore_encoding_private::getBomEncoding(const QoreEncoding* enc, const char* p, size_t len,
@@ -1443,6 +1494,11 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
     - UTF-7: if iconv decodes the "-" that ends a base64 run as a character when it is the last byte of its input
       (Apple's libiconv), conversions from the encoding give such a "-" to iconv on its own; see
       IconvHelper::iconvUtf7().
+    - Stateful encodings (ex: UTF-7, ISO-2022-JP, ISO-2022-KR, IBM930): if a sample character converted twice is not
+      the conversion of the character on its own repeated (after a constant prefix), the bytes of a character
+      depend on the characters before it (see is_stateful_encoding()).  Such an encoding is not ASCII-compatible,
+      and character operations on its strings are made on their text in UTF-8 (see
+      qore_string_private::isStateful()); no other property is probed.
     - ASCII compatibility: each ASCII character (TAB, LF, CR, and every printable character) is converted on its
       own; the encoding is ASCII-compatible if every one that the encoding can represent is the same single byte, and
       every letter, digit, and whitespace character can be represented.  A punctuation character that has no
@@ -1464,9 +1520,9 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
       byte order mark, text is converted to the encoding in the byte order of the form explicitly (ex: "UTF-32BE"),
       as for QCS_UTF16, so that strings in the encoding have no byte order mark; conversions from it are made with
       its own name, which takes the byte order from a byte order mark in the input.
-    - Any other encoding (ex: EBCDIC code pages, UTF-7) is handled as single-byte text, ASCII-compatible or not as
-      found above; text in an encoding that is not ASCII-compatible is converted to UTF-8 by every function that
-      parses or splits it.  Stateful encodings (ex: UTF-7, ISO-2022-JP) cannot be decoded one character at a time.
+    - Any other encoding (ex: single-byte EBCDIC code pages) is handled as single-byte text, ASCII-compatible or
+      not as found above; text in an encoding that is not ASCII-compatible is converted to UTF-8 by every function
+      that parses or splits it.
 
     If iconv does not know the encoding, the properties are not changed: no text can be converted to or from the
     encoding, so its strings are handled as single-byte, ASCII-compatible text, as before, rather than raising an
@@ -1490,11 +1546,56 @@ void qore_encoding_private::probe() {
 
     // converts UTF-8 text to the encoding; returns false if it cannot be represented in the encoding, including when
     // iconv substitutes a character without reporting it, as Apple's libiconv does
-    auto convert = [&to, &from](const std::string& utf8, std::string& out) -> bool {
+    const bool dash_literal = utf7_final_dash_literal;
+    probe_convert_t convert = [&to, &from, dash_literal](const std::string& utf8, std::string& out) -> bool {
         std::string back;
-        return to.convert(utf8, out) && from.convert(out, back) && back == utf8;
+        if (!to.convert(utf8, out) || !from.convert(out, back)) {
+            return false;
+        }
+        if (back == utf8) {
+            return true;
+        }
+        // Apple's libiconv decodes the "-" that ends a UTF-7 base64 run at the end of its input as a character; the
+        // conversions from the encoding give it on its own (see IconvHelper::iconvUtf7()), so the text is the same
+        return dash_literal && !out.empty() && out.back() == '-' && back.size() == utf8.size() + 1
+            && back.back() == '-' && !back.compare(0, utf8.size(), utf8);
     };
 
+    // a stateful encoding is not ASCII-compatible, even if each ASCII character on its own is the same byte (as in
+    // ISO-2022-JP), as an ASCII byte in a shifted run is part of another character; it keeps the single-byte
+    // character functions, as its character operations are made on its text in UTF-8
+    if (is_stateful_encoding(convert)) {
+        setStateful(convert);
+        return;
+    }
+
+    probeProperties(convert);
+
+    // an encoding left without character functions whose characters have more than one byte has no functions to
+    // find its characters (ex: ISO-2022-JP with musl, which shifts back to ASCII after every character, so that a
+    // character converted twice is its conversion on its own repeated): it is handled as a stateful encoding
+    if (!flength && has_multibyte_units(convert)) {
+        setStateful(convert);
+    }
+}
+
+void qore_encoding_private::setStateful(const probe_convert_t& convert) {
+    stateful = true;
+    ascii_compat = false;
+    // the constant prefix of the conversion of an ASCII character, which is in the initial shift state
+    std::string one, two;
+    if (convert("A", one) && convert("AA", two) && two.size() > one.size()
+            && (two.size() - one.size()) <= one.size()) {
+        size_t width = two.size() - one.size();
+        std::string unit = one.substr(one.size() - width);
+        std::string prefix = one.substr(0, one.size() - width);
+        if (two == prefix + unit + unit) {
+            stateful_prefix = prefix;
+        }
+    }
+}
+
+void qore_encoding_private::probeProperties(const probe_convert_t& convert) {
     std::string out;
     bool compat = true;
     for (int c = 1; c < 0x80 && compat; ++c) {

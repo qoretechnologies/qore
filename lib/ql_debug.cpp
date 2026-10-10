@@ -37,6 +37,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_type.h"
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 
 #include <map>
@@ -428,6 +429,137 @@ static void ut_qorevalue_operator_bool_null(UnitTestCounters& c) {
     handling one of the two representations, the C++ code that reads string values out of hashes,
     lists, object members and exceptions dereferences a null pointer and kills the process.
 */
+// QoreString::compareSoft() and QoreString::concat(const QoreString*, size_t, ExceptionSink*)
+static void ut_string_compare_soft_and_concat_chars(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    // compareSoft() returns -1, 0, or 1 as the string is less than, equal to, or greater than the argument
+    QoreString ab("ab"), abc("abc"), b("b"), empty("");
+    UT_ASSERT_EQ(c, -1, ab.compareSoft(&abc, &xsink), "compareSoft(): a prefix is less than the longer string");
+    UT_ASSERT_EQ(c, 1, abc.compareSoft(&ab, &xsink), "compareSoft(): a string is greater than its prefix");
+    UT_ASSERT_EQ(c, 0, ab.compareSoft(&ab, &xsink), "compareSoft(): equal strings");
+    UT_ASSERT_EQ(c, -1, empty.compareSoft(&ab, &xsink), "compareSoft(): an empty string is less");
+    UT_ASSERT_EQ(c, 1, ab.compareSoft(&empty, &xsink), "compareSoft(): a string is greater than an empty one");
+    UT_ASSERT_EQ(c, 0, empty.compareSoft(&empty, &xsink), "compareSoft(): empty strings are equal");
+    UT_ASSERT_EQ(c, -1, abc.compareSoft(&b, &xsink), "compareSoft(): the first different byte decides");
+    {
+        QoreString latin1("ab", QCS_ISO_8859_1);
+        UT_ASSERT_EQ(c, -1, latin1.compareSoft(&abc, &xsink), "compareSoft(): converted prefix");
+    }
+    UT_ASSERT(c, !xsink, "compareSoft(): no exception");
+
+    // concat() of the first characters of a string: no more bytes than the string has are read
+    {
+        QoreString t("0123456789");
+        t.concat(&ab, 10, &xsink);
+        UT_ASSERT(c, t.equal("0123456789ab"), "concat(): more characters than the string has");
+        QoreString u;
+        u.concat(&abc, 2, &xsink);
+        UT_ASSERT(c, u.equal("ab"), "concat(): the first characters");
+    }
+    // the buffer is resized for the length of the target plus the bytes appended, not the length of the source
+    {
+        size_t len = 200;
+        char* buf = static_cast<char*>(malloc(len + 1));
+        memset(buf, 'x', len);
+        buf[len] = '\0';
+        QoreString t;
+        // the buffer is taken with no room for more bytes
+        t.take(buf, len);
+        t.concat(&abc, 3, &xsink);
+        UT_ASSERT_EQ(c, len + 3, t.size(), "concat(): the bytes are appended");
+        UT_ASSERT(c, qore_string_private::get(t)->allocated > t.size(), "concat(): the buffer holds the result");
+        UT_ASSERT(c, !strcmp(t.c_str() + len, "abc"), "concat(): the appended bytes");
+    }
+    // in a multi-byte encoding, characters are counted
+    {
+        QoreString t("x");
+        QoreString src("äöü", QCS_UTF8);
+        t.concat(&src, 2, &xsink);
+        UT_ASSERT(c, t.equal("xäö"), "concat(): the first characters in UTF-8");
+    }
+    UT_ASSERT(c, !xsink, "concat(): no exception");
+    xsink.clear();
+}
+
+// the C++ API of strings in a stateful encoding (ex: ISO-2022-JP), whose characters have no bytes of their own
+static void ut_stateful_string_api(UnitTestCounters& c) {
+    const QoreEncoding* enc = QEM.findCreate("ISO-2022-JP");
+    ExceptionSink xsink;
+    QoreString utf8("hello 日本語 world", QCS_UTF8);
+    std::unique_ptr<QoreString> s(utf8.convertEncoding(enc, &xsink));
+    if (!s) {
+        // not supported by iconv on this platform
+        xsink.clear();
+        return;
+    }
+    UT_ASSERT(c, qore_string_private::get(*s)->isStateful(), "ISO-2022-JP is stateful");
+    UT_ASSERT(c, !enc->isAsciiCompat(), "a stateful encoding is not ASCII-compatible");
+    UT_ASSERT_EQ(c, static_cast<size_t>(15), s->length(), "length() counts characters");
+
+    // the same text concatenated from two strings can have other bytes (two shifts to JIS X 0208 with GNU libiconv
+    // and glibc; musl shifts back after every character, so its bytes are the same)
+    std::unique_ptr<QoreString> s1(QoreString("hello 日本", QCS_UTF8).convertEncoding(enc, &xsink));
+    std::unique_ptr<QoreString> s2(QoreString("語 world", QCS_UTF8).convertEncoding(enc, &xsink));
+    QoreString cat(enc);
+    cat.concat(s1.get(), &xsink);
+    cat.concat(s2.get(), &xsink);
+    UT_ASSERT(c, cat.equalSoft(*s, &xsink), "equalSoft() compares the text");
+    UT_ASSERT_EQ(c, 0, cat.compare(s.get()), "compare() compares the text");
+    UT_ASSERT_EQ(c, 0, cat.compareSoft(s.get(), &xsink), "compareSoft() compares the text");
+    UT_ASSERT(c, cat.equalPartialSoft(*s1, &xsink), "equalPartialSoft() compares the text");
+    std::unique_ptr<QoreString> jp(QoreString("日本", QCS_UTF8).convertEncoding(enc, &xsink));
+    std::unique_ptr<QoreString> go(QoreString("本語 world", QCS_UTF8).convertEncoding(enc, &xsink));
+    UT_ASSERT(c, s->startsWith(*s1), "startsWith() compares the text");
+    UT_ASSERT(c, s->endsWith(*go), "endsWith() compares the text");
+    UT_ASSERT(c, !s->endsWith(*jp), "endsWith() of text that the string does not end with");
+    // the text is ordered by code point
+    std::unique_ptr<QoreString> a(QoreString("a日", QCS_UTF8).convertEncoding(enc, &xsink));
+    std::unique_ptr<QoreString> z(QoreString("z", QCS_UTF8).convertEncoding(enc, &xsink));
+    UT_ASSERT_EQ(c, -1, a->compare(z.get()), "compare(): code point order");
+    UT_ASSERT_EQ(c, 1, jp->compare(z.get()), "compare(): a shifted character is after ASCII");
+
+    // the first characters
+    QoreString first(enc);
+    first.concat(s.get(), 8, &xsink);
+    std::unique_ptr<QoreString> first_utf8(first.convertEncoding(QCS_UTF8, &xsink));
+    UT_ASSERT(c, first_utf8 && first_utf8->equal("hello 日本"), "concat() of the first characters");
+    UT_ASSERT(c, !xsink, "no exception");
+
+    // characters are walked in the text in UTF-8
+    {
+        UnicodeCharacterIterator i(*s);
+        int n = 0;
+        int last = -1;
+        while (i.next(&xsink)) {
+            ++n;
+            if (n == 7) {
+                last = i.getValue();
+            }
+        }
+        UT_ASSERT_EQ(c, 15, n, "UnicodeCharacterIterator: the characters");
+        UT_ASSERT_EQ(c, 0x65e5, last, "UnicodeCharacterIterator: a shifted character");
+        UT_ASSERT(c, !xsink, "UnicodeCharacterIterator: no exception");
+    }
+    UT_ASSERT_EQ(c, 0x8a9eu, s->getUnicodePoint(8, &xsink), "getUnicodePoint()");
+
+    // a character has no byte offset of its own
+    auto is_unsupported_encoding = [](ExceptionSink& xs) -> bool {
+        if (!xs) {
+            return false;
+        }
+        QoreValue err = xs.getExceptionErr();
+        return err.getType() == NT_STRING && err.get<const QoreStringNode>()->equal("UNSUPPORTED-ENCODING");
+    };
+    unsigned clen = 0;
+    s->getUnicodePointFromBytePos(0, clen, &xsink);
+    UT_ASSERT(c, is_unsupported_encoding(xsink), "getUnicodePointFromBytePos() raises UNSUPPORTED-ENCODING");
+    UT_ASSERT(c, clen > 0, "getUnicodePointFromBytePos() guarantees progress");
+    xsink.clear();
+    s->getByteOffset(2, &xsink);
+    UT_ASSERT(c, is_unsupported_encoding(xsink), "getByteOffset() raises UNSUPPORTED-ENCODING");
+    xsink.clear();
+}
+
 static void ut_string_data_helper(UnitTestCounters& c) {
     // inline short string ("1.0" is 3 bytes, so it is always stored inline)
     QoreValue short_value = QoreValue::makeStringValue("1.0");
@@ -5716,6 +5848,8 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
     ut_string_data_helper(c);
+    ut_string_compare_soft_and_concat_chars(c);
+    ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
@@ -5729,6 +5863,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 
     ut_qorevalue_operator_bool_null(c);
     ut_string_data_helper(c);
+    ut_string_compare_soft_and_concat_chars(c);
+    ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);

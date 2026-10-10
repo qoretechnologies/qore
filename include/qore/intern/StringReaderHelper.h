@@ -63,6 +63,19 @@ DLLLOCAL QoreStringNode* q_remove_bom(QoreStringNode* str, const QoreEncoding*& 
  */
 DLLLOCAL QoreStringNode* q_read_string_all(ExceptionSink* xsink, const QoreEncoding* enc, f_read_t my_read);
 
+//! raises an exception if text in the given encoding cannot be read a number of characters at a time
+/** Text in a stateful encoding (ex: UTF-7, ISO-2022-JP) cannot be read one character or a number of characters at a
+    time: the bytes of the characters after the ones read depend on the shift state at the end of the ones read,
+    which a following read would not have; such text is read in lines (which end in the initial shift state), all at
+    once, or in bytes (see qoretechnologies/qorus#709 for readers that keep the shift state between reads)
+
+    @param enc the encoding of the text
+    @param xsink for the \c UNSUPPORTED-ENCODING exception
+
+    @return 0 if the text can be read a number of characters at a time, -1 if an exception was raised
+*/
+DLLLOCAL int q_check_char_read_encoding(const QoreEncoding* enc, ExceptionSink* xsink);
+
 //! helper function for reading valid strings with character semantics
 /** @param xsink for Qore-language exceptions
     @param size the nubmer of characters to read, negative values = read all available data

@@ -640,6 +640,15 @@ public:
     //! internal API, must be called before deleting the object if an event queue is set
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
+    //! internal API: reads until the given end-of-line marker, converted to the file's encoding, is read
+    /** @param eol the end-of-line marker, in any encoding
+        @param incl_eol if true, the marker is included in the string returned
+        @param xsink for exceptions
+
+        @return the string read, or nullptr at the end of the file or if an exception was raised
+    */
+    DLLLOCAL QoreStringNode* readUntilText(const QoreString& eol, bool incl_eol, ExceptionSink* xsink);
+
 protected:
     //! private implementation
     struct qore_qf_private *priv;

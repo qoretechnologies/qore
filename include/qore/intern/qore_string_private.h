@@ -36,6 +36,7 @@
 
 #include "qore/intern/qore_encoding_private.h"
 
+#include <utility>
 #include <vector>
 
 class QoreRegexBase;
@@ -464,8 +465,140 @@ public:
         return pos > (qore_offset_t)slen ? (qore_offset_t)slen : pos;
     }
 
+    //! returns true if the string is in a stateful encoding
+    /** A stateful encoding (ex: UTF-7, ISO-2022-JP; see qore_encoding_private::stateful) has no byte sequence per
+        character: character operations on a string in such an encoding are made on its text in UTF-8 (see
+        statefulToUtf8()), and text results are converted back to the encoding (see statefulFromUtf8())
+    */
+    DLLLOCAL bool isStateful() const {
+        return qore_encoding_private::isStateful(getEncoding());
+    }
+
+    //! appends the text of the string, which is in a stateful encoding, in UTF-8 to the given UTF-8 string
+    /** @return 0 for OK, -1 if an exception was raised (invalid text)
+    */
+    DLLLOCAL int statefulToUtf8(QoreString& utf8, ExceptionSink* xsink) const;
+
+    //! appends the given UTF-8 text in the encoding of this string, which is stateful, to the target string
+    /** @param utf8 the text in UTF-8
+        @param targ the target, which must be in the encoding of this string
+
+        @return 0 for OK, -1 if an exception was raised (a character that cannot be represented in the encoding)
+    */
+    DLLLOCAL int statefulFromUtf8(const QoreString& utf8, QoreString& targ, ExceptionSink* xsink) const;
+
+    //! removes characters from the string, which is in a stateful encoding, and optionally inserts text in their place
+    /** The operation is made on the text in UTF-8, and the string takes the result converted back to its encoding
+
+        @param offset the character offset of the first character to remove
+        @param num the number of characters to remove (as for splice_complex()); ignored if \a to_end is true
+        @param to_end true to remove all characters from \a offset
+        @param repl the text to insert, or nullptr
+        @param extract if not nullptr, set to the characters removed, in the encoding of the string
+        @param xsink for exceptions
+
+        @return 0 for OK, -1 if an exception was raised; the string is not changed if an exception is raised
+    */
+    DLLLOCAL int statefulSplice(qore_offset_t offset, qore_offset_t num, bool to_end, const QoreString* repl,
+            QoreString* extract, ExceptionSink* xsink);
+
+    //! appends the characters of the given string in the same stateful encoding from a character offset
+    /** @param str the source string, in the encoding of this string
+        @param pos the character offset in \a str (negative: from the end)
+        @param plen the number of characters (negative: up to that many characters from the end), or nullptr for all
+        characters from \a pos
+        @param xsink for exceptions
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int concatStateful(const qore_string_private& str, qore_offset_t pos, const qore_offset_t* plen,
+            ExceptionSink* xsink);
+
+    //! raises an exception for an operation on the byte position of a character in a string in a stateful encoding
+    DLLLOCAL void raiseStatefulByteOffsetError(ExceptionSink* xsink) const;
+
+    //! removes the bytes that iconv writes at the start of text in a stateful encoding from a short sequence
+    /** For a sequence converted on its own that is searched for in text in the encoding (ex: an end-of-line marker);
+        see qore_encoding_private::stateful_prefix
+    */
+    DLLLOCAL void removeStatefulPrefix() {
+        if (!isStateful()) {
+            return;
+        }
+        const std::string& prefix = qore_encoding_private::get(*getEncoding())->stateful_prefix;
+        if (prefix.empty() || len <= prefix.size() || memcmp(effective_buf(), prefix.data(), prefix.size())) {
+            return;
+        }
+        if (view_parent) {
+            materialize();
+        }
+        memmove(buf, buf + prefix.size(), len - prefix.size());
+        len -= prefix.size();
+        buf[len] = '\0';
+    }
+
+    //! returns true if the string contains the given text, which must be in the encoding of the string
+    /** The text of a string in a stateful encoding is searched by characters, as its characters have no bytes of
+        their own; any other string is searched byte by byte at character boundaries
+
+        @param needle the text to search for, in the encoding of the string
+        @param xsink for exceptions (text that is not valid in a stateful encoding); may be nullptr, in which case
+        such text is not found
+    */
+    DLLLOCAL bool containsText(const QoreString& needle, ExceptionSink* xsink) const;
+
+    //! trims the characters in the given vector from the start or end of the string, which is in a stateful encoding
+    /** The characters are trimmed from the text in UTF-8, and the string takes the result converted back to its
+        encoding
+
+        @return 0 for OK, -1 if an exception was raised; the string is not changed in this case
+    */
+    DLLLOCAL int statefulTrim(ExceptionSink* xsink, const intvec_t& cvec, bool leading);
+
+    //! replaces the source string of an iterator with a new string with its text in UTF-8
+    /** For iterators over the characters of a string in a stateful encoding, whose characters have no bytes of their
+        own, and that walk its text in UTF-8 instead
+
+        @param src the source string; on success, the reference to it is released and it is set to the new string
+        @param xsink for exceptions
+
+        @return 0 for OK, -1 if an exception was raised (text that is not valid in its encoding); \a src is not changed
+        in this case
+    */
+    DLLLOCAL static int replaceWithUtf8(QoreStringNode*& src, ExceptionSink* xsink);
+
+    //! sets the target to the characters of the string, which is in a stateful encoding, in reverse order
+    /** @param targ the target string, which must be empty and in the encoding of this string
+
+        @return 0 for OK, -1 if the text is not valid in the encoding or its reverse cannot be represented in it; the
+        target is not changed in this case
+    */
+    DLLLOCAL int concat_reverse_stateful(qore_string_private& targ) const;
+
+    //! replaces the text of the string with the text of the given string in the same encoding, which takes the old
+    //! text
+    DLLLOCAL void swapText(qore_string_private& other) {
+        assert(other.getEncoding() == getEncoding());
+        if (view_parent) {
+            materialize();
+        }
+        if (other.view_parent) {
+            other.materialize();
+        }
+        std::swap(buf, other.buf);
+        std::swap(len, other.len);
+        std::swap(allocated, other.allocated);
+    }
+
     //! Returns the length of the string in characters
     DLLLOCAL int getCharLength(size_t& clen, ExceptionSink* xsink) const {
+        if (isStateful()) {
+            QoreString utf8(QCS_UTF8);
+            if (statefulToUtf8(utf8, xsink)) {
+                return -1;
+            }
+            return utf8.priv->getCharLength(clen, xsink);
+        }
         if (!getEncoding()->isMultiByte()) {
             clen = len;
             return 0;
@@ -477,6 +610,14 @@ public:
 
     DLLLOCAL qore_offset_t index(const QoreString &orig_needle, qore_offset_t pos, ExceptionSink *xsink) const {
         assert(xsink);
+        if (isStateful()) {
+            // character offsets are the same in the text in UTF-8
+            QoreString utf8(QCS_UTF8);
+            if (statefulToUtf8(utf8, xsink)) {
+                return -1;
+            }
+            return utf8.priv->index(orig_needle, pos, xsink);
+        }
         TempEncodingHelper needle(orig_needle, getEncoding(), xsink);
         if (!needle)
             return -1;
@@ -605,6 +746,14 @@ public:
 
     DLLLOCAL qore_offset_t rindex(const QoreString &orig_needle, qore_offset_t pos, ExceptionSink *xsink) const {
         assert(xsink);
+        if (isStateful()) {
+            // character offsets are the same in the text in UTF-8
+            QoreString utf8(QCS_UTF8);
+            if (statefulToUtf8(utf8, xsink)) {
+                return -1;
+            }
+            return utf8.priv->rindex(orig_needle, pos, xsink);
+        }
         TempEncodingHelper needle(orig_needle, getEncoding(), xsink);
         if (!needle)
             return -1;
@@ -737,6 +886,9 @@ public:
     DLLLOCAL int concat(const qore_string_private& str, qore_offset_t pos, ExceptionSink* xsink) {
         assert(str.getEncoding() == getEncoding());
 
+        if (isStateful()) {
+            return concatStateful(str, pos, nullptr, xsink);
+        }
         if (!getEncoding()->isMultiByte()) {
             concat_simple(str, pos);
             return 0;
@@ -778,6 +930,9 @@ public:
         assert(str.getEncoding() == getEncoding());
         assert(plen);
 
+        if (isStateful()) {
+            return concatStateful(str, pos, &plen, xsink);
+        }
         if (!getEncoding()->isMultiByte()) {
             concat_simple(str, pos);
             return 0;
@@ -807,6 +962,11 @@ public:
 
     DLLLOCAL qore_offset_t getByteOffset(size_t i, ExceptionSink* xsink) const {
         assert(xsink);
+        if (isStateful()) {
+            // a character has no byte offset of its own in a stateful encoding
+            raiseStatefulByteOffsetError(xsink);
+            return -1;
+        }
         size_t rc;
         if (i) {
             const char* b = effective_buf();
@@ -987,6 +1147,10 @@ public:
         assert(targ.getEncoding() == getEncoding());
         assert(!targ.len);
 
+        if (isStateful() && !concat_reverse_stateful(targ)) {
+            return;
+        }
+
         targ.check_char(len);
         const char* src = effective_buf();
         if (getEncoding()->isMultiByte()) {
@@ -1073,6 +1237,13 @@ public:
     DLLLOCAL int concatDecode(ExceptionSink* xsink, const QoreString& str, unsigned code = CD_ALL);
 
     DLLLOCAL int getUnicodeCharArray(intvec_t& vec, ExceptionSink* xsink) const {
+        if (isStateful()) {
+            QoreString utf8(QCS_UTF8);
+            if (statefulToUtf8(utf8, xsink)) {
+                return -1;
+            }
+            return utf8.priv->getUnicodeCharArray(vec, xsink);
+        }
         size_t j = 0;
         while (j < len) {
             unsigned clen;

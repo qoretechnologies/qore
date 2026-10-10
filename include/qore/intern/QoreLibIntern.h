@@ -1588,8 +1588,14 @@ DLLLOCAL void qore_string_init();
 
 DLLLOCAL QoreListNode* split_regex_intern(QoreRegex& regex, const char* str, size_t sl, const QoreEncoding* enc,
     bool with_separator = false);
+//! splits text by a separator in the same encoding
+/** Text in a stateful encoding (ex: ISO-2022-JP) is split in UTF-8, and the pieces are converted back; if the text is
+    not valid in its encoding, nullptr is returned with an exception if \a xsink is given, otherwise the text is split
+    byte by byte
+*/
 DLLLOCAL QoreListNode* split_intern(const char* pattern, size_t pl, const char* str, size_t sl,
-    const QoreEncoding* enc, bool with_separator = false, bool keep_trailing_empty = false);
+    const QoreEncoding* enc, bool with_separator = false, bool keep_trailing_empty = false,
+    ExceptionSink* xsink = nullptr);
 DLLLOCAL QoreStringNode* join_intern(const QoreStringNode* p0, const QoreListNode* l, int offset,
     ExceptionSink* xsink);
 DLLLOCAL QoreListNode* split_with_quote(ExceptionSink* xsink, const char* sep, size_t seplen, const QoreString* str,
