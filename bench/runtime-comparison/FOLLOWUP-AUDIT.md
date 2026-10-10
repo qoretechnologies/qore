@@ -7447,3 +7447,95 @@ Strict Qore table conversion and diff checks are required before commit.
 |60. QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP methods or flags changed.
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new user-controlled format strings or credentials; fixed PIC bound and borrowed-value lifetime preserved. This is a call-performance experiment, not a separate security project.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Candidate release/debug each pass 57 files, 195 cases, 6951 assertions, eight standalones; debug native units pass two more assertions; six-mode reference grids and all paired timing checks pass. Restoration checked separately.
+
+## Post-fused-admission upstream merge audit (2026-10-10)
+
+Applied `audit-changes` before committing the automatic merge of
+`origin/develop@c20f41a3d5fb395f060f7c897317a6ad045b0b8e` into
+`feature/performance@b557d1735210d75769edbb05315e045ff105b4c7`.
+The four incoming files match upstream exactly; there was no manual conflict
+resolution. This integration adds upstream foreach definite-assignment analysis
+and structured-output diagnostics, not a call-performance optimization.
+
+All 62 checks: **19 Pass, 43 N/A, 0 unresolved Fail**. The main agent read the
+applicable module-structure, sandboxing, cancellation and table guides completely.
+No DataProvider action/app/constructor declaration changed; an unchanged
+`getConstructorOptions()` client call is not a DataProvider change.
+
+Release and debug each pass 44 files: 218 cases, 6296 assertions, nine
+standalones. This includes the 42-file call/foreach matrix (83 cases/5157 assertions)
+and both upstream suites: structured diagnostics (30/157) and QoreLlmUtils
+(105/982). Debug native units add one case/two assertions. OpenAiRestClient,
+QoreLlmUtils, GeminiRestClient, HttpServerUtil, HttpServer, QUnit and FsUtil qmod
+targets and their dependencies were built before their respective test runs.
+Fresh reference grids pass 345 checks in each of six modes. No full-suite,
+sanitizer, cross-architecture or post-merge speedup claim.
+[Source, binary, qmod and validation evidence](results-performance-merge-c20f41a3d-macos-arm64.json).
+
+The merged baseline is the starting point for the next ownership/cleanup and
+native-frame experiments. Earlier rejected-candidate measurements must not be
+presented as measurements of this merged runtime.
+
+|!Check|!Status|!Evidence
+|1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new module, separated source, QPP class or registration change.
+|2. Entry exists in doxygen/lang/900_release_notes.dox.tmpl (for modules in the Qore repo; external modules have release notes in their .qm)|N/A|No new module, separated source, QPP class or registration change.
+|3. qore_user_module() or qore_external_user_module() call in CMakeLists.txt|N/A|No new module, separated source, QPP class or registration change.
+|4. Module added to QMOD list in CMakeLists.txt|N/A|No new module, separated source, QPP class or registration change.
+|5. .qm file has @section <lowercasemodname>intro as first doc section — must be all lowercase (e.g., avrodataproviderintro, not AvroDataProviderintro)|N/A|No new module, separated source, QPP class or registration change.
+|6. %modern in .qm file — no redundant %new-style, %require-types, %strict-args, %enable-all-warnings|N/A|No new module, separated source, QPP class or registration change.
+|7. No parse directives (%requires, %modern, %new-style) in separated .qc files (check OUTSIDE of @code blocks only)|N/A|No new module, separated source, QPP class or registration change.
+|8. No %include usage (deprecated for modules)|N/A|No new module, separated source, QPP class or registration change.
+|9. Copyright 2026 on all new files|Pass|No new upstream source file; the new merge-evidence record carries 2026 copyright.
+|10. Directory layout: .qm inside qlib/<ModuleName>/ directory (not at qlib/<ModuleName>.qm for multi-file modules)|N/A|No new module, separated source, QPP class or registration change.
+|11. No second .qm for the same module at qlib/<ModuleName>.qm|N/A|No new module, separated source, QPP class or registration change.
+|12. ns=Qore::XX matches the QoreNamespace constructor path|N/A|No new module, separated source, QPP class or registration change.
+|13. %modern directive present|Pass|Both modified upstream test drivers use %modern.
+|14. Executable permission set (chmod +x)|Pass|Both modified test drivers retain tracked mode 100755.
+|15. Uses %prepend-module-path  before %requires for in-repo modules|Pass|Both drivers prepend repository qlib before their bundled-module requirements.
+|16. External module dependencies use %try-module — except modules delivered with Qore itself (DataProvider, ConnectionProvider, QUnit, etc.) which use hard %requires|Pass|Added assertions introduce no external-module dependency; existing required modules are bundled.
+|17. No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks|Pass|ForEachStatement changes only parse-state handling, with no filesystem operation.
+|18. No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks|Pass|No C++ network operation is added.
+|19. If filesystem/network ops exist, verify QoreSandboxManagerHelper usage|N/A|No new C++ external I/O operation.
+|20. No File::, Dir::, Socket::, HTTPClient:: usage without justification|Pass|New provider assertions use the existing localhost mock handler; no new production File/Dir/Socket/HTTPClient call. Endpoint classification examples do not make remote requests.
+|21. All for/while loops that could iterate >100 times have qore_check_cancel() checks|Pass|No C++ loop added; diagnostic extraction is bounded at 20 listed errors and uses ordinary Qore loop cancellation.
+|22. Uses qore_check_cancel() (NOT deprecated qore_check_io_interrupt())|N/A|No new C++ cancellation check or potentially long loop.
+|23. Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations|N/A|No new C++ cancellation check or potentially long loop.
+|24. No blocking operations without cancellation support|Pass|No blocking operation added to parse analysis or diagnostic extraction.
+|25. Every action has display_name, short_desc (plain text, <80 chars), desc (markdown)|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|26. Every action has options populated via getActionOptionFromFields() — without this, the action shows an empty, unusable form|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|27. Every action has output_type set to a typed data type constant (e.g., MyResponseDataType) — not omitted|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|28. DPAT_API actions: provider has "supports_request": True and implements doRequestImpl()|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|29. DPAT_FIND actions: every option exists in SearchOptions, getRecordTypeImpl() returns hash<string, AbstractDataField>|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|30. Scheme-based apps (with "scheme" in registerApp): actions use "path" and do NOT use "cls" — having both scheme and cls causes a runtime error|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|31. Single-key hash slices use trailing comma: Fields{"key",} (without trailing comma, Fields{"key"} returns the value, not a hash)|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|32. Typed data type classes exist for request and response types — inherit HashDataType, have const Fields hash, call addQoreFields(Fields) in constructor, export public constant at bottom (e.g., public const MyDataType = new MyDataType();)|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|33. Request/input types use public Fields (enables ClassName::Fields in action registration)|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|34. Response/output types use private Fields|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|35. Each field in data types has display_name, type, and desc (markdown-formatted)|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|36. Input fields have example_value where useful (string fields, endpoint URIs, SQL queries, etc.)|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|37. Fields with finite allowed values use allowed_values with AllowedValueInfo containing both value and display_name (Title Case, human-readable) — never bare values, never described only in text|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|38. Password/secret fields have "sensitive": True|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|39. groups uses AppGroup enum values from qlib/DataProvider/AppGroup.qc|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|40. App logo stored as separate file, loaded at module level in Priv namespace|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|41. App desc uses markdown: bullet list of capabilities, links to project website, business-language explanation of value|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|42. display_name is user-friendly ("Apache Avro" not "avro")|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|43. short_desc is plain text, under 80 chars, single sentence — no markdown|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|44. desc uses markdown: backticks for code/field refs ( field_name ,  True ,  pdf ), \n\n for paragraphs, -  bullet lists for enumerations, bold for caveats|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|45. Descriptions use plain business language relating to common challenges — not just technical "what" but "why" and "when to use"|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|46. No bare True/False/NOTHING — must be backtick-wrapped in desc|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|47. No bare field/option names in prose — must use backticks|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|48. Long descriptions (>500 chars) use bold section headers and bullet lists|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|49. Factory registration in Qore repo: every factory name registered in qlib/DataProvider/DataProvider.qc → FactoryMap (without this, module loads but doesn't appear in Qorus apps)|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|50. getRecordTypeImpl() signature: must be private hash<string, AbstractDataField> getRecordTypeImpl(hash<auto> search_options) — NOT returning AbstractDataProviderType|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|51. Dependency JARs committed (for JNI modules): JAR files in qlib//jar/ may be gitignored — use git add -f to ensure they're tracked, otherwise CI compilation fails|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|52. JAR install rules in CMakeLists.txt for all dependency JARs|N/A|No DataProvider action/app/field registration or JNI/JAR change; the unchanged getConstructorOptions client call is not a DataProvider declaration.
+|53. No workarounds: No TODOs, FIXMEs, stubs, or partially-implemented features|Pass|No added TODO, stub or workaround; automatic merge preserves all four upstream files exactly.
+|54. Exception safety: C++ uses ReferenceHolder for Qore allocations, std::unique_ptr for C++ allocations, xsink checked after every fallible operation|Pass|Parse flag helper restores flags by scope; assigned-state helpers retain the implicit zero-iteration branch. Qore exceptions propagate automatically and accounting metadata is preserved on rethrow.
+|55. Thread safety: All mutable shared state protected by std::lock_guard<std::mutex> or documented as immutable-after-construction|Pass|No new shared mutable runtime state. Parse state stays within the existing parse context; module constants are immutable and diagnostic lists are invocation-local.
+|56. Type safety: Strongly-typed code<return(args)> instead of untyped code; static_cast instead of C casts; typed hashdecls for results; enums where appropriate|Pass|VarRefNode access is guarded by NT_VARREF and successful parse initialization; typed JsonSchemaValidationResult/Error inputs feed an internal diagnostic hash matching ExceptionInfo.arg.
+|57. Performance: No O(n²) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply|Pass|No hot-call implementation change. Diagnostic list bounded at 20; no new quadratic algorithm. No post-merge performance improvement is claimed.
+|58. Error handling: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable|Pass|Validation preserves wire/caller distinction, error counts and existing exception accounting; missing structured facts become an empty hash with cause. Zero-iteration foreach state remains conservative.
+|59. Documentation: Doxygen @param, @return, @throw on all public methods; @par Example with realistic business scenarios; @note for important caveats|Pass|Internal diagnostic helper documents schema, result and returned facts; new constants and keyword-message policy are documented. No new public module API, QPP or release entry is required.
+|60. QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP method/flag change.
+|61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No user-controlled format string or credential added; tests use fixture values and check rejected content is absent from the diagnostic envelope. Standard review only, not expanded project scope.
+|62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Merged release/debug core builds, rebuilt OpenAiRestClient/dependencies, both upstream suites, call/foreach regressions and reference grids are recorded in merge evidence; no manual conflict resolution.

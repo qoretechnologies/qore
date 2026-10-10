@@ -29,6 +29,7 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         addTestCase("hard keyword member diagnostic", \testHardKeywordMember());
         addTestCase("uninitialized local trap warning", \testUninitializedLocalWarning());
         addTestCase("intentional absence checks stay quiet", \testIntentionalAbsenceChecks());
+        addTestCase("a foreach loop variable is assigned in the loop body", \testForeachLoopVariableAssigned());
         addTestCase("NULL and NOTHING trap warning", \testNullNothingWarning());
         addTestCase("string multiplication trap warning", \testStringMultiplicationWarning());
         addTestCase("optional reference exists trap warning", \testOptionalReferenceExistsWarning());
@@ -319,6 +320,22 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
             "int copy = partial; }");
         assertEq(1, diags.size(), "assignment on only one branch is not definitely assigned");
         assertEq("UNINITIALIZED-LOCAL-READ", diags[0].id);
+    }
+
+    testForeachLoopVariableAssigned() {
+        # the loop variable holds the current element on every iteration (Qorus run 673m6: every
+        # `foreach hash<auto> row in (...)` read of the row was reported as read before assignment)
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest(list<hash<auto>> rows) { foreach hash<auto> row in (rows) { auto v = row.id; } "
+            "int total = 0; foreach int n in ((1, 2)) { total += n; } }");
+        assertEq(0, diags.size(), "reads of a declared foreach variable in the body stay quiet");
+
+        diags = parseTrapWarnings(
+            "nothing sub trapTest(list<int> l) { int last; foreach last in (l) { int copy = last; } "
+            "int after = last; }");
+        assertEq(1, diags.size(), "a loop that may not run leaves a variable declared before it unassigned");
+        assertEq("UNINITIALIZED-LOCAL-READ", diags[0].id);
+        assertEq("last", diags[0].facts.variable);
     }
 
     testNullNothingWarning() {

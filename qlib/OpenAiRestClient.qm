@@ -598,6 +598,22 @@ class OpenAiStrictOutputSchema {
         const RootDefinition = "__qore_strict_schema_root";
     }
 
+    public {
+        #! The most schema validation errors a structured-output failure lists
+        const MaxValidationErrors = 20;
+
+        #! Validation keywords whose messages name only schema properties or types, never a response value
+        const SchemaNamingKeywords = {
+            "required": True,
+            "additionalProperties": True,
+            "type": True,
+            "minItems": True,
+            "maxItems": True,
+            "minProperties": True,
+            "maxProperties": True,
+        };
+    }
+
     constructor(hash<auto> schema) {
         original = transform(schema, False, "#", "#", 0);
         original = rebaseRefs(original, 0, True);
@@ -634,16 +650,58 @@ class OpenAiStrictOutputSchema {
             return content;
         }
         auto value = parse_json(content);
-        if (!wire_validator.validate(value)) {
+        hash<JsonSchemaValidationResult> result = wire_validator.validateWithErrors(value);
+        if (!result.valid) {
             throw "OPENAI-STRUCTURED-OUTPUT-ERROR",
-                "the response does not match the strict wire schema";
+                "the response does not match the strict wire schema",
+                getValidationFacts("wire", result);
         }
         value = restore(value, original, wire, 0);
-        if (!original_validator.validate(value)) {
+        result = original_validator.validateWithErrors(value);
+        if (!result.valid) {
             throw "OPENAI-STRUCTURED-OUTPUT-ERROR",
-                "the response does not match the caller's schema";
+                "the response does not match the caller's schema",
+                getValidationFacts("caller", result);
         }
         return make_json(value);
+    }
+
+    #! Returns where a structured response failed its schema, without any of the response's values
+    /** A caller that asks the model again needs to say what was wrong: which field, and which schema rule it
+        broke.  The validator's own message is kept only for rules whose message names the schema, never the
+        response: a @c required or @c additionalProperties message names a property, a @c type message names two
+        types, while an @c enum, @c const or @c pattern message quotes the value the model wrote.
+
+        @param schema @c "wire" for the strict schema sent to the provider, @c "caller" for the caller's schema
+        @param result the failed validation
+
+        @return @c structured_output: @c schema, @c error_count and @c validation_errors, each with @c path (a JSON
+        pointer into the response), @c schema_path, @c keyword and, for the rules above, @c message; at most
+        @ref MaxValidationErrors errors are listed
+    */
+    static hash<auto> getValidationFacts(string schema, hash<JsonSchemaValidationResult> result) {
+        list<hash<auto>> errors = ();
+        foreach hash<JsonSchemaValidationError> error in (result.errors) {
+            if (errors.size() == MaxValidationErrors) {
+                break;
+            }
+            hash<auto> fact = {
+                "path": error.path,
+                "schema_path": error.schema_path,
+                "keyword": error.keyword,
+            };
+            if (SchemaNamingKeywords{error.keyword}) {
+                fact.message = error.message;
+            }
+            errors += fact;
+        }
+        return {
+            "structured_output": {
+                "schema": schema,
+                "error_count": result.errors.size(),
+                "validation_errors": errors,
+            },
+        };
     }
 
     private static schemaError(string path, string reason) {
@@ -1924,12 +1982,19 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 rethrow;
             }
             # A paid response rejected locally still has billable usage. Carry
-            # only accounting metadata, never the rejected content or prompt.
-            throw "OPENAI-STRUCTURED-OUTPUT-ERROR", "structured output failed local schema validation", {
+            # only accounting metadata, never the rejected content or prompt,
+            # and where the response broke its schema, which the caller needs
+            # to ask the model again (a parse failure has no location to give)
+            hash<auto> arg = {
                 "_qore_llm_response": {"id": response.id, "model": response.model,
                     "created": response.created, "usage": response.usage ?? {},
                     "service_tier": response.service_tier},
+                "structured_output": ex.arg.typeCode() == NT_HASH && ex.arg.structured_output.typeCode() == NT_HASH
+                    ? ex.arg.structured_output
+                    : {},
             };
+            arg.structured_output.cause = ex.err;
+            throw "OPENAI-STRUCTURED-OUTPUT-ERROR", "structured output failed local schema validation", arg;
         }
     }
 
