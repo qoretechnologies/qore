@@ -2931,6 +2931,41 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertThrows("OPENAI-STRUCTURED-OUTPUT-ERROR", sub () {
             llm.complete("extract", "fixture", schema);
         });
+        # the failure says where the response broke the schema, so the caller can ask again with it
+        try {
+            llm.complete("extract", "fixture", schema);
+            assertTrue(False, "the invalid response is refused");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("OPENAI-STRUCTURED-OUTPUT-ERROR", ex.err);
+            hash<auto> facts = ex.arg.structured_output;
+            assertEq("OPENAI-STRUCTURED-OUTPUT-ERROR", facts.cause);
+            assertEq("wire", facts.schema);
+            assertEq(1, facts.error_count);
+            assertEq("/id", facts.validation_errors[0].path);
+            assertEq("type", facts.validation_errors[0].keyword);
+            assertTrue(facts.validation_errors[0].message.val(), "a type rule's message names only types");
+            assertTrue(exists ex.arg._qore_llm_response, "accounting metadata is still carried");
+        }
+        # a rule whose message quotes the response's value lists only where and which rule
+        installGeminiHandler({"/v1/chat/completions": {"code": 200,
+            "body": {"choices": ({"finish_reason": "stop", "message": {
+                "content": "{\"mode\":\"private-response-value\"}"}},)}}});
+        try {
+            # the optional field makes the response validated locally, as for a provider without enforcement
+            llm.complete("extract", "fixture", {"type": "object", "properties": {
+                "mode": {"type": "string", "enum": ("a", "b")}, "note": {"type": "string"}},
+                "required": ("mode",)});
+            assertTrue(False, "the invalid response is refused");
+        } catch (hash<ExceptionInfo> ex) {
+            hash<auto> facts = ex.arg.structured_output;
+            assertEq("/mode", facts.validation_errors[0].path);
+            assertEq("enum", facts.validation_errors[0].keyword);
+            assertFalse(exists facts.validation_errors[0].message);
+            assertEq(-1, make_json(ex.arg).find("private-response-value"), "no response value is carried");
+        }
+        installGeminiHandler({"/v1/chat/completions": {"code": 200,
+            "body": {"choices": ({"finish_reason": "stop", "message": {
+                "content": "{\"id\":null,\"subject\":null}"}},)}}});
         # A caller explicitly disabling strict mode gets unmodified output.
         hash<auto> rv = llm.chatCompletions({"messages": (),
             "response_format": {"type": "json_schema", "json_schema": {
