@@ -8160,3 +8160,152 @@ attribution is incomplete; they are not additive costs or precise guard timings.
 The [audit](FOLLOWUP-AUDIT.md#native-floating-method-audit-2026-10-10) reports
 19 Pass, 43 N/A and no failures. Java-level retained-call speed remains an open
 goal; this iteration closes a substantial floating-method gap.
+
+## Generic floating-method dispatch (2026-10-10)
+
+Decision: retain native floating dispatch for generic AOT callers, with the two
+internal invocation/cleanup closures forced inline. This closes the runtime-only
+gap left by the preceding native-result continuation work. It does not change
+compiler lowering or the ABI, and does not establish Java parity or an IR speedup.
+
+[Complete evidence](results-generic-float-method-macos-arm64.json) preserves the
+initial baseline, the first candidate and its repeated integer regression, and
+the qualified revised candidate. All 406 jobs / 2030 measurement windows across
+these stages are independently revalidated; 186 jobs / 930 windows belong to the
+accepted revision. No task build, test, profile or evidence work overlaps actual
+timing. The first candidate's qualitative profile briefly overlapped the harness
+unit test; the revised profile was captured separately after qualification.
+
+### Scope and proof
+
+The new `boxed_float_method_call` kernel carries an `auto` floating recurrence
+through three dynamic receivers. `dynamic_float_result_call` passes a native float
+but consumes each unknown method result directly as an integer, independently
+advancing its native recurrence. LLVM inspection finds ordinary boxed method
+dispatch and no native method try-helper in either caller. The reference grid now
+covers 29 kernels, 435 checks per mode, with independent integer-exact checksums.
+
+The original 541602b19 baseline (`run-u_hayg9s`) measured roughly 201/174 ns per
+iteration for these AOT kernels and 757/752 ns in IR. Its qualitative profile
+placed most sampled work beneath generic method dispatch. The new runtime uses
+the already-published, whole-body-proven homogeneous `float(float)` companions
+for actual floating arguments. It prefers v3/v2 with explicit RuntimeConfig;
+prepared hits use the existing compact frame/deferred receiver-class context.
+V1-only and late/uncached admission retain eager context. Late admission never
+mutates a previously published immutable PIC descriptor.
+
+Full-key dispatch, live context/body identity and metadata readiness, same-Program
+checks, debugger attachment, receiver deletion, stack guards and frame-reader
+publication remain. Integer generic dispatch retains its eager v1 convention.
+Arguments remain borrowed on a miss; handled cleanup is consumed once. Special
+float encodings and arbitrary boxed fallback results preserve ordinary ownership.
+No proof is inferred from mere coercibility or an old context pointer.
+
+`QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1` is a runtime-only control
+for this path. Native-result caller continuations remain enabled. Methods with
+unsupported bodies/signatures, integer arguments needing float coercion, or
+cross-Program contexts retain the existing fallback.
+
+### Revised candidate measurements
+
+Apple M4 Pro, macOS arm64, release build; median of independent fork means in
+ns/iteration, excluding startup. Each fork has three warmup windows and five
+500 ms measurement windows. All before/after trials reuse one identical AOT
+executable against the recorded libraries. The source baseline is 541602b19;
+the candidate is that parent plus the recorded patch, not a prospective commit.
+
+Default path, count 4096, three forks, `run-s0by7y7b`:
+
+|!Kernel|!Before|!After|!Reduction %|!Java JIT|!After / Java
+|boxed_float_method_call|202.649|64.353|68.24|2.551|25.23
+|dynamic_float_result_call|174.522|35.908|79.43|3.466|10.36
+|polymorphic_float_expression_call|10.516|10.372|1.37|2.560|4.05
+|polymorphic_expression_call|10.271|10.349|-0.76|2.521|4.11
+|indirect_float|9.002|8.971|0.34|1.631|5.50
+|arithmetic|1.417|1.419|-0.15|0.891|1.59
+
+Count 1024 is `run-18gwp9_v`. The same-runtime control, `run-04p4fyko`, uses
+count 4096 and the same candidate library/executable on both sides; only before
+runtime processes receive the generic-float disable flag. Both use three forks.
+
+|!Kernel|!1024 before|!1024 after|!Reduction %|!Same-runtime before|!Same-runtime after|!Reduction %
+|boxed_float_method_call|203.778|66.321|67.45|204.776|63.683|68.90
+|dynamic_float_result_call|174.823|37.383|78.62|175.020|35.892|79.49
+|polymorphic_float_expression_call|12.214|12.330|-0.95|10.551|10.501|0.47
+|polymorphic_expression_call|12.056|11.982|0.61|10.435|10.363|0.69
+|indirect_float|10.459|10.457|0.02|9.043|8.982|0.68
+|arithmetic|2.779|2.759|0.74|1.420|1.411|0.62
+
+The new floating kernels have disjoint observed before/after fork ranges in all
+three trials. Small adverse native-expression/arithmetic control changes are
+retained; their ranges overlap and their direction does not persist across
+repeats. Observed ranges are not confidence intervals. No new optimization of
+these unchanged controls is claimed.
+
+### Integer regression caught and revised
+
+The first candidate substantially improved the new floating kernels, but the
+v1-only control exposed integer slowdowns. With
+`QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1` at compilation and execution,
+`run-d2h_okg3` measured typed integer +1.86% and integer expression +4.56% slower,
+with disjoint observed ranges. A five-fork repeat, `run-b4_q8occ`, measured
++1.77%/+3.28%; the expression repeat had an overlapping range and a slow baseline
+fork, all retained in the evidence. That candidate was not accepted unchanged.
+
+Symbol inspection found new outlined invocation/cleanup lambda operators,
+including integer specializations. Forcing just these two closures inline removes
+those symbols. The revised five-fork v1-only trial, `run-mp6pe_lk`, gives:
+
+|!Kernel|!Before|!After|!Reduction %
+|boxed_float_method_call|200.513|72.263|63.96
+|dynamic_float_result_call|172.796|44.099|74.48
+|polymorphic_call|46.484|46.522|-0.08
+|polymorphic_expression_call|29.722|29.621|0.34
+|indirect_float|9.058|9.084|-0.28
+|arithmetic|1.418|1.418|0.01
+
+Both integer controls now overlap their baseline ranges: typed integer
+46.236–46.607 before / 46.209–46.679 after; expression 29.601–30.000 before /
+29.542–29.682 after. The earlier repeated regression is no longer observed.
+The v1-only floating benefit is smaller than the default v2/v3 path, as expected
+for its eager context/frame convention, but remains substantial.
+
+### Qualification and remaining gap
+
+Both revised builds pass 76 selected test files: release 314 cases / 12764 QUnit
+assertions, debug 321 / 12863, plus nine standalone fixtures in each. The expanded
+float driver contributes 932 assertions per build; NativeLeafContext contributes
+210 plus native host assertions. Tests cover v1/v2/v3 selection, late admission,
+integer coercion fallback, consumed ownership, signed zero/NaN/infinities and
+tag-colliding doubles, forced stack overflow and recovery, debugger attach/detach,
+concurrent readers/calls, deletion and cross-Program fallback. Fresh IR/AOT grids
+pass 435 checks per mode/build; 146 debug-native checks and 13 harness tests pass.
+The existing release-only short-string skip is retained. Only the established
+macOS deployment-target workaround for RecursiveClosureLocals is used.
+No full-suite, sanitizer or cross-architecture qualification is claimed.
+
+The revised isolated profile still shows generic dispatch, full-key PIC lookup,
+RuntimeConfig/TLS retrieval, float boxing/unboxing, result conversion and cleanup.
+These inclusive samples are nested, not additive cost estimates. The profile
+supports a remaining wrapper/representation bottleneck, not a claim that any one
+check accounts for the whole gap. Java keeps native doubles and retained
+`DONT_INLINE` targets while Qore's `auto` contract is broader; the measured ratios
+are whole-kernel comparisons, not equal-representation isolated call latency.
+The already-native expression paths remain about 4x Java here; these generic
+float callers remain about 10x–25x. No new IR or single-iteration improvement is
+measured in this runtime-only change.
+
+Next experiments, in order:
+
+1. Extend compiler native try-helper emission to already-native scalar arguments
+   whose result is consumed without a native assignment. Pass the hoisted
+   RuntimeConfig explicitly; preserve boxed results, arbitrary override fallback,
+   cleanup, mutation invalidation and exceptions. Measure separately compiled
+   before/after executables and retain integer/default/disabled-path controls.
+2. Consider an actual-type guard for boxed float arguments only after that result
+   path is validated. Do not treat coercibility as native admission.
+3. Profile prepared same-Program IR invocation separately; AOT runtime gains do
+   not imply interpreter gains. Preserve frame observability and real lifetimes.
+
+The [62-item audit](FOLLOWUP-AUDIT.md#generic-floating-method-audit-2026-10-10)
+reports 19 Pass, 43 N/A, zero failures. Java-level call efficiency remains open.

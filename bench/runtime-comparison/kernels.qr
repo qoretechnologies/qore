@@ -200,6 +200,28 @@ int sub dispatchControl(int count, int seed) {
     return sum;
 }
 
+# Keep the recurrence boxed: the dynamic receiver's return type is not a native local contract.
+int sub boxedFloatMethodCall(int count, int seed, auto a, auto b, auto c) {
+    auto value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+# Consume an unknown method result directly; there is no native result assignment.
+int sub dynamicFloatResultCall(int count, int seed, auto a, auto b, auto c) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        sum += int((i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value));
+        value = 65535.0 - value;
+    }
+    return sum;
+}
+
 int sub arithmetic(int count, int seed) {
     int sum = 0;
     for (int i = 0; i < count; ++i) {
@@ -320,6 +342,8 @@ int sub dispatch(string name, int count, int seed, list<int> data, Stepper recei
         case "polymorphic_float_expression_call": return polymorphicFloatExpressionCall(count, seed, fa, fb, fc);
         case "monomorphic_float_call": return monomorphicFloatCall(count, seed, fa);
         case "optional_float_method_call": return optionalFloatMethodCall(count, seed, fa);
+        case "boxed_float_method_call": return boxedFloatMethodCall(count, seed, fa, fb, fc);
+        case "dynamic_float_result_call": return dynamicFloatResultCall(count, seed, fa, fb, fc);
         case "dispatch_control": return dispatchControl(count, seed);
         case "list_read": return listRead(data, seed);
         case "list_build": return listBuild(count, seed);
@@ -371,7 +395,8 @@ sub main() {
                         "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
                         "polymorphic_call", "polymorphic_expression_call", "monomorphic_call",
                         "optional_method_call", "polymorphic_float_call", "polymorphic_float_expression_call",
-                        "monomorphic_float_call", "optional_float_method_call", "dispatch_control", "list_read",
+                        "monomorphic_float_call", "optional_float_method_call",
+                        "boxed_float_method_call", "dynamic_float_result_call", "dispatch_control", "list_read",
                         "list_build", "list_mutate", "temporary_list", "temporary_hash",
                         "closure_call", "closure_capture")) {
                     printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed,

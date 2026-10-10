@@ -69,10 +69,20 @@ class NativeFloatMethodEntryTest inherits QUnit::Test {
                     assertFalse(regex(ir, "call i32 @qore_rt_try_method_float_unary_v1"),
                         "disabled caller " + prefix + level);
                 }
+                foreach string name in (("nativeFloatGenericCall", "nativeFloatGenericInvoke",
+                        "nativeFloatGenericSpecial")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " normal LLVM entry");
+                    assertRegex("(?:call|invoke) i64 @qore_rt_dot_eval_method_direct_aot", body[0] ?? "");
+                    assertFalse(regex(body[0] ?? "", "call i32 @qore_rt_try_method_"),
+                        name + " must use generic dispatch");
+                }
                 foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
                         "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1 ",
                         "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
                         "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
                     assertEq(expected, run((executable,), runtime), prefix + level + runtime);
@@ -99,6 +109,8 @@ class NativeFloatMethodEntryTest inherits QUnit::Test {
                 "fallback " + level);
             assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 "),
                 "uncached admission " + level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1 "),
+                "generic float disabled " + level);
         }
     }
 
@@ -107,6 +119,7 @@ class NativeFloatMethodEntryTest inherits QUnit::Test {
         string expected = "native-float-method-frame-readers: ok\n";
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
             assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source, "generic")), "generic " + mode);
         }
         TmpDir dir("qore-native-method-readers-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
@@ -115,13 +128,20 @@ class NativeFloatMethodEntryTest inherits QUnit::Test {
                 string ir = run((qcc, level, "--strip-source", "-o", executable, source),
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
                 assertRegex("call void @qore_rt_bind_method_float_unary_v1[^\n]*NativeFloatReaderB", ir);
-                assertEq(expected, run((executable,)), prefix + level);
-                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "),
-                    "fallback " + prefix + level);
-                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 "),
-                    "uncached admission " + prefix + level);
-                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "),
-                    "eager method frame " + prefix + level);
+                *list<*string> body = regex_extract(ir,
+                    "(?s)define [^\n]*@nativeFloatGenericMethodReaderBatch_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                assertTrue(!!body);
+                assertRegex("(?:call|invoke) i64 @qore_rt_dot_eval_method_direct_aot", body[0] ?? "");
+                assertFalse(regex(body[0] ?? "", "call i32 @qore_rt_try_method_"));
+                foreach bool generic in ((False, True)) {
+                    list<string> args = generic ? (executable, "generic") : (executable,);
+                    foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                            "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
+                            "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                            "QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1 ")) {
+                        assertEq(expected, run(args, runtime), prefix + level + runtime + generic);
+                    }
+                }
             }
         }
     }

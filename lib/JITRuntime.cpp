@@ -17388,11 +17388,13 @@ private:
 };
 static_assert(sizeof(QoreCompactNativeMethodStackLocation) < sizeof(QoreNativeMethodStackLocation<true>));
 
-template <bool CachedAdmission>
-static bool try_dispatch_native_int_method(QoreObject* object,
+template <bool CachedAdmission, typename Scalar>
+static bool try_dispatch_native_scalar_method(QoreObject* object,
         const QoreAOTMethodDispatchCacheEntry& cache, const UserVariantBase* uvb,
-        uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        Scalar arg, uint64_t** arg_cleanups,
         ExceptionSink* xsink, uint64_t& result) {
+    static_assert(std::is_same_v<Scalar, int64_t> || std::is_same_v<Scalar, double>);
+    constexpr bool floating = std::is_same_v<Scalar, double>;
     if constexpr (CachedAdmission) {
         // The ordinary helper checks this before admission. A prepared hit can
         // bypass that helper, but must still observe deletion on every call.
@@ -17400,15 +17402,22 @@ static bool try_dispatch_native_int_method(QoreObject* object,
             return false;
         }
     }
-    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY");
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")
+        && (!floating || (!std::getenv("QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY")
+            && !std::getenv("QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY")));
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
-    if (!enabled || !ctx || nargs != 1 || !uvb->hasCachedAOT()
+    if (!enabled || !ctx || !uvb->hasCachedAOT()
             || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
-            || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)
-            || fromBits(args[0]).getType() != NT_INT) {
+            || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)) {
         return false;
     }
-    auto entry = ctx->native_int_unary_method_entry.load(std::memory_order_acquire);
+    auto entry = [&]() {
+        if constexpr (floating) {
+            return ctx->native_float_unary_method_entry.load(std::memory_order_acquire);
+        } else {
+            return ctx->native_int_unary_method_entry.load(std::memory_order_acquire);
+        }
+    }();
     if (!entry || ctx->uses_self || ctx->uses_argv) {
         return false;
     }
@@ -17416,17 +17425,18 @@ static bool try_dispatch_native_int_method(QoreObject* object,
     QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(rc);
     QoreProgram* exec_pgm = CachedAdmission ? cache.native_scalar_program
         : qore_rt_method_execution_program(cache.method, uvb);
-    if (pgm != ctx->pgm || pgm != object->getProgram()
+    if (!pgm || pgm != ctx->pgm || pgm != object->getProgram()
             || pgm != exec_pgm
             || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return false;
     }
     if constexpr (!CachedAdmission) {
         const UserSignature* sig = uvb->getUserSignature();
+        const QoreTypeInfo* scalar_type = floating ? floatTypeInfo : bigIntTypeInfo;
         // Validate the resolved override, never the parse-selected base signature.
         // Prepared entries record this immutable proof before publication.
-        if (sig->numParams() != 1 || sig->getParamTypeInfo(0) != bigIntTypeInfo
-                || sig->getReturnTypeInfo() != bigIntTypeInfo
+        if (sig->numParams() != 1 || sig->getParamTypeInfo(0) != scalar_type
+                || sig->getReturnTypeInfo() != scalar_type
                 || sig->needsTypeParameterSubstitution()) {
             return false;
         }
@@ -17435,27 +17445,86 @@ static bool try_dispatch_native_int_method(QoreObject* object,
     if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
         return true;
     }
-    // Even a pure body must preserve method context on error/stack observation.
-    // No self/argv/parameter TLS slots are needed by this whole-body proof.
-    RuntimeConfigNativeObjectHelper context(rc, object, CachedAdmission ? cache.native_scalar_class_ctx
-        : METHV_const(cache.variant)->getClassPriv());
+    // Float callers without a native result assignment can still use the
+    // explicit-context companions. A v1-only object remains supported, and the
+    // existing integer generic-entry convention is unchanged.
+    QoreAOTContext::NativeFloatUnaryMethodEntryV3 inline_entry = nullptr;
+    QoreAOTContext::NativeFloatUnaryMethodEntryV2 explicit_entry = nullptr;
+    if constexpr (floating) {
+        static const bool continuation = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION");
+        if (continuation) {
+            inline_entry = ctx->native_float_unary_method_entry_v3.load(std::memory_order_acquire);
+            if (!inline_entry) {
+                explicit_entry = ctx->native_float_unary_method_entry_v2.load(std::memory_order_acquire);
+            }
+        }
+    }
     QoreValue value;
-    {
-        QoreNativeMethodStackLocation<> frame(rc, cache, uvb, pgm, xsink);
+    auto invoke = [&]() __attribute__((always_inline)) {
         if (!*xsink) {
             try {
-                value = QoreValue(entry(fromBits(args[0]).getAsBigInt(), ctx, xsink));
+                if constexpr (floating) {
+                    value = QoreValue(inline_entry
+                        ? inline_entry(arg, ctx, xsink, &rc, qore_rt_get_stack_limit_v1(&rc))
+                        : explicit_entry ? explicit_entry(arg, ctx, xsink, &rc) : entry(arg, ctx, xsink));
+                } else {
+                    value = QoreValue(entry(arg, ctx, xsink));
+                }
             } catch (const QoreJITException&) {
                 // Stack overflow already belongs to the sink; RAII restores context.
             }
         }
+    };
+    auto finish = [&]() __attribute__((always_inline)) {
+        if (clearConsumedArgCleanups(arg_cleanups, 1, xsink) < 0 || *xsink) {
+            value.discard(xsink);
+        } else {
+            result = toBits(value);
+        }
+        return true;
+    };
+    if constexpr (floating && CachedAdmission) {
+        static const bool defer_context = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
+        if (defer_context && (inline_entry || explicit_entry)) {
+            RuntimeConfigNativeMethodContext context(rc, object, cache);
+            {
+                QoreCompactNativeMethodStackLocation frame(rc, cache, xsink, context);
+                invoke();
+            }
+            return finish();
+        }
     }
-    if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0 || *xsink) {
-        value.discard(xsink);
-    } else {
-        result = toBits(value);
+    // Uncached admission and v1 entries retain eager object/class state. Even a
+    // pure body must preserve method context on error and stack observation.
+    RuntimeConfigNativeObjectHelper context(rc, object, CachedAdmission ? cache.native_scalar_class_ctx
+        : METHV_const(cache.variant)->getClassPriv());
+    {
+        QoreNativeMethodStackLocation<> frame(rc, cache, uvb, pgm, xsink);
+        invoke();
     }
-    return true;
+    return finish();
+}
+
+template <bool CachedAdmission>
+static bool try_dispatch_native_method(QoreObject* object,
+        const QoreAOTMethodDispatchCacheEntry& cache, const UserVariantBase* uvb,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink, uint64_t& result) {
+    if (nargs != 1) {
+        return false;
+    }
+    // Arguments remain borrowed until a handled call consumes their cleanup.
+    // Reject other types without coercion or changing ownership on a miss.
+    QoreValue arg = fromBits(args[0]);
+    if (arg.getType() == NT_INT) {
+        return try_dispatch_native_scalar_method<CachedAdmission>(object, cache, uvb,
+            arg.getAsBigInt(), arg_cleanups, xsink, result);
+    }
+    if (arg.getType() == NT_FLOAT) {
+        return try_dispatch_native_scalar_method<CachedAdmission>(object, cache, uvb,
+            arg.getAsFloat(), arg_cleanups, xsink, result);
+    }
+    return false;
 }
 
 // Dispatch a method call on a QoreObject with pre-evaluated args.
@@ -17505,7 +17574,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     const QoreTypeInfo* receiver_type_info = qore_get_object_receiver_type_info(o);
     if (native_cache && (!receiver_type_info
             || !QoreTypeInfo::getParameterizedClassType(receiver_type_info))
-            && try_dispatch_native_int_method<false>(o, *native_cache, uvb,
+            && try_dispatch_native_method<false>(o, *native_cache, uvb,
                 args, arg_cleanups, nargs, xsink, result)) {
         return true;
     }
@@ -18498,7 +18567,7 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
                 static const bool use_fast_entry = !std::getenv(
                     "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY");
                 if (use_fast_entry && entry->native_scalar_uvb
-                        && try_dispatch_native_int_method<true>(object, *entry, entry->native_scalar_uvb,
+                        && try_dispatch_native_method<true>(object, *entry, entry->native_scalar_uvb,
                             args, arg_cleanups, nargs, xsink, result)) {
                     return result;
                 }

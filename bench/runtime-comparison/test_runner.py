@@ -52,7 +52,7 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(8451, run.reference("dispatch_control", 2, 7))
 
     def test_float_method_reference(self):
-        for name in ("polymorphic_float_call", "polymorphic_float_expression_call"):
+        for name in ("polymorphic_float_call", "polymorphic_float_expression_call", "boxed_float_method_call"):
             self.assertEqual(65528, run.reference(name, 1, 7))
             self.assertEqual(65537, run.reference(name, 2, 7))
             self.assertEqual(131069, run.reference(name, 3, 7))
@@ -62,6 +62,13 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual(65528, run.reference(name, 1, 7))
             self.assertEqual(65535, run.reference(name, 2, 7))
             self.assertEqual(0, run.reference(name, 1, 65535))
+
+    def test_dynamic_float_result_reference(self):
+        self.assertEqual(65528, run.reference("dynamic_float_result_call", 1, 7))
+        self.assertEqual(65537, run.reference("dynamic_float_result_call", 2, 7))
+        self.assertEqual(131071, run.reference("dynamic_float_result_call", 3, 7))
+        self.assertEqual(196621, run.reference("dynamic_float_result_call", 6, 7))
+        self.assertEqual(65543, run.reference("dynamic_float_result_call", 3, 65535))
 
     def test_checks(self):
         run.validate_checks(self.checks())

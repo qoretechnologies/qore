@@ -62,7 +62,9 @@ class NativeLeafContextTest inherits QUnit::Test {
             "float sub optionalFloatMethodProbe(*NativeLeafFloatMethodBase receiver, float value) {\n"
             "    value = receiver.next(value); return value;\n}\n"
             "float sub floatMethodArgumentProbe(NativeLeafFloatMethodBase receiver, auto value) {\n"
-            "    return receiver.next(value);\n}\n");
+            "    return receiver.next(value);\n}\n"
+            "auto sub genericFloatMethodProbe(auto receiver, auto value) { return receiver.next(value); }\n"
+            "auto sub genericFloatLateProbe(auto receiver, auto value) { return receiver.next(value); }\n");
         file.close();
         string control = dir.path + "/control.qr";
         file.open2(control, O_WRONLY | O_CREAT | O_TRUNC);
@@ -127,6 +129,14 @@ class NativeLeafContextTest inherits QUnit::Test {
                     assertTrue(!!body, name + " normal LLVM entry");
                     assertRegex("call i32 @qore_rt_try_method_float_unary_v1", body[0] ?? "",
                         name + " must exercise the float continuation");
+                }
+                foreach string name in (("genericFloatMethodProbe", "genericFloatLateProbe")) {
+                    *list<*string> body = regex_extract(output,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " normal LLVM entry");
+                    assertRegex("call i64 @qore_rt_dot_eval_method_direct_aot", body[0] ?? "");
+                    assertFalse(regex(body[0] ?? "", "call i32 @qore_rt_try_method_"),
+                        name + " must use generic dispatch");
                 }
                 assertEq(inline_callback, output.find("qore_rt_bind_function_call_ref_typed_v3") >= 0,
                     "deferred eligible entry or eager control");

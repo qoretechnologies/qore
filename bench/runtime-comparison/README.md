@@ -249,12 +249,22 @@ Methods using self/argv, side effects, throwing operations or currently unsuppor
 mixed int/float expression summaries stay general. Existing integer bindings and
 generated context offsets are preserved; three typed atomic pointers are appended.
 
-The floating v1 binding currently supplies the admission proof; only the v2/v3
-caller continuation invokes floating companions. Generic runtime-only method
-dispatch is still integer-only, and an immutable PIC entry populated before
-companion publication may remain general after debugger detach. Correctness is
-preserved in these fallbacks; faster re-admission is a separate follow-up.
-See the [measured float-method follow-up](RESULTS.md#native-floating-method-continuations-2026-10-10).
+Generic runtime method dispatch also invokes proven floating companions, including
+callers whose result has no native local assignment. Actual floating arguments
+are required; coercible integers retain ordinary argument checking. The runtime
+prefers v3/v2 entries with explicit RuntimeConfig, while v1-only and uncached
+admission retain eager receiver/class context. Prepared v2/v3 hits use the existing
+compact frame and deferred context. An immutable PIC entry populated before native
+admission can discover the live companion without mutating that entry.
+
+`QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1` disables only this generic
+floating runtime path, leaving native-result caller continuations enabled. It is
+a runtime-only control: `--reuse-aot-for-baseline` is valid for this follow-up when
+both libraries support the existing float companion ABI. The general method-entry,
+float-entry and continuation controls retain their documented behavior. No ABI
+layout or compiler change is part of the generic-dispatch follow-up.
+See the [native continuations](RESULTS.md#native-floating-method-continuations-2026-10-10)
+and [generic floating dispatch measurements](RESULTS.md#generic-floating-method-dispatch-2026-10-10).
 
 `QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1` disables caching immutable
 eligibility/signature/Program/class facts in polymorphic method entries without
@@ -385,6 +395,8 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |polymorphic_float_expression_call|The same floating targets and selection directly in the receiver expression, without the per-iteration receiver local
 |monomorphic_float_call|One unchanged exact-base floating receiver; Java retains its target call and Qore may inline the base body
 |optional_float_method_call|Same floating receiver with Qore's nullable contract; only strong non-null inputs are timed
+|boxed_float_method_call|Three auto receivers and an auto floating recurrence in Qore; Java retains native doubles and the same three non-final targets
+|dynamic_float_result_call|Three auto receivers with a native float argument; each unknown method result is consumed directly by int conversion, with an independent native recurrence
 |dispatch_control|Same receiver-selection arithmetic and increments without method calls
 |list_read|Indexed traversal of a list prepared outside timing; XOR each element with the invocation seed
 |list_build|Build a growing list, then read every element into the checksum
@@ -408,6 +420,15 @@ The Java methods retain `DONT_INLINE`;
 Qore may inline its exact-base branch, so ratios are whole-kernel comparisons,
 not isolated call latency or an equal-inlining-policy comparison. Exceptional
 floating values and null receiver errors belong in separate correctness tests.
+
+The two generic floating kernels deliberately have no native result assignment
+contract. LLVM inspection confirms ordinary boxed method dispatch, with no native
+method try-helper in either caller. The boxed recurrence reuses the polymorphic
+float reference; the direct-result kernel independently computes the selected
+target minus the current value and then advances `value = 65535.0 - value`.
+All results are integer-exact; the full reference grid has 29 kernels and 435 rows
+per mode. Java uses native doubles and retained `DONT_INLINE` targets, so these
+comparisons include Qore's broader dynamic representation and dispatch contract.
 
 `monomorphic_call` exercises the cached exact-class check for an unwritten
 receiver parameter. The generated AOT guard also checks receiver identity:

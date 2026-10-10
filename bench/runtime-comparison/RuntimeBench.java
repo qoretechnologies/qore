@@ -239,6 +239,18 @@ public class RuntimeBench {
         return sum;
     }
 
+    // Java can retain a native double even where the matched Qore variable is auto.
+    static long dynamicFloatResultCall(int count, long seed,
+            DynamicFloatStep a, DynamicFloatStep b, DynamicFloatStep c) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            sum += (long) (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value);
+            value = 65535.0 - value;
+        }
+        return sum;
+    }
+
     static long dispatchControl(int count, long seed) {
         long sum = 0;
         for (int i = 0; i < count; ++i) {
@@ -376,6 +388,12 @@ public class RuntimeBench {
     }
     @Benchmark public long monomorphic_float_call() { return monomorphicFloatCall(count, nextSeed(), fa); }
     @Benchmark public long optional_float_method_call() { return monomorphicFloatCall(count, nextSeed(), fa); }
+    @Benchmark public long boxed_float_method_call() {
+        return polymorphicFloatExpressionCall(count, nextSeed(), fa, fb, fc);
+    }
+    @Benchmark public long dynamic_float_result_call() {
+        return dynamicFloatResultCall(count, nextSeed(), fa, fb, fc);
+    }
     @Benchmark public long dispatch_control() { return dispatchControl(count, nextSeed()); }
     @Benchmark public long list_read() { return listRead(data, nextSeed()); }
     @Benchmark public long list_build() { return listBuild(count, nextSeed()); }
@@ -408,7 +426,8 @@ public class RuntimeBench {
                     "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
                     "polymorphic_call", "polymorphic_expression_call", "monomorphic_call",
                     "optional_method_call", "polymorphic_float_call", "polymorphic_float_expression_call",
-                    "monomorphic_float_call", "optional_float_method_call", "dispatch_control", "list_read",
+                    "monomorphic_float_call", "optional_float_method_call",
+                    "boxed_float_method_call", "dynamic_float_result_call", "dispatch_control", "list_read",
                     "list_build", "list_mutate", "temporary_list", "temporary_hash",
                     "closure_call", "closure_capture"};
                 long[] results = {arithmetic(count, seed), directCall(count, seed),
@@ -424,6 +443,8 @@ public class RuntimeBench {
                     polymorphicFloatCall(count, seed, fa, fb, fc),
                     polymorphicFloatExpressionCall(count, seed, fa, fb, fc),
                     monomorphicFloatCall(count, seed, fa), monomorphicFloatCall(count, seed, fa),
+                    polymorphicFloatExpressionCall(count, seed, fa, fb, fc),
+                    dynamicFloatResultCall(count, seed, fa, fb, fc),
                     dispatchControl(count, seed),
                     listRead(values, seed), listBuild(count, seed),
                     listMutate(count, seed), temporaryList(count, seed), temporaryHash(count, seed),

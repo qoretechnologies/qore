@@ -14,6 +14,7 @@ extern "C" void init_NATIVE_LEAF_CONTEXT_qo(QoreProgram*);
 #undef NDEBUG
 #endif
 #include <cassert>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -682,6 +683,176 @@ static void checkFloatMethodReceivers(QoreProgram* program, const char* caller_n
     call(*opaque, 1.25, false, -123.0);
 }
 
+// Observe which real companion generic dispatch selects. Bindings belong to
+// this test's unshared Program and are restored before the probe goes away.
+class GenericFloatBindingProbe {
+public:
+    GenericFloatBindingProbe(QoreAOTContext* ctx, QoreObject* object, unsigned version, bool eager)
+        : ctx(ctx), object(object), eager(eager),
+          v1(ctx->native_float_unary_method_entry.load(std::memory_order_acquire)),
+          v2(ctx->native_float_unary_method_entry_v2.load(std::memory_order_acquire)),
+          v3(ctx->native_float_unary_method_entry_v3.load(std::memory_order_acquire)) {
+        assert(!current && v1 && v2 && version >= 1 && version <= 3);
+        assert(version != 3 || v3);
+        current = this;
+        ctx->native_float_unary_method_entry.store(callV1, std::memory_order_release);
+        ctx->native_float_unary_method_entry_v2.store(version >= 2 ? callV2 : nullptr, std::memory_order_release);
+        ctx->native_float_unary_method_entry_v3.store(version == 3 ? callV3 : nullptr, std::memory_order_release);
+    }
+    ~GenericFloatBindingProbe() {
+        ctx->native_float_unary_method_entry.store(v1, std::memory_order_release);
+        ctx->native_float_unary_method_entry_v2.store(v2, std::memory_order_release);
+        ctx->native_float_unary_method_entry_v3.store(v3, std::memory_order_release);
+        current = nullptr;
+    }
+    unsigned count(unsigned version) const {
+        assert(version >= 1 && version <= 3);
+        return calls[version - 1];
+    }
+private:
+    void record(unsigned version, RuntimeConfig& rc) {
+        ++calls[version - 1];
+        if (eager || version == 1) {
+            assert(rc.getObject() == object);
+            assert(rc.getClass() == qore_class_private::get(*object->getClass()));
+            ExceptionSink xsink;
+            uint64_t bits = qore_rt_load_self_member("leafContextMarker", &xsink);
+            QoreValue value;
+            std::memcpy(&value, &bits, sizeof(value));
+            ValueHolder marker(value, &xsink);
+            assert(!xsink && marker->getAsBigInt() == 927);
+        }
+    }
+    static double callV1(double arg, QoreAOTContext* ctx, ExceptionSink* xsink) {
+        assert(current && current->ctx == ctx);
+        current->record(1, *qore_rt_get_fast_runtime_config());
+        return current->v1(arg, ctx, xsink);
+    }
+    static double callV2(double arg, QoreAOTContext* ctx, ExceptionSink* xsink, RuntimeConfig* rc) {
+        assert(current && current->ctx == ctx);
+        current->record(2, *rc);
+        return current->v2(arg, ctx, xsink, rc);
+    }
+    static double callV3(double arg, QoreAOTContext* ctx, ExceptionSink* xsink, RuntimeConfig* rc,
+            const size_t* limit) {
+        assert(current && current->ctx == ctx);
+        current->record(3, *rc);
+        return current->v3(arg, ctx, xsink, rc, limit);
+    }
+    static inline thread_local GenericFloatBindingProbe* current = nullptr;
+    QoreAOTContext* ctx;
+    QoreObject* object;
+    bool eager;
+    QoreAOTContext::NativeFloatUnaryMethodEntry v1;
+    QoreAOTContext::NativeFloatUnaryMethodEntryV2 v2;
+    QoreAOTContext::NativeFloatUnaryMethodEntryV3 v3;
+    std::array<unsigned, 3> calls{};
+};
+
+static void checkGenericFloatMethods(QoreProgram* program, bool inline_method, bool late) {
+    ExceptionSink xsink;
+    const char* caller_name = late ? "genericFloatLateProbe" : "genericFloatMethodProbe";
+    ValueHolder object(program->callFunction("makeFloatMethodProbe", nullptr, &xsink), &xsink);
+    assert(!xsink && object->getType() == NT_OBJECT);
+    const auto* method = object->get<QoreObject>()->getClass()->findMethod("next");
+    assert(method);
+    const auto* uvb = qore_method_private::get(*method)->getFunction()->first()->getUserVariantBase();
+    auto* ctx = uvb->getCachedAOTContext();
+    assert(ctx && !ctx->uses_self);
+    ReferenceHolder<QoreListNode> warm_args(new QoreListNode(autoTypeInfo), &xsink);
+    warm_args->push(object->refSelf(), &xsink);
+    assert(!xsink);
+    warm_args->push(QoreValue(1.25), &xsink);
+    assert(!xsink);
+    // Publish a real cache entry while native admission is unavailable. Once
+    // restored, generic dispatch must discover the live companion without
+    // changing the immutable cache entry (also needed after debugger detach).
+    ctx->uses_self = late;
+    ValueHolder warm(program->callFunction(caller_name, *warm_args, &xsink), &xsink);
+    ctx->uses_self = false;
+    assert(!xsink && warm->getAsFloat() == 1.75);
+    int slot;
+    QoreAOTContext* caller_ctx = getMethodProbeContext(program, caller_name, slot);
+    const auto* cache = caller_ctx->call_targets[slot].method_dispatch_cache.load(std::memory_order_acquire);
+    assert(cache);
+    const auto* admission = cache->entries[0].load(std::memory_order_acquire);
+    assert(admission && static_cast<bool>(admission->native_scalar_uvb) == !late);
+    RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    QoreObject* old_object = rc->getObject();
+    const auto* old_class = rc->getClass();
+    auto call = [&](QoreValue receiver, QoreValue argument) {
+        uint64_t args[] = {argument.refSelf().rawBits()};
+        uint64_t cleanup = args[0];
+        uint64_t* cleanups[] = {&cleanup};
+        uint64_t bits = qore_rt_dot_eval_method_direct_aot_consume_args(caller_ctx, slot,
+            receiver.rawBits(), args, cleanups, 1, &xsink);
+        QoreValue consumed;
+        std::memcpy(&consumed, &cleanup, sizeof(consumed));
+        assert(consumed.isNothing());
+        QoreValue result;
+        std::memcpy(&result, &bits, sizeof(result));
+        assert(rc->getObject() == old_object && rc->getClass() == old_class);
+        return result;
+    };
+    bool eager = late || std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
+    for (unsigned version = 1; version <= (inline_method ? 3u : 2u); ++version) {
+        GenericFloatBindingProbe probe(ctx, object->get<QoreObject>(), version, eager);
+        ValueHolder result(call(*object, QoreValue(1.25)), &xsink);
+        assert(!xsink && result->getType() == NT_FLOAT && result->getAsFloat() == 1.75);
+        assert(probe.count(version) == 1);
+        // An integer argument still needs ordinary float coercion; it must not
+        // call an int ABI or reuse float admission without a type match.
+        ValueHolder converted(call(*object, QoreValue(int64_t{7})), &xsink);
+        assert(!xsink && converted->getType() == NT_FLOAT && converted->getAsFloat() == 7.5);
+        assert(probe.count(version) == 1);
+    }
+    if (inline_method && qore_rt_get_stack_limit_v1(rc)) {
+        for (bool null_view : {false, true}) {
+            for (bool overflow : {false, true}) {
+                FloatMethodStackProbe probe(ctx, object->get<QoreObject>(), null_view, overflow);
+                ValueHolder result(call(*object, QoreValue(1.25)), &xsink);
+                assert(static_cast<bool>(xsink) == overflow);
+                if (overflow) {
+                    assert(result->isNothing());
+                    assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+                    ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+                    assert(!xsink && info);
+                    const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+                    assert(stack);
+                    bool published = false;
+                    for (size_t i = 0; i < stack->size(); ++i) {
+                        const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                        assert(frame);
+                        const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                        published |= name && std::strstr(name->c_str(), "NativeLeafFloatMethodDerived");
+                        if (!(i % 100)) {
+                            assert(!qore_check_cancel(&xsink, "generic float method frame inspection"));
+                        }
+                    }
+                    assert(published);
+                } else {
+                    assert(result->getType() == NT_FLOAT && result->getAsFloat() == 1.75);
+                }
+            }
+        }
+    }
+    assert(admission->native_scalar_uvb == (late ? nullptr : uvb));
+    ValueHolder identity(program->callFunction("makeFloatIdentityProbe", nullptr, &xsink), &xsink);
+    assert(!xsink);
+    for (double value : {0.0, -0.0, 1.25, -3.0e307, -6.0e307,
+            std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity(),
+            std::numeric_limits<double>::quiet_NaN()}) {
+        ValueHolder argument(QoreValue(value), &xsink);
+        ValueHolder result(call(*identity, *argument), &xsink);
+        assert(!xsink && result->getType() == NT_FLOAT);
+        double actual = result->getAsFloat();
+        assert(std::isnan(value) ? std::isnan(actual) : value == actual);
+        if (!value) {
+            assert(std::signbit(value) == std::signbit(actual));
+        }
+    }
+}
+
 // Enter through a normal compiled function so probes inherit the same real
 // source parse policy as the warmed callers; the external host's policy differs.
 static QoreValue methodReceiverProbes(const void* ptr, const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
@@ -693,6 +864,8 @@ static QoreValue methodReceiverProbes(const void* ptr, const QoreListNode*, Runt
     checkFloatMethodReceivers(invocation.program, "floatMethodProbe", invocation.inline_method);
     checkFloatMethodReceivers(invocation.program, "optionalFloatMethodProbe", invocation.inline_method);
     checkFloatMethodReceivers(invocation.program, "floatMethodArgumentProbe", invocation.inline_method);
+    checkGenericFloatMethods(invocation.program, invocation.inline_method, false);
+    checkGenericFloatMethods(invocation.program, invocation.inline_method, true);
     return QoreValue(int64_t{24});
 }
 

@@ -58,6 +58,19 @@ auto sub nativeFloatMethodCall(NativeFloatMethodBase input, float value) {
     NativeFloatMethodBase receiver = input;
     return receiver.next(value);
 }
+auto sub nativeFloatGenericCall(auto receiver, auto value) {
+    return receiver.next(value);
+}
+auto sub nativeFloatGenericInvoke(auto receiver, auto value) {
+    try {
+        return receiver.next(value);
+    } catch (hash<ExceptionInfo> e) {
+        return e.err;
+    }
+}
+auto sub nativeFloatGenericSpecial(auto receiver, float value) {
+    return receiver.next(value);
+}
 auto sub nativeFloatMethodInvoke(NativeFloatMethodBase input, float value) {
     NativeFloatMethodBase receiver = input;
     try {
@@ -123,7 +136,7 @@ int sub nativeFloatMethodWorkload() {
     NativeFloatMethodThread other();
     int result = 0;
     for (int i = 0; i < 256; ++i) {
-        NativeFloatMethodBase receiver = i % 3 == 0 ? base : i % 3 == 1 ? derived : other;
+        auto receiver = i % 3 == 0 ? base : i % 3 == 1 ? derived : other;
         result += int(receiver.next(float(i)));
     }
     return result;
@@ -141,6 +154,7 @@ NativeFloatMethodSelf self_context();
 NativeFloatMethodArgv argv_context();
 NativeFloatMethodDivide divide();
 NativeFloatMethodEffect effect();
+NativeFloatMethodEffect generic_effect();
 for (int round = 0; round < 16; ++round) {
     if (nativeFloatMethodCall(derived, 2.0) != 21.0
             || nativeFloatMethodInvoke(derived, 2.0) != 21.0
@@ -166,7 +180,18 @@ for (int round = 0; round < 16; ++round) {
             || nativeFloatMethodInvoke(divide, 0.0) != "DIVISION-BY-ZERO"
             || nativeFloatMethodStore(divide, 2.0) != 50.0
             || nativeFloatOptionalStore(derived, 2.0) != 21.0
-            || nativeFloatOptionalStore(optional, 2.0) != "RUNTIME-TYPE-ERROR") {
+            || nativeFloatOptionalStore(optional, 2.0) != "RUNTIME-TYPE-ERROR"
+            || nativeFloatGenericCall(derived, 2.0) != 21.0
+            || nativeFloatGenericCall(derived, 2) != 21.0
+            || nativeFloatGenericCall(other, -2.0) != 2.0
+            || nativeFloatGenericCall(mixed, 2.0) != 21.0
+            || exists nativeFloatGenericCall(optional, 2.0)
+            || nativeFloatGenericCall(text, 2.0) != "override"
+            || nativeFloatGenericInvoke(throwing, 2.0) != "NATIVE-FLOAT-METHOD-ERROR"
+            || nativeFloatGenericInvoke(divide, 0.0) != "DIVISION-BY-ZERO"
+            || nativeFloatGenericCall(generic_effect, 2.0) != 31.0
+            || generic_effect.calls != round + 1
+            || nativeFloatGenericCall(self_context, 2.0) != 25.0) {
         throw "NATIVE-FLOAT-METHOD-CONTRACT", "argument, override or context mismatch";
     }
     foreach float value in ((0.0, -0.0, 1.25, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@)) {
@@ -175,6 +200,8 @@ for (int round = 0; round < 16; ++round) {
         expectFloat(value, nativeFloatSpecialOptional(identity, value));
         expectFloat(-value, nativeFloatSpecialOptional(negative, value));
         expectFloat(value, nativeFloatMethodCall(identity, value));
+        expectFloat(value, nativeFloatGenericSpecial(identity, value));
+        expectFloat(-value, nativeFloatGenericSpecial(negative, value));
     }
 }
 if (type(nativeFloatOptionalStore(NOTHING, 2.0)) != "string") {
@@ -186,6 +213,9 @@ doomed.destroy();
 if (nativeFloatMethodStoreInvoke(doomed, 2.0) != "OBJECT-ALREADY-DELETED") {
     throw "NATIVE-FLOAT-DELETION", "deleted receiver accepted";
 }
+if (nativeFloatGenericInvoke(doomed, 2.0) != "OBJECT-ALREADY-DELETED") {
+    throw "NATIVE-FLOAT-DELETION", "generic dispatch accepted deleted receiver";
+}
 Program foreign(PO_NO_INHERIT_USER_CLASSES | PO_NO_CHILD_PO_RESTRICTIONS);
 foreign.importClass("NativeFloatMethodBase");
 foreign.importClass("NativeFloatMethodDerived");
@@ -196,6 +226,7 @@ foreign.parse("%modern\nNativeFloatMethodDerived sub make() { return new NativeF
 NativeFloatMethodBase imported = foreign.callFunction("make");
 for (int i = 0; i < 16; ++i) {
     expectFloat(float(i * 5 + 11), nativeFloatMethodStore(imported, float(i)));
+    expectFloat(float(i * 5 + 11), nativeFloatGenericCall(imported, float(i)));
     expectFloat(float(i * 5 + 11), foreign.callFunction("invoke", derived, float(i)));
     expectFloat(float(i * 5 + 11), nativeFloatMethodStore(derived, float(i)));
 }
