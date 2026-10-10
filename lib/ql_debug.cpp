@@ -38,6 +38,7 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/LocalVar.h"
 
 #include <map>
 #include "qore/intern/QC_Counter.h"
@@ -303,6 +304,79 @@ struct UnitTestCounters {
             (long long)(expected), (long long)(actual), __LINE__); \
     } \
 } while (0)
+
+//! A final release may reenter and delete the variable whose value is being released.
+class UtLocalDiscardString : public QoreStringNode {
+public:
+    UtLocalDiscardString(VarValueBase*& owner, UnitTestCounters& counters)
+        : QoreStringNode("local discard reentry"), owner(owner), counters(counters) {
+    }
+
+    ~UtLocalDiscardString() override {
+        UT_ASSERT(counters, owner->block_cleared, "block is cleared before the final release");
+        UT_ASSERT(counters, !owner->val.assigned, "slot is unassigned before the final release");
+        ExceptionSink xsink;
+        owner->del(&xsink);
+        UT_ASSERT(counters, !xsink, "reentrant deletion of the cleared slot is a no-op");
+        delete owner;
+        owner = nullptr;
+    }
+
+private:
+    VarValueBase*& owner;
+    UnitTestCounters& counters;
+};
+
+static void ut_local_discard(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    // A deletion must not read the inactive payload for unassigned or inline scalar storage.
+    for (valtype_t type : {QV_Bool, QV_Int, QV_Float, QV_Enum, QV_Value, QV_Node}) {
+        VarValueBase slot("discard", type);
+        slot.del(&xsink);
+        UT_ASSERT(c, slot.block_cleared && !slot.val.assigned, "unassigned deletion stays empty");
+        slot.val.v.qv = 0;
+        slot.val.assigned = true;
+        slot.del(&xsink);
+        UT_ASSERT(c, !slot.val.assigned, "deletion clears each storage representation");
+        slot.del(&xsink);
+        UT_ASSERT(c, !xsink, "repeated deletion is harmless");
+    }
+    {
+        VarValueBase slot("nothing");
+        slot.val.assign(&Nothing);
+        slot.del(&xsink);
+        UT_ASSERT(c, !slot.val.assigned && !xsink, "the NOTHING singleton is normalized away");
+    }
+    {
+        ReferenceHolder<QoreStringNode> value(new QoreStringNode("owned local node"), &xsink);
+        VarValueBase slot("owned");
+        slot.val.assign(value->refSelf());
+        UT_ASSERT_EQ(c, 2, value->reference_count(), "the owning local has its own reference");
+        slot.del(&xsink);
+        UT_ASSERT_EQ(c, 1, value->reference_count(), "deletion releases exactly the local's reference");
+        slot.del(&xsink);
+        UT_ASSERT_EQ(c, 1, value->reference_count(), "second deletion releases no reference");
+    }
+    {
+        ReferenceHolder<QoreStringNode> value(new QoreStringNode("borrowed local node"), &xsink);
+        VarValueBase slot("borrowed");
+        slot.val.assign(*value);
+        slot.val.static_assignment = true;
+        slot.del(&xsink);
+        UT_ASSERT(c, !slot.val.assigned && !slot.val.static_assignment, "borrowed slot is unassigned");
+        UT_ASSERT_EQ(c, 1, value->reference_count(), "borrowed local does not release its owner's reference");
+    }
+    {
+        auto owner = std::make_unique<VarValueBase>("reentrant");
+        VarValueBase* slot = owner.get();
+        ReferenceHolder<QoreStringNode> value(new UtLocalDiscardString(slot, c), &xsink);
+        slot->val.assign(value.release());
+        owner.release(); // the node's final release deliberately deletes this container
+        slot->del(&xsink);
+        UT_ASSERT(c, !slot, "final release can delete the variable container");
+    }
+    UT_ASSERT(c, !xsink, "local deletion unit checks raise no exception");
+}
 
 //! the I/O thread count of a process in a container with a CPU limit: the cgroup CPU quota files
 static void ut_cgroup_cpu_limit(UnitTestCounters& c) {
@@ -5714,6 +5788,7 @@ static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* x
 
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
+    ut_local_discard(c);
     ut_qorevalue_operator_bool_null(c);
     ut_string_data_helper(c);
     ut_qorefile_timed_read_contract(c);
@@ -5726,6 +5801,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
 
 static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
+    ut_local_discard(c);
 
     ut_qorevalue_operator_bool_null(c);
     ut_string_data_helper(c);

@@ -7392,3 +7392,129 @@ same-Program fast path must retain real-reference bookkeeping, reflection,
 cycle roots, destruction order, live invalidation and stack observers.
 Do not reintroduce this fused helper unchanged or infer performance from
 fewer source-level checks alone.
+
+## Direct local-value discard rejected (2026-10-10)
+
+Decision: reject the broad local-deletion shortcut and restore the runtime
+headers exactly to the merged `157323d11` baseline. Retain 29 native cleanup
+regression checks and this measurement record. There is **no retained speedup**
+from this experiment.
+[Raw samples, source patch, identities and validation](results-local-discard-rejected-macos-arm64.json).
+
+### Experiment and correctness contract
+
+A fresh profile of the merged baseline found 1368 cleanup-callsite samples plus
+49 sibling samples under 7559 inclusive typed-polymorphic kernel samples
+(about 18.7%). Descendants are not added to their parents. The source executable
+was `run-03nzhlji/kernels-aot`, SHA-256 `bd0b30faa6749dd9e81979cef8336104b8a9f223d4dd4c617db5bc2f37858b40`.
+
+The candidate replaced `VarValueBase::del()`'s
+`removeValue(true).discard(xsink)` with an internal
+`QoreLValue::discardForDelete()`. It unassigned the slot before release,
+retained real-reference bookkeeping, normalized null/NOTHING nodes, left
+borrowed static values on `unassignIgnore()`, and accessed no lvalue members
+after final dereference. Scalars remained deletion no-ops after unassignment.
+It skipped the temporary QoreValue box/unbox/discard round trip; it did not
+remove an owner, a cycle root, runtime type checks or stack observability.
+No public ABI, layout or compiler-lowering change was proposed.
+
+The new native checks cover all six storage tags, repeated deletion, NOTHING,
+owned and borrowed references, and a node whose final release reenters deletion
+and deletes its own variable container. They run through both existing native
+unit-test entry points and are retained against the original cleanup path.
+
+Static ARM64 inspection found the candidate's `VarValueBase::del()` reduced
+from 68 to 24 instructions, but it tail-called a new 99-instruction helper
+containing inlined node-release work. This is not a reduction of the complete
+cleanup path to 24 instructions and was not used as evidence of a speedup.
+
+### Paired measurements
+
+Each trial uses five independent forks per mode/kernel, three warmup and five
+500-ms measurement windows, five startup samples and a shuffled schedule.
+The same AOT executable runs against both compatible libraries within each
+trial. Before: release SHA-256 `8d47bf0dc5c0e534771f168d239101e7aa8d78b1d88d35a6f6dd8b397abdfe54`;
+after: `5818427c163c33d472cd04c5855a794f10f592caf33c396452bd2df9d8c9c599`.
+Frozen libraries, tools, source patches and reference checks identify the
+artifacts. Both runtimes pass 345 reference checks before each timing run.
+
+- `run-v5dvs72j`: 4096 iterations, seed 810911, AOT before/after plus Java JIT;
+  120 jobs and 600 windows.
+- `run-92zsvby7`: 1024 iterations, seed 810912, AOT before/after;
+  80 jobs and 400 windows.
+- `run-yqajwdd6`: 4096 iterations, seed 810913, independent repeat;
+  80 jobs and 400 windows.
+
+All 280 jobs and 1400 windows were re-parsed; fork statistics, raw output,
+checksums and source/tool/library/executable identities were verified. No task
+build, test, profile or evidence computation ran during timing. Host background
+work, core placement, clocks and caches were not controlled.
+
+Median of fork means in ns/element; negative percentages mean faster:
+
+|!Kernel|!4096 first: before -> after|!1024: before -> after|!4096 repeat: before -> after
+|polymorphic_call|31.231 -> 30.508 (-2.31%)|32.399 -> 31.727 (-2.07%)|30.835 -> 30.466 (-1.19%)
+|polymorphic_expression_call|10.299 -> 10.464 (+1.59%)|11.774 -> 11.803 (+0.24%)|10.279 -> 10.349 (+0.68%)
+|monomorphic_call|3.358 -> 3.338 (-0.60%)|4.610 -> 4.582 (-0.60%)|3.302 -> 3.235 (-2.00%)
+|optional_method_call|10.883 -> 10.793 (-0.83%)|12.064 -> 12.024 (-0.33%)|10.856 -> 10.873 (+0.16%)
+|indirect_wide|7.355 -> 7.212 (-1.94%)|8.244 -> 8.471 (+2.75%)|7.236 -> 7.182 (-0.75%)
+|indirect_float|9.071 -> 9.655 (+6.44%)|10.156 -> 10.169 (+0.13%)|8.953 -> 9.141 (+2.10%)
+|arithmetic|1.354 -> 1.364 (+0.78%)|2.418 -> 2.384 (-1.42%)|1.347 -> 1.324 (-1.73%)
+|dispatch_control|1.426 -> 1.412 (-1.02%)|2.560 -> 2.531 (-1.16%)|1.413 -> 1.401 (-0.87%)
+
+Typed-polymorphic medians improved by 1.19–2.31%, but observed fork ranges
+overlap in all three trials. Floating callbacks were slower in both 4096
+trials (+6.44% and +2.10%), with overlapping ranges, and essentially unchanged
+at 1024 (+0.13%). Wide-integer callbacks were mixed (-1.94%, +2.75%, -0.75%).
+Expression receivers were slightly slower in every trial (+0.24–1.59%). These
+are reasons not to accept the broad change, not proof of a particular cause or
+statistically established regression. An adverse code-layout effect is only
+a hypothesis. Overlapping ranges do not prove equivalence or no regression.
+
+Three floating candidate forks in the first trial have all five windows around
+9.56–10.01 ns, versus two around 8.89–9.03 ns. The repeat also retains a slow
+baseline typed-polymorphic fork (mean 39.465 ns; all five windows 39.089–40.543 ns).
+Neither cluster was removed. Scalar controls also move: dispatch is faster
+in all three trials, with disjoint ranges in the last two; arithmetic is mixed,
+with disjoint faster ranges in the last trial. Thus source-level simplification
+cannot be treated as isolated causal attribution.
+
+The first trial's **retained baseline**, not the rejected candidate, is about
+12.4x Java for typed polymorphism, 4.4x for expression receivers, 2.0x for
+monomorphic calls and 6.5x for nullable methods. These are whole-kernel ratios:
+Java methods are DONT_INLINE while Qore can inline an exact-base branch.
+There is no equal-policy isolated-call, Java-parity, IR-timing or startup-gain claim.
+
+### Qualification and next work
+
+Candidate release: 73 files, 260 reported cases, 11254 assertions, nine
+standalones and one expected debug-only short-string skip. Candidate debug:
+73 files, 267 cases, 11353 assertions and nine standalones, no skips. Debug
+native-unit driver adds one case/two assertions. The focused native checks
+increase from 80/80 in the saved baseline to 109/109, adding 29 cleanup checks.
+Fresh reference grids pass 345 checks in each of four release and two debug
+modes; all 11 benchmark-harness tests pass. Qmod dependencies were rebuilt
+before their respective test suites.
+
+RecursiveClosureLocals initially rejected a linker warning: LLVM emitted a
+macOS 28 object while the default link target was macOS 27. The saved baseline
+reproduced it. Setting MACOSX_DEPLOYMENT_TARGET=28.0 only for that warning-strict
+fixture aligns the link and all 28 assertions then pass; benchmark configuration
+is unchanged. Two focused-unit command/loader setup errors and an exploratory
+cross-target object-only invocation are also retained in the evidence, separately
+from the successful qualification. No production workaround was added.
+
+Next: investigate a narrowly guarded strong-object cleanup path and the larger
+class-acceptance/native-frame costs. Do not reintroduce this broad helper
+unchanged, eliminate real-reference marks, or borrow owning locals without a
+proof covering reflection, cycle roots and destruction order. Java parity is
+still unachieved.
+
+After restoration, both cores and QUnit/FsUtil dependencies were rebuilt.
+Each build passes five targeted lifetime drivers (21 cases,
+849 assertions), and fresh IR/AOT grids pass 345 checks per mode.
+Restored debug passes all 109 focused native checks plus the native-unit driver
+(one case/two assertions). These checks qualify the final tree separately from
+the rejected candidate; no timing benefit is claimed for the restored libraries.
+The [full audit](FOLLOWUP-AUDIT.md#direct-local-value-discard-rejection-audit-2026-10-10)
+records 14 Pass, 48 N/A and zero Fail across all 62 checklist items.
