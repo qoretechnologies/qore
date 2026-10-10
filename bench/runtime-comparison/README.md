@@ -274,6 +274,14 @@ executable after verifying matching runtime compatibility identities. Dynamic
 call workloads improve, but the interpreter and generic fallback remain separate
 optimization targets. See [measurements](RESULTS.md#direct-reference-tag-loads-2026-10-10).
 
+Native unary dispatch also reuses the immutable cache's Program-equality proof:
+preparation establishes one parameter and identical caller/receiver/execution
+Programs before publication. A live receiver-Program check plus that witness
+replaces redundant stored-key comparisons. Argument type/state, access context,
+parse options, epoch, live body/readiness, debugger and stack guards remain.
+This runtime-only change adds no switch or ABI field. Its measured gains are
+small and not universal; see [results](RESULTS.md#native-program-proof-factoring-2026-10-10).
+
 `QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1` disables only the floating-method
 bindings and caller continuations at compilation, and their native admission/
 try-helper at runtime. Compile separate artifacts for this additive ABI change;

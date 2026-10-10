@@ -18329,9 +18329,14 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
         class_ctx = nullptr;
     }
     QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(*rc);
+    // Native admission records caller == receiver == execution Program before
+    // publishing the immutable PIC entry. Check the live receiver here, then
+    // match that single witness instead of repeating both stored Program keys.
+    if (!pgm || pgm != object->getProgram()) {
+        return 0;
+    }
     const QoreClass* receiver_class = object->getClass();
     const QoreTypeInfo* receiver_type = qore_get_object_receiver_type_info(object);
-    QoreProgram* object_program = object->getProgram();
     QoreParseOptions parse_options = RuntimeConfigNativeAccess::getParseOptions(*rc);
     uint64_t epoch = qore_get_method_dispatch_epoch();
     const QoreAOTMethodDispatchCacheEntry* cached = nullptr;
@@ -18342,23 +18347,26 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
         const auto* candidate = cache_slot.load(std::memory_order_acquire);
         if (candidate && candidate->receiver_class == receiver_class
                 && candidate->receiver_type_info == receiver_type && candidate->class_ctx == class_ctx
-                && candidate->caller_program == pgm && candidate->object_program == object_program
+                && candidate->native_scalar_program == pgm
                 && candidate->parse_options == parse_options && candidate->dispatch_epoch == epoch
-                && candidate->nargs == 1 && candidate->arg_types[0] == (floating ? floatTypeInfo : bigIntTypeInfo)
+                && candidate->arg_types[0] == (floating ? floatTypeInfo : bigIntTypeInfo)
                 && candidate->arg_states[0] == 0) {
             cached = candidate;
             break;
         }
     }
-    if (!cached || !cached->native_scalar_uvb) {
+    if (!cached) {
         return 0;
     }
+    // A non-null native_scalar_program also proves unary admission. Argument
+    // type/state, access context and dispatch epoch still match live above.
+    assert(cached->native_scalar_uvb && cached->nargs == 1
+        && cached->caller_program == pgm && cached->object_program == pgm);
     const UserVariantBase* uvb = cached->native_scalar_uvb;
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
     if (!ctx || !uvb->hasCachedAOT() || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
             || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)
-            || ctx->uses_self || ctx->uses_argv || !pgm || pgm != ctx->pgm
-            || pgm != cached->native_scalar_program || pgm != object->getProgram()
+            || ctx->uses_self || ctx->uses_argv || pgm != ctx->pgm
             || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return 0;
     }
@@ -18466,6 +18474,8 @@ static void qore_rt_prepare_aot_native_method_admission(QoreAOTMethodDispatchCac
     // These facts belong to the exact resolved variant and full PIC key. Entry
     // identity/readiness remain live. A cache populated before publication keeps
     // the ordinary path, which can discover the companion after debugger detach.
+    // Publish the Program witness only after proving nargs == 1 and equality
+    // with both stored Program keys; the unary continuation relies on this.
     entry.native_scalar_uvb = uvb;
     entry.native_scalar_program = pgm;
     entry.native_scalar_class_ctx = variant->getClassPriv();

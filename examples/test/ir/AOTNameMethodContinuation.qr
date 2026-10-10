@@ -142,9 +142,11 @@ foreign.parse("%modern\nNameNativeDerived sub make() { return new NameNativeDeri
 NameNativeBase imported = foreign.callFunction("make");
 for (int i = 0; i < 16; ++i) {
     if (nameNativeLoop(imported, i, 16) != i + 176
+            || nameNativeDynamic(imported, i, 16) != i + 176
             || nameNativeInvoke(imported, i, 16) != i + 176
             || foreign.callFunction("call", derived, i) != i + 11
-            || nameNativeLoop(derived, i, 16) != i + 176) {
+            || nameNativeLoop(derived, i, 16) != i + 176
+            || nameNativeDynamic(derived, i, 16) != i + 176) {
         throw "NAME-METHOD-PROGRAM", "context restoration mismatch";
     }
 }

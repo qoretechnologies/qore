@@ -8730,3 +8730,131 @@ Next experiments:
 
 The [audit](FOLLOWUP-AUDIT.md#reference-tag-load-audit-2026-10-10) records every
 check: 15 Pass, 47 N/A, 0 Fail.
+
+## Native Program-proof factoring (2026-10-10)
+
+Decision: retain the narrowly scoped immutable-proof reuse. Floating dynamic-call
+medians improve 1.9–2.3% across four trials, but their fork ranges overlap in each.
+Dynamic integer calls improve 5.58% and 3.93% in the two same-executable trials,
+with disjoint ranges, while the separately compiled main trial is 0.46% slower.
+This is a modest conditional gain, not a universal speedup or Java parity.
+
+[Complete evidence](results-native-program-proof-macos-arm64.json) records
+360 randomized jobs / 1800 windows: 90 fresh baseline, 90 main, 60 shorter-loop,
+60 same-AOT and 60 five-fork confirmation jobs. No task build, test, profile,
+inspection or evidence work overlapped timing.
+
+### Proof and qualification
+
+Source parent ed2ef50a5; origin/develop 1800de49a was already merged.
+Frozen baseline binaries match that committed source and retain their original
+pre-commit provenance. The candidate is the parent plus its saved patch.
+
+Cache preparation already proves one parameter and equal caller, receiver and
+execution Programs before publishing a native descriptor. The hot unary path
+checks the live receiver Program once and matches the cached non-null Program
+witness. That also proves the stored nargs/variant checks. A debug assertion
+checks the implications. The sole witness assignment remains after all proofs
+and before release-publication; readers acquire the immutable entry.
+
+Receiver validity, hierarchy-sensitive private access, receiver class/type,
+argument type/state, parse options, epoch, live AOT body/readiness, debugger and
+both stack guards remain. No context pointer is newly cached. Receiver/argument
+ownership, fallback, deferred context and concurrent diagnostic-frame publication
+are unchanged. Rejected non-native entries can require scanning further in the
+bounded four-entry PIC; fallback is measured rather than assumed free.
+
+No compiler, ABI, layout, runtime-identity or benchmark change. All 130 normalized
+emitted LLVM bodies, including bootstrap main, match. Both arm64 unary helpers
+shrink from 749 to 723 static instructions, retaining their 400-byte stack frames.
+Smaller code is supporting evidence, not a performance result.
+
+The expanded integer and floating fixtures alternate foreign-Program and
+same-Program receivers at dynamic/nullable call sites. Both pass the frozen
+baseline in AST/IR/JIT/tiered and stripped AOT O0/O3. Candidate release/debug pass
+90 selected files each: 372/379 cases, 16254/16353 assertions, 12 standalone files,
+one known release-only skip and no debug skips. All 495 references per mode pass
+(release IR/AOT/Java-int/Java-JIT, debug IR/AOT), as do 15 harness tests and
+146 native debug checks. Support qmods were rebuilt sequentially per build.
+No full-suite, sanitizer, cross-platform or IR-speedup claim.
+
+### Measurements
+
+Apple M4 Pro, macOS arm64 release; median fork means in ns/iteration, startup
+excluded. Three warmups and five 500 ms measurement windows per fork; local
+Temurin 25.0.2 JIT retains target calls. Whole workloads have unequal Qore/Java
+representation and inlining contracts.
+
+Main count 4096, three forks, run-lhvijh83:
+
+|!Kernel|!Before ns|!After ns|!Reduction %|!Java JIT ns|!After / Java
+|dynamic_int_result_call|11.812|11.867|-0.46|3.079|3.85
+|dynamic_float_result_call|12.728|12.437|2.29|3.560|3.49
+|indirect_int_result|6.948|7.101|-2.19|1.947|3.65
+|indirect_float_result|8.991|9.173|-2.02|2.855|3.21
+|dynamic_int_result_fallback|311.995|314.073|-0.67|3.005|104.51
+|boxed_float_method_call|64.527|64.944|-0.65|2.557|25.40
+|polymorphic_expression_call|10.775|10.172|5.60|2.615|3.89
+|polymorphic_float_expression_call|11.236|10.727|4.52|2.654|4.04
+|indirect_float|9.379|8.959|4.48|1.698|5.28
+|arithmetic|1.499|1.504|-0.36|1.058|1.42
+
+Count 1024, run-8or1ocwa, and same-AOT count 4096, run-wntmqm7m, have three forks.
+Main/1024 compile separate executables. Same-AOT uses identical executable bytes
+with compatible baseline/candidate libraries, verified by SHA-256 and RUID.
+
+|!Kernel|!1024 before|!1024 after|!Reduction %|!Same-AOT before|!Same-AOT after|!Reduction %
+|dynamic_int_result_call|13.584|13.458|0.93|12.068|11.395|5.58
+|dynamic_float_result_call|14.603|14.308|2.02|12.880|12.635|1.90
+|indirect_int_result|8.735|8.546|2.15|7.070|7.034|0.51
+|indirect_float_result|10.613|10.617|-0.04|9.106|8.934|1.89
+|dynamic_int_result_fallback|317.626|316.693|0.29|316.489|312.566|1.24
+|boxed_float_method_call|66.356|66.740|-0.58|64.099|63.939|0.25
+|polymorphic_expression_call|12.693|12.408|2.25|10.640|10.587|0.50
+|polymorphic_float_expression_call|13.023|12.893|0.99|11.182|11.046|1.21
+|indirect_float|10.906|10.880|0.25|9.384|9.362|0.23
+|arithmetic|2.961|2.950|0.38|1.493|1.500|-0.46
+
+Five-fork same-AOT confirmation, count 4096, run-s94t3c50:
+
+|!Kernel|!Before ns|!After ns|!Reduction %|!Before fork range|!After fork range
+|dynamic_int_result_call|12.003|11.531|3.93|11.924–12.548|11.424–11.827
+|dynamic_float_result_call|12.867|12.618|1.93|12.604–13.485|12.558–12.714
+|polymorphic_expression_call|10.769|10.695|0.69|10.684–10.809|10.435–10.905
+|polymorphic_float_expression_call|11.211|10.902|2.76|11.126–11.420|10.845–11.303
+|indirect_float_result|8.931|8.869|0.70|8.803–9.315|8.817–9.122
+|arithmetic|1.509|1.504|0.33|1.501–1.523|1.494–1.536
+
+Observed ranges are not confidence intervals. Only the integer dynamic workload
+has disjoint ranges in this confirmation. Floating-polymorphic medians improve
+in all four trials (0.99–4.52%); main and the first same-AOT trial have disjoint
+ranges. Integer-polymorphic gains shrink from 5.60% in main to 0.50–0.69% in the
+same-AOT trials, so the largest observed gain is not treated as a stable effect.
+
+The unchanged floating callback-result control slows 2.02% in main with disjoint
+ranges, is nearly unchanged at 1024, and improves 1.89%/0.70% in the same-AOT
+trials. It does not call the changed method helper; the initial adverse effect
+remains unexplained, not attributed to admission. Other adverse controls include
+main integer callbacks, unsupported fallback and boxed floating calls, plus small
+arithmetic changes. They do not consistently repeat; every raw sample is retained.
+The data supports limited retention, not a claim that all call categories improve.
+
+### Next work
+
+A separate ten-second 1 ms profile after all timing records 8322 top-level inclusive
+samples. Top-of-stack counts include 4131 native floating helper, 483 receiver
+reference-check helper, 379 frame-unpublication and 327 stack-check samples.
+Nested inclusive counts are not additive; attribution is qualitative.
+
+Investigate fusing a sole-use untyped receiver load with the native method attempt,
+so an admitted strong object avoids a separate reference-check helper call.
+Any such lowering needs explicit evaluation-order and ownership proofs: delaying
+reference evaluation past an argument effect or exception is not valid. Keep
+the existing resolver on every rejected/reference/weak path. Also investigate
+invocation-local reuse of immutable dispatch facts without retaining stale AOT
+contexts or bypassing live body/debugger/access checks.
+
+Dynamic native workloads in main still take 3.49–3.85 times Java's time;
+generic fallback takes about 104.5 times. IR and context-using/cross-Program calls
+remain separate large gaps. The [audit](FOLLOWUP-AUDIT.md#native-program-proof-audit-2026-10-10)
+records all 62 checks: 13 Pass, 49 N/A, 0 Fail. No Java-parity claim.

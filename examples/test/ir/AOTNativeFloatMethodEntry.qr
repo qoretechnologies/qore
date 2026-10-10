@@ -226,9 +226,11 @@ foreign.parse("%modern\nNativeFloatMethodDerived sub make() { return new NativeF
 NativeFloatMethodBase imported = foreign.callFunction("make");
 for (int i = 0; i < 16; ++i) {
     expectFloat(float(i * 5 + 11), nativeFloatMethodStore(imported, float(i)));
+    expectFloat(float(i * 5 + 11), nativeFloatOptionalStore(imported, float(i)));
     expectFloat(float(i * 5 + 11), nativeFloatGenericCall(imported, float(i)));
     expectFloat(float(i * 5 + 11), foreign.callFunction("invoke", derived, float(i)));
     expectFloat(float(i * 5 + 11), nativeFloatMethodStore(derived, float(i)));
+    expectFloat(float(i * 5 + 11), nativeFloatOptionalStore(derived, float(i)));
 }
 Counter gate(1);
 Counter running(8);
