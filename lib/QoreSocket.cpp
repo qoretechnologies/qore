@@ -41,6 +41,7 @@
 #include <atomic>
 #include <limits>
 #include <map>
+#include <set>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -666,7 +667,7 @@ static void qore_socket_wake_async_controller(qore_socket_private* priv) {
     xsink.clear();
 }
 
-class QoreSocketControllerPollable : public AbstractPollableIoObjectBase {
+class QoreSocketControllerPollable : public AsyncIoRoutedPollable {
 public:
     DLLLOCAL QoreSocketControllerPollable(QoreSocket* sock, bool use_outer_lock = true)
             : QoreSocketControllerPollable(qore_socket_private::get(*sock), use_outer_lock) {
@@ -696,7 +697,7 @@ public:
     /** Keeps this wrapper's operations on the I/O thread of the socket's other operations; see
         qore_socket_private::async_io_route_key
     */
-    DLLLOCAL const std::string& getRouteKey() const {
+    DLLLOCAL virtual const std::string& getAsyncIoRouteKey() const override {
         return priv->async_io_route_key.empty() ? identity_hash : priv->async_io_route_key;
     }
 
@@ -3590,22 +3591,18 @@ static QoreHashNode* qore_socket_exec_poll_operation(QoreObject* sock_obj, Abstr
     key += ':';
     key += socket_hash;
     // Several synchronous callers can delegate work for the same socket at the
-    // same time; keep the cache key unique while thread_key preserves affinity:
-    // a socket wrapper routes with the key of the Socket object wrapping the
-    // socket (if any), so its operations run on the I/O thread of the socket's
-    // other operations.
+    // same time; keep the cache key unique.  The controller runs the operation
+    // on the I/O thread of the socket's other operations whatever its key: a
+    // socket wrapper routes with the key of the Socket object wrapping the
+    // socket (if any; see AsyncIoRoutedPollable).
     key += ':';
     key += std::to_string(++qore_socket_sync_exec_seq);
-
-    QoreSocketControllerPollable* socket_pollable = dynamic_cast<QoreSocketControllerPollable*>(pollable);
-    const std::string& route_key = socket_pollable ? socket_pollable->getRouteKey() : socket_hash;
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
     info->setKeyValue("sock", sock_obj->objectRefSelf(), xsink);
     info->setKeyValue("spop", op_obj->objectRefSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner), xsink);
     info->setKeyValue("key", new QoreStringNode(key), xsink);
-    info->setKeyValue("thread_key", new QoreStringNode(route_key), xsink);
     info->setKeyValue("to", timeout_ms, xsink);
     if (*xsink) {
         return nullptr;
@@ -4409,7 +4406,7 @@ int qore_socket_exec_close_private(qore_socket_private* priv) {
 
     ReferenceHolder<QoreSocketControllerPollable> pollable(
         new QoreSocketControllerPollable(priv, !qore_on_async_io_thread()), &xsink);
-    int rc = ctrl->close(*pollable, &xsink, pollable->getRouteKey());
+    int rc = ctrl->close(*pollable, &xsink);
     if (xsink) {
         xsink.clear();
         return -1;
@@ -7046,7 +7043,6 @@ QoreFuture* qore_socket_resolve_addrinfo_asyncio_future(ExceptionSink* xsink, co
     info->setKeyValue("spop", (*op_obj)->objectRefSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner), xsink);
     info->setKeyValue("key", new QoreStringNode(key), xsink);
-    info->setKeyValue("thread_key", new QoreStringNode(socket_hash), xsink);
     info->setKeyValue("to", timeout_ms, xsink);
     if (*xsink) {
         return nullptr;
@@ -7644,7 +7640,6 @@ QoreFuture* qore_socket_resolve_nameinfo_asyncio_future(ExceptionSink* xsink, co
     info->setKeyValue("spop", (*op_obj)->objectRefSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner), xsink);
     info->setKeyValue("key", new QoreStringNode(key), xsink);
-    info->setKeyValue("thread_key", new QoreStringNode(socket_hash), xsink);
     info->setKeyValue("to", timeout_ms, xsink);
     if (*xsink) {
         return nullptr;
@@ -9494,6 +9489,8 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
     size_t submitted = 0;
     cancel_check = 0;
     uint64_t target_seq = 0;
+    // each readiness operation runs on the I/O thread of its socket; these are the threads to wait for
+    std::set<int> submit_threads;
 
     auto submit_readiness_poll = [&](const PollEntry& entry, QoreObject* poll_obj, int event) -> int {
         if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "Socket::poll submit")) {
@@ -9530,7 +9527,6 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         info->setKeyValue("spop", (*op_obj)->objectRefSelf(), xsink);
         info->setKeyValue("owner", new QoreStringNode(owner.c_str()), xsink);
         info->setKeyValue("key", new QoreStringNode(key.c_str()), xsink);
-        info->setKeyValue("thread_key", new QoreStringNode(owner.c_str()), xsink);
         info->setKeyValue("to", -1, xsink);
         info->setKeyValue("resultQueue", (*queue_obj)->objectRefSelf(), xsink);
         info->setKeyValue("other", other.release(), xsink);
@@ -9539,11 +9535,14 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             return -1;
         }
 
-        ReferenceHolder<QoreObject> submit_rv(ctrl->submit(*ctl_obj, info.release(), false, xsink), xsink);
+        int thread_idx = -1;
+        ReferenceHolder<QoreObject> submit_rv(ctrl->submit(*ctl_obj, info.release(), false, xsink, &thread_idx),
+            xsink);
         if (*xsink) {
             cancel_owner();
             return -1;
         }
+        submit_threads.insert(thread_idx);
         ++submitted;
         return 0;
     };
@@ -9571,7 +9570,7 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         }
     }
 
-    if (submitted && !ctrl->waitForProcessing(owner.c_str(), 0, xsink)) {
+    if (submitted && !ctrl->waitForProcessing(submit_threads, 0, xsink)) {
         cancel_owner();
         xsink->raiseException("SOCKET-POLL-ERROR",
             "async I/O controller stopped before Socket::poll() operations were processed");

@@ -1380,7 +1380,6 @@ public:
             info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
             info->setKeyValue("owner", new QoreStringNode("late-close-unit-test"), &xsink);
             info->setKeyValue("key", new QoreStringNode("late-close-accept"), &xsink);
-            info->setKeyValue("thread_key", new QoreStringNode("late-close-route"), &xsink);
             info->setKeyValue("to", -1, &xsink);
             UT_ASSERT(c, !xsink, "late accept submission info is initialized");
             if (xsink) {
@@ -4641,16 +4640,16 @@ static void ut_asyncio_wait_for_processing_rejects_io_thread(UnitTestCounters& c
     }
 
     old = qore_set_async_io_thread_for_test(true);
-    processed = ctrl->waitForProcessing("test-key", 0, &xsink);
+    processed = ctrl->waitForProcessing(std::set<int>{0}, 0, &xsink);
     qore_set_async_io_thread_for_test(old);
 
-    UT_ASSERT(c, !processed, "keyed waitForProcessing returns false from async I/O thread");
-    UT_ASSERT(c, (bool)xsink, "keyed waitForProcessing raises from async I/O thread");
+    UT_ASSERT(c, !processed, "per-thread waitForProcessing returns false from async I/O thread");
+    UT_ASSERT(c, (bool)xsink, "per-thread waitForProcessing raises from async I/O thread");
     if (xsink) {
         // note: the error code can be held in inline short string storage, which has no
         // QoreStringNode, so the data helper must be used to compare it
         QoreStringDataHelper err(xsink.getExceptionErr());
-        UT_ASSERT(c, err == "ASYNC-IO-ERROR", "keyed exception is ASYNC-IO-ERROR");
+        UT_ASSERT(c, err == "ASYNC-IO-ERROR", "per-thread exception is ASYNC-IO-ERROR");
         xsink.clear();
     }
 

@@ -94,15 +94,10 @@ hashdecl Qore::SocketPollOperationInfo {
     */
     *string key;
 
-    //! Optional I/O thread affinity key; default: the I/O identity of \c sock
-    /** Every operation on one pollable I/O object runs on the same I/O thread, whatever its cache key: by default
-        operations are routed by their \c sock, so a socket, its TLS state and its HTTP/2 or QUIC session are only
-        ever used by one I/O thread.  Operations on different I/O objects with the same \c thread_key are routed
-        to the same I/O thread, for coordinated cancellation and readiness barriers.
-
-        @note an operation routed by a \c thread_key can run on a different I/O thread than other operations on the
-        same \c sock; do not give a \c thread_key to an operation on an I/O object that other operations use at
-        the same time
+    //! Ignored; accepted for source compatibility
+    /** Every operation on one pollable I/O object runs on the same I/O thread, whatever its cache key or this
+        value: operations are routed by their \c sock, so a socket, its TLS state and its HTTP/2 or QUIC session are
+        only ever used by one I/O thread, and the operations on a socket are processed in order by that thread.
 
         @since %Qore 3.0
     */

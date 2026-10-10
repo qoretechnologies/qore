@@ -200,7 +200,7 @@ Submits an operation to the controller. The `SocketPollOperationInfo` hashdecl:
 | `resultQueue` | `*Queue`                   | Optional shared result Queue.                           |
 | `callback`    | `*code`                    | Optional completion callback (mutually exclusive with `resultQueue`). |
 | `key`         | `*string`                  | Optional custom cache key (default: `sock.uniqueHash()`). |
-| `thread_key`  | `*string`                  | Optional I/O thread route key (default: the I/O identity of `sock`; see [I/O Thread Routing](#io-thread-routing)). |
+| `thread_key`  | `*string`                  | Accepted for source compatibility and ignored: an operation always runs on the I/O thread of its `sock` (see [I/O Thread Routing](#io-thread-routing)). |
 
 When `callback` is provided, results are delivered by the callback dispatcher worker pool.
 When `resultQueue` is provided, results are pushed to that Queue. Otherwise a new Queue is
@@ -208,8 +208,8 @@ created and returned.
 
 The `replace` flag allows replacing an existing operation on the same key (used for connection
 re-polling patterns like HTTP/2 persistent connections).  Keys are looked up in the cache of the operation's I/O
-thread, so an operation replaces one with the same key on the same I/O object (or `thread_key`); operations with
-the same key on different sockets can coexist on different I/O threads.
+thread, so an operation replaces one with the same key on the same I/O object; operations with the same key on
+different sockets can coexist on different I/O threads.
 
 ### exec()
 
@@ -276,24 +276,29 @@ for the other threads (see [I/O threads never wait for each other](#io-threads-n
 
 ### I/O Thread Routing
 
-The I/O thread of an operation is chosen by its route key: the explicit `thread_key` if one was given, otherwise
-the I/O identity hash of its `sock` (`AbstractPollableIoObjectBase::getIoIdentityHash()`), hashed over the I/O
-threads (`AsyncIoControllerPriv::getThreadIndex()`).  Routing by the socket keeps a socket, its TLS state and its
+The I/O thread of an operation is chosen by the route key of its `sock` (`AsyncIoControllerPriv::getRouteKey()`),
+hashed over the I/O threads (`AsyncIoControllerPriv::getThreadIndex()`): normally the I/O identity hash of the object
+(`AbstractPollableIoObjectBase::getIoIdentityHash()`).  Routing by the socket keeps a socket, its TLS state and its
 HTTP/2 or QUIC session on one thread: a connection's long-lived operation and the short operations that synchronous
 Socket calls run on the controller for the same socket (each with its own cache key) all run on that thread, and
 wakes for the socket reach it.  Routing by the cache key would spread them over threads, so that one thread used
 the socket while another one ran a synchronous call on it, and wakes went to the wrong thread.
 
+There is no exception: the route depends only on the socket, so all operations on one socket run on one thread in
+the order the thread processes them.  The `thread_key` of `SocketPollOperationInfo` is accepted for source
+compatibility and ignored; it used to route an operation by a caller-chosen key, which could put it on another
+thread than the other operations on its socket.
+
 - **Socket wrappers**: C++ socket methods run controller-backed calls through lightweight wrappers
   (`QoreSocketControllerPollable`, `Http2SocketControllerPollable`) whose identity is that of the
   `qore_socket_private`, not that of the Socket object.  A Socket object stores its own identity in
-  `qore_socket_private::async_io_route_key` when it is created, and the wrappers pass it as `thread_key`, so their
-  operations run on the I/O thread of the socket's other operations.  Closes from a wrapper and the HTTP/2 data
-  wake (`qore_socket_wake_async_controller()`) use the same key.
-- **Explicit `thread_key`**: groups operations on different I/O objects on one thread and processing barrier
-  (`Socket::poll()` readiness operations use their owner).  An operation routed by a `thread_key` can run on
-  another thread than other operations on its socket, so a `thread_key` must not be given to an operation on an I/O
-  object that other operations use at the same time.
+  `qore_socket_private::async_io_route_key` when it is created; the wrappers are `AsyncIoRoutedPollable` objects
+  whose route key (`getAsyncIoRouteKey()`) is that key, so their operations run on the I/O thread of the socket's
+  other operations.  Closes from a wrapper and the HTTP/2 data wake (`qore_socket_wake_async_controller()`) use the
+  same key.
+- **`Socket::poll()`** submits one readiness operation per socket and event, each on the thread of its socket, and
+  waits until each of those threads has processed its operations (`waitForProcessing()` with the thread indexes
+  that `submit()` returns) before it arms them.
 - **Results of worker-dispatched `continuePoll()` calls** carry the index of the I/O thread that dispatched them
   (`AsyncWorkItem::thread_idx`) and return to that thread; the operation key does not identify it.
 - **Submits from an I/O thread** go straight into the cache only when the calling thread is the operation's own I/O
@@ -1013,8 +1018,8 @@ Representative bridges:
   ownership has moved to the I/O thread.
   An operation can be submitted between the cancellation barrier and descriptor
   close. After closing the descriptor, the controller explicitly wakes matching
-  operations on every live I/O context, including operations routed with a custom
-  `thread_key`. Closing a descriptor removes its epoll/kqueue registration without
+  operations on every live I/O context, as the thread of a socket's operations cannot
+  be derived from its hash. Closing a descriptor removes its epoll/kqueue registration without
   delivering a readiness event; this explicit wake lets the existing descriptor
   generation check complete a late operation with `SOCKET-CLOSED`. For example,
   closing a listening socket while another thread enters `accept()` must release

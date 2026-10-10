@@ -2014,7 +2014,7 @@ void AsyncIoControllerPriv::flushCallbacksByOwner(const std::string& owner) {
 // --- Public API ---
 
 QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, bool replace,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, int* thread_idx) {
     // Callers transfer ownership of `info`; hold it here so it is deref'd on
     // any return path.  Otherwise the submission hash (spop ref, owner
     // string, sock ref, etc.) leaks for every FTP connect/command and every
@@ -2113,23 +2113,15 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         uh = getSocketHash(sock);
     }
 
-    // Route key: the socket's I/O identity, so that every operation on one socket - whatever its cache key - runs
-    // on the same I/O thread, as it would with a single I/O thread: a socket, its TLS state and its HTTP/2 or QUIC
-    // session must only ever be used by one I/O thread, and wakes for the socket are routed to that thread.  Routing
-    // by the cache key would put a connection's long-lived operation and the short operations that synchronous
-    // Socket calls run on the I/O thread (keyed per call) on different threads.  A caller can give an explicit
-    // thread_key to group operations on different sockets on one thread and processing barrier.
-    v = info->getKeyValue("thread_key");
-    std::string thread_key;
-    if (v.getType() == NT_STRING) {
-        QoreStringValueHelper str(v);
-        if (str->size()) {
-            thread_key = str->c_str();
-        }
-    }
-    if (thread_key.empty()) {
-        thread_key = getSocketHash(sock);
-    }
+    // Route key: that of the socket (see getRouteKey()), so that every operation on one socket - whatever its cache
+    // key - runs on the same I/O thread, as it would with a single I/O thread: a socket, its TLS state and its
+    // HTTP/2 or QUIC session must only ever be used by one I/O thread, and wakes for the socket are routed to that
+    // thread.  Routing by the cache key would put a connection's long-lived operation and the short operations that
+    // synchronous Socket calls run on the I/O thread (keyed per call) on different threads.  The thread_key of the
+    // submission info is ignored for the same reason: an operation routed by it could run on another thread than the
+    // other operations on its socket.  Copied: the key belongs to the socket, which the I/O thread can release as
+    // soon as the operation has been handed over.
+    std::string route_key = getRouteKey(sock);
 
     // Get timeout
     v = info->getKeyValue("to");
@@ -2229,7 +2221,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // the TARGET thread for this op's key has autostopped while thread 0 is
     // still alive.  startIntern() is idempotent per-thread (already-running
     // threads are skipped), so calling it when any thread is down is safe.
-    IoThreadContext& target_t = getThreadForKey(thread_key);
+    IoThreadContext& target_t = getThreadForKey(route_key);
     if (!target_t.running.load(std::memory_order_acquire)) {
         AutoLocker al(m);
         if (shutting_down) {
@@ -2250,6 +2242,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     int own_idx = ownIoThreadIndex();
     if (own_idx >= 0 && own_idx == target_t.thread_idx) {
         IoThreadContext& t = target_t;
+        if (thread_idx) {
+            *thread_idx = t.thread_idx;
+        }
         auto it = t.cache.find(uh);
         if (it != t.cache.end()) {
             if (!replace) {
@@ -2377,7 +2372,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         // under QORE_IO_THREADS>=2.
         {
             AutoLocker al(m);
-            target = &getThreadForKey(thread_key);
+            target = &getThreadForKey(route_key);
         }
         if (publishSocketRoute(sock_hash, sock_obj, target->thread_idx, true)) {
             cmd.submit_route_sock_hash = sock_hash;
@@ -2391,7 +2386,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                 xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
                 return nullptr;
             }
-            target = &getThreadForKey(thread_key);
+            target = &getThreadForKey(route_key);
             // Bump submit_seq BEFORE pushing.  Queue mutation and the I/O
             // thread's empty checks are synchronized by m, so a command
             // visible to the I/O thread has a visible sequence bump.
@@ -2402,6 +2397,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             cmd.seq_at_push = ++target->submit_seq;
             target->cmdq.push(std::move(cmd));
             socket_async_io_guard.release();
+        }
+        if (thread_idx) {
+            *thread_idx = target->thread_idx;
         }
         target->notifier->notify();
         ASYNC_IO_TRACE("worker submit: ++submit_seq(%d)+pushed+notified key='%s'\n",
@@ -2638,8 +2636,8 @@ int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
         // The calling I/O thread's own operations are canceled directly; other I/O threads get a CancelSocket
         // command and are not waited for: an I/O thread must never wait for another one, as two I/O threads waiting
         // for each other would deadlock.  The returned count therefore only includes the calling thread's
-        // operations.  The socket's operations normally all run on one thread (see getThreadIndex()), but one
-        // submitted with an explicit thread_key can run on another.
+        // operations.  All operations on one socket run on one thread (see getRouteKey()), but that thread cannot
+        // be derived from the socket hash: a wrapper around a socket routes with the key of the socket it wraps.
         int my_idx = ownIoThreadIndex();
         AsyncOpCompletion* completion = nullptr;
         if (my_idx >= 0) {
@@ -2669,8 +2667,8 @@ int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
     if (on_async_io_thread && inside_continue_poll_batch) {
         // Defer to the next command-processing pass; the current Phase-2
         // batch owns raw pointers captured from the cache.  Broadcast to all
-        // live I/O threads: submit() may have routed an operation with a
-        // stable thread_key that is different from the socket hash.
+        // live I/O threads: the thread of the socket's operations cannot be
+        // derived from the socket hash (see getRouteKey()).
         std::vector<IoThreadContext*> live_targets;
         {
             AutoLocker al(m);
@@ -2751,24 +2749,23 @@ bool AsyncIoControllerPriv::cancelAndClose(AbstractPollableIoObjectBase* sock,
     return count > 0;
 }
 
-int AsyncIoControllerPriv::close(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink,
-        const std::string& route_key) {
+int AsyncIoControllerPriv::close(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink) {
     std::string sock_hash = getSocketHash(sock);
     cancelBySocketHash(sock_hash, xsink);
     if (*xsink) {
         return -1;
     }
-    return closeSocketOnController(sock, sock_hash, xsink, route_key);
+    return closeSocketOnController(sock, sock_hash, xsink);
 }
 
 int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase* sock,
-        const std::string& sock_hash, ExceptionSink* xsink, const std::string& route_key) {
+        const std::string& sock_hash, ExceptionSink* xsink) {
     // The socket is closed on the I/O thread of its registered operations or, with none, on the thread its
-    // operations are routed to (see getThreadIndex())
+    // operations are routed to (see getRouteKey())
     auto get_target_idx = [&]() {
         AutoLocker al(sock_route_lock);
         auto it = sock_to_thread.find(sock_hash);
-        return it != sock_to_thread.end() ? it->second : getThreadIndex(route_key.empty() ? sock_hash : route_key);
+        return it != sock_to_thread.end() ? it->second : getThreadIndex(getRouteKey(sock));
     };
 
     auto close_direct = [&]() -> int {
@@ -2884,8 +2881,8 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
 bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink* xsink) {
     std::string uh(key->c_str());
 
-    // An operation runs on the I/O thread of its socket (or of its explicit thread_key), which cannot be derived
-    // from its key; with several I/O threads every thread is searched
+    // An operation runs on the I/O thread of its socket, which cannot be derived from its key; with several I/O
+    // threads every thread is searched
     int own_idx = ownIoThreadIndex();
     if (own_idx >= 0) {
         return cancelByKeyOnIoThread(uh, own_idx, xsink);
@@ -3641,8 +3638,9 @@ void AsyncIoControllerPriv::wakeSocketAfterClose(const std::string& sock_hash) {
     // when close removes its fd. The kernel does not report that removal as
     // readiness, so explicitly schedule the closed socket once more. Existing
     // generation validation then delivers SOCKET-CLOSED to the waiting caller.
-    // Broadcast because callers may use different thread_key routes for the
-    // same socket; no I/O thread may retain a waiter on the removed descriptor.
+    // Broadcast because the thread of the socket's operations cannot be derived
+    // from its hash (see getRouteKey()); no I/O thread may retain a waiter on
+    // the removed descriptor.
     AutoLocker al(m);
     if (shutting_down || io_exiting) {
         return; // teardown already completes all outstanding operations
@@ -3945,44 +3943,62 @@ bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsi
     return allDone();
 }
 
-bool AsyncIoControllerPriv::waitForProcessing(const std::string& key, int timeout_ms, ExceptionSink* xsink) {
+bool AsyncIoControllerPriv::waitForProcessing(const std::set<int>& thread_idxs, int timeout_ms,
+        ExceptionSink* xsink) {
     if (qore_on_async_io_thread()) {
         xsink->raiseException("ASYNC-IO-ERROR",
             "waitForProcessing() cannot be called from the async I/O thread");
         return false;
     }
 
-    IoThreadContext& target_ctx = getThreadForKey(key);
     AutoLocker al(m);
-    if (!target_ctx.tid) {
-        return false;
+    // each thread's target is its submit counter at call time, so the wait covers every operation submitted to it
+    // before the call
+    std::vector<std::pair<IoThreadContext*, int>> targets;
+    targets.reserve(thread_idxs.size());
+    for (int idx : thread_idxs) {
+        if (idx < 0 || (size_t)idx >= io_threads.size()) {
+            continue;
+        }
+        IoThreadContext* t = io_threads[idx].get();
+        targets.push_back({t, t->submit_seq.load(std::memory_order_acquire)});
     }
-    int target = target_ctx.submit_seq.load(std::memory_order_acquire);
-    auto done = [&]() -> bool {
-        return target_ctx.processed_seq.load(std::memory_order_acquire) >= target;
+    // a thread that has stopped will not process its pending operations
+    auto done = [&](bool& stopped) -> bool {
+        stopped = false;
+        bool rv = true;
+        for (auto& [t, target] : targets) {
+            if (t->processed_seq.load(std::memory_order_acquire) < target) {
+                rv = false;
+                if (!t->tid) {
+                    stopped = true;
+                }
+            }
+        }
+        return rv;
     };
-    if (done()) {
+    bool stopped;
+    if (done(stopped)) {
         return true;
     }
     if (timeout_ms > 0) {
         int64 deadline_us = get_epoch_us() + (int64)timeout_ms * 1000;
-        while (!done() && target_ctx.tid) {
+        while (!done(stopped) && !stopped) {
             int64 remaining_us = deadline_us - get_epoch_us();
             if (remaining_us <= 0) {
                 return false;
             }
             int remaining_ms = (int)((remaining_us + 999) / 1000);
-            int rc = processed_cond.wait2(m, remaining_ms);
-            if (rc) {
-                return done();
+            if (processed_cond.wait2(m, remaining_ms)) {
+                return done(stopped);
             }
         }
-        return done();
+        return done(stopped);
     }
-    while (!done() && target_ctx.tid) {
+    while (!done(stopped) && !stopped) {
         processed_cond.wait(m);
     }
-    return done();
+    return done(stopped);
 }
 
 bool AsyncIoControllerPriv::running() const {
@@ -7718,7 +7734,7 @@ QoreObject* AsyncIoControllerPriv::getSocketFromPollInfo(QoreHashNode* poll_info
 void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key, int thread_idx,
         QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed) {
     // Route to the I/O thread that dispatched the continuePoll() and holds the operation; the operation key does not
-    // identify it, since operations are routed by their socket (or an explicit thread_key)
+    // identify it, since operations are routed by their socket
     bool do_signal = false;
     IoThreadContext* target = nullptr;
     {

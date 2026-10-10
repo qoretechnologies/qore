@@ -103,7 +103,8 @@ static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s,
     key += ':';
     key += s->getUniqueHash();
     // Several synchronous callers can delegate work for the same socket at the
-    // same time; keep the cache key unique while thread_key preserves affinity.
+    // same time; keep the cache key unique.  The controller runs every operation
+    // on the I/O thread of its socket, whatever its key.
     key += ':';
     key += std::to_string(++qore_socket_object_sync_exec_seq);
 
@@ -112,7 +113,6 @@ static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s,
     info->setKeyValue("spop", op_obj->objectRefSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner), xsink);
     info->setKeyValue("key", new QoreStringNode(key), xsink);
-    info->setKeyValue("thread_key", new QoreStringNode(s->getUniqueHash()), xsink);
     info->setKeyValue("to", timeout_ms, xsink);
     if (*xsink) {
         return nullptr;

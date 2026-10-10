@@ -49,6 +49,7 @@
 #include <deque>
 #include <memory>
 #include <queue>
+#include <set>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -64,6 +65,20 @@ class SocketPollOperationBase;
 // so connection TUs can use getReferencedPrivateData(CID_ASYNCIOCONTROLLER, ...)
 // in non-SCU builds.
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
+
+//! A pollable I/O object whose async I/O operations run on the I/O thread of the socket it wraps
+/** The lightweight wrappers that C++ socket methods create for controller-backed calls have their own I/O identity
+    hash, but they use a socket that other operations use too, so every operation on a wrapper must run on the I/O
+    thread of the socket's other operations; see qore_socket_private::async_io_route_key and
+    AsyncIoControllerPriv::getRouteKey().
+
+    @since %Qore 3.0
+*/
+class AsyncIoRoutedPollable : public AbstractPollableIoObjectBase {
+public:
+    //! Returns the route key that selects the I/O thread of every operation on this object
+    DLLLOCAL virtual const std::string& getAsyncIoRouteKey() const = 0;
+};
 
 //! Converts an absolute microsecond deadline to the millisecond timeout expected by the OS poll API
 /** @param deadline_us the absolute deadline in microseconds
@@ -176,7 +191,7 @@ public:
         std::string stream_key;              //!< For DT_STREAM_DATA_NOTIFY: stream key
         //! For DT_CONTINUE_POLL: index of the I/O thread whose cache holds the operation
         /** The result must go back to this thread: with several I/O threads an operation's thread is chosen by its
-            socket (or explicit \c thread_key), so it cannot be derived from the operation key.
+            socket, so it cannot be derived from the operation key.
         */
         int thread_idx = -1;
         QoreProgram* pgm = nullptr;          //!< Program reference to prevent premature deletion
@@ -521,9 +536,11 @@ public:
         @param info the SocketPollOperationInfo hash
         @param replace if true, cancel any existing operation with the same key
         @param xsink for exception handling
+        @param thread_idx if not nullptr, receives the index of the I/O thread the operation was submitted to
         @return a Queue object for receiving the result (or nullptr if callback was provided)
     */
-    DLLLOCAL QoreObject* submit(QoreObject* self, QoreHashNode* info, bool replace, ExceptionSink* xsink);
+    DLLLOCAL QoreObject* submit(QoreObject* self, QoreHashNode* info, bool replace, ExceptionSink* xsink,
+        int* thread_idx = nullptr);
 
     //! Execute an async operation synchronously
     /** @param self the QoreObject wrapping this controller
@@ -551,13 +568,9 @@ public:
     //! Close a socket on the controller thread after canceling controller work for it
     /** @param sock the socket to close
         @param xsink for exception handling
-        @param route_key the route key of the socket's operations if different from its I/O identity hash (see
-        qore_socket_private::async_io_route_key); selects the I/O thread that closes the socket when no operation on
-        it is registered
         @return 0 on success, -1 on error
     */
-    DLLLOCAL int close(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink,
-        const std::string& route_key = std::string());
+    DLLLOCAL int close(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink);
 
     //! Cancel an operation by key
     /** @param key the operation key
@@ -646,14 +659,13 @@ public:
     */
     DLLLOCAL bool waitForProcessing(int timeout_ms, ExceptionSink* xsink);
 
-    //! Wait until the I/O thread for a route key has processed all operations submitted to it
-    /** @param route_key the route key the operations were submitted with: the explicit \c thread_key or, without
-        one, the socket's I/O identity hash (see @ref getThreadIndex())
+    //! Wait until the given I/O threads have processed all operations submitted to them
+    /** @param thread_idxs the indexes of the I/O threads to wait for, as returned by submit()
         @param timeout_ms timeout in ms; 0 = wait forever
         @param xsink for exception handling
-        @return true if all submitted operations have been processed
+        @return true if all operations submitted to the given threads have been processed
     */
-    DLLLOCAL bool waitForProcessing(const std::string& route_key, int timeout_ms, ExceptionSink* xsink);
+    DLLLOCAL bool waitForProcessing(const std::set<int>& thread_idxs, int timeout_ms, ExceptionSink* xsink);
 
     //! Returns true if the I/O thread is running
     DLLLOCAL bool running() const;
@@ -1214,12 +1226,11 @@ private:
     };
 
     //! Get the I/O thread index for a route key (hash-based affinity)
-    /** The route key of an operation is its socket's I/O identity hash (see @ref getSocketHash()) unless the
-        submitter gave an explicit \c thread_key, so every operation on one socket runs on the same I/O thread, as
-        it would with a single I/O thread: the socket, its TLS state and its HTTP/2 or QUIC session are only ever
-        used by that thread.  Sockets are spread over the threads by this hash.
+    /** The route key of an operation is that of its socket (see @ref getRouteKey()), so every operation on one
+        socket runs on the same I/O thread, as it would with a single I/O thread: the socket, its TLS state and its
+        HTTP/2 or QUIC session are only ever used by that thread.  Sockets are spread over the threads by this hash.
 
-        @param route_key the route key: a socket's I/O identity hash or an explicit \c thread_key
+        @param route_key the route key of a socket; see @ref getRouteKey()
     */
     DLLLOCAL int getThreadIndex(const std::string& route_key) const {
         if (io_threads.size() <= 1) {
@@ -1229,7 +1240,7 @@ private:
     }
 
     //! Get the I/O thread context for a route key
-    /** @param route_key the route key: a socket's I/O identity hash or an explicit \c thread_key
+    /** @param route_key the route key of a socket; see @ref getRouteKey()
     */
     DLLLOCAL IoThreadContext& getThreadForKey(const std::string& route_key) {
         return *io_threads[getThreadIndex(route_key)];
@@ -1414,14 +1425,14 @@ private:
     DLLLOCAL int cancelBySocketHash(const std::string& sock_hash, ExceptionSink* xsink);
 
     //! Submit a controller-side close command after socket operations are canceled
-    /** @param sock the socket to close
+    /** The socket is closed on the I/O thread of its operations (see @ref getRouteKey()).
+
+        @param sock the socket to close
         @param sock_hash the socket's I/O identity hash
         @param xsink for exception handling
-        @param route_key the route key of the socket's operations if different from \a sock_hash; selects the I/O
-        thread that closes the socket when no operation on it is registered
     */
     DLLLOCAL int closeSocketOnController(AbstractPollableIoObjectBase* sock,
-        const std::string& sock_hash, ExceptionSink* xsink, const std::string& route_key = std::string());
+        const std::string& sock_hash, ExceptionSink* xsink);
 
     //! Wake late submissions after descriptor close removes kernel readiness registration
     /** Called without m held, after closeIo(). The current I/O context is updated
@@ -1562,6 +1573,20 @@ private:
 
     //! Get the unique hash from a pollable I/O object
     DLLLOCAL static std::string getSocketHash(AbstractPollableIoObjectBase* sock);
+
+    //! Returns the route key of an I/O object: the key that selects the I/O thread of all of its operations
+    /** Normally the object's I/O identity hash; a wrapper around a socket that other operations use routes with the
+        key of that socket instead (see AsyncIoRoutedPollable).  The \c thread_key of an operation's submission
+        info has no effect on its routing, so no operation on a socket can run on another I/O thread than the
+        socket's other operations.
+
+        @param sock the I/O object
+        @return the route key; valid as long as \a sock is
+    */
+    DLLLOCAL static const std::string& getRouteKey(const AbstractPollableIoObjectBase* sock) {
+        const AsyncIoRoutedPollable* routed = dynamic_cast<const AsyncIoRoutedPollable*>(sock);
+        return routed ? routed->getAsyncIoRouteKey() : sock->getIoIdentityHash();
+    }
 
     //! Get socket and poll info from a SocketPollInfo hash
     DLLLOCAL static QoreObject* getSocketFromPollInfo(QoreHashNode* poll_info, std::string& sock_hash,

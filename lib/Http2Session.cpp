@@ -96,7 +96,7 @@ static bool http2_poll_exception_is(const QoreHashNode& ex, const char* err) {
     return QoreStringDataHelper(ex.getKeyValue("err")) == err;
 }
 
-class Http2SocketControllerPollable : public AbstractPollableIoObjectBase {
+class Http2SocketControllerPollable : public AsyncIoRoutedPollable {
 public:
     DLLLOCAL Http2SocketControllerPollable(qore_socket_private* sock)
             : sock(sock), close_lock(sock->outer_lock) {
@@ -116,6 +116,14 @@ public:
 
     DLLLOCAL virtual const std::string& getIoIdentityHash() const override {
         return identity_hash;
+    }
+
+    //! Returns the async I/O controller route key: that of the Socket object wrapping the socket, if any
+    /** Keeps this wrapper's operations on the I/O thread of the socket's other operations; see
+        qore_socket_private::async_io_route_key
+    */
+    DLLLOCAL virtual const std::string& getAsyncIoRouteKey() const override {
+        return sock->async_io_route_key.empty() ? identity_hash : sock->async_io_route_key;
     }
 
     DLLLOCAL virtual void closeIo(ExceptionSink*) override {
@@ -246,24 +254,19 @@ static QoreHashNode* http2_exec_poll_operation(qore_socket_private* sock, QoreOb
     key += owner_name;
     key += ':';
     key += pollable->getUniqueHash();
-    // Multiple blocking session helpers can target the same socket affinity;
-    // keep the cache key unique while thread_key preserves controller routing:
-    // the key of the Socket object wrapping the socket (if any), so these
-    // operations run on the I/O thread of the socket's other operations (see
-    // qore_socket_private::async_io_route_key).
+    // Multiple blocking session helpers can target the same socket; keep the
+    // cache key unique.  The controller runs the operation on the I/O thread of
+    // the socket's other operations whatever its key: the wrapper routes with
+    // the key of the Socket object wrapping the socket (if any; see
+    // AsyncIoRoutedPollable).
     key += ':';
     key += std::to_string(++http2_session_sync_exec_seq);
-
-    const std::string& route_key = sock->async_io_route_key.empty()
-        ? pollable->getIoIdentityHash()
-        : sock->async_io_route_key;
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
     info->setKeyValue("sock", sock_obj->objectRefSelf(), xsink);
     info->setKeyValue("spop", op_obj->objectRefSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner), xsink);
     info->setKeyValue("key", new QoreStringNode(key), xsink);
-    info->setKeyValue("thread_key", new QoreStringNode(route_key), xsink);
     info->setKeyValue("to", timeout_ms, xsink);
     if (*xsink) {
         return nullptr;
