@@ -52,6 +52,7 @@ public:
    DLLLOCAL IconvHelper(const QoreEncoding *to, const QoreEncoding *from, ExceptionSink *xsink,
          bool validate_utf8 = false) : to(to), from(from),
          validateUtf8(from == QCS_UTF8 && (validate_utf8 || !rejectsMalformedUtf8())),
+         validateForm(isUnicodeForm(from) && !rejectsInvalidUnicodeForms()),
          splitFinalDash(qore_encoding_private::get(*from)->utf7_final_dash_literal) {
 #ifdef NEED_ICONV_TRANSLIT
       QoreString to_code(getIconvTargetCode(to));
@@ -78,10 +79,12 @@ public:
       }
    }
 
-   //! Converts input like iconv(3); malformed UTF-8 input is rejected on every platform
+   //! Converts input like iconv(3); malformed UTF-8 and invalid UTF-16 and UTF-32 input is rejected on every platform
    /** If the platform's iconv accepts malformed UTF-8 input (see rejectsMalformedUtf8()), UTF-8 input is validated
        here, and the conversion stops at the first malformed sequence with \c EILSEQ, or at a sequence truncated by
-       the end of the input with \c EINVAL, exactly as a strict iconv does.
+       the end of the input with \c EINVAL, exactly as a strict iconv does.  Input in a Unicode encoding form (UTF-16,
+       UTF-32, UCS-2, UCS-4) is validated the same way where the platform's iconv accepts values above U+10FFFF or
+       unpaired surrogates in it (see rejectsInvalidUnicodeForms()).
 
        @param xsink if given, the validation is a cancellation point; when it is cancelled, the exception is raised
        here, and -1 is returned with \c errno set to \c ECANCELED
@@ -95,12 +98,14 @@ public:
       if (splitFinalDash) {
          return iconvUtf7(inbuf, inavail, outbuf, outavail);
       }
-      if (!validateUtf8 || !inbuf || !*inbuf) {
+      if ((!validateUtf8 && !validateForm) || !inbuf || !*inbuf) {
          return iconv_adapter(::iconv, c, inbuf, inavail, outbuf, outavail);
       }
       bool incomplete;
       bool cancelled = false;
-      size_t valid = validUtf8Prefix(*inbuf, *inavail, incomplete, xsink, &cancelled);
+      size_t valid = validateUtf8
+         ? validUtf8Prefix(*inbuf, *inavail, incomplete, xsink, &cancelled)
+         : validFormPrefix(from, *inbuf, *inavail, incomplete, xsink, &cancelled);
       if (cancelled) {
          errno = ECANCELED;
          return (size_t)-1;
@@ -119,6 +124,66 @@ public:
       assert(!prefix);
       errno = incomplete ? EINVAL : EILSEQ;
       return (size_t)-1;
+   }
+
+   //! Returns the length of the longest prefix of the input that is made of complete, valid characters of a Unicode form
+   /** A value above U+10FFFF, a surrogate code point in UTF-32 or UCS-2, and an unpaired surrogate in UTF-16 are
+       invalid; see the character functions of the encoding (QoreEncoding::getCharLen()).
+
+       @param enc the encoding of the input; a Unicode encoding form (see isUnicodeForm())
+       @param p the input
+       @param len the byte length of the input
+       @param incomplete set to true if the input after the prefix is a character truncated by the end of the input,
+       false if it is invalid or the whole input is valid
+       @param xsink if given, cancellation is checked every \c CancelCheckBytes bytes and raised here
+       @param cancelled if given, set to true if the validation was cancelled; the return value is then undefined
+
+       @return the byte length of the valid prefix
+   */
+   DLLLOCAL static size_t validFormPrefix(const QoreEncoding* enc, const char* p, size_t len, bool& incomplete,
+         ExceptionSink* xsink = nullptr, bool* cancelled = nullptr) {
+      size_t i = 0;
+      size_t next_check = CancelCheckBytes;
+      while (i < len) {
+         if (xsink && i >= next_check) {
+            if (qore_check_cancel(xsink, "Unicode validation")) {
+               incomplete = false;
+               if (cancelled) {
+                  *cancelled = true;
+               }
+               return i;
+            }
+            next_check = i + CancelCheckBytes;
+         }
+         qore_offset_t l = enc->getCharLen(p + i, len - i);
+         if (l <= 0) {
+            // a negative length is the number of bytes a complete character needs
+            incomplete = l < 0;
+            return i;
+         }
+         i += l;
+      }
+      incomplete = false;
+      return len;
+   }
+
+   //! Returns true if the encoding is a Unicode encoding form decoded with its own character functions
+   /** The built-in UTF-16 encodings, and encodings created on the fly with the characters of a Unicode encoding form
+       (ex: \c "UTF-32", \c "UCS-2LE"), which have a byte order mark; see qore_encoding_private::probe()
+   */
+   DLLLOCAL static bool isUnicodeForm(const QoreEncoding* enc) {
+      return enc == QCS_UTF16 || enc == QCS_UTF16BE || enc == QCS_UTF16LE
+         || !qore_encoding_private::get(*enc)->bom.empty();
+   }
+
+   //! Returns true if the platform's iconv rejects values above U+10FFFF and unpaired surrogates in Unicode forms
+   /** glibc, GNU libiconv and musl fail with \c EILSEQ; Apple's system libiconv converts a UTF-32 value above U+10FFFF
+       to malformed UTF-8 without an error.  The answer is a property of the library %Qore is linked against, so it is
+       probed once; where any sample is accepted, iconv() validates such input itself.
+   */
+   DLLLOCAL static bool rejectsInvalidUnicodeForms() {
+      static bool rv = probeInvalidUnicodeFormRejection();
+      return rv;
    }
 
    //! Returns the length of the longest prefix of the input that is complete, well-formed UTF-8 (RFC 3629)
@@ -201,7 +266,8 @@ public:
 
    //! Returns true if the platform's iconv rejects malformed UTF-8 input
    /** glibc and GNU libiconv fail with \c EILSEQ on malformed UTF-8 input; some versions of Apple's system libiconv
-       convert some malformed sequences, such as a lead byte followed by an ASCII character, without an error.  The
+       convert some malformed sequences, such as a lead byte followed by an ASCII character, without an error, and
+       glibc with \c "//TRANSLIT" (see \c NEED_ICONV_TRANSLIT) substitutes a character for a value above U+10FFFF.  The
        answer is a property of the library %Qore is linked against, so it is probed once with malformed sequences;
        where any of them is accepted, iconv() validates UTF-8 input itself.
    */
@@ -254,15 +320,22 @@ public:
 private:
    //! Performs the one-time probe described by rejectsMalformedUtf8()
    DLLLOCAL static bool probeMalformedUtf8Rejection() {
+      // the probe opens the conversion as conversions are opened: with "//TRANSLIT", glibc substitutes a character
+      // for a value above U+10FFFF and reports it only in the count of non-reversible conversions, which a stream
+      // conversion does not see, while it fails with EILSEQ without it
+#ifdef NEED_ICONV_TRANSLIT
+      iconv_t cd = iconv_open("UTF-16LE//TRANSLIT", "UTF-8");
+#else
       iconv_t cd = iconv_open("UTF-16LE", "UTF-8");
+#endif
       if (cd == (iconv_t)-1) {
          // the probe cannot run; assume the worst and validate UTF-8 input
          return false;
       }
-      // a lead byte followed by ASCII, a lone continuation byte, an overlong form, a surrogate and a value above
-      // U+10FFFF, each followed by ASCII text
+      // a lead byte followed by ASCII, a lone continuation byte, an overlong form, a surrogate, a value above
+      // U+10FFFF and a lead byte of one, each followed by ASCII text
       static const char* const samples[] = {
-         "a\xc2 b", "a\x80 b", "a\xc0\x80 b", "a\xed\xa0\x80 b", "a\xf4\x90\x80\x80 b",
+         "a\xc2 b", "a\x80 b", "a\xc0\x80 b", "a\xed\xa0\x80 b", "a\xf4\x90\x80\x80 b", "a\xf5\x80\x80\x80 b",
       };
       bool rv = true;
       for (const char* sample : samples) {
@@ -283,6 +356,45 @@ private:
       }
       iconv_close(cd);
       return rv;
+   }
+
+   //! Performs the one-time probe described by rejectsInvalidUnicodeForms()
+   DLLLOCAL static bool probeInvalidUnicodeFormRejection() {
+      // a value above U+10FFFF in UTF-32 and unpaired surrogates in UTF-16, converted as conversions are
+      static const struct {
+         const char* code;
+         const char data[4];
+      } samples[] = {
+         {"UTF-32BE", {'\x00', '\x11', '\x00', '\x00'}},
+         {"UTF-32LE", {'\x00', '\x00', '\x11', '\x00'}},
+         {"UTF-16BE", {'\xd8', '\x00', '\x00', '\x41'}},
+         {"UTF-16LE", {'\x00', '\xdc', '\x41', '\x00'}},
+      };
+      for (const auto& sample : samples) {
+#ifdef NEED_ICONV_TRANSLIT
+         iconv_t cd = iconv_open("UTF-8//TRANSLIT", sample.code);
+#else
+         iconv_t cd = iconv_open("UTF-8", sample.code);
+#endif
+         if (cd == (iconv_t)-1) {
+            // the probe cannot run; assume the worst and validate the input
+            return false;
+         }
+         char in[4];
+         memcpy(in, sample.data, sizeof(in));
+         char out[32];
+         char* ib = in;
+         size_t il = sizeof(in);
+         char* ob = out;
+         size_t ol = sizeof(out);
+         size_t rc = iconv_adapter(::iconv, cd, &ib, &il, &ob, &ol);
+         iconv_close(cd);
+         // a conversion that succeeds, or that substitutes a character and only counts it, accepts the sample
+         if (rc != (size_t)-1) {
+            return false;
+         }
+      }
+      return true;
    }
 
    //! Performs the one-time probe described by reportsNonReversibleConversions()
@@ -326,15 +438,16 @@ private:
        \c QCS_UTF16LE according to the BOM found.
     */
    DLLLOCAL static const char* getIconvCode(const QoreEncoding* enc) {
-      return enc == QCS_UTF16 ? "UTF-16BE" : enc->getCode();
+      return enc == QCS_UTF16 ? "UTF-16BE" : qore_encoding_private::get(*enc)->getIconvSourceCode();
    }
 
    //! Returns the encoding name to pass to iconv_open() to convert text to the given %Qore encoding
    /** As getIconvCode(), and for an encoding created on the fly whose iconv conversion writes a byte order mark
        (ex: \c "UTF-32"), the name of the encoding in the byte order of the characters without one (ex:
        \c "UTF-32BE"), which is what the character functions of the encoding expect; see
-       qore_encoding_private::probe().  Text converted from such an encoding is converted with its own name, so a
-       byte order mark at the start of the input gives its byte order.
+       qore_encoding_private::probe().  Text converted from a generic Unicode encoding (ex: \c "UTF-32") is converted
+       with the explicit big-endian name (see getIconvCode()); a byte order mark at the start of the input is found
+       by the caller with qore_encoding_private::getBomEncoding().
    */
    DLLLOCAL static const char* getIconvTargetCode(const QoreEncoding* enc) {
       return enc == QCS_UTF16 ? "UTF-16BE" : qore_encoding_private::get(*enc)->getIconvTargetCode();
@@ -428,6 +541,8 @@ private:
    const QoreEncoding *from;
    //! true if UTF-8 input is validated here because the platform's iconv accepts malformed UTF-8
    bool validateUtf8;
+   //! true if input in a Unicode encoding form is validated here; see rejectsInvalidUnicodeForms()
+   bool validateForm;
    //! true if a "-" ending a UTF-7 base64 run at the end of the input is converted on its own; see iconvUtf7()
    bool splitFinalDash;
    //! the UTF-7 state after the input converted so far, if splitFinalDash is set

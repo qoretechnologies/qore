@@ -1374,6 +1374,11 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_9 DataProvider v3.9
+    - fixed DPQL serialization (@ref DataProvider::DataProvider::serializeDpqlExpression() "serializeDpqlExpression()")
+      of a \c + or \c * expression with more than two arguments, such as a text concatenation of three values:
+      only the first two were written, so text saved from the serialized form lost the others; all arguments are
+      now written in order, and an operator that takes two arguments but has more raises \c DPQL-SERIALIZE-ERROR
+      instead of dropping them
     - @ref DataProvider::AbstractDataProviderFactory::create() "AbstractDataProviderFactory::create()" and
       @ref DataProvider::AbstractDataProviderFactory::createWithTemplate() "createWithTemplate()" report that a data
       provider does not support a constructor from an option hash only when its class really has no such

@@ -355,11 +355,19 @@ public:
         The locking path has nothing to do when the object is in no recursive set and no deferred scan is due, so
         that is decided before the reference is released: afterwards another thread may delete the object, and a
         dereference that returns 1 never touches it again, which is why it does not have to register as a
-        dereference in progress.  A real reference is released here only while other real references remain,
-        because the last one has to wait for rset invalidations in progress and may have to make the deferred scan;
-        see derefRealIntern().  See design/dgc.md, "A dereference that has nothing to decide takes no lock".
+        dereference in progress.  A real reference is taken from the real reference count here only while other
+        real references remain, because the last one has to wait for rset invalidations in progress and may have to
+        make the deferred scan; see derefRealIntern().  Its reference can still be the last one, when the holders of
+        the other real references release theirs in the locking path before it is released here.  See design/dgc.md,
+        "A dereference that has nothing to decide takes no lock".
     */
     DLLLOCAL int tryFastDeref(bool real);
+
+#ifdef DEBUG
+    //! Test hook run by tryFastDeref() between releasing a real reference and releasing the reference itself
+    typedef void (*dbg_after_fast_real_release_t)(RObject* o);
+    DLLLOCAL static std::atomic<dbg_after_fast_real_release_t> dbg_after_fast_real_release;
+#endif
 
     // wait_only=true means: we do not claim deleter status (so the "deleter vs. waiter" invariant
     // is not tripped) but we still wait for other in-progress derefs to complete — used by the

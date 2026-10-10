@@ -150,6 +150,16 @@ public class DpqlSerializer {
         #! Map of operators to their precedence
         const OperatorPrecedence = DpqlOperatorPrecedence;
 
+        #! Arithmetic operators that take any number of arguments, evaluated as a left fold
+        /** All other arithmetic and comparison operators take exactly two.
+
+            @since %DataProvider 3.9
+        */
+        const NaryOperators = {
+            DP_OP_PLUS: True,
+            DP_OP_MULT: True,
+        };
+
         #! Map of operators to their DPQL symbols
         const hash<string, string> OperatorSymbols = {
             DP_OP_OR: "||",
@@ -252,6 +262,9 @@ public class DpqlSerializer {
     #! Serializes an expression to DPQL string
     /** @param exp the expression to serialize
         @return the DPQL string representation
+
+        @throw DPQL-SERIALIZE-ERROR a two-argument operator in the expression has more arguments; they cannot be
+        written without changing the expression's meaning
     */
     string serialize(hash<DataProviderExpression> exp) {
         return serializeExpr(exp, DPQL_PREC_OR + 1);
@@ -416,21 +429,42 @@ public class DpqlSerializer {
     }
 
     #! Serializes a comparison operator
+    /** @throw DPQL-SERIALIZE-ERROR the operator has more than two arguments
+    */
     private string serializeComparisonOp(list<auto> args, string symbol, string op) {
         if (args.size() < 2) {
             return "";
+        }
+        if (args.size() > 2) {
+            throw "DPQL-SERIALIZE-ERROR", sprintf("operator %y takes 2 arguments; the expression has %d",
+                symbol, args.size());
         }
         return serializeArg(args[0], DpqlSerializer::getArgumentContext(op, 0)) + " " + symbol + " "
             + serializeArg(args[1], DpqlSerializer::getArgumentContext(op, 1));
     }
 
-    #! Serializes an arithmetic binary operator with correct precedence
+    #! Serializes an arithmetic operator with correct precedence
+    /** \c + and \c * take any number of arguments, which are evaluated as a left fold; they are written as a
+        chain (\c a + b + c), which the parser reads back as the same left fold.  Each argument after the first is
+        parenthesized when it is itself an operator of the same precedence, as re-parsing would otherwise
+        re-associate it.  The other arithmetic operators take exactly two arguments.
+
+        @throw DPQL-SERIALIZE-ERROR a two-argument operator has more than two arguments
+    */
     private string serializeArithmeticOp(list<auto> args, string symbol, string op) {
         if (args.size() < 2) {
             return "";
         }
-        return serializeArg(args[0], DpqlSerializer::getArgumentContext(op, 0)) + " " + symbol + " "
-            + serializeArg(args[1], DpqlSerializer::getArgumentContext(op, 1));
+        if (args.size() > 2 && !NaryOperators{op}) {
+            throw "DPQL-SERIALIZE-ERROR", sprintf("operator %y takes 2 arguments; the expression has %d",
+                symbol, args.size());
+        }
+        list<string> parts = ();
+        int argn = 0;
+        foreach auto arg in (args) {
+            parts += serializeArg(arg, DpqlSerializer::getArgumentContext(op, argn++));
+        }
+        return parts.join(" " + symbol + " ");
     }
 
     #! Serializes the NOT operator

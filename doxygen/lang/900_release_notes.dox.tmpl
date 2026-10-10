@@ -176,7 +176,50 @@
     The server now answers with a QUIC Retry (<a href="https://datatracker.ietf.org/doc/html/rfc9000#section-8.1.2">RFC 9000
     section 8.1.2</a>) and accepts the client's next Initial even if its first datagram is lost again.  A
     client HTTP/3 request cancelled before any response header (for example by its timeout) logs the
-    connection's transport state at warning level to the async I/O logger, to diagnose stalled connections.
+    connection's transport state at warning level to the async I/O logger (see @ref Qore::set_async_io_logger()
+    "set_async_io_logger()") or, when none is set, to the async I/O controller's logger, to diagnose stalled
+    connections: how much of the request was sent and acknowledged, when the connection last sent and received, and
+    its flow-control and congestion state.  With \c QORE_QUIC_STALL_TRACE set, it also logs the connection's last
+    QUIC events.
+
+    An HTTP/3 client request no longer waits until its timeout when its response arrives while the request is
+    still being registered with its connection: the response was kept for the request but never delivered to it.
+
+    With more than one async I/O thread (the \c QORE_IO_THREADS environment variable or
+    @ref Qore::AsyncIoController::setMaxIoThreads() "AsyncIoController::setMaxIoThreads()"), every operation on a
+    socket runs on that socket's I/O thread, whatever its key.  Operations were routed by their key, so an HTTP client
+    connection and the socket calls made on it could run on different I/O threads at the same time, and a request on
+    an HTTP/3 connection could wait until its timeout.  @ref Qore::AsyncIoController::cancelByKey()
+    "AsyncIoController::cancelByKey()" finds operations on every I/O thread,
+    @ref Qore::AsyncIoController::getInfo() "AsyncIoController::getInfo()" reports the operations of all I/O threads
+    (it reported only one thread's) with the new \c threads and \c io_threads keys, and controller timers are spread
+    over the I/O threads.  The \c thread_key of @ref Qore::SocketPollOperationInfo "SocketPollOperationInfo" is
+    ignored: an operation submitted with one ran on the I/O thread chosen by that key, which could be another thread
+    than that of the other operations on its socket, as with readiness polls of
+    @ref Qore::Socket::poll() "Socket::poll()".
+
+    The async I/O controller runs one I/O thread per CPU available to the process by default (its CPU affinity mask on
+    Linux), at most 8; it ran a single I/O thread unless \c QORE_IO_THREADS was set, so all network I/O of a process
+    was limited to one CPU.  Sockets are spread over the threads; \c QORE_IO_THREADS and
+    @ref Qore::AsyncIoController::setMaxIoThreads() "AsyncIoController::setMaxIoThreads()" still set any count, and
+    <tt>setMaxIoThreads(0)</tt> restores the default.  An I/O thread also does less work per I/O event: the
+    deadlines of its operations take one entry per operation instead of one per event, a socket that is already
+    non-blocking is not set again on every read or write, the poll info that a native poll operation returns for the
+    next event reuses the previous one instead of being created anew, and operations are looked up by an integer ID
+    instead of by their key.
+
+    @ref Qore::Socket::getSSLCipherName() "Socket::getSSLCipherName()" and
+    @ref Qore::Socket::getSSLCipherVersion() "Socket::getSSLCipherVersion()" read the cipher from the socket's I/O
+    thread once for each TLS connection and handshake instead of on every call, and setting a body size limit of a
+    socket to the value it already has
+    (@ref Qore::Socket::setMaxChunkedBodySize() "Socket::setMaxChunkedBodySize()",
+    @ref Qore::Socket::setHttp2MaxRequestBodySize() "Socket::setHttp2MaxRequestBodySize()") returns at once, so the
+    HTTP server no longer waits for the I/O thread four times for every HTTPS request it logs.
+
+    An object that several threads use at the same time is deleted when its last reference is released, also when
+    two of its method calls return at the same moment: the second release could find the reference count at zero
+    without deleting the object, so its destructor never ran and its memory was not freed (debug builds aborted with
+    an assertion in <tt>RObject::tryFastDeref()</tt>).
 
     HTTP/3 connections on macOS no longer abort the process when the system clock is set back,
     such as when a virtual machine resynchronizes its clock: QUIC timers use a clock that cannot
@@ -1071,8 +1114,12 @@ val = "string";      # OK
     @parblock
     A string converted to the generic \c "UTF-32" encoding is now big-endian and no longer starts with a byte order
     mark, as for the generic \c "UTF-16" encoding, so that strings in it have no extra character; data that starts
-    with a byte order mark still gives its byte order when it is read or converted.  Use \c "UTF-32LE" or
-    \c "UTF-32BE" for a specific byte order, and write a byte order mark explicitly where one is required.
+    with a byte order mark in either byte order still gives its byte order when it is read or converted, and data
+    without one is read as big-endian.  This is the same on every platform: before, the byte order followed the
+    platform's iconv, so on Linux with glibc, text converted to \c "UTF-32" was little-endian (with a byte order mark)
+    and \c "UTF-32" data without a byte order mark was read as little-endian.  Use \c "UTF-32LE" to keep writing and
+    reading little-endian text, or \c "UTF-32BE" for big-endian, and write a byte order mark explicitly where one is
+    required.
     @endparblock
 
     @par Shift_JIS Is Not Compatible With ASCII
@@ -4278,6 +4325,26 @@ while (*binary chunk = input.read(65536)) {
       @ref Qore::SQL::DatasourcePool "DatasourcePool" opens: the driver's connection stayed attached to a
       datasource that was not open, so the next open or the datasource's destruction left it behind; the
       connection is now closed with the error
+
+    - Fixed threads with a small stack size on Linux with glibc having less stack for their code than the size set
+      with @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()": glibc takes the static
+      thread-local storage of the process from each thread's stack, which left a thread set to 128KB too little stack
+      to start running code, so it ended with \c STACK-LIMIT-EXCEEDED before its first statement; the thread-local
+      storage is now added to the stack size of each thread
+
+    - Fixed the order in which a closure releases the variables it captured depending on the memory allocator: they
+      were ordered by address, so on Linux with musl (Alpine), a closure could release a variable holding the rest of
+      a chain of closures before the one holding its own object, and the objects' destructors ran in reverse order;
+      captured variables are now released in the order they were declared
+
+    - Fixed malformed UTF-8 encoding a value above U+10FFFF not being rejected when converted through a stream (for
+      example with @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream") on Linux with glibc,
+      where a \c "?" was substituted for it; such input now raises \c ENCODING-CONVERSION-ERROR as on other
+      platforms and in string conversions
+
+    - Fixed UTF-32 text with a value above U+10FFFF, and UTF-16 text with an unpaired surrogate, being converted to
+      malformed UTF-8 without an error on macOS with the system's iconv; such input now raises
+      \c ENCODING-CONVERSION-ERROR on every platform, in string and stream conversions
 
     - Fixed a crash evaluating a deeply nested expression with the AST interpreter on a thread with a small stack, or
       near the end of a thread's stack, such as nested arguments of function, method, static method and closure

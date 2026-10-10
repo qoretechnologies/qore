@@ -57,6 +57,14 @@ struct qore_encoding_private {
     */
     std::string iconv_target_code;
 
+    //! the name passed to iconv to convert text from this encoding; empty if it is the code of the encoding
+    /** Set for a generic Unicode encoding created on the fly (ex: \c "UTF-32"), whose text without a byte order mark
+        is big-endian on every platform: it is converted from with the explicit big-endian name (ex: \c "UTF-32BE"),
+        as iconv implementations disagree on the byte order of such text; a byte order mark at the start of the text
+        is found with getBomEncoding() before the conversion
+    */
+    std::string iconv_source_code;
+
     //! true if every Unicode character can be represented in the encoding (UTF-8, UTF-16*, UTF-32*)
     bool unicode_complete = false;
 
@@ -104,6 +112,11 @@ struct qore_encoding_private {
     //! returns the name to pass to iconv to convert text to this encoding
     DLLLOCAL const char* getIconvTargetCode() const {
         return iconv_target_code.empty() ? code.c_str() : iconv_target_code.c_str();
+    }
+
+    //! returns the name to pass to iconv to convert text from this encoding
+    DLLLOCAL const char* getIconvSourceCode() const {
+        return iconv_source_code.empty() ? code.c_str() : iconv_source_code.c_str();
     }
 
     //! sets the properties of an encoding created on the fly from its name from the encoding itself

@@ -141,8 +141,14 @@ class AsyncIoLoggerProgramContextTest inherits QUnit::Test {
         # truncated would mean the format step was skipped, not that it worked
         list<string> msgs = appender.snapshot();
         list<string> ready = map $1, msgs, $1.find(IoThreadReadyMsg) != -1;
-        assertEq(1, ready.size(), sprintf("exactly one ready message in %y", msgs));
-        assertEq(IoThreadReadyMsg, ready[0], "the rendered message is complete");
+        # every I/O thread logs the message once when it starts; when the first one has been rendered, the others
+        # can still be starting
+        int io_threads = AsyncIoController::getInfo().io_threads;
+        assertGe(1, ready.size(), sprintf("a ready message in %y", msgs));
+        assertLe(io_threads, ready.size(), sprintf("at most one ready message per I/O thread in %y", msgs));
+        foreach string msg in (ready) {
+            assertEq(IoThreadReadyMsg, msg, "the rendered message is complete");
+        }
     }
 
     #! Logging from a thread that does have a program context must keep formatting arguments

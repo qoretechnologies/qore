@@ -94,6 +94,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("serializer tests", \serializerTests());
         addTestCase("accessor serializer tests", \accessorSerializerTests());
         addTestCase("round-trip tests", \roundTripTests());
+        addTestCase("n-ary arithmetic round-trip tests", \naryArithmeticRoundTripTests());
         addTestCase("expression parentheses tests", \expressionParenthesesTests());
         addTestCase("value literal rendering tests", \valueLiteralRenderingTests());
         addTestCase("accessor round-trip tests", \accessorRoundTripTests());
@@ -1734,6 +1735,70 @@ public class DpqlTest inherits QUnit::Test {
         assertEq(DPQL_PREC_ADDITIVE - 1, DpqlSerializer::getArgumentContext(DP_OP_MINUS, 1));
         # associative: every argument gets the same context as the first
         assertEq(DpqlSerializer::getArgumentContext(DP_OP_AND, 0), DpqlSerializer::getArgumentContext(DP_OP_AND, 1));
+    }
+
+    #! Returns an arithmetic expression
+    private static hash<DataProviderExpression> arith(string op, softlist<auto> args) {
+        return <DataProviderExpression>{"exp": op, "args": args};
+    }
+
+    #! + and * take any number of arguments: serializing, parsing and evaluating gives the value of the original
+    naryArithmeticRoundTripTests() {
+        hash<auto> rec = {"text": "Total: ", "amount": 1234.5, "a": 10, "b": 4, "c": 3, "s": "x"};
+        # expression, record, expected value, expected text
+        list<list<auto>> cases = (
+            # the stored expression that lost its third argument: text + format_number(...) + text
+            (arith("+", (<DataProviderFieldReference>{"field": "text"},
+                <DataProviderExpression>{"exp": "format_number", "args": (<DataProviderFieldReference>{
+                    "field": "amount"}, ",", ".", 2)},
+                " and that's it")),
+                "Total: 1,234.50 and that's it",
+                "@text + format_number(...) + text"),
+            (arith("+", (1, 2)), 3, "1 + 2"),
+            (arith("+", (1, 2, 3)), 6, "1 + 2 + 3"),
+            (arith("+", (1, 2, 3, 4, 5)), 15, "1 + 2 + 3 + 4 + 5"),
+            # mixed types: a left fold, where a string turns + into concatenation from that point
+            (arith("+", (1, 2, "a")), "3a", "1 + 2 + \"a\""),
+            (arith("+", ("a", 1, 2)), "a12", "\"a\" + 1 + 2"),
+            (arith("+", (<DataProviderFieldReference>{"field": "s"}, 1, 2.5, <DataProviderFieldReference>{
+                "field": "a"}, "!")), "x12.510!", "@s + 1 + 2.5 + @a + \"!\""),
+            # a nested + after the first argument keeps its parentheses: 1 + (2 + "a") is not 1 + 2 + "a"
+            (arith("+", (1, arith("+", (2, "a")), 3)), "12a3", "1 + (2 + \"a\") + 3"),
+            # a nested + as the first argument is the left fold itself
+            (arith("+", (arith("+", (1, 2)), "a", 3)), "3a3", "1 + 2 + \"a\" + 3"),
+            (arith("*", (2, 3)), 6, "2 * 3"),
+            (arith("*", (2, 3, 4)), 24, "2 * 3 * 4"),
+            (arith("*", (1, 2, 3, 4, 5)), 120, "1 * 2 * 3 * 4 * 5"),
+            (arith("*", (1.5, 2, 4)), 12.0, "1.5 * 2 * 4"),
+            # non-associative operators nested in an n-ary chain keep their grouping
+            (arith("+", (10, arith("-", (5, 2)), arith("-", (1, 3)))), 11, "10 + (5 - 2) + (1 - 3)"),
+            (arith("+", (arith("-", (<DataProviderFieldReference>{"field": "a"}, <DataProviderFieldReference>{
+                "field": "b"})), <DataProviderFieldReference>{"field": "c"}, 1)), 10, "@a - @b + @c + 1"),
+            (arith("*", (arith("+", (1, 2)), 3, arith("/", (8, 2)))), 36, "(1 + 2) * 3 * (8 / 2)"),
+            (arith("*", (arith(DP_OP_MOD, (<DataProviderFieldReference>{"field": "a"}, 4)), 5, 2)), 20, "@a % 4 * 5 * 2"),
+            (arith("-", (100, arith("*", (2, 3, 4)))), 76, "100 - 2 * 3 * 4"),
+            (arith("/", (arith("+", (2, 4, 6)), 3)), 4, "(2 + 4 + 6) / 3"),
+            (arith("-", (1, arith("+", (2, 3, 4)))), -8, "1 - (2 + 3 + 4)"),
+        );
+        foreach list<auto> c in (cases) {
+            hash<DataProviderExpression> exp = c[0];
+            auto expected = c[1];
+            string label = c[2];
+            assertEq(expected, AbstractDataProvider::evalGenericExpressionValue(rec, exp), label + ": original");
+            string text = DataProvider::serializeDpqlExpression(exp);
+            if (label !~ /format_number/) {
+                assertEq(label, text, label + ": text");
+            }
+            hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(text);
+            assertEq(expected, AbstractDataProvider::evalGenericExpressionValue(rec, parsed), label + ": re-parsed");
+            # serializing the re-parsed expression gives the same text
+            assertEq(text, DataProvider::serializeDpqlExpression(parsed), label + ": stable");
+        }
+
+        # an operator that takes two arguments cannot be written with more without changing its meaning
+        foreach string op in ("-", "/", DP_OP_MOD, "==", "<") {
+            assertThrows("DPQL-SERIALIZE-ERROR", \DataProvider::serializeDpqlExpression(), arith(op, (1, 2, 3)), op);
+        }
     }
 
     roundTripTests() {

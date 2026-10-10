@@ -34,6 +34,12 @@ hash<string, int> sub exactLiteral(int value) {
     return result;
 }
 
+# a hash literal typed by the declaration it is assigned to; a call argument is not typed by the call's result
+hash<string, int> sub typedLiteral(int value) {
+    hash<string, int> result = (\"value\": value);
+    return result;
+}
+
 string sub invalidDynamic() {
     try {
         hash<string, int> invalid((\"value\": opaque(\"not-an-int\")));
@@ -77,9 +83,9 @@ int sub main() {
     hash<string, int> int_result = ints.convert((\"value\": 42));
     hash<string, string> string_result = strings.convert((\"value\": \"ok\"));
     hash<string, *int> optional((\"value\": NOTHING));
-    printf(\"%d:%d:%s:%y:%s:%s:%d\\n\", exactLiteral(43).value,
+    printf(\"%d:%d:%s:%y:%s:%s:%d:%d\\n\", exactLiteral(43).value,
         int_result.value, string_result.value, optional.value === NOTHING,
-        invalidDynamic(), invalidUnassigned(), concurrentChecksum(ints));
+        invalidDynamic(), invalidUnassigned(), concurrentChecksum(ints), typedLiteral(44).value);
     return 0;
 }
 
@@ -137,7 +143,7 @@ outputs.cache_disabled = backquote(sprintf(
     env, enabled_exe));
 outputs.precheck_disabled = backquote(sprintf("%s %s 2>&1", env, checked_exe));
 
-string expected = "43:42:ok:True:RUNTIME-TYPE-ERROR:RUNTIME-TYPE-ERROR:28\n";
+string expected = "43:42:ok:True:RUNTIME-TYPE-ERROR:RUNTIME-TYPE-ERROR:28:44\n";
 foreach string mode in (keys outputs) {
     string output = outputs{mode};
     if (output != expected) {

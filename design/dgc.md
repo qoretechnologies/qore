@@ -680,11 +680,18 @@ dereference with no lock:
   constructor registers it under `rlck`, and the deletion waits for other threads' dereferences in progress as
   before. Those registered in the same critical section in which they released their references, before this one
   reached zero, so taking `rlck` orders it after them.
-- A **real** reference is released there only while other real references remain (a compare-and-swap that never
-  takes `rrefs` to zero). The last real reference goes through `rlck`, because it has to wait for rset
+- A **real** reference is taken from `rrefs` there only while other real references remain (a compare-and-swap that
+  never takes `rrefs` to zero). The last real reference goes through `rlck`, because it has to wait for rset
   invalidations in progress (`rref_wait`) and may have to make the deferred scan. `derefRealIntern()` decrements
   with a compare-and-swap too, so a concurrent lock-free decrement cannot make it the one that reaches zero without
   having waited.
+- The real reference and the reference are two counts, released one after the other, so the other real references
+  can all be released between the two: another thread's dereference finds no other real reference left, takes the
+  last one in the locking path, and releases its reference there while this one has released only its real
+  reference. The lock-free release of the reference is then the last one, and the thread becomes the deleter as for
+  a weak reference. Two method calls on a shared object that return at the same time do this; the lock-free path
+  used to assume it never released the last reference, so the object was never deleted (an assertion in debug
+  builds).
 - Taking a reference (`customRef()`, `realRef()`, `startCall()`, `ClosureVarValue::ref()`) is a plain atomic
   increment. Marking an object held in a local variable as a real reference (`setRealReference()`, which every
   method call does for `self`) is one too, and unmarking it (`unsetRealReference()`) follows the rule above: a

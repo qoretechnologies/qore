@@ -56,6 +56,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
+#include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/NegotiatingConnectionPollOp.h"
 #include "qore/intern/RSection.h"
 #include "qore/intern/RSet.h"
@@ -925,6 +926,87 @@ void ut_rescan_release_other(ClosureVarValue* cvv, ExceptionSink* xsink) {
 }
 }
 
+namespace {
+//! signaled by ut_deref_wait_hook() when the test's dereference starts waiting
+struct UtDerefWait {
+    std::mutex m;
+    std::condition_variable cond;
+    bool waiting = false;
+};
+UtDerefWait ut_deref_wait;
+
+void ut_deref_wait_hook(const char* name) {
+    std::lock_guard<std::mutex> l(ut_deref_wait.m);
+    ut_deref_wait.waiting = true;
+    ut_deref_wait.cond.notify_all();
+}
+}
+
+//! Tests that a dereference that re-entered an object on its own thread is woken when another thread's completes
+/** RObject::derefDone() makes a deleting dereference wait until only the dereferences of its own thread remain in
+    progress; one that re-entered the object on its own thread waits for the count to fall to the number of its own,
+    not to zero.  The other threads woke waiters only when the count reached zero, so such a waiter was never woken:
+    in examples/test/qore/misc/dgc-handed-out-values/dgc-handed-out-values.qtest, a thread releasing a value taken
+    from a Queue re-entered it through the orphan recheck of a recursive set and waited for ever, and another thread
+    then waited for ever for the first one's dereference of another object.  Here the outer dereference is a
+    registered one of this thread, the inner one waits, and another thread completes its dereference.  If the waiter
+    is not woken within a few seconds, the other thread wakes it with a broadcast of its own and the test fails.
+*/
+static void ut_deref_wait_reentrant_wakeup(UnitTestCounters& c) {
+    static const char* name = "ut_deref_wait_reentrant_wakeup";
+    QoreValue nval;
+    ClosureVarValue* cvv = thread_instantiate_closure_var(name, autoTypeInfo, nval, false);
+    {
+        // the outer dereference of this thread, still in progress
+        robject_dereference_helper outer(cvv, false, true);
+        // another thread's dereference in progress
+        {
+            AutoLocker al(cvv->rlck);
+            ++cvv->ref_inprogress;
+        }
+        // the inner dereference of this thread, which re-entered the object
+        {
+            AutoLocker al(cvv->rlck);
+            ++cvv->ref_inprogress;
+        }
+        {
+            std::lock_guard<std::mutex> l(ut_deref_wait.m);
+            ut_deref_wait.waiting = false;
+        }
+        qore_dbg_deref_wait_hook.store(ut_deref_wait_hook);
+
+        std::atomic<bool> woken{false};
+        bool rescued = false;
+        std::thread other([cvv, &woken, &rescued]() {
+            {
+                std::unique_lock<std::mutex> l(ut_deref_wait.m);
+                ut_deref_wait.cond.wait(l, []() { return ut_deref_wait.waiting; });
+            }
+            // the other thread's dereference completes
+            cvv->derefDone(false);
+            // the waiter must now be woken; it is woken here if it was not, so that the test fails instead of hanging
+            for (int i = 0; i < 500 && !woken.load(); ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            if (!woken.load()) {
+                rescued = true;
+                AutoLocker al(cvv->rlck);
+                cvv->rcond.broadcast();
+            }
+        });
+        // the inner dereference hands its deletion off and waits for the other thread's
+        cvv->derefDone(false, true);
+        woken.store(true);
+        other.join();
+        qore_dbg_deref_wait_hook.store(nullptr);
+        UT_ASSERT(c, !rescued, "a re-entrant waiter is woken when another thread's dereference completes");
+    }
+    UT_ASSERT_EQ(c, 0, cvv->ref_inprogress, "no dereference remains in progress");
+    ExceptionSink xsink;
+    thread_uninstantiate_closure_var(&xsink);
+    UT_ASSERT(c, !xsink, "releasing the variable raises no exception");
+}
+
 //! Tests that the frame's dereference of a closure-bound variable keeps it allocated while it is still using it
 /** The frame's release of its real reference makes a scan deferred while it held the variable.  If the variable's
     other holder - a closure that captured it and ran on a handler thread - releases the last reference meanwhile,
@@ -953,7 +1035,291 @@ static void ut_closure_var_deref_rescan_reentry(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "releasing the variable raises no exception");
     ut_rescan_other_holder = nullptr;
 }
+
+namespace {
+//! the object whose other real reference is released in ut_fast_real_deref_releases_last()
+QoreObject* ut_fast_real_other_holder = nullptr;
+bool ut_fast_real_hook_ran = false;
+
+void ut_fast_real_release_other(RObject* o) {
+    if (!ut_fast_real_other_holder || o != qore_object_private::get(*ut_fast_real_other_holder)) {
+        return;
+    }
+    QoreObject* obj = ut_fast_real_other_holder;
+    ut_fast_real_other_holder = nullptr;
+    RObject::dbg_after_fast_real_release.store(nullptr);
+    ut_fast_real_hook_ran = true;
+    // the other holder finds no other real reference left and releases the last one in the locking path, while
+    // the lock-free dereference has released its real reference but not yet its reference
+    ExceptionSink xsink;
+    obj->realDeref(&xsink);
+    xsink.clear();
+}
+}
+
+//! Tests that a lock-free release of a real reference can be the release of the last reference
+/** Two method calls on a shared object that return at the same time release the real reference each call holds on
+    the object.  The first takes its real reference from the count while the other one remains, with no lock; the
+    second then finds no other real reference, takes the last one in the locking path and releases its reference;
+    and the first releases its reference after that, which is the last one.  The lock-free path asserted that it
+    never released the last reference, which aborted WebSocketPerfTest.qtest in debug builds, and did not delete the
+    object in release builds.  The hook releases the other reference at exactly that point.
+*/
+static void ut_fast_real_deref_releases_last(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreObject* obj = new QoreObject(QC_COUNTER, getProgram(), new Counter(0));
+    // a weak reference keeps the object allocated, so the test can see that it was deleted
+    obj->tRef();
+    // the real references of two method calls in progress
+    obj->realRef();
+    obj->realRef();
+    // the reference returned by the constructor
+    obj->deref(&xsink);
+    UT_ASSERT(c, obj->isValid(), "the object is alive while method calls hold it");
+
+    ut_fast_real_hook_ran = false;
+    ut_fast_real_other_holder = obj;
+    RObject::dbg_after_fast_real_release.store(ut_fast_real_release_other);
+    obj->realDeref(&xsink);
+    RObject::dbg_after_fast_real_release.store(nullptr);
+    ut_fast_real_other_holder = nullptr;
+
+    UT_ASSERT(c, ut_fast_real_hook_ran, "the other real reference is released between the two lock-free releases");
+    UT_ASSERT(c, !obj->isValid(), "the object is deleted when the lock-free release is the last one");
+    UT_ASSERT(c, !xsink, "releasing the object raises no exception");
+    xsink.clear();
+    obj->tDeref();
+}
 #endif
+
+namespace {
+//! A poll operation whose continuePoll() returns the poll info for its socket and the given events
+class UtPollInfoOp : public SocketPollOperationBase {
+public:
+    int events = SOCK_POLLIN;
+    std::vector<std::pair<int, int>> extra_fds;
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return false;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        return extra_fds.empty()
+            ? getSocketPollInfoHash(xsink, events)
+            : getSocketPollInfoHash(xsink, events, extra_fds);
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return "test";
+    }
+};
+
+//! Returns a new EventNotifier object, or nullptr on error
+QoreObject* ut_new_notifier_object(ExceptionSink& xsink) {
+    QoreEventNotifier* notifier = new QoreEventNotifier(&xsink);
+    if (xsink) {
+        notifier->deref(&xsink);
+        return nullptr;
+    }
+    return new QoreObject(QC_EVENTNOTIFIER, getProgram(), notifier);
+}
+}
+
+#ifdef DEBUG
+//! Tests the operation cache of an I/O thread: IDs, lookups by ID, and the removal paths
+class AsyncIoOpCacheTest {
+public:
+    static void run(UnitTestCounters& c) {
+        using OpCache = AsyncIoControllerPriv::OpCache;
+        using PollInfo = AsyncIoControllerPriv::PollInfo;
+        OpCache cache;
+        uint64_t ida = cache["a"].op_id;
+        uint64_t idb = cache["b"].op_id;
+        UT_ASSERT(c, ida && idb && ida != idb, "operations get distinct IDs");
+        OpCache::node_t* node = cache.findId(ida);
+        UT_ASSERT(c, node && node->first == "a" && node->second.op_id == ida, "an operation is found by its ID");
+        UT_ASSERT_EQ(c, static_cast<int64>(ida), static_cast<int64>(cache["a"].op_id), "an operation keeps its ID");
+
+        // several removal paths reset an entry's PollInfo before removing it
+        auto it = cache.find("a");
+        it->second = PollInfo();
+        cache.erase(it);
+        UT_ASSERT(c, !cache.findId(ida), "a removed operation is not found by its ID");
+        uint64_t ida2 = cache["a"].op_id;
+        UT_ASSERT(c, ida2 && ida2 != ida && ida2 != idb,
+            "an operation with the key of a removed one gets a new ID");
+
+        // a replacing operation keeps the ID it is given
+        cache.erase(cache.find("a"));
+        PollInfo& a3 = cache.emplaceWithId("a", ida2);
+        node = cache.findId(ida2);
+        UT_ASSERT(c, a3.op_id == ida2 && node && &node->second == &a3, "a replacing operation keeps the given ID");
+
+        cache.eraseId(idb);
+        UT_ASSERT(c, !cache.findId(idb) && cache.find("b") == cache.end(), "an operation is removed by its ID");
+
+        // node memory is reused by later operations: an old ID never finds them
+        std::vector<uint64_t> old_ids;
+        for (int i = 0; i < 100; ++i) {
+            std::string key = "k" + std::to_string(i % 4);
+            auto kit = cache.find(key);
+            if (kit != cache.end()) {
+                old_ids.push_back(kit->second.op_id);
+                cache.erase(kit);
+            }
+            cache[key];
+        }
+        bool found_old = false;
+        for (uint64_t id : old_ids) {
+            if (cache.findId(id)) {
+                found_old = true;
+            }
+        }
+        UT_ASSERT(c, !found_old, "the ID of a removed operation does not find a later one");
+        UT_ASSERT_EQ(c, 5, static_cast<int64>(cache.size()), "the cache holds the remaining operations");
+
+        cache.clear();
+        UT_ASSERT(c, cache.empty() && !cache.findId(ida2), "clear() removes all operations and their IDs");
+    }
+};
+#endif
+
+//! Tests that the poll info hash lent to a continuePoll() call is reused only when nothing else references it
+/** The I/O thread lends an operation's previous poll info hash to the C++ continuePoll() call it makes for it, as
+    the result replaces it; getSocketPollInfoHash() then updates the lent hash instead of creating a new one.  The
+    result must have the members of a new hash, and a hash that anything else references must never be changed.
+*/
+static void ut_lent_poll_info_reuse(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreObject> sock1(ut_new_notifier_object(xsink), &xsink);
+    ReferenceHolder<QoreObject> sock2(ut_new_notifier_object(xsink), &xsink);
+    UT_ASSERT(c, !xsink && sock1 && sock2, "the test sockets are created");
+    if (xsink || !sock1 || !sock2) {
+        xsink.clear();
+        return;
+    }
+
+    UtPollInfoOp* op = new UtPollInfoOp;
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+    op->setSelf(*op_obj);
+    op_obj->setValue("sock", sock2->objectRefSelf(), &xsink);
+    UT_ASSERT(c, !xsink, "the test operation is created");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // the previous poll info of an operation: another socket, other events, a poll timeout and extra fds
+    auto make_prev = [&]() -> QoreHashNode* {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclSocketPollInfo, &xsink), &xsink);
+        h->setKeyValue("events", SOCK_POLLOUT, &xsink);
+        h->setKeyValue("socket", sock1->objectRefSelf(), &xsink);
+        h->setKeyValue("poll_timeout_ms", 50, &xsink);
+        ReferenceHolder<QoreListNode> fds(new QoreListNode(hashdeclExtraPollFdInfo->getTypeInfo()), &xsink);
+        ReferenceHolder<QoreHashNode> fd(new QoreHashNode(hashdeclExtraPollFdInfo, &xsink), &xsink);
+        fd->setKeyValue("fd", (int64)0, &xsink);
+        fd->setKeyValue("events", SOCK_POLLIN, &xsink);
+        fds->push(fd.release(), &xsink);
+        h->setKeyValue("extra_fds", fds.release(), &xsink);
+        return h.release();
+    };
+
+    auto check_new = [&](const QoreHashNode* h, int events, const char* what) {
+        UT_ASSERT(c, h && h->getHashDecl() == hashdeclSocketPollInfo, what);
+        if (!h) {
+            return;
+        }
+        UT_ASSERT_EQ(c, events, (int)h->getKeyValue("events").getAsBigInt(), what);
+        UT_ASSERT(c, h->getKeyValue("socket").getInternalNode() == *sock2, what);
+        UT_ASSERT(c, h->getKeyValue("poll_timeout_ms").isNothing(), what);
+        UT_ASSERT(c, h->getKeyValue("extra_fds").isNothing(), what);
+    };
+
+    // a hash that only the operation references is reused for the result
+    {
+        QoreHashNode* prev = make_prev();
+        QoreHashNode* slot = prev;
+        QoreHashNode* rv;
+        {
+            SocketPollInfoLender lender(slot, &xsink);
+            UT_ASSERT(c, !slot, "the operation's poll info is lent for the call");
+            rv = op->continuePoll(&xsink);
+        }
+        ReferenceHolder<QoreHashNode> holder(rv, &xsink);
+        UT_ASSERT(c, rv == prev, "the lent hash is the result");
+        UT_ASSERT(c, rv && rv->is_unique(), "the result has a single reference");
+        check_new(rv, SOCK_POLLIN, "the reused hash has the members of a new one");
+    }
+
+    // a hash that something else also references is never changed
+    {
+        ReferenceHolder<QoreHashNode> prev(make_prev(), &xsink);
+        prev->ref();
+        QoreHashNode* slot = *prev;
+        QoreHashNode* rv;
+        {
+            SocketPollInfoLender lender(slot, &xsink);
+            UT_ASSERT(c, slot == *prev, "a shared hash is not lent");
+            rv = op->continuePoll(&xsink);
+        }
+        slot->deref(&xsink);
+        ReferenceHolder<QoreHashNode> holder(rv, &xsink);
+        UT_ASSERT(c, rv && rv != *prev, "a new hash is the result");
+        check_new(rv, SOCK_POLLIN, "the new hash has its members");
+        UT_ASSERT_EQ(c, SOCK_POLLOUT, (int)prev->getKeyValue("events").getAsBigInt(), "the shared hash is unchanged");
+        UT_ASSERT(c, prev->getKeyValue("socket").getInternalNode() == *sock1, "the shared hash keeps its socket");
+        UT_ASSERT(c, !prev->getKeyValue("extra_fds").isNothing(), "the shared hash keeps its extra fds");
+    }
+
+    // a hash of another type is not lent
+    {
+        QoreHashNode* untyped = new QoreHashNode(autoTypeInfo);
+        QoreHashNode* slot = untyped;
+        {
+            SocketPollInfoLender lender(slot, &xsink);
+            UT_ASSERT(c, slot == untyped, "an untyped hash is not lent");
+        }
+        slot->deref(&xsink);
+    }
+
+    // extra fds are set on the reused hash as on a new one
+    {
+        op->extra_fds = {{0, SOCK_POLLIN}, {1, SOCK_POLLOUT}};
+        QoreHashNode* prev = make_prev();
+        QoreHashNode* slot = prev;
+        QoreHashNode* rv;
+        {
+            SocketPollInfoLender lender(slot, &xsink);
+            rv = op->continuePoll(&xsink);
+        }
+        ReferenceHolder<QoreHashNode> holder(rv, &xsink);
+        UT_ASSERT(c, rv == prev, "the lent hash is the result with extra fds");
+        if (rv) {
+            QoreValue v = rv->getKeyValue("extra_fds");
+            UT_ASSERT(c, v.getType() == NT_LIST && v.get<const QoreListNode>()->size() == 2,
+                "the result has the new extra fds");
+            UT_ASSERT(c, rv->getKeyValue("poll_timeout_ms").isNothing(), "the result has no poll timeout");
+        }
+        op->extra_fds.clear();
+    }
+
+    // a lent hash that the call does not take is released
+    {
+        QoreHashNode* prev = make_prev();
+        prev->weakRef();
+        QoreHashNode* slot = prev;
+        {
+            SocketPollInfoLender lender(slot, &xsink);
+        }
+        UT_ASSERT(c, prev->weakDeref(), "a lent hash that is not taken is released");
+    }
+
+    UT_ASSERT(c, !xsink, "no exception is raised");
+    xsink.clear();
+}
 
 //! Fills in a socket address for the network policy tests and returns its size
 static socklen_t ut_net_addr(struct sockaddr_storage& ss, int family, const char* addr, int port) {
@@ -1243,7 +1609,6 @@ public:
             info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
             info->setKeyValue("owner", new QoreStringNode("late-close-unit-test"), &xsink);
             info->setKeyValue("key", new QoreStringNode("late-close-accept"), &xsink);
-            info->setKeyValue("thread_key", new QoreStringNode("late-close-route"), &xsink);
             info->setKeyValue("to", -1, &xsink);
             UT_ASSERT(c, !xsink, "late accept submission info is initialized");
             if (xsink) {
@@ -1289,6 +1654,172 @@ public:
                 UT_ASSERT_EQ(c, 0, static_cast<int>(queue->size()), "close delivers exactly one completion");
             }
         }
+    }
+};
+
+//! An HTTP/3 response drained by the I/O thread while its request registers with the connection is delivered
+/** The I/O thread routes each response drained from the QUIC session with
+    Http3ClientPollOperationPriv::takeResponseAction(); the requesting thread registers its action with
+    registerStream() right after the request was sent.  When both run at the same time, the response must reach the
+    request exactly once: either the I/O thread finds the registered action, or the registration finds the buffered
+    response.  The check for a registered action and the buffering used to be in two critical sections, and a
+    registration between them found nothing buffered: the response stayed in the buffer and the request waited until
+    its timeout.
+
+    Each round runs both sides at the same time on two threads, released together, for a new stream.
+*/
+class Http3ClientResponseRegistrationTest {
+public:
+    //! Counts the responses delivered to a request
+    class CountingAction : public AbstractAsyncAction {
+    public:
+        DLLLOCAL CountingAction(std::atomic<int>& delivered, std::atomic<int>& errors)
+                : delivered(delivered), errors(errors) {
+        }
+
+        DLLLOCAL virtual void execute(QoreValue output, ExceptionSink* xsink) override {
+            ++delivered;
+            output.discard(xsink);
+        }
+
+        DLLLOCAL virtual void executeError(const char* err, const char* desc, ExceptionSink* xsink) override {
+            ++errors;
+        }
+
+        DLLLOCAL virtual void cleanup(ExceptionSink* xsink) override {
+        }
+
+    private:
+        std::atomic<int>& delivered;
+        std::atomic<int>& errors;
+    };
+
+    DLLLOCAL static void run(UnitTestCounters& c) {
+        static constexpr int Rounds = 20000;
+
+        ExceptionSink xsink;
+        Http3ClientPollOperationPriv* op = new Http3ClientPollOperationPriv(nullptr, nullptr, nullptr, nullptr);
+        op->h3_state.store(Http3ClientPollOperationPriv::H3State::READING, std::memory_order_release);
+
+        std::atomic<int> delivered{0};
+        std::atomic<int> errors{0};
+
+        // the two sides of a round start together: the main thread prepares the round, then releases both
+        std::mutex m;
+        std::condition_variable cond;
+        int round = -1;
+        int finished = 0;
+        bool quit = false;
+
+        // the I/O thread's side: routes the drained response like Http3ClientPollOperationPriv::handleReading()
+        auto io_side = [&](int r) {
+            ExceptionSink io_xsink;
+            std::string sid = std::to_string(r);
+            ReferenceHolder<QoreHashNode> output(new QoreHashNode(autoTypeInfo), &io_xsink);
+            output->setKeyValue("stream_id", (int64)r, &io_xsink);
+            output->setKeyValue("end_stream", true, &io_xsink);
+            bool buffered = false;
+            AbstractAsyncAction* action = op->takeResponseAction(sid, *output, buffered, &io_xsink);
+            if (action) {
+                op->completeStream(r, &io_xsink);
+                action->execute(output->refSelf(), &io_xsink);
+                action->deref(&io_xsink);
+            }
+            io_xsink.clear();
+        };
+
+        // the requesting thread's side: registers the request's action like
+        // Http3ClientPollOperationBase::registerStreamWithPromise()
+        auto request_side = [&](int r) {
+            ExceptionSink rq_xsink;
+            CountingAction* action = new CountingAction(delivered, errors);
+            bool need_cancel = false;
+            QoreListNode* buffered = op->registerStream(r, action, need_cancel, &rq_xsink);
+            if (need_cancel) {
+                action->deref(&rq_xsink);
+            }
+            if (buffered) {
+                if (!need_cancel) {
+                    op->dispatchBufferedResponses(r, action, buffered, &rq_xsink);
+                }
+                buffered->deref(&rq_xsink);
+            }
+            rq_xsink.clear();
+        };
+
+        auto side_thread = [&](bool io) {
+            int last = -1;
+            while (true) {
+                int r;
+                {
+                    std::unique_lock<std::mutex> l(m);
+                    cond.wait(l, [&] { return quit || round != last; });
+                    if (quit) {
+                        return;
+                    }
+                    r = last = round;
+                }
+                if (io) {
+                    io_side(r);
+                } else {
+                    request_side(r);
+                }
+                {
+                    std::lock_guard<std::mutex> l(m);
+                    ++finished;
+                }
+                cond.notify_all();
+            }
+        };
+
+        std::thread io_thread(side_thread, true);
+        std::thread request_thread(side_thread, false);
+
+        int lost = 0;
+        int duplicated = 0;
+        for (int r = 0; r < Rounds; ++r) {
+            // the request has been sent: the stream awaits its registration
+            op->beginSubmit();
+            op->endSubmitOk(r);
+            int before = delivered.load();
+            {
+                std::lock_guard<std::mutex> l(m);
+                finished = 0;
+                round = r;
+            }
+            cond.notify_all();
+            {
+                std::unique_lock<std::mutex> l(m);
+                cond.wait(l, [&] { return finished == 2; });
+            }
+            int got = delivered.load() - before;
+            if (got < 1) {
+                ++lost;
+            } else if (got > 1) {
+                ++duplicated;
+            }
+        }
+        {
+            std::lock_guard<std::mutex> l(m);
+            quit = true;
+        }
+        cond.notify_all();
+        io_thread.join();
+        request_thread.join();
+
+        UT_ASSERT_EQ(c, 0, lost, "H3: no response is left undelivered when it races its request's registration");
+        UT_ASSERT_EQ(c, 0, duplicated, "H3: no response is delivered twice");
+        UT_ASSERT_EQ(c, 0, errors.load(), "H3: no request fails");
+        {
+            AutoLocker al(op->stream_lock);
+            UT_ASSERT_EQ(c, 0, (int)op->pending_responses.size(), "H3: no response stays buffered");
+            UT_ASSERT_EQ(c, 0, (int)op->stream_actions.size(), "H3: every request's stream is completed");
+        }
+
+        op->cleanup(&xsink);
+        op->deref(&xsink);
+        UT_ASSERT(c, !xsink, "H3: the poll operation is released without an exception");
+        xsink.clear();
     }
 };
 #endif
@@ -4338,16 +4869,16 @@ static void ut_asyncio_wait_for_processing_rejects_io_thread(UnitTestCounters& c
     }
 
     old = qore_set_async_io_thread_for_test(true);
-    processed = ctrl->waitForProcessing("test-key", 0, &xsink);
+    processed = ctrl->waitForProcessing(std::set<int>{0}, 0, &xsink);
     qore_set_async_io_thread_for_test(old);
 
-    UT_ASSERT(c, !processed, "keyed waitForProcessing returns false from async I/O thread");
-    UT_ASSERT(c, (bool)xsink, "keyed waitForProcessing raises from async I/O thread");
+    UT_ASSERT(c, !processed, "per-thread waitForProcessing returns false from async I/O thread");
+    UT_ASSERT(c, (bool)xsink, "per-thread waitForProcessing raises from async I/O thread");
     if (xsink) {
         // note: the error code can be held in inline short string storage, which has no
         // QoreStringNode, so the data helper must be used to compare it
         QoreStringDataHelper err(xsink.getExceptionErr());
-        UT_ASSERT(c, err == "ASYNC-IO-ERROR", "keyed exception is ASYNC-IO-ERROR");
+        UT_ASSERT(c, err == "ASYNC-IO-ERROR", "per-thread exception is ASYNC-IO-ERROR");
         xsink.clear();
     }
 
@@ -5104,10 +5635,14 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_network_security_rules(c);
     ut_asyncio_construction(c);
     ut_asyncio_poll_timeout_rounding(c);
+    ut_lent_poll_info_reuse(c);
 #ifdef DEBUG
     AsyncIoCloseTest::resize(c);
     AsyncIoCloseTest::run(c);
     ut_cond_wait_cancel_in_window(c);
+    Http3ClientResponseRegistrationTest::run(c);
+    ut_fast_real_deref_releases_last(c);
+    AsyncIoOpCacheTest::run(c);
 #endif
     ut_asyncio_autostop(c);
     ut_asyncio_start_stop(c);
@@ -5160,6 +5695,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_asyncio_stop_clear(c);
 #ifdef DEBUG
     ut_closure_var_deref_rescan_reentry(c);
+    ut_deref_wait_reentrant_wakeup(c);
     ut_asyncio_exec_rejects_io_thread(c);
     ut_asyncio_wait_for_processing_rejects_io_thread(c);
 #endif

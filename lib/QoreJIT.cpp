@@ -1855,9 +1855,44 @@ bool QoreJIT::startBackgroundThread() {
         return false;
     }
     if (!bg_thread_running.exchange(true, std::memory_order_acq_rel)) {
-        bg_compile_thread = q_start_llvm_compile_thread([this]() { bgCompileThreadLoop(); });
+        if (bg_compile_thread.start([this]() { bgCompileThreadLoop(); })) {
+            // no thread could be created (ex: the process has reached its thread limit): the code keeps running in
+            // the tier it is in, and a later promotion tries again
+            bg_thread_running.store(false, std::memory_order_release);
+            return false;
+        }
     }
     return true;
+}
+
+int QoreLlvmCompileThread::start(std::function<void()> f) {
+    assert(!started);
+    fn = std::move(f);
+    pthread_attr_t attr;
+    int rc = pthread_attr_init(&attr);
+    if (rc) {
+        return rc;
+    }
+    rc = pthread_attr_setstacksize(&attr, QORE_LLVM_COMPILE_STACK_SIZE);
+    if (!rc) {
+        rc = pthread_create(&tid, &attr, run, this);
+    }
+    pthread_attr_destroy(&attr);
+    if (!rc) {
+        started = true;
+    }
+    return rc;
+}
+
+void QoreLlvmCompileThread::join() {
+    assert(started);
+    pthread_join(tid, nullptr);
+    started = false;
+}
+
+void* QoreLlvmCompileThread::run(void* arg) {
+    static_cast<QoreLlvmCompileThread*>(arg)->fn();
+    return nullptr;
 }
 
 void QoreJIT::releaseBgCompileWorkRefs(BgCompileWork& work) {

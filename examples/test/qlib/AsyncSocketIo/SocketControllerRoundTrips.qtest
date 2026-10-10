@@ -1,0 +1,389 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+
+%exec-class SocketControllerRoundTripsTest
+
+#! Counts the async I/O controller submissions of synchronous Socket calls by method name
+/** A synchronous Socket call that must run on the socket's I/O thread submits an operation keyed
+    "QoreSocketObject::sync:<method>:..."; the controller logs every submission at DEBUG level in the calling thread
+    before it returns, so the count is exact when the call returns.
+*/
+class SubmitCountingAppender inherits LoggerAppenderWithLayout {
+    private {
+        Mutex mtx();
+        hash<string, int> counts = {};
+    }
+
+    constructor() : LoggerAppenderWithLayout("round-trips", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    public processEventImpl(int type, auto params) {
+        if (type != LoggerAppender::EVENT_LOG) {
+            return;
+        }
+        *list<*string> m = (params.toString() =~ x/^submit: operation 'QoreSocketObject::sync:([A-Za-z0-9]+):/);
+        if (m) {
+            AutoLock al(mtx);
+            ++counts{m[0]};
+        }
+    }
+
+    #! Returns the number of submissions by method
+    hash<string, int> getAll() {
+        AutoLock al(mtx);
+        return counts;
+    }
+
+    #! Returns the number of submissions of the given methods
+    int get(softlist<string> methods) {
+        AutoLock al(mtx);
+        return foldl $1 + $2, (map counts{$1} ?? 0, methods);
+    }
+}
+
+#! Keeps the HTTP server's request log lines
+class RequestLogAppender inherits LoggerAppenderWithLayout {
+    private {
+        Mutex mtx();
+        list<string> lines = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("request-log", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    public processEventImpl(int type, auto params) {
+        if (type != LoggerAppender::EVENT_LOG) {
+            return;
+        }
+        string msg = params.toString();
+        # the request line, not the body line logged with it
+        if (msg =~ /cid [0-9]+ src .* \(agent: /) {
+            AutoLock al(mtx);
+            push lines, msg;
+        }
+    }
+
+    list<string> get(string path) {
+        AutoLock al(mtx);
+        return select lines, $1.find(" " + path + " ") != -1;
+    }
+}
+
+#! Echoes the request body
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, body ?? "none", {"Content-Type": "application/octet-stream"});
+    }
+}
+
+class SocketControllerRoundTripsTest inherits QUnit::Test {
+    public {
+        #! self-signed certificate for localhost and 127.0.0.1, valid until 2126
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDJzCCAg+gAwIBAgIUNk74M8XYwhuFBYrVZ9VoV7jMIoowDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MCAXDTI2MDkyNDA2MzIzN1oYDzIxMjYw
+ODMxMDYzMjM3WjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3DQEB
+AQUAA4IBDwAwggEKAoIBAQCbSLWZ9lPypGBk99KDJErqzdJ/+wgFtrGvZoZ9so8Y
+hwSBbiTwLUOSsCgx75WQs6MIB1xUa8vj/Wgpsmov7OLnaMj5PPrWc8ArVMVe04gE
+c3a5Qjslx5bQzFfugw3ItnA0/c5dlrAKnzcd+XlOq44BchIX9dxGqn40kwmH9G2O
+E1J9AdD1fmg2ekUh3CoqVK+DBZvdc0rK4uBz6WZQGChNGFtqhxO74iQFPwJmb5aR
+6xuLW+dXCgrGNAh99E2n5YoW4SoNezfyvpTcWZiFLt6KfHUZxpMdLOnsqQljJ0fC
+neEQs1tB3p1p8cDFf55iMF5AaOpohMVBHmgx2u+lX7+9AgMBAAGjbzBtMB0GA1Ud
+DgQWBBRWWBZYIsmL3KRc/MYLfXP1scnfajAfBgNVHSMEGDAWgBRWWBZYIsmL3KRc
+/MYLfXP1scnfajAPBgNVHRMBAf8EBTADAQH/MBoGA1UdEQQTMBGCCWxvY2FsaG9z
+dIcEfwAAATANBgkqhkiG9w0BAQsFAAOCAQEAHUkZzPUjYe+p7BSydt+5f1EvvfgF
+/REGAfZiax6AbCOU42MWUjY465ONeH8kjcrLhv6QxzLwJgKqsCWccoxBGgPr4THL
+At31mux3bYt7UZdpKCifpEE+qQIrdckJi7xBx+pr59NOQoiqasVOKHoGMOgawzKr
+SdsHrqcMjbqz/NaU9/GHzux2kKx5zGkftHSDcBg4MoELanw6o9i+gIglTR6B3s6F
+d7kDfLG4SG94RMA3lvTj6iiqk8tz3NcxSoldpaKQo5CsbHZ/BGAvKW6LOuAJqdJ1
+XVCdAwP0kCyg4562Gup0waOGvzxEhrJXXOz5TlT3ZE1/pUa/F1T/67RxCQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCbSLWZ9lPypGBk
+99KDJErqzdJ/+wgFtrGvZoZ9so8YhwSBbiTwLUOSsCgx75WQs6MIB1xUa8vj/Wgp
+smov7OLnaMj5PPrWc8ArVMVe04gEc3a5Qjslx5bQzFfugw3ItnA0/c5dlrAKnzcd
++XlOq44BchIX9dxGqn40kwmH9G2OE1J9AdD1fmg2ekUh3CoqVK+DBZvdc0rK4uBz
+6WZQGChNGFtqhxO74iQFPwJmb5aR6xuLW+dXCgrGNAh99E2n5YoW4SoNezfyvpTc
+WZiFLt6KfHUZxpMdLOnsqQljJ0fCneEQs1tB3p1p8cDFf55iMF5AaOpohMVBHmgx
+2u+lX7+9AgMBAAECggEABcpAmJIPxUS4d2tU2nZNo32zM08dQyFHH37XgEkFKZP3
+PgrpA6+cYmmBG4OPHyB48WwHgaUCAD6gVgBaEe688zCmtcG+qfpnmEtb5KeciGtJ
+v6n8N0dplIraCIGzJOBwmfk7avqbFnpN/Xx3jSW7xiAGaVr4hgYGGK3BiuPj+zUm
+/MFe3NVrsniFS/hk2pi4Q9n2ek1bTBdgQGOYcDZei5qvhfTzF+jw2hI+jlHYBh20
+COctsgB19+i4Kxe0vV+J/JHtSXun1Z8MUeAQZO1s9efrWC+7pAlvexRJqHh5NN2A
+vjey9i689CUOFVRnHoEmapQHWtojy0UgyjJGiOEYvQKBgQDXbpBE4CnXoQPOcNwm
+qqDzuFpyFbsR7T8k2i8uB9uPcKBU2vQ5wOtLYziyhzK7arOV18yuJpi2y0EjOQ+h
+aixnke4hegPRYS4fk9875KPQ5RuwM1W8aqX6HFZ15XOyjTVfE+LxqV5h+hCBp1YL
++ey8HphXe0Z1vTWrWDxc3nCzDwKBgQC4hpED8WcWMyyqq8tfVwegWrm5sYcYsThs
+Cr7HDlvyJ6mrNk2Qhd+LY14j9AIehLoStys4FnsJ+wQ1OJ1QQMRXaXnpCPqY9uFN
++JNEQPNWNdr/n/a0tY6ihC+UJRhciFbYIUtZBWDt7SwyQwWpbe2QNilZHIIpp1x9
+7L+0tAuwcwKBgQC++oLmrBorz8/CCQcBOC4rIPj9Pgpyn/FkSA+fLNQVWvCniNsM
+/9sXH8S5b2UoBDVj1sTaddjX42PBR+p1W9w1jIagIryTtyTeVYaGX/BhVVmwYDHX
+MGwnR0vWhCyG0uvHd6euOEk1biuH5MJBJ7QYKL9AfkY+Rhf35+bLJV6fPQKBgGGG
+zfJ1jnSPS5ZRAkY7q043ZV4d1Ddaw2VnMHnovvP3vpc9NjWibAox1LnP56bVo7rs
+kK0uRI173Dd82rhl4uAIYWSnWDuskFwzezJh2brA8CSXGT9djiubDcKQ8JVHgg7t
+WfONAjP+XJOcFMv9y8eiuKveg3UcfagYjyIk3uC9AoGARAXelr1bHoWL7I305Dn8
+ndWrv2HdvZhzJdxpBUgqeKeEXa/Fb5wlB3014Jk63HrNClzMHTIpD249/mZEFT7h
+QabowAregdM8CQp7zFoK+dD/Ito6xsUxH+4lVm+BjWj/mt/py7MAJLfRJEz55/Nc
+qiurSfIBhXYMDdqWsl9GD+c=
+-----END PRIVATE KEY-----";
+
+        const CipherMethods = ("getSSLCipherName", "getSSLCipherVersion");
+        const LimitMethods = ("setMaxChunkedBodySize", "setHttp2MaxRequestBodySize");
+
+        #! Requests sent on one HTTP/2 connection
+        const Requests = 10;
+    }
+
+    private {
+        SubmitCountingAppender counter();
+        Logger counter_logger("round-trips", LoggerLevel::getLevelDebug());
+    }
+
+    constructor() : Test("SocketControllerRoundTripsTest", "1.0") {
+        addTestCase("the TLS cipher is read once per TLS state", \cipherCacheTest());
+        addTestCase("setting a body size limit to its value needs no round trip", \limitSetterTest());
+        addTestCase("an HTTP/2 request needs no round trip for the cipher and limits", \http2RequestTest());
+        addTestCase("a changed body size limit applies to the next request", \limitChangeTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        counter_logger.addAppender(counter);
+        AsyncIoController::setLogger(counter_logger);
+    }
+
+    globalTearDown() {
+        AsyncIoController::setLogger(NOTHING);
+    }
+
+    #! Returns a connected plain socket pair: (client, server)
+    private list<Socket> getSocketPair() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        Queue q();
+        background sub () {
+            try {
+                q.push(listener.accept(10s));
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+        Socket client();
+        client.connect("127.0.0.1:" + port, 10s);
+        auto server = q.get(10s);
+        if (server.typeCode() == NT_HASH) {
+            throw server.err, server.desc;
+        }
+        return (client, server);
+    }
+
+    #! Upgrades both ends of a plain connection to TLS
+    private upgradeToTls(Socket client, Socket server) {
+        server.setCertificate(new SSLCertificate(CertPem));
+        server.setPrivateKey(new SSLPrivateKey(KeyPem));
+        Queue q();
+        background sub () {
+            try {
+                server.upgradeServerToSSL(10s);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+        client.upgradeClientToSSL(10s);
+        auto rv = q.get(10s);
+        if (rv.typeCode() == NT_HASH) {
+            throw rv.err, rv.desc;
+        }
+    }
+
+    #! The cipher name and version are read from the socket's I/O thread once for each TLS state of the socket
+    /** They were read with a round trip to the socket's I/O thread on every call; they can only change when the
+        socket's TLS connection is created, renegotiated or released.
+    */
+    cipherCacheTest() {
+        list<Socket> pair = getSocketPair();
+        Socket client = pair[0];
+        Socket server = pair[1];
+        on_exit {
+            client.close();
+            server.close();
+        }
+
+        # a plain connection has no cipher
+        int start = counter.get(CipherMethods);
+        assertNothing(client.getSSLCipherName());
+        assertNothing(client.getSSLCipherVersion());
+        assertNothing(client.getSSLCipherName());
+        assertEq(1, counter.get(CipherMethods) - start, "the plain connection's state is read once");
+
+        # the TLS connection is reported; the cached plain state is not
+        upgradeToTls(client, server);
+        start = counter.get(CipherMethods);
+        *string name = client.getSSLCipherName();
+        *string version = client.getSSLCipherVersion();
+        assertEq(Type::String, name.type(), "the TLS cipher name is reported after the upgrade");
+        assertEq(Type::String, version.type(), "the TLS cipher version is reported after the upgrade");
+        assertEq(server.getSSLCipherName(), name, "both ends report the same cipher");
+        assertEq(server.getSSLCipherVersion(), version, "both ends report the same version");
+        for (int i = 0; i < 10; ++i) {
+            assertEq(name, client.getSSLCipherName());
+            assertEq(version, client.getSSLCipherVersion());
+        }
+        assertEq(1, counter.get(CipherMethods) - start - 1,
+            "the client's TLS state is read once for 22 calls (the server's once more)");
+
+        # the connection still works, and the cipher is still the same
+        client.send("ping");
+        assertEq("ping", server.recv(4, 10s));
+        assertEq(name, client.getSSLCipherName());
+
+        # a closed socket has no cipher
+        client.close();
+        assertNothing(client.getSSLCipherName(), "a closed socket has no cipher name");
+        assertNothing(client.getSSLCipherVersion(), "a closed socket has no cipher version");
+    }
+
+    #! Setting a body size limit to its current value changes nothing and needs no round trip
+    limitSetterTest() {
+        list<Socket> pair = getSocketPair();
+        Socket client = pair[0];
+        on_exit {
+            client.close();
+            pair[1].close();
+        }
+
+        int start = counter.get(LimitMethods);
+        client.setMaxChunkedBodySize(1000);
+        client.setHttp2MaxRequestBodySize(1000);
+        assertEq(2, counter.get(LimitMethods) - start, "a new value is set on the socket's thread");
+        assertEq(1000, client.getMaxChunkedBodySize());
+        assertEq(1000, client.getHttp2MaxRequestBodySize());
+
+        start = counter.get(LimitMethods);
+        for (int i = 0; i < 10; ++i) {
+            client.setMaxChunkedBodySize(1000);
+            client.setHttp2MaxRequestBodySize(1000);
+        }
+        assertEq(0, counter.get(LimitMethods) - start, "setting the current value needs no round trip");
+        assertEq(1000, client.getMaxChunkedBodySize());
+        assertEq(1000, client.getHttp2MaxRequestBodySize());
+
+        start = counter.get(LimitMethods);
+        client.setMaxChunkedBodySize(2000);
+        client.setHttp2MaxRequestBodySize(0);
+        assertEq(2, counter.get(LimitMethods) - start, "a changed value is set on the socket's thread");
+        assertEq(2000, client.getMaxChunkedBodySize());
+        assertEq(0, client.getHttp2MaxRequestBodySize());
+    }
+
+    #! An HTTPS server sets the limits and logs the cipher of every HTTP/2 request without per-request round trips
+    /** The server set both body size limits and read the cipher name and version with a round trip to the
+        connection's I/O thread for every request.
+    */
+    http2RequestTest() {
+        Logger logger("round-trips-server", LoggerLevel::getLevelInfo());
+        RequestLogAppender request_log();
+        logger.addAppender(request_log);
+        HttpServer srv(<HttpServerOptionInfo>{
+            "logger": logger,
+            "max_request_body_size": 4096,
+        });
+        on_exit delete srv;
+        srv.setDefaultHandler("echo", new EchoHandler());
+        int port = srv.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        srv.waitForAsyncIo();
+        # the server sets its own logger on the controller
+        AsyncIoController::setLogger(counter_logger);
+
+        HTTPClient client({
+            "url": "https://localhost:" + port,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+            "timeout": 10s,
+        });
+        client.connect();
+        on_exit client.disconnect();
+
+        int cipher_start = counter.get(CipherMethods);
+        int limit_start = counter.get(LimitMethods);
+        for (int i = 0; i < Requests; ++i) {
+            hash<auto> resp = client.send(binary("body-" + i), "POST", "/round-trip");
+            assertEq(200, resp.status_code);
+            assertEq(binary("body-" + i), resp.body);
+            assertTrue(client.isHttp2Active(), "the request is sent with HTTP/2");
+        }
+        # the server reads the cipher once for the connection, and the limits it sets for each request are the ones
+        # it set when it accepted the connection
+        assertLe(1, counter.get(CipherMethods) - cipher_start, "the cipher is read at most once per connection");
+        assertEq(0, counter.get(LimitMethods) - limit_start, "the limits are not set again for each request");
+
+        # every request is logged with the connection's cipher
+        list<string> lines = request_log.get("/round-trip");
+        assertEq(Requests, lines.size(), "every request is logged");
+        # the line ends with the cipher name and version, then any connection kind in brackets
+        *list<*string> suffix = (lines[0] =~ x/ ([A-Za-z0-9_-]+) (TLSv[0-9.]+)(?: \[[a-z0-9-]+\])?\)$/);
+        assertEq(2, suffix.size(), "the request log line has the cipher name and version: " + lines[0]);
+        foreach string line in (lines) {
+            assertNeq(-1, line.find(sprintf(" %s %s", suffix[0], suffix[1])), "the request is logged with the cipher");
+        }
+    }
+
+    #! A body size limit changed between two requests on one connection applies to the second request
+    limitChangeTest() {
+        HttpServer srv(<HttpServerOptionInfo>{
+            "logger": new Logger("round-trips-limits", LoggerLevel::getLevelInfo()),
+            "max_request_body_size": 4096,
+        });
+        on_exit delete srv;
+        srv.setDefaultHandler("echo", new EchoHandler());
+        int port = srv.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        srv.waitForAsyncIo();
+
+        Socket s();
+        s.connect("127.0.0.1:" + port, 10s);
+        on_exit s.close();
+
+        string body = strmul("C", 2000);
+        assertEq(200, sendChunked(s, port, body).status_code, "a chunked body under the limit is accepted");
+
+        # the same connection: the next request is checked against the new limit
+        srv.setMaxRequestBodySize(1024);
+        assertGe(400, sendChunked(s, port, body).status_code, "a chunked body over the new limit is rejected");
+    }
+
+    #! Sends a chunked POST request and returns the response header
+    private hash<auto> sendChunked(Socket s, int port, string body) {
+        s.sendHTTPMessage("POST", "/limit", "1.1", {
+            "Host": "localhost:" + port,
+            "Transfer-Encoding": "chunked",
+            "Content-Type": "application/octet-stream",
+        });
+        s.send(sprintf("%x\r\n%s\r\n0\r\n\r\n", body.size(), body));
+        hash<auto> hdr = s.readHTTPHeader(10s);
+        if (hdr."content-length") {
+            s.recv(hdr."content-length".toInt(), 10s);
+        }
+        return hdr;
+    }
+}

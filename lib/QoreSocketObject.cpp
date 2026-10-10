@@ -103,7 +103,8 @@ static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s,
     key += ':';
     key += s->getUniqueHash();
     // Several synchronous callers can delegate work for the same socket at the
-    // same time; keep the cache key unique while thread_key preserves affinity.
+    // same time; keep the cache key unique.  The controller runs every operation
+    // on the I/O thread of its socket, whatever its key.
     key += ':';
     key += std::to_string(++qore_socket_object_sync_exec_seq);
 
@@ -112,7 +113,6 @@ static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s,
     info->setKeyValue("spop", op_obj->objectRefSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner), xsink);
     info->setKeyValue("key", new QoreStringNode(key), xsink);
-    info->setKeyValue("thread_key", new QoreStringNode(s->getUniqueHash()), xsink);
     info->setKeyValue("to", timeout_ms, xsink);
     if (*xsink) {
         return nullptr;
@@ -2483,10 +2483,13 @@ public:
         qore_socket_private* sp = qore_socket_private::get(*priv->socket);
         switch (action) {
             case Action::GetCipherName:
+                // other threads read the cipher from the cache until the TLS state changes
+                sp->cacheTlsCipher();
                 setStringValue(sp->ssl ? sp->ssl->getCipherName() : nullptr);
                 break;
 
             case Action::GetCipherVersion:
+                sp->cacheTlsCipher();
                 setStringValue(sp->ssl ? sp->ssl->getCipherVersion() : nullptr);
                 break;
 
@@ -4595,6 +4598,7 @@ static int qore_socket_object_exec_check_idle_data(QoreSocketObject* s, Exceptio
 
 QoreSocketObject::QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert, QoreSSLPrivateKey* pk)
         : priv(new my_socket_priv(s, cert, pk)) {
+    priv->socket->priv->async_io_route_key = getIoIdentityHash();
 }
 
 QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
@@ -4621,9 +4625,11 @@ QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
     }
     dst->ssl_ca_file = src->ssl_ca_file;
     dst->ssl_ca_path = src->ssl_ca_path;
+    dst->async_io_route_key = getIoIdentityHash();
 }
 
 QoreSocketObject::QoreSocketObject() : priv(new my_socket_priv) {
+    priv->socket->priv->async_io_route_key = getIoIdentityHash();
 }
 
 QoreSocketObject::~QoreSocketObject() {
@@ -5376,6 +5382,16 @@ QoreStringNode* QoreSocketObject::getSSLCipherNameString(ExceptionSink* xsink) {
         return str ? new QoreStringNode(str) : nullptr;
     }
 
+    // the cipher can only change with the socket's TLS state, so it is read on the socket's I/O thread once per
+    // state (see qore_socket_private::tls_state_gen)
+    {
+        bool found;
+        QoreStringNode* cached = qore_socket_private::get(*priv->socket)->getCachedTlsCipher(false, found);
+        if (found) {
+            return cached;
+        }
+    }
+
     ValueHolder rv(qore_socket_object_exec_poll_output(this,
         new QoreSocketObjectTlsStatePollOperation(this,
             QoreSocketObjectTlsStatePollOperation::Action::GetCipherName),
@@ -5391,6 +5407,15 @@ QoreStringNode* QoreSocketObject::getSSLCipherVersionString(ExceptionSink* xsink
         AutoLocker al(priv->m);
         const char* str = priv->socket->getSSLCipherVersion();
         return str ? new QoreStringNode(str) : nullptr;
+    }
+
+    // see getSSLCipherNameString()
+    {
+        bool found;
+        QoreStringNode* cached = qore_socket_private::get(*priv->socket)->getCachedTlsCipher(true, found);
+        if (found) {
+            return cached;
+        }
     }
 
     ValueHolder rv(qore_socket_object_exec_poll_output(this,
@@ -6401,6 +6426,11 @@ void QoreSocketObject::setHttpDecodeBody(bool decode) {
 }
 
 void QoreSocketObject::setMaxChunkedBodySize(int64 size) {
+    // the limit is only read by the socket's operations, so setting the value it has changes nothing and needs no
+    // round trip to the socket's I/O thread
+    if (priv->socket->getMaxChunkedBodySize() == size) {
+        return;
+    }
     ExceptionSink xsink;
     qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
         SocketSetupPollOperation::ConfigAction::SetMaxChunkedBodySize, size), "setMaxChunkedBodySize",
@@ -6416,6 +6446,12 @@ int64 QoreSocketObject::getMaxChunkedBodySize() const {
 }
 
 void QoreSocketObject::setHttp2MaxRequestBodySize(int64 size) {
+    // the limit of the socket's HTTP/2 session, if any, always has the effect of the socket's limit (see
+    // qore_socket_private::max_http2_body_size), so setting the value the socket has changes nothing and needs no
+    // round trip to the socket's I/O thread
+    if (priv->socket->getHttp2MaxRequestBodySize() == size) {
+        return;
+    }
     ExceptionSink xsink;
     qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
         SocketSetupPollOperation::ConfigAction::SetHttp2MaxRequestBodySize, size), "setHttp2MaxRequestBodySize",

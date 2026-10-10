@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class AsyncIoThreadCountTest
+
+#! The number of I/O threads of the global async I/O controller
+class AsyncIoThreadCountTest inherits QUnit::Test {
+    public {
+        #! the most I/O threads the controller runs by default
+        const DefaultMaxIoThreads = 8;
+    }
+
+    constructor() : Test("AsyncIoThreadCountTest", "1.0", ARGV) {
+        addTestCase("default thread count", \defaultCountTest());
+        addTestCase("setMaxIoThreads() while stopped", \setWhileStoppedTest());
+        addTestCase("setMaxIoThreads() while running", \setWhileRunningTest());
+        set_return_value(main());
+    }
+
+    #! Returns the default thread count expected for this process, or NOTHING if it cannot be determined here
+    private *int expectedDefault() {
+        if (PlatformOS != "Linux") {
+            return;
+        }
+        # nproc counts the CPUs in the process's affinity mask, as the controller does
+        string out = trim(`nproc`);
+        if (out !~ /^[0-9]+$/) {
+            return;
+        }
+        return min(out.toInt(), DefaultMaxIoThreads);
+    }
+
+    defaultCountTest() {
+        assertFalse(AsyncIoController::running(), "the controller is stopped at test start");
+        int io_threads = AsyncIoController::getInfo().io_threads;
+        *string env = ENV.QORE_IO_THREADS;
+        if (env && env.toInt() > 0) {
+            assertEq(env.toInt(), io_threads, "QORE_IO_THREADS sets the thread count");
+            return;
+        }
+        assertGe(1, io_threads, "at least one I/O thread");
+        assertLe(DefaultMaxIoThreads, io_threads, "at most the default maximum");
+        *int expected = expectedDefault();
+        if (exists expected) {
+            assertEq(expected, io_threads, "one I/O thread per CPU available to the process");
+        }
+    }
+
+    setWhileStoppedTest() {
+        AsyncIoController::setMaxIoThreads(3);
+        assertEq(3, AsyncIoController::getInfo().io_threads, "an explicit thread count");
+
+        # an explicit count is not limited to the default maximum
+        AsyncIoController::setMaxIoThreads(DefaultMaxIoThreads + 2);
+        assertEq(DefaultMaxIoThreads + 2, AsyncIoController::getInfo().io_threads, "more threads than the default maximum");
+
+        AsyncIoController::setMaxIoThreads(0);
+        int io_threads = AsyncIoController::getInfo().io_threads;
+        *int expected = expectedDefault();
+        if (exists expected) {
+            assertEq(expected, io_threads, "0 restores the default");
+        } else {
+            assertGe(1, io_threads, "0 restores the default");
+            assertLe(DefaultMaxIoThreads, io_threads, "0 restores the default");
+        }
+
+        # the threads all run once the controller starts
+        Counter fired(1);
+        AsyncIoController::addTimer(now_us() + 1ms, sub () { fired.dec(); });
+        assertEq(0, fired.waitForZero(10s), "the timer fires");
+        hash<auto> info = AsyncIoController::getInfo();
+        assertEq(io_threads, info.threads.size(), "every I/O thread runs");
+    }
+
+    setWhileRunningTest() {
+        # a timer far in the future keeps the controller running
+        int id = AsyncIoController::addTimer(now_us() + 1h, sub () {});
+        on_exit {
+            AsyncIoController::cancelTimer(id);
+        }
+        assertTrue(AsyncIoController::running(), "the controller runs");
+        int io_threads = AsyncIoController::getInfo().io_threads;
+        assertThrows("ASYNC-IO-ERROR", "cannot change I/O thread count while controller is running",
+            \AsyncIoController::setMaxIoThreads(), (io_threads + 1,));
+        assertEq(io_threads, AsyncIoController::getInfo().io_threads, "the thread count is unchanged");
+    }
+}

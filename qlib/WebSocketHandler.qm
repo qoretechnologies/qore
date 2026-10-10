@@ -135,6 +135,16 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     @section websockethandler_relnotes WebSocketHandler Release History
 
     @subsection websockethandler_v2_8 Version 2.8
+    - @ref WebSocketHandler::WebSocketConnection::stop() "WebSocketConnection::stop()" delivers the messages sent
+      before it to an HTTP/1.1 client, followed by a close frame, before the connection closes; the connection
+      could be closed before they were written, so a message sent just before closing, such as an error reported
+      to the client, was lost.  Messages sent after the call are discarded, and a client that does not read the
+      messages within the send timeout is disconnected without them
+    - added @ref WebSocketHandler::WebSocketConnection::forceStop() "WebSocketConnection::forceStop()" to close a
+      connection at once, discarding the messages not yet delivered; the handler uses it when its listener or the
+      server stops and to drop a slow client, so a subclass that overrides
+      @ref WebSocketHandler::WebSocketConnection::stop() "stop()" to observe those closes must override
+      @ref WebSocketHandler::WebSocketConnection::forceStop() "forceStop()" instead
     - an HTTP/1.0 opening handshake is rejected with a 400 response (RFC 6455 section 4.2.1); a server must ignore
       the \c Upgrade header of an HTTP/1.0 request (RFC 9110 section 7.8)
     - added a per-connection outbound queue limit (the \c max_queue_size handler option and
@@ -397,6 +407,28 @@ public class WebSocketConnection {
             @since WebSocketHandler 2.8
         */
         bool transport_close_signaled = False;
+
+        #! True once a close discarding the undelivered frames has been requested with @ref forceStop()
+        /** Set under @ref io_mutex; read by @ref signalTransportClose().
+
+            @since WebSocketHandler 2.8
+        */
+        bool force_stop = False;
+
+        #! True once the transport has been closed without delivering the queued frames
+        /** Set by @ref signalTransportClose() under @ref io_mutex.
+
+            @since WebSocketHandler 2.8
+        */
+        bool transport_force_closed = False;
+
+        #! True once the HTTP/1.1 close frame has been queued after the frames already sent
+        /** Set under @ref send_lock; no frame may follow the close frame, so @ref sendFrameLocked() discards
+            frames sent after it.
+
+            @since WebSocketHandler 2.8
+        */
+        bool close_frame_queued = False;
 
         #! True after the async transport has been registered and can accept direct writes
         /** Sends performed during @ref registered() must be queued and drained
@@ -723,7 +755,8 @@ public class WebSocketConnection {
         handler.logWarn("WebSocket connection outbound queue reached the limit (%d frames); dropping the slow "
             "client to protect server memory", limit);
         try {
-            stop();
+            # the client does not read its messages, so they are discarded rather than delivered first
+            forceStop();
         } catch (hash<ExceptionInfo> ex) {
             handler.logError("error dropping overflowing WebSocket connection: %s", get_exception_string(ex));
         }
@@ -755,7 +788,7 @@ public class WebSocketConnection {
                 handler.logWarn("WebSocket stream outbound send buffer is full (backpressure); dropping the slow "
                     "client to protect server resources");
                 try {
-                    stop();
+                    forceStop();
                 } catch (hash<ExceptionInfo> ex) {
                     handler.logError("error dropping backpressured WebSocket connection: %s",
                         get_exception_string(ex));
@@ -790,6 +823,10 @@ public class WebSocketConnection {
         @since WebSocketHandler 2.8
     */
     private sendFrameLocked(binary encoded) {
+        if (close_frame_queued) {
+            # the connection is closing and its close frame has been queued; no frame may follow it
+            return;
+        }
         if (direct_send_enabled && (async_ws_poll_op || stream_ctx)) {
             flushBufferedFramesLocked();
             sendDirectLocked(encoded);
@@ -982,8 +1019,48 @@ public class WebSocketConnection {
         }
     }
 
-    #! force closing socket related to connection
+    #! Closes the connection after delivering the messages already sent on it
+    /** On HTTP/1.1, messages passed to @ref send() before this call reach the client in the order they were sent,
+        followed by a close frame; then the connection closes.  Messages sent after this call are discarded.  A
+        client that does not read the messages within the handler's send timeout (see
+        @ref WebSocketHandler::WebSocketHandler::setSendTimeout() "WebSocketHandler::setSendTimeout()") is
+        disconnected without them.
+
+        On HTTP/2 and HTTP/3, the messages sent before this call have already been handed to the transport, and
+        the stream is closed without a close frame.
+
+        Use @ref forceStop() to close the connection at once, discarding the messages not yet delivered.
+
+        @par Example:
+        @code{.py}
+# reject a client protocol violation: the client receives the error, then the close
+send(make_json({"type": "error", "message": "unsupported request"}));
+stop();
+        @endcode
+
+        @note on HTTP/1.1, the messages sent before this call are delivered before the connection closes since
+        %WebSocketHandler 2.8
+    */
     stop() {
+        stopIntern(False);
+    }
+
+    #! Closes the connection immediately, discarding the messages not yet delivered to the client
+    /** The handler uses this when its listener or the server stops, and to drop a client that does not read its
+        messages; a connection still delivering its messages after @ref stop() is closed at once.
+
+        @since %WebSocketHandler 2.8
+    */
+    forceStop() {
+        stopIntern(True);
+    }
+
+    #! Stops the connection; delivers the messages already sent first unless \a force is @ref True
+    private stopIntern(bool force) {
+        if (force) {
+            AutoLock al(io_mutex);
+            force_stop = True;
+        }
         stop_flag = True;
         # initiate the transport close (no-op if the async transport is not wired yet — the
         # handler's startImpl() replays signalTransportClose() once the transport is registered,
@@ -1000,48 +1077,87 @@ public class WebSocketConnection {
     }
 
     #! Signals the wired async transport (H1 poll op or H2/H3 stream processor) to begin closing
-    /** Idempotent and safe to call from any thread.  Called by @ref stop() and replayed by the
-        handler's @ref WebSocketHandler::startImpl() after the transport is wired: a @ref stop()
-        that arrives during the setup window — after the connection is registered in the handler's
-        connection hash but before @ref setWsPollOp() (H1) or @ref setStreamProcessor() (H2/H3) has
-        wired the transport — would otherwise silently lose the close, leaving the connection alive
-        until an unrelated timeout.  The @ref transport_close_signaled guard ensures the close is
-        signaled exactly once even when @ref stop() and the replay race.
+    /** Idempotent and safe to call from any thread.  Called by @ref stop() and @ref forceStop() and replayed by
+        the handler's @ref WebSocketHandler::startImpl() after the transport is wired: a stop that arrives during
+        the setup window — after the connection is registered in the handler's connection hash but before
+        @ref setWsPollOp() (H1) or @ref setStreamProcessor() (H2/H3) has wired the transport — would otherwise
+        silently lose the close, leaving the connection alive until an unrelated timeout.  The
+        @ref transport_close_signaled and @ref transport_force_closed guards ensure that the close is signaled
+        once, and the forced close once, even when a stop and the replay race; a @ref forceStop() after a
+        @ref stop() still closes the transport at once.
+
+        On HTTP/1.1, the close frame of a @ref stop() is queued after the frames already sent, and the poll
+        operation completes when it has written them all (or when the client does not read them within the send
+        timeout), which releases the handler thread.
 
         @note Internal API — not intended for use by subclasses.
 
         @since WebSocketHandler 2.8
     */
     signalTransportClose() {
+        bool force;
+        bool queue_close;
         {
             AutoLock al(io_mutex);
-            if (transport_close_signaled || (!async_ws_poll_op && !stream_processor)) {
-                # already signaled, or the transport is not wired yet (startImpl() will replay)
+            if (!async_ws_poll_op && !stream_processor) {
+                # the transport is not wired yet (startImpl() will replay)
                 return;
             }
+            force = force_stop;
+            if (force) {
+                if (transport_force_closed) {
+                    return;
+                }
+                transport_force_closed = True;
+            } else if (transport_close_signaled) {
+                return;
+            }
+            queue_close = !transport_close_signaled;
             transport_close_signaled = True;
         }
         # For async H1 WebSocket: initiate close handshake via poll op
         if (async_ws_poll_op) {
-            try {
-                async_ws_poll_op.sendClose(WSCC_GoingAway);
-            } catch () {}
-            # Wake the I/O controller to flush the close frame
+            if (queue_close) {
+                # the close frame follows every frame already sent; frames sent after it are discarded (see
+                # sendFrameLocked()); a forced close does not need the ordering, and it can be requested by a
+                # thread already holding send_lock (a send that drops a slow client)
+                if (force) {
+                    try {
+                        async_ws_poll_op.sendClose(WSCC_GoingAway);
+                    } catch () {}
+                } else {
+                    AutoLock al(send_lock);
+                    if (!direct_send_enabled) {
+                        # frames buffered before direct sends are enabled must be written before the close frame;
+                        # startImpl() replays this call after enableDirectSend() has written them (lock order
+                        # send_lock -> io_mutex, as in sendFrame() -> notifyIo())
+                        AutoLock al_io(io_mutex);
+                        transport_close_signaled = False;
+                        return;
+                    }
+                    flushBufferedFramesLocked();
+                    close_frame_queued = True;
+                    try {
+                        async_ws_poll_op.sendClose(WSCC_GoingAway);
+                    } catch () {}
+                }
+            }
+            # Wake the I/O controller to flush the queued frames and the close frame; the poll op completes once
+            # it has written them, which releases the handler thread's done Counter
             if (async_ctrl) {
                 try {
                     async_ctrl.wakeSocket(sock);
                 } catch () {}
             }
-            # Deterministically release the handler thread's done Counter.  The
-            # wakeSocket() above re-drives the poll op's continuePoll() to run the
-            # close handshake and complete the op, but that wake can be lost during
-            # teardown (the controller routes wakes by a socket hash that may have
-            # gone stale), leaving startImpl() blocked forever on done.waitForZero()
-            # and the listener stop blocked on dThreads.wait().  Force-completing the
-            # poll op here guarantees teardown always makes progress; it is
-            # idempotent with the poll op's normal onComplete().  (Only the async H1
-            # HttpWebSocketPollOperation implements forceClose(); guard accordingly.)
-            if (async_ws_poll_op.hasCallableMethod("forceClose")) {
+            # A forced close releases the handler thread's done Counter at once, discarding the frames not yet
+            # written: it is used for listener and server shutdown, where the wakeSocket() above can be lost
+            # (the controller routes wakes by a socket hash that may have gone stale during teardown), which
+            # would leave startImpl() blocked forever on done.waitForZero() and the listener stop blocked on
+            # dThreads.wait(); force-completing the poll op guarantees teardown always makes progress, and it is
+            # idempotent with the poll op's normal onComplete().  It is not used for a stop(): releasing the
+            # handler thread closes the socket, which would discard the frames sent before the stop.  (Only the
+            # async H1 HttpWebSocketPollOperation implements forceClose(); guard accordingly.)
+            if (force && async_ws_poll_op.hasCallableMethod("forceClose")) {
                 try {
                     call_object_method(async_ws_poll_op, "forceClose");
                 } catch () {}
@@ -2393,7 +2509,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             # sets the stop flag and startImpl() replays signalTransportClose() once the poll
             # op (H1) or stream processor (H2/H3) is registered (see the wsc.stop_flag checks
             # below)
-            wsc.stop();
+            wsc.forceStop();
         }
         if (is_http2) {
             @assert(h2_stream_id > 0, "missing HTTP/2 stream id for WebSocket");
@@ -2722,7 +2838,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         ch{id}.send(d);
     }
 
-    #! stop given connection ID
+    #! stops the given connection after delivering the messages already sent on it
+    /** @see @ref WebSocketConnection::stop()
+    */
     stopOne(softstring id) {
         rwl.readLock();
         on_exit rwl.readUnlock();
@@ -2750,13 +2868,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         - A Counter for HTTP/2 and HTTP/3 stream connections (WebSocketStreamProcessor drives I/O)
 
         Without this method, the server shutdown sequence would hang waiting for these threads
-        to notice the shutdown flag. By calling stop() on each connection, we:
+        to notice the shutdown flag. By calling forceStop() on each connection, we:
         1. Set the connection's stop_flag to True
         2. Abort the poll operation or stream processor (decrements the done Counter)
 
         @param lid the listener ID being stopped
 
-        @see WebSocketConnection::stop() for how individual connections are signaled
+        @see WebSocketConnection::forceStop() for how individual connections are signaled
     */
     private stopImpl(string lid) {
         # The inherited stop() method has already marked lsh{lid} while holding m.  Wake up
@@ -2764,7 +2882,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         # publication in startImpl().
         rwl.readLock();
         on_exit rwl.readUnlock();
-        map $1.stop(), ch.iterator(), $1.getListenerId() == lid;
+        map $1.forceStop(), ch.iterator(), $1.getListenerId() == lid;
     }
 
     #! Called when the handler itself is stopped; signals all connections to wake up blocked threads
@@ -2792,19 +2910,19 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     /**
         ## Implementation
 
-        Iterates over all active connections (ch hash) and calls stop() on each.
+        Iterates over all active connections (ch hash) and calls forceStop() on each.
         Uses a read lock since we're only reading the hash and calling methods on values.
 
         ## Thread Safety
 
         - Uses rwl.readLock() to allow concurrent access during iteration
-        - Each connection's stop() is thread-safe
+        - Each connection's forceStop() is thread-safe
         - New connections can still be added during iteration (won't be signaled, but that's OK
           since they'll see the shutdown flags on their next loop iteration)
 
-        ## WebSocketConnection::stop() Behavior
+        ## WebSocketConnection::forceStop() Behavior
 
-        For each connection, stop() does:
+        For each connection, forceStop() does:
         1. Sets stop_flag = True
         2. Closes the channel (wakes up waitForIoEvent() immediately)
         3. For async H1 connections, aborts the poll operation (decrements the done Counter)
@@ -2816,7 +2934,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     private stopAllConnections() {
         rwl.readLock();
         on_exit rwl.readUnlock();
-        map $1.stop(), ch.iterator();
+        map $1.forceStop(), ch.iterator();
     }
 
 

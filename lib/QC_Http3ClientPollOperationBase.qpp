@@ -497,30 +497,10 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
             std::string sid = std::to_string(stream_id_val);
             bool is_end = output->getKeyValue("end_stream").getAsBool();
 
-            AbstractAsyncAction* action = nullptr;
-            bool need_buffer = false;
-            {
-                AutoLocker al(stream_lock);
-                auto it = stream_actions.find(sid);
-                if (it != stream_actions.end()) {
-                    action = it->second;
-                    action->ref();
-                    response_dispatched = true;
-                } else if (pending_stream_ids.count(sid) || submits_in_progress > 0) {
-                    need_buffer = true;
-                }
-            }
-
-            if (need_buffer) {
-                // Buffer response for pending submit.  Mutate the hash while
-                // it's still uniquely owned by output_val (refcount==1) — the
-                // setKeyValue assertion enforces this — then bump the
-                // refcount so pending_responses gets its own owning reference
-                // before output_val discards at end of loop iteration.
-                output->setKeyValue("protocol", new QoreStringNode("h3"), xsink);
-                output->ref();
-                AutoLocker al(stream_lock);
-                pending_responses[sid].push_back(output);
+            bool buffered = false;
+            AbstractAsyncAction* action = takeResponseAction(sid, output, buffered, xsink);
+            if (action) {
+                response_dispatched = true;
             }
 
             // Remove stream BEFORE action so active_stream_count is already
@@ -837,6 +817,34 @@ void Http3ClientPollOperationPriv::checkCapacity(int max_streams, ExceptionSink*
         xsink->raiseException("HTTP3-CAPACITY-ERROR",
             "connection at capacity: %d/%d streams", active_stream_count, effective_max_streams);
     }
+}
+
+AbstractAsyncAction* Http3ClientPollOperationPriv::takeResponseAction(const std::string& sid, QoreHashNode* output,
+        bool& buffered, ExceptionSink* xsink) {
+    buffered = false;
+    AutoLocker al(stream_lock);
+    auto it = stream_actions.find(sid);
+    if (it != stream_actions.end()) {
+        it->second->ref();
+        return it->second;
+    }
+    if (pending_stream_ids.count(sid) || submits_in_progress > 0) {
+        // Buffer the response for the pending submit in the same critical
+        // section as the check: registerStream() takes the buffered responses
+        // under stream_lock, so if the lock were released between the check
+        // and the push, a registration in between would find nothing buffered
+        // and this response would be left in pending_responses with the
+        // request's action registered, never completing it.  Mutate the hash
+        // while it's still uniquely owned by the caller (refcount==1) — the
+        // setKeyValue assertion enforces this — then bump the refcount so
+        // pending_responses gets its own owning reference before the caller
+        // discards its own.
+        output->setKeyValue("protocol", new QoreStringNode("h3"), xsink);
+        output->ref();
+        pending_responses[sid].push_back(output);
+        buffered = true;
+    }
+    return nullptr;
 }
 
 void Http3ClientPollOperationPriv::beginSubmit() {

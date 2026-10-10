@@ -225,6 +225,11 @@ private:
     DLLLOCAL static bool setLayeredBioRetry(BIO* bio, SSL* outer_ssl, int rc);
 #endif
 
+    //! Advances the TLS state generation of the socket when a handshake starts or completes
+    /** A handshake can change the cipher of the connection; see qore_socket_private::tls_state_gen.
+    */
+    DLLLOCAL static void infoCallback(const SSL* ssl, int where, int ret);
+
     //! Static callback for server-side ALPN protocol selection
     static int alpnSelectCallback(SSL* ssl, const unsigned char** out, unsigned char* outlen,
         const unsigned char* in, unsigned int inlen, void* arg);

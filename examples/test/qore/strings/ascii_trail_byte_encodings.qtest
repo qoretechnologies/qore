@@ -54,7 +54,10 @@ class AsciiTrailByteEncodingTest inherits QUnit::Test {
             }
             rv{i.key} = text;
         }
-        assertTrue(rv.size() > 0, "an encoding is supported");
+        # the iconv of the platform may support none of them (ex: musl, which can decode some but encode none)
+        if (!rv) {
+            testSkip(sprintf("iconv cannot convert text to any of %y", keys Chars));
+        }
         return rv;
     }
 

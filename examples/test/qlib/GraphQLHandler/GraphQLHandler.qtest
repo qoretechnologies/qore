@@ -26,6 +26,9 @@ class GraphQLHandlerTest inherits QUnit::Test {
         HttpServer mServer;
         int port;
 
+        #! the time allowed for each expected message, so a lost message fails the test instead of hanging it
+        const RecvTimeout = 60s;
+
         const StarWarsSdl = "
             schema { query: Query mutation: Mutation }
             \"\"\"the root query\"\"\"
@@ -473,14 +476,14 @@ class GraphQLHandlerTest inherits QUnit::Test {
 
         # connection_init -> connection_ack
         wsc.send(make_json({"type": "connection_init"}));
-        assertEq("connection_ack", parse_json(q.get()).type);
+        assertEq("connection_ack", parse_json(q.get(RecvTimeout)).type);
 
         # a subscription streams a next per event, then complete
         wsc.send(make_json({"type": "subscribe", "id": "1",
             "payload": {"query": "subscription { ticks }"}}));
         list<int> vals = ();
         while (True) {
-            hash<auto> m = parse_json(q.get());
+            hash<auto> m = parse_json(q.get(RecvTimeout));
             if (m.type == "next") {
                 vals += m.payload.data.ticks;
             } else if (m.type == "complete") {
@@ -493,14 +496,14 @@ class GraphQLHandlerTest inherits QUnit::Test {
 
         # a query sent over subscribe executes once: a single next then complete
         wsc.send(make_json({"type": "subscribe", "id": "2", "payload": {"query": "{ x }"}}));
-        hash<auto> nm = parse_json(q.get());
+        hash<auto> nm = parse_json(q.get(RecvTimeout));
         assertEq("next", nm.type);
         assertEq(0, nm.payload.data.x);
-        assertEq("complete", parse_json(q.get()).type);
+        assertEq("complete", parse_json(q.get(RecvTimeout)).type);
 
         # ping -> pong
         wsc.send(make_json({"type": "ping"}));
-        assertEq("pong", parse_json(q.get()).type);
+        assertEq("pong", parse_json(q.get(RecvTimeout)).type);
     }
 
     #! creates a connected WebSocket client whose messages are pushed to the returned Queue
@@ -540,17 +543,17 @@ class GraphQLHandlerTest inherits QUnit::Test {
             Queue mq = c.queue;
             on_exit wsc.disconnect();
             wsc.send(make_json({"type": "connection_init"}));
-            assertEq("connection_ack", parse_json(mq.get()).type);
+            assertEq("connection_ack", parse_json(mq.get(RecvTimeout)).type);
             wsc.send(make_json({"type": "subscribe", "id": "ev",
                 "payload": {"query": "subscription { feed }"}}));
             # the resolver (in the stream thread) created the event queue; fetch it deterministically
-            GraphQLEventQueue evq = created.get();
+            GraphQLEventQueue evq = created.get(RecvTimeout);
             evq.post(10);
             evq.post(20);
             evq.complete();
             list<int> vals = ();
             while (True) {
-                hash<auto> m = parse_json(mq.get());
+                hash<auto> m = parse_json(mq.get(RecvTimeout));
                 if (m.type == "next") {
                     vals += m.payload.data.feed;
                 } else if (m.type == "complete") {
@@ -570,7 +573,7 @@ class GraphQLHandlerTest inherits QUnit::Test {
             on_exit wsc.disconnect();
             wsc.send(make_json({"type": "subscribe", "id": "early",
                 "payload": {"query": "subscription { feed }"}}));
-            assertRegex("connection_init must be sent", parse_json(mq.get()).payload[0].message);
+            assertRegex("connection_init must be sent", parse_json(mq.get(RecvTimeout)).payload[0].message);
         }
 
         # --- a duplicate connection_init is rejected ---
@@ -580,9 +583,9 @@ class GraphQLHandlerTest inherits QUnit::Test {
             Queue mq = c.queue;
             on_exit wsc.disconnect();
             wsc.send(make_json({"type": "connection_init"}));
-            assertEq("connection_ack", parse_json(mq.get()).type);
+            assertEq("connection_ack", parse_json(mq.get(RecvTimeout)).type);
             wsc.send(make_json({"type": "connection_init"}));
-            assertRegex("too many initialisation", parse_json(mq.get()).payload[0].message);
+            assertRegex("too many initialisation", parse_json(mq.get(RecvTimeout)).payload[0].message);
         }
 
         # --- the per-connection subscription cap (1) rejects a second concurrent subscription ---
@@ -592,16 +595,16 @@ class GraphQLHandlerTest inherits QUnit::Test {
             Queue mq = c.queue;
             on_exit wsc.disconnect();
             wsc.send(make_json({"type": "connection_init"}));
-            assertEq("connection_ack", parse_json(mq.get()).type);
+            assertEq("connection_ack", parse_json(mq.get(RecvTimeout)).type);
             # the first subscription occupies the only slot; its source never completes (it blocks)
             wsc.send(make_json({"type": "subscribe", "id": "a",
                 "payload": {"query": "subscription { feed }"}}));
-            GraphQLEventQueue qa = created.get();
+            GraphQLEventQueue qa = created.get(RecvTimeout);
             on_exit qa.cancel();
             # a second subscription exceeds the cap and is rejected
             wsc.send(make_json({"type": "subscribe", "id": "b",
                 "payload": {"query": "subscription { feed }"}}));
-            assertRegex("subscription limit", parse_json(mq.get()).payload[0].message);
+            assertRegex("subscription limit", parse_json(mq.get(RecvTimeout)).payload[0].message);
         }
 
         # --- an unrecognized message type is reported as an error (not silently ignored) ---
@@ -611,9 +614,9 @@ class GraphQLHandlerTest inherits QUnit::Test {
             Queue mq = c.queue;
             on_exit wsc.disconnect();
             wsc.send(make_json({"type": "connection_init"}));
-            assertEq("connection_ack", parse_json(mq.get()).type);
+            assertEq("connection_ack", parse_json(mq.get(RecvTimeout)).type);
             wsc.send(make_json({"type": "bogus", "id": "z"}));
-            hash<auto> em = parse_json(mq.get());
+            hash<auto> em = parse_json(mq.get(RecvTimeout));
             assertEq("error", em.type);
             assertRegex("unsupported message type", em.payload[0].message);
         }
@@ -735,7 +738,7 @@ class GraphQLHandlerTest inherits QUnit::Test {
 
         # a subscription over SSE: a background producer posts three events then completes the stream
         background sub () {
-            GraphQLEventQueue evq = created.get();
+            GraphQLEventQueue evq = created.get(RecvTimeout);
             evq.post(1);
             evq.post(2);
             evq.post(3);

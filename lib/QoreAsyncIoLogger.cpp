@@ -67,11 +67,15 @@ void qore_async_io_log_v(int level, const char* fmt, va_list args) {
     QoreLoggerBridge* lgr;
     {
         AutoLocker al(async_io_logger_lock);
-        if (!async_io_logger) {
-            return;   // fast path: no logger set
-        }
         lgr = async_io_logger;
-        lgr->ref();
+        if (lgr) {
+            lgr->ref();
+        }
+    }
+    if (!lgr) {
+        // no global async I/O logger: use the global controller's logger, if it has one
+        qore_async_io_controller_log_v(level, fmt, args);
+        return;
     }
     // Check level outside lock (calls Qore method)
     if (!lgr->isEnabledFor(level)) {

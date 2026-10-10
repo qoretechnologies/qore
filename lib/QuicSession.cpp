@@ -111,6 +111,20 @@ static bool quic_server_keep_alive_disabled_for_test() {
 }
 #endif
 
+//! The number of ngtcp2 log lines a client connection keeps for the unanswered-request diagnostic
+/** From the QORE_QUIC_STALL_TRACE environment variable (0 or unset: none; at most 10000).  Read for every new
+    connection so a process can enable it without restarting; the ring costs one formatted line per logged
+    ngtcp2 event of the connection, so it is meant for capturing a stall, not for permanent use.
+*/
+static size_t quic_stall_trace_lines() {
+    const char* v = getenv("QORE_QUIC_STALL_TRACE");
+    if (!v || !*v) {
+        return 0;
+    }
+    long n = strtol(v, nullptr, 10);
+    return n <= 0 ? 0 : static_cast<size_t>(n > 10000 ? 10000 : n);
+}
+
 static void quic_ngtcp2_log_printf(void* /*user_data*/, const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
@@ -561,6 +575,22 @@ bool QuicSession::verifyRetryToken(const ngtcp2_pkt_hd& hd, const struct sockadd
         &hd.dcid, RETRY_TOKEN_TIMEOUT_NS, timestamp()) == 0;
 }
 
+void QuicSession::traceRingPrintf(void* user_data, const char* fmt, ...) {
+    // called by ngtcp2 inside ngtcp2_conn_* calls, which run under mtx_
+    auto* session = static_cast<QuicSession*>(user_data);
+    if (!session || session->trace_ring_.empty()) {
+        return;
+    }
+    char buf[256];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    session->trace_ring_[session->trace_pos_] = buf;
+    session->trace_pos_ = (session->trace_pos_ + 1) % session->trace_ring_.size();
+    ++session->trace_count_;
+}
+
 std::shared_ptr<QuicSession> QuicSession::createServer(
     qore_socket_private* sock, ExceptionSink* xsink,
     const ngtcp2_pkt_hd* initial_hdr,
@@ -981,6 +1011,10 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
 #endif
     if (quic_ngtcp2_log_enabled()) {
         settings.log_printf = quic_ngtcp2_log_printf;
+    } else if (size_t lines = quic_stall_trace_lines()) {
+        // keep the connection's last ngtcp2 log lines for the unanswered-request diagnostic
+        trace_ring_.resize(lines);
+        settings.log_printf = traceRingPrintf;
     }
 
     // Transport parameters
@@ -1550,6 +1584,28 @@ int QuicSession::writePackets(QuicPacketBatch& packets, ExceptionSink* xsink) {
     return writePacketsLocked(packets, xsink);
 }
 
+void QuicSession::accountStreamWrite(int64_t stream_id, ngtcp2_ssize ndatalen, int fin, const nghttp3_vec* vec,
+        nghttp3_ssize sveccnt) {
+    if (is_server_ || stream_id < 0 || ndatalen < 0) {
+        return;
+    }
+    auto it = streams_.find(stream_id);
+    if (it == streams_.end()) {
+        return;
+    }
+    it->second->tx_bytes += static_cast<uint64_t>(ndatalen);
+    if (fin) {
+        // ngtcp2 writes the FIN with the last of the stream data handed to it
+        size_t total = 0;
+        for (nghttp3_ssize i = 0; i < sveccnt; ++i) {
+            total += vec[i].len;
+        }
+        if (static_cast<size_t>(ndatalen) == total) {
+            it->second->fin_written = true;
+        }
+    }
+}
+
 int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsink) {
     if (!conn_) {
         xsink->raiseException("QUIC-ERROR", "QUIC connection not initialized");
@@ -1691,6 +1747,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                     nghttp3_conn_add_write_offset(h3_conn_, stream_id,
                                                    static_cast<uint64_t>(ndatalen));
                 }
+                accountStreamWrite(stream_id, ndatalen, fin, vec, sveccnt);
                 continue;
             case NGTCP2_ERR_CLOSING:
             case NGTCP2_ERR_DRAINING:
@@ -1710,6 +1767,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
             nghttp3_conn_add_write_offset(h3_conn_, stream_id,
                                            static_cast<uint64_t>(ndatalen));
         }
+        accountStreamWrite(stream_id, ndatalen, fin, vec, sveccnt);
 
         if (nwrite == 0) {
             // No stream data to write — try sending queued datagrams (RFC 9221)
@@ -1764,6 +1822,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
         // Each ngtcp2_conn_writev_stream result is a separate QUIC packet
         // that must be sent as its own UDP datagram
         packets.addPacket(pkt_buf_, static_cast<size_t>(nwrite));
+        last_tx_ts_ = ts;
         ++total_packets;
         total_bytes += static_cast<size_t>(nwrite);
         printd(5, "writePacketsLocked() packet #%d: %d bytes, stream_id=" QLLD " ndatalen=%d\n",
@@ -1915,6 +1974,8 @@ QuicTimerWriteResult QuicSession::processTimerAndWrite(QuicPacketBatch& packets,
         connect_response_hold_until_ = 0;
     }
 #endif
+
+    last_write_attempt_ts_ = nowLocked();
 
     // Check and handle timer expiry (matches curl's pattern: handle once,
     // then re-check after writePacketsLocked flushes the result).
@@ -3608,20 +3669,43 @@ int QuicSession::cancelStream(int64_t stream_id, uint64_t app_error_code, Except
             const QuicStreamInfo& si = *it->second;
             // log the path without its query string, which can carry credentials (e.g. an API key parameter)
             std::string path = si.path.substr(0, si.path.find('?'));
+            auto ago = [now](uint64_t ts) -> long long {
+                return ts ? static_cast<long long>((now - ts) / 1000000) : -1LL;
+            };
+            // the request's progress tells a request that never left (I/O loop, flow control) from one the
+            // peer received but did not answer; last_write tells whether the I/O thread kept servicing the
+            // connection
             qore_async_io_log(QORE_LOG_LEVEL_WARN, "QUIC: cancelling unanswered client stream %lld "
-                "(%s %s) on session %lld after %lld ms: handshake_complete=%d last_rx=%lld ms ago "
-                "pkt_sent=%llu pkt_recv=%llu pkt_lost=%llu bytes_in_flight=%llu cwnd=%llu smoothed_rtt=%lld ms "
-                "loss_timer_in=%lld ms streams=%zu",
+                "(%s %s) on session %lld after %lld ms: handshake_complete=%d req_tx=%llu req_acked=%llu "
+                "fin_written=%d last_rx=%lld ms ago last_tx=%lld ms ago last_write=%lld ms ago pending_write=%d "
+                "max_data_left=%llu cwnd_left=%llu pkt_sent=%llu pkt_recv=%llu pkt_lost=%llu "
+                "bytes_in_flight=%llu cwnd=%llu smoothed_rtt=%lld ms loss_timer_in=%lld ms streams=%zu",
                 (long long)stream_id, si.method.c_str(), path.c_str(), (long long)session_id_,
-                si.opened_ts ? (long long)((now - si.opened_ts) / 1000000) : -1LL,
-                (int)isHandshakeComplete(),
-                last_rx_ts_ ? (long long)((now - last_rx_ts_) / 1000000) : -1LL,
+                ago(si.opened_ts), (int)isHandshakeComplete(),
+                (unsigned long long)si.tx_bytes, (unsigned long long)si.acked_bytes, (int)si.fin_written,
+                ago(last_rx_ts_), ago(last_tx_ts_), ago(last_write_attempt_ts_),
+                (int)pending_write_.load(std::memory_order_acquire),
+                (unsigned long long)ngtcp2_conn_get_max_data_left(conn_),
+                (unsigned long long)ngtcp2_conn_get_cwnd_left(conn_),
                 (unsigned long long)cinfo.pkt_sent, (unsigned long long)cinfo.pkt_recv,
                 (unsigned long long)cinfo.pkt_lost, (unsigned long long)cinfo.bytes_in_flight,
                 (unsigned long long)cinfo.cwnd, (long long)(cinfo.smoothed_rtt / 1000000),
                 ngtcp2_conn_get_expiry(conn_) == UINT64_MAX ? -1LL
                     : (long long)(((int64_t)ngtcp2_conn_get_expiry(conn_) - (int64_t)now) / 1000000),
                 streams_.size());
+            if (!trace_ring_.empty() && trace_count_) {
+                // the connection's last ngtcp2 events, oldest first
+                std::string trace;
+                size_t n = trace_count_ < trace_ring_.size() ? static_cast<size_t>(trace_count_)
+                    : trace_ring_.size();
+                size_t start = trace_count_ < trace_ring_.size() ? 0 : trace_pos_;
+                for (size_t i = 0; i < n; ++i) {
+                    trace += "\n  ";
+                    trace += trace_ring_[(start + i) % trace_ring_.size()];
+                }
+                qore_async_io_log(QORE_LOG_LEVEL_WARN, "QUIC: last %zu ngtcp2 events of session %lld:%s", n,
+                    (long long)session_id_, trace.c_str());
+            }
         }
     }
 
@@ -3857,6 +3941,12 @@ int QuicSession::ackedStreamDataOffsetCallback(ngtcp2_conn* /* conn */,
         int rv = nghttp3_conn_add_ack_offset(session->h3_conn_, stream_id, datalen);
         if (rv != 0) {
             return NGTCP2_ERR_CALLBACK_FAILURE;
+        }
+    }
+    if (!session->is_server_) {
+        auto it = session->streams_.find(stream_id);
+        if (it != session->streams_.end()) {
+            it->second->acked_bytes += datalen;
         }
     }
     return 0;
