@@ -654,6 +654,15 @@ Operations that genuinely block stay guarded and must **not** grow a fast path â
 examples.  A continuePoll worker that hits `HTTP2-FLOW-CONTROL` therefore cannot wait for drain
 and must surface the error to its caller.
 
+`AbstractStreamContext::sendDataWithTimeout()` is the bounded form of that wait for stream contexts:
+`Http2StreamContext` retries `sendHttp2StreamData()` after `waitForHttp2StreamDrain()` and
+`Http3StreamContext` retries `submitQuicStreamData()` after `waitForQuicStreamDrain()`, waking the
+controller before each wait, until the data is accepted or the timeout expires
+(`STREAM-SEND-TIMEOUT`).  `WebSocketHandler` uses it for HTTP/2 and HTTP/3 sends when no
+`max_queue_size` is set, with the handler's send timeout, and closes the connection when it expires;
+its sends run on handler-pool threads, where the wait is legal.  Called in a continuePoll worker or on
+the I/O thread, the wait raises `SOCKET-SYNC-ON-IO-THREAD-ERROR` as above.
+
 ## HTTP/2 Extended CONNECT Rejection (RFC 8441)
 
 When the server does not advertise `ENABLE_CONNECT_PROTOCOL` in its SETTINGS, extended CONNECT requests (i.e.,

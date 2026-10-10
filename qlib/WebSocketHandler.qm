@@ -154,6 +154,11 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       HTTP/2 and HTTP/3 the connection is closed as soon as the stream send buffer reports backpressure (a
       non-blocking send is used instead of waiting for the buffer to drain).  Dropped frames are never sent on a
       live connection — the whole connection is closed so the peer never sees a gap in the message stream
+    - without an outbound queue limit, a message sent to an HTTP/2 client while more than 1 MB sent before it was
+      still waiting to be delivered was dropped, and the connection closed with it; the send now waits for the
+      stream to drain, as on HTTP/1.1 and HTTP/3, for at most the send timeout (see
+      @ref WebSocketHandler::WebSocketHandler::setSendTimeout() "setSendTimeout()"), and a client that does not read
+      in that time is disconnected; HTTP/3 sends are bounded by the send timeout too
     - added an idle timeout (the \c idle_timeout handler option and
       @ref WebSocketHandler::WebSocketHandler::setIdleTimeout() "setIdleTimeout()"): a connection with no
       inbound activity for the configured number of seconds is closed, reclaiming slots/resources held by idle
@@ -778,7 +783,8 @@ public class WebSocketConnection {
         limit is configured, a non-blocking @ref AsyncSocketIo::AbstractStreamContext::trySendData() "trySendData()"
         is used: if the stream send buffer is full the whole connection is closed (a slow or non-reading client must
         not stall a broadcast or have frames silently dropped — closing is the only stream-safe response).  When no
-        limit is set the legacy blocking @ref AsyncSocketIo::AbstractStreamContext::sendData() "sendData()" is used.
+        limit is set, @ref AsyncSocketIo::AbstractStreamContext::sendDataWithTimeout() "sendDataWithTimeout()" waits
+        for a full stream send buffer to drain for at most the send timeout, after which the connection is closed.
 
         @since %WebSocketHandler 2.8
     */
@@ -796,7 +802,22 @@ public class WebSocketConnection {
                 return;
             }
         } else {
-            stream_ctx.sendData(encoded);
+            # a full stream send buffer is waited for, as on HTTP/1.1, for at most the send timeout; a client that
+            # does not read in that time is disconnected, so the peer never sees a gap in the message stream
+            try {
+                stream_ctx.sendDataWithTimeout(encoded, get_duration_milliseconds(handler.getSendTimeout()));
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "STREAM-SEND-TIMEOUT") {
+                    rethrow;
+                }
+                handler.logWarn("WebSocket stream send timed out; disconnecting the client: %s", ex.desc);
+                try {
+                    forceStop();
+                } catch (hash<ExceptionInfo> ex1) {
+                    handler.logError("error disconnecting the WebSocket client: %s", get_exception_string(ex1));
+                }
+                return;
+            }
         }
         notifyIo();
     }
@@ -2071,7 +2092,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
           be an empty string meaning no message
         - \c logger: a @ref Qore::Logger::Logger "Logger" object to use for logging (default: no logging)
         - \c send_timeout: a relative date/time value giving the timeout to use for sending data on the socket
-          (default: 30s); if an integer is sent here, it is assumed to represent a value in milliseconds
+          (default: 30s); if an integer is sent here, it is assumed to represent a value in milliseconds; a client
+          that does not read the messages sent to it within this time is disconnected (on HTTP/2 and HTTP/3, this is
+          the longest time a send waits for a full stream send buffer to drain)
         - \c extensions: a list of extension names to support (e.g., \c ("permessage-deflate")) or a
           @ref WebSocketUtil::WebSocketExtensionRegistry "WebSocketExtensionRegistry" instance (since WebSocketHandler
           2.3)

@@ -1,0 +1,221 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+/*  WebSocketStreamBackpressure.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    WebSocket over HTTP/2 and HTTP/3: messages sent while the stream send buffer is full are delivered.
+
+    The HTTP/2 stream refuses data while more than 1 MB sent before it is still waiting to be delivered; without an
+    outbound queue limit, a WebSocket send then waits for the stream to drain (for at most the handler's send
+    timeout) instead of losing the message and the connection.
+*/
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+
+%exec-class WebSocketStreamBackpressureTest
+
+#! Sends a large message and then a short one when the client asks for them
+class LargeSendWsConnection inherits WebSocketConnection {
+    private {
+        int payload_size;
+    }
+
+    constructor(WebSocketHandler handler, int payload_size) : WebSocketConnection(handler) {
+        self.payload_size = payload_size;
+    }
+
+    gotMessage(string msg) {
+        if (msg == "SEND") {
+            # the large message fills the stream send buffer, so the next send finds it full
+            send(strmul("x", payload_size));
+            send("last");
+        }
+    }
+}
+
+class LargeSendWsHandler inherits WebSocketHandler {
+    private {
+        int payload_size;
+    }
+
+    constructor(int payload_size, *hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+        self.payload_size = payload_size;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new LargeSendWsConnection(self, payload_size);
+    }
+}
+
+class WebSocketStreamBackpressureTest inherits QUnit::Test {
+    public {
+        #! the size of the large message: many times the 1 MB HTTP/2 stream backpressure threshold
+        const PayloadSize = 8 * 1024 * 1024;
+        #! the time allowed for each message
+        const RecvTimeout = 60s;
+
+        #! a self-signed certificate for localhost and 127.0.0.1, valid until 2126
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDADCCAeigAwIBAgIUXKr15b8sQMxcb9INtPg+H1wg/xIwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MCAXDTI2MTAxMDAyNTc0OFoYDzIxMjYw
+OTE2MDI1NzQ4WjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3DQEB
+AQUAA4IBDwAwggEKAoIBAQDsD4V5ReaHFImLv0RPFqnYq8+FaElazijf4Gj+VhOS
+vTl1IfEYzc0aEQ6Fmkqi0I+vXQtEE0HFmghjXD3aIXhzD21Kzx1y8ercXl00ldzF
+6u3npLF6QMQBnDe8O1fUXOOcB2gKLMXxgpVv4B8B48LE77YL/wvUuxfeEi709xcZ
+SharxQn/wScUX3FKvuwiPLe6ah0qcLiBMWQ5F3V1B6ZFc/0H4zVS5rXo9Ta94lsR
+xaWK53tRL2pAmOq5rGYPDVc2juIeiVEJilmUPcvjC+KYF8DP5h/k0taSD8XqhMnh
+6llIdO7xjMTnBfOyYijFDz0uNIosz5P+7uslIhpj/v2PAgMBAAGjSDBGMBoGA1Ud
+EQQTMBGCCWxvY2FsaG9zdIcEfwAAATAJBgNVHRMEAjAAMB0GA1UdDgQWBBQ+3yAG
+w8JgUjtCFfxAh60AjihZ3DANBgkqhkiG9w0BAQsFAAOCAQEApXmiRxqHQQB6wxXB
+JF3Ad9KpUZedmGvHKoQpTBRsPFhV+EmoYJSySLD8Ammu2ocCqK0UrJr/wEMSSnSK
+DmwA6KMIYZhm6OOB+viPD/VTMs4N5jX33VD8lfOOkaMd0hbYeajnk9oNCQYVJ7jS
+8u9SvmPO3Mt+RkGO8bPsmgR+TbWB/hGt1RHRZ1ROOKR/nSmjNNAsZ+RUEX1IkIv1
+apls+SUxkGTu9+U6qrZuv8hNIOG7a15Atsi8An9HctzSrxePe7oUfOXBfFLjYMVK
+VeKZRiu7L7tYKMXBPGZgoL0xxxe42wQVm7mfZyE8BjIBIaKR+/FGGs9UCSx6nlD6
+rHP25A==
+-----END CERTIFICATE-----
+";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDsD4V5ReaHFImL
+v0RPFqnYq8+FaElazijf4Gj+VhOSvTl1IfEYzc0aEQ6Fmkqi0I+vXQtEE0HFmghj
+XD3aIXhzD21Kzx1y8ercXl00ldzF6u3npLF6QMQBnDe8O1fUXOOcB2gKLMXxgpVv
+4B8B48LE77YL/wvUuxfeEi709xcZSharxQn/wScUX3FKvuwiPLe6ah0qcLiBMWQ5
+F3V1B6ZFc/0H4zVS5rXo9Ta94lsRxaWK53tRL2pAmOq5rGYPDVc2juIeiVEJilmU
+PcvjC+KYF8DP5h/k0taSD8XqhMnh6llIdO7xjMTnBfOyYijFDz0uNIosz5P+7usl
+Ihpj/v2PAgMBAAECggEAbTZ3IZbh4y/wvOtWHqMVHG3MumN3wJ+t0HoCCV1oe9S4
+zwTPhxK75+npRo2OJ0qHl3HcIvgnz1SGufV0lkUy9US3Y0t0S/g5mQ+9XnVRKW4Z
++Dg9dhqdtEMClD7+UP1Svp68lyyEvcoU+if+IIEv3K4skttCLX8LuU2/VM02bhdx
+8fJuR05rjxx4BBpz7/Zv1Xz0wE4nzmOaERErytnrsjrsKmhw+Ns2tKZuS5tf/KBQ
+Ae5GyAW2uOaZLN6Mdbkq8myzHN9XPvS1J7gzSNiwbJ8xPLdgJdKCeqiRytffmG5g
+4yjh8aCtIBpPCIDE8czVDC2xwS9V6iHrQgtjmZRJ2QKBgQD3bRlF3rl+axAVhI4I
+/JSc64phc5QGUAHQmdwdPL1tiTB4/uUhUo+DzfYk9zi7kXu89wQG/6Cn7zhMGbN6
+CLDtcBY3suK89+yGIn9VUCBZlZTmUDTG6J62+TYyR/HvX8L6NStX9bA6oFRy9U0m
+PbDQDD4+Zd32hNBSQTJoJ4E9VwKBgQD0PZmIAfhdgBYO3583s5l1JWJSOCk4Lheb
+YlAG+cRImUl8ZlWrDyK4nCQwrGCvrrCL23zy39h4Qgq/g/BzYxdBCVB8CZ0Yg4PH
+J+w1Qed52gz4wFYvHBrKnqd2gLTzn8kCHKYLoT2GNm/J8TDGi0EsEMlmdEfSqjEg
+aVHWhm/miQKBgFCtARWYJtGCpU7u1sU1XlvALXHTFsvsIHtc/7mEyZtCpUx+iEWS
+PvtSF9U7ywLV0AvwWx7RERhQ1wFxS+UZml8BMi1dJbNJ/5RJAU3W/4VWUaO7OUo2
+JTIyFirU7J0Jk3C0D3rxwFGNX5vQQiSa7uEXbOA5pOMxsR9w5LezUd+nAoGBALjI
+rhLPYsfis02XdE9hKxYNLaEE6nKdtLCTpfZRG2bNymI6zk+4CM3hHCRTFmd0ZA+8
+BIGAR7dcR+NzgATckGhdEq51W4yDW7zegIAel3GCPlQouEu2GLL5a7tlTwIO/rYB
+VMLxv6l+H/+J4hwkmS8smCNSkFBbAQYDiK4kUh75AoGAIw5bn5KYXG5pMYlK26lu
+9WEWhibcF0+mMfX9XHmJp2qSE8rF23ylTaGPwKv4dwK3Bz8GS/FXXCvC295YSJ/h
+z9lB1wmdOY5x7kbmzOH6s+veRkLlRsdZWjbeW3HPdDCST+p0f41qATav6fezD1gk
+fZL39HUu4YNGoEjMgHPIeMg=
+-----END PRIVATE KEY-----
+";
+    }
+
+    private {
+        HttpServer server;
+        int port;
+        Logger logger;
+        #! messages received by the current client
+        Queue queue;
+    }
+
+    constructor() : Test("WebSocketStreamBackpressureTest", "1.0") {
+        addTestCase("HTTP/2: a message sent while the stream send buffer is full is delivered", \h2Test());
+        addTestCase("HTTP/3: a message sent while the stream send buffer is full is delivered", \h3Test());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("ws-stream-backpressure", m_options.verbose > 2
+            ? LoggerLevel::getLevelInfo()
+            : LoggerLevel::getLevelWarn());
+        logger.addAppender(new StdoutAppender());
+        # no outbound queue limit: a full stream send buffer is waited for
+        LargeSendWsHandler handler(PayloadSize, {"logger": logger});
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        server.setDefaultHandler("ws", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    h2Test() {
+        WebSocketClient wsc = connect({
+            "url": "wss://localhost:" + port,
+            "http_version": "2.0",
+        });
+        assertTrue(wsc.isHttp2(), "the client is connected over HTTP/2");
+        receiveLargeThenLast(wsc);
+    }
+
+    h3Test() {
+        WebSocketClient wsc = connect({
+            "url": "wss://127.0.0.1:" + port,
+            "http3_mode": "required",
+        });
+        assertTrue(wsc.isHttp3(), "the client is connected over HTTP/3");
+        receiveLargeThenLast(wsc);
+    }
+
+    #! connects a client whose messages are pushed to its queue
+    private WebSocketClient connect(hash<auto> opts) {
+        queue = new Queue();
+        Queue q = queue;
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                q.push(msg);
+            }
+        }, opts + {"ssl_verify_cert": False, "logger": logger});
+        wsc.connect();
+        return wsc;
+    }
+
+    #! asks the server for the large message and the short one and checks that both arrive intact and in order
+    private receiveLargeThenLast(WebSocketClient wsc) {
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        wsc.send("SEND");
+        auto msg = queue.get(RecvTimeout);
+        assertEq(PayloadSize, msg.size(), "the large message is delivered");
+        assertTrue(msg == strmul("x", PayloadSize), "the large message is delivered intact");
+        assertEq("last", queue.get(RecvTimeout), "the message sent while the stream send buffer was full is "
+            "delivered");
+    }
+}

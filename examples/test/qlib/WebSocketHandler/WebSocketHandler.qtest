@@ -268,6 +268,22 @@ class FakeBackpressureStreamContext inherits AsyncSocketIo::AbstractStreamContex
     }
 }
 
+#! a fake H2/H3 stream context whose send buffer never drains, so a send waiting for it times out
+class FakeSendTimeoutStreamContext inherits FakeBackpressureStreamContext {
+    public {
+        #! the time the last send was allowed to wait
+        *int timeout_ms;
+    }
+
+    constructor() : FakeBackpressureStreamContext(True) {
+    }
+
+    sendDataWithTimeout(binary data, timeout timeout_ms, bool end_stream = False) {
+        self.timeout_ms = timeout_ms;
+        throw "STREAM-SEND-TIMEOUT", "the stream send buffer did not drain";
+    }
+}
+
 #! a connection that records whether it was dropped (forceStop() called) without performing real teardown
 class DropTrackingWsConnection inherits WebSocketConnection {
     public {
@@ -1164,7 +1180,8 @@ class WebSocketHandlerTest inherits QUnit::Test {
             assertEq(1, ctx.sent.size(), "the frame is sent on a healthy stream");
         }
 
-        # with no limit set, the legacy blocking sendData() path is used and the connection is never dropped here
+        # with no limit set, a full stream send buffer is waited for (the fake's sendData() accepts the frame), so the
+        # connection is not dropped here
         {
             MyWsHandler h({"max_queue_size": 0, "logger": logger});
             FakeBackpressureStreamContext ctx(True);
@@ -1173,7 +1190,20 @@ class WebSocketHandlerTest inherits QUnit::Test {
             c.enableDirectSend();
             c.sendEncoded(<00ff>);
             assertFalse(c.dropped, "with no limit set, the connection is not dropped");
-            assertEq(1, ctx.sent.size(), "with no limit set, sendData() is used so the frame is sent");
+            assertEq(1, ctx.sent.size(), "with no limit set, the frame is sent");
+        }
+
+        # with no limit set, a stream send buffer that does not drain within the send timeout closes the connection
+        {
+            MyWsHandler h({"max_queue_size": 0, "send_timeout": 1500, "logger": logger});
+            FakeSendTimeoutStreamContext ctx();
+            DropTrackingWsConnection c(h);
+            c.setStreamContext(ctx);
+            c.enableDirectSend();
+            c.sendEncoded(<00ff>);
+            assertTrue(c.dropped, "a stream that does not drain within the send timeout closes the connection");
+            assertEq(1500, ctx.timeout_ms, "the send waits for at most the handler's send timeout");
+            assertEq(0, ctx.sent.size(), "no frame is sent on the dropped connection");
         }
     }
 

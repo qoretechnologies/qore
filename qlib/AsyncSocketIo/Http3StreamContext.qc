@@ -169,6 +169,49 @@ public class Http3StreamContext inherits AbstractStreamContext {
         }
     }
 
+    #! Sends data on the QUIC stream, waiting at most the given time for a full send buffer to drain
+    /** @ref Qore::Socket::submitQuicStreamData() "submitQuicStreamData()" refuses data while the stream send buffer
+        is full; this method then wakes the I/O controller to send it and waits for the stream to drain before trying
+        again, so a peer that reads more slowly than data is sent slows the sender down instead of losing the data.
+
+        @param data the binary payload to send
+        @param timeout_ms the maximum time to wait for the stream send buffer to drain; a value less than or equal to
+        zero waits without a limit
+        @param end_stream if @ref True, signals end of stream after this data
+
+        @throw STREAM-SEND-TIMEOUT the stream send buffer did not drain in time; the data was not sent
+        @throw SOCKET-SYNC-ON-IO-THREAD-ERROR the stream send buffer is full and this method was called on the async
+        I/O controller's I/O path, where it cannot wait
+
+        @note other exceptions are thrown as by @ref sendData()
+
+        @since AsyncSocketIo 1.0
+    */
+    sendDataWithTimeout(binary data, timeout timeout_ms, bool end_stream = False) {
+        # the wake callback runs even if the wait throws, so the data already queued is sent
+        on_exit {
+            if (wake_callback) {
+                wake_callback();
+            }
+        }
+        int deadline = timeout_ms > 0 ? clock_getmillis() + timeout_ms : 0;
+        while (sock.submitQuicStreamData(session_id, stream_id, data, end_stream) == 1) {
+            # the data already queued must be sent before the stream can drain
+            if (wake_callback) {
+                wake_callback();
+            }
+            int wait_ms = -1;
+            if (deadline) {
+                wait_ms = deadline - clock_getmillis();
+                if (wait_ms <= 0) {
+                    throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/3 stream %d: the send buffer did not drain within %d "
+                        "ms; %d bytes were not sent", stream_id, timeout_ms, data.size());
+                }
+            }
+            sock.waitForQuicStreamDrain(session_id, stream_id, wait_ms);
+        }
+    }
+
     #! Flush pending HTTP/3 writes for this session through the async I/O controller
     /** @throw QUIC-ERROR if no QUIC session with the context's session ID is active
         @throw QUIC-SEND-ERROR if the UDP send fails

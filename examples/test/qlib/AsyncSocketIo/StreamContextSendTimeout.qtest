@@ -1,0 +1,185 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# StreamContextSendTimeout.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Http2StreamContext and Http3StreamContext sendDataWithTimeout(): a full stream send buffer is waited for, for at
+# most the given time, and the data is then sent or STREAM-SEND-TIMEOUT is raised; the socket is a fake that reports
+# a full buffer a given number of times, so the tests need no network
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AsyncSocketIo
+
+%exec-class StreamContextSendTimeoutTest
+
+#! a socket whose HTTP/2 and HTTP/3 stream sends report a full send buffer a given number of times
+class FullBufferSocket inherits Socket {
+    public {
+        #! the number of sends refused before one is accepted; -1 refuses every send
+        int full_sends;
+        #! the data accepted
+        list<binary> sent();
+        #! the time given to each drain wait
+        list<int> drain_waits();
+        #! an error raised by the next send instead of a full buffer
+        *string send_error;
+    }
+
+    constructor(int full_sends) {
+        self.full_sends = full_sends;
+    }
+
+    bool isOpen() {
+        return True;
+    }
+
+    nothing sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) {
+        if (send_error) {
+            throw send_error, sprintf("stream %d", stream_id);
+        }
+        if (full()) {
+            throw "HTTP2-FLOW-CONTROL", sprintf("stream %d buffer full: data dropped", stream_id);
+        }
+        sent += data;
+    }
+
+    int waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
+        return drainWait(timeout_ms);
+    }
+
+    int submitQuicStreamData(int session_id, int stream_id, *data body, softbool end_stream = False) {
+        if (send_error) {
+            throw send_error, sprintf("stream %d", stream_id);
+        }
+        if (full()) {
+            return 1;
+        }
+        sent += binary(body);
+        return 0;
+    }
+
+    int waitForQuicStreamDrain(int session_id, int stream_id, timeout timeout_ms = 5s) {
+        return drainWait(timeout_ms);
+    }
+
+    #! records the time given to a drain wait; a buffer that never drains times out after it, others drain at once
+    private int drainWait(int timeout_ms) {
+        drain_waits += timeout_ms;
+        if (full_sends >= 0) {
+            return 0;
+        }
+        if (timeout_ms > 0) {
+            Counter never(1);
+            never.waitForZero(timeout_ms);
+        }
+        return 1;
+    }
+
+    #! returns True if this send is refused because the buffer is full
+    private bool full() {
+        if (!full_sends) {
+            return False;
+        }
+        if (full_sends > 0) {
+            --full_sends;
+        }
+        return True;
+    }
+}
+
+class StreamContextSendTimeoutTest inherits QUnit::Test {
+    constructor() : Test("StreamContextSendTimeoutTest", "1.0") {
+        addTestCase("HTTP/2: a full buffer is waited for", \h2WaitTest());
+        addTestCase("HTTP/2: a buffer that does not drain in time raises STREAM-SEND-TIMEOUT", \h2TimeoutTest());
+        addTestCase("HTTP/2: no timeout waits without a limit", \h2NoTimeoutTest());
+        addTestCase("HTTP/2: other send errors are raised", \h2ErrorTest());
+        addTestCase("HTTP/3: a full buffer is waited for", \h3WaitTest());
+        addTestCase("HTTP/3: a buffer that does not drain in time raises STREAM-SEND-TIMEOUT", \h3TimeoutTest());
+        addTestCase("HTTP/3: no timeout waits without a limit", \h3NoTimeoutTest());
+        addTestCase("HTTP/3: other send errors are raised", \h3ErrorTest());
+        set_return_value(main());
+    }
+
+    h2WaitTest() {
+        FullBufferSocket sock(2);
+        Counter wakes();
+        Http2StreamContext ctx(sock, 1, new Queue(), True, sub () { wakes.inc(); });
+        ctx.sendDataWithTimeout(<0102>, 10s);
+        assertEq((<0102>,), sock.sent, "the data is sent once the buffer drains");
+        checkWaits(sock.drain_waits, 2, 10000);
+        # one wake before each wait so the queued data is sent, and one after the data is accepted
+        assertEq(3, wakes.getCount());
+    }
+
+    h2TimeoutTest() {
+        FullBufferSocket sock(-1);
+        Http2StreamContext ctx(sock, 1, new Queue(), True);
+        assertThrows("STREAM-SEND-TIMEOUT", \ctx.sendDataWithTimeout(), (<0102>, 50ms));
+        assertEq((), sock.sent, "nothing is sent");
+        checkWaits(sock.drain_waits, NOTHING, 50);
+    }
+
+    h2NoTimeoutTest() {
+        FullBufferSocket sock(3);
+        Http2StreamContext ctx(sock, 1, new Queue(), True);
+        ctx.sendDataWithTimeout(<0102>, 0);
+        assertEq((<0102>,), sock.sent);
+        assertEq((-1, -1, -1), sock.drain_waits, "each wait is unlimited");
+    }
+
+    h2ErrorTest() {
+        FullBufferSocket sock(0);
+        sock.send_error = "HTTP2-STREAM-RESET";
+        Http2StreamContext ctx(sock, 1, new Queue(), True);
+        assertThrows("HTTP2-STREAM-RESET", \ctx.sendDataWithTimeout(), (<0102>, 10s));
+        assertEq((), sock.drain_waits, "an error that is not a full buffer is not waited for");
+    }
+
+    h3WaitTest() {
+        FullBufferSocket sock(2);
+        Counter wakes();
+        Http3StreamContext ctx(sock, 1, 0, sub () { wakes.inc(); }, new Queue(), True);
+        ctx.sendDataWithTimeout(<0102>, 10s);
+        assertEq((<0102>,), sock.sent, "the data is sent once the buffer drains");
+        checkWaits(sock.drain_waits, 2, 10000);
+        assertEq(3, wakes.getCount());
+    }
+
+    h3TimeoutTest() {
+        FullBufferSocket sock(-1);
+        Http3StreamContext ctx(sock, 1, 0, NOTHING, new Queue(), True);
+        assertThrows("STREAM-SEND-TIMEOUT", \ctx.sendDataWithTimeout(), (<0102>, 50ms));
+        assertEq((), sock.sent, "nothing is sent");
+        checkWaits(sock.drain_waits, NOTHING, 50);
+    }
+
+    h3NoTimeoutTest() {
+        FullBufferSocket sock(3);
+        Http3StreamContext ctx(sock, 1, 0, NOTHING, new Queue(), True);
+        ctx.sendDataWithTimeout(<0102>, 0);
+        assertEq((<0102>,), sock.sent);
+        assertEq((-1, -1, -1), sock.drain_waits, "each wait is unlimited");
+    }
+
+    h3ErrorTest() {
+        FullBufferSocket sock(0);
+        sock.send_error = "QUIC-ERROR";
+        Http3StreamContext ctx(sock, 1, 0, NOTHING, new Queue(), True);
+        assertThrows("QUIC-ERROR", \ctx.sendDataWithTimeout(), (<0102>, 10s));
+        assertEq((), sock.drain_waits, "an error that is not a full buffer is not waited for");
+    }
+
+    #! checks that \a count waits (at least one if not given) were made, each bounded by what is left of \a timeout_ms
+    private checkWaits(list<int> waits, *int count, int timeout_ms) {
+        if (exists count) {
+            assertEq(count, waits.size(), "one wait per refused send");
+        } else {
+            assertGt(0, waits.size(), "the buffer is waited for before the timeout");
+        }
+        foreach int w in (waits) {
+            assertGt(0, w, "each wait is bounded");
+            assertLe(timeout_ms, w, "no wait is longer than the timeout");
+        }
+    }
+}
