@@ -391,6 +391,12 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_v1) },
     { "qore_rt_try_assign_pinned_class_local_aot_throwing_v1",
         reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_throwing_v1) },
+    { "qore_rt_get_class_local_slot_aot_v1", reinterpret_cast<void*>(&qore_rt_get_class_local_slot_aot_v1) },
+    { "qore_rt_try_assign_pinned_class_local_aot_v2",
+        reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_v2) },
+    { "qore_rt_try_assign_pinned_class_local_aot_throwing_v2",
+        reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_throwing_v2) },
+    { "qore_rt_clear_class_local_slot_aot_v1", reinterpret_cast<void*>(&qore_rt_clear_class_local_slot_aot_v1) },
     { "qore_rt_assign_local_no_coerce_aot", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot) },
     { "qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing) },
     { "qore_rt_assign_local_no_coerce_aot_throwing",
@@ -12533,8 +12539,8 @@ extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx
     qore_rt_assign_local_no_coerce(ctx->locals[idx], val, xsink);
 }
 
-extern "C" DLLEXPORT int qore_rt_try_assign_pinned_class_local_aot_v1(QoreAOTContext* ctx,
-        int32_t idx, uint64_t value, ExceptionSink* xsink) {
+static int qore_rt_try_assign_pinned_class_local(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, LocalVarValue* prepared_slot, ExceptionSink* xsink) {
     static const bool enabled = !std::getenv("QORE_DISABLE_AOT_PINNED_CLASS_LOCAL")
         && !std::getenv("QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE")
         && !std::getenv("QORE_DISABLE_AOT_CLASS_STRONG_STORE");
@@ -12545,7 +12551,12 @@ extern "C" DLLEXPORT int qore_rt_try_assign_pinned_class_local_aot_v1(QoreAOTCon
     // all slot, type/access and real-reference checks; only the cache owner is
     // omitted on an admitted unchanged strong-object initializer.
     return enabled && var && !*xsink && qore_rt_get_strong_object(val)
-        && var->tryAssignInitialClassValue(val, nullptr, xsink);
+        && var->tryAssignInitialClassValue(val, nullptr, xsink, prepared_slot);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_assign_pinned_class_local_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, ExceptionSink* xsink) {
+    return qore_rt_try_assign_pinned_class_local(ctx, idx, value, nullptr, xsink);
 }
 
 extern "C" DLLEXPORT int qore_rt_try_assign_pinned_class_local_aot_throwing_v1(QoreAOTContext* ctx,
@@ -12555,6 +12566,42 @@ extern "C" DLLEXPORT int qore_rt_try_assign_pinned_class_local_aot_throwing_v1(Q
         throw QoreJITException();
     }
     return handled;
+}
+
+extern "C" DLLEXPORT void* qore_rt_get_class_local_slot_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, RuntimeConfig* rc) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_CLASS_LOCAL_SLOT");
+    if (!enabled || !ctx || idx < 0 || idx >= ctx->num_locals || !rc
+            || RuntimeConfigNativeAccess::getProgram(*rc) != ctx->pgm) {
+        return nullptr;
+    }
+    return RuntimeConfigNativeAccess::getAOTBodyLocalSlot(*rc, ctx->locals[idx]);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_assign_pinned_class_local_aot_v2(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, void* prepared_slot, ExceptionSink* xsink) {
+    return qore_rt_try_assign_pinned_class_local(ctx, idx, value,
+        static_cast<LocalVarValue*>(prepared_slot), xsink);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_assign_pinned_class_local_aot_throwing_v2(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, void* prepared_slot, ExceptionSink* xsink) {
+    int handled = qore_rt_try_assign_pinned_class_local_aot_v2(ctx, idx, value, prepared_slot, xsink);
+    if (*xsink) {
+        throw QoreJITException();
+    }
+    return handled;
+}
+
+extern "C" DLLEXPORT void qore_rt_clear_class_local_slot_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, void* prepared_slot, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals && xsink);
+    if (auto* slot = static_cast<LocalVarValue*>(prepared_slot)) {
+        assert(slot->local_var == ctx->locals[idx] && !slot->frame_boundary);
+        slot->del(xsink);
+    } else {
+        qore_rt_clear_local(ctx->locals[idx], xsink);
+    }
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_eval_weak_aot(QoreAOTContext* ctx,

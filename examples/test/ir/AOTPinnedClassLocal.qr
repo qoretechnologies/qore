@@ -99,6 +99,20 @@ int sub notPinned() {
     return receiver.id;
 }
 
+# Every recursive invocation owns distinct pre-instantiated storage. The outer
+# handle must survive nested frames growing and shrinking the local-stack blocks.
+int sub pinnedRecursive(PinnedValue source, int depth) {
+    int result = 0;
+    for (int i = 0; i < 2; ++i) {
+        PinnedValue receiver = source;
+        if (depth && !i) {
+            result += pinnedRecursive(source, depth - 1);
+        }
+        result += receiver.touch();
+    }
+    return result;
+}
+
 printf("%d:%d:%d:%d\n", pinnedPhi(6, new PinnedValue(1), new PinnedValue(2), new PinnedValue(3)),
     pinnedReflect(new PinnedHook(11)), pinnedReflectReplaced(new PinnedValue(10)), notPinned());
 PinnedValue returned = pinnedReturn(new PinnedValue(40));
@@ -119,4 +133,7 @@ int changing = pinnedChanging(original, original);
 pinnedDrops = ();
 int cycle = pinnedCycle(makePinnedCycle());
 printf("%d:%d:%d\n", changing, cycle, (select pinnedDrops, $1 == 50).size());
+if (pinnedRecursive(new PinnedValue(7), 64) != 910) {
+    throw "PINNED-RECURSIVE", "body-local slot changed across nested frames";
+}
 printf("pinned-class-local: ok\n");

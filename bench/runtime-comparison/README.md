@@ -105,6 +105,20 @@ fixed storage and other unadmitted values keep the owned path. Setting this
 presence flag only at execution exercises that fallback. Compile separate
 before/after artifacts: the versioned borrowing helpers are new runtime symbols.
 
+`QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1` at compilation keeps ordinary TLS/stack
+lookup for required-class body locals. Otherwise AOT resolves an opaque storage
+handle after entry instantiation, using an explicit RuntimeConfig, and reuses it
+for pinned initializers and loop-scope cleanup. The slot remains on the runtime
+stack until function exit: reflection still sees and changes its live value.
+This caches storage, not class acceptance or object identity; all assignment
+type/access, empty-slot, representation and ownership checks remain, as do
+real-reference accounting and source cleanup order. Captured, self, top-level,
+complex and IR-only locals do not use the handle. At runtime the same presence
+control, sampled at the first getter invocation, makes handle acquisition
+return null, exercising ordinary lookup. Each
+handle is confined to one invocation/thread, including recursive fast entries.
+Use separately compiled before/after artifacts for the new versioned helpers.
+
 `QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE=1` at runtime disables the fresh-slot
 specialization inside that versioned helper. The enabled path skips generic
 lvalue setup only for an unassigned, ordinary required-class local, keeping

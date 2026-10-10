@@ -933,15 +933,19 @@ public:
         nullptr requests a borrowed result and admits only unchanged strong-object
         storage without filtering (the caller must independently pin the value)
         @param xsink exception sink
+        @param prepared_slot optional same-invocation AOT body-local slot; its
+        storage must remain instantiated until all uses of the handle end
         @return true if handled (including a type error), false for ordinary fallback
     */
-    DLLLOCAL bool tryAssignInitialClassValue(QoreValue value, ValueHolder* result, ExceptionSink* xsink) const {
+    DLLLOCAL bool tryAssignInitialClassValue(QoreValue value, ValueHolder* result, ExceptionSink* xsink,
+            LocalVarValue* prepared_slot = nullptr) const {
         assert(!*xsink && (!result || (*result)->isNothing()));
         if (closure_use || is_self || name == "self"
                 || type_info_needs_substitution || ref_type_info_needs_substitution) {
             return false;
         }
-        LocalVarValue* slot = get_var();
+        assert(!prepared_slot || prepared_slot->local_var == this);
+        LocalVarValue* slot = prepared_slot ? prepared_slot : get_var();
         if (!slot || slot->finalized || slot->val.assigned || slot->val.static_assignment) {
             return false;
         }

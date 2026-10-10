@@ -5564,6 +5564,51 @@ llvm::Value* QoreIRToLLVM::emitPinnedClassLocalBorrowGuard(uint32_t value_id, ll
     return pinned;
 }
 
+llvm::Value* QoreIRToLLVM::getAOTClassLocalSlot(const LocalVar* local, llvm::Module& module,
+        llvm::Function* llvm_func) {
+    if (!aot_mode || !local || !aot_body_locals.count(local) || local->closureUse()
+            || local->isSelf() || local->isTopLevel() || !strcmp(local->getName(), "self")
+            || ir_only_body_locals.count(local) || !current_ir_func || current_ir_func->blocks.empty()
+            || std::getenv("QORE_DISABLE_AOT_CLASS_LOCAL_SLOT")) {
+        return nullptr;
+    }
+    const QoreTypeInfo* ti = local->getTypeInfoForLValue();
+    if (!QoreTypeInfo::getUniqueReturnClass(ti) || QoreTypeInfo::isComplex(ti)
+            || QoreTypeInfo::isReference(ti)) {
+        return nullptr;
+    }
+    auto found = aot_class_local_slots.find(local);
+    if (found != aot_class_local_slots.end()) {
+        return found->second;
+    }
+    if (!aot_class_local_slot_entry || aot_class_local_slot_entry->getParent() != llvm_func) {
+        return nullptr;
+    }
+    // Fast entries instantiate their own body slots inside the logical entry.
+    // Insert after that prologue, not at its first instruction (which could
+    // resolve the recursive caller's slot before the callee slot exists).
+    llvm::IRBuilder<> eb(aot_class_local_slot_entry, aot_class_local_slot_entry->getFirstInsertionPt());
+    if (aot_class_local_slot_anchor) {
+        eb.SetInsertPoint(aot_class_local_slot_anchor->getParent(),
+            std::next(aot_class_local_slot_anchor->getIterator()));
+    }
+    if (!aot_class_local_runtime_config) {
+        auto acquire = module.getOrInsertFunction("qore_rt_get_fast_runtime_config",
+            llvm::FunctionType::get(ptr_type, {}, false));
+        aot_class_local_runtime_config = eb.CreateCall(acquire, {}, "class_local_runtime_config");
+    } else {
+        auto* acquire = llvm::cast<llvm::Instruction>(aot_class_local_runtime_config);
+        eb.SetInsertPoint(acquire->getParent(), std::next(acquire->getIterator()));
+    }
+    auto get_slot = module.getOrInsertFunction("qore_rt_get_class_local_slot_aot_v1",
+        llvm::FunctionType::get(ptr_type, {ptr_type, i32_type, ptr_type}, false));
+    int32_t index = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(local);
+    llvm::Value* slot = eb.CreateCall(get_slot,
+        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, index), aot_class_local_runtime_config}, "class_local_slot");
+    aot_class_local_slots.emplace(local, slot);
+    return slot;
+}
+
 void QoreIRToLLVM::clearLocalCachedValue(const void* key, llvm::Module& module,
         llvm::Function* llvm_func, LocalCacheClearMode mode) {
     const LocalVar* var_ptr = reinterpret_cast<const LocalVar*>(key);
@@ -11504,6 +11549,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_exact_class_guards.clear();
     stable_exact_receiver_loads.clear();
     aot_pinned_entry_values.clear();
+    aot_class_local_slots.clear();
+    aot_class_local_slot_entry = nullptr;
+    aot_class_local_slot_anchor = nullptr;
+    aot_class_local_runtime_config = nullptr;
     stable_scalar_loads.clear();
     aot_class_param_cache_candidates.clear();
     aot_class_param_caches.clear();
@@ -11675,6 +11724,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         builder->SetInsertPoint(block_map[func.blocks.front().get()]);
         emitNativeMethodBinding(module, llvm_func);
         emitLocalInstantiation(module);
+        aot_class_local_slot_entry = builder->GetInsertBlock();
+        if (!aot_class_local_slot_entry->empty()) {
+            aot_class_local_slot_anchor = &aot_class_local_slot_entry->back();
+        }
         preCreateLocalAllocas(module, llvm_func);
 
         // Save on_block_exit handler count at function entry so we can
@@ -15994,13 +16047,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         pinned_store_done = llvm::BasicBlock::Create(ctx, "pinned_class_store_done", llvm_func);
                         builder->CreateCondBr(pinned, probe_bb, owned_bb);
                         builder->SetInsertPoint(probe_bb);
-                        auto probe_ft = llvm::FunctionType::get(i32_type,
-                            {ptr_type, i32_type, i64_type, ptr_type}, false);
+                        llvm::Value* local_slot = getAOTClassLocalSlot(linst->local, module, llvm_func);
+                        std::vector<llvm::Type*> probe_types{ptr_type, i32_type, i64_type};
+                        std::vector<llvm::Value*> probe_args{aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), boxed};
+                        if (local_slot) {
+                            probe_types.push_back(ptr_type);
+                            probe_args.push_back(local_slot);
+                        }
+                        probe_types.push_back(ptr_type);
+                        probe_args.push_back(xsink_arg);
+                        auto probe_ft = llvm::FunctionType::get(i32_type, probe_types, false);
                         llvm::Value* handled = emitMaybeInvoke(
-                            module.getOrInsertFunction("qore_rt_try_assign_pinned_class_local_aot_v1", probe_ft),
-                            module.getOrInsertFunction("qore_rt_try_assign_pinned_class_local_aot_throwing_v1",
-                                probe_ft),
-                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), boxed, xsink_arg},
+                            module.getOrInsertFunction(local_slot ? "qore_rt_try_assign_pinned_class_local_aot_v2"
+                                : "qore_rt_try_assign_pinned_class_local_aot_v1", probe_ft),
+                            module.getOrInsertFunction(local_slot
+                                ? "qore_rt_try_assign_pinned_class_local_aot_throwing_v2"
+                                : "qore_rt_try_assign_pinned_class_local_aot_throwing_v1", probe_ft),
+                            probe_args,
                             module, llvm_func, inst);
                         emitExceptionCheck(module, llvm_func, inst);
                         builder->CreateCondBr(builder->CreateICmpNE(handled,
@@ -16263,11 +16327,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         }
                     } else {
                         if (aot_mode) {
-                            auto clear_helper = module.getOrInsertFunction("qore_rt_clear_local_aot",
-                                    llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
                             int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
-                            builder->CreateCall(clear_helper, {aot_ctx_arg,
+                            llvm::Value* local_slot = getAOTClassLocalSlot(linst->local, module, llvm_func);
+                            if (local_slot) {
+                                auto clear_helper = module.getOrInsertFunction("qore_rt_clear_class_local_slot_aot_v1",
+                                    llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type, ptr_type}, false));
+                                builder->CreateCall(clear_helper, {aot_ctx_arg,
+                                    llvm::ConstantInt::get(i32_type, slot), local_slot, xsink_arg});
+                            } else {
+                                auto clear_helper = module.getOrInsertFunction("qore_rt_clear_local_aot",
+                                    llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                                builder->CreateCall(clear_helper, {aot_ctx_arg,
                                     llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                            }
                         } else {
                             auto clear_helper = module.getOrInsertFunction("qore_rt_clear_local",
                                     llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));

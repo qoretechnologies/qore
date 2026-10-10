@@ -2214,6 +2214,15 @@ const uint64_t* RuntimeConfigNativeAccess::getStrongLocalMutationEpoch(const Run
     return td->tlpd->lvstack.getReflectiveMutationEpoch();
 }
 
+LocalVarValue* RuntimeConfigNativeAccess::getAOTBodyLocalSlot(const RuntimeConfig& rc, const LocalVar* local) {
+    ThreadData* td = getThreadData(rc);
+    if (!td->tlpd || !local || local->closureUse() || local->isSelf() || local->isTopLevel()) {
+        return nullptr;
+    }
+    LocalVarValue* slot = td->tlpd->lvstack.findMaybe(local);
+    return slot && !slot->finalized && !slot->frame_boundary ? slot : nullptr;
+}
+
 QoreProgram* RuntimeConfigNativeAccess::getProgram(const RuntimeConfig& rc) {
     return getThreadData(rc)->current_pgm;
 }

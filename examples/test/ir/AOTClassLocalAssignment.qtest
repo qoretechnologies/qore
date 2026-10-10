@@ -42,6 +42,7 @@ class ClassLocalAssignmentTest inherits QUnit::Test {
                 "QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE=1 ",
                 "QORE_DISABLE_AOT_CLASS_STORE_RESULT=1 ",
                 "QORE_DISABLE_AOT_PINNED_CLASS_LOCAL=1 ",
+                "QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             bool separate_coercion = prefix.startsWith("QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE");
             bool stored_result = !separate_coercion && !prefix.startsWith("QORE_DISABLE_AOT_CLASS_STORE_RESULT");
@@ -95,6 +96,8 @@ class ClassLocalAssignmentTest inherits QUnit::Test {
                     "weak-normalization path control " + prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_PINNED_CLASS_LOCAL=1 "),
                     "owned-cache control " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1 "),
+                    "runtime local-slot control " + prefix + level);
             }
         }
     }

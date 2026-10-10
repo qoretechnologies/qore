@@ -316,6 +316,11 @@ private:
     std::unordered_map<uint32_t, const LocalVar*> stable_exact_receiver_loads;
     // Snapshots backed by existing unmodified entry owners, never new references.
     std::unordered_map<const LocalVar*, llvm::Value*> aot_pinned_entry_values;
+    // Borrowed storage, not a value/owner: ordinary body slots survive until function exit.
+    std::unordered_map<const LocalVar*, llvm::Value*> aot_class_local_slots;
+    llvm::BasicBlock* aot_class_local_slot_entry = nullptr;
+    llvm::Instruction* aot_class_local_slot_anchor = nullptr;
+    llvm::Value* aot_class_local_runtime_config = nullptr;
     std::unordered_map<uint32_t, const LocalVar*> stable_scalar_loads;
 
     // Read-only class parameters retain their ordinary runtime slots and entry
@@ -1493,6 +1498,9 @@ private:
     // Guard a class-local cache borrow with identity against persistent source
     // entry owners. Unknown/large source graphs retain ordinary owned caching.
     llvm::Value* emitPinnedClassLocalBorrowGuard(uint32_t value_id, llvm::Value* value,
+        llvm::Function* llvm_func);
+    // Resolve eligible pre-instantiated body-local storage once after the native entry guard.
+    llvm::Value* getAOTClassLocalSlot(const LocalVar* local, llvm::Module& module,
         llvm::Function* llvm_func);
 
     enum class LocalCacheClearMode {

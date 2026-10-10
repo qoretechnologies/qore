@@ -6830,3 +6830,111 @@ base-class addition paths (`QoreClass::addBuiltinBaseClass` and
 `qore_class_private::addBaseClass`). Do not treat it as a complete inheritance
 invalidation mechanism. Any cached admission must establish a sufficient
 invariant or add the appropriate invalidation before it can replace a check.
+
+
+## Invocation-local AOT class body-slot handles (2026-10-10)
+
+Retain an entry-time storage lookup for ordinary required-class body locals.
+The compiler proves the local is noncaptured, nonself, nontoplevel and backed
+by a runtime slot. After entry instantiation, an explicit RuntimeConfig resolves
+that slot once; pinned initialization and source block cleanup receive the
+borrowed handle. This removes repeated TLS and stack lookup, not assignment
+validation. Type/access, empty-slot, representation and real-reference checks
+remain. Reflection still sees and replaces the live slot value. The storage
+survives until function exit, including nested calls across stack blocks; no
+value or extra owner is cached. Other locals and null handles use the old path.
+
+`QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1` is a compile-time control and a runtime
+presence control sampled at the first getter call. Old helper exports remain;
+new versioned helpers require separately compiled baseline/candidate artifacts.
+The new direct clear helper's admitted arm64 branch tail-calls the existing
+`VarValueBase::del` without a TLS lookup. No general class-acceptance cache is
+introduced: the method-dispatch epoch still cannot prove all inheritance
+mutations absent.
+
+Baseline is `0e8f443dd` (runtime source unchanged from `f0b67f173`), release
+SHA256 `ed38958bd81afcc8664141211839bbc106e9561e980b8b416e870ee61417586f`.
+Candidate release SHA256 is
+`91f586f481ce30922c24d83f3feae1ce8dec798b3cf3d30b2a3ed34497854629`.
+[Complete evidence](results-class-local-slot-macos-arm64.json) preserves the
+production patch, identities, raw-derived windows, summaries, test/reference
+hashes and assembly. All full runs use five forks, three warmups, five 500 ms
+windows, five startup samples and a randomized before/after/Java schedule.
+Whole-kernel ns/element is the median of fork means; startup is excluded.
+
+Count 4096, seed 810851, `run-9bhu8r0p`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|polymorphic_call|38.357|34.882|-9.06%|no|2.591|13.46x
+|polymorphic_expression_call|10.608|10.705|+0.91%|yes|2.618|4.09x
+|monomorphic_call|3.431|3.371|-1.76%|yes|1.713|1.97x
+|optional_method_call|10.747|10.919|+1.60%|yes|1.702|6.42x
+|indirect_wide|7.463|7.372|-1.21%|yes|1.707|4.32x
+|indirect_float|9.239|9.262|+0.25%|yes|1.694|5.47x
+|arithmetic|1.393|1.396|+0.27%|yes|0.967|1.44x
+|dispatch_control|1.447|1.450|+0.26%|yes|1.024|1.42x
+
+Count 1024, seed 810852, `run-cy77g_z3`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|polymorphic_call|39.877|36.575|-8.28%|no|2.572|14.22x
+|polymorphic_expression_call|12.009|12.326|+2.64%|yes|2.563|4.81x
+|monomorphic_call|4.771|4.739|-0.68%|yes|1.698|2.79x
+|optional_method_call|12.291|12.278|-0.10%|yes|1.708|7.19x
+|indirect_wide|8.711|8.368|-3.93%|no|1.708|4.90x
+|indirect_float|10.414|10.371|-0.41%|yes|1.676|6.19x
+|arithmetic|2.462|2.460|-0.07%|yes|0.989|2.49x
+|dispatch_control|2.634|2.580|-2.03%|yes|1.003|2.57x
+
+Count 1024, seed 810853, `run-w0qqaglq`:
+
+|!Kernel|!Before|!After|!Change|!Fork ranges overlap|!Java JIT|!Qore/Java
+|polymorphic_call|39.974|36.687|-8.22%|no|2.585|14.19x
+|polymorphic_expression_call|12.123|12.216|+0.77%|yes|2.579|4.74x
+|monomorphic_call|4.768|4.686|-1.72%|yes|1.686|2.78x
+|optional_method_call|12.332|12.540|+1.69%|yes|1.693|7.41x
+|indirect_wide|8.624|8.573|-0.60%|yes|1.702|5.04x
+|indirect_float|10.477|10.515|+0.36%|yes|1.685|6.24x
+|arithmetic|2.467|2.486|+0.75%|yes|0.944|2.63x
+|dispatch_control|2.627|2.657|+1.11%|yes|0.984|2.70x
+
+The target saves 3.3–3.5 ns/element (8.22–9.06%) in all three runs, with disjoint
+fork ranges. Expression controls increase 0.77–2.64%; nullable calls change
++1.60%, -0.10%, +1.69%. Their ranges overlap in every trial; this does not prove
+there is no small regression. The one disjoint 3.93% indirect-wide gain is not
+repeated at that magnitude. Range overlap is descriptive, not a significance
+test. Retain the targeted storage-lookup saving, explicitly preserve the
+control results, and investigate the remaining expression/runtime effects.
+No general call, isolated latency, IR, startup or Java-parity gain is claimed.
+Java retains DONT_INLINE targets; Qore may inline its exact-base branch. These
+whole-kernel ratios do not use equal inlining policies.
+
+The first 1024 run lost its process session, but subsequent artifact inspection
+found all 120 jobs and the complete summary. Every raw job was revalidated;
+it is included above. A sandbox retry, `run-86_72vy8`, failed at job three when
+JMH's localhost coordination socket was denied. Its two completed Qore jobs
+(10 windows), failed stderr and hashes are preserved separately, without a
+paired conclusion. The approved confirmation uses a fresh directory and the
+same retry seed. Across full trials: 360 jobs/1800 windows, all independently
+recomputed. No task builds, tests, profiling, disassembly or evidence computation
+overlapped timing; only progress reads. Host background activity and filesystem
+caches remain uncontrolled.
+
+Release/debug each pass 38 files: 30 QUnit files, 77 cases, 5097 assertions plus
+eight standalones. Pinned-local coverage expands to 388 assertions, assignment
+coverage to 500 per build. The new recursion case crosses 64-entry stack blocks;
+it exercises ordinary AOT entry, not explicit recursive fast-entry coverage.
+Existing fast-entry, reflective replacement, weak/reference, generic/private
+class, lifetime, exception, source-location, parallel, cancellation and stack
+guard cases pass. O0/O3, native EH, compile/runtime-disabled and full-context
+legs pass. The baseline also matches AST output for the expanded fixture.
+Candidate release has four reference modes (IR/AOT/Java interpreter/JIT), debug
+has two (IR/AOT), and baseline release has four; each passes 345 checks. There
+is no fresh baseline debug reference grid in this experiment. Eleven harness
+tests pass. Both core and QUnit/FsUtil/Util qmod rebuilds finished before tests.
+No full-repository, sanitizer or cross-architecture qualification is claimed.
+
+Next: commit the audited result, synchronize with develop, then profile the
+remaining checked initializer, real-reference cleanup and native continuation.
+Use those profiles to select the next same-Program fast-call optimization;
+do not replace access-sensitive acceptance with an incomplete epoch proof.

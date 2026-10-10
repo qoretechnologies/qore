@@ -50,6 +50,7 @@
 class ExceptionSink;
 class ThreadData;
 class LocalVar;
+class LocalVarValue;
 
 class RuntimeConfig::Impl {
 public:
@@ -134,6 +135,12 @@ public:
     //! @note The address cannot outlive this invocation/thread. No ownership is transferred.
     DLLLOCAL static const uint64_t* getStrongLocalMutationEpoch(const RuntimeConfig& rc,
         const LocalVar* local, const QoreObject* expected);
+    //! Resolve an ordinary, compiler-proven pre-instantiated AOT body local once.
+    //! @param rc same-thread native invocation view
+    //! @param local non-captured body local whose slot is not popped until function exit
+    //! @return borrowed stable stack slot, or nullptr for the ordinary lookup path
+    //! @note No value is cached. The handle cannot escape this invocation/thread.
+    DLLLOCAL static LocalVarValue* getAOTBodyLocalSlot(const RuntimeConfig& rc, const LocalVar* local);
     //! Preserve the normal stack guard without looking up TLS again.
     DLLLOCAL static int checkStack(const RuntimeConfig& rc, ExceptionSink* xsink);
     //! Perform the normal cancellation check using the live thread view, not TLS snapshots.

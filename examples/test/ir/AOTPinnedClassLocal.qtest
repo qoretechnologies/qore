@@ -37,14 +37,16 @@ class PinnedClassLocalTest inherits QUnit::Test {
         TmpDir dir("qore-pinned-class-local-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ",
                 "QORE_DISABLE_AOT_PINNED_CLASS_LOCAL=1 ",
+                "QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
                 string ir = run((qcc, level, "--strip-source", "-o", executable, source),
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
                 bool pinned = !prefix.startsWith("QORE_DISABLE_AOT_PINNED_CLASS_LOCAL");
+                bool prepared = !prefix.startsWith("QORE_DISABLE_AOT_CLASS_LOCAL_SLOT");
                 foreach string name in (("pinnedPhi", "pinnedReflect", "pinnedReflectReplaced",
-                        "pinnedChanging", "pinnedCycle")) {
+                        "pinnedChanging", "pinnedCycle", "pinnedRecursive")) {
                     *list<*string> body = regex_extract(ir,
                         "(?s)define [^\n]*@" + name + "_[^\n]*\n(.*?)\n\\}");
                     assertTrue(!!body, name + " LLVM definition");
@@ -53,6 +55,14 @@ class PinnedClassLocalTest inherits QUnit::Test {
                     assertEq(pinned, regex(body[0] ?? "",
                         "(?:call|invoke) i32 @qore_rt_try_assign_pinned_class_local_aot"),
                         name + " checked borrowed initializer " + prefix + level);
+                    if (pinned) {
+                        assertEq(prepared, regex(body[0] ?? "",
+                            "call ptr @qore_rt_get_class_local_slot_aot_v1"),
+                            name + " entry-local slot resolution " + prefix + level);
+                        assertEq(prepared, regex(body[0] ?? "",
+                            "qore_rt_try_assign_pinned_class_local_aot(?:_throwing)?_v2"),
+                            name + " prepared initializer " + prefix + level);
+                    }
                 }
                 *list<*string> body = regex_extract(ir,
                     "(?s)define [^\n]*@notPinned_[^\n]*\n(.*?)\n\\}");
@@ -64,6 +74,8 @@ class PinnedClassLocalTest inherits QUnit::Test {
                     "runtime owned-cache fallback " + prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_IR_CONTEXT_ELISION=1 "),
                     "full runtime context " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1 "),
+                    "runtime slot-lookup fallback " + prefix + level);
             }
         }
     }

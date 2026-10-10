@@ -1483,6 +1483,32 @@ int qore_rt_try_assign_pinned_class_local_aot_v1(QoreAOTContext* ctx, int32_t id
 int qore_rt_try_assign_pinned_class_local_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx,
     uint64_t value, ExceptionSink* xsink);
 
+//! Resolve an opaque class body-local slot after native entry instantiation.
+/** @param ctx current AOT context
+    @param idx compiler-proven ordinary class body-local slot, never popped within this function
+    @param rc live same-thread invocation context
+    @return borrowed storage handle, or nullptr for ordinary runtime lookup
+    @note The handle is invocation-local and owns no value. Reflection may replace
+    its value, but the pre-instantiated storage remains until function exit.
+*/
+void* qore_rt_get_class_local_slot_aot_v1(QoreAOTContext* ctx, int32_t idx, RuntimeConfig* rc);
+//! Checked pinned initializer with an optional prepared slot; v1 ownership and fallback contract.
+//! @param prepared_slot handle from qore_rt_get_class_local_slot_aot_v1 for this ctx/idx/invocation
+int qore_rt_try_assign_pinned_class_local_aot_v2(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+//! Throwing counterpart; throws QoreJITException on a populated sink.
+int qore_rt_try_assign_pinned_class_local_aot_throwing_v2(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+//! Clear the live slot value at the original source scope exit; nullptr uses ordinary lookup.
+/** @param ctx current AOT context
+    @param idx compiler-proven ordinary class body-local index
+    @param prepared_slot same-invocation handle; storage remains instantiated after clearing
+    @param xsink exception sink, including one already populated during unwind
+    @note Preserves del(), real-reference bookkeeping and declaration-order cleanup.
+*/
+void qore_rt_clear_class_local_slot_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    void* prepared_slot, ExceptionSink* xsink);
+
 //! Assign to a local variable via AOT context slot without type coercion.
 //! Used when coercion has already been applied.
 void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
