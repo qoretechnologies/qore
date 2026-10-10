@@ -61,6 +61,39 @@ binary sub generatePayload(int size) {
 }
 
 #! Handler that echoes the POST body back in the response
+#! Keeps the last warnings logged by the async I/O and QUIC layers, to report them when a request is not answered
+class DiagnosticAppender inherits LoggerAppenderWithLayout {
+    public {
+        #! the most messages kept
+        const MaxMessages = 200;
+    }
+
+    private {
+        Mutex lock();
+        list<string> messages();
+    }
+
+    constructor() : LoggerAppenderWithLayout("h3-diagnostics", new LoggerLayoutPattern("%d{YYYY-MM-DD HH:mm:SS.us} T%t [%p]: %m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == LoggerAppender::EVENT_LOG) {
+            AutoLock al(lock);
+            push messages, params.toString();
+            if (messages.size() > MaxMessages) {
+                shift messages;
+            }
+        }
+    }
+
+    #! returns the messages kept
+    list<string> get() {
+        AutoLock al(lock);
+        return messages;
+    }
+}
+
 class EchoHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         return makeResponse(200, body ?? "", {
@@ -973,6 +1006,11 @@ class HttpServerH3StreamingTest inherits Test {
         *Logger mLogger;
         binary mPayload;
 
+        #! the async I/O and QUIC warnings logged
+        DiagnosticAppender mDiagnostics;
+        #! the async I/O logger
+        Logger mDiagnosticLogger;
+
         # Self-signed test certificate (localhost, RSA 2048)
         const CertPem = "-----BEGIN CERTIFICATE-----
 MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
@@ -1078,6 +1116,33 @@ l50Xb2GWQesIt9k5jF5IOw==
         if (m_options.verbose > 2) {
             mLogger.addAppender(new StdoutAppender());
         }
+        # the async I/O and QUIC warnings are kept, with each client connection's last ngtcp2 log lines (read when
+        # a connection is created), to report them when a request is not answered
+        setenv("QORE_QUIC_STALL_TRACE", "500");
+        mDiagnostics = new DiagnosticAppender();
+        mDiagnosticLogger = new Logger("h3-streaming-diagnostics", LoggerLevel::getLevelWarn());
+        mDiagnosticLogger.addAppender(mDiagnostics);
+        set_async_io_logger(mDiagnosticLogger);
+    }
+
+    globalTearDown() {
+        set_async_io_logger();
+        unsetenv("QORE_QUIC_STALL_TRACE");
+    }
+
+    #! Cancels a request that was not answered in time and fails with the async I/O and QUIC warnings logged
+    /** Canceling the request logs its progress and its connection's state (see QuicSession::cancelStream()).
+    */
+    private failUnanswered(HttpClientIo::HttpClientStreamHandle stream, string msg) {
+        try {
+            stream.cancel();
+        } catch (hash<ExceptionInfo> ex) {
+            printf("canceling the request: %s: %s\n", ex.err, ex.desc);
+        }
+        list<string> warnings = mDiagnostics.get();
+        printf("%s; %d async I/O and QUIC warnings%s\n", msg, warnings.size(), warnings ? ":" : "");
+        map printf("%s\n", $1), warnings;
+        throw "TEST-ERROR", msg;
     }
 
     #! Creates a new async HTTP server with TLS and HTTP/3 + headers-only
@@ -1547,7 +1612,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             while (True) {
                 auto data = stream.readData(10s);
                 if (!exists data) {
-                    throw "TEST-ERROR", sprintf("request %d: no response in time", i);
+                    # the only failure seen was the first request of a connection, with several I/O threads
+                    failUnanswered(stream, sprintf("request %d: no response in time", i));
                 }
                 if (data.typeCode() == NT_HASH && data.error) {
                     throw "TEST-ERROR", sprintf("request %d: %y", i, data.error);
