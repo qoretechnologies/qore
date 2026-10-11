@@ -122,6 +122,11 @@ class SslConsumerCheckTest inherits QUnit::Test {
         assertEq(0, r.rc, r.output);
         assertRegex("module mod_path: .*dep_other.* loads .*libssl[.](so[.])?4.* privately", r.output);
 
+        # a library that the linker finds in a -L directory of the linker flags, before the library search path
+        r = check("module-linker-flags-dir");
+        assertEq(0, r.rc, r.output);
+        assertRegex("module mod_flags: .*flagdir/[^ ]*dep_choice.* loads .*libssl[.](so[.])?4.* privately", r.output);
+
         # an imported library target of a module in its own directory, linked after the check is scheduled
         r = check("module-subdir-imported");
         assertEq(0, r.rc, r.output);
