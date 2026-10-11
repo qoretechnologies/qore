@@ -51,11 +51,12 @@ function(_qore_ssl_consumer_files item link_dirs out_var)
         # a target built in this project (ex: a static library fetched with FetchContent) is not checked
     elseif (IS_ABSOLUTE "${item}")
         list(APPEND _files "${item}")
-    elseif (link_dirs AND item MATCHES "^(-l)?[A-Za-z0-9_.+-]+$")
-        # a bare library name (ex: from pkg-config's LIBRARIES), in the target's link directories
+    elseif (item MATCHES "^(-l)?[A-Za-z0-9_.+-]+$")
+        # a bare library name (ex: from pkg-config's LIBRARIES): the target's link directories first, then the
+        # project's library search path, as the linker finds it
         string(REGEX REPLACE "^-l" "" _name "${item}")
         unset(_qore_ssl_found CACHE)
-        find_library(_qore_ssl_found NAMES "${_name}" PATHS ${link_dirs} NO_DEFAULT_PATH)
+        find_library(_qore_ssl_found NAMES "${_name}" HINTS ${link_dirs})
         if (_qore_ssl_found)
             list(APPEND _files "${_qore_ssl_found}")
         endif()
