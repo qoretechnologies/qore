@@ -15,6 +15,9 @@
 #
 # A static library uses the OpenSSL that libqore links and is not checked.
 
+# the directory of this module and of its dependency script
+set(_QORE_SSL_CHECK_DIR "${CMAKE_CURRENT_LIST_DIR}")
+
 # Returns the files of the shared libraries that a link item stands for
 function(_qore_ssl_consumer_files item out_var)
     set(_files)
@@ -120,29 +123,42 @@ function(qore_check_ssl_consumers)
                 "(3.16 or later is needed)")
             return()
         endif()
+        set(_otool "${CMAKE_OTOOL}")
+        if (NOT _otool)
+            find_program(QORE_SSL_CHECK_OTOOL NAMES otool llvm-otool)
+            set(_otool "${QORE_SSL_CHECK_OTOOL}")
+        endif()
+        if (NOT _otool)
+            message(STATUS "cannot check the OpenSSL libraries used by linked libraries: no otool")
+            return()
+        endif()
+        set(_deps_file "${CMAKE_BINARY_DIR}/CMakeFiles/qore-ssl-consumer-deps.txt")
         foreach(_consumer IN LISTS _consumers)
-            # only the OpenSSL libraries are resolved: the install names, including @rpath ones, as dyld would
-            file(GET_RUNTIME_DEPENDENCIES
-                LIBRARIES "${_consumer}"
-                RESOLVED_DEPENDENCIES_VAR _deps
-                UNRESOLVED_DEPENDENCIES_VAR _unresolved
-                PRE_INCLUDE_REGEXES "^(.*/)?lib(ssl|crypto)[.-][^/]*$"
-                PRE_EXCLUDE_REGEXES ".*")
-            foreach(_dep IN LISTS _deps)
-                _qore_ssl_kind("${_dep}" _kind)
-                if (NOT _kind)
-                    continue()
-                endif()
-                get_filename_component(_dep_real "${_dep}" REALPATH)
-                if (NOT _dep_real STREQUAL _qore_${_kind}_real)
-                    _qore_ssl_consumer_mismatch("${_consumer}" "${_dep_real}" "${_qore_${_kind}_real}")
-                endif()
-            endforeach()
-            foreach(_dep IN LISTS _unresolved)
-                _qore_ssl_kind("${_dep}" _kind)
-                if (_kind)
-                    message(WARNING "cannot verify that ${_consumer} uses Qore's OpenSSL: its dependency ${_dep} "
-                        "cannot be resolved")
+            # the install names, including @rpath ones, are resolved as dyld would, in a script (see
+            # QoreSslConsumerDeps.cmake)
+            execute_process(COMMAND "${CMAKE_COMMAND}" "-DQORE_SSL_CONSUMER=${_consumer}"
+                    "-DQORE_SSL_OTOOL=${_otool}" "-DQORE_SSL_OUTPUT=${_deps_file}"
+                    -P "${_QORE_SSL_CHECK_DIR}/QoreSslConsumerDeps.cmake"
+                RESULT_VARIABLE _rc OUTPUT_VARIABLE _out ERROR_VARIABLE _err)
+            if (NOT _rc EQUAL 0)
+                message(FATAL_ERROR "cannot read the libraries that ${_consumer} loads: ${_err}")
+            endif()
+            file(STRINGS "${_deps_file}" _lines)
+            file(REMOVE "${_deps_file}")
+            foreach(_line IN LISTS _lines)
+                if (_line MATCHES "^resolved (.*)$")
+                    set(_dep "${CMAKE_MATCH_1}")
+                    _qore_ssl_kind("${_dep}" _kind)
+                    if (NOT _kind)
+                        continue()
+                    endif()
+                    get_filename_component(_dep_real "${_dep}" REALPATH)
+                    if (NOT _dep_real STREQUAL _qore_${_kind}_real)
+                        _qore_ssl_consumer_mismatch("${_consumer}" "${_dep_real}" "${_qore_${_kind}_real}")
+                    endif()
+                elseif (_line MATCHES "^unresolved (.*)$")
+                    message(WARNING "cannot verify that ${_consumer} uses Qore's OpenSSL: its dependency "
+                        "${CMAKE_MATCH_1} cannot be resolved")
                 endif()
             endforeach()
         endforeach()
