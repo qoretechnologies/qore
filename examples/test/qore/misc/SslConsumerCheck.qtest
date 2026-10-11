@@ -1,0 +1,124 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class SslConsumerCheckTest
+
+#! QoreCheckSslConsumers.cmake on a fixture with a stand-in for another OpenSSL (ssl-consumer-check/)
+/** Two OpenSSL libraries in one process crash when an object made by one is used by the other: a library linked into
+    libqore, or a module that links OpenSSL itself, must load only Qore's OpenSSL; another OpenSSL that the libraries
+    of a module without its own OpenSSL load privately is information
+*/
+class SslConsumerCheckTest inherits QUnit::Test {
+    private {
+        *string cmake;
+        string fixture;
+        string cmake_dir;
+        *string deps_dir;
+        *string skip;
+        TmpDir tmp();
+    }
+
+    constructor() : QUnit::Test("QoreCheckSslConsumers", "1.0", \ARGV) {
+        fixture = get_script_dir() + "/ssl-consumer-check";
+        cmake_dir = normalize_dir(get_script_dir() + "/../../../../cmake");
+        addTestCase("a library linked into libqore", \libqoreTest());
+        addTestCase("modules", \moduleTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        cmake = ENV.CMAKE_COMMAND ?? findCmake();
+        if (!cmake) {
+            skip = "cmake is not available";
+            return;
+        }
+        hash<auto> build = run(("-S", fixture, "-B", tmp.path + "/deps", "-DPHASE=build"));
+        if (build.output =~ /QORE-SSL-CHECK-SKIP/) {
+            skip = "no OpenSSL development files";
+            return;
+        }
+        if (build.rc || run(("--build", tmp.path + "/deps")).rc) {
+            throw "FIXTURE-ERROR", sprintf("cannot build the fixture: %s", build.output);
+        }
+        deps_dir = tmp.path + "/deps";
+    }
+
+    #! Returns the cmake executable in PATH, if any
+    private static *string findCmake() {
+        foreach string dir in (ENV.PATH.split(":")) {
+            if (is_executable(dir + "/cmake")) {
+                return dir + "/cmake";
+            }
+        }
+    }
+
+    #! Runs cmake; returns its exit code and its output
+    private hash<auto> run(list<string> args) {
+        string out = tmp.path + "/cmake-" + get_random_string() + ".log";
+        string cmd = sprintf("%s %s > %s 2>&1", shell_quote(cmake), (foldl $1 + " " + $2,
+            map shell_quote($1), args), shell_quote(out));
+        int rc = system(cmd);
+        string output = ReadOnlyFile::readTextFile(out);
+        unlink(out);
+        # CMake wraps its messages
+        output =~ s/\s+/ /g;
+        return {"rc": rc, "output": output};
+    }
+
+    #! Runs the check for a case of the fixture
+    private hash<auto> check(string fixture_case) {
+        return run(("-S", fixture, "-B", tmp.path + "/" + fixture_case, "-DPHASE=check", "-DCASE=" + fixture_case,
+            "-DQORE_CMAKE_DIR=" + cmake_dir, "-DDEPS_DIR=" + deps_dir));
+    }
+
+    private static string shell_quote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    libqoreTest() {
+        if (skip) {
+            testSkip(skip);
+        }
+        hash<auto> r = check("libqore-other");
+        assertNeq(0, r.rc, "another OpenSSL in a library linked into libqore fails the configuration");
+        assertRegex("libqore: .*dep_other.* uses .*libssl[.](so[.])?4.*, but Qore uses", r.output);
+        r = check("libqore-same");
+        assertEq(0, r.rc, r.output);
+        assertRegex("QORE-SSL-CHECK-DONE: libqore-same", r.output);
+        assertNRegex("Warning", r.output);
+    }
+
+    moduleTest() {
+        if (skip) {
+            testSkip(skip);
+        }
+        # a module that links OpenSSL itself can pass OpenSSL objects to the library that loads another OpenSSL
+        hash<auto> r = check("module-own-openssl-other");
+        assertNeq(0, r.rc, "a module with its own OpenSSL fails on another OpenSSL");
+        assertRegex("module mod_fail: .*dep_other.* uses .*libssl[.](so[.])?4", r.output);
+        r = check("module-bare-name");
+        assertNeq(0, r.rc, "a library given by name in the module's link directories is checked as well");
+        assertRegex("module mod_name: .*dep_other.* uses .*libssl[.](so[.])?4", r.output);
+
+        # a module without its own OpenSSL cannot: the other OpenSSL is information, and the build stays warning-free
+        r = check("module-private-other");
+        assertEq(0, r.rc, r.output);
+        assertRegex("module mod_info: .*dep_other.* loads .*libssl[.](so[.])?4.* privately; the module does not link OpenSSL",
+            r.output);
+        assertNRegex("Warning", r.output);
+
+        r = check("module-own-openssl-same");
+        assertEq(0, r.rc, r.output);
+        assertNRegex("privately|Warning", r.output);
+    }
+}
