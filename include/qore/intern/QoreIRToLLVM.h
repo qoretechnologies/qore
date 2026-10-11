@@ -173,6 +173,18 @@ public:
         dynamic_closure_accepted = accepted;
     }
 
+    //! Publish the separately proven receiver-aware companion from this normal method entry.
+    //! @param name module-local companion symbol, or empty for no companion
+    void setReceiverMethodBinding(const std::string& name) {
+        receiver_method_binding = name;
+    }
+
+    //! Pass an invocation-owned live RuntimeConfig to a receiver-aware fast entry.
+    //! @param runtime_config borrowed same-thread view, valid until this invocation returns
+    void setReceiverRuntimeConfig(llvm::Value* runtime_config) {
+        receiver_runtime_config = runtime_config;
+    }
+
     //! Set the name of an AOT self-recursive fast entry function.
     //! When set, self-recursive CallDirect instructions in AOT mode emit direct
     //! LLVM calls to this function instead of going through qore_rt_call_direct_aot.
@@ -351,6 +363,8 @@ private:
     // When fast_entry_name is non-empty, lowerFunction uses it instead of func.name
     // and initializes params from fast_entry_args instead of qore_rt_load_local().
     std::string fast_entry_name;
+    std::string receiver_method_binding;
+    llvm::Value* receiver_runtime_config = nullptr;
     llvm::Value* dynamic_closure_arg = nullptr;
     llvm::Value* dynamic_closure_runtime_config = nullptr;
     llvm::Value* dynamic_closure_accepted = nullptr;

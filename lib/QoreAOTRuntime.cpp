@@ -3577,14 +3577,14 @@ private:
 // its offset->loc-index entries through ctx->locs into offset->QoreProgramLocation*.
 // Best-effort: silently no-ops when the artifact carries no trailer (graceful for
 // --strip-debug-info / pre-feature builds, where the eager path remains the source).
-static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) {
+static bool aotAttachPcLocMap(const void* fn_ptr, const QoreAOTContext* ctx) {
     // Skip all lazy-location bookkeeping (dladdr1, trailer parse, registry, segment
     // snapshot) unless the feature is enabled — default builds pay nothing.
     if (!aotLazyLocEnabled()) {
-        return;
+        return false;
     }
     if (!fn_ptr || !ctx || !ctx->locs || ctx->num_locs <= 0) {
-        return;
+        return false;
     }
     Dl_info info{};
     uintptr_t sym_size = 0;
@@ -3593,7 +3593,7 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
     const bool cached_artifact = aot_pc_artifact_cache && aot_pc_artifact_cache->resolved;
     if (cached_artifact) {
         if (aot_pc_artifact_cache->path.empty()) {
-            return;
+            return false;
         }
         info.dli_fname = aot_pc_artifact_cache->path.c_str();
         info.dli_fbase = reinterpret_cast<void*>(aot_pc_artifact_cache->bias);
@@ -3605,17 +3605,17 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
         // are not in .dynsym, which is all dladdr sees) — those are resolved via .symtab.
 #ifdef __GLIBC__
         const ElfW(Sym)* sym = nullptr;
-        if (!dladdr1(reinterpret_cast<void*>(fn_ptr), &info, reinterpret_cast<void**>(
+        if (!dladdr1(fn_ptr, &info, reinterpret_cast<void**>(
                 const_cast<ElfW(Sym)**>(&sym)), RTLD_DL_SYMENT)
                 || !info.dli_fname) {
-            return;
+            return false;
         }
         if (sym && sym->st_size) {
             sym_size = static_cast<uintptr_t>(sym->st_size);
         }
 #else
-        if (!dladdr(reinterpret_cast<void*>(fn_ptr), &info) || !info.dli_fname) {
-            return;
+        if (!dladdr(fn_ptr, &info) || !info.dli_fname) {
+            return false;
         }
 #endif
         symmap = getOrLoadPcLocTrailer(info.dli_fname);
@@ -3645,7 +3645,7 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
             fprintf(stderr, "AOT-LOC: no map for fname=%s sym=%s\n",
                 info.dli_fname ? info.dli_fname : "?", info.dli_sname ? info.dli_sname : "?");
         }
-        return;
+        return false;
     }
     // Resolve the function's name (-> map key), runtime start, and size. Prefer the
     // dladdr/.dynsym result; fall back to .symtab when the symbol is absent there or
@@ -3653,7 +3653,7 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
     const AotSymEntry* sym_entries = nullptr;
     uintptr_t fn_start = 0;
     uintptr_t fn_size = 0;
-    if (info.dli_sname && info.dli_saddr) {
+    if (info.dli_sname && info.dli_saddr == fn_ptr) {
         auto it = symmap->find(info.dli_sname);
         if (it != symmap->end()) {
             sym_entries = &it->second;
@@ -3705,7 +3705,7 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
             }
             if (lo > 0) {
                 const AOTElfFuncSym& e = v[lo - 1];
-                if (link_addr < e.value + e.size) {
+                if (link_addr == e.value) {
                     auto it = symmap->find(e.name);
                     if (it != symmap->end()) {
                         sym_entries = &it->second;
@@ -3722,7 +3722,7 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
                 info.dli_fname ? info.dli_fname : "?", info.dli_sname ? info.dli_sname : "?",
                 symmap->size());
         }
-        return;
+        return false;
     }
     AotPcRange range;
     range.base = fn_start;
@@ -3766,7 +3766,7 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
         }
     }
     if (range.offmap.empty()) {
-        return;
+        return false;
     }
     std::sort(range.offmap.begin(), range.offmap.end(),
         [](const std::pair<uint32_t, const QoreProgramLocation*>& a,
@@ -3797,6 +3797,7 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
             entry_count,
             g_aot_pc_ranges.size());
     }
+    return true;
 }
 
 void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx) {
@@ -3807,8 +3808,27 @@ void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx) {
     if (ctx->pc_loc_map_attached.load(std::memory_order_relaxed)) {
         return;
     }
-    aotAttachPcLocMap(ctx->pc_loc_fn, ctx);
+    aotAttachPcLocMap(reinterpret_cast<const void*>(ctx->pc_loc_fn), ctx);
     ctx->pc_loc_map_attached.store(true, std::memory_order_release);
+}
+
+extern "C" DLLEXPORT void qore_rt_bind_receiver_int_method_v1(QoreAOTContext* ctx,
+        AotFunctionPtr normal, QoreAOTContext::ReceiverIntMethodEntryV1 entry, int32_t requires_pc_map) {
+    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal
+            || ctx->receiver_int_method_entry_v1.load(std::memory_order_acquire)) {
+        return;
+    }
+    // The companion shares the owner's location indices, not its native PC range.
+    // Serialize attachment with normal-body attachment (both may materialize extra
+    // locations in the context), and publish only once the required map is usable.
+    AutoLocker al(g_aot_pc_attach_lock);
+    if (ctx->receiver_int_method_entry_v1.load(std::memory_order_relaxed)) {
+        return;
+    }
+    if (requires_pc_map && !aotAttachPcLocMap(reinterpret_cast<const void*>(entry), ctx)) {
+        return;
+    }
+    ctx->receiver_int_method_entry_v1.store(entry, std::memory_order_release);
 }
 
 namespace {

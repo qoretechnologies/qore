@@ -9579,3 +9579,123 @@ exceptions, debugger fallback and live body/Program/stack checks must remain.
 Do not remove the pure-leaf `uses_self` restriction without a new entry contract.
 Keep boxed-float and monomorphic controls prominent in subsequent measurements;
 qualify, audit and commit each demonstrated improvement separately.
+
+## Receiver-aware forwarding entry (2026-10-11)
+
+Add a separate AOT entry for the exact `int(int)` instance-method shape
+`return self.method(value)`. The compiler proves that the only local reads are
+the receiver and parameter, both before the sole nested call; no stale native
+copy is reused after an override can observe or change caller locals. Pass a
+native integer, borrowed boxed receiver, live `RuntimeConfig`, AOT context and
+exception sink. Return an owned boxed value through the normal declared-return
+filter. This does not relax the existing pure-leaf `uses_self` restrictions.
+
+Same-Program admission retains live receiver/body/readiness/debugger checks and
+the full method-cache key. The normal runtime frame, signature slots, object/
+defining-class context, coercion and cleanup remain. Cross-Program calls and
+unsupported signatures/bodies take the normal entry. The presence flag
+`QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY` controls compilation and runtime use.
+This internal ABI/context-layout change updates runtime identity, so all
+comparisons use separately compiled artifacts and their matching frozen runtimes.
+
+### Final comparison with Java
+
+Apple M4 Pro, macOS arm64, Temurin 25.0.2/JMH. Three randomized forks per runtime,
+three warmups and five 500 ms windows per fork, count 4096. Values are medians of
+fork means for whole workloads, not isolated call latency; startup is excluded.
+Observed fork ranges are descriptive, not confidence intervals.
+
+|!Workload|!Baseline Qore ns/element|!Qore ns/element|!Java ns/element|!Qore/Java
+|Nested context-using call|179.14|158.32|3.00|52.81x
+|Dynamic integer result|10.38|10.14|3.09|3.28x
+|Dynamic float result|10.91|11.14|3.46|3.22x
+|Boxed float method result|59.77|60.22|2.56|23.56x
+|Integer callback result|6.76|6.92|1.88|3.68x
+|Float callback result|8.76|8.79|2.86|3.07x
+|Polymorphic integer expression|10.22|10.06|2.32|4.33x
+|Polymorphic float expression|10.13|10.13|2.56|3.96x
+|Final-class method|1.49|1.50|0.89|1.69x
+|Monomorphic virtual method|3.37|3.44|1.66|2.08x
+|Arithmetic control|1.42|1.42|0.90|1.58x
+
+The nested target improves **11.62%** in the main run, **10.27%** in the
+five-fork same-runtime compiler control and **12.10%** in a five-fork
+actual-baseline repeat. All three observed fork ranges are separated. Earlier
+prototype screen/control gains were 10.12/12.50%, but those binaries had not yet
+received the diagnostic/source-map correction and are not the accepted candidate.
+
+This is a targeted improvement with an observed tradeoff, not a general or
+zero-regression speedup. Integer callbacks are **2.37% slower** in the main run
+and **1.09% slower** in a five-fork actual-baseline repeat, both with separated
+ranges. The five-fork compiler control is 1.50% slower with a small range overlap.
+The callback is not eligible for the new entry. Layout/host effects are possible
+explanations, not established causes; the repeated adverse result is retained.
+
+Monomorphic calls are 2.21% slower in the main run (separated ranges), 1.64%
+slower in the compiler control (overlap), and 1.22% faster in the actual-baseline
+repeat (overlap). Boxed-float medians are 0.75/0.06% slower in main/control and
+0.08% faster in the repeat, all overlapping. Dynamic-float main is 2.08% slower;
+its additional baseline/control repeats narrow to 0.37/0.49% slower, all with
+overlap. Final-class methods are 0.44% slower in main (barely separated ranges),
+then 0.15% faster/0.11% slower in baseline/control repeats (overlap). All signed
+changes, including the non-target dynamic-integer 2.40% gain, remain in the data.
+
+### Correctness gate and qualification
+
+Initial broad qualification missed a source-location bug: the companion had its
+own native body but no registered PC range. A warmed exception probe reported
+line 19 for a nested call whose baseline location was line 8. Before acceptance,
+give the hidden native companion its own symbol-keyed PC map, sharing the owner's
+location table but never its function-relative offsets. Serialize companion maps
+in the existing PC payload, not as additional callable variants/slot records.
+Attach under the existing context attachment lock before release publication;
+if a debug-enabled map is unavailable, do not publish the fast entry. Bodies
+without debug info keep eager locations. Existing outer-frame imprecision in
+the baseline probe is not claimed fixed.
+
+The regression now asserts the actual nested call line after warmup, map
+serialization/registration, and absence of TLS local loads in the companion.
+It also checks reference/wide integer inputs, reflection reading the outer
+receiver/parameter slots and changing the parameter, overriding/private context, recursion,
+exceptions/recovery, invalid arguments, deleted objects, foreign Programs and
+concurrent first publication. All 190 assertions pass in release/debug across
+O0/O3, disabled compilation, EH, no-debug and split compilation, with runtime
+disable/admission/PIC/context-elision controls.
+
+Each build passes 102 selected files: release/debug report 382/389 cases and
+27374/27473 assertions, with 15 standalones each and one known release skip.
+All 153 debug native checks, 15 runner checks and 495 references in each of Qore
+IR/AOT and Java interpreted/JIT modes pass. The final compiler-only PC-map
+serialization also propagates cooperative cancellation rather than leaving a
+partial payload. No full-suite, sanitizer or cross-platform validation is claimed.
+
+The [evidence](results-receiver-entry-macos-arm64.json) retains **321 jobs / 1605
+measurement windows**: 102 earlier baseline/screen/control jobs and 219 final
+qualified jobs, including adverse-control repeats. Frozen identities, source
+hashes, fixture contents, all normalized/raw-sample checks and reproduction
+scripts distinguish the screened, rejected-diagnostic and accepted versions.
+No task build/test/profile/inspection/evidence work overlapped timing; unrelated
+editor processes were left untouched. See the [62-item audit](FOLLOWUP-AUDIT.md#receiver-aware-entry-audit-2026-10-11).
+
+### Remaining costs and next plan
+
+The final LLVM dump has 131 definitions (baseline 130). The normal forwarding
+entry still has two TLS local loads; its 142-line companion has zero and uses
+the explicit RuntimeConfig stack guard. These are IR-body observations, not
+claims that unrelated machine-code bodies or peak stack use are unchanged.
+
+A separate ten-second, 1 ms profile confirms the companion executes. Top-of-stack
+counts include name dispatch 642, generic dispatch 493, type classification 402,
+TLS lookup 357, cache matching 307, local setup 249 and explicit RuntimeConfig
+acquisition 164. Return acceptance and its type machinery also remain visible.
+The profile includes a sleeping signal thread; counts are qualitative and are
+not additive CPU percentages.
+
+Next isolate redundant return validation in the generic dispatch epilogue, with
+an exact immediate-value/canonical-type guard and the existing full fallback.
+Then investigate a preflighted native forwarding path that can prove the nested
+target is an existing scalar leaf before eliding frame/slot work. Arbitrary
+overrides must retain observable locals; misses must be effect-free, and selected
+overload identity, defining-class context, logical stack traces, debugger,
+receiver lifetime and Program/body guards must remain. Keep callback and
+monomorphic controls in subsequent measurements. Java parity remains unachieved.

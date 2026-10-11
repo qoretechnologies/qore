@@ -459,6 +459,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_bind_function_call_ref_typed_v3) },
     { "qore_rt_bind_method_int_unary_v1",
         reinterpret_cast<void*>(&qore_rt_bind_method_int_unary_v1) },
+    { "qore_rt_bind_receiver_int_method_v1",
+        reinterpret_cast<void*>(&qore_rt_bind_receiver_int_method_v1) },
     { "qore_rt_bind_method_int_unary_v2",
         reinterpret_cast<void*>(&qore_rt_bind_method_int_unary_v2) },
     { "qore_rt_bind_method_int_unary_v3",
@@ -17734,10 +17736,36 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
                 return toBits(ir_return_value);
             }, val, xsink, caller_pgm, receiver_type_info, exec_pgm);
         } else if (uvb->hasCachedFunction() && !use_specialized_ir) {
-            // JIT/AOT fast path
-            execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
-                return uvb->execCachedFunction(xs, inv);
-            }, val, xsink, caller_pgm, receiver_type_info, exec_pgm);
+            // Keep the normal observable frame and signature slots for forwarding methods.
+            // The companion only avoids reloading/refcounting already-bound scalar/self values.
+            // It never removes slots that a nested override could inspect through reflection.
+            QoreAOTContext::ReceiverIntMethodEntryV1 receiver_entry = nullptr;
+            QoreAOTContext* receiver_ctx = nullptr;
+            static const bool receiver_enabled = !std::getenv("QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY");
+            if (receiver_enabled && native_cache && native_cache->native_scalar_uvb == uvb
+                    && native_cache->native_scalar_program == caller_pgm
+                    && caller_pgm == exec_pgm && caller_pgm == o->getProgram()
+                    && native_cache->arg_types[0] == bigIntTypeInfo && native_cache->arg_states[0] == 0) {
+                receiver_ctx = uvb->getCachedAOTContext();
+                if (receiver_ctx && uvb->hasCachedAOT() && receiver_ctx->pgm == caller_pgm
+                        && receiver_ctx->pc_loc_fn == uvb->getCachedAOTFunction()
+                        && receiver_ctx->pc_loc_map_attached.load(std::memory_order_acquire)) {
+                    receiver_entry = receiver_ctx->receiver_int_method_entry_v1.load(std::memory_order_acquire);
+                }
+            }
+            if (receiver_entry) {
+                RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+                const int64_t arg = fromBits(args[0]).getAsBigInt();
+                const uint64_t self = toBits(QoreValue(o));
+                execJITWithDeopt(uvb, call_name, [&](ExceptionSink* xs, bool&) {
+                    return receiver_entry(arg, self, &rc, receiver_ctx, xs);
+                }, val, xsink, caller_pgm, receiver_type_info, exec_pgm);
+            } else {
+                // JIT/AOT fast path
+                execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+                    return uvb->execCachedFunction(xs, inv);
+                }, val, xsink, caller_pgm, receiver_type_info, exec_pgm);
+            }
         } else {
             // IR fast path (standard TLS): execute IR directly without QoreListNode.
             execJITWithDeopt(uvb, call_name, [ir, uvb, exec_pgm](ExceptionSink* xs, bool& inv) -> uint64_t {

@@ -908,6 +908,17 @@ void qore_rt_bind_method_int_unary_v1(QoreAOTContext* ctx,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
     int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*));
 
+//! Publish a receiver-aware forwarding companion without removing observable signature slots.
+//! @param ctx runtime-owned AOT context, already identifying normal in its PC metadata
+//! @param normal immutable normal-body identity; publication must match this exact body
+//! @param entry native int argument, borrowed boxed receiver and live RuntimeConfig, context and sink;
+//! returns an owned boxed value after the ordinary declared-return filter
+//! @param requires_pc_map nonzero when this body relies on lazy native-PC source locations
+//! @note Thread-safe, idempotent publication. The caller must retain the normal frame and TLS signature slots.
+void qore_rt_bind_receiver_int_method_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    uint64_t (*entry)(int64_t, uint64_t, RuntimeConfig*, QoreAOTContext*, ExceptionSink*), int32_t requires_pc_map);
+
 //! Publish an optional exact-body scalar method companion with an explicit live RuntimeConfig.
 //! @param ctx runtime-owned context whose normal body must match
 //! @param normal immutable body identity, rechecked on every call

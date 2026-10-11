@@ -414,6 +414,13 @@ struct QoreAOTContext {
         const size_t*);
     std::atomic<NativeFloatUnaryMethodEntryV3> native_float_unary_method_entry_v3{nullptr};
 
+    //! Forwarding-method companion: native argument, borrowed boxed self, live context, owned boxed result.
+    //! The caller retains the ordinary observable frame and signature slots. The whole body is lowered;
+    //! this is not a pure-leaf entry and must not use deferred native-leaf frame/context setup.
+    using ReceiverIntMethodEntryV1 = uint64_t (*)(int64_t, uint64_t, RuntimeConfig*,
+        QoreAOTContext*, ExceptionSink*);
+    std::atomic<ReceiverIntMethodEntryV1> receiver_int_method_entry_v1{nullptr};
+
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
     ~QoreAOTContext();

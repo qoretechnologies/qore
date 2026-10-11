@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "RECEIVER-ENTRY-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+class ReceiverEntry {
+    private:internal {
+        int offset = 7;
+    }
+    int next(int value) { return value + offset; }
+    int forward(int value) {
+        return self.next(value);  # Keep line 18: asserted below after warming the companion.
+    }
+    int twice(int value) { return self.forward(value) + self.forward(value); }
+}
+class ReceiverDerived inherits ReceiverEntry {
+    private:internal {
+        int offset = 11;
+    }
+    int next(int value) { return value + offset; }
+}
+class ReceiverInspect inherits ReceiverEntry {
+    int next(int value) {
+        hash<auto> vars = get_local_vars(1);
+        expect(value, vars.value.value);
+        expect(self, vars.self.value);
+        set_local_var_value(1, "value", value + 100);
+        expect(value + 100, get_local_vars(1).value.value);
+        return value + 3;
+    }
+}
+class ReceiverRecursive inherits ReceiverEntry {
+    int next(int value) {
+        return value ? self.forward(value - 1) + 1 : 0;
+    }
+}
+class ReceiverFailure inherits ReceiverEntry {
+    int next(int value) {
+        if (value < 0) { throw "EXPECTED-RECEIVER-FAILURE", "negative"; }
+        return value;
+    }
+}
+class ReceiverConcurrent {
+    int next(int value) { return value + 7; }
+    int forward(int value) { return self.next(value); }
+}
+
+int sub callReceiver(auto receiver, int value) { return receiver.forward(value); }
+int sub callReceiverArgument(auto receiver, auto value) { return receiver.forward(value); }
+sub deleteReceiver(ReceiverEntry receiver) { delete receiver; }
+
+sub receiverWorker(Counter done, Queue results) {
+    on_exit done.dec();
+    # This class's companion is first published by concurrent workers, not the serial warmup.
+    ReceiverConcurrent receiver();
+    for (int i = 0; i < 100; ++i) {
+        expect(i + 7, callReceiver(receiver, i));
+    }
+    results.push(100);
+}
+
+ReceiverEntry base();
+ReceiverDerived derived();
+ReceiverInspect inspecting();
+ReceiverRecursive recursive();
+ReceiverFailure failing();
+Program foreign(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_ALLOW_DEBUGGER);
+foreign.parse("int sub run(object receiver, int value) { return receiver.forward(value); }", "receiver-foreign");
+for (int round = 0; round < 12; ++round) {
+    foreach int value in ((0, -1, 140737488355327, 140737488355328,
+            -140737488355329, 1125899906842624)) {
+        expect(value + 7, callReceiver(base, value));
+        expect(value + 11, callReceiver(derived, value));
+        expect(value + 3, callReceiver(inspecting, value));
+        expect(value + 7, callReceiverArgument(base, \value));
+        expect((value + 7) * 2, base.twice(value));
+        expect(value + 7, foreign.callFunction("run", base, value));
+    }
+    expect(8, callReceiver(recursive, 8));
+    expect(5, callReceiver(failing, 5));
+    try {
+        callReceiver(failing, -1);
+        throw "RECEIVER-ENTRY-TEST", "missing exception";
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "EXPECTED-RECEIVER-FAILURE") { rethrow; }
+        bool found = False;
+        foreach hash<CallStackInfo> frame in (ex.callstack) {
+            if (frame.function == "ReceiverFailure::next") {
+                expect(18, frame.line);
+                found = True;
+            }
+        }
+        expect(True, found);
+    }
+    expect(6, callReceiver(failing, 6));
+}
+try {
+    callReceiverArgument(derived, "not an integer");
+    throw "RECEIVER-ENTRY-TEST", "invalid argument accepted";
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err != "RUNTIME-TYPE-ERROR" && ex.err != "RUNTIME-OVERLOAD-ERROR") { rethrow; }
+}
+Counter done(4);
+Queue results();
+for (int i = 0; i < 4; ++i) {
+    background receiverWorker(done, results);
+}
+done.waitForZero();
+for (int i = 0; i < 4; ++i) {
+    expect(100, results.get(1000));
+}
+deleteReceiver(base);
+try {
+    callReceiver(base, 1);
+    throw "RECEIVER-ENTRY-TEST", "deleted receiver accepted";
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err != "OBJECT-ALREADY-DELETED") { rethrow; }
+}
+printf("receiver-entry: ok\n");

@@ -955,3 +955,19 @@ against their matching runtimes. See the
 [evidence](results-scalar-return-guard-macos-arm64.json): the nested workload
 improves repeatedly by about 9-10%, but remains far from Java. Adverse boxed-float
 and monomorphic comparisons are retained; this is not a zero-regression claim.
+
+`QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY=1` disables the receiver-aware forwarding
+companion at compilation or its use at runtime (presence, sampled once at runtime).
+Eligible same-Program `int(int)` instance methods that only forward their explicit
+receiver and argument to another method can receive those inputs and a live
+`RuntimeConfig` directly. The caller still installs the ordinary logical frame,
+defining-class/object context and reflection-visible signature slots. Arbitrary
+overrides, cleanup and full return filtering remain supported; this is not the
+pure-leaf convention. Debug-enabled companions have separate native PC maps, and
+are published only after their map is attached. No-debug bodies keep eager locations.
+
+The internal context layout/runtime identity changes: rebuild AOT artifacts against
+the matching runtime. See the [results](RESULTS.md#receiver-aware-forwarding-entry-2026-10-11)
+and [evidence](results-receiver-entry-macos-arm64.json): the nested workload gains
+10-12%, but remains about 53x Java. An integer-callback slowdown repeats at 1.09%
+against the frozen baseline; all adverse controls are retained.

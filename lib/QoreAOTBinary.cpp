@@ -241,12 +241,43 @@ constexpr size_t QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE = 16 * 1024 * 1024;
 constexpr size_t QORE_AOT_MODULE_DEPS_MAX_COUNT = 65536;
 } // anonymous namespace
 
-size_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>& func_slots,
-        std::vector<uint8_t>& out) {
+int64_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>& func_slots,
+        std::vector<uint8_t>& out, std::string& error) {
     const size_t count_pos = out.size();
+    size_t checked = 0;
+    auto cancelled = [&]() {
+        if (!(++checked % 100) && qore_check_cancel(nullptr, "AOT PC-map serialization")) {
+            out.resize(count_pos);
+            error = "operation cancelled during AOT PC-map serialization";
+            return true;
+        }
+        return false;
+    };
+    struct PcRecord {
+        const std::string& llvm_symbol;
+        const std::vector<std::pair<uint32_t, uint32_t>>& pc_loc_map;
+        const std::vector<AOTCompiledFuncWithSlots::AOTLocEntry>& pc_extra_locs;
+    };
+    std::vector<PcRecord> records;
+    records.reserve(func_slots.size());
+    for (const auto& fws : func_slots) {
+        if (cancelled()) {
+            return -1;
+        }
+        records.push_back({fws.llvm_symbol, fws.pc_loc_map, fws.pc_extra_locs});
+        for (const auto& pc : fws.pc_companions) {
+            if (cancelled()) {
+                return -1;
+            }
+            records.push_back({pc.symbol, pc.entries, pc.extra_locs});
+        }
+    }
     pcmapPut32(out, 0);  // placeholder for num_funcs
     uint32_t n = 0;
-    for (const auto& fws : func_slots) {
+    for (const auto& fws : records) {
+        if (cancelled()) {
+            return -1;
+        }
         if (fws.pc_loc_map.empty() || fws.llvm_symbol.empty()) {
             continue;
         }
@@ -255,6 +286,9 @@ size_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>&
         out.insert(out.end(), fws.llvm_symbol.begin(), fws.llvm_symbol.end());
         pcmapPut32(out, static_cast<uint32_t>(fws.pc_loc_map.size()));
         for (const auto& e : fws.pc_loc_map) {
+            if (cancelled()) {
+                return -1;
+            }
             pcmapPut32(out, e.first);
             pcmapPut32(out, e.second);
         }
@@ -269,7 +303,10 @@ size_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>&
     // (see AOTCompiledFuncWithSlots::pc_extra_locs).  Appended AFTER every function record so that
     // readers predating it parse the records above and ignore these bytes.
     uint32_t num_extra_funcs = 0;
-    for (const auto& fws : func_slots) {
+    for (const auto& fws : records) {
+        if (cancelled()) {
+            return -1;
+        }
         if (!fws.pc_loc_map.empty() && !fws.llvm_symbol.empty() && !fws.pc_extra_locs.empty()) {
             ++num_extra_funcs;
         }
@@ -277,7 +314,10 @@ size_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>&
     if (num_extra_funcs) {
         pcmapPut32(out, QORE_AOT_PCMAP_EXTRA_MAGIC);
         pcmapPut32(out, num_extra_funcs);
-        for (const auto& fws : func_slots) {
+        for (const auto& fws : records) {
+            if (cancelled()) {
+                return -1;
+            }
             if (fws.pc_loc_map.empty() || fws.llvm_symbol.empty() || fws.pc_extra_locs.empty()) {
                 continue;
             }
@@ -285,6 +325,9 @@ size_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>&
             out.insert(out.end(), fws.llvm_symbol.begin(), fws.llvm_symbol.end());
             pcmapPut32(out, static_cast<uint32_t>(fws.pc_extra_locs.size()));
             for (const auto& loc : fws.pc_extra_locs) {
+                if (cancelled()) {
+                    return -1;
+                }
                 pcmapPut32(out, static_cast<uint32_t>(loc.start_line));
                 pcmapPut32(out, static_cast<uint32_t>(loc.end_line));
                 pcmapPut32(out, static_cast<uint32_t>(loc.file.size()));

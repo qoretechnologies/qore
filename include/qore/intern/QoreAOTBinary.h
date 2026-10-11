@@ -2228,6 +2228,8 @@ struct AOTSlotIdentities {
     std::vector<std::string> unsupported_expr_details; //!< compile-time diagnostics for unsupported expression slots
 };
 
+struct AOTPcLocFuncEntry;
+
 //! Descriptor for a compiled function with slot identities
 struct AOTCompiledFuncWithSlots {
     std::string name;                //!< AOT function name (e.g. "myFunc", "MyClass::method")
@@ -2274,6 +2276,10 @@ struct AOTCompiledFuncWithSlots {
         index is >= ctx->num_locs), losing the inlined location but never reporting a wrong one.
     */
     std::vector<AOTLocEntry> pc_extra_locs;
+    //! Additional native bodies sharing this function's location table, but not its PC offsets.
+    //! Compiler-only records: these are serialized in the symbol-keyed PC payload, never as
+    //! additional callable variants or slot maps.
+    std::vector<AOTPcLocFuncEntry> pc_companions;
     //! Source-stripped metadata-only statement locations for ProgramControl::findStatementId().
     struct AOTStmtLocEntry {
         int32_t start_line = 0;
@@ -2320,10 +2326,10 @@ struct AOTPcLocFuncEntry {
 constexpr uint32_t QORE_AOT_PCMAP_EXTRA_MAGIC = 0x4c435051u;   //!< 'QPCL' little-endian
 
 //! Serialize the per-function PC->loc maps from func_slots into a trailer payload.
-//! Returns the number of functions written (functions with an empty map or symbol
-//! are skipped).
-size_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>& func_slots,
-        std::vector<uint8_t>& out);
+//! Returns the number of native bodies written (including companions; empty maps/symbols
+//! are skipped), or -1 on cancellation, restoring out and setting error.
+int64_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>& func_slots,
+        std::vector<uint8_t>& out, std::string& error);
 
 //! Parse a trailer payload (without footer) into per-function entries. Returns false
 //! on truncation/corruption.

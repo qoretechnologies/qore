@@ -494,6 +494,14 @@ static bool isNonThrowingScalarBody(const BatchCalleeInfo* info, bool& scalar_le
 }
 
 void QoreIRToLLVM::emitNativeMethodBinding(llvm::Module& module, llvm::Function* normal) {
+    if (aot_mode && fast_entry_name.empty() && !receiver_method_binding.empty()) {
+        llvm::Function* companion = module.getFunction(receiver_method_binding);
+        assert(companion);
+        auto bind = module.getOrInsertFunction("qore_rt_bind_receiver_int_method_v1",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type, i32_type}, false));
+        builder->CreateCall(bind, {aot_ctx_arg, normal, companion,
+            llvm::ConstantInt::get(i32_type, emit_debug_info)});
+    }
     if (!aot_mode || !fast_entry_name.empty() || !current_ir_func
             || std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")) {
         return;
@@ -11691,7 +11699,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     assigned_hash_guard_elisions = 0;
     local_allocas.clear();
     aot_call_target_contexts.clear();
-    fast_runtime_config = nullptr;
+    fast_runtime_config = receiver_runtime_config;
     loop_runtime_config = nullptr;
     loop_cancel_deferral = nullptr;
     loop_cancel_requested = nullptr;
@@ -11841,10 +11849,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
         builder->SetInsertPoint(stack_check_bb);
         llvm::Value* err;
-        if (dynamic_closure_runtime_config) {
+        if (receiver_runtime_config || dynamic_closure_runtime_config) {
             auto check_fn = module.getOrInsertFunction("qore_rt_check_stack_v2",
                 llvm::FunctionType::get(i32_type, {ptr_type, ptr_type}, false));
-            err = builder->CreateCall(check_fn, {xsink_arg, dynamic_closure_runtime_config});
+            err = builder->CreateCall(check_fn, {xsink_arg,
+                receiver_runtime_config ? receiver_runtime_config : dynamic_closure_runtime_config});
         } else {
             auto check_fn = module.getOrInsertFunction("qore_rt_check_stack",
                 llvm::FunctionType::get(i32_type, {ptr_type}, false));
