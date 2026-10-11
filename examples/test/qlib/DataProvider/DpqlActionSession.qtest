@@ -101,6 +101,8 @@ class DpqlActionSessionTest inherits QUnit::Test {
         addTestCase("dpql-set-context", \testSetContext());
         addTestCase("dpql-parse with fields", \testParseWithFields());
         addTestCase("dpql-parse unknown field", \testParseUnknownField());
+        addTestCase("dpql-parse validation warnings and errors", \testParseValidationSeverity());
+        addTestCase("each diagnostic is reported once", \testDiagnosticsOnce());
         addTestCase("dpql-get-completions without context", \testCompletionsNoContext());
         addTestCase("dpql-get-completions", \testCompletions());
         addTestCase("dpql-validate with override", \testValidateOverride());
@@ -171,6 +173,38 @@ class DpqlActionSessionTest inherits QUnit::Test {
         });
         assertFalse(result.success, "Unknown field should fail validation");
         assertTrue(result.diagnostics.size() > 0, "Should return diagnostics");
+    }
+
+    testParseValidationSeverity() {
+        DataProvider::DpqlActionSession session = newSession();
+        # a warning is reported, and the expression still parses
+        hash<auto> result = session.handleAction("dpql-parse", {
+            "text": "@age == @age",
+            "fields": getFieldInfo(),
+        });
+        assertTrue(result.success, "a validation warning does not fail parsing");
+        assertEq(("DPQL-W006",), map $1.code, result.diagnostics);
+        assertEq("warning", result.diagnostics[0].severity);
+
+        # an error fails it
+        result = session.handleAction("dpql-parse", {
+            "text": "@name - 1",
+            "fields": getFieldInfo(),
+        });
+        assertFalse(result.success, "a validation error fails parsing");
+        assertEq(("DPQL-E050",), map $1.code, result.diagnostics);
+    }
+
+    testDiagnosticsOnce() {
+        DataProvider::DpqlActionSession session = newSession();
+        # a parse-time warning (an argument type) and a validation warning
+        foreach string action in (("dpql-parse", "dpql-eval")) {
+            hash<auto> result = session.handleAction(action, {
+                "text": "lwr(@age) == \"x\" && @name == @name",
+                "fields": getFieldInfo(),
+            });
+            assertEq(("DPQL-W004", "DPQL-W006"), map $1.code, result.diagnostics, action);
+        }
     }
 
     testCompletionsNoContext() {

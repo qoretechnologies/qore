@@ -1394,6 +1394,10 @@ fetch
       arithmetic operands that the operator cannot combine (\c DPQL-E050), such as a hash plus a number, which
       evaluates to the number, and comparisons whose result is the same for every record (\c DPQL-W006), such as
       <tt>\@price > \@price</tt>; see @ref dpql_validation
+    - the \c dpql-parse action fails an expression only for a validation error, as parsing does, and no longer for a
+      validation warning
+    - the \c dpql-parse and \c dpql-eval actions report each diagnostic of parsing once; they were reported twice
+      when the expression was validated against fields
     - added @ref ConnectionProvider::connection_option_override() "connection_option_override()" to derive a
       connection option from the option of another connection scheme: adding a hash cast to
       @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo" to a base option also set every member
