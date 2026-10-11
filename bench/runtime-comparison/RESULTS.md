@@ -8990,3 +8990,122 @@ cross-Program paths remain separate gaps. The [audit](FOLLOWUP-AUDIT.md#stable-u
 records all 62 checks: 18 Pass, 44 N/A, 0 Fail. Full identities, raw samples,
 earlier screens and reproduction scripts are in
 [the evidence](results-stable-untyped-load-macos-arm64.json). No Java parity claim.
+
+## Generic method-name reuse (2026-10-10)
+
+Retain reuse of an immutable PIC entry's existing diagnostic name in generic
+method dispatch. The context-using fallback workload improves 8.65% in the main
+comparison and 10.78% with identical executable bytes, with disjoint observed
+fork ranges in both. Native-call controls do not establish a speedup; their
+adverse separate-executable results are preserved below. This is an incremental
+generic-dispatch improvement, not Java parity.
+
+The old path rebuilt declaring-class::method on every no-IR call even though
+the matching entry already owned exactly that string. The new path uses that
+immutable name while preserving IR display-name precedence and ordinary miss
+construction. The sole supplying caller passes the entry's own method and
+variant; a debug assertion checks that invariant. execJITWithDeopt continues to
+copy into its owned frame, so no borrowed diagnostic-frame lifetime, publication,
+reader handshake or deoptimization contract changes. Program/object/access,
+parse-option, type, body/readiness, debugger, stack and cancellation checks remain.
+
+No compiler, header, ABI, cache-layout or runtime-identity change. All 129
+non-bootstrap normalized LLVM bodies match. Bootstrap differs only in compressed
+metadata length, 27934 versus 27935 bytes; no cause for that serialization
+difference is inferred. The generic helper has 804/803 static arm64 instructions,
+but its stack frame grows from 448 to 464 bytes. Those code-shape observations
+are not performance measurements; the measured net effect determines retention.
+
+### Qualification
+
+Baseline is ec0089000 with its previously qualified frozen binaries and original
+pre-commit provenance retained. Candidate is that parent plus the frozen patch,
+not a prospective commit hash. Sources and binaries were frozen before timing.
+Release/debug pass 93 selected files: 375/382 cases, 16558/16657 assertions,
+12 standalone files each, one known release skip and no debug skips. Support
+qmods were rebuilt sequentially for each build. Both builds pass IR/AOT 495-case
+reference grids; release also passes Java-interpreter/JIT grids, and 15 harness
+tests and 146 native debug checks pass. No full-suite, sanitizer or cross-platform
+claim is made.
+
+The new diagnostic driver passes 88 assertions on the frozen baseline and both
+candidate builds. It warms polymorphic caches before exceptions and validates
+long inherited/overridden names, namespaces, foreign-Program calls, normal and
+exception stacks, and cache/fast-entry/context-elision-disabled paths. AST's bare
+method spelling is accepted; any incorrect qualified method name is rejected.
+AST/IR/JIT/tiered, stripped AOT O0/O3, EH, no-debug and split compilation are covered.
+
+### Measurements
+
+Apple M4 Pro, macOS arm64 release; count 4096, three warmups and five 500 ms
+measurement windows per fork. Values are median fork means in ns/iteration,
+startup excluded. Local Temurin 25.0.2 JIT retains target calls. Qore/Java
+representation and inlining contracts differ: these are complete workloads, not
+isolated call latencies. All 171 jobs / 855 windows are independently revalidated
+and retained. No task builds, tests, profiling or evidence work overlapped timing.
+
+Main, three forks, run-vcad4ch2:
+
+|!Kernel|!Before ns|!After ns|!Reduction %|!Java JIT ns|!After / Java
+|dynamic_int_result_fallback|313.853|286.703|8.65|3.013|95.15
+|dynamic_int_result_call|10.406|10.757|-3.37|3.164|3.40
+|dynamic_float_result_call|11.439|12.003|-4.92|3.616|3.32
+|boxed_float_method_call|64.225|64.434|-0.33|2.620|24.59
+|indirect_int_result|7.097|7.112|-0.21|1.946|3.65
+|indirect_float_result|8.962|9.090|-1.43|2.927|3.11
+|polymorphic_expression_call|10.856|10.479|3.47|2.636|3.98
+|polymorphic_float_expression_call|10.723|10.874|-1.41|2.648|4.11
+|arithmetic|1.530|1.529|0.11|1.019|1.50
+
+Identical-executable comparison, five forks, run-t528f7qs:
+
+|!Kernel|!Before ns|!After ns|!Reduction %|!Before fork range|!After fork range
+|dynamic_int_result_fallback|318.804|284.452|10.78|314.352–322.361|282.061–290.474
+|dynamic_int_result_call|10.575|10.522|0.49|10.454–10.782|10.295–10.597
+|dynamic_float_result_call|11.806|11.789|0.14|11.656–11.894|11.643–12.050
+|boxed_float_method_call|63.706|63.845|-0.22|62.711–64.761|63.486–65.394
+|indirect_int_result|7.094|7.071|0.32|6.986–7.168|6.937–7.217
+|indirect_float_result|9.093|9.160|-0.73|8.928–9.155|8.918–10.700
+|arithmetic|1.518|1.507|0.73|1.511–1.537|1.500–1.516
+
+Main fallback ranges are 312.247–315.486 before and 282.268–289.300 after. Its
+gain repeats in the identical-executable control. Observed ranges are not
+confidence intervals. Boxed and callback controls have mixed small changes;
+the slow 10.700 ns floating-callback fork is retained, not filtered.
+
+Main native-floating calls slow 4.92% with disjoint ranges, but the five-fork
+identical-executable median improves 0.14% with overlap. An additional five-fork
+identical-executable trial, run-jydpdnqd, improves 0.75% (11.927 to 11.837 ns,
+overlapping 11.670–12.018 / 11.770–12.053 ranges). The main adverse effect is
+unresolved, not claimed to be a runtime-helper slowdown or confidently dismissed
+as noise. Main native-integer calls also slow 3.37% with overlapping ranges,
+versus a 0.49% improvement with overlap in the first same-AOT control.
+
+Floating-polymorphic calls slow 1.41% in main with disjoint ranges. The focused
+same-AOT repeat slows 0.79% (10.779 to 10.864 ns), with overlapping
+10.667–10.929 / 10.713–10.917 ranges. That adverse median trend remains a caveat.
+No general native-call, callback or polymorphic speedup is claimed.
+
+### Remaining costs and next plan
+
+A separate ten-second 1 ms fallback profile after timing still shows type
+classification (414 top-of-stack samples), generic dispatch (397/380), TLS
+resolution (277), local setup/evaluation and parameter instantiation (131).
+Owned diagnostic-frame copies remain, as intended. Profile counts are qualitative,
+include a sleeping signal thread, and are not additive inclusive CPU percentages
+or benchmark measurements.
+
+Next investigate immutable generic-call eligibility and signature facts for
+reuse in the existing dispatch cache, retaining live body/debugger/Program/access
+guards. Also map context-using same-Program methods to the
+existing compiled fast-entry conventions: generic fallback still pushes arguments
+through TLS and instantiates locals despite having compiled bodies. Any broader
+adapter must preserve coercion, self/class context, reflection, exceptions and
+deoptimization; measure it separately from metadata reuse. The remaining gap
+requires reducing this call setup, not merely more diagnostic-string tuning.
+
+Main native dynamic workloads remain about 3.3–3.4 times Java, boxed floating
+results about 24.6 times, and context-using fallback about 95.1 times. IR and
+cross-Program execution remain separate gaps. See the [audit](FOLLOWUP-AUDIT.md#generic-method-name-audit-2026-10-10)
+(all 62 checks: 15 Pass, 47 N/A, 0 Fail) and
+[full evidence](results-generic-method-name-macos-arm64.json).

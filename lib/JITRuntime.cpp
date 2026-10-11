@@ -17681,12 +17681,17 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
-    // Use cached IR name when available (zero allocation); fall back to building the name
+    // Keep the IR display name authoritative. A PIC entry already owns the
+    // identical declaring-class::method spelling used when IR is unavailable;
+    // reuse it instead of rebuilding a temporary string on every cache hit.
+    // execJITWithDeopt still copies this name into its ordinary owned frame.
     std::string call_name_buf;
-    if (!ir) {
+    assert(!native_cache || (native_cache->method == method && native_cache->variant == variant));
+    if (!ir && !native_cache) {
         call_name_buf = std::string(method->getClass()->getName()) + "::" + method->getName();
     }
-    const std::string& call_name = ir ? ir->getDisplayName() : call_name_buf;
+    const std::string& call_name = ir ? ir->getDisplayName()
+        : native_cache ? native_cache->call_name : call_name_buf;
 
     QoreValue val{};
     {

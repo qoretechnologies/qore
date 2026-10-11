@@ -847,6 +847,15 @@ Useful source references:
 
 See [RESULTS.md](RESULTS.md) for the initial measurements and follow-up targets.
 
+Generic AOT method-cache hits reuse the immutable diagnostic `Class::method`
+name already stored in their PIC entry when no cached IR display name exists.
+The IR name keeps precedence, misses still construct the ordinary name, and
+`execJITWithDeopt` still copies it into an owned diagnostic frame. This removes
+temporary string work without changing dispatch checks, frame-reader lifetime,
+ABI or runtime identity. See the [measurements](RESULTS.md#generic-method-name-reuse-2026-10-10)
+and [evidence](results-generic-method-name-macos-arm64.json), including identical-
+executable controls, mixed native-call results and the remaining Java gap.
+
 `QORE_DISABLE_AOT_STABLE_UNTYPED_LOAD=1` disables invocation-local caching of a
 stable untyped parameter's non-reference classification. Set it during `qcc`
 compilation, not just execution. The compiler excludes written, captured,

@@ -1,0 +1,84 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+
+string sub observeDiagnosticMethod(string expected, bool fail) {
+    list<hash<CallStackInfo>> stack = get_thread_call_stack();
+    bool found = False;
+    foreach hash<CallStackInfo> frame in (stack) {
+        if (frame.function == "inspect" || frame.function.endsWith("::inspect")) {
+            if (frame.function != "inspect" && frame.function != expected) {
+                throw "METHOD-NAME-TEST", sprintf("wrong method name: %s, expected %s", frame.function, expected);
+            }
+            if (frame.type != "user" || frame.file.empty() || frame.line < 0) {
+                throw "METHOD-NAME-TEST", sprintf("invalid frame: %y", frame);
+            }
+            found = True;
+        }
+    }
+    if (!found) { throw "METHOD-NAME-TEST", sprintf("missing %s: %y", expected, stack); }
+    if (fail) { throw "EXPECTED-METHOD-FAILURE", expected; }
+    return expected;
+}
+
+namespace DiagnosticNameTests {
+    class LongDiagnosticMethodNameBase {
+        string inspect(bool fail) {
+            return observeDiagnosticMethod("LongDiagnosticMethodNameBase::inspect", fail);
+        }
+    }
+    class LongDiagnosticMethodNameInherited inherits LongDiagnosticMethodNameBase {}
+    class LongDiagnosticMethodNameOverride inherits LongDiagnosticMethodNameBase {
+        string inspect(bool fail) {
+            return observeDiagnosticMethod("LongDiagnosticMethodNameOverride::inspect", fail);
+        }
+    }
+}
+
+string sub invokeDiagnosticMethod(auto receiver, bool fail) {
+    return receiver.inspect(fail);
+}
+
+sub checkDiagnosticMethod(auto receiver, string expected) {
+    for (int round = 0; round < 8; ++round) {
+        # Successful calls populate the PIC before the throwing call.
+        if (invokeDiagnosticMethod(receiver, False) != expected) {
+            throw "METHOD-NAME-TEST", "normal result mismatch";
+        }
+        try {
+            invokeDiagnosticMethod(receiver, True);
+            throw "METHOD-NAME-TEST", "missing expected exception";
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "EXPECTED-METHOD-FAILURE" || ex.desc != expected) {
+                rethrow;
+            }
+            bool found = False;
+            foreach hash<CallStackInfo> frame in (ex.callstack) {
+                if (frame.function.endsWith("::inspect") && frame.function != expected) {
+                    throw "METHOD-NAME-TEST", sprintf("wrong exception frame: %y", frame);
+                }
+                if (frame.function == "inspect" || frame.function == expected) { found = True; }
+            }
+            if (!found) { throw "METHOD-NAME-TEST", sprintf("missing exception frame: %y", ex); }
+        }
+    }
+}
+
+DiagnosticNameTests::LongDiagnosticMethodNameBase base();
+DiagnosticNameTests::LongDiagnosticMethodNameInherited inherited();
+DiagnosticNameTests::LongDiagnosticMethodNameOverride overridden();
+for (int round = 0; round < 3; ++round) {
+    checkDiagnosticMethod(base, "LongDiagnosticMethodNameBase::inspect");
+    checkDiagnosticMethod(inherited, "LongDiagnosticMethodNameBase::inspect");
+    checkDiagnosticMethod(overridden, "LongDiagnosticMethodNameOverride::inspect");
+}
+
+Program foreign(PO_NO_INHERIT_USER_CLASSES | PO_NO_CHILD_PO_RESTRICTIONS);
+foreign.importFunction("observeDiagnosticMethod");
+foreign.parse("%modern\nclass ForeignLongDiagnosticMethodName {\n"
+    "string inspect(bool fail) { return observeDiagnosticMethod(\"ForeignLongDiagnosticMethodName::inspect\", fail); }\n"
+    "}\nobject sub make() { return new ForeignLongDiagnosticMethodName(); }\n", "foreign-method-names");
+auto imported = foreign.callFunction("make");
+checkDiagnosticMethod(imported, "ForeignLongDiagnosticMethodName::inspect");
+checkDiagnosticMethod(overridden, "LongDiagnosticMethodNameOverride::inspect");
+printf("cached-method-names: ok\n");
