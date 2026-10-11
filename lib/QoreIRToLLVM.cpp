@@ -1418,7 +1418,8 @@ static bool qore_ir_guard_scalar_decrefs(llvm::Function* function, std::string& 
             llvm::StringRef name = call->getCalledFunction()->getName();
             if (name.starts_with("qore_rt_try_funcref_")) {
                 has_native_scalar_call = true;
-            } else if ((name == "qore_rt_try_method_int_unary_v1" || name == "qore_rt_try_method_float_unary_v1")
+            } else if ((name == "qore_rt_try_method_int_unary_v1" || name == "qore_rt_try_method_float_unary_v1"
+                    || name == "qore_rt_try_method_int_unary_v2" || name == "qore_rt_try_method_float_unary_v2")
                     && !std::getenv("QORE_DISABLE_LLVM_METHOD_DECREF_GUARD")) {
                 has_native_scalar_call = true;
             }
@@ -9944,32 +9945,35 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
     }
     uint32_t arg_id = inst->operands[1].id;
     llvm::Value* arg = getVal(arg_id, error);
-    if (!arg || nanboxed_values.count(arg_id)
-            || native_boxed_sources.count(arg_id)) {
+    if (!arg) {
+        return false;
+    }
+    bool boxed_argument = nanboxed_values.count(arg_id) || native_boxed_sources.count(arg_id);
+    if (boxed_argument && std::getenv("QORE_DISABLE_AOT_NAME_METHOD_BOXED_ARGUMENT")) {
         return false;
     }
     bool floating = arg->getType() == double_type;
-    if ((!floating && arg->getType() != i64_type)
-            || (floating && std::getenv("QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY"))) {
+    bool float_enabled = !std::getenv("QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY");
+    if (!boxed_argument && ((!floating && arg->getType() != i64_type)
+            || (floating && !float_enabled))) {
         return false;
     }
     llvm::Type* native_type = floating ? double_type : i64_type;
     auto store = native_funcref_store_types.find(inst->result.id);
-    bool native_continuation = store != native_funcref_store_types.end()
+    bool native_continuation = !boxed_argument && store != native_funcref_store_types.end()
         && store->second == (floating ? floatTypeInfo : bigIntTypeInfo);
     if (!native_continuation && std::getenv("QORE_DISABLE_AOT_NAME_METHOD_BOXED_RESULT")) {
         return false;
     }
-    native_continuation |= native_call_conversion_results.count(inst->result.id) != 0;
-    // The operand is already an assigned native scalar. Do not reinterpret
-    // an arbitrary boxed value or coerce NOTHING for admission.
+    native_continuation |= !boxed_argument && native_call_conversion_results.count(inst->result.id) != 0;
+    // A boxed argument has no statically known scalar family. Guard its actual
+    // representation and keep the result boxed; no guessed native side channel
+    // or coercion (including NOTHING) may participate in admission.
     uint64_t bits;
     std::memcpy(&bits, expr, sizeof(bits));
     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(bits);
     bool has_cleanups = false;
     llvm::Value* cleanups = buildArgCleanupArray(inst, 1, llvm_func, 1, has_cleanups);
-    llvm::IRBuilder<> eb(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
-    auto* output = eb.CreateAlloca(native_type, nullptr, "name_method_native_result");
     if (!fast_runtime_config) {
         auto* logical_entry = block_map.at(current_ir_func->blocks.front().get());
         llvm::IRBuilder<> rb(logical_entry, logical_entry->getFirstInsertionPt());
@@ -9977,30 +9981,82 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
             llvm::FunctionType::get(ptr_type, {}, false));
         fast_runtime_config = rb.CreateCall(acquire, {}, "runtime_config");
     }
-    auto helper = module.getOrInsertFunction(floating
-        ? "qore_rt_try_method_float_unary_v1" : "qore_rt_try_method_int_unary_v1",
-        llvm::FunctionType::get(i32_type,
-            {ptr_type, i32_type, i64_type, native_type, ptr_type, ptr_type, ptr_type}, false));
-    auto* handled = builder->CreateCall(helper,
-        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), base, arg,
-         output, xsink_arg, fast_runtime_config});
-    auto* fast = llvm::BasicBlock::Create(ctx, "name_method_native", llvm_func);
     auto* fallback = llvm::BasicBlock::Create(ctx, "name_method_fallback", llvm_func);
     auto* merge = llvm::BasicBlock::Create(ctx, "name_method_merge", llvm_func);
-    builder->CreateCondBr(builder->CreateICmpNE(handled, llvm::ConstantInt::get(i32_type, 0)),
-        fast, fallback);
-    builder->SetInsertPoint(fast);
-    llvm::Value* payload = builder->CreateLoad(native_type, output);
-    // Only a proven exact native store or scalar conversion may consume the
-    // unboxed side channel. Other consumers own boxed values, including wide integers and
-    // tag-colliding doubles; a miss can return any type through the same merge.
-    llvm::Value* fast_result = native_continuation ? llvm::ConstantInt::get(i64_type, VAL_NOTHING)
-        : floating ? boxFloat(payload) : boxIntInline(payload);
-    if (has_cleanups) {
-        emitArgCleanupClear(module, cleanups, 1, false);
+    std::vector<std::pair<llvm::Value*, llvm::BasicBlock*>> fast_results;
+    llvm::Value* payload = nullptr;
+    auto emit_attempt = [&](llvm::Value* argument, bool is_float) {
+        llvm::Type* type = is_float ? double_type : i64_type;
+        llvm::IRBuilder<> eb(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+        auto* output = eb.CreateAlloca(type, nullptr, "name_method_native_result");
+        auto* boxed_output = boxed_argument
+            ? eb.CreateAlloca(i64_type, nullptr, "name_method_matched_result") : nullptr;
+        std::vector<llvm::Type*> types{ptr_type, i32_type, i64_type, type, ptr_type};
+        std::vector<llvm::Value*> args{aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), base, argument, output};
+        if (boxed_argument) {
+            types.push_back(ptr_type);
+            args.push_back(boxed_output);
+        }
+        types.insert(types.end(), {ptr_type, ptr_type});
+        args.insert(args.end(), {xsink_arg, fast_runtime_config});
+        std::string helper_name = is_float ? "qore_rt_try_method_float_unary_" : "qore_rt_try_method_int_unary_";
+        helper_name += boxed_argument ? "v2" : "v1";
+        auto helper = module.getOrInsertFunction(helper_name, llvm::FunctionType::get(i32_type, types, false));
+        auto* handled = builder->CreateCall(helper, args);
+        auto* fast = llvm::BasicBlock::Create(ctx, "name_method_native", llvm_func);
+        llvm::BasicBlock* matched = nullptr;
+        if (boxed_argument) {
+            matched = llvm::BasicBlock::Create(ctx, "name_method_matched", llvm_func);
+            auto* branch = builder->CreateSwitch(handled, fallback, 2);
+            branch->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i32_type), 1), fast);
+            branch->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i32_type), 2), matched);
+        } else {
+            builder->CreateCondBr(builder->CreateICmpNE(handled, llvm::ConstantInt::get(i32_type, 0)),
+                fast, fallback);
+        }
+        builder->SetInsertPoint(fast);
+        payload = builder->CreateLoad(type, output);
+        // Wide integers and tag-colliding doubles still own their boxed results.
+        llvm::Value* fast_result = native_continuation ? llvm::ConstantInt::get(i64_type, VAL_NOTHING)
+            : is_float ? boxFloat(payload) : boxIntInline(payload);
+        if (has_cleanups) {
+            // The successful input is an immediate scalar and owns no node.
+            emitArgCleanupClear(module, cleanups, 1, false);
+        }
+        builder->CreateBr(merge);
+        fast_results.emplace_back(fast_result, builder->GetInsertBlock());
+        if (matched) {
+            builder->SetInsertPoint(matched);
+            llvm::Value* result = builder->CreateLoad(i64_type, boxed_output);
+            if (has_cleanups) {
+                emitArgCleanupClear(module, cleanups, 1, false);
+            }
+            builder->CreateBr(merge);
+            fast_results.emplace_back(result, builder->GetInsertBlock());
+        }
+    };
+    if (boxed_argument) {
+        llvm::Value* boxed = boxValue(arg, arg_id);
+        auto* integer = llvm::BasicBlock::Create(ctx, "name_method_int_argument", llvm_func);
+        auto* other = float_enabled
+            ? llvm::BasicBlock::Create(ctx, "name_method_float_guard", llvm_func) : fallback;
+        builder->CreateCondBr(emitIsBoxedInt48(boxed), integer, other);
+        builder->SetInsertPoint(integer);
+        auto* value = builder->CreateAShr(builder->CreateShl(boxed,
+            llvm::ConstantInt::get(i64_type, 16)), llvm::ConstantInt::get(i64_type, 16));
+        emit_attempt(value, false);
+        if (float_enabled) {
+            builder->SetInsertPoint(other);
+            auto* attempt = llvm::BasicBlock::Create(ctx, "name_method_float_argument", llvm_func);
+            builder->CreateCondBr(emitIsBoxedFloat(boxed), attempt, fallback);
+            builder->SetInsertPoint(attempt);
+            auto* value = builder->CreateBitCast(builder->CreateSub(boxed,
+                llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET)), double_type);
+            emit_attempt(value, true);
+        }
+    } else {
+        emit_attempt(arg, floating);
     }
-    builder->CreateBr(merge);
-    fast = builder->GetInsertBlock();
 
     builder->SetInsertPoint(fallback);
     llvm::Value* args = nullptr;
@@ -10029,10 +10085,15 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
     builder->CreateBr(merge);
     fallback = builder->GetInsertBlock();
     builder->SetInsertPoint(merge);
-    auto* result = builder->CreatePHI(i64_type, 2, "name_method_boxed_result");
-    result->addIncoming(fast_result, fast);
+    auto* result = builder->CreatePHI(i64_type, fast_results.size() + 1, "name_method_boxed_result");
+    // At most two scalar families, each with native/ordinary results, plus fallback.
+    for (const auto& fast : fast_results) {
+        result->addIncoming(fast.first, fast.second);
+    }
     result->addIncoming(boxed, fallback);
     if (native_continuation) {
+        assert(fast_results.size() == 1);
+        auto* fast = fast_results.front().second;
         auto* used_native = builder->CreatePHI(i1_type, 2, "name_method_native_handled");
         used_native->addIncoming(llvm::ConstantInt::getTrue(ctx), fast);
         used_native->addIncoming(llvm::ConstantInt::getFalse(ctx), fallback);

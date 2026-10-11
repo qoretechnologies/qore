@@ -75,14 +75,23 @@ class NativeFloatMethodEntryTest inherits QUnit::Test {
                         "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
                     assertTrue(!!body, name + " normal LLVM entry");
                     assertRegex("(?:call|invoke) i64 @qore_rt_dot_eval_method_direct_aot", body[0] ?? "");
-                    assertFalse(regex(body[0] ?? "", "call i32 @qore_rt_try_method_"),
-                        name + " must use generic dispatch");
+                    bool integer_enabled = prefix != "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "
+                        && prefix != "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ";
+                    assertEq(integer_enabled, regex(body[0] ?? "", "call i32 @qore_rt_try_method_int_unary_v2"),
+                        name + " actual boxed integer argument " + prefix + level);
+                    assertEq(integer_enabled && prefix != "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        regex(body[0] ?? "", "call i32 @qore_rt_try_method_float_unary_v2"),
+                        name + " actual boxed float argument " + prefix + level);
+                    assertEq(integer_enabled, regex(body[0] ?? "", "name_method_int_argument"));
+                    assertFalse(regex(body[0] ?? "", "name_method_native_value"),
+                        name + " unknown argument family retains boxed result");
                 }
                 foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
                         "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
                         "QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
                         "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
                         "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
                     assertEq(expected, run((executable,), runtime), prefix + level + runtime);
@@ -132,12 +141,15 @@ class NativeFloatMethodEntryTest inherits QUnit::Test {
                     "(?s)define [^\n]*@nativeFloatGenericMethodReaderBatch_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
                 assertTrue(!!body);
                 assertRegex("(?:call|invoke) i64 @qore_rt_dot_eval_method_direct_aot", body[0] ?? "");
-                assertFalse(regex(body[0] ?? "", "call i32 @qore_rt_try_method_"));
+                assertRegex("call i32 @qore_rt_try_method_float_unary_v2", body[0] ?? "");
+                assertRegex("name_method_float_argument", body[0] ?? "");
+                assertFalse(regex(body[0] ?? "", "name_method_native_value"));
                 foreach bool generic in ((False, True)) {
                     list<string> args = generic ? (executable, "generic") : (executable,);
                     foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
                             "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
                             "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                            "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
                             "QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1 ")) {
                         assertEq(expected, run(args, runtime), prefix + level + runtime + generic);
                     }

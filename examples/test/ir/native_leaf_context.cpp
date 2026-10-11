@@ -1006,6 +1006,90 @@ static void checkGenericFloatMethods(QoreProgram* program, bool inline_method, b
         assert(!xsink && converted->getType() == NT_FLOAT && converted->getAsFloat() == 7.5);
         assert(probe.count(version) == 1);
     }
+    // v2 has two independent output channels. A miss must leave both untouched;
+    // native success writes only the native channel, and ordinary matched
+    // dispatch transfers one owned boxed result without claiming a native type.
+    constexpr double native_sentinel = -123.25;
+    constexpr uint64_t boxed_sentinel = 0x123456789abcdef0ULL;
+    const bool matched_enabled = !std::getenv("QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK");
+    auto native_call = [&](QoreValue receiver, bool accepted) {
+        double native = native_sentinel;
+        uint64_t boxed = boxed_sentinel;
+        int handled = qore_rt_try_method_float_unary_v2(caller_ctx, slot, receiver.rawBits(),
+            1.25, &native, &boxed, &xsink, rc);
+        assert(handled == static_cast<int>(accepted));
+        assert(!xsink && native == (accepted ? 1.75 : native_sentinel) && boxed == boxed_sentinel);
+        assert(rc->getObject() == old_object && rc->getClass() == old_class);
+    };
+    native_call(*object, cached_admission);
+    native_call(QoreValue(int64_t{7}), false);
+    {
+        // This Program is unshared. Force a live body miss without changing
+        // immutable PIC admission, then restore the context even on unwinding.
+        struct RestoreSelf {
+            QoreAOTContext* ctx;
+            bool saved;
+            ~RestoreSelf() { ctx->uses_self = saved; }
+        } restore{ctx, ctx->uses_self};
+        ctx->uses_self = true;
+        const bool accepted = cached_admission && matched_enabled;
+        for (double argument : {1.25, -3.0e307}) {
+            double native = native_sentinel;
+            uint64_t boxed = boxed_sentinel;
+            int handled = qore_rt_try_method_float_unary_v2(caller_ctx, slot, object->rawBits(),
+                argument, &native, &boxed, &xsink, rc);
+            assert(!xsink && handled == (accepted ? 2 : 0) && native == native_sentinel);
+            if (accepted) {
+                QoreValue value;
+                std::memcpy(&value, &boxed, sizeof(value));
+                ValueHolder result(value, &xsink);
+                assert(result->getType() == NT_FLOAT && result->getAsFloat() == argument + 0.5);
+            } else {
+                assert(boxed == boxed_sentinel);
+            }
+            assert(!xsink && rc->getObject() == old_object && rc->getClass() == old_class);
+        }
+        xsink.raiseException("MATCHED-METHOD-PENDING", "pre-existing exception");
+        double native = native_sentinel;
+        uint64_t boxed = boxed_sentinel;
+        int handled = qore_rt_try_method_float_unary_v2(caller_ctx, slot, object->rawBits(),
+            1.25, &native, &boxed, &xsink, rc);
+        assert(handled == (accepted ? 2 : 0) && native == native_sentinel);
+        assert(boxed == (accepted ? QoreValue().rawBits() : boxed_sentinel));
+        assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("MATCHED-METHOD-PENDING"));
+        xsink.clear();
+        assert(rc->getObject() == old_object && rc->getClass() == old_class);
+    }
+    // A transient body miss must not poison native admission after restoration.
+    native_call(*object, cached_admission);
+    // The ordinary coercion above warmed an integer-argument key after the
+    // live context was restored, even when early admission is disabled. Its
+    // float signature cannot justify an integer result or an integer companion.
+    bool integer_admission = false;
+    for (auto& cache_slot : cache->entries) {
+        const auto* entry = cache_slot.load(std::memory_order_acquire);
+        if (entry && entry->receiver_class == object->get<QoreObject>()->getClass()
+                && entry->arg_types[0] == bigIntTypeInfo && !entry->arg_states[0]) {
+            integer_admission = entry->native_scalar_uvb == uvb;
+        }
+    }
+    assert(integer_admission);
+    for (int64_t argument : {int64_t{7}, int64_t{1} << 50}) {
+        int64_t native = -123;
+        uint64_t boxed = boxed_sentinel;
+        int handled = qore_rt_try_method_int_unary_v2(caller_ctx, slot, object->rawBits(),
+            argument, &native, &boxed, &xsink, rc);
+        assert(!xsink && handled == (matched_enabled ? 2 : 0) && native == -123);
+        if (matched_enabled) {
+            QoreValue value;
+            std::memcpy(&value, &boxed, sizeof(value));
+            ValueHolder result(value, &xsink);
+            assert(result->getType() == NT_FLOAT && result->getAsFloat() == static_cast<double>(argument) + 0.5);
+        } else {
+            assert(boxed == boxed_sentinel);
+        }
+        assert(!xsink && rc->getObject() == old_object && rc->getClass() == old_class);
+    }
     if (inline_method && qore_rt_get_stack_limit_v1(rc)) {
         for (bool null_view : {false, true}) {
             for (bool overflow : {false, true}) {

@@ -238,17 +238,43 @@ An already-native integer/float argument qualifies. A matching sole native-scala
 local assignment or proven sole scalar conversion consumes the unboxed result;
 other consumers receive an owned boxed result. Wide integers and tag-colliding
 doubles retain their ordinary heap encoding when boxed. Boxed and optional
-arguments remain excluded. Every miss retains original
+arguments use the additional representation guards described below. Every miss retains original
 dispatch, arbitrary boxed returns, return checks, caller-local invalidation and cleanup.
 The broader native-method entry/continuation controls also disable this path.
 
 `QORE_DISABLE_AOT_NAME_METHOD_BOXED_RESULT=1` disables the additional non-store
 consumers at compilation, including direct scalar conversions of name-method
 results, while preserving exact native-local continuations.
-Compile separate artifacts; this is not a runtime control. The new path reuses
-existing scalar helpers and the caller's hoisted RuntimeConfig; no runtime ABI or
-whole-body eligibility change is needed. Unsupported targets can pay an unsuccessful
+Compile separate artifacts; this is not a runtime control. For already-native
+arguments, the path reuses existing scalar helpers and the caller's hoisted
+RuntimeConfig; no additional runtime ABI or whole-body eligibility change is needed.
+Unsupported targets can pay an unsuccessful
 native attempt before fallback, so include `dynamic_int_result_fallback` in comparisons.
+
+`QORE_DISABLE_AOT_NAME_METHOD_BOXED_ARGUMENT=1` disables the compiler's additional
+immediate-scalar argument guards for name-dispatched unary methods. Compile separate
+artifacts; this is not a runtime switch. The guard accepts only an actual immediate
+integer or double, without coercion; heap-backed scalars, enum/reference wrappers,
+weak values, NOTHING and other representations retain ordinary dispatch. A native
+hit still requires the full live receiver, access, Program/options, epoch, body,
+typed-companion and debugger checks. Because the argument family is unknown at
+compile time, both successful scalar branches produce an owned boxed result, never
+a guessed native-result side channel. Ordinary and invoke/EH callers retain local
+invalidation, result ownership and exception handling.
+
+The additive `qore_rt_try_method_{int,float}_unary_v2` helpers also reuse a fully
+validated PIC match when a context-using body or missing typed companion needs
+ordinary execution. Their result code distinguishes an untouched miss, native
+result and owned boxed result. The ordinary path keeps parameter coercion, return
+filtering, observable frames/locals and object/class context; it does not treat a
+non-leaf body as a native scalar leaf. No negative body-eligibility fact is cached.
+`QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1` disables only this matched-fallback
+reuse at runtime, leaving native leaf calls unchanged. This control can use an
+identical candidate executable/library. The new helper declarations change the
+private runtime identity, so comparisons against older builds require separately
+compiled, matching artifacts. Include `boxed_int_method_fallback` and
+`boxed_float_method_fallback` to measure natural misses as well as leaf hits.
+See the [boxed-argument measurements and remaining costs](RESULTS.md#aot-boxed-scalar-arguments-and-matched-fallback-2026-10-11).
 
 `QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1` disables native result consumption by
 a sole `ToInt`/`ToFloat` instruction at compilation. Compile separate executables;
@@ -510,9 +536,10 @@ not isolated call latency or an equal-inlining-policy comparison. Exceptional
 floating values and null receiver errors belong in separate correctness tests.
 
 The generic-result kernels deliberately have no native result assignment contract.
-The boxed floating recurrence stays on ordinary dispatch. Already-native integer
-and floating arguments now permit a native try-helper followed by result boxing;
-LLVM inspection verifies both that path and its retained ordinary fallback. The
+Boxed integer and floating recurrences now guard the actual immediate argument
+representation before trying the matching native helper. Already-native integer
+and floating arguments also permit a native try-helper followed by result boxing;
+LLVM inspection verifies these paths and their retained ordinary fallback. The
 boxed recurrence reuses the polymorphic float reference; the floating direct-result
 kernel independently computes the selected target minus the current value and
 advances `value = 65535.0 - value`. The integer direct-result kernels compute the

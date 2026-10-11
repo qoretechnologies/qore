@@ -18552,10 +18552,25 @@ static bool try_dispatch_forwarded_int_leaf(QoreObject* object,
     return true;
 }
 
+// A scalar-native miss may already have a fully checked PIC match. Execute
+// its ordinary entry without repeating name lookup or argument classification.
+// Keep this uncommon, context-using path out of the native leaf's stack frame.
 template <typename Scalar>
+__attribute__((noinline)) static int qore_rt_dispatch_matched_scalar_method(QoreObject* object,
+        const QoreAOTMethodDispatchCacheEntry& cached, Scalar arg,
+        uint64_t* result, ExceptionSink* xsink) {
+    // v2 also permits full-width native inputs. Own any escaped scalar boxing
+    // until the ordinary entry has acquired and released its parameter slots.
+    ValueHolder argument(QoreValue(arg), xsink);
+    uint64_t args[] = {argument->rawBits()};
+    return try_dispatch_method_fast(object, cached.method, object->getClass(), cached.variant,
+        args, nullptr, 1, xsink, *result, &cached) ? 2 : 0;
+}
+
+template <typename Scalar, bool MatchedFallback = false>
 __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContext* caller_ctx,
         int32_t slot, uint64_t base_bits, Scalar arg, Scalar* result,
-        ExceptionSink* xsink, RuntimeConfig* rc) {
+        ExceptionSink* xsink, RuntimeConfig* rc, uint64_t* boxed_result = nullptr) {
     static_assert(std::is_same_v<Scalar, int64_t> || std::is_same_v<Scalar, double>);
     constexpr bool floating = std::is_same_v<Scalar, double>;
     static const bool enabled = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION")
@@ -18630,6 +18645,19 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
     assert(cached->native_scalar_uvb && cached->nargs == 1
         && cached->caller_program == pgm && cached->object_program == pgm);
     const UserVariantBase* uvb = cached->native_scalar_uvb;
+    auto matched_fallback = [&]() {
+        if constexpr (MatchedFallback) {
+            static const bool enabled = !std::getenv("QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK");
+            assert(boxed_result);
+            if (enabled) {
+                // The complete live receiver, Program, access, argument and
+                // epoch key was checked above. No permission/body fact is
+                // cached negatively; ordinary dispatch keeps its live guards.
+                return qore_rt_dispatch_matched_scalar_method(object, *cached, arg, boxed_result, xsink);
+            }
+        }
+        return 0;
+    };
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
     if (!ctx || !uvb->hasCachedAOT() || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
             || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)
@@ -18648,7 +18676,7 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
                 return 1;
             }
         }
-        return 0;
+        return matched_fallback();
     }
     // The common PIC descriptor proves one homogeneous scalar signature; only
     // a matching typed companion for the live body authorizes this invocation.
@@ -18668,7 +18696,7 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
         }
     }();
     if (!inline_entry && !entry) {
-        return 0;
+        return matched_fallback();
     }
     *result = 0;
     if (*xsink || RuntimeConfigNativeAccess::checkStack(*rc, xsink)) {
@@ -18711,6 +18739,20 @@ extern "C" DLLEXPORT int qore_rt_try_method_float_unary_v1(QoreAOTContext* calle
         int32_t slot, uint64_t base_bits, double arg, double* result,
         ExceptionSink* xsink, RuntimeConfig* rc) {
     return qore_rt_try_method_unary(caller_ctx, slot, base_bits, arg, result, xsink, rc);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_method_int_unary_v2(QoreAOTContext* caller_ctx,
+        int32_t slot, uint64_t base_bits, int64_t arg, int64_t* result, uint64_t* boxed_result,
+        ExceptionSink* xsink, RuntimeConfig* rc) {
+    return qore_rt_try_method_unary<int64_t, true>(caller_ctx, slot, base_bits,
+        arg, result, xsink, rc, boxed_result);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_method_float_unary_v2(QoreAOTContext* caller_ctx,
+        int32_t slot, uint64_t base_bits, double arg, double* result, uint64_t* boxed_result,
+        ExceptionSink* xsink, RuntimeConfig* rc) {
+    return qore_rt_try_method_unary<double, true>(caller_ctx, slot, base_bits,
+        arg, result, xsink, rc, boxed_result);
 }
 
 static void qore_rt_prepare_aot_generic_method_admission(QoreAOTMethodDispatchCacheEntry& entry) {

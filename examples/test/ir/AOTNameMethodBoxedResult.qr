@@ -18,9 +18,16 @@ class BoxedResultSelf {
     private { int delta = 23; }
     int next(int value) { return value + delta; }
 }
+class BoxedResultFloatSelf {
+    private { float delta = 0.5; }
+    float next(float value) { return value + delta; }
+}
+enum BoxedArgumentKind : int { Seven = 7 }
 class BoxedResultGeneric<T> { T next(T value) { return value; } }
 class BoxedResultPrivate { private int next(int value) { return value; } }
 class BoxedResultGate { auto methodGate(string name, int value) { return value + 29; } }
+class BoxedResultOptional { *int next(*int value) { return value; } }
+class BoxedResultEcho { auto next(auto value) { return value; } }
 thread_local int boxedResultDestroyed = 0;
 class BoxedResultOwned { destructor() { ++boxedResultDestroyed; } }
 class BoxedResultObject { object next(int value) { return new BoxedResultOwned(); } }
@@ -55,6 +62,31 @@ float sub boxedIntToFloat(auto receiver, int value) {
 }
 auto sub boxedResultArgument(auto receiver, auto value) { return receiver.next(value); }
 auto sub boxedOptionalArgument(auto receiver, *int value) { return receiver.next(value); }
+auto sub boxedArgumentInvoke(auto receiver, auto value) {
+    try { return receiver.next(value); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+int sub boxedArgumentConvert(auto receiver, auto value) { return int(receiver.next(value)); }
+int sub boxedArgumentMutation(auto input, auto value) {
+    *BoxedResultInt receiver = input;
+    auto result = receiver.next(value);
+    return int(receiver.next(value)) + int(result);
+}
+int sub boxedArgumentMutationInvoke(auto input, auto value) {
+    *BoxedResultInt receiver = input;
+    try { return int(receiver.next(value)); }
+    catch (hash<ExceptionInfo> ex) { return int(receiver.next(value)); }
+}
+auto sub boxedArgumentDeletedResult(auto receiver, auto value) {
+    auto doomed = receiver;
+    try {
+        for (int i = 0; i < 32; ++i) {
+            if (i == 16) { delete doomed; }
+            auto result = receiver.next(value);
+        }
+        return "accepted deleted object";
+    } catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
 int sub boxedMutation(auto input, int value) {
     *BoxedResultInt receiver = input;
     auto result = receiver.next(value);
@@ -96,9 +128,12 @@ BoxedResultFloatText float_text();
 BoxedResultThrow throwing();
 BoxedResultFloatThrow float_throwing();
 BoxedResultSelf self_context();
+BoxedResultFloatSelf float_self();
 BoxedResultGeneric<int> generic();
 BoxedResultPrivate hidden();
 BoxedResultGate gate();
+BoxedResultOptional optional();
+BoxedResultEcho echo();
 BoxedResultObject owned();
 BoxedResultMutation mutate();
 BoxedResultMutationThrow mutate_throw();
@@ -121,17 +156,28 @@ foreach int value in ((0, 1, -1, 140737488355327, 140737488355328,
                 || boxedIntInvoke(hidden, value) != "METHOD-IS-PRIVATE"
                 || boxedIntInvoke(NOTHING, value) != "PSEUDO-METHOD-DOES-NOT-EXIST"
                 || boxedResultArgument(derived, value) != value + 19
-                || boxedOptionalArgument(derived, value) != value + 19) {
+                || boxedOptionalArgument(derived, value) != value + 19
+                || boxedArgumentInvoke(derived, value) != value + 19
+                || boxedArgumentConvert(derived, value) != value + 19
+                || boxedArgumentInvoke(throwing, value) != "BOXED-RESULT-ERROR"
+                || boxedArgumentInvoke(hidden, value) != "METHOD-IS-PRIVATE"
+                || boxedArgumentInvoke(NOTHING, value) != "PSEUDO-METHOD-DOES-NOT-EXIST") {
             throw "BOXED-INT-CONTRACT", sprintf("value %d round %d", value, round);
         }
         {
             auto result = boxedOwnedResult(owned, value);
             if (type(result) != "object") { throw "BOXED-OWNERSHIP", "not an object"; }
         }
+        {
+            auto result = boxedResultArgument(owned, value);
+            if (type(result) != "object") { throw "BOXED-ARGUMENT-OWNERSHIP", "not an object"; }
+        }
     }
 }
 auto deletion = boxedDeletedResult(new BoxedResultDerived(), 7);
-if (boxedResultDestroyed != 108 || deletion != "OBJECT-ALREADY-DELETED") {
+auto boxed_deletion = boxedArgumentDeletedResult(new BoxedResultDerived(), 7);
+if (boxedResultDestroyed != 216 || deletion != "OBJECT-ALREADY-DELETED"
+        || boxed_deletion != "OBJECT-ALREADY-DELETED") {
     throw "BOXED-RESULT-FALLBACK", sprintf("destroyed %d, deletion %y", boxedResultDestroyed, deletion);
 }
 # Enter the ordinary function entry for explicit caller-frame reflection.
@@ -140,11 +186,30 @@ if (boxedResultDestroyed != 108 || deletion != "OBJECT-ALREADY-DELETED") {
 if (ARGV) {
     int mutation = call_function("boxedMutation", mutate, 7);
     int mutation_throw = call_function("boxedMutationInvoke", mutate_throw, 7);
-    if (mutation != 36 || mutation_throw != 26) {
+    int boxed_mutation = call_function("boxedArgumentMutation", mutate, 7);
+    int boxed_mutation_throw = call_function("boxedArgumentMutationInvoke", mutate_throw, 7);
+    if (mutation != 36 || mutation_throw != 26 || boxed_mutation != 36 || boxed_mutation_throw != 26) {
         throw "BOXED-RESULT-MUTATION", sprintf("receiver %d, throwing receiver %d", mutation, mutation_throw);
     }
 }
 for (int round = 0; round < 16; ++round) {
+    expectBoxedFloat(1.75, boxedResultArgument(floating, 1.25));
+    expectBoxedFloat(1.75, boxedArgumentInvoke(floating, 1.25));
+    expectBoxedFloat(1.5, boxedResultArgument(floating, 1));
+    expectBoxedFloat(1.5, boxedResultArgument(float_self, 1));
+    expectBoxedFloat(1.75, boxedResultArgument(float_self, 1.25));
+    if (exists boxedOptionalArgument(optional, NOTHING)
+            || boxedArgumentConvert(floating, 1.25) != 1
+            || boxedResultArgument(self_context, 7) != 30
+            || boxedResultArgument(text, 7) != "int override"
+            || boxedResultArgument(weak, 7) != 26
+            || boxedResultArgument(echo, "text argument") != "text argument"
+            || boxedResultArgument(echo, (1, 2)) != (1, 2)
+            || boxedResultArgument(derived, BoxedArgumentKind::Seven) != 26
+            || boxedResultArgument(echo, True) !== True
+            || exists boxedResultArgument(echo, NOTHING)) {
+        throw "BOXED-ARGUMENT-FALLBACK", "optional, conversion, context, ownership or representation mismatch";
+    }
     expectBoxedFloat(1.75, boxedFloatResult(floating, 1.25));
     expectBoxedFloat(1.75, boxedFloatInvoke(floating, 1.25));
     if (boxedFloatConvert(floating, 1.25) != 1
@@ -154,6 +219,8 @@ for (int round = 0; round < 16; ++round) {
     }
     foreach float value in ((0.0, -0.0, 1.25, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@)) {
         expectBoxedFloat(value, boxedSpecialFloat(identity, value));
+        expectBoxedFloat(value, boxedResultArgument(identity, value));
+        expectBoxedFloat(value, boxedArgumentInvoke(identity, value));
     }
 }
 Program foreign(PO_NO_INHERIT_USER_CLASSES | PO_NO_CHILD_PO_RESTRICTIONS);
@@ -175,5 +242,9 @@ for (int i = 0; i < 16; ++i) {
     }
     expectBoxedFloat(float(i) + 0.5, boxedFloatResult(imported_float, float(i)));
     expectBoxedFloat(float(i) + 0.5, boxedFloatResult(floating, float(i)));
+    expectBoxedFloat(float(i) + 0.5, boxedResultArgument(imported_float, float(i)));
+    if (boxedResultArgument(imported, i) != i + 19 || boxedArgumentInvoke(derived, i) != i + 19) {
+        throw "BOXED-ARGUMENT-PROGRAM", "cross-Program context restoration";
+    }
 }
 printf("name-method-boxed-result: ok\n");

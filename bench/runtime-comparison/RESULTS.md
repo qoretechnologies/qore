@@ -10137,3 +10137,60 @@ Next AOT-first steps:
 5. If the remaining boxed profile still warrants it, move immutable ordinary-auto declaration eligibility to bind time and use explicit RuntimeConfig for the real local-slot lookup. Preserve live slot, ownership, alias and reflection checks; do not add a private shadow local. Resolve the known baseline visibility defects before broader frame/local elision.
 
 [Measurements, identities, implementation variants, reproduction and all 62 audit items](results-native-scalar-key-macos-arm64.json).
+
+
+## AOT boxed scalar arguments and matched fallback (2026-10-11)
+
+Baseline: 888fe2144 benchmark controls over merged runtime 9b745b8d8. Name-dispatched unary AOT callers now guard actual immediate integer/float arguments and retain boxed results. Native eligibility still uses the full live PIC/body/context proofs. On a context-using body or missing companion, additive v2 helpers can reuse the validated match to enter ordinary dispatch, preserving signature slots, frames, coercion, ownership and return checks. No negative body cache or broader local/frame elision.
+
+Before/after artifacts are separately compiled against matching private runtime identities. Count 4096, three warmups, five 500 ms windows per fork, randomized scheduling. Three-fork screen; independent five-fork old/new/Java repeat and two five-fork controls. No task build/test/profile/source inspection overlapped timing. Values are medians of fork means in ns/element, not isolated call latency.
+
+|!Workload|!Before|!After|!Time reduction|!Java JIT|!After / Java
+|boxed_int_method_call|39.573322|22.697259|42.645%|2.325728|9.759x
+|boxed_float_method_call|43.268660|28.065525|35.137%|2.549186|11.010x
+|boxed_int_method_fallback|159.539794|147.745067|7.393%|2.526843|58.470x
+|boxed_float_method_fallback|170.959711|162.495646|4.951%|2.525462|64.343x
+|dynamic_int_result_call|9.912359|9.960105|-0.482%|3.080277|3.234x
+|dynamic_float_result_call|10.973665|10.845802|1.165%|3.468125|3.127x
+|dynamic_int_result_fallback|21.038140|20.980750|0.273%|3.009341|6.972x
+|indirect_int_result|6.940805|6.853529|1.257%|1.880518|3.644x
+|indirect_float_result|8.796885|8.796242|0.007%|2.767143|3.179x
+
+Same-compiler boxed-argument-disabled control:
+
+|!Workload|!Disabled|!Enabled|!Time reduction
+|boxed_int_method_call|39.342073|22.488617|42.838%
+|boxed_float_method_call|42.928447|27.975677|34.832%
+|boxed_int_method_fallback|159.027950|146.166003|8.088%
+|boxed_float_method_fallback|169.724181|160.967790|5.159%
+
+Same-executable matched-fallback-disabled control:
+
+|!Workload|!Disabled|!Enabled|!Time reduction
+|boxed_int_method_call|22.828842|22.823602|0.023%
+|boxed_float_method_call|28.231251|28.259994|-0.102%
+|boxed_int_method_fallback|163.603192|148.589720|9.177%
+|boxed_float_method_fallback|178.652529|163.330380|8.577%
+
+The guarded AOT caller's gains repeat: boxed integer/float leaf workload time falls 43.995%/35.309% in screening and 42.645%/35.137% in the independent five-fork comparison. Natural integer/float field-method workloads improve 7.501%/4.394% in screening and 7.393%/4.951% in the repeat. All four targets have separated observed fork ranges in both batches. Same-compiler disabled-guard controls confirm reductions of 42.838%/34.832% and 8.088%/5.159%. These ranges are descriptive, not confidence intervals.
+
+The identical-executable matched-fallback switch reduces integer and float field-method time 9.177% and 8.577%, with separated ranges. Leaf workloads are effectively unchanged (+0.023% and -0.102%, overlapping ranges), as expected because this switch does not disable native leaves. This isolates saved repeated dispatch work, not the net gain against the original build: the disabled runtime still includes the new compiler guards and helper. The superseded v1 prototype had larger leaf speedups but repeatedly slowed the float field-method workload by 3.3-3.4%. Reusing a fully validated match removes that repeated slowdown and improves both natural fallback workloads. V1 and v2 were not directly paired with each other; their individual before/after data are all retained.
+
+Existing native integer, native float and forwarding controls change -0.482%, +1.165% and +0.273% in the repeat, with overlapping ranges. Integer callbacks improve 1.257% in that batch with narrowly separated ranges but only 0.076% with overlap in the screen; no callback gain is attributed to this method-only optimization. Float callback medians are essentially unchanged (+0.007%); both sides' slow outlying forks remain in the evidence. These controls do not establish zero regression or universal improvement.
+
+Java remains substantially ahead. The repeat puts native integer/float call workloads at 3.234x/3.127x Java, forwarding at 6.972x, boxed leaf recurrences at 9.759x/11.010x, and field-method workloads at 58.470x/64.343x. Those are whole-workload ns/element ratios, including dynamic representation, local storage, loops and checksums, not isolated call-instruction costs or general language-performance ratios. This is AOT-specific caller/runtime work; no new IR/JIT timing gain is claimed.
+
+The exact-candidate profiles show remaining dispatch/stack bookkeeping and scalar local assignment/classification/ref-deref work in the boxed integer recurrence. The field-method profile remains spread across ordinary call setup, TLS/local/frame setup, value ownership and member lookup; the new matched helper is present and no longer repeats the full name dispatch first. Ignore the idle signal-wait thread. Sampling counts are investigative evidence, not causal percentages or isolated latency.
+
+All seven unique batches are retained: 417 jobs / 2085 windows, including the superseded v1 prototype and its repeated float-fallback slowdown. Release/debug each pass 104 selected files plus seven exception/stack fixtures, including 3153 boxed-call assertions, 378 native driver assertions and 1110 float-method assertions. The debug native suite has 205 checks; the harness has 16 tests; all four reference modes pass 540 checks. No full-suite, sanitizer or cross-platform claim.
+
+Initial qualification encountered two obsolete generic-only codegen assertions; corrected tests now require guarded v2 calls and retained fallback. A separate auto-receiver reflection defect reproduces on the frozen baseline and with the new controls disabled: callee replacement can remain stale after an exception. Its failing source and logs are retained, not claimed fixed. The supported nullable typed receiver case is tested with genuinely boxed arguments.
+
+Next AOT-first steps:
+
+1. Commit this measured, qualified and audited stage on feature/performance, then fetch origin and merge origin/develop. Inspect and validate any merged compiler/runtime changes before freezing the next matched baseline; do not push.
+2. Prioritize the much slower field-reading AOT methods. Inspect their IR and current receiver-companion eligibility, then prototype a narrowly proven scalar member-read entry passing the receiver and RuntimeConfig explicitly. Do not classify arbitrary self-using methods as pure leaves; preserve member access/locking, deletion, exceptions, coercion, logical frames, debugger/concurrent readers and cross-Program fallback.
+3. If eligibility expands, add a genuine non-eligible context/side-effect benchmark control before measuring. Compare integer/float field methods, boxed leaf recurrences, existing native calls and callbacks against fresh matching baseline artifacts, with disabled controls and repeated Java measurements; audit and commit only a verified net benefit.
+4. Use the boxed-leaf profile to evaluate compile/bind-time ordinary-auto declaration/member facts and direct RuntimeConfig access to real runtime slots. First repair the saved auto-receiver exception/reload defect before broadening caller-local or frame elision; retain earlier documented reflection limitations until individually reproduced and fixed. Never introduce an unobservable shadow local.
+
+[Measurements, identities, superseded results, profiles, reproductions and all 62 audit items](results-boxed-argument-macos-arm64.json).

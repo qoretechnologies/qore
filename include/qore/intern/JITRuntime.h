@@ -998,6 +998,34 @@ void qore_rt_bind_method_float_unary_v3(QoreAOTContext* ctx,
 int qore_rt_try_method_float_unary_v1(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
     double arg, double* result, ExceptionSink* xsink, RuntimeConfig* rc);
 
+//! Try a native integer method, reusing a validated PIC match for ordinary dispatch on a body miss.
+//! @param ctx caller context owning the call-target slot
+//! @param slot non-generic object method target, with no explicit type instantiation
+//! @param base_bits borrowed strong receiver; ownership remains with the caller
+//! @param arg assigned full-width integer, without coercion
+//! @param result native result initialized only for return code one; check xsink before use
+//! @param boxed_result owned boxed result initialized only for return code two
+//! @param xsink exception sink for either handled path
+//! @param rc live same-thread invocation view
+//! @return zero for effect-free miss, one for native result, two for ordinary boxed result
+//! @note Does not consume caller argument cleanups. The ordinary entry retains frames, locals,
+//! context, debugger checks and return filtering; a boxed result is never a native type proof.
+int qore_rt_try_method_int_unary_v2(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    int64_t arg, int64_t* result, uint64_t* boxed_result, ExceptionSink* xsink, RuntimeConfig* rc);
+
+//! Floating counterpart of qore_rt_try_method_int_unary_v2, retaining the same outcome/ownership contract.
+//! @param ctx caller context owning the call-target slot
+//! @param slot non-generic object method target, with no explicit type instantiation
+//! @param base_bits borrowed strong receiver; ownership remains with the caller
+//! @param arg assigned double, including escaped representations; no coercion
+//! @param result native result initialized only for return code one; check xsink before use
+//! @param boxed_result owned boxed result initialized only for return code two
+//! @param xsink exception sink for either handled path
+//! @param rc live same-thread invocation view
+//! @return zero for effect-free miss, one for native result, two for ordinary boxed result
+int qore_rt_try_method_float_unary_v2(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    double arg, double* result, uint64_t* boxed_result, ExceptionSink* xsink, RuntimeConfig* rc);
+
 //! Publish a pure dynamic int(int) closure companion, idempotently for this exact normal body.
 //! @param ctx runtime-owned context, without per-instance captured values
 //! @param normal body identity checked again at dispatch
