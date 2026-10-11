@@ -17812,18 +17812,30 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         selfid->uninstantiateSelf();
     }
 
-    // Apply return type coercion (e.g. softlist wrapping) to match
-    // ReturnStatement::execImpl behavior
+    // An immediate scalar already satisfying its exact canonical declaration cannot
+    // require substitution, reference evaluation or conversion. Do not extend this
+    // proof to optional/soft/enum types or heap-backed values: they retain the full
+    // return filter below, including missing-return diagnostics and ownership rules.
     if (!*xsink) {
-        const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig, receiver_type_info);
-        if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
-            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-            if (*xsink) {
-                xsink->overrideLocation(*sig->getParseLocation());
-                xsink->appendLastDescription(": block missing return statement");
+        static const bool scalar_return_guard_enabled =
+            std::getenv("QORE_DISABLE_METHOD_SCALAR_RETURN_GUARD") == nullptr;
+        const QoreTypeInfo* declared_rt = sig->getReturnTypeInfo();
+        const bool exact_scalar = scalar_return_guard_enabled
+            && ((declared_rt == bigIntTypeInfo && val.isInt())
+                || (declared_rt == floatTypeInfo && val.isFloat())
+                || (declared_rt == boolTypeInfo && val.isBool()));
+        if (!exact_scalar) {
+            // Apply coercion (e.g. softlist wrapping) like ReturnStatement::execImpl.
+            const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig, receiver_type_info);
+            if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
+                QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+                if (*xsink) {
+                    xsink->overrideLocation(*sig->getParseLocation());
+                    xsink->appendLastDescription(": block missing return statement");
+                }
+            } else {
+                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
             }
-        } else {
-            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
         }
     }
 

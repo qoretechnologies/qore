@@ -971,3 +971,15 @@ the matching runtime. See the [results](RESULTS.md#receiver-aware-forwarding-ent
 and [evidence](results-receiver-entry-macos-arm64.json): the nested workload gains
 10-12%, but remains about 53x Java. An integer-callback slowdown repeats at 1.09%
 against the frozen baseline; all adverse controls are retained.
+
+
+`QORE_DISABLE_METHOD_SCALAR_RETURN_GUARD=1` disables the runtime method-wrapper
+return shortcut (presence sampled on first use). It accepts only immediate int/float/bool
+values under their exact canonical declared type; every other value/type retains the
+existing substitution/coercion/error path. It does not remove frame, argument cleanup
+or Program/object context setup. Unlike the AOT compiler return guard, this applies to
+the generic fast method wrapper used by both IR and AOT. No ABI change is introduced,
+so one AOT executable can be reused with the saved compatible before/after libraries.
+An additional same-binary control toggles only this flag for the before processes.
+See the [measurements](RESULTS.md#exact-scalar-returns-in-the-method-wrapper-2026-10-11)
+and [verified evidence](results-method-return-guard-macos-arm64.json).

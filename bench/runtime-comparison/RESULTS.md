@@ -9716,3 +9716,81 @@ receiver-entry gain and callback regression remain as reported above.
 Next: measure a narrow exact-scalar return guard in the generic method wrapper,
 retaining full optional/soft/generic/reference/heap/missing-return handling and
 measuring callback, boxed-float and monomorphic controls before any optimization commit.
+
+
+## Exact scalar returns in the method wrapper (2026-10-11)
+
+Baseline is merge c5c7b80d2. The runtime now accepts immediate int/float/bool values
+directly when the method has that exact canonical declared return type. Optional, soft,
+generic, enum, reference, heap-backed and missing-return cases retain the full filter.
+Existing argument cleanup, frames, Program/object context and diagnostics are unchanged.
+
+Frozen before/after libraries run one identical AOT artifact. Main: three forks;
+identical-binary guard-off/on control: five forks. Each uses three warmups and five
+500 ms measurement windows at count 4096, with shuffled scheduling. No task build,
+test, profile or inspection runs during timing. Values are median fork means in
+ns/element; positive reduction means faster.
+
+|!Workload|!Before|!After|!Time reduction|!Java JIT|!After / Java
+|dynamic_int_result_fallback|158.330124|148.910590|5.949%|3.006616|49.528x
+|dynamic_int_result_call|10.094968|10.089744|0.052%|3.081880|3.274x
+|dynamic_float_result_call|10.915636|11.073500|-1.446%|3.463900|3.197x
+|boxed_float_method_call|60.437286|60.086341|0.581%|2.554555|23.521x
+|indirect_int_result|6.904788|6.925970|-0.307%|1.879951|3.684x
+|indirect_float_result|8.795923|8.825958|-0.341%|2.684673|3.288x
+|polymorphic_expression_call|10.034748|10.228484|-1.931%|2.519411|4.060x
+|polymorphic_float_expression_call|10.182675|10.285589|-1.011%|2.546730|4.039x
+|method_call|1.494582|1.482087|0.836%|0.889005|1.667x
+|monomorphic_call|3.327583|3.426869|-2.984%|1.661858|2.062x
+|arithmetic|1.406730|1.406383|0.025%|0.891363|1.578x
+
+Identical-binary runtime control (disabled / enabled):
+
+|!Workload|!Disabled|!Enabled|!Time reduction
+|dynamic_int_result_fallback|159.087079|151.806574|4.576%
+|indirect_int_result|6.987542|7.007672|-0.288%
+|monomorphic_call|3.433814|3.397680|1.052%
+
+Five-fork confirmation after the main adverse observations (all original results retained):
+
+|!Comparison|!Workload|!Before / disabled|!After / enabled|!Time reduction
+|repeat|dynamic_int_result_fallback|160.508108|152.236597|5.153%
+|repeat|monomorphic_call|3.507570|3.444914|1.786%
+|repeat|polymorphic_expression_call|10.235975|10.224154|0.115%
+|control|dynamic_int_result_fallback|160.263304|151.114759|5.708%
+|control|monomorphic_call|3.444054|3.444964|-0.026%
+|control|polymorphic_expression_call|10.306734|10.315303|-0.083%
+
+IR interpreter comparison:
+
+|!Workload|!Before|!After|!Time reduction
+|dynamic_int_result_fallback|1321.827818|1319.564898|0.171%
+|boxed_float_method_call|750.618655|746.143786|0.596%
+
+Nested AOT improves 5.949% in main, 5.153% in baseline confirmation and 5.708% in
+same-binary confirmation, with separated observed ranges. The first five-fork
+same-binary control improves 4.576% but has overlapping ranges due to one enabled
+fork at 161.714 ns. The initial screen found 5.011% and 6.005% gains.
+
+Main monomorphic/polymorphic-int calls are 2.984%/1.931% slower with separated
+ranges; this did not repeat: baseline confirmation is 1.786%/0.115% faster,
+and same-binary confirmation is 0.026%/0.083% slower, all with overlapping ranges.
+Other adverse medians remain in the table/evidence. IR changes of 0.171% and
+0.596% overlap variation and are not claimed as demonstrated IR gains. No general
+or zero-regression claim is made. All 285 jobs / 1425 measurement windows are retained.
+
+Qualification: 103 selected files per release/debug build; 86 assertions in the new
+fixture; 153 debug native checks; 15 harness tests; 495 references per execution mode.
+The baseline fixture passes as well. Initial temporary-list lifetime differences in
+baseline IR are documented; the final fixture explicitly owns/deletes its invalid object
+and separately checks callee-local cleanup. No temporary-lifetime fix is claimed.
+
+A separate 10-second/1 ms profile still shows method dispatch, TLS lookup,
+local-slot setup and execution/frame context costs. It is qualitative evidence,
+not a timing run or additive CPU-percentage breakdown; the sleeping signal thread
+is included in the raw profile.
+
+This does not reach Java parity. Next is a preflighted forwarding path that can prove
+its inner target is a same-Program scalar leaf before omitting outer TLS/slot setup,
+while preserving logical frames, access context and effect-free fallback.
+[Full evidence and all 62 audit items](results-method-return-guard-macos-arm64.json).

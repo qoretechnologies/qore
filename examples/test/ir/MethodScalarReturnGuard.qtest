@@ -1,0 +1,54 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class MethodScalarReturnGuardTest
+
+class MethodScalarReturnGuardTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("Method scalar return guard", "1.0", \ARGV) {
+        addTestCase("generic method scalar acceptance and full return fallbacks", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/MethodScalarReturnGuard.qr";
+        string expected = "method-scalar-return: ok\n";
+        assertEq(expected, run((qore, "--exec-mode=ast", source)), "AST reference");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            foreach string runtime in (("", "QORE_DISABLE_METHOD_SCALAR_RETURN_GUARD=1 ")) {
+                assertEq(expected, run((qore, "--exec-mode=" + mode, source), runtime), mode + runtime);
+            }
+        }
+        TmpDir dir("qore-method-scalar-return-");
+        foreach string compile in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), compile);
+                foreach string runtime in (("", "QORE_DISABLE_METHOD_SCALAR_RETURN_GUARD=1 ",
+                        "QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY=1 ", "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
+                    assertEq(expected, run((executable,), runtime), compile + level + runtime);
+                }
+            }
+        }
+    }
+}
