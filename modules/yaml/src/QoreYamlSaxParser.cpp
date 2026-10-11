@@ -239,8 +239,7 @@ int QoreYamlSaxParser::parseStream(QoreObject* stream,
 
     // Check for read handler errors
     if (read_handler.hasError() && !*xsink) {
-        xsink->raiseException(QY_SAX_STREAM_ERR, "stream read error: %s",
-            read_handler.getErrorMessage().c_str());
+        read_handler.raiseError(xsink, QY_SAX_STREAM_ERR);
         result = false;
     }
 

@@ -40,6 +40,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/LocalVar.h"
+#include "qore/intern/UnicodeByteOrder.h"
 
 #include <map>
 #include "qore/intern/QC_Counter.h"
@@ -721,6 +722,34 @@ static void ut_string_data_helper(UnitTestCounters& c) {
         UT_ASSERT(c, s == "1.0", "the data helper reads a short string out of a hash");
         UT_ASSERT(c, !xsink, "no exception was raised building the test hash");
     }
+}
+
+//! Native byte-order scans deliver cancellation without treating it as an inconclusive sample.
+static void ut_unicode_byte_order_cancel(UnitTestCounters& c) {
+    std::string sample(QORE_UNICODE_BYTE_ORDER_SAMPLE, 'A');
+    const auto* data = reinterpret_cast<const unsigned char*>(sample.data());
+    ExceptionSink xsink;
+    int requested = qore_cancel_thread(q_gettid(), "Unicode scan unit test");
+    QoreUnicodeByteOrder found = q_get_unicode_byte_order(data, sample.size(), &xsink);
+    bool detected_cancel = !!xsink;
+    QoreValue error = xsink.getExceptionErr();
+    bool correct_error = error.getType() == NT_STRING && QoreStringDataHelper(error) == "THREAD-CANCELLED";
+    xsink.clear();
+    int checked = q_check_unicode_byte_order(data, sample.size(), "UTF-16LE", &xsink);
+    bool checked_cancel = !!xsink;
+    // Restore the caller before assertions or any further runtime operation.
+    qore_clear_thread_cancel();
+    xsink.clear();
+    UT_ASSERT_EQ(c, 0, requested, "request cancellation for the byte-order scan");
+    UT_ASSERT(c, detected_cancel && correct_error, "detection reports THREAD-CANCELLED");
+    UT_ASSERT(c, !found.encoding, "cancelled detection returns no partial byte-order result");
+    UT_ASSERT(c, checked == -1 && checked_cancel, "byte-order validation propagates cancellation");
+    UT_ASSERT(c, !qore_is_thread_cancel_requested(), "the fixture restores cancellation state");
+    found = q_get_unicode_byte_order(data, sample.size(), &xsink);
+    UT_ASSERT(c, !found.encoding && !xsink, "an inconclusive scan succeeds after cancellation is cleared");
+    UT_ASSERT_EQ(c, 0, q_check_unicode_byte_order(data, sample.size(), "UTF-16LE", &xsink),
+        "inconclusive data remains accepted after recovery");
+    xsink.clear();
 }
 
 //! verifies the public QoreFile timed-read C++ API preserves zero-length and event contracts
@@ -5925,6 +5954,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_string_data_helper(c);
     ut_string_compare_soft_and_concat_chars(c);
     ut_stateful_string_api(c);
+    ut_unicode_byte_order_cancel(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);

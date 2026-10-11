@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FixedLengthAbstractIterator.qc Qore user module for working with files with fixed lines length
 
-/*  FixedLengthAbstractIterator Copyright 2015 - 2024 Qore Technologies, s.r.o.
+/*  FixedLengthAbstractIterator Copyright 2015 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -143,7 +143,7 @@ my hash $h = $i.getValue();
             if (!field.timezone) {
                 field.timezone = m_opts.timezone;
             }
-            result.record{col} = transform(line.substr(pos, field.length), field + {'name': col});
+            result.record{col} = transform(getField(line, pos, field.length, col), field + {'name': col});
             pos += field.length;
         }
         return result;
@@ -355,16 +355,78 @@ my hash $h = $i.getValue();
         return rv;
     }
 
+    #! Returns the field at the byte offset and byte length of the line, in the encoding of the line
+    /** Field lengths and offsets are in bytes; a line of characters of one byte is read by character, others by byte
+
+        @param line the input line
+        @param pos the byte offset of the field
+        @param len the byte length of the field; if not given, the rest of the line
+        @param name the name of the field, for the error message
+
+        @return the text of the field; empty if the line ends before the field
+
+        @throw FIXED-LENGTH-UTIL-CHARACTER-SPLIT the start or the end of the field is not at a character boundary of
+        the line
+
+        @since FixedLengthUtil 1.7
+    */
+    static string getField(string line, int pos, *int len, string name) {
+        # every character is one byte: byte offsets are character offsets
+        if (line.size() == line.length()) {
+            return exists len ? line.substr(pos, len) : line.substr(pos);
+        }
+        binary bytes = binary(line);
+        int size = bytes.size();
+        if (pos >= size) {
+            return "";
+        }
+        int end = exists len && pos + len < size ? pos + len : size;
+        foreach int offset in ((pos, end)) {
+            if (FixedLengthAbstractIterator::splitsCharacter(bytes, offset, line.encoding())) {
+                throw "FIXED-LENGTH-UTIL-CHARACTER-SPLIT", sprintf("field %y at bytes %d to %d of a line in %s splits "
+                    "a character at byte %d; field lengths are in bytes and must end at character boundaries (line: "
+                    "%y)", name, pos, end, line.encoding(), offset, line);
+            }
+        }
+        return binary_to_string(bytes.substr(pos, end - pos), line.encoding());
+    }
+
+    #! Returns True if the byte offset is not at a character boundary of the bytes in the encoding
+    /** @param bytes the text in the encoding
+        @param offset a byte offset in \a bytes
+        @param encoding the encoding of \a bytes
+
+        @return True if the bytes before \a offset end inside a character
+
+        @since FixedLengthUtil 1.7
+    */
+    static bool splitsCharacter(binary bytes, int offset, string encoding) {
+        if (offset <= 0 || offset >= bytes.size()) {
+            return False;
+        }
+        # UTF-8: a continuation byte is inside a character
+        if (encoding == "UTF-8") {
+            return (bytes[offset] & 0xc0) == 0x80;
+        }
+        # other encodings: the bytes before the offset are not complete characters
+        try {
+            convert_encoding(binary_to_string(bytes.substr(0, offset), encoding), "UTF-8");
+            return False;
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
+    }
+
     #! Attempts to identify a single record
     bool identifyRecord(list<auto> rec_rule, string input_line) {
         foreach hash fld_rule in (rec_rule) {
             if (exists fld_rule.regex) {
                 # we do not limit regex to field length to support multi field regex
-                if (!input_line.substr(fld_rule.pos).regex(fld_rule.regex)) {
+                if (!getField(input_line, fld_rule.pos, NOTHING, "rule").regex(fld_rule.regex)) {
                     return False;
                 }
             } else {
-                string val = input_line.substr(fld_rule.pos, fld_rule.len);
+                string val = getField(input_line, fld_rule.pos, fld_rule.len, "rule");
                 if (fld_rule.value.typeCode() == NT_INT) {
                     # special care about int type,  0 == "000" should evaluate as True
                     if (!val.intp() || val.toInt() != fld_rule.value) {

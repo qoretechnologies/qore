@@ -117,8 +117,7 @@ int QoreYamlDocumentIterator::getEvent(ExceptionSink* xsink) {
     if (!yaml_parser_parse(&parser, &event)) {
         // Check for stream read error
         if (read_handler && read_handler->hasError()) {
-            xsink->raiseException(QY_STREAM_ERR, "stream read error: %s",
-                read_handler->getErrorMessage().c_str());
+            read_handler->raiseError(xsink, QY_STREAM_ERR);
         } else {
             xsink->raiseException(QY_PARSE_ERR, "YAML parse error at line %d column %d: %s",
                 (int)parser.problem_mark.line + 1, (int)parser.problem_mark.column + 1,

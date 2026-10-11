@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FixedLengthDataWriter.qc Qore user module for working with files with fixed lines length
 
-/*  FixedLengthDataWriter Copyright 2015 - 2024 Qore Technologies, s.r.o.
+/*  FixedLengthDataWriter Copyright 2015 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -81,7 +81,8 @@ string file = w.write(input_list);
         @throw RECORD-TRANSITION-ERROR a record transition error occurred; an invalid record sequence was given in the input data
     */
     string write(list<auto> lines) {
-        string result = "";
+        # the output encoding
+        string result = convert_encoding("", m_opts.encoding ?? get_default_encoding());
         string eol = m_opts.eol;
         map result += formatLine($1) + eol, lines;
         return result;
@@ -141,7 +142,8 @@ string file = w.write(i);
         @throw RECORD-TRANSITION-ERROR a record transition error occurred; an invalid record sequence was given in the input data
     */
     string write(Qore::AbstractIterator lines) {
-        string result = "";
+        # the output encoding
+        string result = convert_encoding("", m_opts.encoding ?? get_default_encoding());
         string eol = m_opts.eol;
         map result += formatLine($1) + eol, lines;
         return result;

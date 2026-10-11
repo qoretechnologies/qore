@@ -206,6 +206,13 @@ public class JsonFileReadDataProvider inherits DataProvider::AbstractDataProvide
         @throw JSON-FILE-READ-ERROR if the input source cannot be read
     */
     private string readContent() {
+        string content = readContentIntern();
+        # JSON is parsed as UTF-8; text in a UTF-16 or UTF-32 encoding is converted
+        return content.encoding() =~ /^UTF-(16|32)/ ? convert_encoding(content, "UTF-8") : content;
+    }
+
+    #! Reads the content in its encoding
+    private string readContentIntern() {
         if (exists data) {
             return data;
         }

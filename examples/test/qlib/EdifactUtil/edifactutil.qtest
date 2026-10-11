@@ -42,6 +42,7 @@ UNZ+1+REF001'";
     }
 
     constructor() : Test("EdifactUtilTest", "1.0") {
+        addTestCase("data in the other byte order than its encoding", \byteOrderTest());
         addTestCase("Delimiter tests", \delimiterTest());
         addTestCase("UNA parsing tests", \unaParseTest());
         addTestCase("Segment parsing tests", \segmentParseTest());
@@ -66,6 +67,39 @@ UNZ+1+REF001'";
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    #! Writes the bytes to a new temporary file and returns its path; the file is removed by the caller
+    private static string writeTemp(binary data, string suffix) {
+        string path = tmp_location() + DirSep + "byte-order-" + get_random_string() + suffix;
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+        return path;
+    }
+
+    #! Returns the segments that the EDIFACT file iterator gives for the file in the encoding
+    private static list<hash<auto>> readEdifact(string path, string encoding) {
+        return map $1, new EdifactFileIterator(path, {"encoding": encoding});
+    }
+
+    #! Returns the segments that the EDIFACT stream iterator gives for the data in the encoding
+    private static list<hash<auto>> readEdifactStream(binary data, string encoding) {
+        return map $1, new EdifactIterator(new BinaryInputStream(data), {"encoding": encoding});
+    }
+
+    byteOrderTest() {
+        binary le = binary(convert_encoding(SimpleEdifact, "UTF-16LE"));
+        string path = writeTemp(le, ".edi");
+        on_exit unlink(path);
+        # the little-endian bytes are refused as (big-endian) UTF-16, from a file and from a stream
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-16LE", \readEdifact(), (path, "UTF-16"));
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-16LE", \readEdifactStream(), (le, "UTF-16"));
+        # and read in their own byte order, as the same text in UTF-8; the file is read in the encoding option
+        list<hash<auto>> expected = map $1, new EdifactDataIterator(SimpleEdifact);
+        assertEq(expected, readEdifact(path, "UTF-16LE"));
+        assertEq(expected, readEdifactStream(le, "UTF-16LE"));
     }
 
     delimiterTest() {

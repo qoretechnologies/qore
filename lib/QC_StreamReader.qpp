@@ -3,7 +3,7 @@
 /*
   Qore Programming Language
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -97,6 +97,7 @@ string str = sr.read(len);
     @return a @ref string value or @ref nothing if there is no more data available in the stream
 
     @throw STREAM-ENCODING-ERROR this exception is thrown if invalid character data is detected on the stream; this exception is not thrown when \a limit is negative, in such cases the input data is not verified
+    @throw ENCODING-BYTE-ORDER-ERROR the text is in a form of UTF-16 or UTF-32 and the start of the text read is in the other byte order than the encoding; see @ref Qore::check_unicode_byte_order() "check_unicode_byte_order()"
     @throw UNSUPPORTED-ENCODING \a limit is positive and the text is in a stateful @ref character_encoding "character encoding" (ex: \c "UTF-7", \c "ISO-2022-JP"), in which the bytes of the characters after the ones read depend on the shift state at their end, which a following read would not have; such text can be read in lines, all at once, or as bytes (support for keeping the shift state between reads is planned: qoretechnologies/qorus#709)
 
     @note
@@ -119,6 +120,7 @@ string line = sr.readLine("\n");
     @return a text line read from the stream or @ref nothing if there is no more data available in the stream
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the \a line_separator argument has a different @ref character_encoding "character encoding" from the data's and an error occurs during encoding conversion
+    @throw ENCODING-BYTE-ORDER-ERROR the text is in a form of UTF-16 or UTF-32 and the start of the text read is in the other byte order than the encoding; see @ref Qore::check_unicode_byte_order() "check_unicode_byte_order()"
 
     @note other stream read errors could be thrown here depending on the underlying @ref InputStream implementation
  */

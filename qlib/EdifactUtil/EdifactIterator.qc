@@ -48,7 +48,7 @@ while (i.next()) {
         constructor(Qore::InputStream is, *hash<auto> opts) : EdifactAbstractIterator(opts) {
             @assert(is, "input stream cannot be null");
             # Read all data from stream
-            string data = readInputStream(is);
+            string data = readText(is);
             initializeFromData(data);
         }
 
@@ -60,27 +60,6 @@ while (i.next()) {
         */
         constructor(string data, *hash<auto> opts) : EdifactAbstractIterator(opts) {
             initializeFromData(data);
-        }
-
-        #! Reads all data from an InputStream
-        private string readInputStream(Qore::InputStream is) {
-            # Read in chunks
-            binary buffer = binary();
-            int chunk_size = 65536;
-
-            while (True) {
-                *binary chunk = is.read(chunk_size);
-                if (!exists chunk || chunk.empty()) {
-                    break;
-                }
-                buffer += chunk;
-            }
-
-            # Convert to string with encoding if specified
-            if (m_encoding) {
-                return buffer.toString(m_encoding);
-            }
-            return buffer.toString();
         }
     }
 
@@ -138,18 +117,10 @@ while (i.next()) {
             @assert(path.val(), "file path cannot be empty");
             m_path = path;
 
-            # Use FileLocationHandler if available for location:// URLs
-            string data;
-            if (path =~ /^[a-z]+:\/\//) {
-                data = FileLocationHandler::getTextFileFromLocation(path);
-            } else {
-                # Read from local file
-                File f();
-                f.open2(path, O_RDONLY);
-                data = f.read(-1);
-            }
-
-            initializeFromData(data);
+            # a location:// URL is read with FileLocationHandler, a path from the local file; both in the encoding
+            # option
+            initializeFromData(readText(path =~ /^[a-z]+:\/\// ? FileLocationHandler::getBinaryStreamFromLocation(path)
+                : new FileInputStream(path)));
         }
 
         #! Returns the file path

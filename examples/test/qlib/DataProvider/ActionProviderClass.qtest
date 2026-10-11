@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class ActionProviderClassTest
+
+#! An application action whose provider cannot be created
+hashdecl UnresolvableActionInfo {
+    #! "app/action"
+    string label;
+    #! the modules that registered the application
+    list<string> modules;
+}
+
+# An action names a connection scheme through its application, or the class of its data provider; an action with
+# neither has a provider implied by the context where it is used.  Only the TypeScript action interface registers
+# such actions in a Qore environment (Qorus's built-in applications are not loaded here); any other application
+# whose actions have neither cannot be used: Qorus refuses its tool calls and Qog actions.
+public class ActionProviderClassTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ActionProviderClass", "1.0") {
+        addTestCase("every action names a scheme or a class", \schemeOrClassTest());
+        set_return_value(main());
+    }
+
+    schemeOrClassTest() {
+        # every module that registers an application: in this source tree and anywhere in the module path
+        list<string> dirs = (normalize_dir(get_script_dir() + "/../../../../qlib"),);
+        dirs += (ENV.QORE_MODULE_DIR ?? "").split(":");
+        dirs += get_qore_library_info().ModulePath.split(":");
+        hash<string, bool> modules;
+        foreach string dir in (dirs) {
+            if (!dir.val() || !is_dir(dir)) {
+                continue;
+            }
+            map modules{$1} = True, ActionProviderClassTest::getAppModules(dir), !modules{$1};
+        }
+        assertTrue(modules.DataProvider, "the scan finds the modules that register applications");
+
+        list<string> load_errors = ();
+        foreach string mod in (sort(keys modules)) {
+            try {
+                load_module(mod);
+            } catch (hash<ExceptionInfo> ex) {
+                # a module that cannot be loaded here (ex: its binary module is not installed) registers nothing
+                push load_errors, sprintf("%s: %s", mod, ex.err);
+            }
+        }
+        if (m_options.verbose > 1 && load_errors) {
+            printf("modules not loaded: %y\n", load_errors);
+        }
+
+        # the TypeScript action interface, by the module path it registers its applications from
+        *string ts_module_path = get_module_hash().TypeScriptActionInterface.filename;
+
+        list<hash<UnresolvableActionInfo>> unresolvable = ();
+        int checked = 0;
+        foreach hash<DataProviderAppInfo> app in (DataProviderActionCatalog::getAllApps()) {
+            if (app.scheme.val()) {
+                continue;
+            }
+            list<string> owners = DataProviderActionCatalog::getModulePathsForApp(app.name) ?? ();
+            if (ts_module_path && inlist(ts_module_path, owners)) {
+                continue;
+            }
+            foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app.name)) {
+                ++checked;
+                if (!action.cls.val()) {
+                    push unresolvable, <UnresolvableActionInfo>{
+                        "label": app.name + "/" + action.action,
+                        "modules": owners,
+                    };
+                }
+            }
+        }
+        assertTrue(checked > 0, "actions of applications without a connection scheme are checked");
+        assertEq((), unresolvable, "every action of an application without a connection scheme names its class");
+    }
+
+    #! Returns the modules in the directory whose sources register an application
+    private static list<string> getAppModules(string dir) {
+        list<string> rv = ();
+        Dir top();
+        top.chdir(dir);
+        foreach string file in (top.listFiles("\\.qm$")) {
+            if (ActionProviderClassTest::registersApp(dir + DirSep + file)) {
+                push rv, file.substr(0, -3);
+            }
+        }
+        foreach string name in (top.listDirs()) {
+            string path = dir + DirSep + name;
+            if (!is_file(path + DirSep + name + ".qm")) {
+                continue;
+            }
+            Dir sub_dir();
+            sub_dir.chdir(path);
+            foreach string file in (sub_dir.listFiles("\\.q[cm]$")) {
+                if (ActionProviderClassTest::registersApp(path + DirSep + file)) {
+                    push rv, name;
+                    break;
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! Returns True if the source registers an application
+    private static bool registersApp(string path) {
+        return ReadOnlyFile::readTextFile(path).find("registerApp(") >= 0;
+    }
+}

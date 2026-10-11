@@ -71,11 +71,41 @@ public:
     //! Returns the error message if an error occurred
     DLLLOCAL const std::string& getErrorMessage() const { return error_message; }
 
+    //! Returns the code of the exception raised while reading, if any (ex: \c "ENCODING-BYTE-ORDER-ERROR")
+    DLLLOCAL const std::string& getErrorCode() const { return error_code; }
+
+    //! Raises the error that occurred while reading
+    /** The exception raised while reading is raised again with its code and description; any other error is
+        raised as @p default_err
+    */
+    DLLLOCAL void raiseError(ExceptionSink* xsink, const char* default_err) const {
+        if (!error_code.empty()) {
+            xsink->raiseException(error_code.c_str(), "%s", error_message.c_str());
+        } else {
+            xsink->raiseException(default_err, "stream read error: %s", error_message.c_str());
+        }
+    }
+
 private:
     QoreObject* stream;
     const QoreEncoding* encoding;
+    //! a Qore StreamReader reading the text of the stream in an encoding other than UTF-8, created at the first read
+    QoreObject* reader = nullptr;
     bool has_error;
     std::string error_message;
+    //! the code of the exception raised while reading, if any
+    std::string error_code;
+
+    //! Records the exception in the sink as the error of the handler and clears it
+    DLLLOCAL void setError(ExceptionSink& xsink, const char* default_message);
+
+    //! Reads the next text of the stream in its encoding, converted to UTF-8
+    /** Text in another encoding than UTF-8 is read in whole characters with a Qore StreamReader, which also refuses
+        text in the other byte order than its UTF-16 or UTF-32 encoding
+
+        @return 0 for OK (\a utf8 is empty at the end of the stream), -1 if an error was recorded
+    */
+    DLLLOCAL int readText(size_t size, std::string& utf8);
     //! Buffer for encoding conversion
     std::string pending_data;
 };
