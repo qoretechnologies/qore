@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FixedLengthAbstractWriter.qc Qore user module for working with files with fixed lines length
 
-/*  FixedLengthAbstractWriter Copyright 2015 - 2024 Qore Technologies, s.r.o.
+/*  FixedLengthAbstractWriter Copyright 2015 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -87,7 +87,12 @@ public class FixedLengthAbstractWriter inherits FixedLengthBase {
 
         @throw INVALID-LINE-DATA line argument missing either \a type or \a record keys
         @throw INVALID-RECORD record name (\a type key in the record hash) not recognized
+        @return the line in the output encoding (the \c "encoding" option, or the default encoding), each field the
+        length of its specification in bytes of that encoding
+
         @throw FIELD-INPUT-ERROR the input value is too large to render into the output field
+        @throw FIXED-LENGTH-UTIL-CHARACTER-SPLIT the bytes of the field left after the value cannot be filled with whole
+        padding characters in the output encoding (ex: an odd field length in UTF-16)
         @throw RECORD-TRANSITION-ERROR a record transition error occurred; an invalid record sequence was given in the input data
     */
     string formatLine(hash<auto> line) {
@@ -99,7 +104,9 @@ public class FixedLengthAbstractWriter inherits FixedLengthBase {
         if (!m_specs{type})
             throw "INVALID-RECORD", sprintf("unknown record type %y; valid records: %y", type, m_specs.keys());
 
-        string result = "";
+        # field lengths are bytes of the output encoding
+        string enc = m_opts.encoding ?? get_default_encoding();
+        string result = convert_encoding("", enc);
         foreach string field in (keys m_specs{type}) {
             # field description
             hash<auto> fh = m_specs{type}{field};
@@ -141,19 +148,35 @@ public class FixedLengthAbstractWriter inherits FixedLengthBase {
                 value = replace (value, "\t", strmul(' ', fh.tab2space ?? m_opts.tab2space));
             }
 
-            int len = value.length();
+            if (value.encoding() != enc) {
+                value = convert_encoding(value, enc);
+            }
+            int len = value.size();
             # Validate and truncate if configured to do so
             if (len > fh.length) {
                 if (!(fh.truncate ?? m_opts.truncate))
-                    throw "FIELD-INPUT-ERROR", sprintf("Value %y (len %d) too large to pack into field: %s (len %d)", value, len, field, fh.length);
-                splice value, fh.length;
-                len = value.length();
+                    throw "FIELD-INPUT-ERROR", sprintf("Value %y (%d bytes in %s) too large to pack into field: %s (%d "
+                        "bytes)", value, len, enc, field, fh.length);
+                # the whole characters that fit the field
+                binary bytes = binary(value);
+                int cut = fh.length;
+                while (cut > 0 && FixedLengthAbstractIterator::splitsCharacter(bytes, cut, enc)) {
+                    --cut;
+                }
+                value = binary_to_string(bytes.substr(0, cut), enc);
+                len = cut;
             }
 
             # do output justification
             int spacingsize = fh.length - len;
             if (spacingsize) {
-                string spacing = strmul(fh.padding_char ?? " ", spacingsize);
+                string padding_char = convert_encoding(fh.padding_char ?? " ", enc);
+                if (spacingsize % padding_char.size()) {
+                    throw "FIXED-LENGTH-UTIL-CHARACTER-SPLIT", sprintf("field %y: the %d bytes of the field left after "
+                        "value %y cannot be filled with whole padding characters %y of %d bytes in %s; field lengths are "
+                        "in bytes", field, spacingsize, value, padding_char, padding_char.size(), enc);
+                }
+                string spacing = strmul(padding_char, spacingsize / padding_char.size());
 
                 if (fh.padding == "left")
                     result += spacing + value;

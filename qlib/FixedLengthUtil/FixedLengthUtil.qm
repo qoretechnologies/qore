@@ -328,6 +328,15 @@ w.write(data);
     @section fixedlengthutil_relnotes Release Notes
 
     @subsection fixedlengthutil_v1_7 Version 1.7
+    - field lengths are bytes, as documented, also when a line has characters of more than one byte (ex: non-ASCII
+      text in UTF-8, or UTF-16): fields were extracted by character while lines were matched by byte length, so their
+      values were shifted; a field that would start or end inside a character raises
+      \c FIXED-LENGTH-UTIL-CHARACTER-SPLIT
+    - the writers size fields in bytes of the output encoding, as documented: values were padded and truncated by
+      character, so lines with such characters were longer than their record and could not be read back; a value is
+      truncated at a character boundary, a field that whole padding characters cannot fill raises
+      \c FIXED-LENGTH-UTIL-CHARACTER-SPLIT, and @ref FixedLengthUtil::FixedLengthDataWriter "FixedLengthDataWriter"
+      returns strings in the \c "encoding" option, as documented
     - the read data provider's \c path option is now tagged
       @ref DataProvider::DTT_FromLocation "DTT_FromLocation", advertising that the
       value (already resolved with \c FileLocationHandler::getBinaryStreamFromLocation())

@@ -53,6 +53,9 @@ class Test inherits QUnit::Test {
 
     constructor() : QUnit::Test("FixedLengthDataIterator", "1.0", \ARGV) {
         addTestCase("FixedLengthDataIterator basic tests", \basicTests());
+        addTestCase("data in the other byte order than its encoding", \byteOrderTest());
+        addTestCase("field lengths in bytes with characters of more than one byte", \multiByteTest());
+        addTestCase("written fields are sized in bytes of the output encoding", \writerBytesTest());
         set_return_value(main());
     }
 
@@ -72,5 +75,144 @@ class Test inherits QUnit::Test {
         i = new FixedLengthDataIterator("XXXX00002017", Specs, GlobalOptions);
         i.next();
         assertThrows("INVALID-DATE", \i.getValue());
+    }
+
+    #! A spec for the test line "11111bb" in UTF-16, whose field lengths are in bytes
+    private hash<auto> getWideSpecs() {
+        return {"type1": {"col1": {"length": 10, "type": "string"}, "col2": {"length": 4, "type": "string"}}};
+    }
+
+    #! Returns the records that the iterator reads
+    private list<hash<auto>> readAll(FixedLengthAbstractIterator i) {
+        return map $1, i;
+    }
+
+    #! Returns the records read from a file in the encoding
+    private list<hash<auto>> readFile(binary data, string encoding) {
+        string path = tmp_location() + DirSep + "fixed-length-byte-order-" + get_random_string() + ".txt";
+        on_exit unlink(path);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+        return readAll(new FixedLengthFileIterator(path, getWideSpecs(), GlobalOptions + {"encoding": encoding}));
+    }
+
+    byteOrderTest() {
+        hash<auto> specs = getWideSpecs();
+        string text = "11111bb\n22222gg\n";
+        binary le = binary(convert_encoding(text, "UTF-16LE"));
+        binary be = binary(convert_encoding(text, "UTF-16BE"));
+
+        # little-endian bytes read as (big-endian) UTF-16 have no line break: they were one line that matched no
+        # record type
+        foreach string encoding in (("UTF-16", "UTF-16BE")) {
+            assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-16LE", sub () {
+                readAll(new FixedLengthIterator(new BinaryInputStream(le), encoding, specs, GlobalOptions));
+            }, NOTHING, encoding);
+            assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-16LE", \readFile(), (le, encoding), encoding);
+        }
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-16LE", sub () {
+            readAll(new FixedLengthDataIterator(binary_to_string(le, "UTF-16"), specs, GlobalOptions));
+        });
+
+        # data in the byte order of its encoding is read
+        list<hash<auto>> expected = ();
+        foreach list<string> v in (("11111", "bb"), ("22222", "gg")) {
+            push expected, {"type": "type1", "record": {"col1": convert_encoding(v[0], "UTF-16"),
+                "col2": convert_encoding(v[1], "UTF-16")}};
+        }
+        assertEq(expected, readAll(new FixedLengthIterator(new BinaryInputStream(le), "UTF-16LE", specs,
+            GlobalOptions)));
+        assertEq(expected, readAll(new FixedLengthIterator(new BinaryInputStream(be), "UTF-16", specs,
+            GlobalOptions)));
+        assertEq(expected, readFile(<fffe> + le, "UTF-16"));
+        assertEq(expected, readAll(new FixedLengthDataIterator(binary_to_string(le, "UTF-16LE"), specs,
+            GlobalOptions)));
+    }
+
+    multiByteTest() {
+        # UTF-8: "Grüß" is 6 bytes
+        hash<auto> specs = {"rec": {"name": {"length": 6, "type": "string"}, "qty": {"length": 3, "type": "int"}}};
+        assertEq(({"type": "rec", "record": {"name": "Grüß", "qty": 7}},),
+            readAll(new FixedLengthDataIterator("Grüß007\n", specs, GlobalOptions)));
+        # a field that ends inside the two bytes of "ß"
+        hash<auto> split = {"rec": {"name": {"length": 5, "type": "string"}, "qty": {"length": 4, "type": "string"}}};
+        assertThrows("FIXED-LENGTH-UTIL-CHARACTER-SPLIT", "field \"name\" at bytes 0 to 5.*splits a character "
+            "at byte 5", \readAll(), (new FixedLengthDataIterator("Grüß007\n", split, GlobalOptions),));
+
+        # UTF-16: "ab" is 4 bytes, "日c" is 4 bytes
+        string u16 = convert_encoding("ab日c\n", "UTF-16LE");
+        specs = {"rec": {"f1": {"length": 4, "type": "string"}, "f2": {"length": 4, "type": "string"}}};
+        list<hash<auto>> values = readAll(new FixedLengthDataIterator(u16, specs, GlobalOptions));
+        assertEq(("ab", "日c"), map convert_encoding($1, "UTF-8"), values[0].record.values());
+        split = {"rec": {"f1": {"length": 3, "type": "string"}, "f2": {"length": 5, "type": "string"}}};
+        assertThrows("FIXED-LENGTH-UTIL-CHARACTER-SPLIT", "field \"f1\"", \readAll(),
+            (new FixedLengthDataIterator(u16, split, GlobalOptions),));
+
+        # a field selected by a rule is read by byte as well
+        hash<auto> rules = {
+            "de": {"country": {"length": 2, "type": "string", "value": "DE"}, "city": {"length": 7,
+                "type": "string"}},
+            "at": {"country": {"length": 2, "type": "string", "value": "AT"}, "city": {"length": 7,
+                "type": "string"}},
+        };
+        # each line is 9 bytes: "Köln" is 5
+        list<hash<auto>> recs = readAll(new FixedLengthDataIterator("ATWien   \nDEKöln  \n", rules, GlobalOptions));
+        assertEq(("at", "de"), map $1.type, recs);
+        assertEq(("Wien", "Köln"), map $1.record.city, recs);
+    }
+
+    writerBytesTest() {
+        hash<auto> specs = {"rec": {
+            "name": {"length": 8, "type": "string"},
+            "qty": {"length": 4, "type": "int", "padding_char": "0"},
+        }};
+        list<hash<auto>> records = (
+            {"type": "rec", "record": {"name": "Grüße", "qty": 7}},
+            {"type": "rec", "record": {"name": "Köln", "qty": -12}},
+        );
+
+        # UTF-8: "Grüße" is 7 bytes and "Köln" 5, so one and three spaces fill the field
+        FixedLengthDataWriter w(specs);
+        string data = w.write(records);
+        assertEq("Grüße 0007\nKöln   -012\n", data);
+        assertEq((12, 12), map binary($1).size(), data.split("\n"));
+        assertEq(records, readAll(new FixedLengthDataIterator(data, specs, GlobalOptions)));
+
+        # the bytes of the output encoding: two per character in UTF-16
+        hash<auto> wide = {"rec": {
+            "name": {"length": 10, "type": "string"},
+            "qty": {"length": 8, "type": "int", "padding_char": "0"},
+        }};
+        BinaryOutputStream out();
+        FixedLengthWriter fw(out, wide, {"encoding": "UTF-16LE"});
+        fw.write(records);
+        binary bytes = out.getData();
+        assertEq(binary(convert_encoding("Grüße0007\nKöln -012\n", "UTF-16LE")), bytes);
+        list<hash<auto>> read = readAll(new FixedLengthIterator(new BinaryInputStream(bytes), "UTF-16LE", wide,
+            GlobalOptions));
+        assertEq(("Grüße", "Köln"), map convert_encoding($1.record.name, "UTF-8"), read);
+        assertEq((7, -12), map $1.record.qty, read);
+        # the returned string is in the output encoding, and its lines are the length of the record in bytes
+        FixedLengthDataWriter dw(wide, {"encoding": "UTF-16LE"});
+        string line = dw.write(records[0]);
+        assertEq("UTF-16LE", line.encoding());
+        # 18 bytes and the two bytes of the line feed
+        assertEq(20, binary(line).size());
+
+        # a value is truncated at a character boundary within its bytes, and the rest of the field is padded
+        w = new FixedLengthDataWriter({"rec": {"name": {"length": 4, "type": "string"}}}, {"truncate": True});
+        assertEq("Grü\n", w.write({"type": "rec", "record": {"name": "Grüße"}}));
+        w = new FixedLengthDataWriter({"rec": {"name": {"length": 3, "type": "string"}}}, {"truncate": True});
+        assertEq("Gr \n", w.write({"type": "rec", "record": {"name": "Grüße"}}));
+        # without truncation, a value larger than the field in bytes is refused
+        w = new FixedLengthDataWriter({"rec": {"name": {"length": 4, "type": "string"}}});
+        assertThrows("FIELD-INPUT-ERROR", "6 bytes in UTF-8.*field: name \\(4 bytes\\)", \w.write(),
+            ({"type": "rec", "record": {"name": "Grüß"}},));
+        # a field that whole padding characters cannot fill
+        w = new FixedLengthDataWriter({"rec": {"name": {"length": 3, "type": "string"}}}, {"encoding": "UTF-16LE"});
+        assertThrows("FIXED-LENGTH-UTIL-CHARACTER-SPLIT", "field \"name\"", \w.write(),
+            ({"type": "rec", "record": {"name": "a"}},));
     }
 }
