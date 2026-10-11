@@ -1234,6 +1234,22 @@ if (errors) {
 }
     @endcode
 
+    Validation also checks the operands of the arithmetic operators, from literals, field types and nested
+    arithmetic.  DPQL arithmetic is %Qore arithmetic, which combines any two values: an operand that the operator
+    cannot use is converted silently, so <tt>\@create + 1</tt> for a hash field \c create evaluates to \c 1.  Such
+    a combination is reported as error \c DPQL-E050; evaluation itself is unchanged.  The combinations that are
+    accepted:
+    - \c +: numbers; a number and a date (seconds); a string with a string, number, date or boolean (joined as
+      text); a list with any value (appended); two hashes (merged); two binary values (joined)
+    - \c -: numbers; a date minus a date or a number; a hash minus a string or a list of strings (keys removed)
+    - \c *, \c /, \c %: numbers
+    An operand whose type can hold more than one kind of value (ex: \c data, a string or binary value) or any value
+    is not checked.
+
+    A comparison whose result is the same for every record, because it compares a value with itself
+    (<tt>\@price > \@price</tt>, <tt>\@a + 1 == \@a + 1</tt>) or two literal values (<tt>1 == 1</tt>), is reported
+    as warning \c DPQL-W006.
+
     @section dataprovider_watch Watch Data Providers
 
     A <b>watch data provider</b> polls an external system and raises an event for each new item it
@@ -1374,6 +1390,10 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_9 DataProvider v3.9
+    - DPQL validation (@ref DataProvider::DataProvider::validateDpqlExpression() "validateDpqlExpression()") reports
+      arithmetic operands that the operator cannot combine (\c DPQL-E050), such as a hash plus a number, which
+      evaluates to the number, and comparisons whose result is the same for every record (\c DPQL-W006), such as
+      <tt>\@price > \@price</tt>; see @ref dpql_validation
     - added @ref ConnectionProvider::connection_option_override() "connection_option_override()" to derive a
       connection option from the option of another connection scheme: adding a hash cast to
       @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo" to a base option also set every member

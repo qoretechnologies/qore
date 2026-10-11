@@ -123,6 +123,8 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("argument type validation tests", \argumentTypeValidationTests());
         addTestCase("return type propagation tests", \returnTypePropagationTests());
         addTestCase("comparison type validation tests", \comparisonTypeValidationTests());
+        addTestCase("arithmetic operand type validation tests", \arithmeticOperandValidationTests());
+        addTestCase("constant comparison validation tests", \constantComparisonValidationTests());
         addTestCase("search expression validation tests", \searchExpressionValidationTests());
         addTestCase("search context completion tests", \searchContextCompletionTests());
         addTestCase("free-form expression tests", \freeFormExpressionTests());
@@ -6185,6 +6187,102 @@ public class DpqlTest inherits QUnit::Test {
             assertTrue(exists rtype, "value expression should have a return type");
             assertEq("string", rtype.getName(), "string literal returns string");
         }
+    }
+
+    #! Returns fields of each kind of value for operand validation tests
+    private hash<string, AbstractDataField> getOperandFields() {
+        return {
+            "create": new QoreDataField("create", NOTHING, AbstractDataProviderTypeMap."hash"),
+            "name": new QoreDataField("name", NOTHING, AbstractDataProviderTypeMap."string"),
+            "age": new QoreDataField("age", NOTHING, AbstractDataProviderTypeMap."*int"),
+            "price": new QoreDataField("price", NOTHING, AbstractDataProviderTypeMap."number"),
+            "when": new QoreDataField("when", NOTHING, AbstractDataProviderTypeMap."date"),
+            "tags": new QoreDataField("tags", NOTHING, AbstractDataProviderTypeMap."softlist"),
+            "flag": new QoreDataField("flag", NOTHING, AbstractDataProviderTypeMap."bool"),
+            "payload": new QoreDataField("payload", NOTHING, AbstractDataProviderTypeMap."data"),
+            "anything": new QoreDataField("anything", NOTHING, AbstractDataProviderTypeMap."auto"),
+        };
+    }
+
+    #! Returns the diagnostics of the given code that validating the expression gives
+    private list<hash<DpqlDiagnostic>> getDiagnostics(string text, string code,
+            hash<string, AbstractDataField> fields) {
+        return select DataProvider::validateDpqlExpression(text, fields), $1.code == code;
+    }
+
+    arithmeticOperandValidationTests() {
+        hash<string, AbstractDataField> fields = getOperandFields();
+
+        # a hash plus an integer is the integer when evaluated: the hash is dropped without an error
+        list<hash<DpqlDiagnostic>> diags = getDiagnostics("@create + 1", "DPQL-E050", fields);
+        assertEq(1, diags.size(), "a hash plus a number is an error");
+        assertEq("error", diags[0].severity);
+        assertRegex("'\\+' cannot be applied to '@create' \\(a hash\\) and a number", diags[0].message);
+        # what the expression evaluates to is unchanged: validation reports it, evaluation does not refuse it
+        assertEq(1, AbstractDataProvider::evalGenericExpressionValue({"create": {"a": 1}},
+            DataProvider::parseDpqlExpression("@create + 1"), NOTHING));
+
+        # operands that an operator cannot combine, as fields, literals and nested arithmetic
+        foreach string text in (("@name - 1", "@flag + 1", "@flag + @flag", "@name * 2", "@create / 2", "@tags % 2",
+                "1 + @create", "1 + 2 + @create", "(@age + 1) + @create", "@when * 2", "@name + @create",
+                "@create - 1", "<0102> + 1", "@name + <0102>", "@age - @when", "@create + @tags * 2")) {
+            assertEq(1, getDiagnostics(text, "DPQL-E050", fields).size(), text + " is an error");
+        }
+
+        # operands that an operator combines
+        foreach string text in (("@age + 1", "@price * 1.19", "@age / @price", "@age % 2", "@price - @age",
+                "@name + @name", "@name + 1", "@name + @when", "\"active: \" + @flag", "@when + 3600",
+                "@when - @when", "@when - 60", "60 + @when", "@tags + \"x\"", "1 + @tags", "@create + @create",
+                "@create - \"a\"", "@create - (\"a\", \"b\")", "<0102> + <0304>", "@age + 1 + @price",
+                "@name + @age + @when")) {
+            assertEq((), getDiagnostics(text, "DPQL-E050", fields), text + " is valid");
+        }
+
+        # an operand that can hold more than one kind of value, or any value, is not checked
+        foreach string text in (("@payload + 1", "@anything + 1", "@anything * @create", "@unknown + 1")) {
+            assertEq((), getDiagnostics(text, "DPQL-E050", fields), text + " is not checked");
+        }
+
+        # one error for a chain of operands, at the first that cannot be combined
+        assertEq(1, getDiagnostics("@create + 1 + 2", "DPQL-E050", fields).size());
+
+        # parsing and evaluating an expression are unchanged
+        hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo("@create + 1");
+        assertTrue(result.success, "the expression parses");
+        assertEq((), select result.diagnostics, $1.severity == "error");
+    }
+
+    constantComparisonValidationTests() {
+        hash<string, AbstractDataField> fields = getOperandFields();
+
+        # a value compared with itself
+        list<hash<DpqlDiagnostic>> diags = getDiagnostics("@age > @age", "DPQL-W006", fields);
+        assertEq(1, diags.size(), "a field compared with itself is reported");
+        assertEq("warning", diags[0].severity);
+        assertEq("Comparison '@age > @age' is always false for every record: it compares a value with itself",
+            diags[0].message);
+        assertRegex("always true", getDiagnostics("@name == @name", "DPQL-W006", fields)[0].message);
+        assertRegex("always true", getDiagnostics("@age <= @age", "DPQL-W006", fields)[0].message);
+        assertRegex("always true", getDiagnostics("@age >= @age", "DPQL-W006", fields)[0].message);
+        assertRegex("always false", getDiagnostics("@age != @age", "DPQL-W006", fields)[0].message);
+        assertRegex("always false", getDiagnostics("@age < @age", "DPQL-W006", fields)[0].message);
+        assertEq(1, getDiagnostics("@age + 1 >= @age + 1", "DPQL-W006", fields).size(),
+            "the same arithmetic on the same field");
+        assertEq(1, getDiagnostics("@f == @f", "DPQL-W006", fields).size(), "an unknown field as well");
+
+        # two literal values, with the result that evaluation gives
+        assertRegex("'1 == 1' is always true.*both sides are literal values",
+            getDiagnostics("1 == 1", "DPQL-W006", fields)[0].message);
+        assertRegex("always false", getDiagnostics("2 < 1", "DPQL-W006", fields)[0].message);
+        assertRegex("always true", getDiagnostics("\"a\" < \"b\"", "DPQL-W006", fields)[0].message);
+
+        # comparisons whose result depends on the record, or on when they are evaluated
+        foreach string text in (("@age > @price", "@age + 1 == @age", "@age == 1", "@age > 0", "0 < @age",
+                "@name == \"x\"", "now() == now()", "@age > @age + 1")) {
+            assertEq((), getDiagnostics(text, "DPQL-W006", fields), text + " is not reported");
+        }
+        # nested in a condition
+        assertEq(1, getDiagnostics("@name == \"x\" && @age == @age", "DPQL-W006", fields).size());
     }
 
     comparisonTypeValidationTests() {
