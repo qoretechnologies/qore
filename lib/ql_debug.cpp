@@ -380,6 +380,83 @@ static void ut_local_discard(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "local deletion unit checks raise no exception");
 }
 
+//! Exercise scalar-store admission itself, not just results obtainable by fallback.
+static void ut_aot_scalar_local_store(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    struct LocalScope {
+        LocalVar var;
+        ExceptionSink& xsink;
+        LocalScope(const char* name, const QoreTypeInfo* ti, ExceptionSink& sink) : var(name, ti), xsink(sink) {
+            var.instantiate(QoreValue(1.25));
+        }
+        ~LocalScope() {
+            var.uninstantiate(&xsink);
+        }
+    };
+    LocalScope local("native_scalar_store", autoTypeInfo, xsink);
+    LocalVarValue* slot = thread_try_find_lvar(&local.var);
+    UT_ASSERT(c, slot && !slot->val.fixed_type, "auto scalar uses an ordinary nonfixed slot");
+    if (!slot) {
+        return;
+    }
+    for (QoreValue value : {QoreValue(false), QoreValue(true), QoreValue(int64_t{7}),
+            QoreValue(-(int64_t{1} << 46)), QoreValue(2.5), QoreValue(-0.0)}) {
+        UT_ASSERT(c, local.var.tryAssignAOTScalarValue(value), "immediate scalar replacement is handled");
+        QoreValue actual = slot->val.getValue();
+        UT_ASSERT_EQ(c, value.getType(), actual.getType(), "scalar store preserves the value type");
+        UT_ASSERT(c, actual.rawBits() == value.rawBits(), "scalar store preserves exact value bits");
+    }
+    auto miss = [&](QoreValue value) {
+        uint64_t before = slot->val.getValue().rawBits();
+        UT_ASSERT(c, !local.var.tryAssignAOTScalarValue(value), "unsupported store is not handled");
+        UT_ASSERT_EQ(c, before, slot->val.getValue().rawBits(), "a miss preserves the slot");
+    };
+    for (QoreValue value : {QoreValue(), QoreValue::makeNull(), QoreValue::makeChar('x'),
+            QoreValue::makeShortString("inline", 6)}) {
+        miss(value);
+    }
+    ValueHolder wide_int(QoreValue(INT64_MAX), &xsink);
+    ValueHolder wide_float(QoreValue(-3.0e307), &xsink);
+    UT_ASSERT(c, wide_int->isPointer() && wide_float->isPointer(), "wide inputs really require ownership");
+    miss(*wide_int);
+    miss(*wide_float);
+    slot->finalized = true;
+    miss(QoreValue(3.5));
+    slot->finalized = false;
+    slot->block_cleared = true;
+    miss(QoreValue(3.5));
+    slot->block_cleared = false;
+    slot->val.static_assignment = true;
+    miss(QoreValue(3.5));
+    slot->val.static_assignment = false;
+    slot->val.fixed_type = true;
+    miss(QoreValue(3.5));
+    slot->val.fixed_type = false;
+    {
+        ReferenceHolder<QoreStringNode> text(new QoreStringNode("owned scalar-store control"), &xsink);
+        slot->syncValue(QoreValue(text->refSelf()), &xsink);
+        miss(QoreValue(3.5));
+        UT_ASSERT_EQ(c, 2, text->reference_count(), "miss leaves both node owners unchanged");
+        slot->syncValue(QoreValue(1.25), &xsink);
+        UT_ASSERT_EQ(c, 1, text->reference_count(), "ordinary replacement releases the old node once");
+    }
+    slot->val.removeValue(true).discard(&xsink);
+    miss(QoreValue(3.5));
+    UT_ASSERT(c, !slot->val.assigned, "unassigned storage is not initialized by the replacement path");
+    slot->syncValue(QoreValue(1.25), &xsink);
+    local.var.setReadOnly();
+    miss(QoreValue(3.5));
+    {
+        LocalScope typed("native_scalar_typed_control", floatTypeInfo, xsink);
+        UT_ASSERT(c, !typed.var.tryAssignAOTScalarValue(QoreValue(3.5)), "typed declaration keeps ordinary binding");
+    }
+    {
+        LocalVar missing("native_scalar_missing", autoTypeInfo);
+        UT_ASSERT(c, !missing.tryAssignAOTScalarValue(QoreValue(3.5)), "uninstantiated slot keeps normal error path");
+    }
+    UT_ASSERT(c, !xsink, "scalar-store admission tests raise no exception");
+}
+
 //! the I/O thread count of a process in a container with a CPU limit: the cgroup CPU quota files
 static void ut_cgroup_cpu_limit(UnitTestCounters& c) {
     // cgroup v2 cpu.max: "<quota> <period>" or "max <period>"
@@ -5950,6 +6027,7 @@ static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* x
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_local_discard(c);
+    ut_aot_scalar_local_store(c);
     ut_qorevalue_operator_bool_null(c);
     ut_string_data_helper(c);
     ut_string_compare_soft_and_concat_chars(c);
@@ -5966,6 +6044,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
 static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_local_discard(c);
+    ut_aot_scalar_local_store(c);
 
     ut_qorevalue_operator_bool_null(c);
     ut_string_data_helper(c);

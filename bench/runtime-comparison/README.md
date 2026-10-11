@@ -1039,3 +1039,14 @@ an additional same-binary control for reusing the normalized context.
 
 See [cached forwarding context measurements](RESULTS.md#cached-forwarding-class-context-2026-10-11)
 and [verified evidence/audit](results-forward-access-context-macos-arm64.json).
+
+`QORE_DISABLE_AOT_SCALAR_LOCAL_STORE=1` disables the runtime shortcut for normal
+AOT assignments that replace an already assigned scalar in an ordinary `auto`
+local (presence sampled on first use). Only immediate int/float/bool inputs and
+existing scalar storage qualify. Captured, reference, typed, substituted,
+read-only, top-level, unassigned, cleared, static and fixed-storage cases retain
+normal assignment, as do weak/opaque/node inputs and replacement of owned nodes.
+The shortcut updates the actual runtime slot; it does not introduce a separate
+unobservable local cache. It does not change the interpreter's assignment path.
+
+See [AOT scalar-store measurements](RESULTS.md#aot-scalar-local-replacement-2026-10-11) and [verified evidence/audit](results-aot-scalar-local-store-macos-arm64.json).

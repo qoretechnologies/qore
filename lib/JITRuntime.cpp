@@ -12541,6 +12541,11 @@ extern "C" DLLEXPORT void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t 
 extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak_aot(QoreAOTContext* ctx, int32_t idx,
         uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    static const bool scalar_store = !std::getenv("QORE_DISABLE_AOT_SCALAR_LOCAL_STORE");
+    if (scalar_store && !*xsink && ctx->locals[idx]
+            && ctx->locals[idx]->tryAssignAOTScalarValue(fromBits(val))) {
+        return;
+    }
     qore_rt_assign_local_eval_weak(ctx->locals[idx], val, xsink);
 }
 

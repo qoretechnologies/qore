@@ -922,6 +922,36 @@ public:
             : LocalVarLValueLookup::Found;
     }
 
+    //! Replaces an ordinary auto local's scalar without generic lvalue preparation.
+    /** Only immediate int/float/bool inputs and already assigned scalar storage
+        are admitted. No reference, filter, weak normalization, replaced node,
+        closure lock or recursive-reference scan can be involved. The actual
+        thread-local slot is updated, so subsequent reflection sees the value.
+        @param value borrowed immediate scalar input
+        @return true if stored without an exception, false without side effects
+        when ordinary assignment is required
+    */
+    DLLLOCAL bool tryAssignAOTScalarValue(QoreValue value) const {
+        if (closure_use || is_self || is_top_level || read_only || no_narrowing
+                || typeInfo != autoTypeInfo || refTypeInfo
+                || type_info_needs_substitution || ref_type_info_needs_substitution
+                || (!value.isInt() && !value.isFloat() && !value.isBool())) {
+            return false;
+        }
+        LocalVarValue* slot = get_var();
+        if (!slot || slot->finalized || slot->block_cleared || !slot->val.assigned
+                || slot->val.static_assignment || slot->val.fixed_type
+                || (slot->val.type != QV_Int && slot->val.type != QV_Float && slot->val.type != QV_Bool)) {
+            return false;
+        }
+        // Reuse the normal storage operation. Both guards exclude any owned
+        // node, so there is no removed value or unconsumed input to release.
+        AbstractQoreNode* removed = slot->val.assignAssume(value);
+        assert(!removed);
+        (void)removed;
+        return true;
+    }
+
     //! Prepares only fixed declaration metadata for an ordinary AOT class-local initializer.
     /** Called after parsing, within the owning Program invocation. The returned
         constraint is borrowed and immutable; neither slot state nor object acceptance

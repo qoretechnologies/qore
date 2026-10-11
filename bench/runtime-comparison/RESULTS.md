@@ -10021,3 +10021,62 @@ Separate forwarding and boxed-float profiles guide the next AOT-first steps:
 3. Investigate compact storage of the normalization proof (original defining class or null) and monitor non-forwarding dynamic-float/callback controls; retain all adverse results. Preserve logical frames, exceptions, debugger behavior, concurrent stack readers and cross-Program fallback.
 
 [Measurements, identities, profiles, reproduction and all 62 audit items](results-forward-access-context-macos-arm64.json).
+
+
+## AOT scalar-local replacement (2026-10-11)
+
+Baseline: merged 64c3f8e53. Skip generic lvalue setup only when an ordinary `auto` local already holds a scalar and receives an immediate int/float/bool. Preserve the real runtime slot and ordinary fallback for ownership, references, closures, filters and special storage. This changes an AOT assignment helper, not IR interpreter assignment or call dispatch.
+
+Separate matching AOT artifacts are built for the changed private runtime identity. Main comparison: three forks; same-binary on/off control: five forks. Count 4096, three warmups, five 500 ms windows per fork, shuffled scheduling. No task build/test/profile/source inspection overlapped timing. Values are medians of fork means in ns/element, not isolated call latency.
+
+|!Workload|!Before|!After|!Time reduction|!Java JIT|!After / Java
+|boxed_float_method_call|59.691851|43.550601|27.041%|2.547558|17.095x
+|dynamic_int_result_call|10.197566|10.457506|-2.549%|3.066573|3.410x
+|dynamic_float_result_call|11.195807|10.895372|2.683%|3.463178|3.146x
+|indirect_int_result|6.919300|6.930636|-0.164%|1.873139|3.700x
+|indirect_float_result|8.623076|8.795501|-2.000%|2.875706|3.059x
+|dynamic_int_result_fallback|22.020436|21.682982|1.532%|3.003145|7.220x
+|list_build|74.546038|74.919184|-0.501%|2.458388|30.475x
+|list_mutate|165.114863|166.953009|-1.113%|4.061532|41.106x
+|temporary_hash|300.584509|315.173433|-4.854%|15.107940|20.861x
+|method_call|1.489866|1.493782|-0.263%|0.888964|1.680x
+|monomorphic_call|3.360259|3.316287|1.309%|1.659984|1.998x
+|arithmetic|1.382970|1.393444|-0.757%|0.890374|1.565x
+
+Same-binary scalar-store control:
+
+|!Workload|!Disabled|!Enabled|!Time reduction
+|boxed_float_method_call|61.668261|44.071551|28.534%
+|dynamic_int_result_call|10.355899|10.435058|-0.764%
+|list_mutate|167.052501|165.361658|1.012%
+|temporary_hash|308.982478|306.611080|0.767%
+
+Additional confirmation run-gpm9pco6:
+
+|!Workload|!Before|!After|!Time reduction
+|boxed_float_method_call|59.486281|43.776798|26.409%
+|dynamic_int_result_call|10.186627|10.393889|-2.035%
+|indirect_float_result|8.701417|8.761663|-0.692%
+|list_mutate|164.314545|164.708516|-0.240%
+|temporary_hash|312.030449|307.116925|1.575%
+
+The target gain repeats across screening (26.298%), final comparison (27.041%) and the independent five-fork repeat (26.409%), with separated observed fork ranges in all three batches. Same-binary scalar-store controls improve 28.563% and 28.534%. Final AOT time is 43.550601 ns/element versus Java JIT 2.547558 ns/element (17.095 times); this is a whole boxed-recurrence workload, not isolated call latency or Java parity.
+
+Dynamic integer calls regress 1.252% in screening, 2.549% in the final comparison and 2.035% in the five-fork repeat. The final ranges are separated; repeat ranges overlap. The same-binary control is 0.764% slower with overlapping ranges. Retain this as a possible small regression of the changed build, not zero effect or established measurement noise; its cause is not established. Floating callbacks regress 0.164%, 2.000% and 0.692% across screening/main/repeat, with separated ranges in main and overlapping ranges in repeat. List mutation regresses 0.991%, 1.113% and 0.240%, with overlapping ranges, while its same-binary control improves 1.012%. These repeated adverse directions remain limitations of this targeted change.
+
+Temporary hashes regress 4.854% in main with separated observed ranges, but improve 2.579% in screening, 1.575% in the five-fork repeat and 0.767% in the same-binary control. The main slowdown does not repeat and its cause is unknown. No process or measurement window is discarded. Dynamic floating-result calls improve 2.683% in main; screening and same-binary results differ, so no separate causal speedup claim is made. Small method/monomorphic/arithmetic differences are controls, not new calling-convention gains.
+
+The implementation keeps the ordinary interpreter/JIT assignment path unchanged. IR correctness is checked, but this stage makes no new IR/JIT timing claim. The first-use flag isolates the runtime shortcut on the same binary; separate matching AOT artifacts are used for old/new private runtime identities. Startup samples are excluded from steady-state figures and are not cold-cache measurements.
+
+Evidence retains 315 jobs / 1575 windows. Release/debug each pass 104 selected files and seven exception/stack fixtures; 205 native debug checks, 15 harness tests and 495 references per mode pass. The new 77-assertion driver also passes the frozen baseline. No full-suite or sanitizer claim.
+
+Baseline diagnostics found two existing visibility defects: compiled block locals disappear from reflection after their first iteration, and direct constant-specialized AOT calls can expose an empty local map. Dynamic/retained ordinary call visibility passes. Reproducers and failure logs are retained; this store optimization does not repair those defects or claim complete reflection coverage.
+
+Next AOT-first steps:
+
+1. Keep AOT primary. Investigate the repeated approximately 2% dynamic-integer and smaller callback/list regressions with a minimal binary/control comparison; retain them as unresolved until explained or removed.
+2. Use the residual boxed-recurrence profile to prototype compile/bind-time admission for immutable ordinary-auto declaration checks and a more direct immediate-scalar store. Keep live slot/ownership/alias checks and write the actual runtime slot; measure matched baselines and fallback-heavy containers.
+3. Evaluate a native unary floating-argument path for dynamically named methods whose result must remain boxed, so generic key/type/reference work is avoided under an exact same-Program receiver/options/epoch proof. Preserve checked return semantics, wide/boxed values, logical frames, exceptions and cross-Program fallback.
+4. Move immutable explicit-type-instantiation absence checks out of forwarding's per-call AST lookup only after binding/body identity and publication are proved. Resolve the documented baseline local-reflection defects before expanding frame or local-state elision.
+
+[Measurements, identities, baseline diagnostics, reproduction and all 62 audit items](results-aot-scalar-local-store-macos-arm64.json).
