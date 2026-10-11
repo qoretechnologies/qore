@@ -17404,8 +17404,10 @@ private:
 };
 static_assert(sizeof(QoreCompactNativeMethodStackLocation) < sizeof(QoreNativeMethodStackLocation<true>));
 
+// Keep scalar dispatch in its caller as both name-based and pre-resolved AOT
+// sites use it. Outlining this hot path adds overhead to existing boxed calls.
 template <bool CachedAdmission, typename Scalar>
-static bool try_dispatch_native_scalar_method(QoreObject* object,
+static QORE_ALWAYS_INLINE bool try_dispatch_native_scalar_method(QoreObject* object,
         const QoreAOTMethodDispatchCacheEntry& cache, const UserVariantBase* uvb,
         Scalar arg, uint64_t** arg_cleanups,
         ExceptionSink* xsink, uint64_t& result) {
@@ -17522,7 +17524,7 @@ static bool try_dispatch_native_scalar_method(QoreObject* object,
 }
 
 template <bool CachedAdmission>
-static bool try_dispatch_native_method(QoreObject* object,
+static QORE_ALWAYS_INLINE bool try_dispatch_native_method(QoreObject* object,
         const QoreAOTMethodDispatchCacheEntry& cache, const UserVariantBase* uvb,
         uint64_t* args, uint64_t** arg_cleanups, int nargs,
         ExceptionSink* xsink, uint64_t& result) {
@@ -18189,7 +18191,7 @@ static const QoreTypeParamInstantiation* qore_rt_get_dot_eval_explicit_type_inst
     return call ? call->getExplicitTypeParamInstantiation() : nullptr;
 }
 
-static bool qore_rt_get_aot_dispatch_arg_key(QoreValue value,
+static QORE_ALWAYS_INLINE bool qore_rt_get_aot_dispatch_arg_key(QoreValue value,
         const QoreTypeInfo*& type_info, uint8_t& state) {
     state = 0;
     switch (value.getType()) {
@@ -18217,7 +18219,7 @@ static bool qore_rt_get_aot_dispatch_arg_key(QoreValue value,
     return type_info;
 }
 
-static bool qore_rt_build_aot_dispatch_key(QoreObject* object,
+static QORE_ALWAYS_INLINE bool qore_rt_build_aot_dispatch_key(QoreObject* object,
         uint64_t* args, int nargs,
         std::array<const QoreTypeInfo*,
             QoreAOTMethodDispatchCacheEntry::MAX_ARGS>& arg_types,
@@ -18244,7 +18246,7 @@ static bool qore_rt_build_aot_dispatch_key(QoreObject* object,
     return true;
 }
 
-static QoreAOTMethodDispatchCache* qore_rt_get_aot_method_dispatch_cache(
+static QORE_ALWAYS_INLINE QoreAOTMethodDispatchCache* qore_rt_get_aot_method_dispatch_cache(
         QoreAOTCallTarget& target) {
     static const bool enabled =
         !std::getenv("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE");
@@ -18717,6 +18719,70 @@ static bool qore_rt_aot_object_method_needs_runtime_dispatch(
             && object->getClass() != target.method->getClass());
 }
 
+// A pre-resolved call must keep its parse-selected variant. Reuse the ordinary
+// full-key PIC admission without performing name-based overload resolution.
+// This also lets nested self calls reach a live native scalar companion instead
+// of instantiating TLS parameters merely because their receiver class is exact.
+static bool qore_rt_try_dispatch_aot_resolved_method(QoreAOTCallTarget& target,
+        QoreObject* object, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink, uint64_t& result) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_RESOLVED_METHOD_CACHE")
+        && !std::getenv("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY");
+    if (!enabled || !target.variant || target.method->isStatic()) {
+        return false;
+    }
+    assert(!qore_rt_aot_object_method_needs_runtime_dispatch(target, object));
+    // Avoid allocating a cache for a builtin, copy, synchronized or non-AOT
+    // target. The hot path reads the existing descriptor instead of repeating
+    // eligibility checks. Body availability and debugger state stay live below.
+    if (!target.method_dispatch_cache.load(std::memory_order_acquire)) {
+        const UserVariantBase* uvb = target.variant->getUserVariantBase();
+        if (!uvb || !uvb->hasCachedAOT() || !strcmp(target.method->getName(), "copy")
+                || !qore_rt_method_fast_call_eligible(target.variant)) {
+            return false;
+        }
+    }
+    QoreAOTMethodDispatchCache* cache = qore_rt_get_aot_method_dispatch_cache(target);
+    if (!cache) {
+        return false;
+    }
+    std::array<const QoreTypeInfo*, QoreAOTMethodDispatchCacheEntry::MAX_ARGS> arg_types{};
+    std::array<uint8_t, QoreAOTMethodDispatchCacheEntry::MAX_ARGS> arg_states{};
+    const QoreTypeInfo* receiver_type_info = nullptr;
+    if (!qore_rt_build_aot_dispatch_key(object, args, nargs, arg_types, arg_states, receiver_type_info)) {
+        return false;
+    }
+    const qore_class_private* class_ctx = runtime_get_class();
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*object->getClass(), class_ctx)) {
+        class_ctx = nullptr;
+    }
+    const QoreProgram* caller_program = getProgram();
+    const QoreProgram* object_program = object->getProgram();
+    const QoreParseOptions parse_options = runtime_get_parse_options();
+    const uint64_t dispatch_epoch = qore_get_method_dispatch_epoch();
+    const QoreAOTMethodDispatchCacheEntry* entry = qore_rt_find_aot_method_dispatch_cache_entry(cache,
+        object->getClass(), receiver_type_info, class_ctx, caller_program, object_program,
+        parse_options, dispatch_epoch, arg_types, arg_states, nargs);
+    if (!entry) {
+        qore_rt_add_aot_method_dispatch_cache_entry(cache, object->getClass(), receiver_type_info,
+            class_ctx, caller_program, object_program, parse_options, dispatch_epoch,
+            arg_types, arg_states, nargs, target.method, target.variant);
+        entry = qore_rt_find_aot_method_dispatch_cache_entry(cache, object->getClass(), receiver_type_info,
+            class_ctx, caller_program, object_program, parse_options, dispatch_epoch, arg_types, arg_states, nargs);
+    }
+    // Other receiver classes may have populated this call site's cache through
+    // runtime dispatch. Never substitute a differently resolved overload here.
+    if (!entry || entry->method != target.method || entry->variant != target.variant) {
+        return false;
+    }
+    if (entry->native_scalar_uvb && try_dispatch_native_method<true>(object, *entry,
+            entry->native_scalar_uvb, args, arg_cleanups, nargs, xsink, result)) {
+        return true;
+    }
+    return try_dispatch_method_fast(object, target.method, target.qc, target.variant,
+        args, arg_cleanups, nargs, xsink, result, entry);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t base_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
@@ -18736,6 +18802,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext*
                 return qore_rt_dispatch_aot_object_method_by_name(target,
                     object, method_name, args, nullptr, nargs, xsink,
                     explicit_inst);
+            }
+        } else if (!explicit_inst) {
+            uint64_t result;
+            if (qore_rt_try_dispatch_aot_resolved_method(target, object, args, nullptr, nargs, xsink, result)) {
+                return result;
             }
         }
     }
@@ -18773,6 +18844,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_object_method_direct_aot(
             method_name, args, nullptr, nargs, xsink, nullptr);
     }
     uint64_t result;
+    if (qore_rt_try_dispatch_aot_resolved_method(target, object, args, nullptr, nargs, xsink, result)) {
+        return result;
+    }
     if (try_dispatch_method_fast(object, target.method, target.qc,
             target.variant, args, nullptr, nargs, xsink, result)) {
         return result;
@@ -19232,6 +19306,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot_consume_args(Qo
                 return qore_rt_dispatch_aot_object_method_by_name(target,
                     object, method_name, args, arg_cleanups, nargs, xsink,
                     explicit_inst);
+            }
+        } else if (!explicit_inst) {
+            uint64_t result;
+            if (qore_rt_try_dispatch_aot_resolved_method(target, object, args, arg_cleanups,
+                    nargs, xsink, result)) {
+                return result;
             }
         }
     }

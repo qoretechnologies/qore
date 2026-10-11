@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "RESOLVED-METHOD-TEST", sprintf("expected %y (%s), got %y (%s)",
+            expected, expected.fullType(), actual, actual.fullType());
+    }
+}
+
+class ResolvedEntry {
+    int next(int value) { return value + 1; }
+    float next(float value) { return 65535.0 - value; }
+    int single(int value) { return value + 1; }
+    float singleFloat(float value) { return value + 0.5; }
+    int nested(int value) { return self.next(value); }
+    float nestedFloat(float value) { return self.next(value); }
+    int defaulted(int value = 31) { return value; }
+    synchronized int locked(int value) { return value + 3; }
+    int optional(*int value) { return value ?? 7; }
+    int extras(int value, ...) { return value + int(argv[0]); }
+    int fail(int value) {
+        if (value < 0) { throw "EXPECTED-RESOLVED-FAILURE", "negative"; }
+        return value;
+    }
+}
+class ResolvedDerived inherits ResolvedEntry {
+    int next(int value) { return value + 2; }
+    float next(float value) { return 65537.0 - value; }
+}
+class ResolvedGeneric<T> {
+    T value(T input) { return input; }
+}
+
+int sub integerCall(ResolvedEntry receiver, int value) { return receiver.next(value); }
+float sub floatCall(ResolvedEntry receiver, float value) { return receiver.next(value); }
+int sub convertedCall(ResolvedEntry receiver, auto value) { return receiver.single(value); }
+float sub convertedFloatCall(ResolvedEntry receiver, auto value) { return receiver.singleFloat(value); }
+int sub nestedCall(ResolvedEntry receiver, int value) { return receiver.nested(value); }
+float sub nestedFloatCall(ResolvedEntry receiver, float value) { return receiver.nestedFloat(value); }
+
+sub fallbacks(ResolvedEntry receiver) {
+    expect(31, receiver.defaulted());
+    expect(9, receiver.locked(6));
+    expect(7, receiver.optional(NOTHING));
+    expect(5, receiver.optional(5));
+    expect(10, receiver.extras(4, 6));
+    expect(8, receiver.fail(8));
+    try {
+        receiver.fail(-1);
+        throw "RESOLVED-METHOD-TEST", "missing exception";
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "EXPECTED-RESOLVED-FAILURE") { rethrow; }
+    }
+}
+
+ResolvedEntry base();
+ResolvedDerived derived();
+ResolvedGeneric<int> genericInt();
+ResolvedGeneric<string> genericString();
+for (int round = 0; round < 12; ++round) {
+    foreach int value in ((0, -1, 140737488355327, 140737488355328,
+            -140737488355329, 1125899906842624)) {
+        expect(value + 1, integerCall(base, value));
+        expect(value + 2, integerCall(derived, value));
+        expect(value + 1, nestedCall(base, value));
+        expect(value + 2, nestedCall(derived, value));
+        expect(value + 1, convertedCall(base, \value));
+    }
+    foreach float value in ((0.0, -0.0, 1.25, -3.0e307, @inf@, -@inf@, @nan@)) {
+        expect(sprintf("%g", 65535.0 - value), sprintf("%g", floatCall(base, value)));
+        expect(sprintf("%g", 65537.0 - value), sprintf("%g", floatCall(derived, value)));
+        expect(sprintf("%g", 65535.0 - value), sprintf("%g", nestedFloatCall(base, value)));
+        expect(sprintf("%g", 65537.0 - value), sprintf("%g", nestedFloatCall(derived, value)));
+    }
+    expect(7.5, convertedFloatCall(base, 7));
+    expect(23, genericInt.value(23));
+    expect("text", genericString.value("text"));
+    fallbacks(base);
+    fallbacks(derived);
+}
+try {
+    convertedCall(base, "not an integer");
+    throw "RESOLVED-METHOD-TEST", "invalid integer accepted";
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err != "RUNTIME-TYPE-ERROR" && ex.err != "RUNTIME-OVERLOAD-ERROR") { rethrow; }
+}
+printf("resolved-method-entry: ok\n");

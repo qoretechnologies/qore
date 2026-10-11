@@ -870,6 +870,20 @@ See [results](RESULTS.md#generic-method-binding-proofs-2026-10-10) and
 [evidence](results-generic-method-binding-macos-arm64.json) for the repeated
 10–12% fallback reduction, code-size/stack growth, and adverse controls.
 
+Pre-resolved AOT object calls now reuse the same bounded dispatch cache without
+re-resolving the parse-selected overload. Exact method/variant identity and the
+full receiver, context, Program, parse-option, epoch and argument key must match.
+Live body readiness, debugger, object validity, ownership and frame checks remain.
+`QORE_DISABLE_AOT_RESOLVED_METHOD_CACHE=1` disables this route at process startup;
+the existing polymorphic-cache and fast-entry switches also disable its use.
+There is no exported ABI, header layout or AOT runtime-identity change.
+Hot native-dispatch and key-building helpers remain inline to avoid slowing
+existing boxed calls when the additional call site is introduced. See the
+[results](RESULTS.md#resolved-aot-method-entries-2026-10-10) and
+[evidence](results-resolved-method-entry-macos-arm64.json): the nested-call
+workload improves about 15%, with small adverse control medians retained. This
+does not eliminate generic outer-call setup or establish Java parity.
+
 `QORE_DISABLE_AOT_STABLE_UNTYPED_LOAD=1` disables invocation-local caching of a
 stable untyped parameter's non-reference classification. Set it during `qcc`
 compilation, not just execution. The compiler excludes written, captured,

@@ -9257,3 +9257,105 @@ is about 83.8 times and boxed floating results about 24.3 times. The remaining
 gap requires reducing complete call setup, not merely additional signature
 caching. See the [62-item audit](FOLLOWUP-AUDIT.md#generic-method-binding-audit-2026-10-10)
 (16 Pass, 46 N/A, 0 Fail) and [full evidence](results-generic-method-binding-macos-arm64.json).
+
+## Resolved AOT method entries (2026-10-10)
+
+Retain a full-key cache route for pre-resolved object method calls, including
+nested `self` calls. It preserves the parse-selected method and variant instead
+of doing name-based overload resolution. Missing, saturated, incompatible and
+ineligible entries retain the previous path. No exported ABI, header layout,
+runtime identity or IR-interpreter change is involved.
+
+On this Apple M4 Pro/macOS arm64 host, the final nested-call workload decreases
+from **244.50 to 207.50 ns/element (15.13%)**. The identical executable/runtime
+control decreases from **245.87 to 207.58 (15.57%)** when the new route is enabled.
+Both have disjoint observed fork ranges, and the five-fork screen improves
+14.85%. These are complete workload costs, not isolated call latency.
+
+### Final comparison with Java
+
+Three randomized forks per runtime, three warmups and five 500 ms measurement
+windows per fork, count 4096; Java is Temurin 25.0.2/JMH. Startup is excluded.
+The separate control uses five forks with identical AOT/runtime bytes and only
+`QORE_DISABLE_AOT_RESOLVED_METHOD_CACHE=1` on the disabled side.
+
+|!Workload|!Baseline Qore ns/element|!Qore ns/element|!Java ns/element|!Qore/Java
+|Nested context-using call|244.50|207.50|3.02|68.79x
+|Dynamic integer result|10.17|10.21|3.10|3.29x
+|Dynamic float result|11.44|11.43|3.46|3.30x
+|Boxed float method result|61.88|62.33|2.56|24.38x
+|Integer callback result|6.87|6.90|1.88|3.67x
+|Float callback result|8.81|8.79|2.63|3.34x
+|Polymorphic integer expression|10.24|10.12|2.54|3.99x
+|Polymorphic float expression|10.41|10.31|2.55|4.04x
+|Final-class method|1.51|1.51|0.89|1.70x
+|Monomorphic virtual method|3.39|3.42|1.66|2.06x
+|Arithmetic control|1.43|1.43|0.89|1.60x
+
+Only the nested target has separated ranges in this final main/control batch.
+Boxed-float medians remain 0.74% slower in main and 0.32% slower in the control,
+both with overlapping ranges. Monomorphic, integer callback and native integer
+medians also worsen slightly with overlap. No general control speedup, proven
+zero regression, statistical confidence interval or Java parity is claimed.
+
+Supplemental exact-receiver probes improve 17.76% for a context-using scalar
+method and 18.80% for a two-argument method, with separated ranges. An eight-type
+site exceeding the four-entry cache improves only 0.47%, with overlap. These
+probes have fixed-seed checksum validation and are not Java comparisons.
+
+### Revisions, qualification and costs
+
+The original prototype improved the target but regressed boxed-float calls
+4.78% in main and 5.03% in a five-fork repeat, both with separated ranges.
+Assembly showed that adding another caller caused previously inlined native
+dispatch and cache/key helpers to be outlined. Inlining just the wrapper moved
+the extra call into scalar dispatch; this intermediate was correctness-tested
+but not timed. Inlining scalar dispatch alone still regressed boxed calls 3.66%.
+A compact-slot shortcut was also tried, showed inconclusive incremental benefit,
+and was removed. Preserving cache/key inlining improved boxed calls 3.03% against
+the scalar-inline revision with separated ranges, while retaining the target gain.
+
+The final name-dispatch helper retains the baseline helper-call set and its
+608-byte frame (1689 to 1690 instructions). The new resolved helper has 1563
+instructions and a 608-byte frame, which remains live through dispatch. The
+general wrapper grows from 96 to 112 stack bytes; the existing generic helper
+remains at 592 bytes. These stack/code costs are not hidden by the timing gain.
+Saturated misses can still allocate/discard an entry, and replaced cache entries
+stay owned until context destruction. No cold-call or cache-saturation gain is
+established.
+
+Release/debug qualification passes 95 selected files each: 377/384 cases and
+16830/16929 assertions, with 12 standalone files each, one known release skip
+and no debug skips. The new 152-assertion fixture passes baseline and candidate;
+146 native debug checks and 15 harness tests pass. IR/AOT/interpreted-Java/JIT-Java
+reference grids pass 495 checks per mode. All 129 normalized non-bootstrap LLVM
+bodies are unchanged. Builds, tests, profiling and evidence work did not overlap
+benchmark timing. No full-suite, sanitizer or cross-platform claim is made.
+
+The [evidence](results-resolved-method-entry-macos-arm64.json) retains all
+**551 jobs / 2755 measurement windows**, including discarded revisions,
+supplemental probes, normalized samples, hashes, qualification, reproduction
+scripts and the implementation patch. Fork ranges are descriptive, not confidence
+intervals. The baseline was built during upstream integration from unchanged
+core source; generated revision/build metadata may differ, hence the additional
+identical-runtime controls.
+
+### Remaining costs and next plan
+
+A separate ten-second, 1 ms profile of the qualified candidate shows generic
+dispatch (539 top-of-stack samples), name dispatch (507), type classification
+(480), TLS lookup (279), cache matching (244) and local setup (209), plus ownership,
+frame and return-filter work. The sample includes a sleeping signal thread;
+counts are qualitative, not additive CPU percentages or a normalized comparison.
+Nested exact calls reach the resolved helper and still incur live native
+admission through the generic dispatcher; outer context-using setup remains.
+
+Next distinguish that admission work from generic outer-call setup, then
+prototype explicit receiver/`RuntimeConfig` arguments for a conservative subset
+of context-using same-Program bodies. Keep replaceable body readiness, debugger,
+Program, exception, frame, return-filter and ownership semantics live. Measure
+cold/miss/saturated sites and the existing native/callback/polymorphic controls,
+qualify and audit before another commit. The current 3–4x native-dynamic and
+roughly 69x generic nested gaps show why complete call setup remains the priority.
+See the [62-item audit](FOLLOWUP-AUDIT.md#resolved-aot-method-entry-audit-2026-10-10)
+(15 Pass, 47 N/A, 0 Fail).
