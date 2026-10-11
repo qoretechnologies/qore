@@ -81,6 +81,7 @@ public class TimerDispatchTest inherits QUnit::Test {
         string owner = "siblinglock-" + get_random_string(8);
         Mutex shared();          # stands in for WebSocketClient::delivery_mutex
         Counter startedA(1);
+        Counter startedB(1);
         Counter aHoldsLock(1);
         Counter bDone(1);
         Counter destructed(1);
@@ -91,6 +92,7 @@ public class TimerDispatchTest inherits QUnit::Test {
         # acquiring it.  It must be in flight so that — without the fix — A's drain
         # would wait for it.
         ctrl.addTimer(now_us() + 10ms, sub () {
+            startedB.dec();
             aHoldsLock.waitForZero(30s);
             AutoLock bl(shared);   # blocks while A holds `shared`
             bDone.dec();
@@ -98,14 +100,21 @@ public class TimerDispatchTest inherits QUnit::Test {
 
         # Callback A (same owner): grabs `shared`, then deletes obj whose destructor
         # calls flushCallbacksByOwner(owner) WHILE A still holds `shared`.
+        #
+        # A first waits until B is running.  flushCallbacksByOwner() discards the
+        # owner's callbacks that have not started yet, and B's may not have: the two
+        # timers can fire on different I/O threads in either order, and B can still
+        # be queued while A runs.  B discarded never completes.
         ctrl.addTimer(now_us() + 10ms, sub () {
             startedA.dec();
+            startedB.waitForZero(30s);
             AutoLock al(shared);
             aHoldsLock.dec();      # B may now race for `shared` (it will block)
             delete obj;            # destructor -> flushCallbacksByOwner(owner)
         }, owner);
 
         assertEq(0, startedA.waitForZero(10s), "callback A did not start within 10s");
+        assertEq(0, startedB.waitForZero(10s), "callback B did not start within 10s");
         # Both must complete: the destructor's drain must not block holding `shared`
         # (else A and B deadlock), and B must then acquire `shared` and finish.
         assertEq(0, destructed.waitForZero(30s),
