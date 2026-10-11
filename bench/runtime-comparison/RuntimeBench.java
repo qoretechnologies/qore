@@ -113,31 +113,49 @@ public class RuntimeBench {
     }
 
     static class DynamicStep {
+        private long increment = 17;
         @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         long next(long value) { return (value * 33 + 17) & 65535; }
+        @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long fieldNext(long value) { return (value * 33 + increment) & 65535; }
         @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         long viaContext(long value) { return next(value); }
     }
     static class DynamicStepB extends DynamicStep {
+        private long increment = 19;
         @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         long next(long value) { return (value * 33 + 19) & 65535; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long fieldNext(long value) { return (value * 33 + increment) & 65535; }
     }
     static class DynamicStepC extends DynamicStep {
+        private long increment = 23;
         @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         long next(long value) { return (value * 33 + 23) & 65535; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long fieldNext(long value) { return (value * 33 + increment) & 65535; }
     }
 
     static class DynamicFloatStep {
+        private double limit = 65535.0;
         @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         double next(double value) { return 65535.0 - value; }
+        @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        double fieldNext(double value) { return limit - value; }
     }
     static class DynamicFloatStepB extends DynamicFloatStep {
+        private double limit = 65537.0;
         @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         double next(double value) { return 65537.0 - value; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        double fieldNext(double value) { return limit - value; }
     }
     static class DynamicFloatStepC extends DynamicFloatStep {
+        private double limit = 65541.0;
         @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         double next(double value) { return 65541.0 - value; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        double fieldNext(double value) { return limit - value; }
     }
 
     static long indirectCall(int count, long seed, LongUnaryOperator callback) {
@@ -398,6 +416,28 @@ public class RuntimeBench {
         return sum;
     }
 
+    // Natural context-using targets: the non-final per-object fields are read
+    // on every retained call, but are not mutated during measurements.
+    static long boxedIntMethodFallback(int count, long seed, DynamicStep a, DynamicStep b, DynamicStep c) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            seed = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).fieldNext(seed);
+            sum += seed;
+        }
+        return sum;
+    }
+
+    static long boxedFloatMethodFallback(int count, long seed,
+            DynamicFloatStep a, DynamicFloatStep b, DynamicFloatStep c) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).fieldNext(value);
+            sum += (long) value;
+        }
+        return sum;
+    }
+
     private long nextSeed() {
         seed = (seed + 1) & 65535;
         return seed;
@@ -435,6 +475,15 @@ public class RuntimeBench {
     @Benchmark public long optional_float_method_call() { return monomorphicFloatCall(count, nextSeed(), fa); }
     @Benchmark public long boxed_float_method_call() {
         return polymorphicFloatExpressionCall(count, nextSeed(), fa, fb, fc);
+    }
+    @Benchmark public long boxed_int_method_call() {
+        return polymorphicExpressionCall(count, nextSeed(), a, b, c);
+    }
+    @Benchmark public long boxed_int_method_fallback() {
+        return boxedIntMethodFallback(count, nextSeed(), a, b, c);
+    }
+    @Benchmark public long boxed_float_method_fallback() {
+        return boxedFloatMethodFallback(count, nextSeed(), fa, fb, fc);
     }
     @Benchmark public long dynamic_float_result_call() {
         return dynamicFloatResultCall(count, nextSeed(), fa, fb, fc);
@@ -480,6 +529,7 @@ public class RuntimeBench {
                     "optional_method_call", "polymorphic_float_call", "polymorphic_float_expression_call",
                     "monomorphic_float_call", "optional_float_method_call",
                     "boxed_float_method_call", "dynamic_int_result_call", "dynamic_int_result_fallback",
+                    "boxed_int_method_call", "boxed_int_method_fallback", "boxed_float_method_fallback",
                     "dynamic_float_result_call",
                     "dispatch_control", "list_read",
                     "list_build", "list_mutate", "temporary_list", "temporary_hash",
@@ -501,6 +551,9 @@ public class RuntimeBench {
                     polymorphicFloatExpressionCall(count, seed, fa, fb, fc),
                     dynamicIntResultCall(count, seed, a, b, c),
                     dynamicIntResultFallback(count, seed, a, b, c),
+                    polymorphicExpressionCall(count, seed, a, b, c),
+                    boxedIntMethodFallback(count, seed, a, b, c),
+                    boxedFloatMethodFallback(count, seed, fa, fb, fc),
                     dynamicFloatResultCall(count, seed, fa, fb, fc),
                     dispatchControl(count, seed),
                     listRead(values, seed), listBuild(count, seed),

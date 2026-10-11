@@ -47,26 +47,39 @@ final class Stepper {
 
 # Three runtime receiver types prevent this from being a final-method benchmark.
 class DynamicStep {
+    private:internal { int increment = 17; }
     int next(int value) { return (value * 33 + 17) & 65535; }
+    # A real object-field read, not a forwarding leaf or a disabled fast path.
+    int fieldNext(int value) { return (value * 33 + increment) & 65535; }
     # Context-using nested call deliberately excludes the native leaf companion.
     int viaContext(int value) { return self.next(value); }
 }
 class DynamicStepB inherits DynamicStep {
+    private:internal { int increment = 19; }
     int next(int value) { return (value * 33 + 19) & 65535; }
+    int fieldNext(int value) { return (value * 33 + increment) & 65535; }
 }
 class DynamicStepC inherits DynamicStep {
+    private:internal { int increment = 23; }
     int next(int value) { return (value * 33 + 23) & 65535; }
+    int fieldNext(int value) { return (value * 33 + increment) & 65535; }
 }
 
 # Exactly representable double recurrences, independently checked with integers.
 class DynamicFloatStep {
+    private:internal { float limit = 65535.0; }
     float next(float value) { return 65535.0 - value; }
+    float fieldNext(float value) { return limit - value; }
 }
 class DynamicFloatStepB inherits DynamicFloatStep {
+    private:internal { float limit = 65537.0; }
     float next(float value) { return 65537.0 - value; }
+    float fieldNext(float value) { return limit - value; }
 }
 class DynamicFloatStepC inherits DynamicFloatStep {
+    private:internal { float limit = 65541.0; }
     float next(float value) { return 65541.0 - value; }
+    float fieldNext(float value) { return limit - value; }
 }
 
 int sub indirectCall(int count, int seed, code<int(int)> callback) {
@@ -223,11 +236,42 @@ int sub dispatchControl(int count, int seed) {
 }
 
 # Keep the recurrence boxed: the dynamic receiver's return type is not a native local contract.
+int sub boxedIntMethodCall(int count, int seed, auto a, auto b, auto c) {
+    auto value = seed;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
 int sub boxedFloatMethodCall(int count, int seed, auto a, auto b, auto c) {
     auto value = float(seed);
     int sum = 0;
     for (int i = 0; i < count; ++i) {
         value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+# These targets need object context and cannot use the native scalar leaf entry.
+int sub boxedIntMethodFallback(int count, int seed, auto a, auto b, auto c) {
+    auto value = seed;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).fieldNext(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+int sub boxedFloatMethodFallback(int count, int seed, auto a, auto b, auto c) {
+    auto value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).fieldNext(value);
         sum += int(value);
     }
     return sum;
@@ -387,6 +431,9 @@ int sub dispatch(string name, int count, int seed, list<int> data, Stepper recei
         case "monomorphic_float_call": return monomorphicFloatCall(count, seed, fa);
         case "optional_float_method_call": return optionalFloatMethodCall(count, seed, fa);
         case "boxed_float_method_call": return boxedFloatMethodCall(count, seed, fa, fb, fc);
+        case "boxed_int_method_call": return boxedIntMethodCall(count, seed, a, b, c);
+        case "boxed_int_method_fallback": return boxedIntMethodFallback(count, seed, a, b, c);
+        case "boxed_float_method_fallback": return boxedFloatMethodFallback(count, seed, fa, fb, fc);
         case "dynamic_int_result_call": return dynamicIntResultCall(count, seed, a, b, c);
         case "dynamic_int_result_fallback": return dynamicIntResultFallback(count, seed, a, b, c);
         case "dynamic_float_result_call": return dynamicFloatResultCall(count, seed, fa, fb, fc);
@@ -444,6 +491,7 @@ sub main() {
                         "optional_method_call", "polymorphic_float_call", "polymorphic_float_expression_call",
                         "monomorphic_float_call", "optional_float_method_call",
                         "boxed_float_method_call", "dynamic_int_result_call", "dynamic_int_result_fallback",
+                        "boxed_int_method_call", "boxed_int_method_fallback", "boxed_float_method_fallback",
                         "dynamic_float_result_call",
                         "dispatch_control", "list_read",
                         "list_build", "list_mutate", "temporary_list", "temporary_hash",

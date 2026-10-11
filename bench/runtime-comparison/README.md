@@ -479,6 +479,9 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |monomorphic_float_call|One unchanged exact-base floating receiver; Java retains its target call and Qore may inline the base body
 |optional_float_method_call|Same floating receiver with Qore's nullable contract; only strong non-null inputs are timed
 |boxed_float_method_call|Three auto receivers and an auto floating recurrence in Qore; Java retains native doubles and the same three non-final targets
+|boxed_int_method_call|The corresponding boxed integer recurrence; Java retains native integers and the same three non-final targets
+|boxed_int_method_fallback|Boxed integer recurrence through three methods reading non-final per-object fields, requiring real receiver context
+|boxed_float_method_fallback|The corresponding boxed floating recurrence with per-object field reads
 |dynamic_int_result_call|Three auto receivers with native integer arguments and directly converted unknown results; the native recurrence is independent of each result
 |dynamic_int_result_fallback|The same checksum through a nested forwarding method; originally a failed-native-attempt control, now eligible for independently proven forwarding entry
 |dynamic_float_result_call|Three auto receivers with a native float argument; each unknown method result is consumed directly by int conversion, with an independent native recurrence
@@ -518,7 +521,16 @@ The context-using variant delegates to the selected virtual target. Its whole-bo
 forwarding proof now admits the warmed exact inner scalar leaf without treating
 arbitrary context-using bodies as scalar leaves. It is no longer a negative
 native-admission control. Java marks both the wrapper and targets `DONT_INLINE`.
-All results are integer-exact; the full reference grid has 33 kernels and 495 rows
+The boxed integer recurrence uses the same reference as the polymorphic integer
+recurrence. Both boxed fallback kernels instead call `fieldNext()`, which reads
+non-final per-object state and cannot use the native scalar leaf entry or the
+forwarding shortcut. They measure a natural native-admission miss; disabling
+native calls alone would not model the same live dispatch checks. Fields are
+initialized outside timing and are not mutated during measurements. Java retains
+native scalars and `DONT_INLINE` on all six field-reading targets. Adding these
+fields changes benchmark object layouts, so comparisons must use fresh matched
+artifacts; previous result grids remain associated with their recorded sources.
+All results are integer-exact; the full reference grid has 36 kernels and 540 rows
 per mode. Java retains native scalar results, so these whole-workload comparisons
 include Qore's broader dynamic representation and dispatch contract.
 
