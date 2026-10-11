@@ -63,7 +63,7 @@ else()
     # dataframe module does not need libarrow.so/dylib at runtime, and bundle
     # Arrow's own dependencies (Snappy/LZ4/ZSTD/Thrift/...) so the build does
     # not require additional system packages.
-    set(QORE_ARROW_FETCH_VERSION "25.0.1")
+    qore_third_party_version(arrow QORE_ARROW_FETCH_VERSION)
     message(STATUS "Apache Arrow not installed; building from source via FetchContent (apache-arrow ${QORE_ARROW_FETCH_VERSION})")
     message(STATUS "  This adds ~5-15 minutes to the build.  Install libarrow-dev / apache-arrow to skip.")
 
@@ -124,9 +124,9 @@ else()
     set(PARQUET_BUILD_EXECUTABLES OFF CACHE BOOL "" FORCE)
     set(PARQUET_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
+    qore_third_party_source_args(arrow _qore_arrow_source)
     FetchContent_Declare(arrow
-        URL "https://archive.apache.org/dist/arrow/arrow-${QORE_ARROW_FETCH_VERSION}/apache-arrow-${QORE_ARROW_FETCH_VERSION}.tar.gz"
-        URL_HASH SHA256=43d5de0a581f43cf63a2c06b4dcf13b9ff6fcd800f023324596e5781093bc500
+        ${_qore_arrow_source}
         SOURCE_SUBDIR cpp
         ${QORE_FETCHCONTENT_URL_OPTIONS}
         ${QORE_FETCHCONTENT_EXCLUDE_FROM_ALL}

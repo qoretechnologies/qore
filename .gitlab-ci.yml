@@ -40,6 +40,22 @@ variables:
   MONGODB_URL: 'mongodb://mongodb:27017'
   QORE_TEST_OPTS: '-penable-debug'
   QORE_EXCLUDE_PERF_TESTS: "1"
+  # the build downloads the third-party source archives of cmake/third-party-sources.cmake from this mirror (the
+  # generic package registry of mirror/qore, read with the job token) before their upstream URLs
+  QORE_THIRD_PARTY_MIRROR: "${CI_API_V4_URL}/projects/mirror%2Fqore/packages/generic"
+
+# Every download of the build takes its source from cmake/third-party-sources.cmake, and the mirror has every archive
+# listed there with its pinned SHA-256
+check-third-party-sources:
+  stage: build
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  script:
+    - cmake -DQORE_THIRD_PARTY_MIRROR="${QORE_THIRD_PARTY_MIRROR}" -P cmake/QoreCheckThirdPartySources.cmake
 
 # Build stage - compile once per platform, save build/ as artifact
 build-ubuntu-amd64:

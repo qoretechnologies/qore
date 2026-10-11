@@ -186,6 +186,10 @@ include("${CMAKE_SOURCE_DIR}/cmake/QoreMacros.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/QoreMacrosIntern.cmake")
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
+# The third-party source archives that the build may download, with their pinned versions and SHA-256 checksums, are
+# listed in cmake/third-party-sources.cmake; set QORE_THIRD_PARTY_MIRROR to download them from a mirror first
+include(QoreThirdPartySources)
+
 include(CheckIncludeFiles)
 include(GNUInstallDirs)
 
@@ -663,7 +667,8 @@ endif()
 # NOT the bare ${CARES_PKG_LIBRARIES} name, so the linker resolves the exact
 # library pkg-config reports (full path + include dirs) rather than a
 # different libcares earlier in its default search path.
-set(CARES_VERSION "1.34.8")  # minimum supported version and FetchContent fallback pin
+# minimum supported version and the version of the source fallback
+qore_third_party_version(c-ares CARES_VERSION)
 set(CARES_FOUND_SYSTEM FALSE)
 pkg_check_modules(CARES_PKG QUIET IMPORTED_TARGET "libcares>=${CARES_VERSION}")
 if (CARES_PKG_FOUND)
@@ -721,9 +726,9 @@ if (NOT CARES_FOUND_SYSTEM)
     set(CARES_STATIC_PIC ON CACHE BOOL "" FORCE)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
 
+    qore_third_party_source_args(c-ares _qore_cares_source)
     FetchContent_Declare(cares
-        URL "https://github.com/c-ares/c-ares/releases/download/v${CARES_VERSION}/c-ares-${CARES_VERSION}.tar.gz"
-        URL_HASH SHA256=c222b6d681096f9444d2c4863d2c1174019e27cacca0a4a5c114d36dd7d7bf78
+        ${_qore_cares_source}
         ${QORE_FETCHCONTENT_URL_OPTIONS}
         # c-ares 1.34.7 and 1.34.8 can lose a query when a completion callback starts a new query with the
         # qid just freed, so that the lookup never completes; lib/QoreSocket.cpp also recovers from it with
@@ -1016,18 +1021,18 @@ if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
     include(ExternalProject)
     set(QORE_JEMALLOC_PREFIX ${CMAKE_BINARY_DIR}/jemalloc)
     set(QORE_JEMALLOC_STATIC_LIBRARY ${QORE_JEMALLOC_PREFIX}/lib/libjemalloc_pic.a)
-    # The source location may be overridden with a local path (e.g. a tarball vendored into a CI image) to avoid a
-    # network fetch at build time.  It must be jemalloc 5.4.0: the pinned SHA-256 below is verified whether the
-    # source is downloaded or taken from a local path, so an override cannot substitute a different tree.
-    # Refresh the previous default in existing build directories, retaining explicit local overrides.
-    if (QORE_JEMALLOC_URL STREQUAL "https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2")
+    # The source is the pinned jemalloc archive of cmake/third-party-sources.cmake.  QORE_JEMALLOC_URL may name a
+    # local path or URL of the same archive instead (e.g. a tarball vendored into a CI image) to avoid a network fetch
+    # at build time; the pinned SHA-256 is verified either way, so an override cannot substitute a different tree.
+    # Existing build directories cached the upstream URL as the default; it is not an override.
+    if (QORE_JEMALLOC_URL MATCHES "^https://github[.]com/jemalloc/jemalloc/releases/download/")
         unset(QORE_JEMALLOC_URL CACHE)
     endif()
-    set(QORE_JEMALLOC_URL "https://github.com/jemalloc/jemalloc/releases/download/5.4.0/jemalloc-5.4.0.tar.bz2"
-        CACHE STRING "URL or local path to the jemalloc 5.4.0 source tarball linked into libqore on musl targets")
+    set(QORE_JEMALLOC_URL "" CACHE STRING
+        "Local path or URL of the pinned jemalloc source archive, instead of the mirror or upstream source")
+    qore_third_party_source_args(jemalloc _qore_jemalloc_source OVERRIDE "${QORE_JEMALLOC_URL}")
     ExternalProject_Add(jemalloc_ext
-        URL ${QORE_JEMALLOC_URL}
-        URL_HASH SHA256=200776fac271093e7c2f21edd6d62657ecd2be578d9328633f2a86bfa6ef4f1d
+        ${_qore_jemalloc_source}
         ${QORE_FETCHCONTENT_URL_OPTIONS}
         PREFIX ${QORE_JEMALLOC_PREFIX}
         CONFIGURE_COMMAND <SOURCE_DIR>/configure
@@ -1111,7 +1116,7 @@ endif()
 # previously produced "undefined reference to nghttp2_session_mem_send2"
 # (Http2Session.cpp selects the API by the compile-time NGHTTP2_VERSION_NUM,
 # so a header/library skew only surfaced at link time).
-set(NGHTTP2_VERSION "1.70.0")
+qore_third_party_version(nghttp2 NGHTTP2_VERSION)
 set(NGHTTP2_FOUND_SYSTEM FALSE)
 pkg_check_modules(NGHTTP2_PKG QUIET IMPORTED_TARGET "libnghttp2>=${NGHTTP2_VERSION}")
 if (NGHTTP2_PKG_FOUND)
@@ -1182,9 +1187,9 @@ if (NOT NGHTTP2_FOUND_SYSTEM)
     # Static lib linked into libqore.so needs -fPIC
     set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
 
+    qore_third_party_source_args(nghttp2 _qore_nghttp2_source)
     FetchContent_Declare(nghttp2
-        URL "https://github.com/nghttp2/nghttp2/releases/download/v${NGHTTP2_VERSION}/nghttp2-${NGHTTP2_VERSION}.tar.xz"
-        URL_HASH SHA256=e05cb1388eaca3830aded4ccf20044b6e1ac1a61411dcca11b0437c4285c8bc2
+        ${_qore_nghttp2_source}
         ${QORE_FETCHCONTENT_URL_OPTIONS}
         # Patch out the unconditional 'check' target to avoid duplicate-target
         # errors when ngtcp2/nghttp3 are also fetched.
@@ -1254,8 +1259,8 @@ endif()
 # QUIC/HTTP/3 support via ngtcp2 + nghttp3
 # Try system packages first (pkg-config, then cmake find); fall back to
 # building from source via FetchContent when not installed.
-set(NGTCP2_VERSION "1.25.0")
-set(NGHTTP3_VERSION "1.18.0")
+qore_third_party_version(ngtcp2 NGTCP2_VERSION)
+qore_third_party_version(nghttp3 NGHTTP3_VERSION)
 
 set(QUIC_FOUND_SYSTEM FALSE)
 # Consume the pkg-config IMPORTED_TARGETs (PkgConfig::*), NOT the bare
@@ -1362,9 +1367,9 @@ if (NOT QUIC_FOUND_SYSTEM)
 
     # --- nghttp3 (must come before ngtcp2) ---
     # Patch out the unconditional 'check' target that conflicts in multi-FetchContent builds
+    qore_third_party_source_args(nghttp3 _qore_nghttp3_source)
     FetchContent_Declare(nghttp3
-        URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
-        URL_HASH SHA256=aad782c23d3f01bd4bb52c8bac7a553b631ef8115fd1612703df6183449fef19
+        ${_qore_nghttp3_source}
         ${QORE_FETCHCONTENT_URL_OPTIONS}
         PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
         ${QORE_FETCHCONTENT_EXCLUDE_FROM_ALL}
@@ -1374,9 +1379,9 @@ if (NOT QUIC_FOUND_SYSTEM)
     # --- ngtcp2 (with OpenSSL crypto backend) ---
     set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
     set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
+    qore_third_party_source_args(ngtcp2 _qore_ngtcp2_source)
     FetchContent_Declare(ngtcp2
-        URL "https://github.com/ngtcp2/ngtcp2/releases/download/v${NGTCP2_VERSION}/ngtcp2-${NGTCP2_VERSION}.tar.xz"
-        URL_HASH SHA256=2a34d2484ba17847a5d11965704e9dd0fac4c6d8efc75ffe1ec7de66d8c6b6fb
+        ${_qore_ngtcp2_source}
         ${QORE_FETCHCONTENT_URL_OPTIONS}
         PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
         ${QORE_FETCHCONTENT_EXCLUDE_FROM_ALL}

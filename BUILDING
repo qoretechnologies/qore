@@ -123,7 +123,8 @@ Then install the tree-sitter CLI: cargo install tree-sitter-cli@0.26.5
 	https://tree-sitter.github.io/tree-sitter/
 Optional; only needed when regenerating the Qore grammar parser sources for the astparser module.
 Pre-generated parser sources are included in the source tree and are used by the CMake build by default.
-The tree-sitter C runtime library is fetched automatically by CMake at build time.
+The tree-sitter C runtime library is downloaded by CMake at build time when it is not installed
+(see "Downloaded Dependency Sources" below).
 Install with: cargo install tree-sitter-cli@0.26.5
 
 CMAKE Build
@@ -142,6 +143,27 @@ the directory), Qore moves the directory to CMakeFiles/pkgRedirects.stale-<suffi
 path, and creates an empty redirect directory. This prevents false package matches such as
 Boost being reported as found while Arrow cannot link Boost::headers. If the parent directory
 is also unwritable, configuration stops with a permissions diagnostic.
+
+
+Downloaded Dependency Sources
+-----------------------------
+
+When a dependency is not installed (or is older than the required version), the build downloads
+its source archive and builds it: c-ares, nghttp2, ngtcp2 and nghttp3, the tree-sitter runtime,
+Apache Arrow for the dataframe module, and jemalloc on musl targets.  Every archive is listed
+once, with its version, upstream URL and SHA-256, in cmake/third-party-sources.cmake; the
+SHA-256 is verified whichever source is used.  That file also describes how to add an archive
+or bump its version.  Use -DQORE_REQUIRE_SYSTEM_DEPENDENCIES=ON to fail instead of downloading.
+
+-DQORE_THIRD_PARTY_MIRROR=<base URL> (or the QORE_THIRD_PARTY_MIRROR environment variable)
+makes the build download each archive from <base URL>/<name>/<version>/<file> first, and from
+upstream only when the mirror cannot provide it.  Qore's CI uses the package registry of its
+GitLab project; there the job token is sent to the mirror, and QORE_THIRD_PARTY_MIRROR_TOKEN
+can provide a GitLab access token elsewhere.  The token is sent only to the mirror.
+
+cmake -P cmake/QoreCheckThirdPartySources.cmake checks that every download in the build takes
+its source from cmake/third-party-sources.cmake; with -DQORE_THIRD_PARTY_MIRROR=<base URL>, it
+also checks that the mirror has every archive with its pinned SHA-256.
 
 
 Documentation Without Java Bindings

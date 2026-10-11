@@ -1,0 +1,555 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires HttpServer
+%requires HttpServerUtil
+%requires Logger
+
+%exec-class ThirdPartySourcesTest
+
+#! A request received by the fixture server
+hashdecl ThirdPartySourcesRequest {
+    string path;
+    hash<auto> headers;
+}
+
+#! The result of a cmake run
+hashdecl ThirdPartySourcesCmakeResult {
+    #! the exit code
+    int rc;
+    #! the output, with whitespace collapsed
+    string output;
+    #! the build directory of a configuration
+    *string build_dir;
+}
+
+#! Serves archives as a mirror (/mirror/...) and as upstream (/upstream/...), and records the requests
+class ThirdPartySourcesHandler inherits AbstractHttpRequestHandler {
+    private {
+        Mutex lck();
+        list<hash<ThirdPartySourcesRequest>> requests;
+        #! path -> response body; a path not listed is not found
+        hash<string, binary> files;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        AutoLock al(lck);
+        requests += <ThirdPartySourcesRequest>{"path": cx.raw_path, "headers": hdr};
+        *binary file = files{cx.raw_path};
+        if (exists file) {
+            return makeResponse({"Content-Type": "application/octet-stream"}, 200, file);
+        }
+        return makeResponse(404, "not found");
+    }
+
+    #! Sets the files served and forgets the requests
+    reset(hash<string, binary> files) {
+        AutoLock al(lck);
+        self.files = files;
+        requests = ();
+    }
+
+    list<hash<ThirdPartySourcesRequest>> getRequests() {
+        AutoLock al(lck);
+        return requests;
+    }
+}
+
+#! cmake/QoreThirdPartySources.cmake and cmake/QoreCheckThirdPartySources.cmake
+/** Every download of the build takes its source from the manifest (cmake/third-party-sources.cmake); with a mirror,
+    the build takes each archive from the mirror before its upstream URL, verifies the pinned SHA-256 whichever source
+    it uses, and sends the mirror's token only to the mirror
+*/
+class ThirdPartySourcesTest inherits QUnit::Test {
+    private {
+        *string cmake;
+        string cmake_dir;
+        *string skip;
+        TmpDir tmp();
+        HttpServer server;
+        ThirdPartySourcesHandler handler();
+        string base_url;
+        #! the fixture archive and another archive
+        binary archive;
+        binary other_archive;
+        string archive_sha256;
+        #! the project that fetches the fixture archive
+        *string project;
+        #! a token that must reach only the mirror
+        string token = "qore-tp-token-" + get_random_string(24);
+    }
+
+    constructor() : QUnit::Test("QoreThirdPartySources", "1.0", \ARGV) {
+        cmake_dir = normalize_dir(get_script_dir() + "/../../../../cmake");
+        addTestCase("the build's downloads", \buildTreeTest());
+        addTestCase("downloads that do not take their source from the manifest", \staticCheckTest());
+        addTestCase("the manifest", \manifestTest());
+        addTestCase("the mirror check", \mirrorCheckTest());
+        addTestCase("sources at configuration time", \configureTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        cmake = ENV.CMAKE_COMMAND ?? findCmake();
+        if (!cmake) {
+            skip = "cmake is not available";
+            return;
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("third-party-sources", LoggerLevel::ERROR),
+        });
+        server.setDefaultHandler("fixture", handler);
+        base_url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+        }).port);
+        archive = makeArchive("fx-1.0", "the fixture archive");
+        other_archive = makeArchive("fx-1.0", "another archive");
+        archive_sha256 = SHA256(archive);
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    #! Returns the cmake executable in PATH, if any
+    private static *string findCmake() {
+        foreach string dir in (ENV.PATH.split(":")) {
+            if (is_executable(dir + "/cmake")) {
+                return dir + "/cmake";
+            }
+        }
+    }
+
+    #! Quotes an argument for the shell
+    private static string shell_quote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    #! Returns a tar.gz archive of a directory <top> with hello.txt
+    private binary makeArchive(string top, string content) {
+        string dir = tmp.path + "/archive-" + get_random_string();
+        mkdir(dir + "/" + top, 0755, True);
+        File f();
+        f.open2(dir + "/" + top + "/hello.txt", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(content);
+        f.close();
+        string file = dir + "/" + top + ".tar.gz";
+        string cmd = sprintf("cd %s && %s -E tar czf %s %s", shell_quote(dir), shell_quote(cmake), shell_quote(file),
+            shell_quote(top));
+        if (system(cmd)) {
+            throw "FIXTURE-ERROR", sprintf("cannot create the archive: %s", cmd);
+        }
+        return ReadOnlyFile::readBinaryFile(file);
+    }
+
+    #! Runs cmake; returns its exit code and its output
+    /** @param args the arguments of cmake
+        @param token the CI job token in cmake's environment, if any
+
+        QORE_THIRD_PARTY_MIRROR and QORE_THIRD_PARTY_MIRROR_TOKEN are removed from the environment (CI sets the first)
+    */
+    private hash<ThirdPartySourcesCmakeResult> run(list<string> args, *string token) {
+        string out = tmp.path + "/cmake-" + get_random_string() + ".log";
+        string env = "env -u QORE_THIRD_PARTY_MIRROR -u QORE_THIRD_PARTY_MIRROR_TOKEN -u CI_JOB_TOKEN "
+            "no_proxy=127.0.0.1 NO_PROXY=127.0.0.1";
+        if (token) {
+            env += " CI_JOB_TOKEN=" + shell_quote(token);
+        }
+        string cmd = sprintf("%s %s %s > %s 2>&1", env, shell_quote(cmake), (foldl $1 + " " + $2,
+            map shell_quote($1), args), shell_quote(out));
+        int rc = system(cmd);
+        string output = ReadOnlyFile::readTextFile(out);
+        unlink(out);
+        # CMake wraps its messages
+        output =~ s/\s+/ /g;
+        return <ThirdPartySourcesCmakeResult>{"rc": rc, "output": output};
+    }
+
+    #! Writes files below a new directory and returns the directory
+    private string makeTree(hash<string, string> files) {
+        string dir = tmp.path + "/tree-" + get_random_string();
+        foreach hash<auto> i in (files.pairIterator()) {
+            string path = dir + "/" + i.key;
+            mkdir(dirname(path), 0755, True);
+            File f();
+            f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(i.value);
+            f.close();
+        }
+        return dir;
+    }
+
+    #! Returns a manifest entry
+    private static string entry(string name, string version, string sha256, string url) {
+        return sprintf("qore_third_party_source(%s %s\n    SHA256 %s\n    URL \"%s\")\n", name, version, sha256, url);
+    }
+
+    #! Runs the check on a tree with a manifest (manifest.cmake) and returns the result
+    private hash<ThirdPartySourcesCmakeResult> checkTree(string dir, *string mirror, *string token) {
+        list<string> args = ("-DQORE_SOURCE_DIR=" + dir, "-DQORE_THIRD_PARTY_SOURCES_FILE=" + dir + "/manifest.cmake");
+        if (mirror) {
+            args += "-DQORE_THIRD_PARTY_MIRROR=" + mirror;
+        }
+        args += ("-P", cmake_dir + "/QoreCheckThirdPartySources.cmake");
+        return run(args, token);
+    }
+
+    #! Runs the check on the source tree
+    buildTreeTest() {
+        if (skip) {
+            testSkip(skip);
+        }
+        hash<ThirdPartySourcesCmakeResult> r = run(("-P", cmake_dir + "/QoreCheckThirdPartySources.cmake"));
+        assertEq(0, r.rc, r.output);
+        assertRegex("third-party sources: [1-9][0-9]* archives in the manifest; [1-9][0-9]* download declarations in "
+            "[1-9][0-9]* files take their source from it", r.output);
+        # the source tree has no other download
+        assertNRegex("CMake Error", r.output);
+    }
+
+    #! Downloads that name their source themselves
+    staticCheckTest() {
+        if (skip) {
+            testSkip(skip);
+        }
+        string manifest = entry("fx", "1.0", archive_sha256, "https://example.invalid/fx-{version}.tar.gz");
+        string good = "include(FetchContent)\n"
+            "qore_third_party_source_args(fx _src)\n"
+            "# FetchContent_Declare(old URL \"https://example.invalid/old-1.0.tar.gz\")\n"
+            "message(STATUS \"no URL or GIT_REPOSITORY here: https://example.invalid/doc.tar.gz.html\")\n"
+            "file(READ \"${CMAKE_CURRENT_LIST_FILE}\" _text)\n"
+            "fetchcontent_declare(fx\n    ${_src}\n    SOURCE_SUBDIR \"sub (dir)\"\n)\n";
+
+        # a tree whose downloads take their source from the manifest
+        hash<ThirdPartySourcesCmakeResult> r = checkTree(makeTree({"manifest.cmake": manifest, "CMakeLists.txt": good}));
+        assertEq(0, r.rc, r.output);
+        assertRegex("1 archives in the manifest; 1 download declarations in 2 files", r.output);
+
+        # a build tree is not checked
+        r = checkTree(makeTree({"manifest.cmake": manifest, "CMakeLists.txt": good,
+            "build/CMakeCache.txt": "",
+            "build/_deps/x-src/CMakeLists.txt": "FetchContent_Declare(x URL ${u})\n",
+            "other/build/CMakeCache.txt": "",
+            "other/build/sub/x.cmake": "file(DOWNLOAD ${u} x)\n",
+            "_deps/y/CMakeLists.txt": "ExternalProject_Add(y GIT_REPOSITORY ${r})\n"}));
+        assertEq(0, r.rc, r.output);
+
+        # each line is a CMakeLists.txt and the error it causes
+        list<list<string>> cases = (
+            ("FetchContent_Declare(x\n    URL ${u}\n    URL_HASH SHA256=${h}\n)\n",
+                "CMakeLists.txt:1: FetchContent_Declare\\(\\) names its source \\(URL\\)"),
+            ("\n\nFetchContent_Declare(x GIT_REPOSITORY ${r} GIT_TAG v1)\n",
+                "CMakeLists.txt:3: FetchContent_Declare\\(\\) names its source \\(GIT_REPOSITORY\\)"),
+            ("FetchContent_Populate(x SVN_REPOSITORY ${r})\n",
+                "CMakeLists.txt:1: FetchContent_Populate\\(\\) names its source \\(SVN_REPOSITORY\\)"),
+            ("ExternalProject_Add(x URL ${u})\n",
+                "CMakeLists.txt:1: ExternalProject_Add\\(\\) names its source \\(URL\\)"),
+            ("externalproject_add(x\n    DOWNLOAD_COMMAND curl -O ${u}\n)\n",
+                "CMakeLists.txt:1: externalproject_add\\(\\) names its source \\(DOWNLOAD_COMMAND\\)"),
+            ("file(MAKE_DIRECTORY x)\nfile(\n    DOWNLOAD ${u} x/y)\n",
+                "CMakeLists.txt:2: file\\(DOWNLOAD\\) outside QoreThirdPartySources.cmake"),
+            ("set(_u \"https://example.invalid/x-1.0.tar.xz\")\n",
+                "CMakeLists.txt:1: archive URL outside manifest.cmake: \"https://example.invalid/x-1.0.tar.xz\""),
+            ("qore_third_party_source_args(nope _src)\n",
+                "CMakeLists.txt:1: qore_third_party_source_args\\(nope\\): nope is not listed in manifest.cmake"),
+            ("qore_third_party_version(nope _v)\n",
+                "CMakeLists.txt:1: qore_third_party_version\\(nope\\): nope is not listed in manifest.cmake"),
+            # an escaped quote does not end a string
+            ("message(STATUS \"say \\\"hi (\")\nFetchContent_Declare(x URL ${u})\n",
+                "CMakeLists.txt:2: FetchContent_Declare\\(\\) names its source \\(URL\\)"),
+            # a long string (CMakeLists.txt has one of 27 kB)
+            ("set(_x \"" + strmul("y", 300000) + " \\\"z\\\" (\")\nFetchContent_Declare(x URL ${u})\n",
+                "CMakeLists.txt:2: FetchContent_Declare\\(\\) names its source \\(URL\\)"),
+        );
+        foreach list<string> c in (cases) {
+            r = checkTree(makeTree({"manifest.cmake": manifest, "CMakeLists.txt": good,
+                "sub/CMakeLists.txt": c[0]}));
+            assertNeq(0, r.rc, c[0]);
+            assertRegex("sub/" + c[1], r.output, c[0]);
+            # the other errors are not reported for this tree
+            assertNRegex("sub/CMakeLists.txt:[0-9]+:.*sub/CMakeLists.txt:[0-9]+:", r.output, c[0]);
+        }
+
+        # an archive of the manifest that the build does not use
+        r = checkTree(makeTree({"manifest.cmake": manifest
+            + entry("unused", "2.0", archive_sha256, "https://example.invalid/unused-{version}.tar.gz"),
+            "CMakeLists.txt": good}));
+        assertNeq(0, r.rc);
+        assertRegex("manifest.cmake: unused is not used by the build", r.output);
+        assertNRegex("fx is not used", r.output);
+    }
+
+    #! Manifest entries that are not valid
+    manifestTest() {
+        if (skip) {
+            testSkip(skip);
+        }
+        string use = "qore_third_party_source_args(fx _src)\n";
+        list<list<string>> cases = (
+            (entry("fx", "1.0", archive_sha256[0..62], "https://example.invalid/fx.tar.gz"),
+                "fx: SHA256 must be 64 lowercase hex digits"),
+            (entry("fx", "1.0", archive_sha256.upr(), "https://example.invalid/fx.tar.gz"),
+                "fx: SHA256 must be 64 lowercase hex digits"),
+            (entry("fx", "1 0", archive_sha256, "https://example.invalid/fx.tar.gz"), "unexpected arguments"),
+            (entry("fx", "1.0", archive_sha256, "https://example.invalid/fx.tar.gz?x=1"),
+                "fx: URL must be the URL of an archive file, without a query"),
+            (entry("fx", "1.0", archive_sha256, "https://example.invalid/fx/"),
+                "fx: URL must be the URL of an archive file, without a query"),
+            (entry("fx", "1.0", archive_sha256, "https://example.invalid/fx.tar.gz")
+                + entry("fx", "1.1", archive_sha256, "https://example.invalid/fx.tar.gz"), "fx: listed twice"),
+            # the check requires upstream URLs to use https
+            (entry("fx", "1.0", archive_sha256, "http://example.invalid/fx-{version}.tar.gz"),
+                "fx 1.0: the upstream URL must use https: http://example.invalid/fx-1.0.tar.gz"),
+        );
+        foreach list<string> c in (cases) {
+            hash<ThirdPartySourcesCmakeResult> r = checkTree(makeTree({"manifest.cmake": c[0], "CMakeLists.txt": use}));
+            assertNeq(0, r.rc, c[0]);
+            assertRegex(c[1], r.output, c[0]);
+        }
+    }
+
+    #! Returns a tree with a manifest of one archive whose upstream is the fixture server
+    private string mirroredTree() {
+        return makeTree({
+            "manifest.cmake": entry("fx", "1.0", archive_sha256, "https://example.invalid/fx-{version}.tar.gz"),
+            "CMakeLists.txt": "qore_third_party_source_args(fx _src)\nFetchContent_Declare(fx ${_src})\n",
+        });
+    }
+
+    #! Asserts that the token is in no request but those to the mirror, and only as the job token header
+    private assertTokenOnlyToMirror(list<hash<ThirdPartySourcesRequest>> requests, *string output, *string dir) {
+        foreach hash<ThirdPartySourcesRequest> req in (requests) {
+            if (req.path =~ /^\/mirror\//) {
+                assertEq(token, req.headers."job-token", req.path);
+                assertEq(1, (select req.headers.values(), $1 =~ /qore-tp-token-/).size(), req.path);
+            } else {
+                assertEq(NOTHING, req.headers."job-token", req.path);
+                assertEq(0, (select req.headers.values(), $1 =~ /qore-tp-token-/).size(), req.path);
+            }
+        }
+        if (output) {
+            assertEq(-1, output.find(token));
+        }
+        if (dir) {
+            assertEq((), filesWithToken(dir));
+        }
+    }
+
+    #! Returns the files below <dir> that contain the token
+    private list<string> filesWithToken(string dir) {
+        list<string> rv = ();
+        Dir d();
+        d.chdir(dir);
+        foreach string f in (d.listFiles()) {
+            if (ReadOnlyFile::readBinaryFile(dir + "/" + f).toString("ISO-8859-1").find(token) >= 0) {
+                rv += dir + "/" + f;
+            }
+        }
+        foreach string subdir in (d.listDirs()) {
+            rv += filesWithToken(dir + "/" + subdir);
+        }
+        return rv;
+    }
+
+    #! The mirror check
+    mirrorCheckTest() {
+        if (skip) {
+            testSkip(skip);
+        }
+        string dir = mirroredTree();
+        string mirror = base_url + "/mirror";
+
+        # the mirror has the archive
+        handler.reset({"/mirror/fx/1.0/fx-1.0.tar.gz": archive});
+        hash<ThirdPartySourcesCmakeResult> r = checkTree(dir, mirror, token);
+        assertEq(0, r.rc, r.output);
+        assertRegex("fx 1.0: the mirror has fx-1.0.tar.gz with the pinned SHA-256", r.output);
+        assertRegex("1 archives in the manifest, all in the mirror", r.output);
+        list<hash<ThirdPartySourcesRequest>> requests = handler.getRequests();
+        assertEq(("/mirror/fx/1.0/fx-1.0.tar.gz",), map $1.path, requests);
+        assertTokenOnlyToMirror(requests, r.output);
+
+        # the mirror has no entry
+        handler.reset({});
+        r = checkTree(dir, mirror, token);
+        assertNeq(0, r.rc);
+        assertRegex("fx 1.0: not available from the mirror \\(HTTP response code said error: no entry, or no "
+            "access\\): " + mirror + "/fx/1.0/fx-1.0.tar.gz: upload it", r.output);
+        assertTokenOnlyToMirror(handler.getRequests(), r.output);
+
+        # the mirror has another archive
+        handler.reset({"/mirror/fx/1.0/fx-1.0.tar.gz": other_archive});
+        r = checkTree(dir, mirror, token);
+        assertNeq(0, r.rc);
+        assertRegex("fx 1.0: the mirror's " + mirror + "/fx/1.0/fx-1.0.tar.gz has SHA-256 " + SHA256(other_archive)
+            + ", manifest.cmake pins " + archive_sha256, r.output);
+        assertTokenOnlyToMirror(handler.getRequests(), r.output);
+
+        # a mirror set but empty
+        r = run(("-DQORE_THIRD_PARTY_MIRROR=", "-P", cmake_dir + "/QoreCheckThirdPartySources.cmake"));
+        assertNeq(0, r.rc);
+        assertRegex("QORE_THIRD_PARTY_MIRROR is set but empty", r.output);
+    }
+
+    #! Configures a project that fetches the fixture archive; returns the result and the build directory
+    private hash<ThirdPartySourcesCmakeResult> configure(string manifest_dir, list<string> args, *string token, *string build_dir) {
+        if (!project) {
+            project = makeTree({"CMakeLists.txt": "cmake_minimum_required(VERSION 3.14)\n"
+                "project(fx NONE)\n"
+                "set(QORE_THIRD_PARTY_SOURCES_FILE \"${FX_MANIFEST}\")\n"
+                "include(\"${QORE_CMAKE_DIR}/QoreThirdPartySources.cmake\")\n"
+                "include(FetchContent)\n"
+                "if (DEFINED FX_OVERRIDE)\n"
+                "    qore_third_party_source_args(fx _src OVERRIDE \"${FX_OVERRIDE}\")\n"
+                "else()\n"
+                "    qore_third_party_source_args(fx _src)\n"
+                "endif()\n"
+                "set(_ts)\n"
+                "if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)\n"
+                "    set(_ts DOWNLOAD_EXTRACT_TIMESTAMP FALSE)\n"
+                "endif()\n"
+                "FetchContent_Declare(fx ${_src} ${_ts})\n"
+                "FetchContent_MakeAvailable(fx)\n"
+                "file(READ \"${fx_SOURCE_DIR}/hello.txt\" _hello)\n"
+                "message(STATUS \"FX-CONTENT: ${_hello}\")\n"});
+        }
+        string dir = build_dir ?? tmp.path + "/build-" + get_random_string();
+        hash<ThirdPartySourcesCmakeResult> r = run(("-S", project, "-B", dir, "-DQORE_CMAKE_DIR=" + cmake_dir,
+            "-DFX_MANIFEST=" + manifest_dir + "/manifest.cmake") + args, token);
+        r.build_dir = dir;
+        # the configuration is free of warnings
+        assertNRegex("CMake Warning", r.output);
+        return r;
+    }
+
+    #! Returns a tree with a manifest of one archive whose upstream is the fixture server
+    private string upstreamTree() {
+        return makeTree({
+            "manifest.cmake": entry("fx", "1.0", archive_sha256, base_url + "/upstream/fx-{version}.tar.gz"),
+        });
+    }
+
+    #! Sources at configuration time
+    configureTest() {
+        if (skip) {
+            testSkip(skip);
+        }
+        string dir = upstreamTree();
+        string mirror_arg = "-DQORE_THIRD_PARTY_MIRROR=" + base_url + "/mirror";
+        string mirror_path = "/mirror/fx/1.0/fx-1.0.tar.gz";
+        string upstream_path = "/upstream/fx-1.0.tar.gz";
+
+        # the mirror has the archive: upstream is not used
+        handler.reset({mirror_path: archive, upstream_path: archive});
+        hash<ThirdPartySourcesCmakeResult> r = configure(dir, (mirror_arg,), token);
+        assertEq(0, r.rc, r.output);
+        assertRegex("fx 1.0: source fetched from the mirror \\(SHA-256 verified\\): " + base_url + mirror_path,
+            r.output);
+        assertRegex("FX-CONTENT: the fixture archive", r.output);
+        list<hash<ThirdPartySourcesRequest>> requests = handler.getRequests();
+        assertEq((mirror_path,), map $1.path, requests);
+        assertTokenOnlyToMirror(requests, r.output, r.build_dir);
+
+        # configuring again uses the verified copy
+        handler.reset({mirror_path: archive, upstream_path: archive});
+        r = configure(dir, (mirror_arg,), token, r.build_dir);
+        assertEq(0, r.rc, r.output);
+        assertEq((), handler.getRequests());
+
+        # the mirror has no entry: upstream is used, without the token
+        handler.reset({upstream_path: archive});
+        r = configure(dir, (mirror_arg,), token);
+        assertEq(0, r.rc, r.output);
+        assertRegex("fx 1.0: not available from the mirror \\(HTTP response code said error\\): " + base_url
+            + mirror_path + "; using the upstream source", r.output);
+        assertRegex("FX-CONTENT: the fixture archive", r.output);
+        requests = handler.getRequests();
+        assertEq((mirror_path, upstream_path), map $1.path, requests);
+        assertTokenOnlyToMirror(requests, r.output, r.build_dir);
+
+        # the mirror cannot be reached: upstream is used, without the token
+        Socket s();
+        s.bind("127.0.0.1:0");
+        int closed_port = s.getSocketInfo().port;
+        s.close();
+        handler.reset({upstream_path: archive});
+        r = configure(dir, ("-DQORE_THIRD_PARTY_MIRROR=http://127.0.0.1:" + closed_port + "/mirror",), token);
+        assertEq(0, r.rc, r.output);
+        assertRegex("fx 1.0: not available from the mirror \\(.*\\): http://127.0.0.1:" + closed_port
+            + "/mirror/fx/1.0/fx-1.0.tar.gz; using the upstream source", r.output);
+        assertRegex("FX-CONTENT: the fixture archive", r.output);
+        requests = handler.getRequests();
+        assertEq((upstream_path,), map $1.path, requests);
+        assertTokenOnlyToMirror(requests, r.output, r.build_dir);
+
+        # the mirror has another archive: the configuration fails, and upstream is not used
+        handler.reset({mirror_path: other_archive, upstream_path: archive});
+        r = configure(dir, (mirror_arg,), token);
+        assertNeq(0, r.rc);
+        assertRegex("fx 1.0: the mirror's " + base_url + mirror_path + " has SHA-256 " + SHA256(other_archive)
+            + "; .*manifest.cmake pins " + archive_sha256, r.output);
+        requests = handler.getRequests();
+        assertEq((mirror_path,), map $1.path, requests);
+        assertTokenOnlyToMirror(requests, r.output, r.build_dir);
+
+        # no mirror: upstream only, without the token
+        handler.reset({mirror_path: archive, upstream_path: archive});
+        r = configure(dir, ("-DQORE_THIRD_PARTY_MIRROR=",), token);
+        assertEq(0, r.rc, r.output);
+        assertNRegex("mirror", r.output);
+        assertRegex("FX-CONTENT: the fixture archive", r.output);
+        requests = handler.getRequests();
+        assertEq((upstream_path,), map $1.path, requests);
+        assertTokenOnlyToMirror(requests, r.output, r.build_dir);
+
+        # no mirror, and upstream has another archive: the pinned SHA-256 fails the configuration
+        handler.reset({upstream_path: other_archive});
+        r = configure(dir, ("-DQORE_THIRD_PARTY_MIRROR=",), token);
+        assertNeq(0, r.rc);
+        assertRegex("(?i)hash mismatch", r.output);
+        assertRegex(archive_sha256, r.output);
+
+        # an override is the only source, and its SHA-256 is verified
+        string override = tmp.path + "/override-fx-1.0.tar.gz";
+        {
+            File f();
+            f.open2(override, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(archive);
+            f.close();
+        }
+        handler.reset({mirror_path: archive, upstream_path: archive});
+        r = configure(dir, (mirror_arg, "-DFX_OVERRIDE=" + override), token);
+        assertEq(0, r.rc, r.output);
+        assertRegex("FX-CONTENT: the fixture archive", r.output);
+        assertEq((), handler.getRequests());
+        {
+            File f();
+            f.open2(override, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(other_archive);
+            f.close();
+        }
+        r = configure(dir, (mirror_arg, "-DFX_OVERRIDE=" + override), token);
+        assertNeq(0, r.rc);
+        assertRegex("SHA256 hash of .*override-fx-1.0.tar.gz does not match expected value expected: '"
+            + archive_sha256 + "'", r.output);
+        assertEq((), handler.getRequests());
+
+        # an empty override is no override
+        handler.reset({mirror_path: archive, upstream_path: archive});
+        r = configure(dir, (mirror_arg, "-DFX_OVERRIDE="), token);
+        assertEq(0, r.rc, r.output);
+        assertEq((mirror_path,), map $1.path, handler.getRequests());
+    }
+}
