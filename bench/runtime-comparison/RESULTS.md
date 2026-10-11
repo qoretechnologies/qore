@@ -9867,3 +9867,86 @@ data. Next: enter this proven forwarding path directly from the typed native hel
 reusing RuntimeConfig and native arguments/results while preserving all logical frames
 and effect-free fallback. Fetch/merge upstream after this audited commit first.
 [Full evidence, reproduction and all 62 audit items](results-forward-leaf-preflight-macos-arm64.json).
+
+
+## Native forwarding continuation and borrowed configuration (2026-10-11)
+
+Baseline is merged commit 958c12ae9. The typed integer method helper now enters
+the independently proven forwarding path directly, passing the existing RuntimeConfig
+and native int64_t argument/result. This avoids a failed native attempt followed by
+generic dispatch, argument/result boxing and another TLS capture. The boxed adapter
+shares execution but keeps its immediate-input and cleanup contract. Both retain the
+full inner dispatch proof, two logical frames and cold exception materialization.
+
+The earlier preflight copied RuntimeConfig, whose copy constructor allocates Impl.
+That copy is now a reference. The earlier audit incorrectly described the path as
+allocation-free; its correction is retained. Wider boxed results may still allocate.
+
+Three-fork main, five-fork same-binary routing control; three warmups and five
+500 ms windows, count 4096, shuffled scheduling. The ABI/runtime identity is unchanged,
+so paired before/after uses one identical AOT artifact with separately frozen libraries.
+The flag control uses the same artifact AND library; it isolates native routing only,
+not removal of the old allocating copy. Builds/tests/profiles/inspection do not overlap
+timing. Values are medians of fork means, ns/element; positive reduction means faster.
+
+|!Workload|!Before|!After|!Time reduction|!Java JIT|!After / Java
+|dynamic_int_result_fallback|59.027843|23.269027|60.580%|3.013477|7.722x
+|dynamic_int_result_call|10.047448|10.487848|-4.383%|3.100398|3.383x
+|dynamic_float_result_call|11.032037|11.221815|-1.720%|3.476903|3.228x
+|boxed_float_method_call|60.749087|60.398807|0.577%|2.566619|23.532x
+|indirect_int_result|6.945575|6.954222|-0.124%|1.892215|3.675x
+|indirect_float_result|8.794219|8.805536|-0.129%|2.749152|3.203x
+|polymorphic_expression_call|10.169334|10.201679|-0.318%|2.369888|4.305x
+|polymorphic_float_expression_call|10.513554|10.180045|3.172%|2.555440|3.984x
+|method_call|1.518751|1.521853|-0.204%|0.903918|1.684x
+|monomorphic_call|3.446278|3.446731|-0.013%|1.668025|2.066x
+|arithmetic|1.450979|1.451730|-0.052%|0.890629|1.630x
+
+Native-routing-only control:
+
+|!Workload|!Disabled|!Enabled|!Time reduction
+|dynamic_int_result_fallback|47.647467|23.230635|51.245%
+|indirect_int_result|6.958255|6.961626|-0.048%
+|monomorphic_call|3.419567|3.406445|0.384%
+
+IR interpreter comparison:
+
+|!Workload|!Before|!After|!Time reduction
+|dynamic_int_result_fallback|1326.711943|1345.847776|-1.442%
+|boxed_float_method_call|752.180156|755.959575|-0.502%
+
+Five-fork adverse-result repeat (new shuffle seed 826037):
+
+|!Workload|!Before|!After|!Time reduction
+|dynamic_int_result_fallback|59.284275|23.133280|60.979%
+|dynamic_int_result_call|10.196505|10.328876|-1.298%
+|dynamic_float_result_call|11.000989|11.121670|-1.097%
+|indirect_int_result|7.006467|7.001884|0.065%
+
+The non-forwarding dynamic integer median regressed 4.383% in the main batch
+and 1.298% in the independent five-fork repeat; floating results regressed
+1.720% and 1.097%. Observed fork ranges overlap in both batches, but the
+repeated adverse direction is retained as a possible small regression, not
+dismissed as noise. The forwarding gain repeats at 60.979%, while the integer
+callback control is effectively unchanged. This is accepted as a targeted
+forwarding improvement with those explicit limitations, not an all-call win.
+
+The main forwarding improvement is 60.580% and the native-routing-only
+control is 51.245%, both with separated observed fork ranges. Screening
+found 60.419%/51.305% reductions. All adverse medians and outliers remain in the
+evidence: 247 jobs / 1235 measurement windows. These are whole workloads,
+not isolated call latency or proof of Java parity. Any IR deltas require separate
+interpretation; the new route admits only AOT-proven forwarding leaves.
+
+Qualification covers 103 files per release/debug, seven additional stack/exception
+fixtures per build, 153 debug native checks, 15 harness tests and 495 references per
+mode. The direct native probes test full-width integers, strong/opaque/deleted/weak
+receiver behavior, body/map readiness, dispatch epoch invalidation and independent
+RuntimeConfig snapshot restoration through forced exceptions. Existing private,
+reflective, cross-Program and concurrent reader/publication tests remain.
+
+A separate 10-second/1 ms profile (concurrent debug qualification, no timing jobs)
+shows remaining forwarding validation, class-access normalization and frame traffic.
+Next evaluate moving immutable checks to binding/initial admission, then examine boxed
+floating calls and IR invocation separately.
+[Full evidence, reproduction and all 62 audit items](results-native-forward-entry-macos-arm64.json).

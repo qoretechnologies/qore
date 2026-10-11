@@ -18381,9 +18381,9 @@ qore_rt_find_aot_method_dispatch_cache_entry(
 // The compiler proves the outer body is exactly return self.method(value).
 // Preflight the already-resolved inner call without installing outer TLS state
 // or running user code. A miss must leave arguments, ownership and sink intact.
-static bool try_dispatch_forwarded_int_leaf(QoreObject* object,
+static bool try_dispatch_forwarded_int_leaf_native(QoreObject* object,
         const QoreAOTMethodDispatchCacheEntry& outer, QoreAOTContext* outer_ctx,
-        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result) {
+        int64_t arg, ExceptionSink* xsink, int64_t& result, RuntimeConfig* supplied_rc) {
     static const bool enabled = !std::getenv("QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT")
         && !std::getenv("QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY")
         && !std::getenv("QORE_DISABLE_IR_CONTEXT_ELISION")
@@ -18395,13 +18395,15 @@ static bool try_dispatch_forwarded_int_leaf(QoreObject* object,
         && !std::getenv("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY")
         && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
     const auto* outer_uvb = outer.native_scalar_uvb;
-    if (!enabled || nargs != 1 || outer.nargs != 1 || outer.arg_types[0] != bigIntTypeInfo
-            || outer.arg_states[0] || !fromBits(args[0]).isInt()
+    if (!enabled || outer.nargs != 1 || outer.arg_types[0] != bigIntTypeInfo || outer.arg_states[0]
             || !outer_uvb->hasCachedAOT() || outer_ctx->pc_loc_fn != outer_uvb->getCachedAOTFunction()
             || !outer_ctx->pc_loc_map_attached.load(std::memory_order_acquire) || outer_ctx->uses_argv) {
         return false;
     }
-    RuntimeConfig rc = RuntimeConfigNativeAccess::getCurrent();
+    // Borrow the invocation's live view. Copying RuntimeConfig allocates its
+    // private implementation and defeats the native calling convention.
+    // Boxed callers acquire it only after the inexpensive admission checks.
+    RuntimeConfig& rc = supplied_rc ? *supplied_rc : RuntimeConfigNativeAccess::getCurrent();
     QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(rc);
     if (!pgm || pgm != outer.native_scalar_program || pgm != outer_ctx->pgm || pgm != object->getProgram()
             || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
@@ -18469,22 +18471,38 @@ static bool try_dispatch_forwarded_int_leaf(QoreObject* object,
     }
     // Only now is the call handled. The inner complete-body proof excludes
     // reflection, reentry, user exceptions and any observable outer locals.
-    result = toBits(QoreValue());
-    QoreValue value;
+    result = 0;
     if (!*xsink && !RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
         RuntimeConfigNativeMethodContext outer_context(rc, object, outer);
         QoreCompactNativeMethodStackLocation outer_frame(rc, outer, xsink, outer_context);
         RuntimeConfigNativeMethodContext inner_context(rc, object, *inner);
         QoreCompactNativeMethodStackLocation inner_frame(rc, *inner, xsink, inner_context, outer_ctx->locs[loc]);
         try {
-            int64_t arg = fromBits(args[0]).getAsBigInt();
-            value = QoreValue(inline_entry
+            result = inline_entry
                 ? inline_entry(arg, ctx, xsink, &rc, qore_rt_get_stack_limit_v1(&rc))
-                : entry(arg, ctx, xsink, &rc));
+                : entry(arg, ctx, xsink, &rc);
         } catch (const QoreJITException&) {
             // The leaf guard materializes both contexts before constructing its exception.
         }
     }
+    return true;
+}
+
+static bool try_dispatch_forwarded_int_leaf(QoreObject* object,
+        const QoreAOTMethodDispatchCacheEntry& outer, QoreAOTContext* outer_ctx,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result) {
+    // The boxed path still rejects owned/wide/reference inputs before doing
+    // anything observable; only the native ABI can pass all int64_t values.
+    if (nargs != 1 || !fromBits(args[0]).isInt()) {
+        return false;
+    }
+    int64_t native_result;
+    if (!try_dispatch_forwarded_int_leaf_native(object, outer, outer_ctx,
+            fromBits(args[0]).getAsBigInt(), xsink, native_result, nullptr)) {
+        return false;
+    }
+    result = toBits(QoreValue());
+    QoreValue value = *xsink ? QoreValue() : QoreValue(native_result);
     if (clearConsumedArgCleanups(arg_cleanups, 1, xsink) < 0 || *xsink) {
         value.discard(xsink);
     } else {
@@ -18576,8 +18594,21 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
     if (!ctx || !uvb->hasCachedAOT() || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
             || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)
-            || ctx->uses_self || ctx->uses_argv || pgm != ctx->pgm
+            || ctx->uses_argv || pgm != ctx->pgm
             || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+        return 0;
+    }
+    if (ctx->uses_self) {
+        // A context-using body is never a scalar leaf. The independent whole-
+        // body forwarding proof may admit its exact inner leaf instead, while
+        // preserving both logical frames and an effect-free ordinary fallback.
+        if constexpr (!floating) {
+            static const bool forward_enabled = !std::getenv("QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF");
+            if (forward_enabled && ctx->receiver_int_forward_ready.load(std::memory_order_acquire)
+                    && try_dispatch_forwarded_int_leaf_native(object, *cached, ctx, arg, xsink, *result, rc)) {
+                return 1;
+            }
+        }
         return 0;
     }
     // The common PIC descriptor proves one homogeneous scalar signature; only

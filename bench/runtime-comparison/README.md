@@ -468,7 +468,7 @@ checksum traversal; it is not a measurement of an isolated append instruction.
 |optional_float_method_call|Same floating receiver with Qore's nullable contract; only strong non-null inputs are timed
 |boxed_float_method_call|Three auto receivers and an auto floating recurrence in Qore; Java retains native doubles and the same three non-final targets
 |dynamic_int_result_call|Three auto receivers with native integer arguments and directly converted unknown results; the native recurrence is independent of each result
-|dynamic_int_result_fallback|The same checksum through a context-using nested method excluded from native-leaf admission; measures failed-attempt overhead
+|dynamic_int_result_fallback|The same checksum through a nested forwarding method; originally a failed-native-attempt control, now eligible for independently proven forwarding entry
 |dynamic_float_result_call|Three auto receivers with a native float argument; each unknown method result is consumed directly by int conversion, with an independent native recurrence
 |dispatch_control|Same receiver-selection arithmetic and increments without method calls
 |list_read|Indexed traversal of a list prepared outside timing; XOR each element with the invocation seed
@@ -502,9 +502,11 @@ boxed recurrence reuses the polymorphic float reference; the floating direct-res
 kernel independently computes the selected target minus the current value and
 advances `value = 65535.0 - value`. The integer direct-result kernels compute the
 selected affine/masked result and independently advance `value = 65535 - value`.
-The context-using variant delegates to the selected virtual target and has no native
-companion. Java marks both the wrapper and targets `DONT_INLINE`.
-All results are integer-exact; the full reference grid has 31 kernels and 465 rows
+The context-using variant delegates to the selected virtual target. Its whole-body
+forwarding proof now admits the warmed exact inner scalar leaf without treating
+arbitrary context-using bodies as scalar leaves. It is no longer a negative
+native-admission control. Java marks both the wrapper and targets `DONT_INLINE`.
+All results are integer-exact; the full reference grid has 33 kernels and 495 rows
 per mode. Java retains native scalar results, so these whole-workload comparisons
 include Qore's broader dynamic representation and dispatch contract.
 
@@ -1009,3 +1011,16 @@ runtimes. The disable flag supports an additional same-binary/artifact control.
 
 See the [forwarding measurements](RESULTS.md#preflighted-same-program-forwarding-leaves-2026-10-11)
 and [verified evidence/audit](results-forward-leaf-preflight-macos-arm64.json).
+
+`QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1` disables only entry from the typed native
+method helper into forwarding preflight (presence sampled on first use). The
+boxed forwarding fallback remains available. Native entry passes the caller's
+existing `RuntimeConfig` and full-width `int64_t` argument/result directly; boxed
+entry still accepts only immediate integer inputs. Both use the same whole-body
+proof, full inner dispatch key, logical frames and cold context materialization.
+Neither path copies `RuntimeConfig`. A same-binary control for this flag isolates
+native routing, not the additional removal of the old allocating configuration
+copy; the full change requires a frozen before/after library comparison.
+
+See the [native-forwarding measurements](RESULTS.md#native-forwarding-continuation-and-borrowed-configuration-2026-10-11)
+and [verified evidence/audit](results-native-forward-entry-macos-arm64.json).
