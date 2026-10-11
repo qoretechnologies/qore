@@ -14,6 +14,7 @@
 
 class YamlDocumentDataProviderTest inherits QUnit::Test {
     constructor() : Test("YamlDocumentDataProviderTest", "1.0") {
+        addTestCase("data in the other byte order than its encoding", \byteOrderTest());
         addTestCase("provider from data", \testProviderFromData());
         addTestCase("provider from path", \testProviderFromPath());
         addTestCase("provider from stream", \testProviderFromStream());
@@ -60,6 +61,36 @@ class YamlDocumentDataProviderTest inherits QUnit::Test {
         addTestCase("writer advertises an open record type", \testWriterOpenRecordType());
         addTestCase("write action writes its file when the action completes", \testWriteActionFile());
         set_return_value(main());
+    }
+
+    #! Writes the bytes to a new temporary file and returns its path; the file is removed by the caller
+    private static string writeTemp(binary data, string suffix) {
+        string path = tmp_location() + DirSep + "byte-order-" + get_random_string() + suffix;
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+        return path;
+    }
+
+    #! Returns the records that the YAML document read data provider gives for the file in the encoding
+    private static list<hash<auto>> readYaml(string path, string encoding) {
+        YamlDocumentReadDataProvider prov({"path": path, "encoding": encoding});
+        return map $1, prov.searchRecords();
+    }
+
+    byteOrderTest() {
+        string text = "- a: 1\n- a: 2\n";
+        string path = writeTemp(binary(convert_encoding(text, "UTF-16LE")), ".yaml");
+        on_exit unlink(path);
+        # read as (big-endian) UTF-16, the little-endian bytes gave one string of other characters, without an error
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-16LE", \readYaml(), (path, "UTF-16"));
+        string utf8 = writeTemp(binary(text), ".yaml");
+        on_exit unlink(utf8);
+        # with a byte order mark, the generic encoding reads the little-endian bytes
+        string bom = writeTemp(<fffe> + binary(convert_encoding(text, "UTF-16LE")), ".yaml");
+        on_exit unlink(bom);
+        assertEq(readYaml(utf8, "UTF-8"), readYaml(bom, "UTF-16"));
     }
 
     testProviderFromData() {

@@ -503,6 +503,26 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Text in the Other Byte Order Than Its UTF-16 or UTF-32 Encoding Is Refused
+    @parblock
+    @ref Qore::StreamReader "StreamReader", @ref Qore::BufferedStreamReader "BufferedStreamReader", and
+    @ref Qore::InputStreamLineIterator "InputStreamLineIterator" raise \c ENCODING-BYTE-ORDER-ERROR instead of
+    returning text in a form of UTF-16 or UTF-32 whose bytes are in the other byte order: when they start with the
+    byte order mark of the other byte order, or, without one, when their zero bytes clearly fall where text in the
+    other byte order has them (\c "UTF-16" and \c "UTF-32" without a byte order mark are big-endian; with one, the
+    byte order mark decides).  The buffered readers check the bytes in their buffer before they return any text;
+    @ref Qore::StreamReader "StreamReader", which reads no bytes beyond the text it returns, checks the text it reads
+    before it returns it, so a read of a few characters can be returned before the evidence is clear.  A
+    @ref Qore::StreamReader "StreamReader" in the generic \c "UTF-16" encoding also keeps the byte order of a byte order
+    mark read with @ref Qore::StreamReader::readString() "StreamReader::readString()" for the rest of the stream, as
+    it did for lines: the strings read after the first one were read as big-endian.  Such data was read as characters that are not in it: a little-endian file read as
+    \c "UTF-16" had no line breaks or separators, so the CSV, fixed-length, NDJSON, and JSON readers gave no records
+    or records without values, without an error.  Data without a clear zero-byte pattern (ex: CJK text) is read as
+    before; see @ref Qore::check_unicode_byte_order() "check_unicode_byte_order()".  The YAML readers of the yaml
+    module and the readers of the \c EdifactUtil module read through @ref Qore::StreamReader "StreamReader" and refuse
+    such data too.
+    @endparblock
+
     @par Fault Signals Cannot Have Qore Signal Handlers
     @parblock
     \c SIGBUS, \c SIGILL, \c SIGFPE and \c SIGTRAP, like \c SIGSEGV, are no longer masked in %Qore threads and
@@ -1693,6 +1713,11 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       - @ref Qore::cancel_thread() "cancel_thread()": requests cooperative cancellation of another thread
       - @ref Qore::channel_select() "channel_select()": waits on multiple @ref Qore::Thread::Channel "Channel"
         objects for the first ready operation (send or recv)
+      - @ref Qore::check_unicode_byte_order() "check_unicode_byte_order()": raises \c ENCODING-BYTE-ORDER-ERROR for
+        data in the other byte order than its declared UTF-16 or UTF-32 encoding, and
+        @ref Qore::get_unicode_byte_order() "get_unicode_byte_order()": returns the UTF-16 or UTF-32 byte order of
+        data, by its byte order mark or by where its zero bytes fall; this is the rule that the stream readers apply,
+        see @ref qore_3_0_0_compatibility
       - @ref Qore::clear_thread_cancel() "clear_thread_cancel()": clears the cancellation flag for the current thread
       - @ref Qore::clock_getseconds() "clock_getseconds()"
       - @ref Qore::format_bounded() "format_bounded()", @ref Qore::sprintf_bounded() "sprintf_bounded()", and

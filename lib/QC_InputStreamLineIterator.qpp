@@ -3,7 +3,7 @@
 /*
   Qore Programming Language
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -123,6 +123,7 @@ while (i.next()) {
     @endcode
 
     @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
+    @throw ENCODING-BYTE-ORDER-ERROR the text is in a form of UTF-16 or UTF-32 and the start of the data is in the other byte order than the encoding; see @ref Qore::check_unicode_byte_order() "check_unicode_byte_order()"
  */
 bool InputStreamLineIterator::next() {
     if (isli->check(xsink))

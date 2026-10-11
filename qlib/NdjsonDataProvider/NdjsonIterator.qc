@@ -67,6 +67,10 @@ public class NdjsonIterator inherits AbstractIterator {
     */
     constructor(string ndjson_string, *hash<NdjsonIteratorOptions> options) {
         opts = options ?? <NdjsonIteratorOptions>{};
+        # the processing below is byte-oriented; text in a UTF-16 or UTF-32 encoding is processed as UTF-8
+        if (ndjson_string.encoding() =~ /^UTF-(16|32)/) {
+            ndjson_string = convert_encoding(ndjson_string, "UTF-8");
+        }
         # Split by newlines, handling both LF and CRLF
         lines = ndjson_string.split("\n");
         # Check line lengths
@@ -218,6 +222,10 @@ public class InputStreamNdjsonIterator inherits AbstractIterator {
                 valid = False;
                 current_value = NOTHING;
                 return False;
+            }
+            # the processing below is byte-oriented; text in a UTF-16 or UTF-32 encoding is processed as UTF-8
+            if (line.encoding() =~ /^UTF-(16|32)/) {
+                line = convert_encoding(line, "UTF-8");
             }
 
             # Check line length

@@ -7,6 +7,12 @@
     @section yaml_bundled_3_0 Qore 3.0
 
     - bundled the native YAML module and all twelve user modules with Qore
+    - @ref Qore::YAML::YamlDocumentIterator "YamlDocumentIterator" and @ref Qore::YAML::YamlSaxParser "YamlSaxParser"
+      read a stream in an encoding other than UTF-8 with @ref Qore::StreamReader "StreamReader": text was converted
+      chunk by chunk, so a character split between chunks failed or was corrupted, and the byte order mark of a
+      \c "UTF-16" stream applied only to its first chunk; data in the other byte order than its UTF-16 or UTF-32
+      encoding raises \c ENCODING-BYTE-ORDER-ERROR, and an exception raised while reading the stream is raised with
+      its own code and description instead of \c STREAM-READ-ERROR
     - fixed overflow when parsing timestamps with more than six fractional-second digits
     - added cancellation checks to scalar scanning and merge expansion
     - fixed a crash generating or parsing deeply nested YAML with @ref Qore::YAML::make_yaml() "make_yaml()",

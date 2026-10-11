@@ -78,6 +78,7 @@ public class CsvByteOrderMarkTest inherits QUnit::Test {
         addTestCase("no byte order mark", \noByteOrderMark());
         addTestCase("an explicit encoding", \explicitEncoding());
         addTestCase("UTF-16 byte order marks", \utf16());
+        addTestCase("data in the other byte order than its encoding", \byteOrderContradiction());
         addTestCase("the stream start", \streamStart());
         addTestCase("the profiler and the reader agree", \profilerAgrees());
         set_return_value(main());
@@ -182,6 +183,89 @@ public class CsvByteOrderMarkTest inherits QUnit::Test {
         list<hash<auto>> records = read(new CsvIterator(new BinaryInputStream(data), "ISO-8859-1",
             Options - "fields"));
         assertFalse(records[0].hasKey("PO"));
+    }
+
+    #! Returns the records that a CSV reader gives for the data in the encoding, read from a stream
+    private list<hash<auto>> readStream(binary data, string encoding) {
+        CsvIterator i(new BinaryInputStream(data), encoding, {"header_names": True});
+        list<hash<auto>> rv = ();
+        while (i.next()) {
+            push rv, i.getValue();
+        }
+        return rv;
+    }
+
+    #! Returns the records that a CSV reader gives for the data in the encoding, read from a file
+    private list<hash<auto>> readFile(binary data, string encoding) {
+        string path = tmp_location() + DirSep + "csv-byte-order-" + get_random_string() + ".csv";
+        on_exit unlink(path);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+        CsvFileIterator i(path, {"encoding": encoding, "header_names": True});
+        list<hash<auto>> rv = ();
+        while (i.next()) {
+            push rv, i.getValue();
+        }
+        return rv;
+    }
+
+    #! Returns the records that the CSV read data provider gives for the data in the encoding
+    private list<hash<auto>> readProvider(binary data, string encoding) {
+        CsvReadDataProvider prov({"data": data, "encoding": encoding, "header_names": True});
+        list<hash<auto>> rv = ();
+        AbstractDataProviderRecordIterator i = prov.searchRecords();
+        while (i.next()) {
+            push rv, i.getValue();
+        }
+        return rv;
+    }
+
+    byteOrderContradiction() {
+        string text = "PO,Qty\n1,2\n";
+        list<hash<auto>> expected = ({"PO": "1", "Qty": "2"},);
+        binary le = binary(convert_encoding(text, "UTF-16LE"));
+        binary be = binary(convert_encoding(text, "UTF-16BE"));
+        binary le32 = binary(convert_encoding(text, "UTF-32LE"));
+        binary be32 = binary(convert_encoding(text, "UTF-32BE"));
+
+        # read as UTF-16 without a byte order mark (big-endian), little-endian bytes have no line break or separator:
+        # 0a 00 is U+0A00 and 2c 00 is U+2C00, so they were one header line and no records, without an error
+        foreach list<auto> c in (
+                (le, "UTF-16", "UTF-16LE"),
+                (le, "UTF-16BE", "UTF-16LE"),
+                (be, "UTF-16LE", "UTF-16BE"),
+                (<feff> + be, "UTF-16LE", "UTF-16BE"),
+                (<fffe> + le, "UTF-16BE", "UTF-16LE"),
+                (le32, "UTF-32", "UTF-32LE"),
+                (be32, "UTF-32LE", "UTF-32BE"),
+            ) {
+            string label = sprintf("%s declared as %s", c[2], c[1]);
+            foreach code read in ((\readStream(), \readFile(), \readProvider())) {
+                assertThrows("ENCODING-BYTE-ORDER-ERROR", "use " + c[2], read, (c[0], c[1]), label);
+            }
+        }
+
+        # data in the byte order of its encoding, or with a byte order mark that decides the byte order of the
+        # generic encoding, is read
+        foreach list<auto> c in (
+                (le, "UTF-16LE"),
+                (<fffe> + le, "UTF-16LE"),
+                (<fffe> + le, "UTF-16"),
+                (be, "UTF-16"),
+                (<feff> + be, "UTF-16"),
+                (be, "UTF-16BE"),
+                (<feff> + be, "UTF-16BE"),
+                (le32, "UTF-32LE"),
+                (be32, "UTF-32"),
+            ) {
+            string label = sprintf("%y declared as %s", c[0].substr(0, 4), c[1]);
+            assertEq(expected, readStream(c[0], c[1]), label);
+            assertEq(expected, readFile(c[0], c[1]), label);
+            assertEq(expected, readProvider(c[0], c[1]), label);
+        }
+
     }
 
     utf16() {

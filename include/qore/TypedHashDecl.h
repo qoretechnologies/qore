@@ -524,6 +524,11 @@ DLLEXPORT extern const TypedHashDecl* hashdeclRegexMatchInfo;
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclFormatBounds;
 
+//! UnicodeByteOrderInfo hashdecl
+/** @since %Qore 3.0
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclUnicodeByteOrderInfo;
+
 //! SqlMutationInfo hashdecl
 /** @since %Qore 3.0
 */

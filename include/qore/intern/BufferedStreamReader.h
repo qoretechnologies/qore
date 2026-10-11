@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -141,6 +141,25 @@ private:
 
         return read;
     }
+
+   //! Makes the next bytes of the stream available in the buffer without reading them, for the byte order check
+   /** At most the capacity of the buffer is made available, with one read of the stream: a read returns the bytes
+       that are available, so the check waits for no more data than the first read of text would (ex: a short message
+       on a pipe that waits for an answer); if these bytes do not show the byte order, the text read is checked as
+       with the unbuffered reader
+   */
+   DLLLOCAL virtual int sampleStart(const unsigned char*& p, size_t& len, size_t size, ExceptionSink* xsink) override {
+      size = QORE_MIN(size, bufCapacity);
+      if (bufCount < size) {
+         fillBuffer(size - bufCount, xsink);
+         if (*xsink) {
+            return -1;
+         }
+      }
+      p = reinterpret_cast<const unsigned char*>(buf);
+      len = QORE_MIN(bufCount, size);
+      return 0;
+   }
 
    /**
     * @brief Peeks the next byte from the input stream.

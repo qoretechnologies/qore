@@ -40,6 +40,9 @@
 #include "qore/intern/StringReaderHelper.h"
 #include "qore/intern/qore_encoding_private.h"
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/UnicodeByteOrder.h"
+
+#include <string>
 
 DLLLOCAL extern qore_classid_t CID_STREAMREADER;
 DLLLOCAL extern QoreClass* QC_STREAMREADER;
@@ -68,6 +71,9 @@ public:
 
     DLLLOCAL void setEncoding(const QoreEncoding* n_enc) {
         enc = n_enc;
+        // text in the new encoding is checked at the next read of text
+        byte_order_checked = false;
+        std::string().swap(sample);
     }
 
     //! Read binary data from the stream.
@@ -114,7 +120,17 @@ public:
         @return Qore string read from the stream
     */
     DLLLOCAL QoreStringNode* readString(int64 size, ExceptionSink* xsink) {
-        return q_read_string(xsink, size, enc, std::bind(&StreamReader::readData, this, _3, _1, _2, false));
+        if (checkByteOrderBefore(xsink)) {
+            return nullptr;
+        }
+        QoreStringNode* str = q_read_string(xsink, size, enc, std::bind(&StreamReader::readData, this, _3, _1, _2,
+            false));
+        // the byte order of a byte order mark read in a generic encoding (ex: "UTF-16") applies to the rest of the
+        // stream, as in readLineEol(); the string has the encoding of the byte order found
+        if (str && str->getEncoding() != enc) {
+            enc = str->getEncoding();
+        }
+        return checkByteOrderAfter(str, xsink);
     }
 
     //! Read one line
@@ -127,15 +143,42 @@ public:
         @return Qore string read from the stream
     */
     DLLLOCAL QoreStringNode* readLine(const QoreStringNode* eol, bool trim, ExceptionSink* xsink) {
+        if (checkByteOrderBefore(xsink)) {
+            return nullptr;
+        }
         if (!eol && !enc->isAsciiCompat()) {
             QoreString nl("\n");
-            return readLineEol(&nl, trim, xsink);
+            return checkByteOrderAfter(readLineEolIntern(&nl, trim, xsink), xsink);
         }
 
-        return eol ? readLineEol(eol, trim, xsink) : readLine(trim, xsink);
+        return checkByteOrderAfter(eol ? readLineEolIntern(eol, trim, xsink) : readLineIntern(trim, xsink), xsink);
     }
 
+    //! Reads one line ending with the given end-of-line marker
     DLLLOCAL QoreStringNode* readLineEol(const QoreString* eol, bool trim, ExceptionSink* xsink) {
+        if (checkByteOrderBefore(xsink)) {
+            return nullptr;
+        }
+        return checkByteOrderAfter(readLineEolIntern(eol, trim, xsink), xsink);
+    }
+
+    DLLLOCAL QoreStringNode* readNullTerminatedString(ExceptionSink* xsink) {
+        if (checkByteOrderBefore(xsink)) {
+            return nullptr;
+        }
+        return checkByteOrderAfter(readNullTerminatedStringIntern(xsink), xsink);
+    }
+
+    DLLLOCAL QoreStringNode* readLine(bool trim, ExceptionSink* xsink) {
+        if (checkByteOrderBefore(xsink)) {
+            return nullptr;
+        }
+        return checkByteOrderAfter(readLineIntern(trim, xsink), xsink);
+    }
+
+private:
+    //! Reads one line ending with the given end-of-line marker; the byte order of the text is checked by the caller
+    DLLLOCAL QoreStringNode* readLineEolIntern(const QoreString* eol, bool trim, ExceptionSink* xsink) {
         // the byte order of a stream in the generic UTF-16 encoding (or a Unicode encoding created on the fly with
         // a byte order mark, ex: "UTF-32") is given by a byte order mark at its start; it must be known before the
         // end-of-line marker is converted to the encoding of the stream
@@ -240,7 +283,8 @@ public:
         }
     }
 
-    DLLLOCAL QoreStringNode* readNullTerminatedString(ExceptionSink* xsink) {
+    //! Reads a string ending with a null byte; the byte order of the text is checked by the caller
+    DLLLOCAL QoreStringNode* readNullTerminatedStringIntern(ExceptionSink* xsink) {
         SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
 
         while (true) {
@@ -263,6 +307,7 @@ public:
         return str.release();
     }
 
+public:
     DLLLOCAL QoreStringNode* readExactString(size_t size, ExceptionSink* xsink) {
         SimpleRefHolder<QoreStringNode> str(readString((int64)size, xsink));
         if (*xsink) {
@@ -277,7 +322,9 @@ public:
         return str.release();
     }
 
-    DLLLOCAL QoreStringNode* readLine(bool trim, ExceptionSink* xsink) {
+private:
+    //! Reads one line ending with any end-of-line marker; the byte order of the text is checked by the caller
+    DLLLOCAL QoreStringNode* readLineIntern(bool trim, ExceptionSink* xsink) {
         SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
 
         while (true) {
@@ -315,6 +362,7 @@ public:
         }
     }
 
+public:
     DLLLOCAL int64 readi1(ExceptionSink* xsink) {
         signed char i = 0;
         if (readData(xsink, &i, 1) < 0) {
@@ -458,6 +506,98 @@ protected:
 
     //! Encoding of the source input stream.
     const QoreEncoding* enc;
+
+    //! The start of the text returned while its byte order is not known yet (unbuffered reader)
+    std::string sample;
+
+    //! true once the byte order of text in the current encoding has been checked
+    bool byte_order_checked = false;
+
+    //! Makes the next bytes of the stream available without reading them, for the byte order check
+    /** The unbuffered reader reads no bytes beyond the text it returns (the stream can be read directly between reads
+        of the reader), so it has no bytes to sample: the text it reads is checked before it is returned; see
+        checkByteOrderAfter()
+
+        @param p receives a pointer to the bytes
+        @param len receives the number of bytes
+        @param size the number of bytes requested
+        @param xsink exception sink
+
+        @return 0 for OK, 1 if no bytes can be sampled, -1 if an exception was raised
+    */
+    DLLLOCAL virtual int sampleStart(const unsigned char*& p, size_t& len, size_t size, ExceptionSink* xsink) {
+        return 1;
+    }
+
+    //! Returns true if the code is of a form of UTF-16 or UTF-32
+    DLLLOCAL static bool isUnicodeWide(const char* code) {
+        return !strncmp(code, "UTF-16", 6) || !strncmp(code, "UTF-32", 6);
+    }
+
+    //! Checks text in a UTF-16 or UTF-32 encoding against the bytes available before it is read
+    /** Text in the other byte order would be decoded to characters that are not in it (0a 00, a line feed in
+        UTF-16LE, read as UTF-16BE is U+0A00), so a reader would find no lines or separators, without an error; see
+        q_check_unicode_byte_order()
+
+        @return 0 for OK, -1 if ENCODING-BYTE-ORDER-ERROR or another exception was raised
+    */
+    DLLLOCAL int checkByteOrderBefore(ExceptionSink* xsink) {
+        if (byte_order_checked) {
+            return 0;
+        }
+        const char* code = enc->getCode();
+        if (!isUnicodeWide(code)) {
+            byte_order_checked = true;
+            return 0;
+        }
+        const unsigned char* p;
+        size_t len;
+        int rc = sampleStart(p, len, QORE_UNICODE_BYTE_ORDER_SAMPLE, xsink);
+        if (rc) {
+            // no bytes to sample: the text is checked after it is read
+            return rc < 0 ? -1 : 0;
+        }
+        return checkSample(p, len, code, xsink);
+    }
+
+    //! Checks text in a UTF-16 or UTF-32 encoding that was read before it is returned
+    /** The text is added to the sample until the sample shows the byte order or is complete
+
+        @param str the text read; may be nullptr at the end of the stream or after an exception
+        @param xsink exception sink
+
+        @return \a str, or nullptr if an exception was raised; \a str is then dereferenced
+    */
+    DLLLOCAL QoreStringNode* checkByteOrderAfter(QoreStringNode* str, ExceptionSink* xsink) {
+        SimpleRefHolder<QoreStringNode> holder(str);
+        if (!str || byte_order_checked) {
+            return holder.release();
+        }
+        const char* code = enc->getCode();
+        if (!isUnicodeWide(code)) {
+            byte_order_checked = true;
+            return holder.release();
+        }
+        sample.append(str->c_str(), QORE_MIN(str->size(), QORE_UNICODE_BYTE_ORDER_SAMPLE - sample.size()));
+        if (checkSample(reinterpret_cast<const unsigned char*>(sample.data()), sample.size(), code, xsink)) {
+            return nullptr;
+        }
+        return holder.release();
+    }
+
+    //! Checks the sample once it shows a byte order or is complete
+    /** @return 0 for OK, -1 if ENCODING-BYTE-ORDER-ERROR was raised
+    */
+    DLLLOCAL int checkSample(const unsigned char* p, size_t len, const char* code, ExceptionSink* xsink) {
+        if (!q_get_unicode_byte_order(p, len).encoding && len < QORE_UNICODE_BYTE_ORDER_SAMPLE) {
+            // not decided yet: the text read next is added to the sample
+            return 0;
+        }
+        byte_order_checked = true;
+        int rc = q_check_unicode_byte_order(p, len, code, xsink);
+        std::string().swap(sample);
+        return rc;
+    }
 
 private:
     //! Resolves the byte order of a stream in the generic UTF-16 encoding from a byte order mark

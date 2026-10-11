@@ -295,6 +295,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclTimerEventInfo,
     * hashdeclRegexMatchInfo,
     * hashdeclFormatBounds,
+    * hashdeclUnicodeByteOrderInfo,
     * hashdeclSqlMutationInfo,
     * hashdeclSqlMutationEventInfo,
     * hashdeclSqlMutationDecisionInfo;
@@ -1563,6 +1564,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
 
     hashdeclRegexMatchInfo = init_hashdecl_RegexMatchInfo(qns);
     hashdeclFormatBounds = init_hashdecl_FormatBounds(qns);
+    hashdeclUnicodeByteOrderInfo = init_hashdecl_UnicodeByteOrderInfo(qns);
 
     qns.addSystemClass(initRegexClass(qns));
     qns.addSystemClass(initRegexSubstClass(qns));

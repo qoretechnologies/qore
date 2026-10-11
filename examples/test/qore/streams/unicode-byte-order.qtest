@@ -1,0 +1,202 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class UnicodeByteOrderStreamTest
+
+#! An input stream that returns its data in pieces of a given size per read
+class TrickleInputStream inherits InputStream {
+    private {
+        binary data;
+        int chunk;
+        int pos = 0;
+    }
+
+    constructor(binary data, int chunk = 1) {
+        self.data = data;
+        self.chunk = chunk;
+    }
+
+    *binary read(int limit) {
+        if (pos >= data.size() || limit <= 0) {
+            return;
+        }
+        int len = min(chunk, limit);
+        binary rv = data.substr(pos, len);
+        pos += rv.size();
+        return rv;
+    }
+
+    int peek() {
+        return pos < data.size() ? data[pos] : -1;
+    }
+}
+
+#! An input stream that sends a message and then waits for an answer: a read past the message would never return
+class MessageInputStream inherits InputStream {
+    private {
+        binary message;
+        int pos = 0;
+    }
+
+    constructor(binary message) {
+        self.message = message;
+    }
+
+    *binary read(int limit) {
+        if (pos >= message.size()) {
+            throw "WAITING-FOR-ANSWER", "the stream was read past its message, which would wait forever";
+        }
+        binary rv = message.substr(pos, limit);
+        pos += rv.size();
+        return rv;
+    }
+
+    int peek() {
+        if (pos >= message.size()) {
+            throw "WAITING-FOR-ANSWER", "the stream was peeked past its message, which would wait forever";
+        }
+        return message[pos];
+    }
+}
+
+# Readers of text in a UTF-16 or UTF-32 encoding refuse data in the other byte order before they return any text: read
+# as the declared encoding, it would be characters that are not in it, so a line reader found no line break and read
+# the whole data as one line of meaningless characters, without an error
+public class UnicodeByteOrderStreamTest inherits QUnit::Test {
+    public {
+        const Text = "PO,Qty\n1,2\n";
+    }
+
+    constructor() : QUnit::Test("unicode byte order in streams", "1.0") {
+        addTestCase("line iterators", \lineIteratorTest());
+        addTestCase("stream readers", \streamReaderTest());
+        addTestCase("buffered stream readers", \bufferedStreamReaderTest());
+        addTestCase("the check waits for no more data than the first read", \messageTest());
+        set_return_value(main());
+    }
+
+    #! Returns the lines of the data read with an InputStreamLineIterator in the encoding, as UTF-8
+    private static list<string> lines(InputStream input, string encoding, *int bufsize) {
+        InputStreamLineIterator i(input, encoding, "\n", True, bufsize ?? 4096);
+        return map convert_encoding($1, "UTF-8"), i;
+    }
+
+    lineIteratorTest() {
+        binary le = binary(convert_encoding(Text, "UTF-16LE"));
+        binary be = binary(convert_encoding(Text, "UTF-16BE"));
+        binary le32 = binary(convert_encoding(Text, "UTF-32LE"));
+        binary be32 = binary(convert_encoding(Text, "UTF-32BE"));
+
+        # the other byte order: refused at the first line
+        foreach list<auto> c in ((le, "UTF-16", "UTF-16LE"), (le, "UTF-16BE", "UTF-16LE"), (be, "UTF-16LE", "UTF-16BE"),
+                (<feff> + be, "UTF-16LE", "UTF-16BE"), (<fffe> + le, "UTF-16BE", "UTF-16LE"),
+                (le32, "UTF-32", "UTF-32LE"), (be32, "UTF-32LE", "UTF-32BE")) {
+            string label = sprintf("%s declared as %s", c[2], c[1]);
+            assertThrows("ENCODING-BYTE-ORDER-ERROR", "use " + c[2], \lines(), (new BinaryInputStream(c[0]), c[1]),
+                label);
+            InputStreamLineIterator i(new BinaryInputStream(c[0]), c[1]);
+            assertThrows("ENCODING-BYTE-ORDER-ERROR", \i.next(), NOTHING, label + ": no line is read");
+        }
+
+        # the byte order of the encoding, or a byte order mark that decides the generic encoding
+        foreach list<auto> c in ((le, "UTF-16LE"), (<fffe> + le, "UTF-16"), (be, "UTF-16"), (<feff> + be, "UTF-16"),
+                (be, "UTF-16BE"), (le32, "UTF-32LE"), (be32, "UTF-32"), (<fffe0000> + le32, "UTF-32")) {
+            string label = sprintf("%y declared as %s", c[0].substr(0, 4), c[1]);
+            assertEq(("PO,Qty", "1,2"), lines(new BinaryInputStream(c[0]), c[1]), label);
+            # however the stream returns its bytes, and with a buffer smaller than the sample
+            assertEq(("PO,Qty", "1,2"), lines(new TrickleInputStream(c[0]), c[1]), label + " (trickle)");
+            assertEq(("PO,Qty", "1,2"), lines(new BinaryInputStream(c[0]), c[1], 3), label + " (small buffer)");
+        }
+
+        # CJK text in its own byte order, and other encodings, are read
+        string cjk = "日本語,一丁\n七万,丈三\n";
+        assertEq(("日本語,一丁", "七万,丈三"), lines(new BinaryInputStream(binary(convert_encoding(cjk, "UTF-16LE"))),
+            "UTF-16LE"));
+        assertEq(("PO,Qty", "1,2"), lines(new BinaryInputStream(binary(Text)), "UTF-8"));
+        assertEq((), lines(new BinaryInputStream(binary()), "UTF-16"));
+    }
+
+    streamReaderTest() {
+        binary le = binary(convert_encoding(Text, "UTF-16LE"));
+        # a StreamReader reads no bytes beyond the text it returns: the text read is checked before it is returned
+        StreamReader sr(new BinaryInputStream(le), "UTF-16");
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", \sr.readLine(), ("\n",));
+        sr = new StreamReader(new BinaryInputStream(le), "UTF-16");
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", \sr.readString());
+        # however the stream returns its bytes
+        sr = new StreamReader(new TrickleInputStream(le), "UTF-16BE");
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", \sr.readString());
+        sr = new StreamReader(new TrickleInputStream(le, 16), "UTF-16BE");
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-16LE", \sr.readLine(), ("\n",));
+        # two characters are no evidence; the text read next completes the evidence
+        sr = new StreamReader(new BinaryInputStream(le), "UTF-16");
+        assertEq(2, sr.readString(2).length());
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", \sr.readString());
+        # the stream is not read ahead: bytes after the text read are read from the stream directly
+        BinaryInputStream input(le);
+        sr = new StreamReader(input, "UTF-16LE");
+        assertEq("PO,Qty", convert_encoding(sr.readLine("\n"), "UTF-8"));
+        assertEq(binary(convert_encoding("1,2\n", "UTF-16LE")), input.read(100));
+
+        # the byte order mark of the generic encoding gives the byte order of all the text read after it
+        sr = new StreamReader(new BinaryInputStream(<fffe> + le), "UTF-16");
+        assertEq(("PO,", "Qty", "\n1,", "2\n"), map convert_encoding(sr.readString(3), "UTF-8"), xrange(4));
+        sr = new StreamReader(new BinaryInputStream(<fffe> + le), "UTF-16");
+        assertEq("PO,Qty", convert_encoding(sr.readLine("\n"), "UTF-8"));
+        assertEq("1,2\n", convert_encoding(sr.readString(), "UTF-8"));
+
+        # accepted text is returned in order with binary reads
+        sr = new StreamReader(new TrickleInputStream(le), "UTF-16LE");
+        assertEq("P", convert_encoding(sr.readString(1), "UTF-8"));
+        assertEq(<4f00>, sr.readBinary(2));
+        assertEq("Qty", convert_encoding(sr.readLine("\n").substr(1), "UTF-8"));
+        assertEq("1,2", convert_encoding(sr.readLine("\n"), "UTF-8"));
+        assertNothing(sr.readLine("\n"));
+
+        # bytes are not text: a binary read is not checked
+        sr = new StreamReader(new BinaryInputStream(le), "UTF-16");
+        assertEq(le, sr.readBinary(-1));
+    }
+
+    bufferedStreamReaderTest() {
+        binary le = binary(convert_encoding(Text, "UTF-16LE"));
+        # the bytes in the buffer are checked before any text is read
+        BufferedStreamReader sr(new BinaryInputStream(le), "UTF-16");
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", \sr.readString(), (2,));
+        sr = new BufferedStreamReader(new BinaryInputStream(le), "UTF-16");
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", \sr.readLine(), ("\n",));
+        # a buffer too small to show the byte order: the text read is checked
+        sr = new BufferedStreamReader(new BinaryInputStream(le), "UTF-16", 3);
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", \sr.readLine(), ("\n",));
+        sr = new BufferedStreamReader(new TrickleInputStream(le), "UTF-32", 2);
+        assertEq(<5000>, sr.readBinary(2));
+
+        # accepted text with a buffer smaller than the sample, read in order
+        sr = new BufferedStreamReader(new BinaryInputStream(le), "UTF-16LE", 3);
+        assertEq("PO,Qty", convert_encoding(sr.readLine("\n"), "UTF-8"));
+        assertEq("1,2", convert_encoding(sr.readLine("\n"), "UTF-8"));
+        assertNothing(sr.readLine("\n"));
+    }
+
+    messageTest() {
+        # a message shorter than the sample: its first line is returned without another read
+        binary msg = binary(convert_encoding("HELLO\n", "UTF-16LE"));
+        StreamReader sr(new MessageInputStream(msg), "UTF-16LE");
+        assertEq("HELLO", convert_encoding(sr.readLine("\n"), "UTF-8"));
+        BufferedStreamReader bsr(new MessageInputStream(msg), "UTF-16LE");
+        assertEq("HELLO", convert_encoding(bsr.readLine("\n"), "UTF-8"));
+        # a message in the other byte order with clear evidence is refused, also without another read; a line of it
+        # has no end in the declared byte order, so only a read of its characters can return without another read
+        binary other = binary(convert_encoding("PO,Qty,Price\n", "UTF-16LE"));
+        sr = new StreamReader(new MessageInputStream(other), "UTF-16BE");
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-16LE", \sr.readString(), (13,));
+        bsr = new BufferedStreamReader(new MessageInputStream(other), "UTF-16BE");
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-16LE", \bsr.readLine(), ("\n",));
+    }
+}

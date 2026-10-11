@@ -34,6 +34,7 @@
 #include "qore/intern/ql_string.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
+#include "qore/intern/UnicodeByteOrder.h"
 
 #include <cctype>
 #include <cfloat>
@@ -808,6 +809,16 @@ hashdecl Qore::FormatBounds {
     int max_depth = 8;
     //! The maximum number of elements expanded in any single container; 0 means unlimited
     int max_elements = 128;
+}
+
+//! The byte order of UTF-16 or UTF-32 text found at the start of data, as returned by @ref Qore::get_unicode_byte_order() "get_unicode_byte_order()"
+/** @since %Qore 3.0
+*/
+hashdecl Qore::UnicodeByteOrderInfo {
+    //! The encoding of the data: \c "UTF-16LE", \c "UTF-16BE", \c "UTF-32LE", or \c "UTF-32BE"
+    string encoding;
+    //! How the encoding was found: \c "bom" (a byte order mark) or \c "zero-bytes" (where its zero bytes fall)
+    string evidence;
 }
 
 /** @defgroup string_functions String Functions
@@ -1635,6 +1646,90 @@ string convert_encoding(string str, string encoding) [flags=RET_VALUE_ONLY,NAMED
 /**
  */
 nothing convert_encoding() [flags=RUNTIME_NOOP] {
+}
+
+
+//! Returns the UTF-16 or UTF-32 byte order of data, by the byte order mark at its start or where its zero bytes fall
+/** Text in UTF-16 has a zero byte in most characters of the Latin, Greek, and Cyrillic scripts and in the digits,
+    separators, and line breaks of delimited data, always on the same side: the high byte, which is the second byte of
+    a character in \c UTF-16LE; in UTF-32, two or three of every four bytes are zero.  Text in an encoding with
+    one-byte characters has no zero bytes.  The pattern must be clear: in UTF-16, a quarter of the characters with a
+    zero high byte and almost no zero low bytes; in UTF-32, nine tenths of the characters with both high bytes zero;
+    and in both, at least eight such characters; text without such a pattern (ex: CJK text in UTF-16, or a few
+    characters) gives no byte order.
+
+    This is the rule that @ref Qore::StreamReader "StreamReader" and the line iterators apply to text in a UTF-16 or
+    UTF-32 encoding; see @ref Qore::check_unicode_byte_order() "check_unicode_byte_order()".
+
+    @param sample the start of the data; up to the first 4096 bytes are examined for zero bytes
+
+    @return the encoding and how it was found, or @ref nothing if the data starts with no byte order mark and its zero
+    bytes do not show a UTF-16 or UTF-32 byte order
+
+    @par Example:
+    @code{.py}
+*hash<UnicodeByteOrderInfo> h = get_unicode_byte_order(binary(convert_encoding("PO,Qty\n1,2\n", "UTF-16LE")));
+# {"encoding": "UTF-16LE", "evidence": "zero-bytes"}
+    @endcode
+
+    @since %Qore 3.0
+*/
+*hash<UnicodeByteOrderInfo> get_unicode_byte_order(binary sample) [flags=CONSTANT] {
+    QoreUnicodeByteOrder bo = q_get_unicode_byte_order(static_cast<const unsigned char*>(sample->getPtr()),
+        sample->size());
+    if (!bo.encoding) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclUnicodeByteOrderInfo, xsink), xsink);
+    h->setKeyValue("encoding", new QoreStringNode(bo.encoding), xsink);
+    h->setKeyValue("evidence", new QoreStringNode(bo.bom ? "bom" : "zero-bytes"), xsink);
+    return h.release();
+}
+
+//! Checks that data is not in the other byte order than its declared UTF-16 or UTF-32 encoding
+/** Data read in the wrong byte order decodes to valid characters that are not in it: in little-endian UTF-16 read as
+    big-endian, a line feed (\c 0A \c 00) becomes U+0A00, so a reader finds no lines or separators and reads nothing,
+    without an error.  The generic \c "UTF-16" and \c "UTF-32" encodings are big-endian unless the data starts with a
+    byte order mark, which then decides.
+
+    The data contradicts its encoding if it starts with the byte order mark of the other byte order, or, without a byte
+    order mark, if its zero bytes fall where text in the other byte order has them (see
+    @ref Qore::get_unicode_byte_order() "get_unicode_byte_order()"); data without a clear pattern is accepted.
+    @ref Qore::BufferedStreamReader "BufferedStreamReader" and
+    @ref Qore::InputStreamLineIterator "InputStreamLineIterator" apply this check to the bytes in their buffer before
+    they return text in a UTF-16 or UTF-32 encoding, and @ref Qore::StreamReader "StreamReader", which reads no bytes
+    beyond the text it returns, to the text it reads before it returns it.
+
+    @param sample the start of the data; up to the first 4096 bytes are examined
+    @param encoding the declared encoding of the data; an encoding that is not a form of UTF-16 or UTF-32
+    (\c "UTF-16", \c "UTF-16LE", \c "UTF-16BE", \c "UTF-32", \c "UTF-32LE", or \c "UTF-32BE", in any case, with or
+    without the \c "-") is not checked
+
+    @throw ENCODING-BYTE-ORDER-ERROR the data is in the other byte order than \a encoding
+
+    @par Example:
+    @code{.py}
+# throws ENCODING-BYTE-ORDER-ERROR: little-endian data declared as (big-endian) UTF-16
+check_unicode_byte_order(binary(convert_encoding("PO,Qty\n1,2\n", "UTF-16LE")), "UTF-16");
+    @endcode
+
+    @since %Qore 3.0
+*/
+nothing check_unicode_byte_order(binary sample, string encoding) {
+    // the canonical code of a form of UTF-16 or UTF-32: "UTF-16", "UTF-16LE", ... "UTF-32BE"
+    std::string code;
+    for (const char* p = encoding->c_str(); *p; ++p) {
+        if (*p != '-' && *p != '_') {
+            code += static_cast<char>(toupper(static_cast<unsigned char>(*p)));
+        }
+    }
+    if (code.size() < 5 || code.compare(0, 3, "UTF") || (code.compare(3, 2, "16") && code.compare(3, 2, "32"))) {
+        return QoreValue();
+    }
+    code.insert(3, "-");
+    q_check_unicode_byte_order(static_cast<const unsigned char*>(sample->getPtr()), sample->size(), code.c_str(),
+        xsink);
+    return QoreValue();
 }
 
 //! Returns the first string argument tagged with the character encoding given as the second argument; does not actually change the string data

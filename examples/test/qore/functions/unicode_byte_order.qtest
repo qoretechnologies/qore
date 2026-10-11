@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%requires QUnit
+
+%exec-class UnicodeByteOrderTest
+
+# Text read in the other byte order than its UTF-16 or UTF-32 encoding decodes to characters that are not in it (0a 00
+# read as big-endian UTF-16 is U+0A00, not a line feed), so it is refused instead of being read as nothing
+public class UnicodeByteOrderTest inherits QUnit::Test {
+    public {
+        const Text = "PO,Qty\n1,2\n";
+    }
+
+    constructor() : QUnit::Test("unicode byte order", "1.0") {
+        addTestCase("the byte order of data", \detectTest());
+        addTestCase("data in the other byte order than its encoding", \checkTest());
+        addTestCase("no refusal without clear evidence", \noFalsePositiveTest());
+        set_return_value(main());
+    }
+
+    #! Returns True if the data is accepted in the encoding, False if it is refused as being in the other byte order
+    private static bool accepts(binary data, string encoding) {
+        try {
+            check_unicode_byte_order(data, encoding);
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "ENCODING-BYTE-ORDER-ERROR") {
+                return False;
+            }
+            rethrow;
+        }
+    }
+
+    detectTest() {
+        # byte order marks; the UTF-32LE one starts with the UTF-16LE one
+        assertEq(<UnicodeByteOrderInfo>{"encoding": "UTF-16LE", "evidence": "bom"},
+            get_unicode_byte_order(<fffe> + binary(convert_encoding(Text, "UTF-16LE"))));
+        assertEq(<UnicodeByteOrderInfo>{"encoding": "UTF-16BE", "evidence": "bom"},
+            get_unicode_byte_order(<feff> + binary(convert_encoding(Text, "UTF-16BE"))));
+        assertEq(<UnicodeByteOrderInfo>{"encoding": "UTF-32LE", "evidence": "bom"},
+            get_unicode_byte_order(<fffe0000> + binary(convert_encoding(Text, "UTF-32LE"))));
+        assertEq(<UnicodeByteOrderInfo>{"encoding": "UTF-32BE", "evidence": "bom"},
+            get_unicode_byte_order(<0000feff> + binary(convert_encoding(Text, "UTF-32BE"))));
+        # where the zero bytes fall
+        foreach string enc in (("UTF-16LE", "UTF-16BE", "UTF-32LE", "UTF-32BE")) {
+            assertEq(<UnicodeByteOrderInfo>{"encoding": enc, "evidence": "zero-bytes"},
+                get_unicode_byte_order(binary(convert_encoding(Text, enc))), enc);
+        }
+    }
+
+    checkTest() {
+        binary le = binary(convert_encoding(Text, "UTF-16LE"));
+        binary be = binary(convert_encoding(Text, "UTF-16BE"));
+        # the other byte order, by zero bytes or by a byte order mark; the generic encodings are big-endian without a
+        # byte order mark
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "declared as UTF-16 \\(big-endian.*zero bytes where UTF-16LE.*use "
+            "UTF-16LE", \check_unicode_byte_order(), (le, "UTF-16"));
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-16LE", \check_unicode_byte_order(), (le, "utf16be"));
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-16BE", \check_unicode_byte_order(), (be, "UTF-16LE"));
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "starts with the UTF-16BE byte order mark",
+            \check_unicode_byte_order(), (<feff> + be, "UTF-16LE"));
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-32LE", \check_unicode_byte_order(),
+            (binary(convert_encoding(Text, "UTF-32LE")), "UTF-32"));
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-32BE", \check_unicode_byte_order(),
+            (binary(convert_encoding(Text, "UTF-32BE")), "utf_32le"));
+
+        # the same byte order, or a byte order mark of either order with a generic encoding
+        foreach list<auto> c in ((le, "UTF-16LE"), (be, "UTF-16"), (be, "UTF-16BE"), (<fffe> + le, "UTF-16"),
+                (<feff> + be, "UTF-16"), (<fffe> + le, "UTF-16LE"),
+                (binary(convert_encoding(Text, "UTF-32LE")), "UTF-32LE"),
+                (binary(convert_encoding(Text, "UTF-32BE")), "UTF-32"),
+                (<fffe0000> + binary(convert_encoding(Text, "UTF-32LE")), "UTF-32")) {
+            assertTrue(accepts(c[0], c[1]), sprintf("%y declared as %s is accepted", c[0].substr(0, 4), c[1]));
+        }
+        # other encodings, and a byte order of another width, are not checked
+        assertTrue(accepts(le, "UTF-8"));
+        assertTrue(accepts(le, "ISO-8859-1"));
+        assertTrue(accepts(binary(convert_encoding(Text, "UTF-32LE")), "UTF-16BE"));
+        # the helper tells a refusal
+        assertFalse(accepts(le, "UTF-16"));
+    }
+
+    noFalsePositiveTest() {
+        # CJK text has no zero bytes, except in characters such as U+4E00 whose low byte is zero
+        string cjk = "日本語の文字列、一丁七万丈三上下不与丐丑";
+        foreach string enc in (("UTF-16LE", "UTF-16BE", "UTF-16")) {
+            binary data = binary(convert_encoding(cjk, enc == "UTF-16" ? "UTF-16BE" : enc));
+            assertTrue(accepts(data, enc), "CJK text in " + enc);
+        }
+        assertNothing(get_unicode_byte_order(binary(convert_encoding(cjk, "UTF-16LE"))));
+        # big-endian text declared as the generic encoding or as big-endian
+        assertTrue(accepts(binary(convert_encoding(Text, "UTF-16BE")), "UTF-16"));
+        assertTrue(accepts(binary(convert_encoding(Text, "UTF-32BE")), "UTF-32"));
+        # two CJK characters in UTF-16BE whose only zero byte is where UTF-16LE text has them: U+4E00 U+4E01
+        assertTrue(accepts(<4e004e01>, "UTF-16BE"));
+        assertTrue(accepts(<4e004e01>, "UTF-16"));
+        # a few characters are no clear evidence; eight are
+        assertNothing(get_unicode_byte_order(binary(convert_encoding("PO,Qty\n", "UTF-16LE"))));
+        assertTrue(accepts(binary(convert_encoding("PO,Qty\n", "UTF-16LE")), "UTF-16BE"));
+        assertEq("UTF-16LE", get_unicode_byte_order(binary(convert_encoding("PO,Qty,1\n", "UTF-16LE"))).encoding);
+        assertNothing(get_unicode_byte_order(binary(convert_encoding("PO,Qty\n", "UTF-32LE"))));
+        assertEq("UTF-32LE", get_unicode_byte_order(binary(convert_encoding("PO,Qty,1\n", "UTF-32LE"))).encoding);
+        # inputs too short to tell
+        foreach binary data in ((binary(), <00>, <4100>, <0041>, <410000>)) {
+            assertNothing(get_unicode_byte_order(data), sprintf("%y", data));
+            assertTrue(accepts(data, "UTF-16BE"), sprintf("%y as UTF-16BE", data));
+            assertTrue(accepts(data, "UTF-16LE"), sprintf("%y as UTF-16LE", data));
+        }
+        # mixed content: mostly CJK text with some ASCII, in its own byte order
+        string mixed = "注文番号: 12345, 数量: 7\n" + cjk + "\n";
+        foreach string enc in (("UTF-16LE", "UTF-16BE")) {
+            assertTrue(accepts(binary(convert_encoding(mixed, enc)), enc), "mixed text in " + enc);
+        }
+        # text with one-byte characters has no zero bytes
+        assertNothing(get_unicode_byte_order(binary(convert_encoding("Grüße,\n", "ISO-8859-1"))));
+        assertNothing(get_unicode_byte_order(binary("plain ASCII text\n")));
+    }
+}

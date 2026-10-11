@@ -30,7 +30,74 @@ YamlStreamReadHandler::YamlStreamReadHandler(QoreObject* s, const QoreEncoding* 
 
 YamlStreamReadHandler::~YamlStreamReadHandler() {
     ExceptionSink xsink;
+    if (reader) {
+        reader->deref(&xsink);
+    }
     stream->deref(&xsink);
+}
+
+void YamlStreamReadHandler::setError(ExceptionSink& xsink, const char* default_message) {
+    has_error = true;
+    error_message = default_message;
+    QoreValue err = xsink.getExceptionErr();
+    if (!err.isNothing()) {
+        QoreStringValueHelper errstr(err);
+        error_code = errstr->c_str();
+        QoreValue desc = xsink.getExceptionDesc();
+        if (!desc.isNothing()) {
+            QoreStringValueHelper descstr(desc);
+            error_message = descstr->c_str();
+        }
+    }
+    xsink.clear();
+}
+
+int YamlStreamReadHandler::readText(size_t size, std::string& utf8) {
+    utf8.clear();
+    ExceptionSink xsink;
+    if (!reader) {
+        QoreProgram* pgm = stream->getProgram();
+        const QoreClass* cls = pgm ? pgm->findClass("Qore::StreamReader", &xsink) : nullptr;
+        if (!cls) {
+            if (!xsink) {
+                xsink.raiseException("STREAM-READ-ERROR", "the StreamReader class is not available");
+            }
+            setError(xsink, "cannot create a StreamReader");
+            return -1;
+        }
+        ReferenceHolder<QoreListNode> cargs(new QoreListNode(autoTypeInfo), &xsink);
+        cargs->push(stream->refSelf(), &xsink);
+        cargs->push(new QoreStringNode(encoding->getCode()), &xsink);
+        reader = cls->execConstructor(*cargs, &xsink);
+        if (xsink) {
+            if (reader) {
+                reader->deref(&xsink);
+                reader = nullptr;
+            }
+            setError(xsink, "cannot create a StreamReader");
+            return -1;
+        }
+    }
+    // whole characters, at most four UTF-8 bytes each, so that the text fits the buffer
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+    args->push((int64)(size >= 4 ? size / 4 : 1), &xsink);
+    ValueHolder rv(reader->evalMethod("readString", *args, &xsink), &xsink);
+    if (xsink) {
+        setError(xsink, "stream read error");
+        return -1;
+    }
+    if (rv->getType() != NT_STRING) {
+        // the end of the stream
+        return 0;
+    }
+    const QoreStringNode* str = rv->get<const QoreStringNode>();
+    TempEncodingHelper text(str, QCS_UTF8, &xsink);
+    if (xsink) {
+        setError(xsink, "encoding conversion error");
+        return -1;
+    }
+    utf8.assign(text->c_str(), text->size());
+    return 0;
 }
 
 void YamlStreamReadHandler::setupParser(yaml_parser_t* parser) {
@@ -55,6 +122,24 @@ int YamlStreamReadHandler::yaml_read_handler(void* data, unsigned char* buffer,
         return 1;
     }
 
+    // text in another encoding than UTF-8 is read in whole characters and converted to UTF-8
+    if (handler->encoding != QCS_UTF8) {
+        std::string utf8;
+        if (handler->readText(size, utf8)) {
+            return 0;
+        }
+        size_t utf8_len = utf8.size();
+        if (utf8_len <= size) {
+            memcpy(buffer, utf8.data(), utf8_len);
+            *size_read = utf8_len;
+        } else {
+            memcpy(buffer, utf8.data(), size);
+            handler->pending_data.assign(utf8.data() + size, utf8_len - size);
+            *size_read = size;
+        }
+        return 1;
+    }
+
     // Read from the stream
     ExceptionSink xsink;
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
@@ -62,14 +147,7 @@ int YamlStreamReadHandler::yaml_read_handler(void* data, unsigned char* buffer,
 
     ValueHolder rv(handler->stream->evalMethod("read", *args, &xsink), &xsink);
     if (xsink) {
-        handler->has_error = true;
-        handler->error_message = "stream read error";
-        QoreValue err = xsink.getExceptionErr();
-        if (!err.isNothing()) {
-            QoreStringValueHelper errstr(err);
-            handler->error_message = errstr->c_str();
-        }
-        xsink.clear();
+        handler->setError(xsink, "stream read error");
         return 0;
     }
 
@@ -93,39 +171,15 @@ int YamlStreamReadHandler::yaml_read_handler(void* data, unsigned char* buffer,
         return 1;
     }
 
-    // Convert encoding if needed
-    if (handler->encoding != QCS_UTF8) {
-        SimpleRefHolder<QoreStringNode> str(new QoreStringNode(
-            (const char*)chunk->getPtr(), chunk->size(), handler->encoding));
-        TempEncodingHelper utf8(*str, QCS_UTF8, &xsink);
-        if (xsink) {
-            handler->has_error = true;
-            handler->error_message = "encoding conversion error";
-            xsink.clear();
-            return 0;
-        }
-
-        size_t utf8_len = utf8->strlen();
-        if (utf8_len <= size) {
-            memcpy(buffer, utf8->c_str(), utf8_len);
-            *size_read = utf8_len;
-        } else {
-            // Buffer too small - copy what we can and save the rest
-            memcpy(buffer, utf8->c_str(), size);
-            handler->pending_data.assign(utf8->c_str() + size, utf8_len - size);
-            *size_read = size;
-        }
+    // UTF-8 bytes are passed to the parser as they are
+    size_t chunk_size = chunk->size();
+    if (chunk_size <= size) {
+        memcpy(buffer, chunk->getPtr(), chunk_size);
+        *size_read = chunk_size;
     } else {
-        // Already UTF-8
-        size_t chunk_size = chunk->size();
-        if (chunk_size <= size) {
-            memcpy(buffer, chunk->getPtr(), chunk_size);
-            *size_read = chunk_size;
-        } else {
-            memcpy(buffer, chunk->getPtr(), size);
-            handler->pending_data.assign((const char*)chunk->getPtr() + size, chunk_size - size);
-            *size_read = size;
-        }
+        memcpy(buffer, chunk->getPtr(), size);
+        handler->pending_data.assign((const char*)chunk->getPtr() + size, chunk_size - size);
+        *size_read = size;
     }
 
     return 1;

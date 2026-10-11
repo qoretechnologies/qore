@@ -101,11 +101,27 @@ while (i.next()) {
             }
         }
 
+        #! Reads all text from the stream in the encoding of the iterator
+        /** @param is the stream to read
+
+            @return the text read; empty for an empty stream
+
+            @throw ENCODING-BYTE-ORDER-ERROR the data is in the other byte order than its UTF-16 or UTF-32 encoding
+        */
+        private string readText(Qore::InputStream is) {
+            StreamReader reader(is, m_encoding ?? get_default_encoding());
+            return reader.readString(-1) ?? "";
+        }
+
         #! Initialize the iterator with raw EDIFACT data
         /** @param data the raw EDIFACT message data
         */
         private initializeFromData(string data) {
             @assert(data.val(), "EDIFACT data cannot be empty");
+            # the segment syntax is ASCII; text in a UTF-16 or UTF-32 encoding is split as UTF-8
+            if (data.encoding() =~ /^UTF-(16|32)/) {
+                data = convert_encoding(data, "UTF-8");
+            }
             # Split into segments (this also handles UNA parsing)
             m_segments = splitIntoSegments(data);
             m_index = -1;
