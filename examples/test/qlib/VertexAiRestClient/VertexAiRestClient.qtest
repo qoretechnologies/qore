@@ -246,8 +246,8 @@ public class VertexAiTest inherits QUnit::Test {
             "Vertex advertises the Gemini conservative tool-count cap");
         assertTrue(vertex.prefers_single_tool_dispatch,
             "Vertex advertises the Gemini single-dispatch preference");
-        assertTrue(vertex.prefers_stringified_tool_payloads,
-            "Vertex advertises the Gemini stringified-payload preference");
+        assertFalse(vertex.prefers_stringified_tool_payloads,
+            "Vertex fills nested tool payloads natively, as Gemini does");
 
         assertEq(gemini.prefers_narrow_tool_catalogue,
             vertex.prefers_narrow_tool_catalogue,
