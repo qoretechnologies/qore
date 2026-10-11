@@ -396,8 +396,8 @@
           "message": "要傳回的記錄筆數，最多 200"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 的上限 `200`。請求超過上限的值將會傳回最大值而非失敗。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 對此清單的上限 `200`；超過上限的值會在送出請求前遭到拒絕。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -824,8 +824,8 @@
           "message": "要傳回的記錄筆數，最多 200"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 的上限 `200`。請求超過上限的值將會傳回最大值而非失敗。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 對此清單的上限 `200`；超過上限的值會在送出請求前遭到拒絕。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -1388,8 +1388,8 @@
           "message": "要傳回的記錄筆數，最多 200"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 的上限 `200`。請求超過上限的值將會傳回最大值而非失敗。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 對此清單的上限 `200`；超過上限的值會在送出請求前遭到拒絕。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -3620,8 +3620,8 @@
           "message": "要傳回的記錄筆數，最多 200"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 的上限 `200`。請求超過上限的值將會傳回最大值而非失敗。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 對此清單的上限 `200`；超過上限的值會在送出請求前遭到拒絕。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -3772,8 +3772,8 @@
           "message": "列出此 Paddle 帳戶中的交易"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.desc": {
-          "source": "Lists transactions - the records that calculate and capture revenue.\n\nFilter by `status` to separate what has been paid (`completed`, `paid`) from what is outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, `updated_at` and `billed_at` take an operator suffix, as in `updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only what changed.\n\n`per_page` defaults to 30 here rather than 50, because a transaction is a large object.",
-          "message": "列出交易——計算與收取營收的記錄。\n\n依 `status` 篩選以區分已付款項 (`completed`, `paid`)、未付款項 (`billed`, `past_due`) 或仍為草稿者 (`draft`, `ready`)。`created_at`、`updated_at` 和 `billed_at` 接受運算子後綴，例如 `updated_at[GT]=2026-01-01T00:00:00Z`，增量同步正是透過此方式僅擷取變更的內容。\n\n此處 `per_page` 預設為 30 而非 50，因為交易屬於大型物件。"
+          "source": "Lists transactions - the records that calculate and capture revenue.\n\nFilter by `status` to separate what has been paid (`completed`, `paid`) from what is outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, `updated_at` and `billed_at` take an operator suffix, as in `updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only what changed.\n\n`per_page` defaults to 30 here rather than 50, and cannot be more than 30, because a transaction is a large object.",
+          "message": "列出交易——計算與收取營收的記錄。\n\n依 `status` 篩選以區分已付款項 (`completed`, `paid`)、未付款項 (`billed`, `past_due`) 或仍為草稿者 (`draft`, `ready`)。`created_at`、`updated_at` 和 `billed_at` 接受運算子後綴，例如 `updated_at[GT]=2026-01-01T00:00:00Z`，增量同步正是透過此方式僅擷取變更的內容。\n\n此處 `per_page` 預設為 30 而非 50，且不得超過 30，因為交易屬於大型物件。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.display_name": {
           "source": "Customer",
@@ -3864,12 +3864,12 @@
           "message": "每頁"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.short_desc": {
-          "source": "How many records to return, up to 200",
-          "message": "要傳回的記錄筆數，最多 200"
+          "source": "How many transactions to return, up to 30",
+          "message": "要傳回的交易筆數，最多 30"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 的上限 `200`。請求超過上限的值將會傳回最大值而非失敗。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
+          "source": "How many transactions to return in one request, up to Paddle's maximum of `30` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "單次請求中傳回的交易筆數，最高為 Paddle 對此清單的上限 `30`；超過上限的值會在送出請求前遭到拒絕。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -5440,8 +5440,8 @@
           "message": "要傳回的記錄筆數，最多 200"
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 的上限 `200`。請求超過上限的值將會傳回最大值而非失敗。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 對此清單的上限 `200`；超過上限的值會在送出請求前遭到拒絕。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.YWZ0ZXI.display_name": {
           "source": "After",

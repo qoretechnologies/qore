@@ -396,8 +396,8 @@
           "message": "返すレコード数（最大200件）"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "1回のリクエストで返すレコード数（Paddleの最大値である `200` まで）。これより大きい値を指定した場合、エラーにはならず最大値が返されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "1回のリクエストで返すレコード数（この一覧でのPaddleの最大値である `200` まで）。これより大きい値はリクエストの送信前に拒否されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -824,8 +824,8 @@
           "message": "返すレコード数（最大200件）"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "1回のリクエストで返すレコード数（Paddleの最大値である `200` まで）。これより大きい値を指定した場合、エラーにはならず最大値が返されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "1回のリクエストで返すレコード数（この一覧でのPaddleの最大値である `200` まで）。これより大きい値はリクエストの送信前に拒否されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -1388,8 +1388,8 @@
           "message": "返すレコード数（最大200件）"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "1回のリクエストで返すレコード数（Paddleの最大値である `200` まで）。これより大きい値を指定した場合、エラーにはならず最大値が返されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "1回のリクエストで返すレコード数（この一覧でのPaddleの最大値である `200` まで）。これより大きい値はリクエストの送信前に拒否されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -3620,8 +3620,8 @@
           "message": "返すレコード数（最大200件）"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "1回のリクエストで返すレコード数（Paddleの最大値である `200` まで）。これより大きい値を指定した場合、エラーにはならず最大値が返されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "1回のリクエストで返すレコード数（この一覧でのPaddleの最大値である `200` まで）。これより大きい値はリクエストの送信前に拒否されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -3772,8 +3772,8 @@
           "message": "このPaddleアカウントのトランザクションを一覧表示"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.desc": {
-          "source": "Lists transactions - the records that calculate and capture revenue.\n\nFilter by `status` to separate what has been paid (`completed`, `paid`) from what is outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, `updated_at` and `billed_at` take an operator suffix, as in `updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only what changed.\n\n`per_page` defaults to 30 here rather than 50, because a transaction is a large object.",
-          "message": "収益の計算および回収を行うレコードであるトランザクションを一覧表示します。\n\n`status` でフィルタリングして、支払済み（`completed`、`paid`）と未払い（`billed`、`past_due`）または下書き（`draft`、`ready`）を区別できます。`created_at`、`updated_at`、`billed_at` は `updated_at[GT]=2026-01-01T00:00:00Z` のように演算子サフィックスを受け取り、差分同期で変更分のみを取得するために使用します。\n\nトランザクションはサイズの大きいオブジェクトであるため、ここでは `per_page` のデフォルト値が50ではなく30になっています。"
+          "source": "Lists transactions - the records that calculate and capture revenue.\n\nFilter by `status` to separate what has been paid (`completed`, `paid`) from what is outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, `updated_at` and `billed_at` take an operator suffix, as in `updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only what changed.\n\n`per_page` defaults to 30 here rather than 50, and cannot be more than 30, because a transaction is a large object.",
+          "message": "収益の計算および回収を行うレコードであるトランザクションを一覧表示します。\n\n`status` でフィルタリングして、支払済み（`completed`、`paid`）と未払い（`billed`、`past_due`）または下書き（`draft`、`ready`）を区別できます。`created_at`、`updated_at`、`billed_at` は `updated_at[GT]=2026-01-01T00:00:00Z` のように演算子サフィックスを受け取り、差分同期で変更分のみを取得するために使用します。\n\nトランザクションはサイズの大きいオブジェクトであるため、ここでは `per_page` のデフォルト値が50ではなく30であり、30を超えることはできません。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.display_name": {
           "source": "Customer",
@@ -3864,12 +3864,12 @@
           "message": "ページあたり"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.short_desc": {
-          "source": "How many records to return, up to 200",
-          "message": "返すレコード数（最大200件）"
+          "source": "How many transactions to return, up to 30",
+          "message": "返すトランザクション数（最大30件）"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "1回のリクエストで返すレコード数（Paddleの最大値である `200` まで）。これより大きい値を指定した場合、エラーにはならず最大値が返されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
+          "source": "How many transactions to return in one request, up to Paddle's maximum of `30` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "1回のリクエストで返すトランザクション数（この一覧でのPaddleの最大値である `30` まで）。これより大きい値はリクエストの送信前に拒否されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -5440,8 +5440,8 @@
           "message": "返すレコード数（最大200件）"
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "1回のリクエストで返すレコード数（Paddleの最大値である `200` まで）。これより大きい値を指定した場合、エラーにはならず最大値が返されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "1回のリクエストで返すレコード数（この一覧でのPaddleの最大値である `200` まで）。これより大きい値はリクエストの送信前に拒否されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.YWZ0ZXI.display_name": {
           "source": "After",

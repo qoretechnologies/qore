@@ -396,8 +396,8 @@
           "message": "Liczba rekordów do zwrócenia, maksymalnie do 200"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "Liczba rekordów do zwrócenia w jednym żądaniu, maksymalnie do limitu Paddle wynoszącego `200`. Żądanie większej liczby zwraca wartość maksymalną zamiast błędu.\n\n`meta.pagination.per_page` w odpowiedzi informuje, ile faktycznie zwrócono, a `meta.pagination.has_more` wskazuje, czy istnieje kolejna strona."
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "Liczba rekordów zwracanych w jednym żądaniu, do maksymalnej wartości Paddle wynoszącej `200` dla tej listy; większa wartość jest odrzucana przed wysłaniem żądania.\n\n`meta.pagination.per_page` w odpowiedzi informuje, ile faktycznie zwrócono, a `meta.pagination.has_more` wskazuje, czy istnieje kolejna strona."
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -824,8 +824,8 @@
           "message": "Liczba rekordów do zwrócenia, maksymalnie do 200"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "Liczba rekordów do zwrócenia w jednym żądaniu, maksymalnie do limitu Paddle wynoszącego `200`. Żądanie większej liczby zwraca wartość maksymalną zamiast błędu.\n\n`meta.pagination.per_page` w odpowiedzi informuje, ile faktycznie zwrócono, a `meta.pagination.has_more` wskazuje, czy istnieje kolejna strona."
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "Liczba rekordów zwracanych w jednym żądaniu, do maksymalnej wartości Paddle wynoszącej `200` dla tej listy; większa wartość jest odrzucana przed wysłaniem żądania.\n\n`meta.pagination.per_page` w odpowiedzi informuje, ile faktycznie zwrócono, a `meta.pagination.has_more` wskazuje, czy istnieje kolejna strona."
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -1388,8 +1388,8 @@
           "message": "Liczba rekordów do zwrócenia, maksymalnie do 200"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "Liczba rekordów do zwrócenia w jednym żądaniu, maksymalnie do limitu Paddle wynoszącego `200`. Żądanie większej liczby zwraca wartość maksymalną zamiast błędu.\n\n`meta.pagination.per_page` w odpowiedzi informuje, ile faktycznie zwrócono, a `meta.pagination.has_more` wskazuje, czy istnieje kolejna strona."
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "Liczba rekordów zwracanych w jednym żądaniu, do maksymalnej wartości Paddle wynoszącej `200` dla tej listy; większa wartość jest odrzucana przed wysłaniem żądania.\n\n`meta.pagination.per_page` w odpowiedzi informuje, ile faktycznie zwrócono, a `meta.pagination.has_more` wskazuje, czy istnieje kolejna strona."
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -3620,8 +3620,8 @@
           "message": "Liczba rekordów do zwrócenia, maksymalnie do 200"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "Liczba rekordów do zwrócenia w jednym żądaniu, maksymalnie do limitu Paddle wynoszącego `200`. Żądanie większej liczby zwraca wartość maksymalną zamiast błędu.\n\n`meta.pagination.per_page` w odpowiedzi informuje, ile faktycznie zwrócono, a `meta.pagination.has_more` wskazuje, czy istnieje kolejna strona."
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "Liczba rekordów zwracanych w jednym żądaniu, do maksymalnej wartości Paddle wynoszącej `200` dla tej listy; większa wartość jest odrzucana przed wysłaniem żądania.\n\n`meta.pagination.per_page` w odpowiedzi informuje, ile faktycznie zwrócono, a `meta.pagination.has_more` wskazuje, czy istnieje kolejna strona."
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -3772,8 +3772,8 @@
           "message": "Wyświetl transakcje na tym koncie Paddle"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.desc": {
-          "source": "Lists transactions - the records that calculate and capture revenue.\n\nFilter by `status` to separate what has been paid (`completed`, `paid`) from what is outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, `updated_at` and `billed_at` take an operator suffix, as in `updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only what changed.\n\n`per_page` defaults to 30 here rather than 50, because a transaction is a large object.",
-          "message": "Wyświetla listę transakcji — rekordów obliczających i rejestrujących przychód.\n\nFiltruj według `status`, aby oddzielić to, co zostało zapłacone (`completed`, `paid`), od tego, co jest zaległe (`billed`, `past_due`) lub nadal jest wersją roboczą (`draft`, `ready`). Parametry `created_at`, `updated_at` i `billed_at` przyjmują sufiks operatora, jak w `updated_at[GT]=2026-01-01T00:00:00Z`, co pozwala na synchronizację przyrostową tylko zmienionych elementów.\n\n`per_page` ma tutaj domyślną wartość 30 zamiast 50, ponieważ transakcja jest dużym obiektem."
+          "source": "Lists transactions - the records that calculate and capture revenue.\n\nFilter by `status` to separate what has been paid (`completed`, `paid`) from what is outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, `updated_at` and `billed_at` take an operator suffix, as in `updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only what changed.\n\n`per_page` defaults to 30 here rather than 50, and cannot be more than 30, because a transaction is a large object.",
+          "message": "Wyświetla listę transakcji — rekordów obliczających i rejestrujących przychód.\n\nFiltruj według `status`, aby oddzielić to, co zostało zapłacone (`completed`, `paid`), od tego, co jest zaległe (`billed`, `past_due`) lub nadal jest wersją roboczą (`draft`, `ready`). Parametry `created_at`, `updated_at` i `billed_at` przyjmują sufiks operatora, jak w `updated_at[GT]=2026-01-01T00:00:00Z`, co pozwala na synchronizację przyrostową tylko zmienionych elementów.\n\n`per_page` ma tutaj domyślną wartość 30 zamiast 50 i nie może przekraczać 30, ponieważ transakcja jest dużym obiektem."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.display_name": {
           "source": "Customer",
@@ -3864,12 +3864,12 @@
           "message": "Na stronę"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.short_desc": {
-          "source": "How many records to return, up to 200",
-          "message": "Liczba rekordów do zwrócenia, maksymalnie do 200"
+          "source": "How many transactions to return, up to 30",
+          "message": "Liczba transakcji do zwrócenia, maksymalnie do 30"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "Liczba rekordów do zwrócenia w jednym żądaniu, maksymalnie do limitu Paddle wynoszącego `200`. Żądanie większej liczby zwraca wartość maksymalną zamiast błędu.\n\n`meta.pagination.per_page` w odpowiedzi informuje, ile faktycznie zwrócono, a `meta.pagination.has_more` wskazuje, czy istnieje kolejna strona."
+          "source": "How many transactions to return in one request, up to Paddle's maximum of `30` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "Liczba transakcji zwracanych w jednym żądaniu, do maksymalnej wartości Paddle wynoszącej `30` dla tej listy; większa wartość jest odrzucana przed wysłaniem żądania.\n\n`meta.pagination.per_page` w odpowiedzi informuje, ile faktycznie zwrócono, a `meta.pagination.has_more` wskazuje, czy istnieje kolejna strona."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -5440,8 +5440,8 @@
           "message": "Liczba rekordów do zwrócenia, maksymalnie do 200"
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "Liczba rekordów do zwrócenia w jednym żądaniu, maksymalnie do limitu Paddle wynoszącego `200`. Żądanie większej liczby zwraca wartość maksymalną zamiast błędu.\n\n`meta.pagination.per_page` w odpowiedzi informuje, ile faktycznie zwrócono, a `meta.pagination.has_more` wskazuje, czy istnieje kolejna strona."
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "Liczba rekordów zwracanych w jednym żądaniu, do maksymalnej wartości Paddle wynoszącej `200` dla tej listy; większa wartość jest odrzucana przed wysłaniem żądania.\n\n`meta.pagination.per_page` w odpowiedzi informuje, ile faktycznie zwrócono, a `meta.pagination.has_more` wskazuje, czy istnieje kolejna strona."
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.YWZ0ZXI.display_name": {
           "source": "After",

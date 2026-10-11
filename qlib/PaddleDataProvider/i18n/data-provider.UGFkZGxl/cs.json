@@ -396,8 +396,8 @@
           "message": "Kolik záznamů vrátit, maximálně 200"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "Kolik záznamů vrátit v jednom požadavku, maximálně do limitu Paddle `200`. Požadavek na vyšší počet vrátí maximum místo chyby.\n\n`meta.pagination.per_page` v odpovědi uvádí, kolik záznamů bylo skutečně vráceno, a `meta.pagination.has_more` informuje, zda existuje další stránka."
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "Kolik záznamů vrátit v jednom požadavku, maximálně do limitu Paddle `200` pro tento výpis; vyšší hodnota je odmítnuta ještě před odesláním požadavku.\n\n`meta.pagination.per_page` v odpovědi uvádí, kolik záznamů bylo skutečně vráceno, a `meta.pagination.has_more` informuje, zda existuje další stránka."
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -824,8 +824,8 @@
           "message": "Kolik záznamů vrátit, maximálně 200"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "Kolik záznamů vrátit v jednom požadavku, maximálně do limitu Paddle `200`. Požadavek na vyšší počet vrátí maximum místo chyby.\n\n`meta.pagination.per_page` v odpovědi uvádí, kolik záznamů bylo skutečně vráceno, a `meta.pagination.has_more` informuje, zda existuje další stránka."
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "Kolik záznamů vrátit v jednom požadavku, maximálně do limitu Paddle `200` pro tento výpis; vyšší hodnota je odmítnuta ještě před odesláním požadavku.\n\n`meta.pagination.per_page` v odpovědi uvádí, kolik záznamů bylo skutečně vráceno, a `meta.pagination.has_more` informuje, zda existuje další stránka."
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -1388,8 +1388,8 @@
           "message": "Kolik záznamů vrátit, maximálně 200"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "Kolik záznamů vrátit v jednom požadavku, maximálně do limitu Paddle `200`. Požadavek na vyšší počet vrátí maximum místo chyby.\n\n`meta.pagination.per_page` v odpovědi uvádí, kolik záznamů bylo skutečně vráceno, a `meta.pagination.has_more` informuje, zda existuje další stránka."
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "Kolik záznamů vrátit v jednom požadavku, maximálně do limitu Paddle `200` pro tento výpis; vyšší hodnota je odmítnuta ještě před odesláním požadavku.\n\n`meta.pagination.per_page` v odpovědi uvádí, kolik záznamů bylo skutečně vráceno, a `meta.pagination.has_more` informuje, zda existuje další stránka."
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -3620,8 +3620,8 @@
           "message": "Kolik záznamů vrátit, maximálně 200"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "Kolik záznamů vrátit v jednom požadavku, maximálně do limitu Paddle `200`. Požadavek na vyšší počet vrátí maximum místo chyby.\n\n`meta.pagination.per_page` v odpovědi uvádí, kolik záznamů bylo skutečně vráceno, a `meta.pagination.has_more` informuje, zda existuje další stránka."
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "Kolik záznamů vrátit v jednom požadavku, maximálně do limitu Paddle `200` pro tento výpis; vyšší hodnota je odmítnuta ještě před odesláním požadavku.\n\n`meta.pagination.per_page` v odpovědi uvádí, kolik záznamů bylo skutečně vráceno, a `meta.pagination.has_more` informuje, zda existuje další stránka."
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -3772,8 +3772,8 @@
           "message": "Vypsat transakce v tomto účtu Paddle"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.desc": {
-          "source": "Lists transactions - the records that calculate and capture revenue.\n\nFilter by `status` to separate what has been paid (`completed`, `paid`) from what is outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, `updated_at` and `billed_at` take an operator suffix, as in `updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only what changed.\n\n`per_page` defaults to 30 here rather than 50, because a transaction is a large object.",
-          "message": "Vypíše transakce – záznamy, které počítají a zachycují výnosy.\n\nFiltrujte podle `status`, chcete-li oddělit to, co bylo zaplaceno (`completed`, `paid`), od neuhrazených položek (`billed`, `past_due`) nebo konceptů (`draft`, `ready`). `created_at`, `updated_at` a `billed_at` přijímají příponu operátoru, jako například v `updated_at[GT]=2026-01-01T00:00:00Z`, což umožňuje přírůstkové synchronizaci načíst pouze změny.\n\n`per_page` je zde ve výchozím nastavení 30 místo 50, protože transakce je velký objekt."
+          "source": "Lists transactions - the records that calculate and capture revenue.\n\nFilter by `status` to separate what has been paid (`completed`, `paid`) from what is outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, `updated_at` and `billed_at` take an operator suffix, as in `updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only what changed.\n\n`per_page` defaults to 30 here rather than 50, and cannot be more than 30, because a transaction is a large object.",
+          "message": "Vypíše transakce – záznamy, které počítají a zachycují výnosy.\n\nFiltrujte podle `status`, chcete-li oddělit to, co bylo zaplaceno (`completed`, `paid`), od neuhrazených položek (`billed`, `past_due`) nebo konceptů (`draft`, `ready`). `created_at`, `updated_at` a `billed_at` přijímají příponu operátoru, jako například v `updated_at[GT]=2026-01-01T00:00:00Z`, což umožňuje přírůstkové synchronizaci načíst pouze změny.\n\n`per_page` má zde výchozí hodnotu 30 místo 50 a nemůže být vyšší než 30, protože transakce je velký objekt."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.display_name": {
           "source": "Customer",
@@ -3864,12 +3864,12 @@
           "message": "Na stránku"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.short_desc": {
-          "source": "How many records to return, up to 200",
-          "message": "Kolik záznamů vrátit, maximálně 200"
+          "source": "How many transactions to return, up to 30",
+          "message": "Kolik transakcí vrátit, maximálně 30"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "Kolik záznamů vrátit v jednom požadavku, maximálně do limitu Paddle `200`. Požadavek na vyšší počet vrátí maximum místo chyby.\n\n`meta.pagination.per_page` v odpovědi uvádí, kolik záznamů bylo skutečně vráceno, a `meta.pagination.has_more` informuje, zda existuje další stránka."
+          "source": "How many transactions to return in one request, up to Paddle's maximum of `30` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "Kolik transakcí vrátit v jednom požadavku, maximálně do limitu Paddle `30` pro tento výpis; vyšší hodnota je odmítnuta ještě před odesláním požadavku.\n\n`meta.pagination.per_page` v odpovědi uvádí, kolik záznamů bylo skutečně vráceno, a `meta.pagination.has_more` informuje, zda existuje další stránka."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YWZ0ZXI.display_name": {
           "source": "After",
@@ -5440,8 +5440,8 @@
           "message": "Kolik záznamů vrátit, maximálně 200"
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.cGVyX3BhZ2U.desc": {
-          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
-          "message": "Kolik záznamů vrátit v jednom požadavku, maximálně do limitu Paddle `200`. Požadavek na vyšší počet vrátí maximum místo chyby.\n\n`meta.pagination.per_page` v odpovědi uvádí, kolik záznamů bylo skutečně vráceno, a `meta.pagination.has_more` informuje, zda existuje další stránka."
+          "source": "How many records to return in one request, up to Paddle's maximum of `200` for this listing; a larger value is rejected before the request is sent.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "Kolik záznamů vrátit v jednom požadavku, maximálně do limitu Paddle `200` pro tento výpis; vyšší hodnota je odmítnuta ještě před odesláním požadavku.\n\n`meta.pagination.per_page` v odpovědi uvádí, kolik záznamů bylo skutečně vráceno, a `meta.pagination.has_more` informuje, zda existuje další stránka."
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.YWZ0ZXI.display_name": {
           "source": "After",

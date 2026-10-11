@@ -462,8 +462,12 @@ public class PaddleDataProviderTest inherits QUnit::Test {
             # Paddle wraps a listing in "data", so records are never at the top level
             assertEq(("data",), rd.records_path);
             assertEq("id", rd.value_field);
-            # Paddle's maximum page size, so filling a dropdown is one request rather than a walk
-            assertEq(PaddleManifest::MaxPerPage, rd.options.per_page);
+            # the listing's maximum page size in Paddle's schema, so filling a dropdown is one request rather than
+            # a walk; the transaction listing's is lower than the others'
+            OpenApi3::OperationObject op = aset.getOperationEx(rd.action).getOperation();
+            assertEq(op.parameters.per_page.getSchema().maximum.toInt(), rd.options.per_page, rd.name);
+            assertEq(rd.action == "list_transactions" ? PaddleManifest::MaxTransactionsPerPage
+                : PaddleManifest::MaxPerPage, rd.options.per_page, rd.name);
         }
 
         # an identifier usually comes from a previous workflow step, and a narrowly scoped key may not be

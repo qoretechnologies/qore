@@ -49,8 +49,9 @@ public namespace PaddleDataProvider {
       accepts, so it is presented as the schema declares it.
     - the SDK returns camel-cased properties (\c createdAt); the REST API returns \c created_at.  Every
       response type here is the schema's, so field names are Paddle's own.
-    - \c per_page is capped at 200 by Paddle for every listing, not at the SDK's page size; the schema
-      carries the cap and the derived type enforces it.
+    - \c per_page is capped per listing by Paddle, not at the SDK's page size: at 200, except for transactions,
+      which are capped at 30.  The schema carries each cap, and the request validation enforces it before a
+      request is sent.
 
     Paddle's timestamps are RFC 3339 strings, not epoch counts, so unlike Stripe no timestamp codec is
     needed anywhere in this application.
@@ -93,16 +94,23 @@ public class PaddleManifest {
         #! Reference data name: reports
         const RefReport = "paddle-report";
 
-        #! Paddle's maximum page size for a listing
+        #! Paddle's maximum page size for a listing (the schema's \c per_page maximum), except for transactions
         const MaxPerPage = 200;
+
+        #! Paddle's maximum page size for the transaction listing
+        /** A transaction is a large object, so its listing is capped lower than the others: the schema declares
+            \c per_page of \c list-transactions with a maximum of 30 (\c ListTransactionsQueryParams).
+        */
+        const MaxTransactionsPerPage = 30;
 
         #! The dropdowns the application offers
         /** Each is produced by executing a listing action from this same manifest, so a dropdown can never
             drift away from an endpoint the application actually exports.
 
-            \c per_page is set to Paddle's maximum, so that filling a dropdown is a single request rather
-            than a walk through the whole collection, and the records are read from the \c data member of
-            Paddle's response envelope.
+            \c per_page is set to the listing's maximum in Paddle's schema, so that filling a dropdown is a single
+            request rather than a walk through the whole collection, and the records are read from the \c data
+            member of Paddle's response envelope.  The action set checks each value against the listing's schema
+            when it is built.
         */
         const ReferenceData = {
             RefCustomer: <RestSchemaReferenceDataInfo>{
@@ -145,7 +153,7 @@ public class PaddleManifest {
             RefTransaction: <RestSchemaReferenceDataInfo>{
                 "name": RefTransaction,
                 "action": "list_transactions",
-                "options": {"per_page": MaxPerPage},
+                "options": {"per_page": MaxTransactionsPerPage},
                 "records_path": "data",
                 "value_field": "id",
                 # only a billed transaction has an invoice number; the ID is shown for the rest
@@ -163,17 +171,27 @@ public class PaddleManifest {
             },
         };
 
-        #! Overlay shared by the \c per_page option of every listing action
+        #! Overlay shared by the \c per_page option of every listing action except the transaction listing
         const PerPageOverlay = <RestSchemaFieldOverlayInfo>{
             "display_name": "Per Page",
             "short_desc": "How many records to return, up to 200",
-            "desc": "How many records to return in one request, up to Paddle's maximum of `200`. Asking "
-                "for more returns the maximum rather than failing.\n\n"
+            "desc": "How many records to return in one request, up to Paddle's maximum of `200` for this "
+                "listing; a larger value is rejected before the request is sent.\n\n"
                 "`meta.pagination.per_page` in the response reports how many were actually returned, and "
                 "`meta.pagination.has_more` says whether another page exists.",
             "preselected": True,
             "example_value": 50,
         };
+
+        #! Overlay for the \c per_page option of the transaction listing, which Paddle caps at 30
+        const TransactionsPerPageOverlay = cast<hash<RestSchemaFieldOverlayInfo>>(PerPageOverlay + {
+            "short_desc": "How many transactions to return, up to 30",
+            "desc": "How many transactions to return in one request, up to Paddle's maximum of `30` for this "
+                "listing; a larger value is rejected before the request is sent.\n\n"
+                "`meta.pagination.per_page` in the response reports how many were actually returned, and "
+                "`meta.pagination.has_more` says whether another page exists.",
+            "example_value": 30,
+        });
 
         #! Overlay shared by the \c after cursor of every listing action
         const AfterOverlay = <RestSchemaFieldOverlayInfo>{
@@ -829,8 +847,8 @@ public class PaddleManifest {
                     "`updated_at` and `billed_at` take an operator suffix, as in "
                     "`updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only "
                     "what changed.\n\n"
-                    "`per_page` defaults to 30 here rather than 50, because a transaction is a large "
-                    "object.",
+                    "`per_page` defaults to 30 here rather than 50, and cannot be more than 30, because a "
+                    "transaction is a large object.",
                 "groups": (GroupTransactions,),
                 "field_order": ("customer_id", "status", "subscription_id", "updated_at", "created_at",
                     "billed_at", "include", "per_page", "after", "id", "invoice_number", "origin",
@@ -861,7 +879,7 @@ public class PaddleManifest {
                         "short_desc": "Include related entities in the response",
                     },
                     "order_by": OrderByOverlay,
-                    "per_page": PerPageOverlay,
+                    "per_page": TransactionsPerPageOverlay,
                     "status": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Status",
                         "short_desc": "Return only transactions with these statuses",
