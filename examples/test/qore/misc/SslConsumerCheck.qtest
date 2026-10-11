@@ -117,6 +117,11 @@ class SslConsumerCheckTest inherits QUnit::Test {
             r.output);
         assertNRegex("Warning", r.output);
 
+        # an imported library target of a module in its own directory, linked after the check is scheduled
+        r = check("module-subdir-imported");
+        assertEq(0, r.rc, r.output);
+        assertRegex("module mod_sub: .*dep_other.* loads .*libssl[.](so[.])?4.* privately", r.output);
+
         r = check("module-own-openssl-same");
         assertEq(0, r.rc, r.output);
         assertNRegex("privately|Warning", r.output);
