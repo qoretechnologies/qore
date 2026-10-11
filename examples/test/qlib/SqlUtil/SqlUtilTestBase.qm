@@ -456,8 +456,9 @@ public class SqlTestBase inherits QUnit::Test {
             assertEq(SqlUtil::TT_Transaction, tmp.getTempScope());
             TempTableHelper th(tmp);
 
-            # a join against an empty temporary table returns no rows
-            assertEq((), src.selectRows({"columns": ("id",), "join": join_inner(tmp, "t", {"id": "id"})}));
+            # a join against an empty temporary table returns no rows (selectRows() returns an empty list or no value,
+            # depending on the driver)
+            assertEq(0, src.selectRows({"columns": ("id",), "join": join_inner(tmp, "t", {"id": "id"})}).size());
 
             # fill the temporary table entirely server-side (INSERT ... SELECT)
             int filled = tmp.insertFromSelect(("id",), src, {"columns": "id", "where": {"grp": 1}});

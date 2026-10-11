@@ -75,6 +75,52 @@ class FreetdsTestSchema inherits SqlUtilTestSchema {
     }
 }
 
+#! A schema with default values that SQL Server returns in another form than they are declared
+class DefaultValueFormSchema inherits SqlUtilTestSchema {
+    public {
+        const TableName = "mssql_test_default_forms";
+
+        const Columns = {
+            "id": c_number(14, True),
+            # numbers: returned in two pairs of parentheses (ex: ((-1)))
+            "int_neg": {"qore_type": "integer", "default_value": -1},
+            "num_neg": {"qore_type": "number", "size": 10, "scale": 2, "default_value": -1.5n},
+            "int_pos": {"qore_type": "integer", "default_value": 1},
+            # strings and expressions: returned in one pair of parentheses (ex: ('-1'), (getdate()))
+            "str_neg": {"qore_type": "string", "size": 10, "default_value": "-1"},
+            "str": {"qore_type": "string", "size": 10, "default_value": "abc"},
+            "str_paren": {"qore_type": "string", "size": 10, "default_value": "(a)"},
+            "dt_now": {"native_type": "datetime", "default_value": "getdate()", "default_value_native": True},
+        };
+
+        #! the default values of the columns in SQL
+        const DefaultSql = {
+            "int_neg": "-1",
+            "num_neg": "-1.5",
+            "int_pos": "1",
+            "str_neg": "'-1'",
+            "str": "'abc'",
+            "str_paren": "'(a)'",
+            "dt_now": "getdate()",
+        };
+    }
+
+    constructor(AbstractDatasource ds, *string dts, *string its) : SqlUtilTestSchema(ds, dts, its) {
+    }
+
+    private string getNameImpl() {
+        return "DefaultValueFormSchema";
+    }
+
+    private string getVersionImpl() {
+        return "1.0";
+    }
+
+    private *hash<auto> getTablesImpl() {
+        return {TableName: {"columns": Columns}};
+    }
+} # class DefaultValueFormSchema
+
 class FreetdsTest inherits SqlTestBase {
     public {
         const CustomColumns = (
@@ -154,6 +200,7 @@ class FreetdsTest inherits SqlTestBase {
             addTestCase("partition switch", \partitionExchangeTest());
             addTestCase("create as select", \createAsSelectTest());
             addTestCase("drop table options", \dropTableOptionsTest());
+            addTestCase("default values in the form SQL Server returns them", \defaultValueFormTest());
         }
 
         set_return_value(main());
@@ -661,6 +708,49 @@ class FreetdsTest inherits SqlTestBase {
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--conn=ARG", "set DB connection argument (ex: \"freetds:user/pass@db\")", OptionColumn);
+    }
+
+    defaultValueFormTest() {
+        AbstractDatasource ds = table.getDatasource();
+        on_exit {
+            ds.rollback();
+            Table t(ds, DefaultValueFormSchema::TableName);
+            if (t.checkExistence()) {
+                t.dropCommit();
+            }
+        }
+
+        DefaultValueFormSchema schema(ds);
+        assertGt(0, schema.align(False, m_options.verbose, m_options.verbose > 0), "the schema is created");
+        # aligning the schema created from the same definition changes nothing
+        assertEq(0, schema.align(False, m_options.verbose, m_options.verbose > 0), "the schema is aligned");
+
+        Table t(ds, DefaultValueFormSchema::TableName);
+        hash<string, AbstractColumn> cols = t.describe().getHash();
+        # each column read from the database has the declared default value
+        foreach hash<auto> i in (DefaultValueFormSchema::DefaultSql.pairIterator()) {
+            assertEq(i.value, cols{i.key}.def_val, i.key);
+        }
+
+        # another value replaces the default constraint of the column, which has a name given by the server
+        MssqlColumn str_col = cols.str;
+        assertEq(Type::String, str_col.default_constraint.type());
+        assertNeq("dv_str", str_col.default_constraint);
+        AbstractColumn declared = str_col.copy();
+        declared.def_val = "'abd'";
+        list<string> sql = str_col.getModifySql(t.getTable(), declared);
+        assertEq(("alter table " + t.getSqlName() + " drop constraint " + str_col.default_constraint,
+            "alter table " + t.getSqlName() + " add constraint dv_str default 'abd' for str"), sql);
+        map ds.execRaw($1), sql;
+        ds.commit();
+        MssqlColumn changed = (new Table(ds, DefaultValueFormSchema::TableName)).describe().str;
+        assertEq("'abd'", changed.def_val);
+        assertEq("dv_str", changed.default_constraint);
+        # without a default value, the constraint is dropped
+        declared = changed.copy();
+        remove declared.def_val;
+        assertEq(("alter table " + t.getSqlName() + " drop constraint dv_str",),
+            changed.getModifySql(t.getTable(), declared));
     }
 
     Datasource getDatasource() {
