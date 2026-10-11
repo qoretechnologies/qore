@@ -17556,17 +17556,18 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     if (!variant) {
         return false;
     }
-    // copy() must go through dispatch_method_on_object → execCopy to create a new object
-    if (!strcmp(method->getName(), "copy")) {
-        return false;
-    }
-    const UserVariantBase* uvb = variant->getUserVariantBase();
+    assert(!native_cache || (native_cache->method == method && native_cache->variant == variant));
+    const UserVariantBase* uvb = native_cache ? native_cache->generic_fast_uvb : nullptr;
     if (!uvb) {
-        // Builtin method — fall back to slow path for proper soft type coercion
-        return false;
-    }
-    if (!qore_rt_method_fast_call_eligible(variant)) {
-        return false;
+        // copy() must go through dispatch_method_on_object → execCopy to create a new object
+        if (!strcmp(method->getName(), "copy")) {
+            return false;
+        }
+        uvb = variant->getUserVariantBase();
+        if (!uvb || !qore_rt_method_fast_call_eligible(variant)) {
+            // Builtins and ineligible user methods retain ordinary argument binding.
+            return false;
+        }
     }
     QoreProgram* caller_pgm = getProgram();
     QoreProgram* exec_pgm = qore_rt_method_execution_program(method, uvb);
@@ -17647,8 +17648,19 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     }
 
     if (!use_direct_params) {
-        // Standard path: push params to TLS
-        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink,
+        if (native_cache && native_cache->generic_scalar_params) {
+            // The full PIC key rechecks actual argument types before this entry.
+            // Only exact canonical scalar parameters qualify: no substitution,
+            // filtering, default evaluation or no-narrow normalization is needed.
+            // Large integers and escaped floats can be boxed, so retain refSelf().
+            assert(native_cache->generic_fast_uvb == uvb && num_params == static_cast<unsigned>(nargs)
+                && num_params <= QoreAOTMethodDispatchCacheEntry::MAX_ARGS);
+            for (unsigned i = 0; i < num_params; ++i) {
+                QoreValue value = fromBits(args[i]);
+                assert(value.getTypeInfo() == sig->getParamTypeInfo(i) && !value.needsEval());
+                sig->lv[i]->instantiate(value.refSelf());
+            }
+        } else if (instantiateFastCallParams(sig, num_params, nargs, args, xsink,
                 receiver_type_info) < 0) {
             if (selfid_instantiated) {
                 selfid->uninstantiateSelf();
@@ -17686,7 +17698,6 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     // reuse it instead of rebuilding a temporary string on every cache hit.
     // execJITWithDeopt still copies this name into its ordinary owned frame.
     std::string call_name_buf;
-    assert(!native_cache || (native_cache->method == method && native_cache->variant == variant));
     if (!ir && !native_cache) {
         call_name_buf = std::string(method->getClass()->getName()) + "::" + method->getName();
     }
@@ -18449,6 +18460,36 @@ extern "C" DLLEXPORT int qore_rt_try_method_float_unary_v1(QoreAOTContext* calle
     return qore_rt_try_method_unary(caller_ctx, slot, base_bits, arg, result, xsink, rc);
 }
 
+static void qore_rt_prepare_aot_generic_method_admission(QoreAOTMethodDispatchCacheEntry& entry) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_GENERIC_METHOD_ADMISSION_CACHE");
+    if (!enabled || entry.method->isStatic() || !strcmp(entry.method->getName(), "copy")
+            || !qore_rt_method_fast_call_eligible(entry.variant)) {
+        return;
+    }
+    const UserVariantBase* uvb = entry.variant->getUserVariantBase();
+    if (!uvb->hasCachedAOT()) {
+        return;
+    }
+    // Callable method signatures are resolved before publication. Cache only
+    // their static eligibility, not a replaceable body, AOT context or readiness.
+    entry.generic_fast_uvb = uvb;
+    static const bool scalar_enabled = !std::getenv("QORE_DISABLE_AOT_SCALAR_PARAM_BINDING_CACHE");
+    const UserSignature* sig = uvb->getUserSignature();
+    if (!scalar_enabled || sig->numParams() != entry.nargs) {
+        return;
+    }
+    for (unsigned i = 0; i < entry.nargs; ++i) {
+        const QoreTypeInfo* ti = sig->getParamTypeInfo(i);
+        if ((ti != bigIntTypeInfo && ti != floatTypeInfo && ti != boolTypeInfo)
+                || entry.arg_types[i] != ti || entry.arg_states[i]) {
+            return;
+        }
+    }
+    // A type-tag match alone would admit enums or coercions. Exact canonical
+    // type identity above excludes both, as well as references and soft types.
+    entry.generic_scalar_params = true;
+}
+
 static void qore_rt_prepare_aot_native_method_admission(QoreAOTMethodDispatchCacheEntry& entry) {
     static const bool enabled = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE")
         && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY");
@@ -18533,6 +18574,7 @@ static void qore_rt_add_aot_method_dispatch_cache_entry(
     entry->arg_types = arg_types;
     entry->arg_states = arg_states;
     entry->nargs = static_cast<uint8_t>(nargs);
+    qore_rt_prepare_aot_generic_method_admission(*entry);
     qore_rt_prepare_aot_native_method_admission(*entry);
     std::lock_guard<std::mutex> lock(cache->write_mutex);
     if (qore_rt_find_aot_method_dispatch_cache_entry(cache, receiver_class,

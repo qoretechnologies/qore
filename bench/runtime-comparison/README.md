@@ -856,6 +856,20 @@ ABI or runtime identity. See the [measurements](RESULTS.md#generic-method-name-r
 and [evidence](results-generic-method-name-macos-arm64.json), including identical-
 executable controls, mixed native-call results and the remaining Java gap.
 
+Generic AOT method-cache hits also reuse static user-method eligibility and an
+all-arguments exact canonical `int`/`float`/`bool` binding proof. Boxed-value
+ownership, ordinary TLS locals, context and live dispatch guards remain intact.
+These facts are computed once when a resolved entry is published; this does not
+yet pass generic-method arguments directly through a native calling convention.
+`QORE_DISABLE_AOT_GENERIC_METHOD_ADMISSION_CACHE=1` disables both proofs;
+`QORE_DISABLE_AOT_SCALAR_PARAM_BINDING_CACHE=1` disables only the binding proof.
+Both switches act at runtime cache construction. The internal PIC layout changes
+AOT runtime identity: rebuild artifacts instead of swapping old/new runtimes
+under the same executable. Same-executable controls use one candidate runtime.
+See [results](RESULTS.md#generic-method-binding-proofs-2026-10-10) and
+[evidence](results-generic-method-binding-macos-arm64.json) for the repeated
+10–12% fallback reduction, code-size/stack growth, and adverse controls.
+
 `QORE_DISABLE_AOT_STABLE_UNTYPED_LOAD=1` disables invocation-local caching of a
 stable untyped parameter's non-reference classification. Set it during `qcc`
 compilation, not just execution. The compiler excludes written, captured,

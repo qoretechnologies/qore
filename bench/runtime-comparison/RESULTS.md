@@ -9109,3 +9109,151 @@ results about 24.6 times, and context-using fallback about 95.1 times. IR and
 cross-Program execution remain separate gaps. See the [audit](FOLLOWUP-AUDIT.md#generic-method-name-audit-2026-10-10)
 (all 62 checks: 15 Pass, 47 N/A, 0 Fail) and
 [full evidence](results-generic-method-name-macos-arm64.json).
+
+## Generic method-binding proofs (2026-10-10)
+
+Retain immutable generic-method eligibility and exact-scalar binding proofs.
+The contextual fallback workload improves 10.27% against the saved baseline
+and 11.97% with identical candidate executable/runtime bytes and only the new
+proofs disabled for before. Scalar binding alone improves 2.68%. All three
+observed fork ranges are disjoint; the earlier screen repeats these gains.
+This is an incremental generic-call improvement, not Java parity or a universal
+call-speed improvement. Adverse callback and polymorphic controls are retained.
+
+### Implementation and limits
+
+After ordinary dispatch resolves a callable AOT method, its PIC entry records
+static fast-call eligibility: user method, no defaults or method type parameters,
+not synchronized, and no no-narrow container parameters. Static methods and
+copy() remain excluded. Null admission retains the original eligibility path.
+The cache does not retain a new body/context pointer or assume current readiness.
+Method signatures are resolved before publication; AOT deferred defaults finish
+during deserialization. Signature retargeting applies to fallback closures,
+not these published method variants. Fields initialize before release-publication
+and remain immutable under existing entry ownership and acquire-loads.
+
+The binding proof additionally requires equal supplied/declared arity (at most
+eight), canonical hard int/float/bool parameter pointers, and exact equality with
+each argument type/state in the full live PIC key. It is all-or-nothing: ordinary
+binding gets no new per-parameter branch. Enums, references, coercions, optional,
+soft, container and type-parameter values retain ordinary filtering. Canonical
+mixed scalar signatures may qualify; scalar/non-scalar mixtures do not.
+Boxed full-width integers and escaped floats still acquire refSelf ownership.
+Ordinary TLS local instantiation and reverse cleanup remain unchanged.
+
+Live body/readiness, debugger, object validity, private access, Program context,
+self/class state, stack/cancellation, return filtering and diagnostic-frame
+ownership remain. This amortizes static checks at cache construction; it does
+not yet remove generic-call TLS parameter setup or create a new native entry ABI.
+
+Appending internal PIC fields changes RUID from
+`1b99ebeb1fe729ae7ba258037db9dd5c2b8aa5c6f003e1a49fc116d7bf0e6118` to
+`10e1d35fdd035f0754fa4ded65cfdf83bdc1412063951efe41dc06123e0f691e`.
+Baseline and candidate therefore compile separate AOT artifacts. Release launcher
+hashes remain unchanged. Same-executable feature controls use only the candidate
+runtime, with QORE_DISABLE_AOT_GENERIC_METHOD_ADMISSION_CACHE or
+QORE_DISABLE_AOT_SCALAR_PARAM_BINDING_CACHE set only for before processes.
+
+All 129 normalized non-bootstrap LLVM bodies match baseline. Bootstrap differs
+only in compressed metadata length, 27935 to 27933 bytes; no cause is inferred.
+The generic runtime helper grows from 803 to 1857 arm64 instructions and from
+464 to 592 stack bytes. Assembly shows the existing native-method fallback is
+newly inlined; scalar-local setup still calls LocalVar::instantiateIntern out
+of line. This is a real code-size/stack tradeoff, not a performance measurement.
+
+### Qualification
+
+Baseline is 7ab51e4ad, using its previous qualified snapshot with original
+pre-commit provenance retained. Candidate is that parent plus the frozen patch.
+Release/debug pass 94 selected files: 376/383 cases and 16678/16777 assertions,
+12 standalone files each, one known release skip and no debug skips. Support
+qmods and qualifications ran sequentially for each build. Both builds pass
+IR/AOT 495-check grids; release also passes Java-interpreter/JIT grids. All 15
+harness tests and 146 native debug checks pass. No full-suite, sanitizer or
+cross-platform claim is made.
+
+The new 120-assertion driver passes the unchanged baseline and both candidate
+builds, covering AST/IR/JIT/tiered and stripped AOT O0/O3, EH, no-debug and split
+compilation with proof/cache/fast-entry/context-elision controls. It exercises
+scalar boxes, float special values, enum coercion, reference<softint> mutation,
+defaults, synchronization, optional values, excess args, no-narrow containers,
+generic receivers, mixed arguments, eight/nine-argument boundaries and exceptions.
+Existing tests cover cross-Program calls, debugger attachment and frame readers.
+
+### Measurements
+
+Apple M4 Pro, macOS arm64 release, local Temurin 25.0.2 JIT. Count 4096,
+three warmups, five 500 ms measurement windows per fork; median fork means in
+ns/iteration, startup excluded. Java retains the target calls, but representation
+and observability contracts differ: these are whole workloads, not isolated
+call latencies. All 223 jobs / 1115 windows (screen plus final trials) are retained
+and independently verified. No task builds, tests, profiles or evidence processing
+overlapped timing. Observed ranges are not confidence intervals.
+
+Main, three forks, run-mz0wcz6q:
+
+|!Kernel|!Before ns|!After ns|!Reduction %|!Java JIT ns|!After / Java
+|dynamic_int_result_fallback|281.886|252.926|10.27|3.018|83.81
+|dynamic_int_result_call|10.588|10.620|-0.30|3.143|3.38
+|dynamic_float_result_call|11.875|11.775|0.84|3.569|3.30
+|boxed_float_method_call|64.157|64.455|-0.47|2.648|24.34
+|indirect_int_result|6.951|7.194|-3.50|1.931|3.73
+|indirect_float_result|9.097|8.997|1.10|2.902|3.10
+|polymorphic_expression_call|10.580|10.678|-0.93|2.602|4.10
+|polymorphic_float_expression_call|10.829|10.706|1.14|2.640|4.06
+|arithmetic|1.512|1.510|0.12|0.983|1.54
+
+All-proofs-disabled control, identical executable/runtime, five forks, run-o3k725kc:
+
+|!Kernel|!Before ns|!After ns|!Reduction %|!Before fork range|!After fork range
+|dynamic_int_result_fallback|285.101|250.989|11.97|282.219–298.524|248.730–255.322
+|dynamic_int_result_call|10.535|10.507|0.26|10.436–10.667|10.419–11.053
+|dynamic_float_result_call|11.853|12.059|-1.74|11.826–12.226|11.711–12.262
+|boxed_float_method_call|64.492|64.509|-0.03|63.805–64.755|64.271–64.946
+|indirect_int_result|7.151|7.043|1.51|7.115–7.237|7.005–7.182
+|indirect_float_result|9.141|9.034|1.17|8.992–9.405|8.880–9.525
+|arithmetic|1.520|1.515|0.34|1.512–1.530|1.499–1.534
+
+Main fallback ranges are 281.581–283.477 before and 250.774–255.469 after.
+The five-fork scalar-only-disabled control, run-a7az09x5, is 263.120 to 256.067 ns
+(2.68%), with disjoint 262.006–266.839 / 255.459–258.852 ranges. The screen's
+baseline, all-proofs and scalar-only comparisons improve 9.66%, 10.06% and 2.67%,
+respectively, also with disjoint ranges. No additive decomposition is inferred
+across independent trials.
+
+The main integer callback slows 3.50% with disjoint ranges (6.929–7.024 versus
+7.145–7.207). Its same-runtime control improves 1.51% with overlap, and the
+five-fork baseline repeat, run-drii6uls, slows only 0.16% (7.146 to 7.158 ns;
+7.037–7.175 / 7.068–7.222). The main adverse result remains unresolved, not
+confidently attributed to noise or to this particular helper.
+
+Integer polymorphic calls slow 0.93% in main with disjoint ranges
+(10.242–10.607 / 10.667–10.710). The five-fork repeat slows 1.22%
+(10.581 to 10.711 ns), with overlapping 10.482–10.745 / 10.491–10.829 ranges.
+The adverse median trend persists and remains a caveat. Native integer and boxed
+floating main medians also worsen slightly with overlapping ranges. Native float
+improves 0.84% in main with disjoint ranges, but its fixed-executable control
+slows 1.74% with overlap. No broad native/callback/polymorphic gain is claimed.
+
+### Remaining costs and next plan
+
+A separate ten-second 1 ms profile after the first final timing batch and before
+the adverse-result repeat shows type classification (507 top-of-stack samples),
+generic dispatch (486/481), TLS resolution (290), local setup (189), parameter
+loads and owned frame work. It also shows nested viaContext -> self.next calls
+entering the generic method dispatcher. Counts include a sleeping signal thread,
+are qualitative and are not additive inclusive CPU percentages or normalized
+before/after measurements.
+
+Next investigate native admission for pre-resolved same-Program method targets
+and the remaining nested self-call fallback, then an explicit-self/RuntimeConfig
+entry for context-using bodies. Preserve overload/coercion, variant identity,
+private class context, return conversion, reflection, exceptions and live-body
+guards. Separately measure a code-shape control that keeps the native fallback
+out of the generic dispatcher; do not assume outlining improves throughput.
+
+Native dynamic workloads remain about 3.3–3.4 times Java; context-using fallback
+is about 83.8 times and boxed floating results about 24.3 times. The remaining
+gap requires reducing complete call setup, not merely additional signature
+caching. See the [62-item audit](FOLLOWUP-AUDIT.md#generic-method-binding-audit-2026-10-10)
+(16 Pass, 46 N/A, 0 Fail) and [full evidence](results-generic-method-binding-macos-arm64.json).

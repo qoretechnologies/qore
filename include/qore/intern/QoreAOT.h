@@ -194,6 +194,13 @@ struct QoreAOTMethodDispatchCacheEntry {
     const UserVariantBase* native_scalar_uvb = nullptr;
     QoreProgram* native_scalar_program = nullptr;
     const qore_class_private* native_scalar_class_ctx = nullptr;
+
+    //! Static eligibility for the ordinary fast method entry, independent of native scalar companions.
+    //! Exact-key hits may reuse this variant; body/readiness/debugger/context guards remain live.
+    const UserVariantBase* generic_fast_uvb = nullptr;
+    //! Every supplied argument exactly matches a canonical hard int/float/bool parameter; no missing/excess args.
+    //! Binding still acquires argument ownership and instantiates ordinary TLS locals.
+    bool generic_scalar_params = false;
 };
 
 //! Bounded polymorphic cache owned by one AOT call target.
