@@ -1566,11 +1566,14 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                 conn = smap{session}.ssemap.firstValue();
             }
             if (conn) {
-                # Send the JSON-RPC response as a "message" event on the SSE stream
-                conn.send(<SseMessageInfo>{
-                    "event": "message",
-                    "data": rv.body,
-                });
+                # Send the JSON-RPC response as a "message" event on the SSE stream; a notification has no
+                # response, so nothing is sent for it
+                if (exists rv.body) {
+                    conn.send(<SseMessageInfo>{
+                        "event": "message",
+                        "data": rv.body,
+                    });
+                }
                 return AbstractHttpRequestHandler::makeResponse(202, "");
             }
         }

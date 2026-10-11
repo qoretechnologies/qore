@@ -177,6 +177,7 @@ public class McpServerHandlerTest inherits QUnit::Test {
         addTestCase("cancellation test", \cancellationTest());
         addTestCase("tasks API negative test", \tasksApiNegativeTest());
         addTestCase("cancellation scoping test", \cancellationScopingTest());
+        addTestCase("SSE session notification test", \sseSessionNotificationTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -1028,5 +1029,62 @@ public class McpServerHandlerTest inherits QUnit::Test {
             "lck": new Qore::Thread::Mutex(),
         };
         assertEq("test-request-id", taskInfo.requestId, "McpTaskInfo should have requestId field");
+    }
+
+    #! A 2024-11-05 SSE client gets each response on its event stream, and nothing for a notification
+    /** A notification has no response; relaying its empty response as a \c "message" event sent the client an event
+        whose data was \c null, which is not a JSON-RPC message (the MCP Python SDK: "Error parsing server message").
+    */
+    sseSessionNotificationTest() {
+        Socket s();
+        s.connect("localhost:" + port, 10s);
+        on_exit s.close();
+        s.send("GET / HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+        hash<auto> resp = s.readHTTPHeader(10s);
+        assertEq(200, resp.status_code, "the GET opens the event stream");
+
+        string buf = "";
+        code next_event = hash<SseMessageInfo> sub () {
+            while (True) {
+                int end = buf.find("\n\n");
+                if (end == -1) {
+                    buf += s.recv(0, 10s).toString();
+                    continue;
+                }
+                string block = buf.substr(0, end);
+                buf = buf.substr(end + 2);
+                # a block without an event or data (a comment) is not a message
+                *hash<SseMessageInfo> evt = Socket::parseServerSentEvent(block + "\n\n");
+                if (evt.event.val() || exists evt.data) {
+                    return evt;
+                }
+            }
+        };
+
+        hash<SseMessageInfo> endpoint = next_event();
+        assertEq("endpoint", endpoint.event);
+        assertRegex("\\?session=.+", endpoint.data);
+
+        HTTPClient hc({"url": "http://localhost:" + port});
+        on_exit hc.disconnect();
+        code post = sub (hash<auto> msg) {
+            hash<auto> info;
+            hc.post(endpoint.data, make_json(msg), {"Content-Type": MimeTypeJson}, \info);
+            assertEq(202, info."response-headers".status_code, msg.method + " is accepted");
+        };
+
+        post({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": ClientInfo2024});
+        hash<SseMessageInfo> evt = next_event();
+        assertEq("message", evt.event);
+        assertEq(1, parse_json(evt.data).id, "the response to initialize arrives on the stream");
+
+        post({"jsonrpc": "2.0", "method": "notifications/initialized"});
+        post({"jsonrpc": "2.0", "id": 2, "method": "ping"});
+        # the next event is the response to the ping: the notification sent nothing
+        evt = next_event();
+        assertEq("message", evt.event);
+        auto msg = parse_json(evt.data);
+        assertEq(Type::Hash, msg.type(), "every message event carries a JSON-RPC message: " + evt.data);
+        assertEq(2, msg.id, "the response to the ping follows the response to initialize");
     }
 }
