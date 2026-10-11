@@ -5147,8 +5147,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "Gemini provider advertises a conservative tool-count cap");
         assertTrue(gemini_info.prefers_single_tool_dispatch,
             "Gemini provider advertises single dispatch tool preference");
-        assertTrue(gemini_info.prefers_stringified_tool_payloads,
-            "Gemini provider advertises stringified payload preference");
+        assertFalse(gemini_info.prefers_stringified_tool_payloads,
+            "Gemini provider fills nested tool payloads natively");
     }
 
     registryRegisterDeregisterTest() {

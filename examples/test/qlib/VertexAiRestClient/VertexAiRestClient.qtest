@@ -6,20 +6,20 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/QoreLlmTypes.qm
-%requires ../../../../qlib/QoreRagTypes.qm
-%requires ../../../../qlib/QoreLlmUtils
-%requires ../../../../qlib/GcpAuth.qm
-%requires ../../../../qlib/GeminiBodyShape.qm
-%requires ../../../../qlib/GeminiRestClient.qm
-%requires ../../../../qlib/VertexAiRestClient.qm
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpServerAsyncIo
+%requires QoreLlmTypes
+%requires QoreRagTypes
+%requires QoreLlmUtils
+%requires GcpAuth
+%requires GeminiBodyShape
+%requires GeminiRestClient
+%requires VertexAiRestClient
 
 %requires json
 
@@ -246,8 +246,8 @@ public class VertexAiTest inherits QUnit::Test {
             "Vertex advertises the Gemini conservative tool-count cap");
         assertTrue(vertex.prefers_single_tool_dispatch,
             "Vertex advertises the Gemini single-dispatch preference");
-        assertTrue(vertex.prefers_stringified_tool_payloads,
-            "Vertex advertises the Gemini stringified-payload preference");
+        assertFalse(vertex.prefers_stringified_tool_payloads,
+            "Vertex fills nested tool payloads natively, as Gemini does");
 
         assertEq(gemini.prefers_narrow_tool_catalogue,
             vertex.prefers_narrow_tool_catalogue,

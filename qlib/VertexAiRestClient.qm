@@ -172,6 +172,9 @@ provider.deleteCachedContent(cache.name);
     @section vertexairestclientrelnotes Release Notes
 
     @subsection vertexairestclient_v1_0 VertexAiRestClient v1.0
+    - the provider info no longer asks callers for JSON text tool payloads
+      (\c prefers_stringified_tool_payloads is @ref False): with the tool parameter schemas shaped for Gemini, the
+      model fills nested tool payloads natively
     - tool calls keep the nested members of their parameters: values that Gemini's schema cannot declare are sent
       as JSON text and returned with their original types (see @ref geminibodyshapetoolschemas)
     - a request rejected because its tool declarations exceed Gemini's constrained-decoding budget raises
@@ -601,7 +604,9 @@ public class VertexAiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvid
             "prefers_narrow_tool_catalogue": True,
             "preferred_max_tool_count": 8,
             "prefers_single_tool_dispatch": True,
-            "prefers_stringified_tool_payloads": True,
+            # with the tool parameter schemas shaped for Gemini, nested tool payloads are filled natively; JSON
+            # text payloads are not needed
+            "prefers_stringified_tool_payloads": False,
         };
     }
 }

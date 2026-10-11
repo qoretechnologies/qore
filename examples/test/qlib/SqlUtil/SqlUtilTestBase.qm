@@ -11,15 +11,16 @@ module SqlUtilTestBase {
     license = "MIT";
 }
 
-%requires(reexport) ../../../../qlib/Util.qm
-%requires(reexport) ../../../../qlib/QUnit.qm
-%requires(reexport) ../../../../qlib/Logger.qm
-%requires(reexport) ../../../../qlib/DataProvider
-%requires(reexport) ../../../../qlib/SqlUtil
-%requires(reexport) ../../../../qlib/BulkSqlUtil
-%requires(reexport) ../../../../qlib/Schema
-%requires(reexport) ../../../../qlib/DbDataProvider
-%requires(reexport) ../../../../qlib/Mapper.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires(reexport) Util
+%requires(reexport) QUnit
+%requires(reexport) Logger
+%requires(reexport) DataProvider
+%requires(reexport) SqlUtil
+%requires(reexport) BulkSqlUtil
+%requires(reexport) Schema
+%requires(reexport) DbDataProvider
+%requires(reexport) Mapper
 
 public class SqlUtilTestSchema inherits AbstractSchema {
     private {
@@ -456,8 +457,9 @@ public class SqlTestBase inherits QUnit::Test {
             assertEq(SqlUtil::TT_Transaction, tmp.getTempScope());
             TempTableHelper th(tmp);
 
-            # a join against an empty temporary table returns no rows
-            assertEq((), src.selectRows({"columns": ("id",), "join": join_inner(tmp, "t", {"id": "id"})}));
+            # a join against an empty temporary table returns no rows (selectRows() returns an empty list or no value,
+            # depending on the driver)
+            assertEq(0, src.selectRows({"columns": ("id",), "join": join_inner(tmp, "t", {"id": "id"})}).size());
 
             # fill the temporary table entirely server-side (INSERT ... SELECT)
             int filled = tmp.insertFromSelect(("id",), src, {"columns": "id", "where": {"grp": 1}});

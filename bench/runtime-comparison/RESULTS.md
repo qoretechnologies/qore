@@ -9699,3 +9699,20 @@ overrides must retain observable locals; misses must be effect-free, and selecte
 overload identity, defining-class context, logical stack traces, debugger,
 receiver lifetime and Program/body guards must remain. Keep callback and
 monomorphic controls in subsequent measurements. Java parity remains unachieved.
+
+
+## Upstream integration 8417bde52 (2026-10-11)
+
+Integrated SQL default/type fixes and provider capability metadata after receiver-entry
+commit dca00b43c; no core runtime change. Added a 1432-assertion offline SQL regression,
+a linear SQL Server normalization scan and correct database constraint-name quoting.
+Release/debug each pass 13 selected files and the IR/AOT 495-check reference grids;
+153 debug native checks pass. Live database cases were skipped.
+
+This is integration qualification, not a new performance measurement. The prior
+receiver-entry gain and callback regression remain as reported above.
+[Evidence and all 62 audit items](results-merge-8417bde-macos-arm64.json).
+
+Next: measure a narrow exact-scalar return guard in the generic method wrapper,
+retaining full optional/soft/generic/reference/heap/missing-return handling and
+measuring callback, boxed-float and monomorphic controls before any optimization commit.
