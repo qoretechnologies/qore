@@ -175,6 +175,15 @@ module McpServerHandler {
     read the values on demand with
     @ref McpServerHandler::McpServerHandler::getAllowedValues() "getAllowedValues()".
 
+    The elements of a list parameter are described in the same way: fixed element values (a field's
+    \c element_allowed_values) are the \c "enum" of the schema's \c "items" when they are the only values accepted,
+    and are not listed when they only suggest values (\c element_allowed_values_creatable); reference data of the
+    elements (a field's \c element_ref_data attribute) is never listed or read, and the parameter's description says
+    where each element comes from, see
+    @ref McpServerHandler::McpServerHandler::getElementReferenceDataDescription()
+    "getElementReferenceDataDescription()" and
+    @ref McpServerHandler::McpServerHandler::getElementAllowedValues() "getElementAllowedValues()".
+
     @subsection McpServer_intro_notifications Notifications
     The handler supports MCP notifications over SSE. Clients can open a GET request with an
     \c Accept: \c text/event-stream header to receive notifications and streamed responses.

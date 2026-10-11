@@ -2626,7 +2626,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             if (field.isMandatory()) {
                 required += name;
             }
-            info = addAllowedValues(name, info, field.getAllowedValues(), field.getAttributes().ref_data, prov);
+            *hash<auto> attr = field.getAttributes();
+            info = addAllowedValues(name, info, field.getAllowedValues(), attr.ref_data, prov);
+            info = addElementAllowedValues(name, info, field.getElementAllowedValues(),
+                field.getElementAllowedValuesCreatable(), attr.element_ref_data, prov);
             if (exists (auto v = field.getDefaultValue())) {
                 info."default" = v;
             }
@@ -2658,6 +2661,30 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         *hash<auto> attr = field.getAttributes();
         if (attr.ref_data.val()) {
             return prov.getReferenceDataSafe(attr.ref_data);
+        }
+    }
+
+    #! Returns the allowed values of a list field's elements: their fixed values, or else their reference data
+    /** Like @ref getAllowedValues(), tool schemas do not call this method; a subclass can use it to look up the
+        values of a list parameter's elements on demand, for example in a tool that searches them.
+
+        @param field the list field
+        @param prov the data provider that reads the reference data of the field's elements, if any
+
+        @return the allowed values of the field's elements, if any
+
+        @note reading reference data calls the connected system and can return every record of a kind
+
+        @since McpServerHandler 1.0
+    */
+    private *list<hash<AllowedValueInfo>> getElementAllowedValues(AbstractDataField field,
+            *AbstractDataProvider prov) {
+        if ((*list<hash<AllowedValueInfo>> rv = field.getElementAllowedValues()) || !prov) {
+            return rv;
+        }
+        *hash<auto> attr = field.getAttributes();
+        if (attr.element_ref_data.val()) {
+            return prov.getElementReferenceDataSafe(attr.element_ref_data, NOTHING);
         }
     }
 
@@ -2708,6 +2735,67 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         return sprintf("The value identifies an existing record of the connected system (reference data %y); "
             "the values are not listed here: use a value given by the user or returned by another tool.",
             ref_data);
+    }
+
+    #! Adds the allowed values of a list parameter's elements to its JSON schema
+    /** The elements of a list are described by the schema's \c "items":
+
+        - fixed element values that are the only values accepted are listed as the \c "enum" of \c "items", up to
+          @ref MaxInlineEnumValues values; a list with more is described by their number in the parameter's
+          description
+        - fixed element values that only suggest values (\a creatable) are not listed as an \c "enum", which would
+          reject the other values that the parameter accepts
+        - reference data of the elements is read from the connected system; like the reference data of a value
+          (see @ref addAllowedValues()) it is never listed and never read to build a schema, and the parameter's
+          description says where each element comes from instead, see
+          @ref getElementReferenceDataDescription()
+
+        @param name the name of the parameter
+        @param info the JSON schema of the parameter
+        @param fixed the fixed allowed values of the parameter's elements, if any
+        @param creatable @ref True if the elements also accept values that are not in \a fixed
+        @param ref_data the name of the reference data that gives the values of the parameter's elements, if any
+        @param prov the data provider of the tool, if any
+
+        @return the JSON schema with the allowed values of the elements or their description
+
+        @since McpServerHandler 1.0
+    */
+    private hash<auto> addElementAllowedValues(string name, hash<auto> info, *list<auto> fixed, bool creatable,
+            *string ref_data, *AbstractDataProvider prov) {
+        if (fixed) {
+            if (creatable) {
+                return info;
+            }
+            if (fixed.size() <= MaxInlineEnumValues && info.items.typeCode() == NT_HASH) {
+                info.items."enum" = map $1.value, fixed;
+                return info;
+            }
+            return McpServerHandler::addDescription(info, sprintf("Each element is one of %d fixed values; a list "
+                "with an element that is not one of them is rejected when the tool is called.", fixed.size()));
+        }
+        if (ref_data.val()) {
+            return McpServerHandler::addDescription(info, getElementReferenceDataDescription(name, ref_data, prov));
+        }
+        return info;
+    }
+
+    #! Returns the description of a list parameter whose elements are reference data of the connected system
+    /** The values are not listed in the tool's schema, so the description tells the caller where each element comes
+        from.  A subclass that offers a way to look the values up names it here, as it does in
+        @ref getReferenceDataDescription().
+
+        @param name the name of the parameter
+        @param ref_data the name of the reference data that gives the values of the parameter's elements
+        @param prov the data provider of the tool, if any
+
+        @return the sentence added to the parameter's description
+
+        @since McpServerHandler 1.0
+    */
+    private string getElementReferenceDataDescription(string name, string ref_data, *AbstractDataProvider prov) {
+        return sprintf("Each element identifies an existing record of the connected system (reference data %y); "
+            "the values are not listed here: use values given by the user or returned by another tool.", ref_data);
     }
 
     #! Appends a sentence to the description of a JSON schema
@@ -3021,6 +3109,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                 required += field.name;
             }
             info = addAllowedValues(field.name, info, field.allowed_values, field.attr.ref_data, prov);
+            info = addElementAllowedValues(field.name, info, field.element_allowed_values,
+                field.element_allowed_values_creatable ?? False, field.attr.element_ref_data, prov);
             if (exists field.default_value) {
                 info."default" = field.default_value;
             }

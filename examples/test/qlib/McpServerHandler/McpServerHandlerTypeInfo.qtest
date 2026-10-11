@@ -29,12 +29,22 @@ class TestMcpServerHandler inherits McpServerHandler {
     *list<hash<AllowedValueInfo>> lookUp(AbstractDataField field, AbstractDataProvider prov) {
         return getAllowedValues(field, prov);
     }
+
+    #! Looks up the allowed values of a list field's elements on demand, as a subclass's lookup tool would
+    *list<hash<AllowedValueInfo>> lookUpElements(AbstractDataField field, *AbstractDataProvider prov) {
+        return getElementAllowedValues(field, prov);
+    }
 }
 
 #! Names a lookup tool in the description of a reference-data parameter
 class LookupMcpServerHandler inherits TestMcpServerHandler {
     private string getReferenceDataDescription(string name, string ref_data, *AbstractDataProvider prov) {
         return sprintf("Find %s with tool lookup-%s of %s.", name, ref_data, prov ? prov.getName() : "n/a");
+    }
+
+    private string getElementReferenceDataDescription(string name, string ref_data, *AbstractDataProvider prov) {
+        return sprintf("Find each of %s with tool lookup-%s of %s.", name, ref_data,
+            prov ? prov.getName() : "n/a");
     }
 }
 
@@ -62,6 +72,11 @@ class CustomerProvider inherits AbstractDataProvider {
         ++reads;
         return map <AllowedValueInfo>{"value": sprintf("gid://shopify/Customer/%d", $1)}, range(1, 4);
     }
+
+    private *list<hash<AllowedValueInfo>> getElementReferenceDataImpl(string type, *hash<auto> action_opts) {
+        ++reads;
+        return map <AllowedValueInfo>{"value": sprintf("tag-%d", $1)}, range(1, 3);
+    }
 }
 
 public class McpServerHandlerTypeInfoTest inherits QUnit::Test {
@@ -71,6 +86,9 @@ public class McpServerHandlerTypeInfoTest inherits QUnit::Test {
         addTestCase("reference data is described, never listed or read for a schema", \referenceDataTest());
         addTestCase("a subclass names its lookup for reference data", \referenceDataLookupTest());
         addTestCase("fixed values are listed up to the bound", \fixedValueBoundTest());
+        addTestCase("a list's element reference data is described for its elements", \elementReferenceDataTest());
+        addTestCase("a subclass names its lookup for element reference data", \elementReferenceDataLookupTest());
+        addTestCase("a list's fixed element values are the enum of its items", \elementFixedValueTest());
         set_return_value(main());
     }
 
@@ -224,6 +242,119 @@ public class McpServerHandlerTypeInfoTest inherits QUnit::Test {
             assertRegex(sprintf("one of %d fixed values", McpServerHandler::MaxInlineEnumValues + 1),
                 props.constrained.description, tool);
             assertEq(("x", "y"), props.constrained_at."enum", tool);
+        }
+    }
+
+    #! Returns an input type with lists whose elements are reference data, fixed values or suggested values
+    private static HashDataType getElementInputType() {
+        HashDataType type("CustomerTags");
+        type.addQoreFields({
+            "tags": {"name": "tags", "type": new ListDataType(AbstractDataProviderTypeMap."string"),
+                "desc": "The tags to add", "attr": {"element_ref_data": "tags"}},
+            "ids": {"name": "ids", "type": new SoftListDataType(AbstractDataProviderTypeMap."softstring", True),
+                "desc": "Return only these customers", "attr": {"element_ref_data": "customers"}},
+            "states": {"name": "states", "type": new ListDataType(AbstractDataProviderTypeMap."string", True),
+                "element_allowed_values": (<AllowedValueInfo>{"value": "active"},
+                    <AllowedValueInfo>{"value": "archived"}),
+                "attr": {"element_ref_data": "states"}},
+            "languages": {"name": "languages", "type": new ListDataType(AbstractDataProviderTypeMap."string",
+                True), "desc": "The languages", "element_allowed_values": (<AllowedValueInfo>{"value": "en"},
+                <AllowedValueInfo>{"value": "de"}), "element_allowed_values_creatable": True},
+        });
+        return type;
+    }
+
+    elementReferenceDataTest() {
+        TestMcpServerHandler handler();
+        CustomerProvider prov();
+        HashDataType type = getElementInputType();
+        handler.registerTool("from-type", "a tool", type, sub (auto v) {}, NOTHING, NOTHING, prov);
+        handler.registerToolWithTypeInfo("from-info", "a tool", type.getInfo(), sub (auto v) {}, NOTHING,
+            NOTHING, prov);
+        # building either schema reads nothing from the connected system
+        assertEq(0, prov.reads);
+        foreach string tool in (("from-type", "from-info")) {
+            hash<auto> props = handler.getInput(tool).properties;
+            # the list parameter's description says where each element comes from; the elements stay plain values
+            assertEq("The tags to add Each element identifies an existing record of the connected system "
+                "(reference data \"tags\"); the values are not listed here: use values given by the user or "
+                "returned by another tool.", props.tags.description, tool);
+            assertEq("array", props.tags.type, tool);
+            assertEq({"type": "string", "description": "array items"}, props.tags.items, tool);
+            assertFalse(props.tags.hasKey("enum"), tool);
+            # a list that also accepts a single value is described in the same way
+            assertRegex("^Return only these customers Each element identifies an existing record of the connected "
+                "system \\(reference data \"customers\"\\)", props.ids.description, tool);
+            assertFalse(props.ids.items.hasKey("enum"), tool);
+            # fixed element values win over element reference data and are listed for the elements
+            assertEq(("active", "archived"), props.states.items."enum", tool);
+            assertFalse(props.states.hasKey("description"), tool);
+        }
+        assertEq(make_json(handler.getInput("from-type")), make_json(handler.getInput("from-info")));
+        assertEq(0, prov.reads);
+
+        # a subclass can still read the values of the elements on demand
+        assertEq(("tag-1", "tag-2"), map $1.value, handler.lookUpElements(type.getField("tags"), prov));
+        assertEq(1, prov.reads);
+        # fixed element values are returned without reading
+        assertEq(("active", "archived"), map $1.value, handler.lookUpElements(type.getField("states"), prov));
+        assertEq(1, prov.reads);
+        # element reference data is not the reference data of the value
+        assertEq(NOTHING, handler.lookUp(type.getField("tags"), prov));
+        assertEq(1, prov.reads);
+
+        # without a provider, the elements are described in the same way
+        handler.registerTool("no-prov", "a tool", type, sub (auto v) {});
+        assertRegex("reference data \"tags\"", handler.getInput("no-prov").properties.tags.description);
+        assertEq(NOTHING, handler.lookUpElements(type.getField("tags"), NOTHING));
+    }
+
+    elementReferenceDataLookupTest() {
+        LookupMcpServerHandler handler();
+        CustomerProvider prov();
+        HashDataType type = getElementInputType();
+        handler.registerTool("from-type", "a tool", type, sub (auto v) {}, NOTHING, NOTHING, prov);
+        handler.registerToolWithTypeInfo("from-info", "a tool", type.getInfo(), sub (auto v) {}, NOTHING,
+            NOTHING, prov);
+        foreach string tool in (("from-type", "from-info")) {
+            assertEq("The tags to add Find each of tags with tool lookup-tags of customers.",
+                handler.getInput(tool).properties.tags.description, tool);
+        }
+        assertEq(0, prov.reads);
+    }
+
+    elementFixedValueTest() {
+        TestMcpServerHandler handler();
+        list<hash<AllowedValueInfo>> at_bound = map <AllowedValueInfo>{"value": sprintf("v%d", $1)},
+            range(1, McpServerHandler::MaxInlineEnumValues + 1);
+        list<hash<AllowedValueInfo>> over_bound = at_bound + (<AllowedValueInfo>{"value": "one-more"},);
+        HashDataType type = getElementInputType();
+        type.addQoreFields({
+            "at": {"name": "at", "type": new ListDataType(AbstractDataProviderTypeMap."string"),
+                "element_allowed_values": at_bound},
+            "over": {"name": "over", "type": new ListDataType(AbstractDataProviderTypeMap."string"),
+                "element_allowed_values": over_bound, "desc": "Codes"},
+            "codes": {"name": "codes", "type": new ListDataType(AbstractDataProviderTypeMap."int"),
+                "element_allowed_values": (<AllowedValueInfo>{"value": 1}, <AllowedValueInfo>{"value": 2})},
+        });
+        handler.registerTool("from-type", "a tool", type, sub (auto v) {});
+        handler.registerToolWithTypeInfo("from-info", "a tool", type.getInfo(), sub (auto v) {});
+        foreach string tool in (("from-type", "from-info")) {
+            hash<auto> props = handler.getInput(tool).properties;
+            assertEq(McpServerHandler::MaxInlineEnumValues, props.at.items."enum".size(), tool);
+            assertEq("v1", props.at.items."enum"[0], tool);
+            # the elements' values are not the values of the list
+            assertFalse(props.at.hasKey("enum"), tool);
+            assertFalse(props.over.items.hasKey("enum"), tool);
+            assertEq(sprintf("Codes Each element is one of %d fixed values; a list with an element that is not "
+                "one of them is rejected when the tool is called.", McpServerHandler::MaxInlineEnumValues + 1),
+                props.over.description, tool);
+            assertEq((1, 2), props.codes.items."enum", tool);
+            assertEq("integer", props.codes.items.type, tool);
+            # values that only suggest an element would reject the others as an enum
+            assertFalse(props.languages.items.hasKey("enum"), tool);
+            assertFalse(props.languages.hasKey("enum"), tool);
+            assertEq("The languages", props.languages.description, tool);
         }
     }
 }
