@@ -2630,7 +2630,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                 required += name;
             }
             *hash<auto> attr = field.getAttributes();
-            info = addAllowedValues(name, info, field.getAllowedValues(), attr.ref_data, prov);
+            info = addAllowedValues(name, info, field.getAllowedValues(), attr.ref_data, prov,
+                field.getAllowedValuesCreatable());
             info = addElementAllowedValues(name, info, field.getElementAllowedValues(),
                 field.getElementAllowedValuesCreatable(), attr.element_ref_data, prov);
             if (exists (auto v = field.getDefaultValue())) {
@@ -2693,7 +2694,9 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
     #! Adds a parameter's allowed values to its JSON schema
     /** Fixed allowed values are part of the parameter's definition and are listed as the schema's \c "enum", up
-        to @ref MaxInlineEnumValues values; a parameter with more is described by their number.
+        to @ref MaxInlineEnumValues values; a parameter with more is described by their number.  Fixed values that
+        only suggest a value (\a creatable) are not an \c "enum", which would reject the other values that the
+        parameter accepts; the description lists them, see @ref getSuggestedValuesDescription().
 
         Reference data is read from the connected system: customers, orders, repositories and other records whose
         number has no bound and which change at any time.  They are never listed and never read to build a schema;
@@ -2705,12 +2708,17 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         @param fixed the parameter's fixed allowed values, if any
         @param ref_data the name of the reference data that gives the parameter's values, if any
         @param prov the data provider of the tool, if any
+        @param creatable @ref True if the parameter also accepts values that are not in \a fixed
 
         @return the JSON schema with the allowed values or their description
     */
     private hash<auto> addAllowedValues(string name, hash<auto> info, *list<auto> fixed, *string ref_data,
-            *AbstractDataProvider prov) {
+            *AbstractDataProvider prov, *bool creatable) {
         if (fixed) {
+            if (creatable) {
+                return McpServerHandler::addDescription(info, getSuggestedValuesDescription(name,
+                    (map $1.value, fixed), False));
+            }
             if (fixed.size() <= MaxInlineEnumValues) {
                 info."enum" = map $1.value, fixed;
                 return info;
@@ -2747,7 +2755,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
           @ref MaxInlineEnumValues values; a list with more is described by their number in the parameter's
           description
         - fixed element values that only suggest values (\a creatable) are not listed as an \c "enum", which would
-          reject the other values that the parameter accepts
+          reject the other values that the parameter accepts; the parameter's description lists them, see
+          @ref getSuggestedValuesDescription()
         - reference data of the elements is read from the connected system; like the reference data of a value
           (see @ref addAllowedValues()) it is never listed and never read to build a schema, and the parameter's
           description says where each element comes from instead, see
@@ -2768,7 +2777,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             *string ref_data, *AbstractDataProvider prov) {
         if (fixed) {
             if (creatable) {
-                return info;
+                return McpServerHandler::addDescription(info, getSuggestedValuesDescription(name,
+                    (map $1.value, fixed), True));
             }
             if (fixed.size() <= MaxInlineEnumValues && info.items.typeCode() == NT_HASH) {
                 info.items."enum" = map $1.value, fixed;
@@ -2781,6 +2791,32 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             return McpServerHandler::addDescription(info, getElementReferenceDataDescription(name, ref_data, prov));
         }
         return info;
+    }
+
+    #! Returns the description of the values that a parameter or the elements of a list parameter suggest
+    /** Values that only suggest a value are not the schema's \c "enum", which would reject the other values that
+        the parameter accepts, so the description lists them: up to @ref MaxInlineEnumValues values as JSON, and a
+        parameter with more by their number.  A subclass can reimplement this method to word the sentence for its
+        own presentation.
+
+        @param name the name of the parameter
+        @param values the suggested values
+        @param for_elements @ref True if the values are suggested for the elements of a list parameter
+
+        @return the sentence added to the parameter's description
+
+        @since McpServerHandler 1.0
+    */
+    private string getSuggestedValuesDescription(string name, list<auto> values, bool for_elements) {
+        if (values.size() > MaxInlineEnumValues) {
+            return for_elements
+                ? sprintf("Each element can be one of %d suggested values or another value.", values.size())
+                : sprintf("The value can be one of %d suggested values or another value.", values.size());
+        }
+        string text = (map make_json($1), values).join(", ");
+        return for_elements
+            ? sprintf("Suggested values for each element: %s; other values are accepted too.", text)
+            : sprintf("Suggested values: %s; other values are accepted too.", text);
     }
 
     #! Returns the description of a list parameter whose elements are reference data of the connected system
@@ -3111,7 +3147,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             if (field.type.mandatory) {
                 required += field.name;
             }
-            info = addAllowedValues(field.name, info, field.allowed_values, field.attr.ref_data, prov);
+            info = addAllowedValues(field.name, info, field.allowed_values, field.attr.ref_data, prov,
+                field.allowed_values_creatable);
             info = addElementAllowedValues(field.name, info, field.element_allowed_values,
                 field.element_allowed_values_creatable ?? False, field.attr.element_ref_data, prov);
             if (exists field.default_value) {

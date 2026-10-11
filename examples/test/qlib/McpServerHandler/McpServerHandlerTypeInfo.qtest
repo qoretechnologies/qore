@@ -46,6 +46,10 @@ class LookupMcpServerHandler inherits TestMcpServerHandler {
         return sprintf("Find each of %s with tool lookup-%s of %s.", name, ref_data,
             prov ? prov.getName() : "n/a");
     }
+
+    private string getSuggestedValuesDescription(string name, list<auto> values, bool for_elements) {
+        return sprintf("%s suggests %d value(s)%s.", name, values.size(), for_elements ? " for each element" : "");
+    }
 }
 
 #! Gives reference data from the connected system and counts each read
@@ -89,6 +93,7 @@ public class McpServerHandlerTypeInfoTest inherits QUnit::Test {
         addTestCase("a list's element reference data is described for its elements", \elementReferenceDataTest());
         addTestCase("a subclass names its lookup for element reference data", \elementReferenceDataLookupTest());
         addTestCase("a list's fixed element values are the enum of its items", \elementFixedValueTest());
+        addTestCase("suggested values are described, not an enum", \suggestedValueTest());
         set_return_value(main());
     }
 
@@ -351,10 +356,60 @@ public class McpServerHandlerTypeInfoTest inherits QUnit::Test {
                 props.over.description, tool);
             assertEq((1, 2), props.codes.items."enum", tool);
             assertEq("integer", props.codes.items.type, tool);
-            # values that only suggest an element would reject the others as an enum
+            # values that only suggest an element would reject the others as an enum, so the description lists them
             assertFalse(props.languages.items.hasKey("enum"), tool);
             assertFalse(props.languages.hasKey("enum"), tool);
-            assertEq("The languages", props.languages.description, tool);
+            assertEq("The languages Suggested values for each element: \"en\", \"de\"; other values are accepted "
+                "too.", props.languages.description, tool);
+        }
+    }
+
+    suggestedValueTest() {
+        list<hash<AllowedValueInfo>> over_bound = (map <AllowedValueInfo>{"value": sprintf("v%d", $1)},
+            range(1, McpServerHandler::MaxInlineEnumValues + 1)) + (<AllowedValueInfo>{"value": "one-more"},);
+        assertEq(McpServerHandler::MaxInlineEnumValues + 1, over_bound.size());
+        HashDataType type("Models");
+        type.addQoreFields({
+            "model": {"name": "model", "type": AbstractDataProviderTypeMap."string", "desc": "The model",
+                "allowed_values": (<AllowedValueInfo>{"value": "gpt-4o"}, <AllowedValueInfo>{"value": "gpt-4.1"}),
+                "allowed_values_creatable": True},
+            "size": {"name": "size", "type": AbstractDataProviderTypeMap."*int",
+                "allowed_values": (<AllowedValueInfo>{"value": 256}, <AllowedValueInfo>{"value": 512}),
+                "allowed_values_creatable": True},
+            "code": {"name": "code", "type": AbstractDataProviderTypeMap."string", "desc": "A code",
+                "allowed_values": over_bound, "allowed_values_creatable": True},
+            "codes": {"name": "codes", "type": new ListDataType(AbstractDataProviderTypeMap."string"),
+                "element_allowed_values": over_bound, "element_allowed_values_creatable": True},
+        });
+        TestMcpServerHandler handler();
+        handler.registerTool("from-type", "a tool", type, sub (auto v) {});
+        handler.registerToolWithTypeInfo("from-info", "a tool", type.getInfo(), sub (auto v) {});
+        foreach string tool in (("from-type", "from-info")) {
+            hash<auto> props = handler.getInput(tool).properties;
+            # another model is accepted, so the suggestions are not an enum
+            assertFalse(props.model.hasKey("enum"), tool);
+            assertEq("The model Suggested values: \"gpt-4o\", \"gpt-4.1\"; other values are accepted too.",
+                props.model.description, tool);
+            assertEq("Suggested values: 256, 512; other values are accepted too.", props.size.description, tool);
+            assertFalse(props.size.hasKey("enum"), tool);
+            # more suggestions than the bound are described by their number
+            assertEq(sprintf("A code The value can be one of %d suggested values or another value.",
+                McpServerHandler::MaxInlineEnumValues + 1), props.code.description, tool);
+            assertEq(sprintf("Each element can be one of %d suggested values or another value.",
+                McpServerHandler::MaxInlineEnumValues + 1), props.codes.description, tool);
+            assertFalse(props.codes.items.hasKey("enum"), tool);
+        }
+        assertEq(make_json(handler.getInput("from-type")), make_json(handler.getInput("from-info")));
+
+        # a subclass words the sentence
+        LookupMcpServerHandler lookup();
+        lookup.registerTool("from-type", "a tool", type, sub (auto v) {});
+        lookup.registerToolWithTypeInfo("from-info", "a tool", type.getInfo(), sub (auto v) {});
+        foreach string tool in (("from-type", "from-info")) {
+            hash<auto> props = lookup.getInput(tool).properties;
+            assertEq("The model model suggests 2 value(s).", props.model.description, tool);
+            assertEq(sprintf("codes suggests %d value(s) for each element.", McpServerHandler::MaxInlineEnumValues + 1),
+                props.codes.description, tool);
         }
     }
 }
