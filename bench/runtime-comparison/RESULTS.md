@@ -9950,3 +9950,74 @@ shows remaining forwarding validation, class-access normalization and frame traf
 Next evaluate moving immutable checks to binding/initial admission, then examine boxed
 floating calls and IR invocation separately.
 [Full evidence, reproduction and all 62 audit items](results-native-forward-entry-macos-arm64.json).
+
+
+## Cached forwarding class context (2026-10-11)
+
+Baseline: merged 70a4c09eb. Normalize the defining-class context once at native PIC admission,
+then reuse it only under the exact receiver/type/Program/options/epoch key. Keep the original
+class pointer for cold exception frames. C++ base-addition APIs advance the dispatch epoch,
+and forwarding rejects mismatched outer/inner epochs. Live body/readiness/debugger checks remain.
+
+Private PIC layout/runtime identity changed: paired runs compile separate matching AOT artifacts.
+The same-binary flag control disables normalized-context reuse only. Three-fork main and
+five-fork control use count 4096, three warmups and five 500 ms windows, shuffled scheduling.
+No task build/test/profile/source inspection overlapped timing. Values are medians of fork
+means in ns/element, including loop/checksum work, not isolated call latencies.
+
+|!Workload|!Before|!After|!Time reduction|!Java JIT|!After / Java
+|dynamic_int_result_fallback|23.335801|21.654001|7.207%|3.035308|7.134x
+|dynamic_int_result_call|10.201750|10.337302|-1.329%|3.100043|3.335x
+|dynamic_float_result_call|11.179789|11.322403|-1.276%|3.471207|3.262x
+|boxed_float_method_call|61.227140|61.751876|-0.857%|2.575524|23.976x
+|indirect_int_result|6.845741|6.911226|-0.957%|1.889761|3.657x
+|indirect_float_result|8.861056|10.321888|-16.486%|2.618716|3.942x
+|polymorphic_expression_call|10.302162|10.180704|1.179%|2.521393|4.038x
+|polymorphic_float_expression_call|10.360939|10.408053|-0.455%|2.552761|4.077x
+|method_call|1.537542|1.522297|0.992%|0.896541|1.698x
+|monomorphic_call|3.446631|3.381552|1.888%|1.676881|2.017x
+|arithmetic|1.445832|1.449944|-0.284%|0.891051|1.627x
+
+Same-binary normalization control:
+
+|!Workload|!Before|!After|!Time reduction
+|dynamic_int_result_fallback|24.145524|21.670233|10.252%
+|indirect_int_result|6.933610|6.883084|0.729%
+|monomorphic_call|3.480706|3.481312|-0.017%
+
+IR interpreter comparison:
+
+|!Workload|!Before|!After|!Time reduction
+|dynamic_int_result_fallback|1348.559302|1331.198741|1.287%
+|boxed_float_method_call|761.579459|746.845085|1.935%
+
+Additional confirmation run-jzwesok2:
+
+|!Workload|!Before|!After|!Time reduction
+|dynamic_int_result_fallback|23.123212|21.587696|6.641%
+|indirect_float_result|8.776473|8.689313|0.993%
+|dynamic_int_result_call|10.311277|10.191582|1.161%
+|dynamic_float_result_call|10.795070|11.048298|-2.346%
+|boxed_float_method_call|60.950594|60.985928|-0.058%
+|indirect_int_result|6.796148|6.888228|-1.355%
+
+The forwarding gain repeats across screening (7.249%), main (7.207%), the AOT comparison accompanying IR (7.061%), and the independent five-fork repeat (6.641%). All four target comparisons have separated observed fork ranges. Same-binary controls improve 10.152% in screening and 10.252% in the final five-fork control. Main forwarding remains 7.134 times Java's whole-workload time; Java parity is not reached.
+
+The main floating-callback median is 16.486% slower (8.861 to 10.322 ns), with all five windows elevated in two of three candidate processes. The five-fork repeat instead improves 0.993% (8.776 to 8.689 ns) with separated ranges; the large slowdown does not reproduce. Its cause is not established, and the original processes and every raw sample remain in the evidence. No samples are excluded.
+
+Non-forwarding dynamic floating calls are 1.276% slower in main and 2.346% slower in the five-fork repeat (screening was 0.720% slower). Integer callbacks are 0.957% and 1.355% slower in main/repeat, while screening and the same-binary control move in the opposite direction. The adverse main/repeat fork ranges overlap, but these are retained as possible small regressions, not dismissed as zero effect. Dynamic integer calls change from 1.329% slower in main to 1.161% faster in the repeat; boxed floating results change from 0.857% slower to 0.058% slower. Accept as a targeted forwarding improvement with these limitations, not a universal call win.
+
+IR medians improve 1.287%/1.935% for forwarding/boxed-float workloads, with separated ranges in this one batch. The optimized route requires an AOT-native forwarding proof, so these observations do not establish a direct IR optimization or repeatable IR gain. Startup is excluded from steady-state values; the stored launch-to-exit samples are not cold-cache latency measurements.
+
+Evidence retains 294 jobs / 1470 windows. Release/debug each
+pass 103 selected fixtures plus the expanded native private-forwarding fixture (300 assertions)
+and seven extra exception fixtures. 153 native debug checks, 15 harness tests and 495
+references per execution mode pass. The stronger fixture changed no timed runtime binary.
+
+Separate forwarding and boxed-float profiles guide the next AOT-first steps:
+
+1. Keep AOT primary. Inspect the boxed floating recurrence's local assignment and generic dispatch: the sample contains substantial LValueHelper, type/coercion, reference handling and TLS work. Prototype an exact scalar local-store or native dispatch specialization only with explicit alias/ownership/context guards, then measure before/after against the frozen qualified baseline.
+2. Move the immutable explicit-type-instantiation absence check in forwarding from per-call AST lookup to binding or context preparation, preserving explicit generic instantiations, stripped/non-stripped artifacts, body identity and publication ordering.
+3. Investigate compact storage of the normalization proof (original defining class or null) and monitor non-forwarding dynamic-float/callback controls; retain all adverse results. Preserve logical frames, exceptions, debugger behavior, concurrent stack readers and cross-Program fallback.
+
+[Measurements, identities, profiles, reproduction and all 62 audit items](results-forward-access-context-macos-arm64.json).

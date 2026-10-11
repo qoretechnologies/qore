@@ -1024,3 +1024,18 @@ copy; the full change requires a frozen before/after library comparison.
 
 See the [native-forwarding measurements](RESULTS.md#native-forwarding-continuation-and-borrowed-configuration-2026-10-11)
 and [verified evidence/audit](results-native-forward-entry-macos-arm64.json).
+
+`QORE_DISABLE_AOT_FORWARD_CLASS_CONTEXT_CACHE=1` retains per-call defining-class
+access normalization in forwarding preflight (presence sampled on first use).
+The default caches that normalization when the full-key native method entry is
+prepared. The cached value is used only for the inner dispatch key; deferred
+exception context still uses the original defining class. Live receiver/type,
+Program/options, dispatch epoch, body, debugger and readiness checks remain.
+C++ base-class addition APIs advance the dispatch epoch, so an existing warmed
+entry misses and is rebuilt after a hierarchy change. This adds internal PIC
+metadata and changes the AOT runtime identity: before/after comparisons need
+separate AOT artifacts compiled against their matching runtimes. The flag gives
+an additional same-binary control for reusing the normalized context.
+
+See [cached forwarding context measurements](RESULTS.md#cached-forwarding-class-context-2026-10-11)
+and [verified evidence/audit](results-forward-access-context-macos-arm64.json).

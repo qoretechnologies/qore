@@ -3266,6 +3266,9 @@ void QoreClass::addBuiltinBaseClass(QoreClass* qc) {
     }
     priv->scl->push_back(new BCNode(&loc_builtin, qc));
     priv->scl->sml.add(this, qc, false);
+    // Native dispatch entries can cache defining-class access normalization.
+    // A changed hierarchy invalidates those proofs as well as method lookup.
+    qore_bump_method_dispatch_epoch();
 }
 
 void QoreClass::addDefaultBuiltinBaseClass(QoreClass* qc) {
@@ -3414,6 +3417,7 @@ void qore_class_private::addBaseClass(QoreClass* qc, bool virt) {
         qc->priv->scl->addBaseClassesToSubclass(qc, cls, virt);
     }
     scl->sml.add(cls, qc, virt);
+    qore_bump_method_dispatch_epoch();
 }
 
 void qore_class_private::addBaseClass(QoreClass* qc, ClassAccess access, bool virt) {
@@ -3429,6 +3433,7 @@ void qore_class_private::addBaseClass(QoreClass* qc, ClassAccess access, bool vi
         qc->priv->scl->addBaseClassesToSubclass(qc, cls, virt);
     }
     scl->sml.add(cls, qc, virt);
+    qore_bump_method_dispatch_epoch();
 }
 
 void qore_class_private::parseCheckAbstractNew(const QoreProgramLocation* loc) const {

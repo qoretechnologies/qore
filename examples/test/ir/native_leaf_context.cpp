@@ -317,6 +317,64 @@ static QoreAOTContext* getMethodProbeContext(QoreProgram* program, const char* c
     return ctx;
 }
 
+// Keep private forwarding on its own two-receiver site: a saturated PIC can
+// return the right value through fallback without testing native class context.
+static void checkPrivateForwardReceivers(QoreProgram* program) {
+    ExceptionSink xsink;
+    ValueHolder base(program->callFunction("makePrivateBaseProbe", nullptr, &xsink), &xsink);
+    assert(!xsink && base->getType() == NT_OBJECT);
+    const auto* defining_class = qore_class_private::get(*base->get<QoreObject>()->getClass());
+    const bool accepted = !std::getenv("QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF")
+        && !std::getenv("QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT")
+        && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT")
+        && !std::getenv("QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION");
+    RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    QoreProgram* caller = qore_get_call_program_context();
+    QoreObject* old_object = rc->getObject();
+    const qore_class_private* old_class = rc->getClass();
+    for (const char* factory : {"makePrivateBaseProbe", "makePrivateDerivedProbe"}) {
+        ValueHolder object(program->callFunction(factory, nullptr, &xsink), &xsink);
+        assert(!xsink && object->getType() == NT_OBJECT);
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+        args->push(object->refSelf(), &xsink);
+        assert(!xsink);
+        args->push(QoreValue(int64_t{7}), &xsink);
+        assert(!xsink);
+        for (unsigned i = 0; i < 16; ++i) {
+            ValueHolder result(program->callFunction("nativePrivateForwardMethodProbe", *args, &xsink), &xsink);
+            assert(!xsink && result->getAsBigInt() == 24);
+        }
+        int slot;
+        QoreAOTContext* ctx = getMethodProbeContext(program, "nativePrivateForwardMethodProbe", slot);
+        auto* cache = ctx->call_targets[slot].method_dispatch_cache.load(std::memory_order_acquire);
+        assert(cache);
+        bool found = false;
+        for (auto& cache_slot : cache->entries) {
+            const auto* entry = cache_slot.load(std::memory_order_acquire);
+            if (entry && entry->receiver_class == object->get<QoreObject>()->getClass()) {
+                found = true;
+                if (accepted) {
+                    assert(entry->native_scalar_program == program);
+                    assert(entry->native_scalar_class_ctx == defining_class);
+                    assert(entry->native_scalar_dispatch_class_ctx == defining_class);
+                }
+            }
+        }
+        assert(found);
+        // A derived private method does not override the base's private call.
+        // Require actual native handling, including full-width integer inputs,
+        // and unchanged output/context for disabled-path misses.
+        for (int64_t value : {int64_t{7}, INT64_MIN, INT64_MAX - 17, int64_t{1} << 50}) {
+            int64_t result = -123;
+            assert(qore_rt_try_method_int_unary_v1(ctx, slot, object->rawBits(), value,
+                &result, &xsink, rc) == static_cast<int>(accepted));
+            assert(!xsink && result == (accepted ? value + 17 : -123));
+            assert(qore_get_call_program_context() == caller);
+            assert(rc->getObject() == old_object && rc->getClass() == old_class);
+        }
+    }
+}
+
 // Exercise the receiver gate itself after the ordinary caller has populated its
 // real PIC. Successful strong/opaque calls must actually use the continuation;
 // rejected representations must leave result, exception and context untouched.
@@ -484,6 +542,16 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     check(*object, true);
     auto* cache = ctx->call_targets[slot].method_dispatch_cache.load(std::memory_order_acquire);
     assert(cache);
+    // Both fixture receivers inherit the admitted method's defining class;
+    // their normalized nested-dispatch context must retain that exact class.
+    // Do not replace the separate context used by cold frame restoration.
+    for (auto& cache_slot : cache->entries) {
+        const auto* entry = cache_slot.load(std::memory_order_acquire);
+        if (entry && entry->native_scalar_program) {
+            assert(entry->native_scalar_class_ctx);
+            assert(entry->native_scalar_dispatch_class_ctx == entry->native_scalar_class_ctx);
+        }
+    }
     const auto* admitted = cache->entries[0].load(std::memory_order_acquire);
     assert(admitted && admitted->native_scalar_uvb);
     auto* callee = admitted->native_scalar_uvb->getCachedAOTContext();
@@ -511,6 +579,29 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     ValueHolder rewarmed(program->callFunction(caller_name, *args, &xsink), &xsink);
     assert(!xsink && rewarmed->getAsBigInt() == 24);
     check(*object, true);
+    // C++ hierarchy construction must invalidate the same key even without
+    // adding a method. These isolated classes are not exposed to other threads.
+    // Warm before each mutation so construction alone cannot satisfy the test.
+    for (unsigned kind = 0; kind < 3; ++kind) {
+        QoreClassHolder base_owner(new QoreClass("NativeEpochBase", "::NativeEpochBase"));
+        QoreClassHolder child_owner(new QoreClass("NativeEpochChild", "::NativeEpochChild"));
+        QoreClass* parent = base_owner;
+        QoreClass* child = child_owner;
+        ValueHolder ready(program->callFunction(caller_name, *args, &xsink), &xsink);
+        assert(!xsink && ready->getAsBigInt() == 24);
+        check(*object, true);
+        if (kind == 0) {
+            child->addBuiltinBaseClass(parent);
+        } else if (kind == 1) {
+            child->addBaseClass(parent, false);
+        } else {
+            child->addBaseClass(parent, Private, false);
+        }
+        check(*object, false);
+        ValueHolder rebuilt(program->callFunction(caller_name, *args, &xsink), &xsink);
+        assert(!xsink && rebuilt->getAsBigInt() == 24);
+        check(*object, true);
+    }
     // The guard must reread deletion status, even for an unchanged receiver
     // still owned by both ordinary and opaque references.
     object->get<QoreObject>()->doDelete(&xsink);
@@ -939,6 +1030,7 @@ static QoreValue methodReceiverProbes(const void* ptr, const QoreListNode*, Runt
     checkMethodReceivers(invocation.program, "methodProbe");
     checkMethodReceivers(invocation.program, "optionalMethodProbe");
     checkMethodReceivers(invocation.program, "nativeForwardMethodProbe");
+    checkPrivateForwardReceivers(invocation.program);
     checkMethodArgumentKeys(invocation.program, "methodArgumentProbe");
     checkMethodArgumentKeys(invocation.program, "optionalMethodArgumentProbe");
     checkFloatMethodReceivers(invocation.program, "floatMethodProbe", invocation.inline_method);

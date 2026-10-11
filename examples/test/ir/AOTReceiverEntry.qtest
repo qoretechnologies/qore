@@ -63,6 +63,7 @@ class ReceiverEntryTest inherits QUnit::Test {
                 foreach string runtime in (("", "QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY=1 ",
                         "QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT=1 ",
                         "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 ",
+                        "QORE_DISABLE_AOT_FORWARD_CLASS_CONTEXT_CACHE=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
                         "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",

@@ -194,6 +194,10 @@ struct QoreAOTMethodDispatchCacheEntry {
     const UserVariantBase* native_scalar_uvb = nullptr;
     QoreProgram* native_scalar_program = nullptr;
     const qore_class_private* native_scalar_class_ctx = nullptr;
+    //! Defining-class context normalized for this exact receiver's committed hierarchy.
+    //! Used only for nested dispatch lookup; cold frame materialization needs the original context above.
+    //! Immutable before PIC publication and valid only under the full receiver/dispatch-epoch key.
+    const qore_class_private* native_scalar_dispatch_class_ctx = nullptr;
 
     //! Static eligibility for the ordinary fast method entry, independent of native scalar companions.
     //! Exact-key hits may reuse this variant; body/readiness/debugger/context guards remain live.

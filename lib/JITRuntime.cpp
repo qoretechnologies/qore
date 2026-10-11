@@ -18428,9 +18428,17 @@ static bool try_dispatch_forwarded_int_leaf_native(QoreObject* object,
     }
     const QoreClass* receiver_class = object->getClass();
     const QoreTypeInfo* receiver_type = qore_get_object_receiver_type_info(object);
-    const qore_class_private* class_ctx = outer.native_scalar_class_ctx;
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*receiver_class, class_ctx)) {
-        class_ctx = nullptr;
+    // The outer full-key hit already selected this receiver and dispatch epoch.
+    // Reuse its immutable defining-class normalization instead of walking the
+    // same hierarchy on every forwarding call. Keep the original context for
+    // cold frame materialization, which must not use this normalized value.
+    static const bool cached_class_context = !std::getenv("QORE_DISABLE_AOT_FORWARD_CLASS_CONTEXT_CACHE");
+    const qore_class_private* class_ctx = outer.native_scalar_dispatch_class_ctx;
+    if (!cached_class_context) {
+        class_ctx = outer.native_scalar_class_ctx;
+        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*receiver_class, class_ctx)) {
+            class_ctx = nullptr;
+        }
     }
     bool resolved = target.method && (receiver_class == target.qc || receiver_class == target.method->getClass());
     static const bool resolved_enabled = !std::getenv("QORE_DISABLE_AOT_RESOLVED_METHOD_CACHE");
@@ -18438,6 +18446,11 @@ static bool try_dispatch_forwarded_int_leaf_native(QoreObject* object,
         return false;
     }
     uint64_t epoch = qore_get_method_dispatch_epoch();
+    // Do not combine an outer normalization proof with a newer inner key if
+    // hierarchy/method publication advanced the epoch after the outer lookup.
+    if (outer.dispatch_epoch != epoch) {
+        return false;
+    }
     const QoreAOTMethodDispatchCacheEntry* inner = nullptr;
     // Four immutable entries at most. A prior ordinary call has performed
     // access and overload resolution under this exact defining-class context.
@@ -18755,6 +18768,15 @@ static void qore_rt_prepare_aot_native_method_admission(QoreAOTMethodDispatchCac
     entry.native_scalar_uvb = uvb;
     entry.native_scalar_program = pgm;
     entry.native_scalar_class_ctx = variant->getClassPriv();
+    // This normalization depends only on the resolved defining class and the
+    // exact receiver hierarchy. C++ base additions invalidate the dispatch
+    // epoch just as method additions do; ordinary misses rebuild this proof.
+    entry.native_scalar_dispatch_class_ctx = entry.native_scalar_class_ctx;
+    if (entry.native_scalar_dispatch_class_ctx
+            && !qore_class_private::runtimeCheckPrivateClassAccess(*entry.receiver_class,
+                entry.native_scalar_dispatch_class_ctx)) {
+        entry.native_scalar_dispatch_class_ctx = nullptr;
+    }
 }
 
 static void qore_rt_add_aot_method_dispatch_cache_entry(

@@ -53,6 +53,14 @@ class NativeLeafContextTest inherits QUnit::Test {
             "auto sub genericIntMethodProbe(auto receiver, auto value) { return receiver.next(value); }\n"
             "auto sub genericForwardMethodProbe(auto receiver, auto value) { return receiver.forward(value); }\n"
             "int sub nativeForwardMethodProbe(auto receiver, int value) { return int(receiver.forward(value)); }\n"
+            "class NativeLeafPrivateForwardBase {\n"
+            "    private:internal int next(int value) { return value + 17; }\n"
+            "    int forward(int value) { return self.next(value); }\n}\n"
+            "class NativeLeafPrivateForwardDerived inherits NativeLeafPrivateForwardBase {\n"
+            "    private:internal int next(int value) { return value + 91; }\n}\n"
+            "NativeLeafPrivateForwardBase sub makePrivateBaseProbe() { return new NativeLeafPrivateForwardBase(); }\n"
+            "NativeLeafPrivateForwardBase sub makePrivateDerivedProbe() { return new NativeLeafPrivateForwardDerived(); }\n"
+            "int sub nativePrivateForwardMethodProbe(auto receiver, int value) { return int(receiver.forward(value)); }\n"
             "class NativeLeafFloatMethodBase { float next(float value) { return value + 7.0; } }\n"
             "class NativeLeafFloatMethodDerived inherits NativeLeafFloatMethodBase {\n"
             "    private { int leafContextMarker = 927; }\n"
@@ -120,7 +128,8 @@ class NativeLeafContextTest inherits QUnit::Test {
                     assertRegex("icmp ugt i64", entry[0] ?? "", "unsigned live stack boundary");
                     assertRegex("tail call i64 @[^\n]*_method_v2", entry[0] ?? "", "cold full-check fallback");
                 }
-                foreach string name in (("methodProbe", "optionalMethodProbe", "nativeForwardMethodProbe")) {
+                foreach string name in (("methodProbe", "optionalMethodProbe", "nativeForwardMethodProbe",
+                        "nativePrivateForwardMethodProbe")) {
                     *list<*string> body = regex_extract(output,
                         "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
                     assertTrue(!!body, name + " normal LLVM entry");
@@ -152,6 +161,7 @@ class NativeLeafContextTest inherits QUnit::Test {
                 foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
                         "QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT=1 ",
                         "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 ",
+                        "QORE_DISABLE_AOT_FORWARD_CLASS_CONTEXT_CACHE=1 ",
                         "QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION=1 ",
                         "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ")) {
                     output = backquote(env + runtime + quote(executable) + (inline_callback ? " inline" : " eager")
