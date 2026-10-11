@@ -56,6 +56,18 @@ hashdecl FakeReply {
     bool await_close = False;
     int header_delay_ms = 0;
     int chunk_delay_ms = 0;
+    #! When set, the first chunk is sent with the response headers, as soon as the request has been read
+    bool first_chunk_with_head = False;
+    #! When set, the end of the chunks is reported in stream_results (see FakeStreamResult)
+    bool report_stream = False;
+}
+
+#! How the chunks of a reply with report_stream ended
+hashdecl FakeStreamResult {
+    #! The number of chunks sent
+    int sent = 0;
+    #! True if every chunk was sent, False if the client closed the connection before
+    bool completed = False;
 }
 
 #! Fake LLM server speaking HTTP/1.1 on a raw socket, so any response, including a stalled event stream, can be
@@ -68,6 +80,8 @@ class FakeLlmServer {
         Queue request_queue();
         #! Receives True when a client closes a held connection, False if it is not closed in time
         Queue client_closed();
+        #! Receives a FakeStreamResult when the chunks of a reply with report_stream have ended
+        Queue stream_results();
     }
 
     private {
@@ -114,6 +128,7 @@ class FakeLlmServer {
         release_queue.clear();
         request_queue.clear();
         client_closed.clear();
+        stream_results.clear();
     }
 
     #! Releases a stalled response
@@ -169,10 +184,25 @@ class FakeLlmServer {
                 conn.send(head + sprintf("Content-Length: %d\r\n\r\n", reply.body.size()) + reply.body);
                 return;
             }
-            conn.send(head + "\r\n");
-            foreach string chunk in (reply.chunks) {
-                if (reply.chunk_delay_ms) { usleep(reply.chunk_delay_ms * 1000); }
-                conn.send(chunk);
+            int first = reply.first_chunk_with_head && reply.chunks ? 1 : 0;
+            hash<FakeStreamResult> result();
+            try {
+                conn.send(head + "\r\n" + (first ? reply.chunks[0] : ""));
+                result.sent = first;
+                for (int i = first; i < reply.chunks.size(); ++i) {
+                    if (reply.chunk_delay_ms) { usleep(reply.chunk_delay_ms * 1000); }
+                    conn.send(reply.chunks[i]);
+                    ++result.sent;
+                }
+                result.completed = True;
+            } catch (hash<ExceptionInfo> ex) {
+                # the client has closed the connection
+            }
+            if (reply.report_stream) {
+                stream_results.push(result);
+            }
+            if (!result.completed) {
+                return;
             }
             if (reply.await_close) {
                 waitForClientClose(conn);
@@ -634,18 +664,23 @@ public class LlmStreamingTest inherits QUnit::Test {
                 string frame = stage == "comments" ? ": keepalive\n\n"
                     : (mode == "http" ? sseData({"choices": ({"delta": {"content": "x"}},)})
                         : sseData({"candidates": ({"content": {"parts": ({"text": "x"},)}},)}));
-                # The event stage must see events before its deadline expires, so the deadline has to be much
-                # longer than the fixture's own sleep jitter: macOS coalesces timers and stretches a 20 ms
-                # sleep to 30 ms or more, which would leave a short deadline expiring before the first frame.
-                int call_timeout_ms = event_stage ? 400 : 50;
-                int frame_count = event_stage ? 60 : 20;
+                # The first event is sent with the response headers as soon as the request has been read, so the
+                # client has it before its deadline unless the request itself takes the whole deadline; the
+                # deadline of the other stages expires before their headers or first event.
+                int call_timeout_ms = event_stage ? 1000 : 50;
+                # The frames take at least frame_count * chunk_delay_ms: a deadline reset by each frame would keep the
+                # call reading until the server had sent its last frame, while a deadline that covers the whole call
+                # ends it while the server is still sending, which the server reports.
+                int chunk_delay_ms = delayed_headers ? 0 : (event_stage ? 20 : 25);
+                int frame_count = delayed_headers ? 20 : (event_stage ? 300 : 80);
                 list<string> frames;
                 for (int i = 0; i < frame_count; ++i) { frames += frame; }
                 server.script(<FakeReply>{"header_delay_ms": delayed_headers ? 200 : 0,
-                    "chunk_delay_ms": delayed_headers ? 0 : (event_stage ? 20 : 25),
+                    "chunk_delay_ms": chunk_delay_ms,
                     "chunks": frames,
+                    "first_chunk_with_head": event_stage,
+                    "report_stream": True,
                     "stall": True});
-                date started = now_us();
                 *hash<ExceptionInfo> error;
                 int observed = 0;
                 try {
@@ -653,16 +688,24 @@ public class LlmStreamingTest inherits QUnit::Test {
                         ++observed;
                     }, NOTHING, <LlmRequestOptions>{"timeout_ms": call_timeout_ms});
                 } catch (hash<ExceptionInfo> ex) { error = ex; }
+                string label = mode + " " + stage;
+                assertTrue(hasTransportTimeout(error), label + ": the call ends on its deadline");
+                # the server has ended its frames: the client closed the connection, or every frame was sent
+                hash<FakeStreamResult> stream = server.stream_results.get(60s);
                 server.release();
-                assertTrue(hasTransportTimeout(error));
-                # a deadline restarted for each frame would only expire after the whole script had been sent
-                assertLt(event_stage ? 1000 : 500, (now_us() - started).durationMilliseconds());
-                if (event_stage) {
-                    # the call ended on its deadline, after some events but well before the scripted stream
-                    assertTrue(observed > 0 && observed < frame_count);
-                } else { assertEq(0, observed); }
+                if (delayed_headers) {
+                    # the deadline expired before the headers arrived: no event of the stream is read
+                    assertEq(0, observed, label + ": no event is read after the deadline");
+                } else {
+                    assertFalse(stream.completed, label + ": the call ended before the server sent its last frame");
+                    if (event_stage) {
+                        assertGt(0, observed, label + ": events were read before the deadline");
+                        assertLe(stream.sent, observed, label + ": only events that the server sent were read");
+                    } else {
+                        assertEq(0, observed, label + ": comments are not events");
+                    }
+                }
                 assertEq(1, server.requests.size());
-                usleep(200000);
             }
         }
     }
