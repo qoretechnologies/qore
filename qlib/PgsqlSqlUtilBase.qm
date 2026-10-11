@@ -26,7 +26,7 @@
 %requires qore >= 1.14
 
 # requires the SqlUtil module
-%requires SqlUtil >= 3.6
+%requires SqlUtil >= 3.7
 %requires json
 
 # don't use "$" signs for variables and class members, assume local variable scope
@@ -37,7 +37,7 @@
 # enable all warnings
 
 module PgsqlSqlUtilBase {
-    version = "1.15";
+    version = "1.16";
     desc = "base user module for working with PostgreSQL SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -213,6 +213,10 @@ $function$
     @ref SqlUtil::AbstractDatabase::getAlignFunctionSql() "AbstractDatabase::getAlignFunctionSql()" for example.
 
     @section pgsql_relnotes Release Notes
+
+    @subsection pgsqlsqlutilbasev116 PgsqlSqlUtilBase v1.16
+    - Added targeted column-migration metadata for resumable offline upgrades, including
+      relation identity, dependent objects, and UPDATE trigger functions.
 
     @subsection pgsqlsqlutilbasev115 PgsqlSqlUtilBase v1.15
     - bounded maintenance starts with fresh READ COMMITTED snapshots and refuses silently hidden rows,
@@ -4606,6 +4610,47 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             }
             result{column} = exists value && value.typeCode() != NT_NULL ? value.toInt() : NOTHING;
         }
+        return result;
+    }
+
+    private hash<auto> getColumnMigrationInfoImpl(list<string> names) {
+        hash<auto> relation = ds.selectRow("select c.oid::bigint as relation_id, "
+            "c.relnamespace::bigint as schema_id, d.oid::bigint as database_id, "
+            "c.relkind::text as kind, c.relispartition as is_partition, "
+            "c.relrowsecurity as row_security, c.relhasrules as has_rules, "
+            "exists(select 1 from pg_catalog.pg_inherits i "
+            "where i.inhrelid = c.oid or i.inhparent = c.oid) as inherits, "
+            "pg_catalog.current_setting('TimeZone') as timezone, "
+            "pg_catalog.pg_relation_size(c.oid) as heap_bytes "
+            "from pg_catalog.pg_class c cross join pg_catalog.pg_database d "
+            "where c.oid = %v::regclass and d.datname = pg_catalog.current_database()", getSqlName());
+        if (!relation || relation.kind != "r" || relation.is_partition || relation.inherits
+                || relation.row_security || relation.has_rules) {
+            throw "COLUMN-MIGRATION-ERROR", "column migration requires an ordinary table without inheritance, row security or rules";
+        }
+        hash<auto> result = {
+            "identity": sprintf("%d:%d:%d", relation.database_id, relation.schema_id, relation.relation_id),
+            "timezone": relation.timezone, "heap_bytes": relation.heap_bytes,
+            "columns": {},
+        };
+        foreach string name in (names) {
+            *hash<auto> column = ds.selectRow("select a.attnum::int as ordinal, "
+                "a.attnotnull as not_null, a.atthasdef as has_default, "
+                "a.attgenerated::text as generated, a.attidentity::text as identity, "
+                "exists(select 1 from pg_catalog.pg_depend dep "
+                "where dep.refclassid = 'pg_catalog.pg_class'::regclass "
+                "and dep.refobjid = a.attrelid and (dep.refobjsubid = a.attnum "
+                "or (dep.refobjsubid = 0 and dep.classid = 'pg_catalog.pg_rewrite'::regclass))) as dependent "
+                "from pg_catalog.pg_attribute a where a.attrelid = %v::oid "
+                "and a.attname = %v and a.attnum > 0 and not a.attisdropped", relation.relation_id, name);
+            if (!column) { throw "COLUMN-MIGRATION-ERROR", "migration column does not exist"; }
+            result.columns{name} = column;
+        }
+        result.triggers = ds.selectRows("select t.tgname as name, t.tgenabled::text as enabled, "
+            "(t.tgtype::int & 1) != 0 as row_trigger, p.prosrc as source "
+            "from pg_catalog.pg_trigger t join pg_catalog.pg_proc p on p.oid = t.tgfoid "
+            "where t.tgrelid = %v::oid and not t.tgisinternal and (t.tgtype::int & 16) != 0 "
+            "order by t.tgname", relation.relation_id) ?? ();
         return result;
     }
 

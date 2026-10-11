@@ -319,16 +319,17 @@ public class DpqlActionSession {
         hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
             text, expressions, use_fields);
         if (use_fields && result.success) {
-            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
-                text, use_fields, expressions,
-                search_context ? provider_expressions : NOTHING);
+            list<hash<DpqlDiagnostic>> diags = validateParsedExpression(result.expression, use_fields);
             if (diags) {
                 if (result.diagnostics) {
                     result.diagnostics += diags;
                 } else {
                     result.diagnostics = diags;
                 }
-                result.success = False;
+                # as in parsing, a warning does not make the expression fail
+                if (select diags, $1.severity == "error") {
+                    result.success = False;
+                }
             }
         }
         hash<auto> rv = {
@@ -338,6 +339,26 @@ public class DpqlActionSession {
             "expression": result.expression,
         };
         return rv;
+    }
+
+    #! Validates an expression that has been parsed against the given fields
+    /** As @ref DataProvider::DataProvider::validateDpqlExpression() "DataProvider::validateDpqlExpression()" does,
+        without parsing the text again: the diagnostics of parsing are already in the parse result, so they would be
+        reported twice
+
+        @param exp the parsed expression
+        @param use_fields the fields to validate against
+
+        @return the validation diagnostics, including the search expression rules in a search context
+    */
+    private list<hash<DpqlDiagnostic>> validateParsedExpression(hash<DataProviderExpression> exp,
+            hash<string, AbstractDataField> use_fields) {
+        DpqlParser parser(expressions ?? DataProviderGenericExpressions, use_fields);
+        list<hash<DpqlDiagnostic>> diags = parser.validate(exp, use_fields);
+        if (search_context && provider_expressions) {
+            diags += parser.validateSearchExpression(exp, provider_expressions);
+        }
+        return diags;
     }
 
     private hash<auto> handleValidate(*hash<auto> args) {
@@ -393,8 +414,7 @@ public class DpqlActionSession {
         hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text, expressions, use_fields);
         list<hash<DpqlDiagnostic>> diags = result.diagnostics ?? ();
         if (use_fields && result.success) {
-            list<hash<DpqlDiagnostic>> vdiags = DataProvider::validateDpqlExpression(text, use_fields, expressions,
-                search_context ? provider_expressions : NOTHING);
+            list<hash<DpqlDiagnostic>> vdiags = validateParsedExpression(result.expression, use_fields);
             if (vdiags) {
                 diags += vdiags;
             }

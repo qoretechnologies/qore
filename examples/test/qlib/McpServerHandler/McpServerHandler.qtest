@@ -460,7 +460,7 @@ public class McpServerHandlerTest inherits QUnit::Test {
         # test logging/setLevel (should not error even without handler)
         h = jsonrpc.call("logging/setLevel", {"level": "debug"});
         # should succeed without error
-        assertTrue(True);
+        assertFalse(exists h.error, "logging/setLevel succeeds without a handler");
     }
 
     toolManagementTest() {

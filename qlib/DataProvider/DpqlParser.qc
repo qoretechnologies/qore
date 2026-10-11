@@ -55,6 +55,60 @@ const hash<auto> DpqlPrefixOperatorSpecs = {
     DP_OP_TAKEUNTIL: {"min": 2, "max": 2},
 };
 
+#! The arithmetic operators whose operand types DPQL validation checks, with what each one accepts
+/** Arithmetic in DPQL is %Qore arithmetic, which combines any two values: an operand that the operator cannot use
+    is converted silently (a hash plus an integer is the integer), so validation reports the combinations that do
+    not give a meaningful result
+*/
+const hash<string, string> DpqlArithmeticAccepts = {
+    DP_OP_PLUS: "it adds numbers, or a number and a date; joins a string with a string, number, date or boolean; "
+        "appends to a list; and merges two hashes or two binary values",
+    DP_OP_MINUS: "it subtracts numbers, or a date or number from a date; and removes keys (a string or a list of "
+        "strings) from a hash",
+    DP_OP_MULT: "it multiplies numbers",
+    DP_OP_DIV: "it divides numbers",
+    DP_OP_MOD: "it gives the remainder of the division of numbers",
+};
+
+#! The kinds of scalar value that \c + joins with a string
+const hash<string, bool> DpqlStringJoinKinds = {
+    "string": True,
+    "numeric": True,
+    "date": True,
+    "bool": True,
+};
+
+#! How a diagnostic names a kind of operand value
+const hash<string, string> DpqlOperandKindLabels = {
+    "numeric": "a number",
+    "string": "a string",
+    "date": "a date",
+    "bool": "a boolean",
+    "binary": "a binary value",
+    "hash": "a hash",
+    "list": "a list",
+};
+
+#! The result of comparing a value with itself, by comparison operator
+const hash<string, bool> DpqlSelfComparisonResults = {
+    DP_SEARCH_OP_EQ: True,
+    DP_SEARCH_OP_LE: True,
+    DP_SEARCH_OP_GE: True,
+    DP_SEARCH_OP_NE: False,
+    DP_SEARCH_OP_LT: False,
+    DP_SEARCH_OP_GT: False,
+};
+
+#! The operators whose result depends only on their arguments, so that identical arguments give the same result
+const hash<string, bool> DpqlDeterministicOperators = {
+    DP_EXPR_VALUE: True,
+    DP_OP_PLUS: True,
+    DP_OP_MINUS: True,
+    DP_OP_MULT: True,
+    DP_OP_DIV: True,
+    DP_OP_MOD: True,
+};
+
 #! Parser for DPQL (Data Provider Query Language) expressions
 /** This class provides parsing of DPQL query expressions into DataProviderExpression
     structures. It implements a recursive descent parser for the DPQL grammar.
@@ -608,6 +662,16 @@ public class DpqlParser {
                     };
                 }
             }
+        }
+
+        # A comparison of a value with itself, or of two literal values, has the same result for every record
+        if (DpqlSelfComparisonResults.hasKey(exp.exp) && exp.args.size() == 2) {
+            checkConstantComparison(exp, \diags);
+        }
+
+        # Arithmetic operand types: an operand that the operator cannot use would be converted silently
+        if (DpqlArithmeticAccepts{exp.exp}) {
+            checkArithmeticOperands(exp, \diags);
         }
 
         # Validate between type compatibility (all 3 args should be compatible)
@@ -1922,6 +1986,239 @@ public class DpqlParser {
                 }
             }
         }
+    }
+
+    #! Reports a comparison whose result is the same for every record
+    /** A value compared with itself (the same field, template value or literal, or the same arithmetic on them), or
+        a literal compared with a literal, gives the same result whatever the record is, which is almost always a
+        mistake in the expression (ex: <tt>\@price > \@price</tt> written for <tt>\@price > \@cost</tt>).
+
+        @param exp a comparison with two arguments
+        @param diags the diagnostics to add a \c DPQL-W006 warning to
+    */
+    private checkConstantComparison(hash<DataProviderExpression> exp, reference<list<hash<DpqlDiagnostic>>> diags) {
+        auto left = exp.args[0];
+        auto right = exp.args[1];
+        *bool result;
+        string reason;
+        if (DpqlParser::isLiteralArg(left) && DpqlParser::isLiteralArg(right)) {
+            # evaluated as a record would evaluate it; a comparison that fails is left to evaluation
+            try {
+                result = AbstractDataProvider::evalGenericExpressionValue({}, exp, NOTHING).toBool();
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            reason = "both sides are literal values";
+        } else if (left === right && DpqlParser::isStableArg(left)) {
+            result = DpqlSelfComparisonResults{exp.exp};
+            reason = "it compares a value with itself";
+        } else {
+            return;
+        }
+        string text;
+        try {
+            text = sprintf("'%s' ", DataProvider::serializeDpqlExpression(exp, expressions));
+        } catch (hash<ExceptionInfo> ex) {
+            # the warning does not need the text of the comparison
+        }
+        diags += <DpqlDiagnostic>{
+            "severity": "warning",
+            "message": sprintf("Comparison %sis always %s for every record: %s", text, result ? "true" : "false",
+                reason),
+            "code": "DPQL-W006",
+            "line": 1,
+            "column": 1,
+            "end_line": 1,
+            "end_column": 1,
+        };
+    }
+
+    #! Returns True if the argument is a literal value
+    private static bool isLiteralArg(auto arg) {
+        if (arg instanceof hash<DataProviderExpression>) {
+            return arg.exp == DP_EXPR_VALUE && arg.args.size() == 1 && DpqlParser::isLiteralArg(arg.args[0]);
+        }
+        if (arg instanceof hash<DataProviderFieldReference> || arg instanceof hash<DataProviderTemplateReference>) {
+            return False;
+        }
+        if (arg.typeCode() == NT_LIST) {
+            return all DpqlParser::isLiteralArg($1), arg;
+        }
+        if (arg.typeCode() == NT_HASH) {
+            return all DpqlParser::isLiteralArg($1), arg.iterator();
+        }
+        return True;
+    }
+
+    #! Returns True if the argument has one value while an expression is evaluated for a record
+    /** A field, a template value and a literal have one value for a record; an expression has one if its operator
+        gives the same result for the same arguments.  A function such as \c now() does not.
+    */
+    private static bool isStableArg(auto arg) {
+        if (arg instanceof hash<DataProviderFieldReference> || arg instanceof hash<DataProviderTemplateReference>) {
+            return True;
+        }
+        if (arg instanceof hash<DataProviderExpression>) {
+            return DpqlDeterministicOperators{arg.exp} && (all DpqlParser::isStableArg($1), arg.args);
+        }
+        return DpqlParser::isLiteralArg(arg);
+    }
+
+    #! Reports arithmetic operands that the operator cannot combine
+    /** Each operand whose kind of value is known (from a literal, a field's type, or nested arithmetic) is checked
+        against the operator, from left to right, as the operator combines them; see
+        @ref getArithmeticResultKind().
+
+        @param exp an arithmetic expression
+        @param diags the diagnostics to add a \c DPQL-E050 error to
+    */
+    private checkArithmeticOperands(hash<DataProviderExpression> exp, reference<list<hash<DpqlDiagnostic>>> diags) {
+        if (exp.args.size() < 2) {
+            return;
+        }
+        *string left = getArithmeticOperandKind(exp.args[0]);
+        string left_desc = DpqlParser::describeOperand(exp.args[0], left);
+        for (int i = 1; i < exp.args.size(); ++i) {
+            *string right = getArithmeticOperandKind(exp.args[i]);
+            if (!left || !right) {
+                # an operand whose kind is not known cannot be checked, nor can what the operator gives with it
+                left = NOTHING;
+                continue;
+            }
+            *string result = DpqlParser::getArithmeticResultKind(exp.exp, left, right);
+            if (!result) {
+                diags += <DpqlDiagnostic>{
+                    "severity": "error",
+                    "message": sprintf("Operator '%s' cannot be applied to %s and %s: %s", getOpSymbol(exp.exp),
+                        left_desc, DpqlParser::describeOperand(exp.args[i], right), DpqlArithmeticAccepts{exp.exp}),
+                    "code": "DPQL-E050",
+                    "line": 1,
+                    "column": 1,
+                    "end_line": 1,
+                    "end_column": 1,
+                };
+                return;
+            }
+            left = result;
+            left_desc = DpqlOperandKindLabels{result};
+        }
+    }
+
+    #! Returns the kind of value of an arithmetic operand, or NOTHING if it is not known
+    private *string getArithmeticOperandKind(auto arg) {
+        # nested arithmetic gives the kind that its operands give
+        if (arg instanceof hash<DataProviderExpression> && DpqlArithmeticAccepts{arg.exp}) {
+            if (arg.args.size() < 2) {
+                return;
+            }
+            *string kind = getArithmeticOperandKind(arg.args[0]);
+            for (int i = 1; i < arg.args.size() && kind; ++i) {
+                *string right = getArithmeticOperandKind(arg.args[i]);
+                kind = right ? DpqlParser::getArithmeticResultKind(arg.exp, kind, right) : NOTHING;
+            }
+            return kind;
+        }
+        return DpqlParser::getOperandKind(inferArgType(arg));
+    }
+
+    #! Returns the kind of value of a type: one of the keys of DpqlOperandKindLabels, or NOTHING
+    /** @return NOTHING if the type holds values of more than one kind (ex: \c data is a string or a binary value)
+        or of another kind (ex: any value)
+    */
+    private static *string getOperandKind(*AbstractDataProviderType type) {
+        if (!type) {
+            return;
+        }
+        *string rv;
+        foreach string name in (keys type.getReturnTypeHash()) {
+            *string kind;
+            switch (name) {
+                case "int":
+                case "integer":
+                case "float":
+                case "number":
+                    kind = "numeric";
+                    break;
+                case "string":
+                case "date":
+                case "bool":
+                case "binary":
+                    kind = name;
+                    break;
+                case "nothing":
+                case "null":
+                    # an optional value
+                    continue;
+                default:
+                    if (name =~ /^(soft)?list\b/) {
+                        kind = "list";
+                    } else if (name =~ /^hash\b/) {
+                        kind = "hash";
+                    }
+                    break;
+            }
+            if (!kind || (rv && rv != kind)) {
+                return;
+            }
+            rv = kind;
+        }
+        return rv;
+    }
+
+    #! Returns the kind of value that an arithmetic operator gives for two kinds of operand
+    /** @param op the operator
+        @param left the kind of the left operand
+        @param right the kind of the right operand
+
+        @return the kind of the result, or NOTHING if the operator cannot combine the operands: %Qore would convert
+        one of them silently (ex: a hash plus an integer is the integer)
+    */
+    private static *string getArithmeticResultKind(string op, string left, string right) {
+        switch (op) {
+            case DP_OP_PLUS:
+                # appends to or prepends to a list
+                if (left == "list" || right == "list") {
+                    return "list";
+                }
+                if (left == "numeric" && right == "numeric") {
+                    return "numeric";
+                }
+                if (left == "string" || right == "string") {
+                    return DpqlStringJoinKinds{left == "string" ? right : left} ? "string" : NOTHING;
+                }
+                if ((left == "date" && (right == "date" || right == "numeric"))
+                        || (left == "numeric" && right == "date")) {
+                    return "date";
+                }
+                if (left == right && (left == "hash" || left == "binary")) {
+                    return left;
+                }
+                return;
+
+            case DP_OP_MINUS:
+                if (left == "numeric" && right == "numeric") {
+                    return "numeric";
+                }
+                if (left == "date" && (right == "date" || right == "numeric")) {
+                    return "date";
+                }
+                # removes keys from a hash
+                if (left == "hash" && (right == "string" || right == "list")) {
+                    return "hash";
+                }
+                return;
+        }
+        # multiplication, division and remainder
+        return left == "numeric" && right == "numeric" ? "numeric" : NOTHING;
+    }
+
+    #! Describes an arithmetic operand in a diagnostic
+    private static string describeOperand(auto arg, *string kind) {
+        string label = kind ? DpqlOperandKindLabels{kind} : "a value";
+        if (arg instanceof hash<DataProviderFieldReference>) {
+            return sprintf("'@%s' (%s)", arg.field, label);
+        }
+        return label;
     }
 
     #! Infers the type of a parsed argument

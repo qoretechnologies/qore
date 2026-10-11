@@ -9092,3 +9092,95 @@ adverse controls remain in the [evidence](results-resolved-method-entry-macos-ar
 |60. QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP change or new purity/no-throw assumption. QCF_CONSTANT is not treated as a no-throw proof.
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|Existing key validation bounds nargs to eight and rejects a missing argument array; cache walk is bounded to four. No new user-controlled format string, credential, filesystem or network operation. This is the standard checklist item within performance work.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug pass 95 selected files: 377/384 cases, 16830/16929 assertions, 12 standalones each, one known release skip and no debug skips. Baseline/final fixture passes 152 assertions; 146 native debug and 15 harness tests pass. Four-mode grids pass 495 checks per mode; all 129 non-bootstrap LLVM bodies match. Timing identities, raw checksums and summaries independently verified.
+
+
+## Upstream integration audit f9aab72d3 (2026-10-11)
+
+Merged six origin/develop commits through f9aab72d354954d58bcfbf1dfe2013a95512faac
+onto 1cd507c563d9ae65e0f20e44485488d4b91aeb2b without conflicts. Scope: DPQL operand
+validation and diagnostics, MCP creatable-value descriptions, SqlUtil migration metadata,
+and stronger test assertions. No core runtime change. Applied audit-changes with the
+module and DataProvider guides; all 62 checks: **16 Pass, 46 N/A, 0 Fail**.
+
+Local adjustment: explicit return types for four new MCP test callbacks. Release/debug
+qmod rebuilds and selected tests ran sequentially because the source qlib symlinks are shared.
+Each build passed 21 test files: 297 reported cases and 5289 assertions, with five live
+PostgreSQL cases explicitly skipped (292 executed cases). The live fixture environment
+variable was removed for these runs; database behavior was not tested against a live server.
+Logs and reproduction script: build/bench-runtime-comparison/merge-f9aab72-validate.sh,
+merge-f9aab72-{build,build-debug}-driver.log, corresponding qmods.log and per-test logs.
+The final callback-only adjustment was rechecked in both builds: nine cases and 126
+assertions each (merge-f9aab72-callback-recheck-{release,debug}.log).
+No timing ran concurrently with this work. Earlier frozen performance evidence is unchanged.
+
+Next experiment: a debugger observation on the frozen runtime found the first
+DynamicStep::next PIC entry has no materialized callee AOT context. Investigate caching
+only immutable signature and same-Program admission facts before context publication,
+while checking body identity, companion availability, receiver validity, debugger and
+stack state live. Avoid retrying the same native admission twice after a guarded miss.
+Measure cold and warmed behavior, nested fallback and existing native/boxed/callback
+controls before proceeding to an explicit-receiver context-using calling convention.
+
+|!Check|!Status|!Evidence
+|1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new module, module layout, registration or QPP class. Existing modules only.
+|2. Entry exists in doxygen/lang/900_release_notes.dox.tmpl (for modules in the Qore repo; external modules have release notes in their .qm)|N/A|No new module, module layout, registration or QPP class. Existing modules only.
+|3. qore_user_module() or qore_external_user_module() call in CMakeLists.txt|N/A|No new module, module layout, registration or QPP class. Existing modules only.
+|4. Module added to QMOD list in CMakeLists.txt|N/A|No new module, module layout, registration or QPP class. Existing modules only.
+|5. .qm file has @section <lowercasemodname>intro as first doc section — must be all lowercase (e.g., avrodataproviderintro, not AvroDataProviderintro)|N/A|No new module, module layout, registration or QPP class. Existing modules only.
+|6. %modern in .qm file — no redundant %new-style, %require-types, %strict-args, %enable-all-warnings|N/A|No new module, module layout, registration or QPP class. Existing modules only.
+|7. No parse directives (%requires, %modern, %new-style) in separated .qc files (check OUTSIDE of @code blocks only)|N/A|No new module, module layout, registration or QPP class. Existing modules only.
+|8. No %include usage (deprecated for modules)|N/A|No new module, module layout, registration or QPP class. Existing modules only.
+|9. Copyright 2026 on all new files|Pass|The only new source/test file, ColumnMigrationInfo.qtest, carries Copyright 2026.
+|10. Directory layout: .qm inside qlib/<ModuleName>/ directory (not at qlib/<ModuleName>.qm for multi-file modules)|N/A|No new module, module layout, registration or QPP class. Existing modules only.
+|11. No second .qm for the same module at qlib/<ModuleName>.qm|N/A|No new module, module layout, registration or QPP class. Existing modules only.
+|12. ns=Qore::XX matches the QoreNamespace constructor path|N/A|No new module, module layout, registration or QPP class. Existing modules only.
+|13. %modern directive present|Pass|All six changed tests use %modern.
+|14. Executable permission set (chmod +x)|Pass|All six changed tests are executable (git mode 100755).
+|15. Uses %prepend-module-path  before %requires for in-repo modules|Pass|All six changed tests prepend the repository qlib path before imports.
+|16. External module dependencies use %try-module — except modules delivered with Qore itself (DataProvider, ConnectionProvider, QUnit, etc.) which use hard %requires|Pass|Shipped modules use %requires; the external pgsql driver uses %try-module.
+|17. No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks|N/A|No C++ change in this merge.
+|18. No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks|N/A|No C++ change in this merge.
+|19. If filesystem/network ops exist, verify QoreSandboxManagerHelper usage|N/A|No C++ change in this merge.
+|20. No File::, Dir::, Socket::, HTTPClient:: usage without justification|Pass|No new File/Dir/Socket/HTTPClient operation in the diff. Existing MCP tests use localhost. New live SQL fixtures were explicitly disabled by removing QORE_DB_CONNSTR_PGSQL from the test environment.
+|21. All for/while loops that could iterate >100 times have qore_check_cancel() checks|N/A|No C++ change in this merge.
+|22. Uses qore_check_cancel() (NOT deprecated qore_check_io_interrupt())|N/A|No C++ change in this merge.
+|23. Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations|N/A|No C++ change in this merge.
+|24. No blocking operations without cancellation support|N/A|No C++ change in this merge.
+|25. Every action has display_name, short_desc (plain text, <80 chars), desc (markdown)|N/A|No action/app registration, request/response type definition or hash-slice change.
+|26. Every action has options populated via getActionOptionFromFields() — without this, the action shows an empty, unusable form|N/A|No action/app registration, request/response type definition or hash-slice change.
+|27. Every action has output_type set to a typed data type constant (e.g., MyResponseDataType) — not omitted|N/A|No action/app registration, request/response type definition or hash-slice change.
+|28. DPAT_API actions: provider has "supports_request": True and implements doRequestImpl()|N/A|No action/app registration, request/response type definition or hash-slice change.
+|29. DPAT_FIND actions: every option exists in SearchOptions, getRecordTypeImpl() returns *hash<string, AbstractDataField>|N/A|No action/app registration, request/response type definition or hash-slice change.
+|30. Scheme-based apps (with "scheme" in registerApp): actions use "path" and do NOT use "cls" — having both scheme and cls causes a runtime error|N/A|No action/app registration, request/response type definition or hash-slice change.
+|31. Single-key hash slices use trailing comma: Fields{"key",} (without trailing comma, Fields{"key"} returns the value, not a hash)|N/A|No action/app registration, request/response type definition or hash-slice change.
+|32. Typed data type classes exist for request and response types — inherit HashDataType, have const Fields hash, call addQoreFields(Fields) in constructor, export public constant at bottom (e.g., public const MyDataType = new MyDataType();)|N/A|No action/app registration, request/response type definition or hash-slice change.
+|33. Request/input types use public Fields (enables ClassName::Fields in action registration)|N/A|No action/app registration, request/response type definition or hash-slice change.
+|34. Response/output types use private Fields|N/A|No action/app registration, request/response type definition or hash-slice change.
+|35. Each field in data types has display_name, type, and desc (markdown-formatted)|N/A|No action/app registration, request/response type definition or hash-slice change.
+|36. Input fields have example_value where useful (string fields, endpoint URIs, SQL queries, etc.)|N/A|No action/app registration, request/response type definition or hash-slice change.
+|37. Fields with finite allowed values use allowed_values with AllowedValueInfo containing both value and display_name (Title Case, human-readable) — never bare values, never described only in text|Pass|MCP consumes AllowedValueInfo records and distinguishes closed choices from creatable suggestions. Sparse test labels intentionally exercise optional metadata; no production field registration was added.
+|38. Password/secret fields have "sensitive": True|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|39. groups uses AppGroup enum values from qlib/DataProvider/AppGroup.qc|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|40. App logo stored as separate file, loaded at module level in Priv namespace|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|41. App desc uses markdown: bullet list of capabilities, links to project website, business-language explanation of value|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|42. display_name is user-friendly ("Apache Avro" not "avro")|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|43. short_desc is plain text, under 80 chars, single sentence — no markdown|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|44. desc uses markdown: backticks for code/field refs ( field_name ,  True ,  pdf ), \n\n for paragraphs, -  bullet lists for enumerations, bold for caveats|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|45. Descriptions use plain business language relating to common challenges — not just technical "what" but "why" and "when to use"|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|46. No bare True/False/NOTHING — must be backtick-wrapped in desc|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|47. No bare field/option names in prose — must use backticks|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|48. Long descriptions (>500 chars) use bold section headers and bullet lists|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|49. Factory registration in Qore repo: every factory name registered in qlib/DataProvider/DataProvider.qc → FactoryMap (without this, module loads but doesn't appear in Qorus apps)|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|50. getRecordTypeImpl() signature: must be private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) — NOT returning *AbstractDataProviderType|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|51. Dependency JARs committed (for JNI modules): JAR files in qlib/*/jar/ may be gitignored — use git add -f to ensure they're tracked, otherwise CI compilation fails|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|52. JAR install rules in CMakeLists.txt for all dependency JARs|N/A|No registered field/app descriptions, factory, record-type override, sensitive field, catalog or JNI dependency change.
+|53. No workarounds: No TODOs, FIXMEs, stubs, or partially-implemented features|Pass|Complete diagnostic, schema-description and metadata implementations; no new TODO/FIXME or production stub.
+|54. Exception safety: C++ uses ReferenceHolder for Qore allocations, std::unique_ptr for C++ allocations, *xsink checked after every fallible operation|Pass|Qore propagates query/schema errors; literal comparison failures are intentionally left to evaluation. SQL inspection does not commit or roll back; live fixtures have on_exit cleanup but were not executed.
+|55. Thread safety: All mutable shared state protected by std::lock_guard<std::mutex> or documented as immutable-after-construction|Pass|New parser maps are constants; diagnostics, SQL results and schema descriptions are per-call values. No shared mutable cache added.
+|56. Type safety: Strongly-typed code<return(args)> instead of untyped code; static_cast instead of C casts; typed hashdecls for results; enums where appropriate|Pass|Four new MCP callbacks now declare auto return types, matching code<auto(auto)>. DPQL diagnostics use hashdecls; SQL metadata is explicitly driver-specific hash<auto>, consistent with the existing API.
+|57. Performance: No O(n²) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply|Pass|The action session reuses the parsed tree instead of reparsing. Arithmetic chains combine left-to-right; SQL inspection is bounded by schema and at most 16 requested columns, with no row scan. No runtime performance claim for this merge.
+|58. Error handling: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable|Pass|Tests cover warning/error severity and duplicate diagnostics, known/unknown operand types, suggestion count limits and subclass descriptions. SQL validates empty, duplicate and oversized name lists before driver dispatch; queries bind relation/column values.
+|59. Documentation: Doxygen @param, @return, @throw on all public methods; @par Example with realistic business scenarios; @note for important caveats|Pass|New SqlUtil public API documents parameters, returned metadata, throws, a migration example and the caller-lock caveat. DPQL/MCP module documentation describes the behavior changes. No new registration or presentation-catalog source string.
+|60. QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP change.
+|61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|Literal format strings, bound SQL values and explicit argument bounds. No credentials added. Standard code-review item within performance integration, not a separate security project.
+|62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release and debug each ran 21 selected files: 297 reported cases, 5289 assertions, including five explicitly skipped live PostgreSQL cases (292 executed cases). Affected qmod targets were rebuilt sequentially. No live-database, full-suite or performance-remeasurement claim.

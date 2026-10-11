@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires SqlUtil >= 3.7
+%requires PgsqlSqlUtilBase >= 1.16
+%requires QUnit
+%try-module pgsql
+%define NoPgsql
+%endtry
+%exec-class ColumnMigrationInfoTest
+
+class ColumnMigrationInfoTest inherits Test {
+    private { int serial; }
+    constructor() : Test("column migration preflight metadata", "1.0", \ARGV) {
+        addTestCase("identity timezone and column definitions", \metadata());
+        addTestCase("indexes and column and whole-row views are dependencies", \dependencies());
+        addTestCase("incoming foreign keys and UPDATE trigger metadata", \triggers());
+        addTestCase("inspection preserves the caller transaction", \transaction());
+        addTestCase("invalid identifiers and partitioned layouts reject", \validation());
+        set_return_value(main());
+    }
+    private hash<auto> fixture() {
+%ifdef NoPgsql
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) { testSkip("live disposable database required"); }
+        Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
+        ds.setOption("timezone", "America/New_York");
+        string name = sprintf("column_migration_%d_%d", getpid(), ++serial);
+        AbstractTable table = AbstractTable::getTable(ds, name);
+        if (table.checkExistence()) { throw "TEST-OWNERSHIP-ERROR", "fixture already exists"; }
+        ds.rollback();
+        table.setupTable({"columns": {"id": {"qore_type": "integer", "notnull": True},
+            "period": {"qore_type": "date"}, "order": {"qore_type": "string", "size": 40}},
+            "primary_key": {"name": name + "_pk", "columns": ("id",)}});
+        table.createCommit();
+        return {"ds": ds, "table": table, "name": name};
+    }
+    private cleanup(hash<auto> f) {
+        f.ds.rollback(); f.table.dropCommit();
+        assertFalse(f.table.checkExistence()); f.ds.rollback(); f.ds.close();
+    }
+    private metadata() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        hash<auto> info = f.table.getColumnMigrationInfo(("id", "period", "order"));
+        assertEq("America/New_York", info.timezone);
+        assertTrue(info.identity =~ /^\d+:\d+:\d+$/);
+        assertEq(0, info.heap_bytes);
+        assertTrue(info.columns.id.not_null);
+        assertTrue(info.columns.id.dependent);
+        assertFalse(info.columns.period.not_null || info.columns.period.has_default || info.columns.period.dependent);
+        assertEq((), info.triggers);
+        f.ds.rollback();
+        # A drop/recreate with the same SQL name must not inherit an old durable cursor.
+        f.table.dropCommit();
+        f.ds.exec("create table " + f.name + " (id bigint primary key, period timestamp, \"order\" varchar(40))");
+        f.ds.commit();
+        assertTrue(info.identity != f.table.getColumnMigrationInfo(("period",)).identity);
+    }
+    private dependencies() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        f.table.addIndex(f.name + "_period", False, ("period",)); f.ds.commit();
+        assertTrue(f.table.getColumnMigrationInfo(("period",)).columns.period.dependent);
+        f.ds.rollback();
+        f.ds.exec("drop index " + f.name + "_period"); f.ds.commit();
+        foreach string expression in (("period", f.name)) {
+            f.ds.exec("create view " + f.name + "_v as select " + expression + " from " + f.name);
+            f.ds.commit();
+            assertTrue(f.table.getColumnMigrationInfo(("period",)).columns.period.dependent,
+                "column and whole-row views must both block replacement");
+            f.ds.rollback();
+            f.ds.exec("drop view " + f.name + "_v"); f.ds.commit();
+        }
+        assertFalse(f.table.getColumnMigrationInfo(("period",)).columns.period.dependent);
+    }
+    private triggers() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        # Controlled PostgreSQL catalog fixtures verify what SqlUtil reports, without modifying dependencies.
+        f.ds.exec("create function " + f.name + "_fn() returns trigger language plpgsql as $$begin return new; end$$");
+        f.ds.exec("create trigger inspect_update before update on " + f.name
+            + " for each row execute function " + f.name + "_fn()");
+        f.ds.commit();
+        on_exit { f.ds.rollback(); f.ds.exec("drop trigger inspect_update on " + f.name);
+            f.ds.exec("drop function " + f.name + "_fn()"); f.ds.commit(); }
+        hash<auto> info = f.table.getColumnMigrationInfo(("period",));
+        assertEq(1, info.triggers.size());
+        assertEq("inspect_update", info.triggers[0].name);
+        assertEq("O", info.triggers[0].enabled);
+        assertTrue(info.triggers[0].row_trigger);
+        assertTrue(info.triggers[0].source.find("return new") >= 0);
+        f.ds.rollback();
+        f.ds.exec("alter table " + f.name + " add unique(period)");
+        f.ds.exec("create table " + f.name + "_child (period timestamp references " + f.name + "(period))");
+        f.ds.commit();
+        on_exit { f.ds.rollback(); f.ds.exec("drop table " + f.name + "_child"); f.ds.commit(); }
+        assertTrue(f.table.getColumnMigrationInfo(("period",)).columns.period.dependent);
+    }
+    private transaction() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        f.table.insert({"id": 1});
+        f.table.getColumnMigrationInfo(("period",));
+        assertTrue(f.ds.currentThreadInTransaction());
+        f.ds.rollback();
+        assertEq(NOTHING, f.table.selectRow({"where": {"id": 1}}));
+    }
+    private validation() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        foreach list<string> names in (((), ("period", "period"), ("",), ("not_present",), ("period'); drop table x;--",))) {
+            assertThrows("COLUMN-MIGRATION-ERROR", \f.table.getColumnMigrationInfo(), (names,));
+            f.ds.rollback();
+        }
+        f.ds.exec("alter table " + f.name + " enable row level security"); f.ds.commit();
+        assertThrows("COLUMN-MIGRATION-ERROR", \f.table.getColumnMigrationInfo(), (("period",),));
+        f.ds.rollback();
+        f.ds.exec("alter table " + f.name + " disable row level security"); f.ds.commit();
+        f.ds.exec("create table " + f.name + "_inherited () inherits (" + f.name + ")"); f.ds.commit();
+        assertThrows("COLUMN-MIGRATION-ERROR", \f.table.getColumnMigrationInfo(), (("period",),));
+        f.ds.rollback();
+        f.ds.exec("drop table " + f.name + "_inherited"); f.ds.commit();
+        f.ds.exec("create table " + f.name + "_parent (period timestamp) partition by range(period)");
+        f.ds.commit();
+        on_exit { f.ds.rollback(); f.ds.exec("drop table " + f.name + "_parent"); f.ds.commit(); }
+        AbstractTable parent = AbstractTable::getTable(f.ds, f.name + "_parent");
+        assertThrows("COLUMN-MIGRATION-ERROR", \parent.getColumnMigrationInfo(), (("period",),));
+        f.ds.rollback();
+    }
+}
