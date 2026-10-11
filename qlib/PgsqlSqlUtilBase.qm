@@ -215,6 +215,8 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev116 PgsqlSqlUtilBase v1.16
+    - a negative number default value of a column, which PostgreSQL returns quoted (ex: \c "'-1'::integer"), compares
+      equal to its declared value: schema alignment changed the default value of such a column on every run
     - Added targeted column-migration metadata for resumable offline upgrades, including
       relation identity, dependent objects, and UPDATE trigger functions.
 
@@ -920,6 +922,12 @@ public class PgsqlColumn inherits SqlUtil::AbstractColumn {
     public {
         #! byte size of the column
         int byte_size;
+
+        #! A number constant read from the server: its value without the quotes of a negative number, and its type
+        const NumberConstantRegex = "^'?([^':]*)'?::(smallint|integer|bigint|numeric|real|double precision)$";
+
+        #! A number literal in SQL
+        const NumberLiteralRegex = "^[-+]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)([eE][-+]?[0-9]+)?$";
     }
 
     #! empty constructor for subclasses
@@ -1010,14 +1018,7 @@ list l = col.getModifySql(t, newcol);
                 l += sprintf("alter table %s alter %s set default %s", t.getSqlName(), ddl_name, c.def_val);
         } else if (def_val !== c.def_val) {
             # issue #2527: ensure that mismatches are not due to server type info
-            bool ok;
-            if (c.def_val.val() && c.def_val !~ /::/ && def_val =~ /::/) {
-                string ndv = def_val;
-                ndv =~ s/::.*//;
-                if (ndv == c.def_val)
-                    ok = True;
-            }
-            if (!ok) {
+            if (!PgsqlColumn::equalDefaultValue(def_val, c.def_val)) {
                 #printf("L: %Y\nXXXXXXXXXXXXXXX\nR: %Y\n\n", self, c);
                 if (exists c.def_val && c.def_val !== NULL)
                     l += sprintf("alter table %s alter %s set default %s", t.getSqlName(), ddl_name, c.def_val);
@@ -1033,6 +1034,38 @@ list l = col.getModifySql(t, newcol);
         if (c.comment != comment)
             l += sprintf("comment on column %s.%s is %s", t.getSqlName(), ddl_name, t.getSqlValue(c.comment));
         return l;
+    }
+
+    #! Returns @ref True "True" if a default value read from the server is the declared default value
+    /** PostgreSQL returns a default value constant with the type of the constant (ex: \c "'abc'::character varying"
+        for \c 'abc'), and a negative number constant quoted (ex: \c "'-1'::integer" for \c -1,
+        \c "'-1.5'::numeric" for \c -1.5, also on a column of another numeric type); the quotes of a number constant
+        are not part of its value, whereas the quotes of a string constant are, so a value whose constant has a string
+        type is compared as it is
+
+        @param server_val the default value read from the server
+        @param declared_val the declared default value in SQL
+
+        @return @ref True "True" if the values are the same
+
+        @since PgsqlSqlUtilBase 1.16
+    */
+    static bool equalDefaultValue(*string server_val, *string declared_val) {
+        if (server_val === declared_val) {
+            return True;
+        }
+        if (!declared_val.val() || declared_val =~ /::/ || server_val !~ /::/) {
+            return False;
+        }
+        string ndv = server_val;
+        ndv =~ s/::.*//;
+        if (ndv == declared_val) {
+            return True;
+        }
+        # a number constant: compared by its value, so that a declared -1.5 is the returned '-1.50'
+        *list<*string> num = regex_extract(server_val, PgsqlColumn::NumberConstantRegex);
+        return num && regex(declared_val, PgsqlColumn::NumberLiteralRegex)
+            && regex(num[0], PgsqlColumn::NumberLiteralRegex) && number(num[0]) == number(declared_val);
     }
 
     #! returns a string that can be used to rename the column

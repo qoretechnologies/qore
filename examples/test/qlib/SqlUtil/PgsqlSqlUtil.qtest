@@ -115,6 +115,72 @@ class Bug2963Schema inherits SqlUtilTestSchema {
     }
 } # class Bug2963Schema
 
+#! A schema with default values that PostgreSQL returns in another form than they are declared
+class DefaultValueFormSchema inherits SqlUtilTestSchema {
+    public {
+        const TableName = "pgsql_test_default_forms";
+        const SequenceName = "pgsql_test_default_forms_seq";
+
+        const Columns = {
+            "id": c_number(14, True),
+            # negative numbers: returned quoted with the type of the constant (ex: '-1'::integer)
+            "int_neg": {"native_type": "integer", "default_value": -1},
+            "bigint_neg": {"native_type": "bigint", "default_value": -1},
+            "num_neg": {"native_type": "numeric", "size": 10, "scale": 2, "default_value": -1.5n},
+            "num_exp": {"native_type": "numeric", "size": 10, "scale": 0, "default_value": "-1e2",
+                "default_value_native": True},
+            "float_neg": {"native_type": "float", "default_value": -1.5},
+            # a number constant on a string column: '-1'::integer
+            "str_num": {"native_type": "varchar", "size": 10, "default_value": "-1", "default_value_native": True},
+            # positive numbers: returned as declared
+            "int_pos": {"native_type": "integer", "default_value": 1},
+            "num_pos": {"native_type": "numeric", "size": 10, "scale": 2, "default_value": 1.5n},
+            # strings: the quotes are part of the value ('-1'::character varying)
+            "str_neg": {"native_type": "varchar", "size": 10, "default_value": "-1"},
+            "str": {"native_type": "text", "default_value": "abc"},
+            # expressions
+            "ts_now": {"native_type": "timestamp", "default_value": "now()", "default_value_native": True},
+            "seq_next": {"native_type": "bigint", "default_value": "nextval('" + SequenceName + "'::regclass)",
+                "default_value_native": True},
+        };
+
+        #! the default values of the columns in SQL
+        const DefaultSql = {
+            "int_neg": "-1",
+            "bigint_neg": "-1",
+            "num_neg": "-1.5",
+            "num_exp": "-1e2",
+            "float_neg": "-1.5",
+            "str_num": "-1",
+            "int_pos": "1",
+            "num_pos": "1.5",
+            "str_neg": "'-1'",
+            "str": "'abc'",
+            "ts_now": "now()",
+            "seq_next": "nextval('" + SequenceName + "'::regclass)",
+        };
+    }
+
+    constructor(AbstractDatasource ds, *string dts, *string its) : SqlUtilTestSchema(ds, dts, its) {
+    }
+
+    private string getNameImpl() {
+        return "DefaultValueFormSchema";
+    }
+
+    private string getVersionImpl() {
+        return "1.0";
+    }
+
+    private *hash<auto> getSequencesImpl() {
+        return {SequenceName: {}};
+    }
+
+    private *hash<auto> getTablesImpl() {
+        return {TableName: {"columns": Columns}};
+    }
+} # class DefaultValueFormSchema
+
 #! Proxy class for testing bulk upsert with non-DatasourcePool AbstractDatasource subclasses
 /** This simulates remote datasource proxies (e.g. QdspClient in Qorus) that inherit
     AbstractDatasource but are not Datasource or DatasourcePool instances.
@@ -366,6 +432,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("sequence operators", \testSequenceOperators());
             addTestCase("analytic/window functions", \testAnalyticFunctions());
             addTestCase("default value", \testDefaultValue());
+            addTestCase("default values in the form PostgreSQL returns them", \defaultValueFormTest());
             addTestCase("pgsqlutil: schema align with trigger drop #2963", \test2963());
             addTestCase("concurrent multi-event trigger introspection", \concurrentTriggerIntrospectionTest());
             addTestCase("proxy bulk upsert", \proxyBulkUpsertTest());
@@ -675,6 +742,49 @@ class PgsqlTest inherits SqlTestBase {
         assertNRegex("::character varying", new_col.def_val);
         list l = c.getModifySql(table, new_col);
         assertEq((), l);
+    }
+
+    defaultValueFormTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+        AbstractDatasource ds = getDatasource();
+        on_exit {
+            ds.rollback();
+            ds.execRaw("drop table if exists " + DefaultValueFormSchema::TableName);
+            ds.execRaw("drop sequence if exists " + DefaultValueFormSchema::SequenceName);
+            ds.commit();
+        }
+
+        DefaultValueFormSchema schema(ds);
+        assertGt(0, schema.align(False, m_options.verbose, m_options.verbose > 0), "the schema is created");
+        # aligning the schema created from the same definition changes nothing
+        assertEq(0, schema.align(False, m_options.verbose, m_options.verbose > 0), "the schema is aligned");
+
+        Table t(ds, DefaultValueFormSchema::TableName);
+        hash<string, AbstractColumn> cols = t.describe().getHash();
+        # each column read from the database has the declared default value
+        foreach hash<auto> i in (DefaultValueFormSchema::DefaultSql.pairIterator()) {
+            AbstractColumn declared = cols{i.key}.copy();
+            declared.def_val = i.value;
+            assertEq((), cols{i.key}.getModifySql(t.getTable(), declared), i.key);
+        }
+        # negative numbers are returned quoted
+        assertEq("'-1'::integer", cols.int_neg.def_val);
+
+        # another value is a change
+        foreach list<string> c in (("int_neg", "-2"), ("num_neg", "-1.6"), ("float_neg", "1.5"), ("str_num", "-2"),
+                ("str", "'abd'"), ("str_neg", "'-2'")) {
+            AbstractColumn declared = cols{c[0]}.copy();
+            declared.def_val = c[1];
+            assertEq(("alter table " + t.getSqlName() + " alter " + c[0] + " set default " + c[1],),
+                cols{c[0]}.getModifySql(t.getTable(), declared), c[0] + " " + c[1]);
+        }
+        # a string is not a number: the quotes of a string value are part of it
+        AbstractColumn declared = cols.str_neg.copy();
+        declared.def_val = "-1";
+        assertEq(("alter table " + t.getSqlName() + " alter str_neg set default -1",),
+            cols.str_neg.getModifySql(t.getTable(), declared), "str_neg -1");
     }
 
     private test2963() {
