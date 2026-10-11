@@ -261,6 +261,74 @@ public class RestSchemaActionOperation {
         return request_type ? request_type.getFields() : NOTHING;
     }
 
+    #! Validates a value for an action option against the option's schema, as the request validator does
+    /** A parameter is checked against its parameter declaration, and a body property or a property of the value
+        an option is lifted into against its property schema, so that a value the API rejects (ex: a page size
+        above the operation's maximum, or a value outside an enumeration) is found without making the request;
+        an option without a schema declaration is checked against its derived type.
+
+        @param option the action option name
+        @param value the value to check
+
+        @throw REST-SCHEMA-ACTION-ERROR the action has no such option
+        @throw SCHEMA-VALIDATION-ERROR the schema rejects the value
+
+        @since RestSchemaActions 1.0
+    */
+    checkOptionValue(string option, auto value) {
+        *hash<RestSchemaFlatFieldInfo> fi = flat_map{option};
+        if (!fi) {
+            throw "REST-SCHEMA-ACTION-ERROR", sprintf("action %y has no option %y; options: %y", info.action, option,
+                sort(keys flat_map));
+        }
+        if (!fi.lift_into.val() && (fi.loc == RSAL_PATH || fi.loc == RSAL_QUERY || fi.loc == RSAL_HEADER)) {
+            # a parameter is checked as the request validator checks it, including a query argument's conversion
+            *OpenApi3::ParameterBase param = op.parameters{fi.wire_name} ?? pio.parameters{fi.wire_name};
+            if (param && param.inLoc == fi.loc) {
+                param.check(False, True, info.path, info.method.upr(), fi.wire_name, \value);
+                return;
+            }
+        } else {
+            auto schema = fi.lift_into.val()
+                ? RestSchemaActionOperation::getSchemaProperty(getValueSchema(fi.loc, fi.wire_path, fi.lift_into),
+                    fi.wire_name)
+                : getValueSchema(fi.loc, fi.wire_path, fi.wire_name);
+            if (schema instanceof RestSchemaValidator::AbstractSchemaObject) {
+                schema.check(False, True, info.path, info.method.upr(), fi.wire_name, \value);
+                return;
+            }
+        }
+        # no schema declaration to check against: the derived type of the option
+        *AbstractDataField field = getRequestFields(){option};
+        if (field) {
+            field.getType().acceptsValue(value);
+        }
+    }
+
+    #! Returns the schema of a value in the request: a parameter or a property of the body, or @ref nothing
+    /** @param loc the value's transport location
+        @param wire_path the path to the enclosing object within the request body, for a body property
+        @param name the value's name in its location
+    */
+    private auto getValueSchema(string loc, *list<string> wire_path, string name) {
+        switch (loc) {
+            case RSAL_PATH:
+            case RSAL_QUERY:
+            case RSAL_HEADER: {
+                *OpenApi3::ParameterBase param = op.parameters{name} ?? pio.parameters{name};
+                return param && param.inLoc == loc ? param.getSchema() : NOTHING;
+            }
+            case RSAL_BODY: {
+                *OpenApi3::ParameterObject body = op.body ?? pio.body;
+                auto s = body.schema;
+                foreach string level in (wire_path) {
+                    s = RestSchemaActionOperation::getSchemaProperty(s, level);
+                }
+                return RestSchemaActionOperation::getSchemaProperty(s, name);
+            }
+        }
+    }
+
     #! Converts flat action options into the transport request
     /** @param options the action options, keyed by action option name
 

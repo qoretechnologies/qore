@@ -8926,3 +8926,96 @@ Code growth and adverse controls remain explicit in the
 |60. QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP change or new purity/no-throw assumption. QCF_CONSTANT is not treated as a no-throw proof.
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|The existing full-key arity check bounds new array reads to eight. No user-controlled format string, credential or capability change. This is the standard review item within performance work.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug pass 94 selected files: 376/383 cases and 16678/16777 assertions, 12 standalone files each, one known release skip and no debug skips. The 120-assertion driver passes unchanged baseline and both candidates. IR/AOT/Java reference grids have 495 checks per mode; 15 harness tests and 146 native debug checks pass. 129 non-bootstrap LLVM bodies match; all raw timing samples/checksums/summaries independently verified.
+
+
+## Upstream integration audit 1978797b3 (2026-10-10)
+
+Merged five origin/develop commits through 1978797b3359cde2163c851c06191fc5008addf4
+onto a15326eea81afe4632d100804c18b965229b81f7 without conflicts. Scope: REST-schema
+reference data, Paddle dropdown bounds/catalogs, MCP element metadata and SSE notifications.
+No core runtime optimization was changed. Applied audit-changes and read the applicable
+module, cancellation, DataProvider and schema-driven application guides.
+All 62 checks: **30 Pass, 32 N/A, 0 Fail**.
+
+Local audit adjustments: explicit types for two new test callbacks and a shorter equivalent
+Paddle transaction description. Generated the root catalog with qore-data-provider-i18n,
+refreshed translated source metadata without changing translation messages, and passed
+--check --require-standard-locales --require-complete-locales for the Paddle owner.
+Release/debug qmod rebuilds and tests ran sequentially because source qlib symlinks are shared.
+Logs: build/bench-runtime-comparison/merge-1978797-{build,build-debug}-driver.log,
+per-test .qtest.log files and merge-1978797-catalogs.log. Catalog generation reported an old
+unrelated RestClientDataProvider qmod ABI and explicitly used its source fallback; this is
+not a claim that every transitive provider module ran AOT-native. Paddle live tests were not
+configured. Both runtime identities remain 10e1d35fdd035f0754fa4ded65cfdf83bdc1412063951efe41dc06123e0f691e.
+
+Next performance experiment: pre-resolved nested same-Program AOT methods currently skip
+PIC-backed native admission. Preserve their parse-selected variant, reuse only valid
+admission proofs, and retain live body/readiness, object, Program, debugger and frame
+checks. Add exact/derived/overloaded/generic/coercion regression coverage, run it on the
+baseline, then compare frozen before/after runtimes and an identical-executable disabled
+control. Include generic fallback, native, callback and arithmetic timing controls;
+qualify and audit a candidate only if the measured benefit survives.
+
+|!Check|!Status|!Evidence
+|1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new module, registration, layout or QPP class; existing modules only.
+|2. Entry exists in doxygen/lang/900_release_notes.dox.tmpl (for modules in the Qore repo; external modules have release notes in their .qm)|N/A|No new module, registration, layout or QPP class; existing modules only.
+|3. qore_user_module() or qore_external_user_module() call in CMakeLists.txt|N/A|No new module, registration, layout or QPP class; existing modules only.
+|4. Module added to QMOD list in CMakeLists.txt|N/A|No new module, registration, layout or QPP class; existing modules only.
+|5. .qm file has @section <lowercasemodname>intro as first doc section — must be all lowercase (e.g., avrodataproviderintro, not AvroDataProviderintro)|N/A|No new module, registration, layout or QPP class; existing modules only.
+|6. %modern in .qm file — no redundant %new-style, %require-types, %strict-args, %enable-all-warnings|N/A|No new module, registration, layout or QPP class; existing modules only.
+|7. No parse directives (%requires, %modern, %new-style) in separated .qc files (check OUTSIDE of @code blocks only)|N/A|No new module, registration, layout or QPP class; existing modules only.
+|8. No %include usage (deprecated for modules)|N/A|No new module, registration, layout or QPP class; existing modules only.
+|9. Copyright 2026 on all new files|Pass|Both new tests carry Copyright 2026 and MIT notices.
+|10. Directory layout: .qm inside qlib/<ModuleName>/ directory (not at qlib/<ModuleName>.qm for multi-file modules)|N/A|No new module, registration, layout or QPP class; existing modules only.
+|11. No second .qm for the same module at qlib/<ModuleName>.qm|N/A|No new module, registration, layout or QPP class; existing modules only.
+|12. ns=Qore::XX matches the QoreNamespace constructor path|N/A|No new module, registration, layout or QPP class; existing modules only.
+|13. %modern directive present|Pass|All five changed test files use %modern.
+|14. Executable permission set (chmod +x)|Pass|All five changed tests are mode 100755.
+|15. Uses %prepend-module-path  before %requires for in-repo modules|Pass|Each changed test prepends the repository qlib path before in-repo imports.
+|16. External module dependencies use %try-module — except modules delivered with Qore itself (DataProvider, ConnectionProvider, QUnit, etc.) which use hard %requires|Pass|All imports are shipped modules; json and yaml are built by the repository CMake configuration.
+|17. No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks|N/A|No C++ changes in this integration.
+|18. No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks|N/A|No C++ changes in this integration.
+|19. If filesystem/network ops exist, verify QoreSandboxManagerHelper usage|N/A|No C++ changes in this integration.
+|20. No File::, Dir::, Socket::, HTTPClient:: usage without justification|Pass|New directory/file reads enumerate repository metadata in tests. SSE socket/HTTP traffic is localhost-only with cleanup and timeouts; canned REST clients avoid external requests. No live Paddle connection was configured.
+|21. All for/while loops that could iterate >100 times have qore_check_cancel() checks|N/A|No C++ changes in this integration.
+|22. Uses qore_check_cancel() (NOT deprecated qore_check_io_interrupt())|N/A|No C++ changes in this integration.
+|23. Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations|N/A|No C++ changes in this integration.
+|24. No blocking operations without cancellation support|N/A|No C++ changes in this integration.
+|25. Every action has display_name, short_desc (plain text, <80 chars), desc (markdown)|Pass|Paddle retains registered action display_name, short_desc and desc; new transaction-page short description is 41 characters.
+|26. Every action has options populated via getActionOptionFromFields() — without this, the action shows an empty, unusable form|Pass|RestSchemaActionSet::getActionInfo still derives options through getActionOptionFromFields; Paddle option and registration tests pass.
+|27. Every action has output_type set to a typed data type constant (e.g., MyResponseDataType) — not omitted|Pass|Generated actions retain getResponseType-derived output_type; response contracts and manifest registration tests pass.
+|28. DPAT_API actions: provider has "supports_request": True and implements doRequestImpl()|Pass|RestSchemaActionDataProvider retains supports_request=True and doRequestImpl.
+|29. DPAT_FIND actions: every option exists in SearchOptions, getRecordTypeImpl() returns hash<string, AbstractDataField>|N/A|No DPAT_FIND action or search option change.
+|30. Scheme-based apps (with "scheme" in registerApp): actions use "path" and do NOT use "cls" — having both scheme and cls causes a runtime error|Pass|Generated scheme-backed actions retain path-only registration; no cls addition.
+|31. Single-key hash slices use trailing comma: Fields{"key",} (without trailing comma, Fields{"key"} returns the value, not a hash)|N/A|No single-key hash slice added.
+|32. Typed data type classes exist for request and response types — inherit HashDataType, have const Fields hash, call addQoreFields(Fields) in constructor, export public constant at bottom (e.g., public const MyDataType = new MyDataType();)|Pass|The schema-driven application guide applies: request/response types derive from pinned schemas, not duplicate handwritten data classes.
+|33. Request/input types use public Fields (enables ClassName::Fields in action registration)|N/A|No handwritten request/response Fields class added.
+|34. Response/output types use private Fields|N/A|No handwritten request/response Fields class added.
+|35. Each field in data types has display_name, type, and desc (markdown-formatted)|Pass|Changed page-size overlays retain display names, descriptions and schema-derived integer types; generated form tests pass.
+|36. Input fields have example_value where useful (string fields, endpoint URIs, SQL queries, etc.)|Pass|The transaction example is now 30, consistent with its schema maximum; ordinary listings retain 50.
+|37. Fields with finite allowed values use allowed_values with AllowedValueInfo containing both value and display_name (Title Case, human-readable) — never bare values, never described only in text|Pass|Element fixed values retain AllowedValueInfo records. No production finite-value set is added; sparse test records intentionally exercise optional display labels.
+|38. Password/secret fields have "sensitive": True|N/A|No new password field, app identity, groups, logo or app description.
+|39. groups uses AppGroup enum values from qlib/DataProvider/AppGroup.qc|N/A|No new password field, app identity, groups, logo or app description.
+|40. App logo stored as separate file, loaded at module level in Priv namespace|N/A|No new password field, app identity, groups, logo or app description.
+|41. App desc uses markdown: bullet list of capabilities, links to project website, business-language explanation of value|N/A|No new password field, app identity, groups, logo or app description.
+|42. display_name is user-friendly ("Apache Avro" not "avro")|N/A|No new password field, app identity, groups, logo or app description.
+|43. short_desc is plain text, under 80 chars, single sentence — no markdown|Pass|Changed page-size short descriptions are plain text below 80 characters. An unchanged 80-character subscription option description found by the broader scan is outside this merge.
+|44. desc uses markdown: backticks for code/field refs ( field_name ,  True ,  pdf ), \n\n for paragraphs, -  bullet lists for enumerations, bold for caveats|Pass|Changed descriptions explain dropdown/page-size behavior, preserve paragraph breaks and backtick field references, and introduce no bare boolean/nothing literals.
+|45. Descriptions use plain business language relating to common challenges — not just technical "what" but "why" and "when to use"|Pass|Changed descriptions explain dropdown/page-size behavior, preserve paragraph breaks and backtick field references, and introduce no bare boolean/nothing literals.
+|46. No bare True/False/NOTHING — must be backtick-wrapped in desc|Pass|Changed descriptions explain dropdown/page-size behavior, preserve paragraph breaks and backtick field references, and introduce no bare boolean/nothing literals.
+|47. No bare field/option names in prose — must use backticks|Pass|Changed descriptions explain dropdown/page-size behavior, preserve paragraph breaks and backtick field references, and introduce no bare boolean/nothing literals.
+|48. Long descriptions (>500 chars) use bold section headers and bullet lists|Pass|Shortened the incoming 517-character transaction description below 500 without changing behavior. Regenerated root catalog using the repository tool and refreshed only equivalent source metadata in the 12 translations.
+|49. Factory registration in Qore repo: every factory name registered in qlib/DataProvider/DataProvider.qc → FactoryMap (without this, module loads but doesn't appear in Qorus apps)|N/A|No factory, getRecordTypeImpl signature, JNI or dependency-JAR change.
+|50. getRecordTypeImpl() signature: must be private hash<string, AbstractDataField> getRecordTypeImpl(hash<auto> search_options) — NOT returning AbstractDataProviderType|N/A|No factory, getRecordTypeImpl signature, JNI or dependency-JAR change.
+|51. Dependency JARs committed (for JNI modules): JAR files in qlib//jar/ may be gitignored — use git add -f to ensure they're tracked, otherwise CI compilation fails|N/A|No factory, getRecordTypeImpl signature, JNI or dependency-JAR change.
+|52. JAR install rules in CMakeLists.txt for all dependency JARs|N/A|No factory, getRecordTypeImpl signature, JNI or dependency-JAR change.
+|53. No workarounds: No TODOs, FIXMEs, stubs, or partially-implemented features|Pass|Complete schema-validation and element-reference-data implementations; no added TODO, stub or disabled workaround.
+|54. Exception safety: C++ uses ReferenceHolder for Qore allocations, std::unique_ptr for C++ allocations, xsink checked after every fallible operation|Pass|Qore exceptions propagate or are wrapped with declaration/action/option context. Test sockets close on exit; failed action-set construction is not published.
+|55. Thread safety: All mutable shared state protected by std::lock_guard<std::mutex> or documented as immutable-after-construction|Pass|No new mutable shared cache. Schema checks use a local value/reference; SSE connection selection retains its existing locking/lifetime protocol.
+|56. Type safety: Strongly-typed code<return(args)> instead of untyped code; static_cast instead of C casts; typed hashdecls for results; enums where appropriate|Pass|Added explicit callable signatures to the two new SSE-test callbacks. Production APIs use typed declarations and AllowedValueInfo results; dynamic schema data remains intentionally hash<auto>.
+|57. Performance: No O(n²) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply|Pass|Fixed-option schema checks happen when an action set is built. Tool-schema generation never fetches reference data; bounded inline enum metadata and linear option walks remain. This merge makes no call-performance claim.
+|58. Error handling: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable|Pass|Tests reject out-of-range page sizes/enums and lifted-body values, distinguish scalar/list element metadata, preserve creatable values, and require notifications to emit no SSE message.
+|59. Documentation: Doxygen @param, @return, @throw on all public methods; @par Example with realistic business scenarios; @note for important caveats|Pass|New public option-check/action-set APIs document contracts and errors; element lookup hooks document on-demand I/O. Root catalog regenerated, all 13 locales with 1598 keys verified by strict repository check.
+|60. QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP methods or flags changed.
+|61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|Literal format strings and bounded enum handling; test credentials are dummy localhost values. Standard review item only, not a separate security project.
+|62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release and debug each pass 17 selected files, 205 cases and 3808 assertions after affected qmod rebuilds, sequentially. Catalog verification passes. No live-vendor, full-suite or performance-remeasurement claim.
