@@ -886,6 +886,16 @@ val = "string";      # OK
     files for build instructions.
     @endparblock
 
+    @par Libraries That Use Another OpenSSL
+    @parblock
+    The configuration fails when a shared library linked into the %Qore library uses another OpenSSL than the one
+    that %Qore found (ex: a system \c libngtcp2_crypto_ossl built with another OpenSSL version), naming both
+    libraries: with two OpenSSL libraries in one process, TLS and QUIC connections crashed (ex: \c SIGSEGV in
+    \c SSL_set0_rbio when an HTTP/3 connection was set up).  On macOS the libraries must be the same files; on other
+    platforms they must have the same \c SONAME.  Set \c OPENSSL_ROOT_DIR to the OpenSSL that the library uses, or
+    install a build of the library that uses the OpenSSL that %Qore uses.
+    @endparblock
+
     @par Reconfiguring Downloaded Dependencies
     Before dependency discovery, the build resets package redirects left behind when CMake could not clear
     their directory, for example because files were created by another user. This prevents repeated
