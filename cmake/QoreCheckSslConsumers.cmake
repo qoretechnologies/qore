@@ -22,7 +22,8 @@
 # the directory of this module and of its dependency script
 set(_QORE_SSL_CHECK_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
-# Returns the files of the shared libraries that a link item stands for; link directories resolve bare names
+# Returns the files of the shared libraries that a link item stands for; a bare name is searched in the given
+# directories, in order, then in the project's library search path
 function(_qore_ssl_consumer_files item link_dirs out_var)
     set(_files)
     if (TARGET "${item}")
@@ -52,11 +53,17 @@ function(_qore_ssl_consumer_files item link_dirs out_var)
     elseif (IS_ABSOLUTE "${item}")
         list(APPEND _files "${item}")
     elseif (item MATCHES "^(-l)?[A-Za-z0-9_.+-]+$")
-        # a bare library name (ex: from pkg-config's LIBRARIES): the target's link directories first, then the
-        # project's library search path, as the linker finds it
+        # a bare library name (ex: from pkg-config's LIBRARIES), as the linker finds it: in the -L directories of the
+        # linker flags and the target's link directories, then in the project's library search path
         string(REGEX REPLACE "^-l" "" _name "${item}")
         unset(_qore_ssl_found CACHE)
-        find_library(_qore_ssl_found NAMES "${_name}" HINTS ${link_dirs})
+        # find_library() searches the project's search path before HINTS, so the directories are searched alone first
+        if (link_dirs)
+            find_library(_qore_ssl_found NAMES "${_name}" PATHS ${link_dirs} NO_DEFAULT_PATH)
+        endif()
+        if (NOT _qore_ssl_found)
+            find_library(_qore_ssl_found NAMES "${_name}")
+        endif()
         if (_qore_ssl_found)
             list(APPEND _files "${_qore_ssl_found}")
         endif()
@@ -269,12 +276,20 @@ function(qore_check_module_ssl_consumers target)
         return()
     endif()
     get_target_property(_items "${target}" LINK_LIBRARIES)
-    get_target_property(_dirs "${target}" LINK_DIRECTORIES)
+    get_target_property(_target_dirs "${target}" LINK_DIRECTORIES)
     if (NOT _items)
         return()
     endif()
-    if (NOT _dirs)
-        set(_dirs "")
+    # the linker searches the -L directories of the module linker flags (ex: from LDFLAGS) before the target's link
+    # directories: a keg-only Homebrew library (ex: curl) is found there, not in the SDK
+    set(_dirs)
+    string(REGEX MATCHALL "(^| )-L *[^ ]+" _flag_dirs "${CMAKE_MODULE_LINKER_FLAGS}")
+    foreach(_flag IN LISTS _flag_dirs)
+        string(REGEX REPLACE "^ ?-L *" "" _dir "${_flag}")
+        list(APPEND _dirs "${_dir}")
+    endforeach()
+    if (_target_dirs)
+        list(APPEND _dirs ${_target_dirs})
     endif()
     set(_links_openssl FALSE)
     set(_consumers)

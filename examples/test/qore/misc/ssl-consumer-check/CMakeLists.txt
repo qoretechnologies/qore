@@ -22,6 +22,16 @@ if (PHASE STREQUAL "build")
     target_link_libraries(dep_other PRIVATE other_ssl)
     add_library(dep_same SHARED dep.c)
     target_link_libraries(dep_same PRIVATE OpenSSL::SSL)
+    # one library name in two directories: with the other OpenSSL in flagdir, with the real one in pathdir
+    add_library(dep_choice_other SHARED dep.c)
+    target_compile_definitions(dep_choice_other PRIVATE OTHER_SSL)
+    target_link_libraries(dep_choice_other PRIVATE other_ssl)
+    set_target_properties(dep_choice_other PROPERTIES OUTPUT_NAME dep_choice
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/flagdir")
+    add_library(dep_choice_same SHARED dep.c)
+    target_link_libraries(dep_choice_same PRIVATE OpenSSL::SSL)
+    set_target_properties(dep_choice_same PROPERTIES OUTPUT_NAME dep_choice
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/pathdir")
     return()
 endif()
 
@@ -56,6 +66,14 @@ elseif (CASE STREQUAL "module-bare-name-search-path")
     add_library(mod_path MODULE module.c)
     target_link_libraries(mod_path dep_other)
     qore_check_module_ssl_consumers(mod_path)
+elseif (CASE STREQUAL "module-linker-flags-dir")
+    # the linker finds a library named in the module's link libraries in a -L directory of the linker flags (ex:
+    # from LDFLAGS, as a keg-only Homebrew library) before the project's library search path
+    list(APPEND CMAKE_LIBRARY_PATH "${DEPS_DIR}/pathdir")
+    string(APPEND CMAKE_MODULE_LINKER_FLAGS " -L${DEPS_DIR}/flagdir")
+    add_library(mod_flags MODULE module.c)
+    target_link_libraries(mod_flags dep_choice)
+    qore_check_module_ssl_consumers(mod_flags)
 elseif (CASE STREQUAL "module-subdir-imported")
     set(DEP_OTHER "${_dep_other}")
     add_subdirectory(subdir)
