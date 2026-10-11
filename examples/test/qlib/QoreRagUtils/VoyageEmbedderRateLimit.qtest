@@ -102,6 +102,31 @@ class FakeVoyageHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A limiter that records when it admits each request, as it decides it
+class RecordingRateLimiter inherits EmbedderRateLimiter {
+    public {
+        #! the admission instants, in monotonic microseconds, in admission order
+        Queue admissions();
+    }
+
+    constructor(*int requests_per_window, *int tokens_per_window, int window_ms)
+            : EmbedderRateLimiter(requests_per_window, tokens_per_window, window_ms) {
+    }
+
+    private admitted(hash<EmbedderRateLimitTicket> ticket) {
+        admissions.push(ticket.admitted_us);
+    }
+
+    #! Returns the recorded admission instants
+    list<int> getAdmissions() {
+        list<int> rv = ();
+        while (admissions.size()) {
+            push rv, admissions.get();
+        }
+        return rv;
+    }
+}
+
 #! Voyage embedder with a test limiter
 class TestVoyageEmbedder inherits VoyageEmbedder {
     private {
@@ -216,23 +241,18 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
     }
 
     testLimiterRequestSpacing() {
-        EmbedderRateLimiter limiter(2, NOTHING, 300);
-        Queue admitted();
+        # the instants at which the limiter admits the requests, not when their threads next run
+        RecordingRateLimiter limiter(2, NOTHING, 300);
         Counter done(5);
         for (int i = 0; i < 5; ++i) {
             background sub () {
                 on_exit done.dec();
                 int id = limiter.admit(1, clock_get_monotonic_us() + 5000000);
-                admitted.push(clock_get_monotonic_us());
                 limiter.settle(id, 1);
             }();
         }
         done.waitForZero();
-        list<int> times = ();
-        while (admitted.size()) {
-            push times, admitted.get();
-        }
-        times = sort(times);
+        list<int> times = limiter.getAdmissions();
         assertEq(5, times.size());
         for (int i = 2; i < times.size(); ++i) {
             assertGe(300000, times[i] - times[i - 2], sprintf("admission %d waited for the window", i));
@@ -419,7 +439,7 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
     testEmbedderSpacing() {
         handler.setScript(());
         # two requests per 400ms window, shared by independently created embedders
-        EmbedderRateLimiter limiter(2, NOTHING, 400);
+        RecordingRateLimiter limiter(2, NOTHING, 400);
         hash<EmbedderConfig> cfg = config();
         Counter done(6);
         Queue errors();
@@ -436,13 +456,15 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
         }
         done.waitForZero();
         assertEq(0, errors.size(), errors.size() ? errors.get() : "");
-        list<int> times = sort(map $1.arrived_us, handler.getRequests());
+        # every request reached the server, each after the limiter admitted it; the limiter's own admission instants
+        # show the spacing (an arrival also depends on how soon the sending thread runs after its admission)
+        assertEq(6, handler.getRequests().size());
+        list<int> times = limiter.getAdmissions();
         assertEq(6, times.size());
         for (int i = 2; i < times.size(); ++i) {
-            # arrival follows admission by the request latency, which varies a little between requests
-            assertGe(350000, times[i] - times[i - 2], sprintf("request %d waited for the window", i));
+            assertGe(400000, times[i] - times[i - 2], sprintf("request %d waited for the window", i));
         }
-        assertGe(750000, times[5] - times[0]);
+        assertGe(800000, times[5] - times[0]);
     }
 
     testRetryAfter() {

@@ -93,6 +93,8 @@ module QoreRagTypes {
 
     @subsection qoreragtypes_1_0 QoreRagTypes 1.0
     - initial release
+    - a subclass of @ref QoreRagUtils::EmbedderRateLimiter "EmbedderRateLimiter" can observe each admission, with
+      the instant at which it is made, in the private \c admitted() method
     - HTTP embedders share RestClientIo's bounded transient-failure retries, configurable per embedder
       and per call, with RAG retry telemetry (issue 5475)
     - EmbedderConfig::attempt_timeout bounds one HTTP attempt so a stalled attempt is retried within the
@@ -491,6 +493,7 @@ public class EmbedderRateLimiter {
                     "tokens": tokens,
                 };
                 push window, ticket;
+                admitted(ticket);
                 return ticket.id;
             }
             if (ready > deadline_us) {
@@ -718,6 +721,16 @@ hash<auto> resp = limiter.call(<RateLimitedCallInfo>{
     #! Monotonic clock; overridable for deterministic tests
     private int nowUs() {
         return clock_get_monotonic_us();
+    }
+
+    #! Called with the lock held when a request is admitted; the default does nothing
+    /** A subclass can observe admissions (ex: their instants) here; it must not call the limiter's other methods
+
+        @param ticket the admitted request
+
+        @since QoreRagTypes 1.0
+    */
+    private admitted(hash<EmbedderRateLimitTicket> ticket) {
     }
 
     #! Validates and sets limits; the lock must be held or the object not yet shared
