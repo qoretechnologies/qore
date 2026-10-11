@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+class ScalarMemberInt {
+    private:internal { int delta = 17; }
+    int next(int value) { return value + delta; }
+    set(int value) { delta = value; }
+}
+class ScalarMemberInherited inherits ScalarMemberInt {
+    private:internal { int delta = 19; }
+}
+class ScalarMemberOverride inherits ScalarMemberInt {
+    private:internal { int delta = 23; }
+    int next(int value) { return value + delta; }
+}
+class ScalarMemberFloat {
+    public { float delta = 65535.0; }
+    float next(float value) { return delta - value; }
+}
+class ScalarMemberAuto {
+    public { auto delta = 7; }
+    int next(int value) { return value + delta; }
+}
+class ScalarMemberReference {
+    private { reference<int> delta; }
+    constructor(reference<int> target) { delta = \target; }
+    int next(int value) { return value + delta; }
+}
+class ScalarMemberEffect {
+    public { int calls = 0; }
+    private { int delta = 31; }
+    int next(int value) { ++calls; return value + delta; }
+}
+class ScalarMemberTwoReads {
+    private { int delta = 11; }
+    int next(int value) { return value + delta + delta; }
+}
+enum ScalarMemberEnum : int { Seven = 7 }
+
+auto sub scalarMemberIntCall(auto receiver, int value) { return receiver.next(value); }
+auto sub scalarMemberFloatCall(auto receiver, float value) { return receiver.next(value); }
+auto sub scalarMemberBoxedCall(auto receiver, auto value) { return receiver.next(value); }
+auto sub scalarMemberFallbackCall(auto receiver, auto value) { return receiver.next(value); }
+auto sub scalarMemberInvoke(auto receiver, auto value) {
+    try { return receiver.next(value); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+sub expectScalarMember(auto expected, auto actual) {
+    if (expected != actual) {
+        throw "SCALAR-MEMBER-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+sub expectScalarMemberFloat(float expected, auto actual) {
+    if (type(actual) != "float" || (expected.nanp() ? !actual.nanp()
+            : expected != actual || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))) {
+        throw "SCALAR-MEMBER-FLOAT", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+ScalarMemberInt integer();
+ScalarMemberInherited inherited();
+ScalarMemberOverride overridden();
+ScalarMemberFloat floating();
+ScalarMemberAuto dynamic();
+int target = 41;
+ScalarMemberReference referenced(\target);
+ScalarMemberEffect effect();
+ScalarMemberTwoReads twice();
+for (int round = 0; round < 32; ++round) {
+    expectScalarMember(round + 17, scalarMemberIntCall(integer, round));
+    expectScalarMember(round + 17, scalarMemberIntCall(inherited, round));
+    expectScalarMember(round + 23, scalarMemberIntCall(overridden, round));
+    expectScalarMember(round + 17, scalarMemberBoxedCall(integer, round));
+    expectScalarMemberFloat(65535.0 - round, scalarMemberFloatCall(floating, float(round)));
+    expectScalarMemberFloat(65535.0 - round, scalarMemberBoxedCall(floating, float(round)));
+    expectScalarMember(round + 7, scalarMemberFallbackCall(dynamic, round));
+    expectScalarMember(round + target, scalarMemberFallbackCall(referenced, round));
+    expectScalarMember(round + 31, scalarMemberFallbackCall(effect, round));
+    expectScalarMember(round + 22, scalarMemberFallbackCall(twice, round));
+}
+expectScalarMember(32, effect.calls);
+inherited.set(29);
+expectScalarMember(30, scalarMemberIntCall(inherited, 1));
+expectScalarMember(24, scalarMemberIntCall(overridden, 1));
+foreach int value in ((0, 1, -1, 140737488355328, -140737488355329, 1125899906842624)) {
+    integer.set(value);
+    for (int round = 0; round < 12; ++round) {
+        expectScalarMember(value + round, scalarMemberIntCall(integer, round));
+        expectScalarMember(value + round, scalarMemberBoxedCall(integer, round));
+    }
+}
+foreach float value in ((0.0, -0.0, 1.25, -9.0e307, @inf@, -@inf@, @nan@)) {
+    floating.delta = value;
+    for (int round = 0; round < 12; ++round) {
+        expectScalarMemberFloat(value - float(round), scalarMemberFloatCall(floating, float(round)));
+        expectScalarMemberFloat(value - float(round), scalarMemberBoxedCall(floating, float(round)));
+    }
+}
+target = 53;
+expectScalarMember(54, scalarMemberFallbackCall(referenced, 1));
+dynamic.delta = ScalarMemberEnum::Seven;
+expectScalarMember(8, scalarMemberFallbackCall(dynamic, 1));
+dynamic.delta = NOTHING;
+expectScalarMember(1, scalarMemberFallbackCall(dynamic, 1));
+dynamic.delta = 13;
+expectScalarMember(14, scalarMemberFallbackCall(dynamic, 1));
+for (int round = 0; round < 16; ++round) {
+    expectScalarMember(14, scalarMemberInvoke(dynamic, 1));
+}
+delete dynamic;
+if (type(scalarMemberInvoke(dynamic, 1)) != "string") {
+    throw "SCALAR-MEMBER-TEST", "deleted receiver did not raise";
+}
+printf("scalar-member-entry: ok\n");

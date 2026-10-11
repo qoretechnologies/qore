@@ -14111,6 +14111,32 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
         llvm::Module& module, std::string& error) {
     printd(3, "LLVM-LOWER: opcode=%d result=%%%d\n", (int)inst->opcode, inst->result.id);
+    if (scalar_member_object && (inst->opcode == QoreIROpcode::AddAny
+            || inst->opcode == QoreIROpcode::SubAny || inst->opcode == QoreIROpcode::MulAny)) {
+        // The separate whole-body proof establishes homogeneous SSA inputs;
+        // the live member read below guards the only dynamically typed source.
+        llvm::Value* lhs = getVal(inst->operands[0].id, error);
+        llvm::Value* rhs = getVal(inst->operands[1].id, error);
+        bool floating = fast_entry_return_kind == BatchCalleeReturnKind::NativeFloat;
+        llvm::Type* type = floating ? double_type : i64_type;
+        if (!lhs || !rhs || lhs->getType() != type || rhs->getType() != type
+                || nanboxed_values.count(inst->operands[0].id)
+                || nanboxed_values.count(inst->operands[1].id)) {
+            error = "invalid scalar-member arithmetic proof";
+            return false;
+        }
+        llvm::Value* result;
+        if (inst->opcode == QoreIROpcode::AddAny) {
+            result = floating ? builder->CreateFAdd(lhs, rhs) : builder->CreateAdd(lhs, rhs);
+        } else if (inst->opcode == QoreIROpcode::SubAny) {
+            result = floating ? builder->CreateFSub(lhs, rhs) : builder->CreateSub(lhs, rhs);
+        } else {
+            result = floating ? builder->CreateFMul(lhs, rhs) : builder->CreateMul(lhs, rhs);
+        }
+        values[inst->result.id] = result;
+        known_not_nothing_values.insert(inst->result.id);
+        return true;
+    }
     auto emit_string_case_comparison = [&]() -> llvm::Value* {
         uint8_t transform_operand =
             inst->aot_string_case_comparison_operand;
@@ -17481,6 +17507,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // applies the declared return type, so like an AOT standard entry it converts the value itself;
                 // the conversion must precede extraction of a native return value
                 coerce_return = !timeout_return && !optional_timeout_return
+                    && !scalar_member_object
                     && (aot_mode || !fast_entry_name.empty())
                     && qore_ir_return_needs_coercion(return_type, return_value_facts);
                 if (timeout_return) {
@@ -27876,6 +27903,44 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* sminst = static_cast<const QoreIRSelfMemberInstruction*>(inst);
             llvm::Constant* name_const = builder->CreateGlobalString(sminst->member_name,
                     "self_member_name");
+            if (scalar_member_object) {
+                bool floating = fast_entry_return_kind == BatchCalleeReturnKind::NativeFloat;
+                llvm::Type* type = floating ? double_type : i64_type;
+                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+                auto* output = ab.CreateAlloca(type, nullptr, "member_value");
+                llvm::Value* accepted;
+                if (qore_ir_use_prehashed_keys() && !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH")) {
+                    auto read = module.getOrInsertFunction(floating
+                            ? "qore_rt_try_load_member_float_prehashed_v1"
+                            : "qore_rt_try_load_member_int_prehashed_v1",
+                        llvm::FunctionType::get(i32_type,
+                            {ptr_type, ptr_type, i64_type, i32_type, ptr_type, ptr_type}, false));
+                    QoreIRPrecomputedStringHash hash = qore_ir_precompute_string_hash(sminst->member_name);
+                    accepted = builder->CreateCall(read,
+                        {scalar_member_object, name_const, llvm::ConstantInt::get(i64_type, hash.hash64),
+                         llvm::ConstantInt::get(i32_type, hash.hash32), scalar_member_class_ctx, output});
+                } else {
+                    auto read = module.getOrInsertFunction(floating
+                            ? "qore_rt_try_load_member_float_v1" : "qore_rt_try_load_member_int_v1",
+                        llvm::FunctionType::get(i32_type, {ptr_type, ptr_type, ptr_type, ptr_type}, false));
+                    accepted = builder->CreateCall(read,
+                        {scalar_member_object, name_const, scalar_member_class_ctx, output});
+                }
+                auto* success = llvm::BasicBlock::Create(ctx, "member_read", llvm_func);
+                auto* miss = llvm::BasicBlock::Create(ctx, "member_fallback", llvm_func);
+                builder->CreateCondBr(builder->CreateICmpNE(accepted,
+                    llvm::ConstantInt::get(i32_type, 0)), success, miss);
+                builder->SetInsertPoint(miss);
+                builder->CreateStore(llvm::ConstantInt::get(i32_type, 0), scalar_member_accepted);
+                if (!error_return_block) {
+                    error_return_block = llvm::BasicBlock::Create(ctx, "error_return", llvm_func);
+                }
+                builder->CreateBr(error_return_block);
+                builder->SetInsertPoint(success);
+                values[inst->result.id] = builder->CreateLoad(type, output);
+                known_not_nothing_values.insert(inst->result.id);
+                return true;
+            }
             // Use _for_call variant when this result is only used as a DotEval base.
             // This returns raw values (including WeakReferenceNode) without evaluating
             // them, avoiding temporary strong references from weak member dereferences.

@@ -10194,3 +10194,109 @@ Next AOT-first steps:
 4. Use the boxed-leaf profile to evaluate compile/bind-time ordinary-auto declaration/member facts and direct RuntimeConfig access to real runtime slots. First repair the saved auto-receiver exception/reload defect before broadening caller-local or frame elision; retain earlier documented reflection limitations until individually reproduced and fixed. Never introduce an unobservable shadow local.
 
 [Measurements, identities, superseded results, profiles, reproductions and all 62 audit items](results-boxed-argument-macos-arm64.json).
+
+
+## AOT scalar member companions and compile-time member hashes (2026-10-11)
+
+Baseline: committed 155ea99ac, with the same 37-kernel benchmark sources on both sides.
+The final candidate adds a whole-body-proven, single-member scalar companion for
+homogeneous unary integer/float methods. It passes receiver, defining class and
+RuntimeConfig explicitly, reads the current scalar under the ordinary object lock,
+and retains ordinary fallback for unsupported representations or bodies. Access,
+same-Program, epoch/body, debugger, stack and logical-frame guards remain. Compiled
+XXH64/XXH32 name hashes remove runtime hashing, not member-context resolution or
+locking. See the design document for the complete eligibility and ownership contract.
+
+Final independent five-fork comparison (`run-9m_epgk2`): count 4096, three warmups,
+five 500 ms windows per fork, randomized scheduling (seed 826121). Separately compiled
+artifacts use their matching private runtime identities. Values are medians of fork
+means in whole-workload ns/element, not isolated call latency.
+
+|!Workload|!Committed baseline|!Final candidate|!Time reduction|!Observed fork ranges
+|Integer member method|149.455608|42.831400|71.342%|Separated
+|Float member method|162.483946|44.712176|72.482%|Separated
+|Boxed integer pure method|22.425995|22.320568|0.470%|Overlap
+|Boxed float pure method|27.882218|28.195380|-1.123%|Overlap
+
+The historical `boxed_*_method_fallback` names now exercise native member entries
+when eligible. The added `boxed_int_method_effect` deliberately mutates receiver
+state, remains ordinary fallback, and consumes every receiver's counter in its
+checksum; counters reset on every invocation in both Qore and Java.
+
+The refined member prototype before prehashing reduced member workload time by
+69.38%/71.28%, but slowed pure integer/float method workloads by 1.99%/3.05% in that
+five-fork comparison. Two layout experiments were measured and rejected: outlining
+context work slowed the float member workload 2.73%, and 64-byte method alignment
+slowed it 2.42% and the float callback 1.25%, with separated observed fork ranges.
+Neither layout change remains in production.
+
+Prehashing versus that refined prototype (`run-imyvmxtw`, five forks) reduces integer
+member time 45.480113 to 42.921454 ns/element (5.626%) and float member time 46.773257
+to 44.791063 (4.238%), both with separated ranges. The effectful control is 0.106%
+slower with overlap; forwarding and callback controls also overlap. Pure-method
+improvements in this separate-build comparison are not attributed to hashing:
+those methods never call the new member-read helper.
+
+|!Prehash control|!Integer member reduction|!Float member reduction|!Pure float change
+|Same executable, runtime disabled versus enabled, three forks|6.996%, separated|8.407%, separated|0.792% slower, separated
+|Compiler disabled versus enabled, three forks|6.297%, separated|6.842%, overlap|0.803% slower, separated
+
+The same-library comparison setup prepended a duplicate library directory and added
+an environment flag. That difference was identified, not established as the cause
+of the small pure-call shifts. A subsequent balanced experiment used one executable,
+one library path, two exact ordered-environment A/A modes, and a disabled mode that
+changed only the final character of an equal-length environment key. Five forks,
+three kernels, randomized blocks/mode order: 45 jobs and 225 windows, all retained.
+
+|!Balanced workload|!Enabled A|!Enabled B|!Prehash disabled|!Observed fork ranges
+|Pure float method|28.191080|28.003440|28.003580|All overlap
+|Pure integer method|22.138810|22.251780|22.166870|All overlap
+|Float member method|44.579100|44.492290|48.147720|Both enabled ranges separated from disabled
+
+The balanced run reproduces the member benefit (about 7.4-7.6%), not a consistent
+pure-call penalty. It does not prove the cause of earlier adverse shifts or zero
+regression. Ranges are descriptive, not confidence intervals. No task inspection,
+build, test or profiling overlapped timing; background desktop activity was observed.
+All 168 prehash/comparison jobs (840 windows), balanced jobs, earlier prototypes,
+adverse results and raw-output identities are retained in the evidence.
+
+Serial sampling of the refined candidate identified member-context lookup, name
+hashing/comparison, ordinary read locking, native dispatch and caller scalar
+local/boxing work. These are investigative stack samples, not normalized CPU
+percentages or causal latency measurements. Prehashing addresses only one of them.
+No fresh Java timing was taken for the final candidate; initial-member Java results
+are historical and must not be combined with final-candidate numbers into a matched
+ratio. This is AOT-specific work; no IR/JIT speedup or Java-parity claim is made.
+
+Qualification verified unchanged frozen production/test/benchmark sources and the
+measured release library. Release: 105 selected files, 388 cases, 29,967 assertions,
+15 standalone fixtures and one skip. Debug: 105 files, 395 cases, 30,066 assertions,
+15 standalones and no skips. Both also pass seven exception/stack fixtures;
+205 debug native checks, 17 benchmark-harness tests and 555 reference checks in
+each of IR, AOT, interpreted Java and Java JIT pass. New member suite: 607 assertions;
+native context driver: 426. No full-suite, sanitizer or cross-platform claim.
+
+An initial test used the wrong integer type-name spelling; it was corrected, with
+the failure retained. A screening command named a nonexistent fixture; the corrected
+boxed-call suite passed 3153 assertions. The previously reproduced auto-receiver
+reflection/reload defect remains unfixed and is not caused by this optimization.
+
+Next AOT-first steps:
+
+1. Commit this qualified stage after all 62 audit checks; fetch origin and merge
+   origin/develop, inspecting and validating any incoming runtime/compiler changes.
+   Do not push. Freeze the merged baseline before another experiment.
+2. Refresh matched AOT/Java measurements and profiles for member methods, pure boxed
+   methods, native calls, callbacks and genuinely effectful fallback. Keep timing
+   isolated from builds/tests/profiles and preserve raw samples and identities.
+3. Investigate compile/bind-time member-storage context facts under exact class and
+   live body guards. Establish class augmentation/lifetime rules before caching
+   metadata; do not cache mutable member values or remove the ordinary read lock.
+   Retain inheritance, private/internal shadowing, reinjection and deletion tests.
+4. Repair the saved baseline reflective auto-receiver exception reload defect before
+   broader caller-local/frame/SSA elision. Then target measured local classification,
+   boxing/ownership and real runtime-slot access via RuntimeConfig. Preserve debugger,
+   reflection, concurrent readers, aliasing and cross-Program behavior.
+
+[Verified measurements and qualification](results-scalar-member-macos-arm64.json).
+[All 62 audit checks](FOLLOWUP-AUDIT.md#aot-scalar-member-companion-audit-2026-10-11).

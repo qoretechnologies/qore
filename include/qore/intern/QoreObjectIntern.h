@@ -422,6 +422,26 @@ public:
 
     DLLLOCAL QoreValue getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const;
 
+    //! Speculatively copy a canonical scalar without evaluating or owning a member value.
+    /** @param mem member name
+        @param class_ctx method's defining class context, not the caller's context
+        @param integer output for an integer read; null selects a floating read
+        @param floating output for a floating read; null selects an integer read
+        @return true only when the live, locked storage has the requested primitive representation
+        @note A miss leaves outputs untouched. Deleted, missing, enum and reference-backed members
+        require ordinary evaluation. The normal object read lock and member-context rules are retained.
+    */
+    DLLLOCAL bool tryReadScalarMember(const char* mem, const qore_class_private* class_ctx,
+        int64_t* integer, double* floating) const;
+
+    //! Same live read, with a compiler-computed member-name hash (not a cached member value).
+    DLLLOCAL bool tryReadScalarMemberPrehashed(const char* mem, size_t hash,
+        const qore_class_private* class_ctx, int64_t* integer, double* floating) const;
+
+    template <bool Prehashed>
+    DLLLOCAL bool tryReadScalarMemberImpl(const char* mem, size_t hash,
+        const qore_class_private* class_ctx, int64_t* integer, double* floating) const;
+
     DLLLOCAL QoreValue getReferencedMemberNoMethodResolved(const char* mem,
             const qore_class_private* member_class_ctx,
             ExceptionSink* xsink) const;

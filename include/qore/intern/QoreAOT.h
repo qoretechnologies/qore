@@ -437,6 +437,16 @@ struct QoreAOTContext {
     int32_t receiver_int_forward_loc = -1;
     std::atomic<bool> receiver_int_forward_ready{false};
 
+    //! Whole-body-proven, single-member scalar companions. Receiver and defining class are borrowed;
+    //! each source member read is synchronized and can clear accepted for effect-free ordinary fallback.
+    //! Append-only; no serialized layout change or value cached in this shared context.
+    using ScalarMemberIntEntry = int64_t (*)(int64_t, QoreObject*, const qore_class_private*, RuntimeConfig*,
+        int*, QoreAOTContext*, ExceptionSink*);
+    using ScalarMemberFloatEntry = double (*)(double, QoreObject*, const qore_class_private*, RuntimeConfig*,
+        int*, QoreAOTContext*, ExceptionSink*);
+    std::atomic<ScalarMemberIntEntry> scalar_member_int_entry{nullptr};
+    std::atomic<ScalarMemberFloatEntry> scalar_member_float_entry{nullptr};
+
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
     ~QoreAOTContext();

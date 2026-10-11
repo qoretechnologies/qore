@@ -479,6 +479,12 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_try_method_float_unary_v1) },
     { "qore_rt_bind_closure_int_unary_v1",
         reinterpret_cast<void*>(&qore_rt_bind_closure_int_unary_v1) },
+    { "qore_rt_bind_member_int_v1", reinterpret_cast<void*>(&qore_rt_bind_member_int_v1) },
+    { "qore_rt_bind_member_float_v1", reinterpret_cast<void*>(&qore_rt_bind_member_float_v1) },
+    { "qore_rt_try_load_member_int_v1", reinterpret_cast<void*>(&qore_rt_try_load_member_int_v1) },
+    { "qore_rt_try_load_member_float_v1", reinterpret_cast<void*>(&qore_rt_try_load_member_float_v1) },
+    { "qore_rt_try_load_member_int_prehashed_v1", reinterpret_cast<void*>(&qore_rt_try_load_member_int_prehashed_v1) },
+    { "qore_rt_try_load_member_float_prehashed_v1", reinterpret_cast<void*>(&qore_rt_try_load_member_float_prehashed_v1) },
     { "qore_rt_try_load_closure_int_v1",
         reinterpret_cast<void*>(&qore_rt_try_load_closure_int_v1) },
     { "qore_rt_get_stack_limit_v1", reinterpret_cast<void*>(&qore_rt_get_stack_limit_v1) },
@@ -10378,6 +10384,58 @@ extern "C" DLLEXPORT void qore_rt_bind_method_float_unary_v3(QoreAOTContext* ctx
         std::memory_order_release, std::memory_order_relaxed);
 }
 
+extern "C" DLLEXPORT void qore_rt_bind_member_int_v1(QoreAOTContext* ctx,
+        uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), QoreAOTContext::ScalarMemberIntEntry entry) {
+    if (ctx && normal && entry && ctx->pc_loc_fn == normal
+            && !ctx->scalar_member_int_entry.load(std::memory_order_relaxed)) {
+        QoreAOTContext::ScalarMemberIntEntry expected = nullptr;
+        ctx->scalar_member_int_entry.compare_exchange_strong(expected, entry,
+            std::memory_order_release, std::memory_order_relaxed);
+    }
+}
+
+extern "C" DLLEXPORT void qore_rt_bind_member_float_v1(QoreAOTContext* ctx,
+        uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), QoreAOTContext::ScalarMemberFloatEntry entry) {
+    if (ctx && normal && entry && ctx->pc_loc_fn == normal
+            && !ctx->scalar_member_float_entry.load(std::memory_order_relaxed)) {
+        QoreAOTContext::ScalarMemberFloatEntry expected = nullptr;
+        ctx->scalar_member_float_entry.compare_exchange_strong(expected, entry,
+            std::memory_order_release, std::memory_order_relaxed);
+    }
+}
+
+extern "C" DLLEXPORT int qore_rt_try_load_member_int_v1(QoreObject* object, const char* name,
+        const qore_class_private* class_ctx, int64_t* result) {
+    return object && name && result
+        && qore_object_private::get(*object)->tryReadScalarMember(name, class_ctx, result, nullptr);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_load_member_float_v1(QoreObject* object, const char* name,
+        const qore_class_private* class_ctx, double* result) {
+    return object && name && result
+        && qore_object_private::get(*object)->tryReadScalarMember(name, class_ctx, nullptr, result);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_load_member_int_prehashed_v1(QoreObject* object, const char* name,
+        uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, int64_t* result) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH");
+    if (!enabled) {
+        return qore_rt_try_load_member_int_v1(object, name, class_ctx, result);
+    }
+    return object && name && result && qore_object_private::get(*object)->tryReadScalarMemberPrehashed(
+        name, qore_rt_select_precomputed_hash(hash64, hash32), class_ctx, result, nullptr);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_load_member_float_prehashed_v1(QoreObject* object, const char* name,
+        uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, double* result) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH");
+    if (!enabled) {
+        return qore_rt_try_load_member_float_v1(object, name, class_ctx, result);
+    }
+    return object && name && result && qore_object_private::get(*object)->tryReadScalarMemberPrehashed(
+        name, qore_rt_select_precomputed_hash(hash64, hash32), class_ctx, nullptr, result);
+}
+
 extern "C" DLLEXPORT void qore_rt_bind_closure_int_unary_v1(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
         QoreAOTContext::NativeIntUnaryClosureEntry entry) {
@@ -18567,6 +18625,60 @@ __attribute__((noinline)) static int qore_rt_dispatch_matched_scalar_method(Qore
         args, nullptr, 1, xsink, *result, &cached) ? 2 : 0;
 }
 
+// Called only after the complete PIC key and live body/Program/debugger checks.
+// A guard miss cannot enter user code or acquire ownership; retrying the normal
+// body therefore preserves reference evaluation and exception/frame semantics.
+template <typename Scalar>
+__attribute__((noinline)) static bool qore_rt_try_scalar_member_method(QoreObject* object,
+        const QoreAOTMethodDispatchCacheEntry& cached, QoreAOTContext* ctx, Scalar arg,
+        Scalar& result, ExceptionSink* xsink, RuntimeConfig& rc) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
+    if (!enabled) {
+        return false;
+    }
+    auto entry = [&]() {
+        if constexpr (std::is_same_v<Scalar, double>) {
+            return ctx->scalar_member_float_entry.load(std::memory_order_acquire);
+        } else {
+            return ctx->scalar_member_int_entry.load(std::memory_order_acquire);
+        }
+    }();
+    if (!entry) {
+        return false;
+    }
+    if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
+        result = 0;
+        return true;
+    }
+    int accepted = 1;
+    Scalar value = 0;
+    auto invoke = [&]() {
+        if (!*xsink) {
+            try {
+                value = entry(arg, object, cached.native_scalar_class_ctx, &rc, &accepted, ctx, xsink);
+            } catch (const QoreJITException&) {
+                // Failing native guards materialize the deferred method context.
+            }
+        }
+    };
+    static const bool defer_context = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
+    if (defer_context) {
+        RuntimeConfigNativeMethodContext context(rc, object, cached);
+        QoreCompactNativeMethodStackLocation frame(rc, cached, xsink, context);
+        invoke();
+    } else {
+        RuntimeConfigNativeObjectHelper context(rc, object, cached.native_scalar_class_ctx);
+        QoreNativeMethodStackLocation<false, true> frame(rc, cached, cached.native_scalar_uvb,
+            cached.native_scalar_program, xsink);
+        invoke();
+    }
+    if (!accepted && !*xsink) {
+        return false;
+    }
+    result = *xsink ? 0 : value;
+    return true;
+}
+
 template <typename Scalar, bool MatchedFallback = false>
 __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContext* caller_ctx,
         int32_t slot, uint64_t base_bits, Scalar arg, Scalar* result,
@@ -18666,7 +18778,7 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
         return 0;
     }
     if (ctx->uses_self) {
-        // A context-using body is never a scalar leaf. The independent whole-
+        // A context-using body is never a context-independent scalar leaf. The whole-
         // body forwarding proof may admit its exact inner leaf instead, while
         // preserving both logical frames and an effect-free ordinary fallback.
         if constexpr (!floating) {
@@ -18675,6 +18787,17 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
                     && try_dispatch_forwarded_int_leaf_native(object, *cached, ctx, arg, xsink, *result, rc)) {
                 return 1;
             }
+        }
+        // Do not enter another helper for ordinary context-using bodies. The
+        // existing forwarding hit also stays ahead of this independent proof.
+        bool member_ready;
+        if constexpr (floating) {
+            member_ready = ctx->scalar_member_float_entry.load(std::memory_order_acquire) != nullptr;
+        } else {
+            member_ready = ctx->scalar_member_int_entry.load(std::memory_order_acquire) != nullptr;
+        }
+        if (member_ready && qore_rt_try_scalar_member_method(object, *cached, ctx, arg, *result, xsink, *rc)) {
+            return 1;
         }
         return matched_fallback();
     }

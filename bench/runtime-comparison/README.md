@@ -272,9 +272,32 @@ non-leaf body as a native scalar leaf. No negative body-eligibility fact is cach
 reuse at runtime, leaving native leaf calls unchanged. This control can use an
 identical candidate executable/library. The new helper declarations change the
 private runtime identity, so comparisons against older builds require separately
-compiled, matching artifacts. Include `boxed_int_method_fallback` and
-`boxed_float_method_fallback` to measure natural misses as well as leaf hits.
+compiled, matching artifacts. The historical `boxed_int_method_fallback` and
+`boxed_float_method_fallback` names denote object-field reads; these can now use
+the guarded member companion below. `boxed_int_method_effect` performs observable
+member writes and measures an ordinary fallback, including all receiver counters
+in its checked result. Counters are reset for each kernel invocation.
 See the [boxed-argument measurements and remaining costs](RESULTS.md#aot-boxed-scalar-arguments-and-matched-fallback-2026-10-11).
+
+`QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1` disables the independent whole-body proof
+for AOT unary scalar methods containing exactly one live member read and otherwise
+only homogeneous scalar arithmetic. It is both a compiler and runtime control.
+The helper retains receiver/access/Program/body/debugger guards, synchronized field
+reads, observable frames and explicit RuntimeConfig stack protection. It borrows
+values only under the object lock; enum, reference, missing and mismatched fields
+fall back without evaluating or taking ownership. Side effects, multiple reads,
+unsupported operations and synchronized methods retain ordinary execution.
+
+`QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1` separately disables compile-time member-name
+hashes, or routes generated reads through the original runtime helper. Both target
+widths are emitted; field values and access context are still read live. The general
+compiler switch `QORE_DISABLE_AOT_PREHASHED_KEYS=1` also suppresses generation.
+Compile separate artifacts when comparing compiler changes or different private
+runtime identities. Runtime-only on/off controls may use an identical executable.
+For small timing differences, include identical-executable A/A controls and account
+for environment/library-path differences; neither a median shift nor separated
+observed ranges alone establishes its cause. Timings are whole-workload ns/element,
+not isolated call latency or a claim of Java-level performance.
 
 `QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1` disables native result consumption by
 a sole `ToInt`/`ToFloat` instruction at compilation. Compile separate executables;

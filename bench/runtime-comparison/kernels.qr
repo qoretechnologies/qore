@@ -47,10 +47,12 @@ final class Stepper {
 
 # Three runtime receiver types prevent this from being a final-method benchmark.
 class DynamicStep {
+    public { int calls = 0; }
     private:internal { int increment = 17; }
     int next(int value) { return (value * 33 + 17) & 65535; }
     # A real object-field read, not a forwarding leaf or a disabled fast path.
     int fieldNext(int value) { return (value * 33 + increment) & 65535; }
+    int effectNext(int value) { ++calls; return (value * 33 + increment) & 65535; }
     # Context-using nested call deliberately excludes the native leaf companion.
     int viaContext(int value) { return self.next(value); }
 }
@@ -58,11 +60,13 @@ class DynamicStepB inherits DynamicStep {
     private:internal { int increment = 19; }
     int next(int value) { return (value * 33 + 19) & 65535; }
     int fieldNext(int value) { return (value * 33 + increment) & 65535; }
+    int effectNext(int value) { ++calls; return (value * 33 + increment) & 65535; }
 }
 class DynamicStepC inherits DynamicStep {
     private:internal { int increment = 23; }
     int next(int value) { return (value * 33 + 23) & 65535; }
     int fieldNext(int value) { return (value * 33 + increment) & 65535; }
+    int effectNext(int value) { ++calls; return (value * 33 + increment) & 65535; }
 }
 
 # Exactly representable double recurrences, independently checked with integers.
@@ -256,7 +260,8 @@ int sub boxedFloatMethodCall(int count, int seed, auto a, auto b, auto c) {
     return sum;
 }
 
-# These targets need object context and cannot use the native scalar leaf entry.
+# Historical fallback names are retained for evidence continuity. These targets
+# need a live object-field read and can now use guarded scalar-member entries.
 int sub boxedIntMethodFallback(int count, int seed, auto a, auto b, auto c) {
     auto value = seed;
     int sum = 0;
@@ -275,6 +280,21 @@ int sub boxedFloatMethodFallback(int count, int seed, auto a, auto b, auto c) {
         sum += int(value);
     }
     return sum;
+}
+
+# Observable stores exclude the pure member companion. Reset between invocations
+# and consume all counters so the side effects are part of the checked result.
+int sub boxedIntMethodEffect(int count, int seed, auto a, auto b, auto c) {
+    a.calls = 0;
+    b.calls = 0;
+    c.calls = 0;
+    auto value = seed;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).effectNext(value);
+        sum += int(value);
+    }
+    return sum + a.calls + b.calls + c.calls;
 }
 
 # Consume an unknown method result directly; there is no native result assignment.
@@ -434,6 +454,7 @@ int sub dispatch(string name, int count, int seed, list<int> data, Stepper recei
         case "boxed_int_method_call": return boxedIntMethodCall(count, seed, a, b, c);
         case "boxed_int_method_fallback": return boxedIntMethodFallback(count, seed, a, b, c);
         case "boxed_float_method_fallback": return boxedFloatMethodFallback(count, seed, fa, fb, fc);
+        case "boxed_int_method_effect": return boxedIntMethodEffect(count, seed, a, b, c);
         case "dynamic_int_result_call": return dynamicIntResultCall(count, seed, a, b, c);
         case "dynamic_int_result_fallback": return dynamicIntResultFallback(count, seed, a, b, c);
         case "dynamic_float_result_call": return dynamicFloatResultCall(count, seed, fa, fb, fc);
@@ -492,6 +513,7 @@ sub main() {
                         "monomorphic_float_call", "optional_float_method_call",
                         "boxed_float_method_call", "dynamic_int_result_call", "dynamic_int_result_fallback",
                         "boxed_int_method_call", "boxed_int_method_fallback", "boxed_float_method_fallback",
+                        "boxed_int_method_effect",
                         "dynamic_float_result_call",
                         "dispatch_control", "list_read",
                         "list_build", "list_mutate", "temporary_list", "temporary_hash",

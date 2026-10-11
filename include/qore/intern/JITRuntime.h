@@ -1026,6 +1026,39 @@ int qore_rt_try_method_int_unary_v2(QoreAOTContext* ctx, int32_t slot, uint64_t 
 int qore_rt_try_method_float_unary_v2(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
     double arg, double* result, uint64_t* boxed_result, ExceptionSink* xsink, RuntimeConfig* rc);
 
+//! Publish a single-member scalar companion only for the supplied normal body identity.
+//! @param ctx runtime-owned method context
+//! @param normal body identity rechecked at dispatch
+//! @param entry borrowed receiver/class, live RuntimeConfig, accepted output, context and sink
+void qore_rt_bind_member_int_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(int64_t, QoreObject*, const qore_class_private*, RuntimeConfig*, int*,
+        QoreAOTContext*, ExceptionSink*));
+//! Floating counterpart, with the same publication and ownership contract.
+void qore_rt_bind_member_float_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    double (*entry)(double, QoreObject*, const qore_class_private*, RuntimeConfig*, int*,
+        QoreAOTContext*, ExceptionSink*));
+
+//! Copy live primitive storage under the ordinary object read lock, never evaluating references.
+//! @param object borrowed receiver
+//! @param name member name
+//! @param class_ctx method's defining class context
+//! @param result output modified only on success
+//! @return one on success, zero on an effect-free miss requiring ordinary execution
+int qore_rt_try_load_member_int_v1(QoreObject* object, const char* name,
+    const qore_class_private* class_ctx, int64_t* result);
+//! Floating counterpart, with the same synchronized read and untouched-miss-output contract.
+int qore_rt_try_load_member_float_v1(QoreObject* object, const char* name,
+    const qore_class_private* class_ctx, double* result);
+
+//! Identical guard/ownership contract, with both target-width hashes computed by the compiler.
+//! Hashes must match name; access context, locking and actual value tags are still checked live.
+int qore_rt_try_load_member_int_prehashed_v1(QoreObject* object, const char* name,
+    uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, int64_t* result);
+int qore_rt_try_load_member_float_prehashed_v1(QoreObject* object, const char* name,
+    uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, double* result);
+
 //! Publish a pure dynamic int(int) closure companion, idempotently for this exact normal body.
 //! @param ctx runtime-owned context, without per-instance captured values
 //! @param normal body identity checked again at dispatch

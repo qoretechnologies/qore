@@ -113,11 +113,14 @@ public class RuntimeBench {
     }
 
     static class DynamicStep {
+        long calls;
         private long increment = 17;
         @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         long next(long value) { return (value * 33 + 17) & 65535; }
         @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         long fieldNext(long value) { return (value * 33 + increment) & 65535; }
+        @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long effectNext(long value) { ++calls; return (value * 33 + increment) & 65535; }
         @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         long viaContext(long value) { return next(value); }
     }
@@ -127,6 +130,8 @@ public class RuntimeBench {
         long next(long value) { return (value * 33 + 19) & 65535; }
         @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         long fieldNext(long value) { return (value * 33 + increment) & 65535; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long effectNext(long value) { ++calls; return (value * 33 + increment) & 65535; }
     }
     static class DynamicStepC extends DynamicStep {
         private long increment = 23;
@@ -134,6 +139,8 @@ public class RuntimeBench {
         long next(long value) { return (value * 33 + 23) & 65535; }
         @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
         long fieldNext(long value) { return (value * 33 + increment) & 65535; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long effectNext(long value) { ++calls; return (value * 33 + increment) & 65535; }
     }
 
     static class DynamicFloatStep {
@@ -416,8 +423,21 @@ public class RuntimeBench {
         return sum;
     }
 
-    // Natural context-using targets: the non-final per-object fields are read
-    // on every retained call, but are not mutated during measurements.
+    // Observable stores keep this target outside the pure scalar-member subset.
+    static long boxedIntMethodEffect(int count, long seed, DynamicStep a, DynamicStep b, DynamicStep c) {
+        a.calls = 0;
+        b.calls = 0;
+        c.calls = 0;
+        long value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).effectNext(value);
+            sum += value;
+        }
+        return sum + a.calls + b.calls + c.calls;
+    }
+
+    // Historical fallback name: these non-final fields are read on every call.
     static long boxedIntMethodFallback(int count, long seed, DynamicStep a, DynamicStep b, DynamicStep c) {
         long sum = 0;
         for (int i = 0; i < count; ++i) {
@@ -482,6 +502,9 @@ public class RuntimeBench {
     @Benchmark public long boxed_int_method_fallback() {
         return boxedIntMethodFallback(count, nextSeed(), a, b, c);
     }
+    @Benchmark public long boxed_int_method_effect() {
+        return boxedIntMethodEffect(count, nextSeed(), a, b, c);
+    }
     @Benchmark public long boxed_float_method_fallback() {
         return boxedFloatMethodFallback(count, nextSeed(), fa, fb, fc);
     }
@@ -530,6 +553,7 @@ public class RuntimeBench {
                     "monomorphic_float_call", "optional_float_method_call",
                     "boxed_float_method_call", "dynamic_int_result_call", "dynamic_int_result_fallback",
                     "boxed_int_method_call", "boxed_int_method_fallback", "boxed_float_method_fallback",
+                    "boxed_int_method_effect",
                     "dynamic_float_result_call",
                     "dispatch_control", "list_read",
                     "list_build", "list_mutate", "temporary_list", "temporary_hash",
@@ -554,6 +578,7 @@ public class RuntimeBench {
                     polymorphicExpressionCall(count, seed, a, b, c),
                     boxedIntMethodFallback(count, seed, a, b, c),
                     boxedFloatMethodFallback(count, seed, fa, fb, fc),
+                    boxedIntMethodEffect(count, seed, a, b, c),
                     dynamicFloatResultCall(count, seed, fa, fb, fc),
                     dispatchControl(count, seed),
                     listRead(values, seed), listBuild(count, seed),

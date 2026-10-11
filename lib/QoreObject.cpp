@@ -1046,6 +1046,53 @@ int qore_object_private::tryAssignScalarMemberResolvedPrehashed(
     return 1;
 }
 
+template <bool Prehashed>
+bool qore_object_private::tryReadScalarMemberImpl(const char* mem, size_t hash,
+        const qore_class_private* class_ctx, int64_t* integer, double* floating) const {
+    assert(mem && (bool(integer) != bool(floating)));
+    const qore_class_private* member_class_ctx = qore_class_private::get(*theclass)->runtimeGetMemberContext(
+        mem, class_ctx);
+    QoreSafeVarRWReadLocker sl(rml);
+    if (status == OS_DELETED) {
+        return false;
+    }
+    const QoreHashNode* odata = member_class_ctx ? getInternalData(member_class_ctx) : data;
+    // A bitwise, borrowed copy is valid only while the object lock is held.
+    // No refSelf()/discard(): even a rejected node must not change ownership.
+    QoreValue value;
+    if (odata) {
+        if constexpr (Prehashed) {
+            bool exists;
+            value = qore_hash_private::get(*odata)->getKeyValueExistencePrehashedIntern(mem, hash, exists);
+        } else {
+            value = qore_hash_private::get(*odata)->getKeyValueIntern(mem);
+        }
+    }
+    // Inspect actual tags/node types, not getType(): enums can report their
+    // underlying scalar type. Canonical wide integers and escaped floats are
+    // safe to extract while locked, without allocating a new box.
+    AbstractQoreNode* node = value.isPointer() ? value.getPtr() : nullptr;
+    if (integer && (value.isInt() || (node && node->getType() == NT_INT))) {
+        *integer = value.getAsBigInt();
+        return true;
+    }
+    if (floating && (value.isFloat() || (node && node->getType() == NT_FLOAT))) {
+        *floating = value.getAsFloat();
+        return true;
+    }
+    return false;
+}
+
+bool qore_object_private::tryReadScalarMember(const char* mem, const qore_class_private* class_ctx,
+        int64_t* integer, double* floating) const {
+    return tryReadScalarMemberImpl<false>(mem, 0, class_ctx, integer, floating);
+}
+
+bool qore_object_private::tryReadScalarMemberPrehashed(const char* mem, size_t hash,
+        const qore_class_private* class_ctx, int64_t* integer, double* floating) const {
+    return tryReadScalarMemberImpl<true>(mem, hash, class_ctx, integer, floating);
+}
+
 QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const {
     const qore_class_private* class_ctx = runtime_get_class();
     const qore_class_private* member_class_ctx = qore_class_private::get(*theclass)->runtimeGetMemberContext(mem,

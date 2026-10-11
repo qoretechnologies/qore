@@ -27,6 +27,7 @@ KERNELS = ("arithmetic", "direct_call", "method_call", "indirect_call", "polymor
            "monomorphic_float_call", "optional_float_method_call",
            "boxed_float_method_call", "dynamic_int_result_call", "dynamic_int_result_fallback",
            "boxed_int_method_call", "boxed_int_method_fallback", "boxed_float_method_fallback",
+           "boxed_int_method_effect",
            "dynamic_float_result_call",
            "indirect_wide", "indirect_float", "indirect_int_result", "indirect_float_result",
            "indirect_tagged_float", "indirect_branch_float",
@@ -120,10 +121,10 @@ def reference(name, count, seed):
             continue
         increment = (17, 19, 23)[index % 3] if name in (
             "polymorphic_call", "polymorphic_expression_call", "dispatch_control",
-            "boxed_int_method_call", "boxed_int_method_fallback") else 17
+            "boxed_int_method_call", "boxed_int_method_fallback", "boxed_int_method_effect") else 17
         seed = (seed * 33 + increment) & 65535
         result += seed
-        if name == "list_mutate":
+        if name in ("list_mutate", "boxed_int_method_effect"):
             result += 1
         elif name in ("temporary_list", "temporary_hash"):
             result += seed & 1

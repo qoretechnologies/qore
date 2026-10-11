@@ -187,6 +187,19 @@ public:
         receiver_runtime_config = runtime_config;
     }
 
+    //! Set invocation arguments for a separately proven pure, single-member scalar body.
+    //! @param object borrowed live receiver
+    //! @param class_ctx method's defining class context
+    //! @param runtime_config same-thread live runtime view
+    //! @param accepted caller-owned flag cleared on a non-evaluating member-read miss
+    void setScalarMemberEntry(llvm::Value* object, llvm::Value* class_ctx,
+            llvm::Value* runtime_config, llvm::Value* accepted) {
+        scalar_member_object = object;
+        scalar_member_class_ctx = class_ctx;
+        receiver_runtime_config = runtime_config;
+        scalar_member_accepted = accepted;
+    }
+
     //! Set the name of an AOT self-recursive fast entry function.
     //! When set, self-recursive CallDirect instructions in AOT mode emit direct
     //! LLVM calls to this function instead of going through qore_rt_call_direct_aot.
@@ -371,6 +384,9 @@ private:
     llvm::Value* dynamic_closure_arg = nullptr;
     llvm::Value* dynamic_closure_runtime_config = nullptr;
     llvm::Value* dynamic_closure_accepted = nullptr;
+    llvm::Value* scalar_member_object = nullptr;
+    llvm::Value* scalar_member_class_ctx = nullptr;
+    llvm::Value* scalar_member_accepted = nullptr;
     //! the name of the generated native function, if not the IR function's own name; see setSymbolName()
     std::string symbol_name;
     const std::unordered_map<const void*, llvm::Value*>* fast_entry_args = nullptr;

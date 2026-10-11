@@ -2,6 +2,8 @@
  * SPDX-License-Identifier: MIT
  */
 #define _QORE_LIB_INTERN
+#define XXH_INLINE_ALL
+#include <qore/intern/xxhash/xxhash.h>
 #include <qore/Qore.h>
 #include <qore/QoreAOT.h>
 #include <qore/intern/QoreAOT.h>
@@ -23,6 +25,7 @@ extern "C" void init_NATIVE_LEAF_CONTEXT_qo(QoreProgram*);
 #include <limits>
 #include <string>
 #include <thread>
+#include <type_traits>
 
 #if defined(__aarch64__)
 #include <qore/macros-aarch64.h>
@@ -1137,6 +1140,242 @@ static void checkGenericFloatMethods(QoreProgram* program, bool inline_method, b
     }
 }
 
+// Replace one unshared Program's member binding with an adapter that still
+// executes the real compiled entry. This distinguishes a fast hit from an
+// accidentally correct ordinary fallback and forces overflow after publication.
+template <typename Scalar>
+class MemberEntryProbe {
+public:
+    static auto& binding(QoreAOTContext* ctx) {
+        if constexpr (std::is_same_v<Scalar, double>) {
+            return ctx->scalar_member_float_entry;
+        } else {
+            return ctx->scalar_member_int_entry;
+        }
+    }
+    MemberEntryProbe(QoreAOTContext* ctx, bool enabled, bool overflow = false)
+        : ctx(enabled ? ctx : nullptr), overflow(overflow) {
+        if (this->ctx) {
+            assert(!current);
+            saved = binding(ctx).exchange(invoke, std::memory_order_acq_rel);
+            assert(saved);
+            current = this;
+        }
+    }
+    ~MemberEntryProbe() {
+        if (ctx) {
+            assert(calls);
+            binding(ctx).store(saved, std::memory_order_release);
+            current = nullptr;
+        }
+    }
+private:
+    using Entry = std::conditional_t<std::is_same_v<Scalar, double>, QoreAOTContext::ScalarMemberFloatEntry,
+        QoreAOTContext::ScalarMemberIntEntry>;
+    static thread_local MemberEntryProbe* current;
+    QoreAOTContext* ctx;
+    bool overflow;
+    Entry saved = nullptr;
+    unsigned calls = 0;
+    static Scalar invoke(Scalar arg, QoreObject* object, const qore_class_private* cls, RuntimeConfig* rc,
+            int* accepted, QoreAOTContext* ctx, ExceptionSink* xsink) {
+        assert(current && current->ctx == ctx && object && cls && *accepted == 1);
+        ++current->calls;
+        struct RestoreLimit {
+            size_t* limit = nullptr;
+            size_t saved = 0;
+            ~RestoreLimit() { if (limit) { *limit = saved; } }
+        } restore;
+        if (current->overflow) {
+#if defined(__aarch64__) || defined(__x86_64__)
+            restore.limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
+            assert(restore.limit);
+            restore.saved = *restore.limit;
+            *restore.limit = get_stack_pos() + 4096;
+#else
+            assert(false && "forced member limit requires a native stack view");
+#endif
+        }
+        Scalar result = current->saved(arg, object, cls, rc, accepted, ctx, xsink);
+        if (current->overflow) {
+            assert(*xsink && result == 0 && *accepted == 1);
+            *restore.limit = restore.saved;
+            assert(rc->getObject() == object && rc->getClass() == cls);
+            ExceptionSink probe_sink;
+            uint64_t bits = qore_rt_load_self_member("leafContextMarker", &probe_sink);
+            QoreValue value;
+            std::memcpy(&value, &bits, sizeof(value));
+            ValueHolder marker(value, &probe_sink);
+            assert(!probe_sink && marker->getAsBigInt() == 927);
+        }
+        return result;
+    }
+};
+template <typename Scalar>
+thread_local MemberEntryProbe<Scalar>* MemberEntryProbe<Scalar>::current = nullptr;
+
+template <typename Scalar>
+static void checkMemberMethods(QoreProgram* program) {
+    constexpr bool floating = std::is_same_v<Scalar, double>;
+    const char* caller_name = floating ? "memberFloatProbe" : "memberIntProbe";
+    const char* class_name = floating ? "NativeLeafMemberFloat" : "NativeLeafMemberInt";
+    ExceptionSink xsink;
+    ValueHolder owner(program->callFunction(floating ? "makeMemberFloatProbe" : "makeMemberIntProbe",
+        nullptr, &xsink), &xsink);
+    assert(!xsink && owner->getType() == NT_OBJECT);
+    QoreObject* object = owner->get<QoreObject>();
+    const auto* cls = qore_class_private::get(*object->getClass());
+    const Scalar arg = 1;
+    const Scalar initial = static_cast<Scalar>(floating ? 0.5 : 17);
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+    args->push(owner->refSelf(), &xsink);
+    assert(!xsink);
+    args->push(QoreValue(arg), &xsink);
+    assert(!xsink);
+    for (unsigned i = 0; i < 16; ++i) {
+        ValueHolder result(program->callFunction(caller_name, *args, &xsink), &xsink);
+        assert(!xsink && result->getType() == (floating ? NT_FLOAT : NT_INT));
+        assert((floating ? result->getAsFloat() : result->getAsBigInt()) == initial + arg);
+    }
+    int slot;
+    QoreAOTContext* caller = getMethodProbeContext(program, caller_name, slot);
+    const auto* method = object->getClass()->findMethod("next");
+    assert(method);
+    const auto* uvb = qore_method_private::get(*method)->getFunction()->first()->getUserVariantBase();
+    assert(uvb && uvb->hasCachedAOT());
+    auto* ctx = uvb->getCachedAOTContext();
+    assert(ctx && ctx->uses_self && MemberEntryProbe<Scalar>::binding(ctx).load(std::memory_order_acquire));
+    const bool admitted = !std::getenv("QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION");
+    const bool enabled = admitted && !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
+    const bool fallback = admitted && !std::getenv("QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK");
+    RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    QoreObject* old_object = rc->getObject();
+    const auto* old_class = rc->getClass();
+    auto invoke = [&](Scalar* result, uint64_t* boxed) {
+        if constexpr (floating) {
+            return boxed ? qore_rt_try_method_float_unary_v2(caller, slot, owner->rawBits(), arg,
+                result, boxed, &xsink, rc) : qore_rt_try_method_float_unary_v1(caller, slot, owner->rawBits(),
+                    arg, result, &xsink, rc);
+        } else {
+            return boxed ? qore_rt_try_method_int_unary_v2(caller, slot, owner->rawBits(), arg,
+                result, boxed, &xsink, rc) : qore_rt_try_method_int_unary_v1(caller, slot, owner->rawBits(),
+                    arg, result, &xsink, rc);
+        }
+    };
+    auto read = [&](QoreObject* receiver, const char* name, Scalar* result) {
+        const size_t length = name ? std::strlen(name) : 0;
+        const uint64_t hash64 = name ? XXH64(name, length, 0) : 0;
+        const uint32_t hash32 = name ? XXH32(name, length, 0) : 0;
+        Scalar prehashed_result = result ? *result : 0;
+        int prehashed;
+        int ordinary;
+        if constexpr (floating) {
+            prehashed = qore_rt_try_load_member_float_prehashed_v1(receiver, name, hash64, hash32,
+                cls, result ? &prehashed_result : nullptr);
+            ordinary = qore_rt_try_load_member_float_v1(receiver, name, cls, result);
+        } else {
+            prehashed = qore_rt_try_load_member_int_prehashed_v1(receiver, name, hash64, hash32,
+                cls, result ? &prehashed_result : nullptr);
+            ordinary = qore_rt_try_load_member_int_v1(receiver, name, cls, result);
+        }
+        assert(prehashed == ordinary);
+        assert(!result || !std::memcmp(&prehashed_result, result, sizeof(Scalar)));
+        return ordinary;
+    };
+    auto equal = [](Scalar a, Scalar b) { return a == b || (std::isnan(a) && std::isnan(b)); };
+    auto check = [&](bool boxed, int handled, Scalar expected) {
+        Scalar result = -123;
+        uint64_t bits = 0x123456789abcdef0;
+        assert(invoke(&result, boxed ? &bits : nullptr) == handled);
+        assert(!xsink && rc->getObject() == old_object && rc->getClass() == old_class);
+        if (handled == 2) {
+            QoreValue value;
+            std::memcpy(&value, &bits, sizeof(value));
+            ValueHolder owned(value, &xsink);
+            assert(result == -123 && owned->getType() == (floating ? NT_FLOAT : NT_INT));
+            assert(equal(floating ? owned->getAsFloat() : owned->getAsBigInt(), expected));
+        } else {
+            assert(bits == 0x123456789abcdef0 && equal(result, handled ? expected : Scalar{-123}));
+        }
+    };
+    std::array<Scalar, 3> values;
+    if constexpr (floating) {
+        values = {0.5, -9.0e307, std::numeric_limits<double>::quiet_NaN()};
+    } else {
+        values = {17, int64_t{1} << 50, -(int64_t{1} << 50)};
+    }
+    for (Scalar value : values) {
+        object->setValue("delta", QoreValue(value), &xsink);
+        assert(!xsink);
+        Scalar output = -123;
+        assert(read(object, "delta", &output) == 1 && equal(output, value));
+        MemberEntryProbe<Scalar> probe(ctx, enabled);
+        check(false, enabled ? 1 : 0, value + arg);
+        check(true, enabled ? 1 : fallback ? 2 : 0, value + arg);
+    }
+    Scalar output = -123;
+    assert(!read(nullptr, "delta", &output) && output == -123);
+    assert(!read(object, nullptr, &output) && output == -123);
+    assert(!read(object, "missing", &output) && output == -123);
+    assert(!read(object, "delta", nullptr));
+    ValueHolder enumeration(program->callFunction("makeEnumProbe", nullptr, &xsink), &xsink);
+    assert(!xsink);
+    for (QoreValue value : {QoreValue(), *enumeration, floating ? QoreValue(int64_t{7}) : QoreValue(1.25)}) {
+        object->setValue("delta", value.refSelf(), &xsink);
+        assert(!xsink);
+        assert(!read(object, "delta", &output) && output == -123);
+        MemberEntryProbe<Scalar> probe(ctx, enabled);
+        check(false, 0, -123);
+        if (value.isNothing()) {
+            check(true, fallback ? 2 : 0, arg);
+        }
+    }
+    object->setValue("delta", QoreValue(initial), &xsink);
+    assert(!xsink);
+    bool ready = ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
+    assert(ready);
+    check(false, 0, -123);
+    ctx->pc_loc_map_attached.store(ready, std::memory_order_release);
+    auto normal = ctx->pc_loc_fn;
+    ctx->pc_loc_fn = nullptr;
+    check(false, 0, -123);
+    ctx->pc_loc_fn = normal;
+    if (enabled && qore_rt_get_stack_limit_v1(rc)) {
+        {
+            MemberEntryProbe<Scalar> probe(ctx, true, true);
+            Scalar result = -123;
+            assert(invoke(&result, nullptr) == 1 && result == 0 && xsink);
+            assert(rc->getObject() == old_object && rc->getClass() == old_class);
+            assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+            ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+            assert(!xsink && info);
+            const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+            assert(stack);
+            bool published = false;
+            for (size_t i = 0; i < stack->size(); ++i) {
+                const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                assert(frame);
+                const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                published |= name && std::strstr(name->c_str(), class_name);
+                if (!(i % 100)) {
+                    assert(!qore_check_cancel(&xsink, "scalar member overflow frame inspection"));
+                }
+            }
+            assert(published);
+        }
+        check(false, 1, initial + arg);
+        xsink.raiseException("MEMBER-PENDING", "pre-existing exception");
+        Scalar result = -123;
+        assert(invoke(&result, nullptr) == 1 && result == 0 && xsink);
+        assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("MEMBER-PENDING"));
+        xsink.clear();
+        assert(rc->getObject() == old_object && rc->getClass() == old_class);
+    }
+    object->doDelete(&xsink);
+    assert(!xsink && !read(object, "delta", &output) && output == -123);
+    check(false, 0, -123);
+}
+
 // Enter through a normal compiled function so probes inherit the same real
 // source parse policy as the warmed callers; the external host's policy differs.
 static QoreValue methodReceiverProbes(const void* ptr, const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
@@ -1152,6 +1391,8 @@ static QoreValue methodReceiverProbes(const void* ptr, const QoreListNode*, Runt
     checkFloatMethodReceivers(invocation.program, "floatMethodArgumentProbe", invocation.inline_method);
     checkGenericFloatMethods(invocation.program, invocation.inline_method, false);
     checkGenericFloatMethods(invocation.program, invocation.inline_method, true);
+    checkMemberMethods<int64_t>(invocation.program);
+    checkMemberMethods<double>(invocation.program);
     return QoreValue(int64_t{24});
 }
 

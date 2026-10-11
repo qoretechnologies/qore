@@ -617,6 +617,55 @@ no object ownership, frame publication, stack check or admission guard. The
 generic `ObjectSubstitutionHelper` remains unchanged. The native context must
 belong to this thread and remain valid for the helper's entire scope.
 
+### Guarded AOT single-member scalar entries
+
+AOT can emit a separate native companion for a non-synchronized `int(int)` or
+`float(float)` method whose complete body contains one member read and otherwise
+only homogeneous scalar arithmetic. The proof is bounded to one block and at most
+64 instructions. It permits the sole parameter, same-family constants, add/subtract/
+multiply and integer bitwise operations; it excludes calls, stores, extra member
+reads, explicit self-local access, opaque AST access, body locals, generic type
+substitution and unsupported instructions. The ordinary body and serialized debug
+IR are unchanged. A member's declared type alone never authorizes a native read.
+
+The companion receives the native argument, borrowed receiver and defining-class
+context, live `RuntimeConfig`, an accepted flag, AOT context and exception sink.
+The normal body publishes the typed companion only for its own body identity.
+Dispatch retains the complete PIC key, receiver validity, access context,
+same-Program/options, dispatch epoch, live body/map and debugger checks. The
+existing integer-forwarding proof is tried first. Companion pointers are appended
+to the runtime-owned context with release/acquire publication; no mutable member
+value or receiver is cached there.
+
+At the source read position, the helper resolves the member's internal storage
+context and acquires the ordinary object read lock. It rejects deleted objects,
+missing/NOTHING fields, references, enums and the wrong scalar family without
+evaluating, referencing or discarding the value. Immediate values and canonical
+wide-integer/escaped-float nodes are copied to native scalars while locked. A miss
+clears the accepted flag and retries ordinary execution; only effect-free work
+can precede that miss. A successful native return follows the separately proven
+homogeneous type, without invoking a dynamic return conversion.
+
+Member-name XXH64 and XXH32 hashes are computed at compilation; the helper selects
+the runtime target width. Builds without the hash-map implementation use the same
+ordered-map lookup as ordinary reads. This removes per-read name hashing, not live
+member-context resolution or synchronization. The diagnostic frame and its reader
+handshake remain published. The callee checks its own stack through the explicit
+runtime view; overflow materializes object/class context before raising and restores
+it afterward. The existing eager-context diagnostic control remains supported.
+
+`QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1` disables companion generation or runtime
+admission. `QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1` independently disables hash
+generation or uses the ordinary read helper at runtime; the broader compiler
+control `QORE_DISABLE_AOT_PREHASHED_KEYS=1` also suppresses prehash generation.
+New artifacts require matching additive runtime helpers and private identity.
+`AOTScalarMemberEntry.qtest` covers live/inherited/shadowed reads, reference and enum
+fallbacks, unusual scalar encodings, debugger attachment, frame readers and concurrent
+field replacement. `NativeLeafContext.qtest` additionally proves real native hits,
+untouched miss outputs, boxed fallback ownership, forced callee overflow and context
+restoration on initial and foreign threads. These are AOT-specific companions;
+IR/JIT execution remains a correctness reference, not a claimed performance gain.
+
 ### Guarded AOT method entries after typed assignment
 
 Exact boxed-local analysis can prove a receiver assigned and non-NOTHING while

@@ -78,6 +78,12 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(196621, run.reference("dynamic_float_result_call", 6, 7))
         self.assertEqual(65543, run.reference("dynamic_float_result_call", 3, 65535))
 
+    def test_boxed_method_effect_reference(self):
+        self.assertEqual(0, run.reference("boxed_int_method_effect", 0, 7))
+        self.assertEqual(249, run.reference("boxed_int_method_effect", 1, 7))
+        self.assertEqual(8453, run.reference("boxed_int_method_effect", 2, 7))
+        self.assertEqual(17032, run.reference("boxed_int_method_effect", 3, 7))
+
     def test_dynamic_int_result_reference(self):
         for name in ("dynamic_int_result_call", "dynamic_int_result_fallback"):
             self.assertEqual(248, run.reference(name, 1, 7))

@@ -76,7 +76,19 @@ class NativeLeafContextTest inherits QUnit::Test {
             "float sub floatMethodArgumentProbe(NativeLeafFloatMethodBase receiver, auto value) {\n"
             "    return receiver.next(value);\n}\n"
             "auto sub genericFloatMethodProbe(auto receiver, auto value) { return receiver.next(value); }\n"
-            "auto sub genericFloatLateProbe(auto receiver, auto value) { return receiver.next(value); }\n");
+            "auto sub genericFloatLateProbe(auto receiver, auto value) { return receiver.next(value); }\n"
+            "class NativeLeafMemberInt {\n"
+            "    public { auto delta = 17; }\n"
+            "    private:internal { int leafContextMarker = 927; }\n"
+            "    int next(int value) { return value + delta; }\n}\n"
+            "class NativeLeafMemberFloat {\n"
+            "    public { auto delta = 0.5; }\n"
+            "    private:internal { int leafContextMarker = 927; }\n"
+            "    float next(float value) { return value + delta; }\n}\n"
+            "NativeLeafMemberInt sub makeMemberIntProbe() { return new NativeLeafMemberInt(); }\n"
+            "NativeLeafMemberFloat sub makeMemberFloatProbe() { return new NativeLeafMemberFloat(); }\n"
+            "auto sub memberIntProbe(auto receiver, auto value) { return receiver.next(value); }\n"
+            "auto sub memberFloatProbe(auto receiver, auto value) { return receiver.next(value); }\n");
         file.close();
         string control = dir.path + "/control.qr";
         file.open2(control, O_WRONLY | O_CREAT | O_TRUNC);
@@ -117,6 +129,10 @@ class NativeLeafContextTest inherits QUnit::Test {
                     "method-v3 binding or method-only full-guard control");
                 assertRegex("qore_rt_bind_method_float_unary_v1[^\n]*NativeLeafFloatMethodDerived", output);
                 assertRegex("qore_rt_bind_method_float_unary_v2[^\n]*NativeLeafFloatMethodDerived", output);
+                assertRegex("qore_rt_bind_member_int_v1[^\n]*NativeLeafMemberInt", output);
+                assertRegex("qore_rt_bind_member_float_v1[^\n]*NativeLeafMemberFloat", output);
+                assertRegex("call i32 @qore_rt_try_load_member_int_prehashed_v1", output);
+                assertRegex("call i32 @qore_rt_try_load_member_float_prehashed_v1", output);
                 assertEq(inline_method, output.find("qore_rt_bind_method_float_unary_v3") >= 0);
                 if (inline_method) {
                     *list<*string> entry = regex_extract(output,
@@ -164,6 +180,8 @@ class NativeLeafContextTest inherits QUnit::Test {
                     + (map quote($1), objects).join(" ") + " 2>&1", \status);
                 assertEq(0, status, output);
                 foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ",
                         "QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT=1 ",
                         "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 ",
                         "QORE_DISABLE_AOT_FORWARD_CLASS_CONTEXT_CACHE=1 ",

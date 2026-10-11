@@ -1005,6 +1005,91 @@ static bool isAOTReceiverIntForwarder(const QoreIRFunction& ir, const UserVarian
         && call->operands[1].id == arg_id && ret->has_value && ret->value.id == call->result.id;
 }
 
+//! Prove a bounded, homogeneous scalar body whose only speculative operation is one live member read.
+//! Every value is derived from the strict parameter, a same-family constant, or the guarded member.
+//! Unsupported bodies retain their ordinary entry; declarations alone never authorize a native read.
+static bool isAOTScalarMemberEligible(const QoreIRFunction& ir, const UserVariantBase* uvb,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    if (std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY") || !method || method->isStatic() || !sig
+            || !isAOTFastMethodCallEligible(variant) || !isAOTFastEntryEligible(&ir, uvb)
+            || ir.has_opaque_ast_local_access || ir.has_explicit_self_local_access
+            || !ir.all_body_locals.empty() || ir.blocks.size() != 1
+            || ir.blocks[0]->instructions.size() > 64 || sig->numParams() != 1
+            || sig->needsTypeParameterSubstitution()) {
+        return false;
+    }
+    const bool floating = sig->getParamTypeInfo(0) == floatTypeInfo;
+    const QoreTypeInfo* type = floating ? floatTypeInfo : bigIntTypeInfo;
+    if (sig->getParamTypeInfo(0) != type || sig->getReturnTypeInfo() != type) {
+        return false;
+    }
+    std::unordered_set<uint32_t> scalars;
+    unsigned reads = 0;
+    for (const auto& inst : ir.blocks[0]->instructions) {
+        bool binary = false;
+        switch (inst->opcode) {
+            case QoreIROpcode::LoadLocal: {
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst.get());
+                if (load->local != sig->lv[0] || load->is_ref || load->is_closure
+                        || load->mode != AssignmentMode::Normal) {
+                    return false;
+                }
+                break;
+            }
+            case QoreIROpcode::LoadSelfMember:
+                if (++reads != 1) {
+                    return false;
+                }
+                break;
+            case QoreIROpcode::ConstInt:
+                if (floating) { return false; }
+                break;
+            case QoreIROpcode::ConstFloat:
+                if (!floating) { return false; }
+                break;
+            case QoreIROpcode::AddInt:
+            case QoreIROpcode::SubInt:
+            case QoreIROpcode::MulInt:
+            case QoreIROpcode::AndInt:
+            case QoreIROpcode::OrInt:
+            case QoreIROpcode::XorInt:
+                if (floating) { return false; }
+                binary = true;
+                break;
+            case QoreIROpcode::AddFloat:
+            case QoreIROpcode::SubFloat:
+            case QoreIROpcode::MulFloat:
+                if (!floating) { return false; }
+                binary = true;
+                break;
+            case QoreIROpcode::AddAny:
+            case QoreIROpcode::SubAny:
+            case QoreIROpcode::MulAny:
+                binary = true;
+                break;
+            case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::DiscardTemps:
+                continue;
+            case QoreIROpcode::Return: {
+                const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst.get());
+                return inst.get() == ir.blocks[0]->instructions.back().get() && reads == 1
+                    && ret->has_value && scalars.count(ret->value.id);
+            }
+            default:
+                return false;
+        }
+        if (binary && (inst->operands.size() != 2 || !scalars.count(inst->operands[0].id)
+                || !scalars.count(inst->operands[1].id))) {
+            return false;
+        }
+        if (!inst->result.isValid() || !scalars.insert(inst->result.id).second) {
+            return false;
+        }
+    }
+    return false;
+}
+
 //! Check if an AOT function has self-recursive CallDirect instructions.
 static bool hasAOTSelfRecursiveCall(const QoreIRFunction* ir_func) {
     size_t inst_i = 0;
@@ -21227,6 +21312,61 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         }
                     }
 
+                    llvm::Function* scalar_member_entry = nullptr;
+                    if (method_ok && !metadata_only && !fn_outliner.active()
+                            && isAOTScalarMemberEligible(*ir_func, uvb, meth, variant)) {
+                        const UserSignature* sig = uvb->getUserSignature();
+                        bool floating = sig->getParamTypeInfo(0) == floatTypeInfo;
+                        auto* scalar_ty = floating ? llvm::Type::getDoubleTy(ctx) : llvm::Type::getInt64Ty(ctx);
+                        auto* ptr_ty = llvm::PointerType::get(ctx, 0);
+                        std::string name = ir_func->name + (floating ? "_member_float_v1" : "_member_int_v1");
+                        scalar_member_entry = llvm::Function::Create(llvm::FunctionType::get(scalar_ty,
+                            {scalar_ty, ptr_ty, ptr_ty, ptr_ty, ptr_ty, ptr_ty, ptr_ty}, false),
+                            llvm::Function::ExternalLinkage, name, module);
+                        scalar_member_entry->setVisibility(llvm::GlobalValue::HiddenVisibility);
+                        std::unordered_map<const void*, llvm::Value*> params{
+                            {sig->lv[0], scalar_member_entry->getArg(0)}};
+                        std::unordered_map<const void*, BatchCalleeParamKind> kinds{
+                            {sig->lv[0], floating ? BatchCalleeParamKind::NativeFloat : BatchCalleeParamKind::NativeInt}};
+                        QoreIRToLLVM member_lowerer(ctx);
+                        member_lowerer.setAOTMode(&slots);
+                        member_lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                        member_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+                        member_lowerer.setDeferredExceptionChecking(false);
+                        member_lowerer.setFastEntryMode(name, &params, &kinds, nullptr,
+                            floating ? BatchCalleeReturnKind::NativeFloat : BatchCalleeReturnKind::NativeInt,
+                            sig->getReturnTypeInfo());
+                        member_lowerer.setScalarMemberEntry(scalar_member_entry->getArg(1),
+                            scalar_member_entry->getArg(2), scalar_member_entry->getArg(3),
+                            scalar_member_entry->getArg(4));
+                        member_lowerer.setAOTLocTableBase(static_cast<int32_t>(aot_locs_local.size()));
+                        std::string member_error;
+                        if (!member_lowerer.lowerFunction(*ir_func, module, member_error)) {
+                            ++failed_count;
+                            setAOTCompileFatal(fatal_error, "method", variant_key,
+                                "scalar-member LLVM lowering", member_error);
+                            delete ir_func;
+                            return;
+                        }
+                        for (const auto& loc : member_lowerer.getAOTLocTable()) {
+                            AOTCompiledFuncWithSlots::AOTLocEntry entry;
+                            entry.start_line = loc.start_line;
+                            entry.end_line = loc.end_line;
+                            entry.file = loc.file;
+                            aot_locs_local.push_back(std::move(entry));
+                        }
+                        // Publish only from this exact normal body. Binding does not
+                        // cache a receiver or a mutable member value in the context.
+                        llvm::Function* normal = module.getFunction(ir_func->name);
+                        llvm::IRBuilder<> bind_builder(&normal->getEntryBlock(),
+                            normal->getEntryBlock().getFirstInsertionPt());
+                        auto bind = module.getOrInsertFunction(floating
+                                ? "qore_rt_bind_member_float_v1" : "qore_rt_bind_member_int_v1",
+                            llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
+                                {ptr_ty, ptr_ty, ptr_ty}, false));
+                        bind_builder.CreateCall(bind, {normal->getArg(0), normal, scalar_member_entry});
+                    }
+
                     // Restore the original method before metadata extraction
                     // and debug-IR serialization (serialized IR must never
                     // contain CallAOTHelper).
@@ -21258,6 +21398,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         if (receiver_entry) {
                             AOTPcLocFuncEntry pc;
                             pc.symbol = receiver_entry_name;
+                            cf.pc_companions.push_back(std::move(pc));
+                        }
+                        if (scalar_member_entry) {
+                            AOTPcLocFuncEntry pc;
+                            pc.symbol = scalar_member_entry->getName().str();
                             cf.pc_companions.push_back(std::move(pc));
                         }
                         // Scan IR function for required features
