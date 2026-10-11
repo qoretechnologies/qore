@@ -42,7 +42,7 @@
 # enable all warnings
 
 module SqlUtil {
-    version = "3.6.0";
+    version = "3.7.0";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -119,6 +119,10 @@ module SqlUtil {
       bodies
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
+
+    @subsection sqlutilv3_7_0 SqlUtil v3.7.0
+    - Added getColumnMigrationInfo() for inspecting dependencies and relation identity before
+      resumable column replacement without scanning table data.
 
     @subsection sqlutilv3_6_0 SqlUtil v3.6.0
     - bounded maintenance transactions establish fresh statement snapshots and complete-row visibility
