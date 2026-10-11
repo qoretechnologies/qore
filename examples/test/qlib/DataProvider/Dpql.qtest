@@ -6174,8 +6174,8 @@ public class DpqlTest inherits QUnit::Test {
             hash<DpqlParseResult> result = parser.parseWithInfo('index(@name, 0)');
             assertTrue(result.success, "function call should parse");
             *AbstractDataProviderType rtype = parser.inferExpressionReturnType(result.expression);
-            # index() returns auto/any — just verify it doesn't crash
-            assertTrue(True, "function return type resolved without error");
+            # index() is declared to return any value
+            assertEq("auto", rtype.getName(), "function return type is the declared return type");
         }
 
         # Value expression return type
@@ -6314,10 +6314,9 @@ public class DpqlTest inherits QUnit::Test {
         # No warning for compatible numeric types (int vs float)
         # Note: this depends on Qore's type assignability rules
         {
-            DataProvider::validateDpqlExpression('@age == 3.14', fields);
-            # int and float may or may not be assignable depending on Qore rules
-            # Just verify it doesn't crash
-            assertTrue(True, "int vs float comparison validation works");
+            # an int field and a float are compatible numbers
+            assertEq((), map $1.code, DataProvider::validateDpqlExpression('@age == 3.14', fields),
+                "int vs float comparison is not a type mismatch");
         }
 
         # DPQL-W004: logical operator with non-bool argument (using function that returns string)
@@ -8365,6 +8364,15 @@ public class DpqlTest inherits QUnit::Test {
         }.pairIterator();
     }
 
+    #! Returns the error that verifying the parsed expression raises, or NOTHING if it is verified
+    private static *string verifyError(string text) {
+        try {
+            AbstractDataProvider::verifyGenericExpression(DataProvider::parseDpqlExpression(text));
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+
     nestedVerificationTests() {
         # an unknown function or a missing argument at any depth is reported when the expression is prepared, not
         # when it is evaluated
@@ -8399,8 +8407,7 @@ public class DpqlTest inherits QUnit::Test {
         foreach string text in ("substr(@a, 1) == \"x\"", "substr(@a, 1, 2) == \"x\"", "regex(@a, \"x\")",
                 "@a in (1, 2, 3)", "@a not in (1, 2, 3)", "coalesce(@a)", "count(@l) > 1", "first(@l) == 1",
                 "any(@l)", "now() > @d", "trim(@a) == \"x\"", "@a + 1 + 2 > 3") {
-            AbstractDataProvider::verifyGenericExpression(DataProvider::parseDpqlExpression(text));
-            assertTrue(True, text);
+            assertEq(NOTHING, verifyError(text), text);
         }
         assertEq(2, AbstractDataProvider::getRequiredArgCount(
             AbstractDataProvider::GenericExpressionImplementations.substr.exp));

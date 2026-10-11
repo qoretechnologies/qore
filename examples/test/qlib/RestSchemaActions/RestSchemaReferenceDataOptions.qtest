@@ -262,7 +262,7 @@ public class RestSchemaReferenceDataOptionsTest inherits QUnit::Test {
         foreach string mod in (sort(keys modules)) {
             try {
                 load_module(mod);
-                assertTrue(True, mod + " loads");
+                assertTrue(get_module_hash(){mod}.filename.val(), mod + " loads");
             } catch (hash<ExceptionInfo> ex) {
                 assertEq("", sprintf("%s: %s: %s", mod, ex.err, ex.desc));
             }
