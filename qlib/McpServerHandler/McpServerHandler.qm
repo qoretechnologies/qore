@@ -170,10 +170,11 @@ module McpServerHandler {
     is described by their number.  Fixed values that only suggest a value (a field's \c allowed_values_creatable)
     are not an \c "enum", which would reject the other values that the parameter accepts; the parameter's
     description lists them instead, worded by
-    @ref McpServerHandler::McpServerHandler::getSuggestedValuesDescription() "getSuggestedValuesDescription()".  Values that are reference data of the connected system (a field's \c ref_data
-    attribute: customers, orders, repositories and other records) are never listed and never read to build a tool
-    schema; the parameter's description says where its value comes from instead.  A subclass can name its own
-    lookup there by reimplementing
+    @ref McpServerHandler::McpServerHandler::getSuggestedValuesDescription() "getSuggestedValuesDescription()".
+
+    Values that are reference data of the connected system (a field's \c ref_data attribute: customers, orders,
+    repositories and other records) are never listed and never read to build a tool schema; the parameter's
+    description says where its value comes from instead.  A subclass can name its own lookup there by reimplementing
     @ref McpServerHandler::McpServerHandler::getReferenceDataDescription() "getReferenceDataDescription()", and can
     read the values on demand with
     @ref McpServerHandler::McpServerHandler::getAllowedValues() "getAllowedValues()".
@@ -181,9 +182,8 @@ module McpServerHandler {
     The elements of a list parameter are described in the same way: fixed element values (a field's
     \c element_allowed_values) are the \c "enum" of the schema's \c "items" when they are the only values accepted,
     and are listed in the description when they only suggest values (\c element_allowed_values_creatable); reference
-    data of the
-    elements (a field's \c element_ref_data attribute) is never listed or read, and the parameter's description says
-    where each element comes from, see
+    data of the elements (a field's \c element_ref_data attribute) is never listed or read, and the parameter's
+    description says where each element comes from, see
     @ref McpServerHandler::McpServerHandler::getElementReferenceDataDescription()
     "getElementReferenceDataDescription()" and
     @ref McpServerHandler::McpServerHandler::getElementAllowedValues() "getElementAllowedValues()".
