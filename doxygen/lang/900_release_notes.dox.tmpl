@@ -1219,6 +1219,10 @@ val = "string";      # OK
     the lookup never completes (c-ares issue 1280): the statically linked c-ares is patched, and a lookup with a
     system c-ares that lost its query is started again. The source-build dependencies also include
     Apache Arrow/Parquet 25.0.1, tree-sitter 0.26.13 and jemalloc 5.4.0 (musl targets).
+    Every source archive the build may download is listed once, with its version and SHA-256, in
+    \c cmake/third-party-sources.cmake, and its SHA-256 is verified whichever source is used;
+    <tt>-DQORE_THIRD_PARTY_MIRROR=</tt><em>url</em> downloads the archives from a mirror first, and
+    <tt>-DQORE_REQUIRE_SYSTEM_DEPENDENCIES=ON</tt> fails the configuration instead of downloading (see \c BUILDING).
     The bundled jsoncons headers are updated to 1.9.0 while preserving schema stack/cancellation
     checks, and xxHash is updated to 0.8.4 with unchanged XXH32/XXH64 cache and AOT checksums.
 
@@ -1327,8 +1331,8 @@ val = "string";      # OK
 cargo install tree-sitter-cli@0.26.5
     @endcode
 
-    The tree-sitter C runtime library is fetched automatically by CMake via \c FetchContent; only the CLI tool
-    needs to be pre-installed.
+    When it is not installed, the tree-sitter C runtime library is built from its SHA-256-pinned release archive,
+    downloaded by CMake; only the CLI tool needs to be pre-installed.
     @endparblock
 
     @par Program-owned Module Path Directives

@@ -13,7 +13,7 @@
 # The generated src/ files are committed to source control.
 
 find_package(PkgConfig QUIET)
-set(QORE_TREE_SITTER_VERSION "0.26.13")
+qore_third_party_version(tree-sitter QORE_TREE_SITTER_VERSION)
 if(PkgConfig_FOUND)
     pkg_check_modules(TREE_SITTER QUIET IMPORTED_TARGET "tree-sitter>=${QORE_TREE_SITTER_VERSION}")
 endif()
@@ -30,11 +30,11 @@ else()
     include(FetchContent)
 
     # Keep the runtime and grammar generation CLI on the same maintenance release.
+    qore_third_party_source_args(tree-sitter _qore_tree_sitter_source)
     FetchContent_Declare(
         tree-sitter
-        GIT_REPOSITORY https://github.com/tree-sitter/tree-sitter.git
-        GIT_TAG v${QORE_TREE_SITTER_VERSION}
-        GIT_SHALLOW TRUE
+        ${_qore_tree_sitter_source}
+        ${QORE_FETCHCONTENT_URL_OPTIONS}
     )
     FetchContent_GetProperties(tree-sitter)
     if(NOT tree-sitter_POPULATED)
