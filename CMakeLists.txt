@@ -3409,6 +3409,20 @@ if (NOT Protobuf_FOUND)
 endif()
 add_subdirectory(modules/protobuf)
 
+# every binary module that links OpenSSL must load only Qore's OpenSSL; see QoreCheckSslConsumers.cmake
+get_property(_qore_ssl_subdirs DIRECTORY "${CMAKE_SOURCE_DIR}" PROPERTY SUBDIRECTORIES)
+foreach(_qore_ssl_dir IN LISTS _qore_ssl_subdirs)
+    if (_qore_ssl_dir MATCHES "/modules/[^/]+$")
+        get_property(_qore_ssl_targets DIRECTORY "${_qore_ssl_dir}" PROPERTY BUILDSYSTEM_TARGETS)
+        foreach(_qore_ssl_target IN LISTS _qore_ssl_targets)
+            get_target_property(_qore_ssl_type "${_qore_ssl_target}" TYPE)
+            if (_qore_ssl_type STREQUAL "MODULE_LIBRARY")
+                qore_check_module_ssl_consumers("${_qore_ssl_target}")
+            endif()
+        endforeach()
+    endif()
+endforeach()
+
 if (UNIX)
     add_custom_target(plugin-type-verify-dataframe
         COMMAND ${CMAKE_COMMAND} -E env

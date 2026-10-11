@@ -2,24 +2,28 @@
 #
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 #
-# QoreCheckSslConsumers.cmake: fails the configuration when a library linked into libqore uses another OpenSSL
-# than the one that Qore found
+# QoreCheckSslConsumers.cmake: fails the configuration when a library that can receive Qore's OpenSSL objects uses
+# another OpenSSL than the one that Qore found
 #
-# A shared library that libqore links and that uses OpenSSL itself (ex: libngtcp2_crypto_ossl from a system
-# package) must use the same libssl and libcrypto as Qore: with two OpenSSL libraries in one process, an object
-# created by one is used by the other, which crashes (ex: SIGSEGV in SSL_set0_rbio when the TLS session of a QUIC
-# connection created by libqore's libssl is configured by ngtcp2's libssl).
+# With two OpenSSL libraries in one process, an object created by one and used by the other crashes (ex: SIGSEGV in
+# SSL_set0_rbio when the TLS session of a QUIC connection created by libqore's libssl was configured by the libssl of
+# a system libngtcp2_crypto_ossl).
 #
-# - on macOS, every install name is loaded separately, so the libraries must be the same files
-# - on ELF platforms, the dynamic loader loads one library per SONAME, so the SONAMEs must be the same
+# - every shared library linked into libqore must load only Qore's OpenSSL (qore_check_ssl_consumers())
+# - a binary module that links OpenSSL itself can exchange OpenSSL objects with libqore and its own libraries, so
+#   everything it loads must use Qore's OpenSSL too; a module that does not link OpenSSL cannot hand OpenSSL objects
+#   to its libraries, so another OpenSSL that they load privately is reported as information
+#   (qore_check_module_ssl_consumers())
 #
-# A static library uses the OpenSSL that libqore links and is not checked.
+# On macOS, every install name is loaded separately, so the libraries must be the same files; on ELF platforms, the
+# dynamic loader loads one library per SONAME, so the SONAMEs must be the same.  The dependencies of a library are
+# examined recursively.  A static library uses the OpenSSL that it is linked with and is not checked.
 
 # the directory of this module and of its dependency script
 set(_QORE_SSL_CHECK_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
-# Returns the files of the shared libraries that a link item stands for
-function(_qore_ssl_consumer_files item out_var)
+# Returns the files of the shared libraries that a link item stands for; link directories resolve bare names
+function(_qore_ssl_consumer_files item link_dirs out_var)
     set(_files)
     if (TARGET "${item}")
         get_target_property(_imported "${item}" IMPORTED)
@@ -47,10 +51,20 @@ function(_qore_ssl_consumer_files item out_var)
         # a target built in this project (ex: a static library fetched with FetchContent) is not checked
     elseif (IS_ABSOLUTE "${item}")
         list(APPEND _files "${item}")
+    elseif (link_dirs AND item MATCHES "^(-l)?[A-Za-z0-9_.+-]+$")
+        # a bare library name (ex: from pkg-config's LIBRARIES), in the target's link directories
+        string(REGEX REPLACE "^-l" "" _name "${item}")
+        unset(_qore_ssl_found CACHE)
+        find_library(_qore_ssl_found NAMES "${_name}" PATHS ${link_dirs} NO_DEFAULT_PATH)
+        if (_qore_ssl_found)
+            list(APPEND _files "${_qore_ssl_found}")
+        endif()
+        unset(_qore_ssl_found CACHE)
     endif()
     set(_shared)
     foreach(_file IN LISTS _files)
-        if (EXISTS "${_file}" AND NOT _file MATCHES "\\.(a|lib)$")
+        # frameworks and SDK stubs (.tbd) are system libraries, and static libraries are not checked
+        if (EXISTS "${_file}" AND NOT IS_DIRECTORY "${_file}" AND NOT _file MATCHES "\\.(a|lib|tbd)$")
             list(APPEND _shared "${_file}")
         endif()
     endforeach()
@@ -79,132 +93,205 @@ function(_qore_elf_soname objdump lib out_var)
     set(${out_var} "${_soname}" PARENT_SCOPE)
 endfunction()
 
-# Raises the configuration error for a library that uses another OpenSSL library than Qore
-function(_qore_ssl_consumer_mismatch consumer dep qore_lib)
-    message(FATAL_ERROR "${consumer} uses ${dep}, but Qore uses ${qore_lib} (OpenSSL ${OPENSSL_VERSION}).  Two "
-        "OpenSSL libraries in one process crash TLS and QUIC connections (ex: SIGSEGV in SSL_set0_rbio): build Qore "
-        "with the OpenSSL that the library uses (set OPENSSL_ROOT_DIR to it), or install a build of the library "
-        "that uses Qore's OpenSSL")
+# Sets up the tool and Qore's OpenSSL identities in the caller's scope; sets _qore_ssl_ok to FALSE if the check
+# cannot be made here
+macro(_qore_ssl_check_setup)
+    set(_qore_ssl_ok TRUE)
+    if (NOT OPENSSL_SSL_LIBRARY OR NOT OPENSSL_CRYPTO_LIBRARY OR CMAKE_VERSION VERSION_LESS 3.16)
+        set(_qore_ssl_ok FALSE)
+    else()
+        get_filename_component(_qore_ssl_real "${OPENSSL_SSL_LIBRARY}" REALPATH)
+        get_filename_component(_qore_crypto_real "${OPENSSL_CRYPTO_LIBRARY}" REALPATH)
+        if (APPLE)
+            set(_qore_ssl_platform "macos+macho")
+            set(_qore_ssl_tool "otool")
+            set(_qore_ssl_command "${CMAKE_OTOOL}")
+            if (NOT _qore_ssl_command)
+                find_program(QORE_SSL_CHECK_OTOOL NAMES otool llvm-otool)
+                set(_qore_ssl_command "${QORE_SSL_CHECK_OTOOL}")
+            endif()
+        else()
+            set(_qore_ssl_platform "linux+elf")
+            set(_qore_ssl_tool "objdump")
+            set(_qore_ssl_command "${CMAKE_OBJDUMP}")
+            if (NOT _qore_ssl_command)
+                find_program(QORE_SSL_CHECK_OBJDUMP NAMES objdump llvm-objdump)
+                set(_qore_ssl_command "${QORE_SSL_CHECK_OBJDUMP}")
+            endif()
+            if (_qore_ssl_command)
+                foreach(_kind ssl crypto)
+                    if (_qore_${_kind}_real MATCHES "\\.a$")
+                        # a static OpenSSL is in libqore itself
+                        set(_qore_${_kind}_id "")
+                    else()
+                        _qore_elf_soname("${_qore_ssl_command}" "${_qore_${_kind}_real}" _qore_${_kind}_id)
+                        if (NOT _qore_${_kind}_id)
+                            get_filename_component(_qore_${_kind}_id "${_qore_${_kind}_real}" NAME)
+                        endif()
+                    endif()
+                endforeach()
+            endif()
+        endif()
+        if (NOT _qore_ssl_command)
+            set(_qore_ssl_ok FALSE)
+        endif()
+    endif()
+endmacro()
+
+# Returns the OpenSSL libraries that a library loads, directly or through its dependencies, as "resolved <path>" or
+# "unresolved <name>" entries, and the error if they cannot be read; the dependencies are resolved in a script (see
+# QoreSslConsumerDeps.cmake)
+function(_qore_ssl_closure consumer out_var err_var)
+    set(_deps_file "${CMAKE_BINARY_DIR}/CMakeFiles/qore-ssl-consumer-deps.txt")
+    execute_process(COMMAND "${CMAKE_COMMAND}" "-DQORE_SSL_CONSUMER=${consumer}"
+            "-DQORE_SSL_PLATFORM=${_qore_ssl_platform}" "-DQORE_SSL_TOOL=${_qore_ssl_tool}"
+            "-DQORE_SSL_COMMAND=${_qore_ssl_command}" "-DQORE_SSL_OUTPUT=${_deps_file}"
+            "-DQORE_SSL_DIRS=${CMAKE_C_IMPLICIT_LINK_DIRECTORIES}"
+            -P "${_QORE_SSL_CHECK_DIR}/QoreSslConsumerDeps.cmake"
+        RESULT_VARIABLE _rc OUTPUT_VARIABLE _out ERROR_VARIABLE _err)
+    set(_lines)
+    if (_rc EQUAL 0)
+        file(STRINGS "${_deps_file}" _lines)
+        set(_err "")
+    else()
+        string(STRIP "${_err}" _err)
+        string(REGEX REPLACE "[ \t\r\n]+" " " _err "${_err}")
+    endif()
+    file(REMOVE "${_deps_file}")
+    set(${out_var} "${_lines}" PARENT_SCOPE)
+    set(${err_var} "${_err}" PARENT_SCOPE)
 endfunction()
 
-# Checks the shared libraries of the given link items against the OpenSSL that Qore found
+# Checks the OpenSSL libraries that the consumer files load; another OpenSSL is a configuration error if strict,
+# otherwise information
+function(_qore_check_ssl_files label strict)
+    foreach(_consumer IN LISTS ARGN)
+        _qore_ssl_closure("${_consumer}" _entries _closure_err)
+        if (_closure_err)
+            if (strict)
+                message(FATAL_ERROR "${label}: cannot verify the OpenSSL libraries that ${_consumer} loads: "
+                    "${_closure_err}")
+            endif()
+            message(STATUS "${label}: cannot read the libraries that ${_consumer} loads; the module does not link "
+                "OpenSSL, so it passes it no OpenSSL objects: ${_closure_err}")
+            continue()
+        endif()
+        foreach(_entry IN LISTS _entries)
+            if (NOT _entry MATCHES "^(resolved|unresolved) (.*)$")
+                continue()
+            endif()
+            set(_state "${CMAKE_MATCH_1}")
+            set(_dep "${CMAKE_MATCH_2}")
+            _qore_ssl_kind("${_dep}" _kind)
+            if (NOT _kind)
+                continue()
+            endif()
+            set(_other "")
+            if (APPLE)
+                set(_qore_desc "${_qore_${_kind}_real}")
+                if (_state STREQUAL "unresolved")
+                    set(_other "${_dep}, which cannot be resolved,")
+                else()
+                    get_filename_component(_dep_real "${_dep}" REALPATH)
+                    if (NOT _dep_real STREQUAL _qore_${_kind}_real)
+                        set(_other "${_dep_real}")
+                    endif()
+                endif()
+            else()
+                # the loader loads one library per SONAME; an unresolved dependency is named by its SONAME too
+                get_filename_component(_dep_name "${_dep}" NAME)
+                if (_qore_${_kind}_id)
+                    set(_qore_desc "${_qore_${_kind}_real} (${_qore_${_kind}_id})")
+                else()
+                    set(_qore_desc "${_qore_${_kind}_real} (a static library linked into libqore)")
+                endif()
+                if (NOT _dep_name STREQUAL _qore_${_kind}_id)
+                    set(_other "${_dep_name}")
+                endif()
+            endif()
+            if (NOT _other)
+                continue()
+            endif()
+            if (strict)
+                message(FATAL_ERROR "${label}: ${_consumer} uses ${_other}, but Qore uses ${_qore_desc} (OpenSSL "
+                    "${OPENSSL_VERSION}).  Two OpenSSL libraries in one process crash TLS and QUIC connections (ex: "
+                    "SIGSEGV in SSL_set0_rbio): build Qore with the OpenSSL that the library uses (set "
+                    "OPENSSL_ROOT_DIR to it), or install a build of the library that uses Qore's OpenSSL")
+            endif()
+            message(STATUS "${label}: ${_consumer} loads ${_other} privately; the module does not link OpenSSL, so "
+                "it passes it no OpenSSL objects (Qore uses ${_qore_desc})")
+        endforeach()
+    endforeach()
+endfunction()
+
+# Checks the shared libraries of the given link items of libqore against the OpenSSL that Qore found
 #
 # qore_check_ssl_consumers(<link item>...)
 #
 # A link item is a library file, an imported target, or a name; OpenSSL's own libraries are skipped.
 function(qore_check_ssl_consumers)
-    set(_qore_ssl "${OPENSSL_SSL_LIBRARY}")
-    set(_qore_crypto "${OPENSSL_CRYPTO_LIBRARY}")
-    if (NOT _qore_ssl OR NOT _qore_crypto)
+    _qore_ssl_check_setup()
+    if (NOT _qore_ssl_ok)
+        message(STATUS "cannot check the OpenSSL libraries used by the libraries linked into libqore here")
         return()
     endif()
-    get_filename_component(_qore_ssl_real "${_qore_ssl}" REALPATH)
-    get_filename_component(_qore_crypto_real "${_qore_crypto}" REALPATH)
-
     set(_consumers)
     foreach(_item IN LISTS ARGN)
-        _qore_ssl_consumer_files("${_item}" _files)
+        _qore_ssl_consumer_files("${_item}" "" _files)
         foreach(_file IN LISTS _files)
-            get_filename_component(_real "${_file}" REALPATH)
-            _qore_ssl_kind("${_real}" _own_kind)
-            if (NOT _own_kind AND NOT _real STREQUAL _qore_ssl_real AND NOT _real STREQUAL _qore_crypto_real)
+            _qore_ssl_kind("${_file}" _own_kind)
+            if (NOT _own_kind)
                 list(APPEND _consumers "${_file}")
             endif()
         endforeach()
     endforeach()
-    if (NOT _consumers)
+    if (_consumers)
+        list(REMOVE_DUPLICATES _consumers)
+        _qore_check_ssl_files("libqore" TRUE ${_consumers})
+    endif()
+endfunction()
+
+# Checks the libraries of a binary module target against the OpenSSL that Qore found
+#
+# qore_check_module_ssl_consumers(<target>)
+#
+# A module that links OpenSSL itself must load only Qore's OpenSSL; another OpenSSL loaded by the libraries of a
+# module that does not link OpenSSL is reported as information.
+function(qore_check_module_ssl_consumers target)
+    if (NOT TARGET "${target}")
         return()
     endif()
-    list(REMOVE_DUPLICATES _consumers)
-
-    if (APPLE)
-        if (CMAKE_VERSION VERSION_LESS 3.16)
-            message(STATUS "cannot check the OpenSSL libraries used by linked libraries with CMake ${CMAKE_VERSION} "
-                "(3.16 or later is needed)")
-            return()
+    _qore_ssl_check_setup()
+    if (NOT _qore_ssl_ok)
+        return()
+    endif()
+    get_target_property(_items "${target}" LINK_LIBRARIES)
+    get_target_property(_dirs "${target}" LINK_DIRECTORIES)
+    if (NOT _items)
+        return()
+    endif()
+    if (NOT _dirs)
+        set(_dirs "")
+    endif()
+    set(_links_openssl FALSE)
+    set(_consumers)
+    foreach(_item IN LISTS _items)
+        if (_item MATCHES "^OpenSSL::(SSL|Crypto)$")
+            set(_links_openssl TRUE)
+            continue()
         endif()
-        set(_otool "${CMAKE_OTOOL}")
-        if (NOT _otool)
-            find_program(QORE_SSL_CHECK_OTOOL NAMES otool llvm-otool)
-            set(_otool "${QORE_SSL_CHECK_OTOOL}")
-        endif()
-        if (NOT _otool)
-            message(STATUS "cannot check the OpenSSL libraries used by linked libraries: no otool")
-            return()
-        endif()
-        set(_deps_file "${CMAKE_BINARY_DIR}/CMakeFiles/qore-ssl-consumer-deps.txt")
-        foreach(_consumer IN LISTS _consumers)
-            # the install names, including @rpath ones, are resolved as dyld would, in a script (see
-            # QoreSslConsumerDeps.cmake)
-            execute_process(COMMAND "${CMAKE_COMMAND}" "-DQORE_SSL_CONSUMER=${_consumer}"
-                    "-DQORE_SSL_OTOOL=${_otool}" "-DQORE_SSL_OUTPUT=${_deps_file}"
-                    -P "${_QORE_SSL_CHECK_DIR}/QoreSslConsumerDeps.cmake"
-                RESULT_VARIABLE _rc OUTPUT_VARIABLE _out ERROR_VARIABLE _err)
-            if (NOT _rc EQUAL 0)
-                message(FATAL_ERROR "cannot read the libraries that ${_consumer} loads: ${_err}")
-            endif()
-            file(STRINGS "${_deps_file}" _lines)
-            file(REMOVE "${_deps_file}")
-            foreach(_line IN LISTS _lines)
-                if (_line MATCHES "^resolved (.*)$")
-                    set(_dep "${CMAKE_MATCH_1}")
-                    _qore_ssl_kind("${_dep}" _kind)
-                    if (NOT _kind)
-                        continue()
-                    endif()
-                    get_filename_component(_dep_real "${_dep}" REALPATH)
-                    if (NOT _dep_real STREQUAL _qore_${_kind}_real)
-                        _qore_ssl_consumer_mismatch("${_consumer}" "${_dep_real}" "${_qore_${_kind}_real}")
-                    endif()
-                elseif (_line MATCHES "^unresolved (.*)$")
-                    message(WARNING "cannot verify that ${_consumer} uses Qore's OpenSSL: its dependency "
-                        "${CMAKE_MATCH_1} cannot be resolved")
-                endif()
-            endforeach()
-        endforeach()
-    else()
-        set(_objdump "${CMAKE_OBJDUMP}")
-        if (NOT _objdump)
-            find_program(QORE_SSL_CHECK_OBJDUMP NAMES objdump llvm-objdump)
-            set(_objdump "${QORE_SSL_CHECK_OBJDUMP}")
-        endif()
-        if (NOT _objdump)
-            message(STATUS "cannot check the OpenSSL libraries used by linked libraries: no objdump")
-            return()
-        endif()
-        foreach(_kind ssl crypto)
-            if (_qore_${_kind}_real MATCHES "\\.a$")
-                # a static OpenSSL is in libqore itself
-                set(_qore_${_kind}_soname "")
+        _qore_ssl_consumer_files("${_item}" "${_dirs}" _files)
+        foreach(_file IN LISTS _files)
+            _qore_ssl_kind("${_file}" _own_kind)
+            if (_own_kind)
+                set(_links_openssl TRUE)
             else()
-                _qore_elf_soname("${_objdump}" "${_qore_${_kind}_real}" _qore_${_kind}_soname)
-                if (NOT _qore_${_kind}_soname)
-                    get_filename_component(_qore_${_kind}_soname "${_qore_${_kind}_real}" NAME)
-                endif()
+                list(APPEND _consumers "${_file}")
             endif()
         endforeach()
-        foreach(_consumer IN LISTS _consumers)
-            execute_process(COMMAND "${_objdump}" -p "${_consumer}" OUTPUT_VARIABLE _out ERROR_QUIET
-                RESULT_VARIABLE _rc)
-            if (NOT _rc EQUAL 0)
-                continue()
-            endif()
-            string(REGEX MATCHALL "NEEDED[ \t]+[^ \t\r\n]+" _needed "${_out}")
-            foreach(_entry IN LISTS _needed)
-                string(REGEX REPLACE "^NEEDED[ \t]+" "" _dep "${_entry}")
-                _qore_ssl_kind("${_dep}" _kind)
-                if (NOT _kind)
-                    continue()
-                endif()
-                if (NOT _dep STREQUAL _qore_${_kind}_soname)
-                    if (_qore_${_kind}_soname)
-                        set(_qore_desc "${_qore_${_kind}_real} (${_qore_${_kind}_soname})")
-                    else()
-                        set(_qore_desc "${_qore_${_kind}_real} (a static library linked into libqore)")
-                    endif()
-                    _qore_ssl_consumer_mismatch("${_consumer}" "${_dep}" "${_qore_desc}")
-                endif()
-            endforeach()
-        endforeach()
+    endforeach()
+    if (_consumers)
+        list(REMOVE_DUPLICATES _consumers)
+        _qore_check_ssl_files("module ${target}" ${_links_openssl} ${_consumers})
     endif()
 endfunction()
