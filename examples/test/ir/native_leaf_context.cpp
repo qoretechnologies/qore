@@ -17,6 +17,7 @@ extern "C" void init_NATIVE_LEAF_CONTEXT_qo(QoreProgram*);
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <initializer_list>
 #include <limits>
@@ -616,6 +617,21 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     check_exact(*opaque_replacement);
 }
 
+// Check the immutable key against the supplied argument, not the callee's
+// signature: coercion can put an integer key on a float(float) method.
+static void checkNativeScalarKey(const QoreAOTMethodDispatchCacheEntry& entry, QoreProgram* program) {
+    uintptr_t expected = 0;
+    if (entry.native_scalar_uvb && !std::getenv("QORE_DISABLE_AOT_NATIVE_SCALAR_KEY")
+            && !entry.arg_states[0]
+            && (entry.arg_types[0] == bigIntTypeInfo || entry.arg_types[0] == floatTypeInfo)) {
+        assert(entry.nargs == 1 && entry.native_scalar_program == program);
+        expected = reinterpret_cast<uintptr_t>(program);
+        assert(expected && !(expected & 1));
+        expected |= static_cast<uintptr_t>(entry.arg_types[0] == floatTypeInfo);
+    }
+    assert(entry.native_scalar_match_key == expected);
+}
+
 // An int-backed enum can resolve to the same int(int) method, but its dispatch
 // argument key is not the native helper's integer key. First require a miss with
 // only that enum entry, then admission after a later integer entry is published.
@@ -644,6 +660,8 @@ static void checkMethodArgumentKeys(QoreProgram* program, const char* caller_nam
     const auto* first = cache->entries[0].load(std::memory_order_acquire);
     assert(first && first->nargs == 1 && first->arg_types[0] == enumeration->getTypeInfo()
         && first->arg_states[0] == 0);
+    checkNativeScalarKey(*first, program);
+    assert(!first->native_scalar_match_key);
     assert(!cache->entries[1].load(std::memory_order_acquire));
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
     QoreProgram* caller = qore_get_call_program_context();
@@ -671,6 +689,7 @@ static void checkMethodArgumentKeys(QoreProgram* program, const char* caller_nam
     const auto* second = cache->entries[1].load(std::memory_order_acquire);
     assert(second && second->nargs == 1 && second->arg_types[0] == bigIntTypeInfo
         && second->arg_states[0] == 0 && second->native_scalar_uvb);
+    checkNativeScalarKey(*second, program);
     assert(cache->entries[0].load(std::memory_order_acquire) == first);
     check(true);
     auto* target_ctx = second->native_scalar_uvb->getCachedAOTContext();
@@ -722,6 +741,12 @@ static void checkFloatMethodReceivers(QoreProgram* program, const char* caller_n
     warm(*object, mixed_key ? QoreValue(int64_t{7}) : QoreValue(1.25), mixed_key ? 7.5 : 1.75);
     int slot;
     QoreAOTContext* caller_ctx = getMethodProbeContext(program, caller_name, slot);
+    auto* cache = caller_ctx->call_targets[slot].method_dispatch_cache.load(std::memory_order_acquire);
+    assert(cache);
+    const auto* first = cache->entries[0].load(std::memory_order_acquire);
+    assert(first && first->nargs == 1
+        && first->arg_types[0] == (mixed_key ? bigIntTypeInfo : floatTypeInfo));
+    checkNativeScalarKey(*first, program);
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
     QoreProgram* caller = qore_get_call_program_context();
     QoreObject* old_object = rc->getObject();
@@ -740,6 +765,11 @@ static void checkFloatMethodReceivers(QoreProgram* program, const char* caller_n
     if (mixed_key) {
         call(*object, 1.25, false, -123.0);
         warm(*object, QoreValue(1.25), 1.75);
+        const auto* second = cache->entries[1].load(std::memory_order_acquire);
+        assert(second && second->nargs == 1 && second->arg_types[0] == floatTypeInfo
+            && second->arg_states[0] == 0 && second->native_scalar_uvb);
+        checkNativeScalarKey(*second, program);
+        assert(cache->entries[0].load(std::memory_order_acquire) == first);
     }
     call(*object, 1.25, true, 1.75);
     int64_t wrong_result = -123;

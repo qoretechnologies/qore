@@ -326,6 +326,18 @@ restores the requirement that a companion already exist when the immutable PIC
 entry is built. Prepared admission misses proceed to the ordinary fallback
 without repeating the same native attempt with uncached proofs.
 
+Native scalar PIC admission also records one immutable comparison key for the
+Program and actual canonical argument kind (int or float), provided the argument
+state is zero. The key never substitutes a coerced signature for the supplied
+argument: enum keys retain ordinary checks, and an integer supplied to a floating
+method does not authorize a floating continuation. All live receiver, access,
+epoch, body/readiness, typed companion and debugger guards remain active.
+`QORE_DISABLE_AOT_NATIVE_SCALAR_KEY=1` disables construction of this proof at its
+first eligible admission; missing proofs use the original Program/type/state
+comparisons. This private cache layout change requires separately compiled,
+matching before/after AOT artifacts. A same-binary flag comparison can reuse the
+candidate artifact to isolate the key's effect.
+
 Generic boxed-result integer method calls now use the existing v3/v2 companions
 with explicit `RuntimeConfig` and stack-limit arguments, as floating calls do.
 Prepared integer hits can use the same compact frame and deferred object/class
@@ -1050,3 +1062,5 @@ The shortcut updates the actual runtime slot; it does not introduce a separate
 unobservable local cache. It does not change the interpreter's assignment path.
 
 See [AOT scalar-store measurements](RESULTS.md#aot-scalar-local-replacement-2026-10-11) and [verified evidence/audit](results-aot-scalar-local-store-macos-arm64.json).
+
+See [native scalar-key measurements](RESULTS.md#aot-native-scalar-dispatch-key-2026-10-11) and [verified evidence/audit](results-native-scalar-key-macos-arm64.json).

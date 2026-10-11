@@ -193,6 +193,12 @@ struct QoreAOTMethodDispatchCacheEntry {
     //! Dispatch must also find the matching typed companion in the live, exact-body AOT context.
     const UserVariantBase* native_scalar_uvb = nullptr;
     QoreProgram* native_scalar_program = nullptr;
+    //! Program address plus canonical argument kind, proved before PIC publication.
+    //! Low bit 0/1 means int/float; alignment is checked by the key builder.
+    //! Nonzero proves unary native admission and zero argument state. This is
+    //! an integer comparison key, never a tagged QoreProgram pointer to dereference.
+    //! Zero retains the ordinary Program/type/state checks (including enum keys).
+    uintptr_t native_scalar_match_key = 0;
     const qore_class_private* native_scalar_class_ctx = nullptr;
     //! Defining-class context normalized for this exact receiver's committed hierarchy.
     //! Used only for nested dispatch lookup; cold frame materialization needs the original context above.

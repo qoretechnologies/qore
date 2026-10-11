@@ -163,6 +163,7 @@ class NativeLeafContextTest inherits QUnit::Test {
                         "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 ",
                         "QORE_DISABLE_AOT_FORWARD_CLASS_CONTEXT_CACHE=1 ",
                         "QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_SCALAR_KEY=1 ",
                         "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ")) {
                     output = backquote(env + runtime + quote(executable) + (inline_callback ? " inline" : " eager")
                         + (inline_method ? " inline" : " eager")

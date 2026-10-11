@@ -10080,3 +10080,60 @@ Next AOT-first steps:
 4. Move immutable explicit-type-instantiation absence checks out of forwarding's per-call AST lookup only after binding/body identity and publication are proved. Resolve the documented baseline local-reflection defects before expanding frame or local-state elision.
 
 [Measurements, identities, baseline diagnostics, reproduction and all 62 audit items](results-aot-scalar-local-store-macos-arm64.json).
+
+
+## AOT native scalar dispatch key (2026-10-11)
+
+Baseline: merged 60c442fa5. Prepare one immutable integer comparison key from the same-Program witness and actual canonical int/float argument kind when scalar argument state is zero. Test the expected hit first; absent proofs keep the original comparisons. The encoded key is never dereferenced. All live receiver, access, Program/options, epoch, body/readiness, companion and debugger guards remain, as do logical frames and context restoration.
+
+The added private cache word changes the AOT runtime identity, so old/new comparisons use separately compiled matching artifacts. The runtime-only flag control reuses an identical candidate executable and library. Count 4096, three warmups, five 500 ms windows per fork, randomized scheduling; three forks in the Java comparison and five in the independent repeat and flag control. No task build/test/profile/source inspection overlapped timing. Values are medians of fork means in ns/element, not isolated call latency.
+
+|!Workload|!Before|!After|!Time reduction|!Java JIT|!After / Java
+|dynamic_int_result_call|10.419742|10.084379|3.219%|3.077980|3.276x
+|dynamic_float_result_call|10.986279|10.722428|2.402%|3.453311|3.105x
+|dynamic_int_result_fallback|21.655499|20.867683|3.638%|3.009173|6.935x
+|boxed_float_method_call|43.893758|43.162071|1.667%|2.548645|16.935x
+|indirect_int_result|6.826783|6.969095|-2.085%|1.880515|3.706x
+|indirect_float_result|8.712189|8.807298|-1.092%|2.778745|3.170x
+|method_call|1.477347|1.472625|0.320%|0.890822|1.653x
+|monomorphic_call|3.412274|3.393742|0.543%|1.650808|2.056x
+
+Same-binary compact-key control:
+
+|!Workload|!Disabled|!Enabled|!Time reduction
+|dynamic_int_result_call|10.616087|10.162262|4.275%
+|dynamic_float_result_call|11.417362|10.964749|3.964%
+|dynamic_int_result_fallback|22.242736|21.257711|4.429%
+|boxed_float_method_call|44.341582|44.355960|-0.032%
+
+Independent five-fork old/new repeat:
+
+|!Workload|!Before|!After|!Time reduction
+|dynamic_int_result_call|10.233206|9.975438|2.519%
+|dynamic_float_result_call|10.879677|10.802478|0.710%
+|dynamic_int_result_fallback|21.808641|20.957433|3.903%
+|boxed_float_method_call|44.570877|43.670599|2.020%
+|indirect_int_result|6.903705|6.881290|0.325%
+|indirect_float_result|8.762885|8.728638|0.391%
+
+The retained hit-first implementation reduces dynamic integer-method workload time 3.219% in the three-fork comparison and 2.519% in the independent five-fork repeat. Forwarding improves 3.638% and 3.903%, with separated observed fork ranges in both batches. Integer ranges overlap in the retained screen and narrowly in the repeat, so these percentages describe observed medians, not confidence bounds. Floating methods improve 2.402% in the screen but only 0.710% in the repeat with overlapping ranges; no reliable independent floating speedup is claimed. Same-binary compact-key controls reduce int, float and forwarding time 4.275%, 3.964% and 4.429%, with separated ranges. Those controls include the new disabled-proof fallback branch/layout and must not be substituted for net gains over the original runtime.
+
+Integer and floating callback controls are 2.085% and 1.092% slower in the retained screen, but 0.325% and 0.391% faster in the independent repeat, with overlapping ranges. The adverse direction does not repeat; it is retained rather than discarded or called impossible. Boxed floating recurrence improves 1.667% and 2.020% versus the old build, but its same-binary key control is effectively unchanged (0.032% slower). Its gain is not attributed to compact-key lookup; code-layout and OS effects remain possible. Small direct/monomorphic differences are controls, not new call-convention gains.
+
+The superseded presence-first prototype improved integer and forwarding screen medians 1.563% and 1.739%, but floating calls were 0.532% slower. Its same-binary controls improved the three targets 3.870%, 4.634% and 2.986%. Disassembly showed a separate key-presence branch on an ordinary hit. The retained source tests the matching key first, preserves null-Program and fallback behavior, and is independently rebuilt and tested. All earlier raw results and implementation patches remain available.
+
+The Java comparison still has AOT native integer/floating workloads at about 3.28x/3.10x Java, forwarding at 6.93x and boxed recurrence at 16.94x. These are whole workloads in ns/element, not isolated call latency or general parity. The change does not eliminate Program/receiver checks, logical frames, stack observation or ownership semantics, and it does not repair the prior stage's baseline local-reflection defects.
+
+All six unique measurement batches are retained: 302 jobs / 1510 windows, including the superseded presence-first prototype. Release/debug each pass 104 selected files and seven exception/stack fixtures; the native driver has 312 assertions, the debug native suite has 205 checks, the harness has 15 tests, and each reference mode has 495 checks. No full-suite, sanitizer or cross-platform claim.
+
+This is AOT runtime-dispatch work; it makes no new IR/JIT timing claim. It adds one machine word per retained PIC entry, not a per-call allocation. Known baseline local-reflection defects from the preceding stage remain unresolved; this change does not broaden frame/local elision.
+
+Next AOT-first steps:
+
+1. Commit this validated and audited stage, then fetch origin and merge origin/develop; inspect and validate any merged runtime or compiler changes before freezing the next baseline. Do not push.
+2. Prototype guarded immediate boxed-int/boxed-float arguments for AOT name-dispatched unary calls, reusing the existing typed native helpers and same-Program/PIC/body/debugger proofs. Guard actual representation without coercion; preserve owned/enum/weak/reference/missing and wrong-signature fallback, checked return behavior, argument cleanup, exceptions and logical frames.
+3. Verify actual native hits and compiler selection for the boxed-argument route, including ordinary and invoke/EH edges, source stripping and split compilation. Measure the boxed recurrence plus existing native methods, callbacks and fallback-heavy calls against a fresh matched AOT baseline and a compiler-disabled control before retaining the change.
+4. Separately evaluate a compile/bind-time absence proof for forwarding-call explicit type instantiation, covering all context loaders and immutable publication before removing any per-call AST query. Keep live Program/options/epoch/body/receiver checks.
+5. If the remaining boxed profile still warrants it, move immutable ordinary-auto declaration eligibility to bind time and use explicit RuntimeConfig for the real local-slot lookup. Preserve live slot, ownership, alias and reflection checks; do not add a private shadow local. Resolve the known baseline visibility defects before broader frame/local elision.
+
+[Measurements, identities, implementation variants, reproduction and all 62 audit items](results-native-scalar-key-macos-arm64.json).

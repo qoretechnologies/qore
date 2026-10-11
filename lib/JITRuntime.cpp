@@ -17414,6 +17414,31 @@ private:
 };
 static_assert(sizeof(QoreCompactNativeMethodStackLocation) < sizeof(QoreNativeMethodStackLocation<true>));
 
+// Program identity and the actual canonical argument kind share one immutable
+// comparison word. Never recover or dereference a pointer from this key; frame
+// metadata keeps its ordinary, unmodified native_scalar_program pointer.
+static QORE_ALWAYS_INLINE uintptr_t qore_rt_aot_native_scalar_key(const QoreProgram* pgm, bool floating) {
+    static_assert(alignof(QoreProgram) >= 2 && !(alignof(QoreProgram) & 1));
+    uintptr_t address = reinterpret_cast<uintptr_t>(pgm);
+    assert(!(address & 1));
+    return address | static_cast<uintptr_t>(floating);
+}
+
+static QORE_ALWAYS_INLINE bool qore_rt_match_aot_native_scalar_key(
+        const QoreAOTMethodDispatchCacheEntry& entry, const QoreProgram* pgm, bool floating) {
+    // Test the ordinary hit first. The native callers already prove pgm is
+    // non-null; keep the explicit guard for generic callers so a missing proof
+    // cannot match a null integer Program key.
+    if (pgm && entry.native_scalar_match_key == qore_rt_aot_native_scalar_key(pgm, floating)) {
+        return true;
+    }
+    // Unsupported argument keys and the disabled-proof control retain exactly
+    // the original checks. In particular, an int-backed enum is not an int key.
+    return !entry.native_scalar_match_key && entry.native_scalar_program == pgm
+        && entry.arg_types[0] == (floating ? floatTypeInfo : bigIntTypeInfo)
+        && entry.arg_states[0] == 0;
+}
+
 // Keep scalar dispatch in its caller as both name-based and pre-resolved AOT
 // sites use it. Outlining this hot path adds overhead to existing boxed calls.
 template <bool CachedAdmission, typename Scalar>
@@ -17767,9 +17792,8 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
             QoreAOTContext* receiver_ctx = nullptr;
             static const bool receiver_enabled = !std::getenv("QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY");
             if (receiver_enabled && native_cache && native_cache->native_scalar_uvb == uvb
-                    && native_cache->native_scalar_program == caller_pgm
-                    && caller_pgm == exec_pgm && caller_pgm == o->getProgram()
-                    && native_cache->arg_types[0] == bigIntTypeInfo && native_cache->arg_states[0] == 0) {
+                    && qore_rt_match_aot_native_scalar_key(*native_cache, caller_pgm, false)
+                    && caller_pgm == exec_pgm && caller_pgm == o->getProgram()) {
                 receiver_ctx = uvb->getCachedAOTContext();
                 if (receiver_ctx && uvb->hasCachedAOT() && receiver_ctx->pgm == caller_pgm
                         && receiver_ctx->pc_loc_fn == uvb->getCachedAOTFunction()
@@ -18463,9 +18487,8 @@ static bool try_dispatch_forwarded_int_leaf_native(QoreObject* object,
         const auto* candidate = cache_slot.load(std::memory_order_acquire);
         if (candidate && candidate->receiver_class == receiver_class
                 && candidate->receiver_type_info == receiver_type && candidate->class_ctx == class_ctx
-                && candidate->native_scalar_program == pgm && candidate->parse_options == po
-                && candidate->dispatch_epoch == epoch && candidate->arg_types[0] == bigIntTypeInfo
-                && candidate->arg_states[0] == 0
+                && qore_rt_match_aot_native_scalar_key(*candidate, pgm, false) && candidate->parse_options == po
+                && candidate->dispatch_epoch == epoch
                 && (!resolved || (candidate->method == target.method && candidate->variant == target.variant))) {
             inner = candidate;
             break;
@@ -18593,10 +18616,8 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
         const auto* candidate = cache_slot.load(std::memory_order_acquire);
         if (candidate && candidate->receiver_class == receiver_class
                 && candidate->receiver_type_info == receiver_type && candidate->class_ctx == class_ctx
-                && candidate->native_scalar_program == pgm
-                && candidate->parse_options == parse_options && candidate->dispatch_epoch == epoch
-                && candidate->arg_types[0] == (floating ? floatTypeInfo : bigIntTypeInfo)
-                && candidate->arg_states[0] == 0) {
+                && qore_rt_match_aot_native_scalar_key(*candidate, pgm, floating)
+                && candidate->parse_options == parse_options && candidate->dispatch_epoch == epoch) {
             cached = candidate;
             break;
         }
@@ -18604,8 +18625,8 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
     if (!cached) {
         return 0;
     }
-    // A non-null native_scalar_program also proves unary admission. Argument
-    // type/state, access context and dispatch epoch still match live above.
+    // The compact key or original fields prove the same unary Program/type/state
+    // match. Access context and dispatch epoch still match live above.
     assert(cached->native_scalar_uvb && cached->nargs == 1
         && cached->caller_program == pgm && cached->object_program == pgm);
     const UserVariantBase* uvb = cached->native_scalar_uvb;
@@ -18772,6 +18793,17 @@ static void qore_rt_prepare_aot_native_method_admission(QoreAOTMethodDispatchCac
     // with both stored Program keys; the unary continuation relies on this.
     entry.native_scalar_uvb = uvb;
     entry.native_scalar_program = pgm;
+    // Use the supplied argument key, not scalar_type: coercion may resolve an
+    // int argument to a float signature, or an enum to int. A native helper must
+    // still find its matching typed companion in the exact live body below.
+    if (!entry.arg_states[0]
+            && (entry.arg_types[0] == bigIntTypeInfo || entry.arg_types[0] == floatTypeInfo)) {
+        static const bool compact_key = !std::getenv("QORE_DISABLE_AOT_NATIVE_SCALAR_KEY");
+        if (compact_key) {
+            entry.native_scalar_match_key = qore_rt_aot_native_scalar_key(pgm,
+                entry.arg_types[0] == floatTypeInfo);
+        }
+    }
     entry.native_scalar_class_ctx = variant->getClassPriv();
     // This normalization depends only on the resolved defining class and the
     // exact receiver hierarchy. C++ base additions invalidate the dispatch
