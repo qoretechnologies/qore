@@ -17463,17 +17463,26 @@ static QORE_ALWAYS_INLINE bool try_dispatch_native_scalar_method(QoreObject* obj
     if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
         return true;
     }
-    // Float callers without a native result assignment can still use the
-    // explicit-context companions. A v1-only object remains supported, and the
-    // existing integer generic-entry convention is unchanged.
-    QoreAOTContext::NativeFloatUnaryMethodEntryV3 inline_entry = nullptr;
-    QoreAOTContext::NativeFloatUnaryMethodEntryV2 explicit_entry = nullptr;
-    if constexpr (floating) {
-        static const bool continuation = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION");
-        if (continuation) {
+    // Boxed-result callers can still pass RuntimeConfig and the stack limit
+    // directly to a matching scalar companion. Keep v1-only bodies supported.
+    using InlineEntry = std::conditional_t<floating, QoreAOTContext::NativeFloatUnaryMethodEntryV3,
+        QoreAOTContext::NativeIntUnaryMethodEntryV3>;
+    using ExplicitEntry = std::conditional_t<floating, QoreAOTContext::NativeFloatUnaryMethodEntryV2,
+        QoreAOTContext::NativeIntUnaryMethodEntryV2>;
+    InlineEntry inline_entry = nullptr;
+    ExplicitEntry explicit_entry = nullptr;
+    static const bool continuation = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION")
+        && (floating || !std::getenv("QORE_DISABLE_AOT_GENERIC_NATIVE_INT_CONTINUATION"));
+    if (continuation) {
+        if constexpr (floating) {
             inline_entry = ctx->native_float_unary_method_entry_v3.load(std::memory_order_acquire);
             if (!inline_entry) {
                 explicit_entry = ctx->native_float_unary_method_entry_v2.load(std::memory_order_acquire);
+            }
+        } else {
+            inline_entry = ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire);
+            if (!inline_entry) {
+                explicit_entry = ctx->native_int_unary_method_entry_v2.load(std::memory_order_acquire);
             }
         }
     }
@@ -17481,13 +17490,9 @@ static QORE_ALWAYS_INLINE bool try_dispatch_native_scalar_method(QoreObject* obj
     auto invoke = [&]() __attribute__((always_inline)) {
         if (!*xsink) {
             try {
-                if constexpr (floating) {
-                    value = QoreValue(inline_entry
-                        ? inline_entry(arg, ctx, xsink, &rc, qore_rt_get_stack_limit_v1(&rc))
-                        : explicit_entry ? explicit_entry(arg, ctx, xsink, &rc) : entry(arg, ctx, xsink));
-                } else {
-                    value = QoreValue(entry(arg, ctx, xsink));
-                }
+                value = QoreValue(inline_entry
+                    ? inline_entry(arg, ctx, xsink, &rc, qore_rt_get_stack_limit_v1(&rc))
+                    : explicit_entry ? explicit_entry(arg, ctx, xsink, &rc) : entry(arg, ctx, xsink));
             } catch (const QoreJITException&) {
                 // Stack overflow already belongs to the sink; RAII restores context.
             }
@@ -17501,7 +17506,7 @@ static QORE_ALWAYS_INLINE bool try_dispatch_native_scalar_method(QoreObject* obj
         }
         return true;
     };
-    if constexpr (floating && CachedAdmission) {
+    if constexpr (CachedAdmission) {
         static const bool defer_context = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
         if (defer_context && (inline_entry || explicit_entry)) {
             RuntimeConfigNativeMethodContext context(rc, object, cache);
@@ -17591,7 +17596,9 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         return true;
     }
     const QoreTypeInfo* receiver_type_info = qore_get_object_receiver_type_info(o);
-    if (native_cache && (!receiver_type_info
+    // Both PIC callers already tried the prepared native admission. A live
+    // body/context miss cannot succeed by repeating it with uncached proofs.
+    if (native_cache && !native_cache->native_scalar_uvb && (!receiver_type_info
             || !QoreTypeInfo::getParameterizedClassType(receiver_type_info))
             && try_dispatch_native_method<false>(o, *native_cache, uvb,
                 args, arg_cleanups, nargs, xsink, result)) {
@@ -18518,21 +18525,26 @@ static void qore_rt_prepare_aot_native_method_admission(QoreAOTMethodDispatchCac
             || (floating && !float_enabled)) {
         return;
     }
-    QoreAOTContext* ctx = uvb->getCachedAOTContext();
-    if (!ctx || ctx->uses_self || ctx->uses_argv) {
-        return;
-    }
-    if (floating ? !ctx->native_float_unary_method_entry.load(std::memory_order_acquire)
-            : !ctx->native_int_unary_method_entry.load(std::memory_order_acquire)) {
-        return;
+    static const bool early_admission = !std::getenv("QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION");
+    if (!early_admission) {
+        QoreAOTContext* ctx = uvb->getCachedAOTContext();
+        if (!ctx || ctx->uses_self || ctx->uses_argv) {
+            return;
+        }
+        if (floating ? !ctx->native_float_unary_method_entry.load(std::memory_order_acquire)
+                : !ctx->native_int_unary_method_entry.load(std::memory_order_acquire)) {
+            return;
+        }
     }
     QoreProgram* pgm = qore_rt_method_execution_program(entry.method, uvb);
     if (!pgm || pgm != entry.caller_program || pgm != entry.object_program) {
         return;
     }
     // These facts belong to the exact resolved variant and full PIC key. Entry
-    // identity/readiness remain live. A cache populated before publication keeps
-    // the ordinary path, which can discover the companion after debugger detach.
+    // identity/readiness remain live. In particular, do not make these immutable
+    // proofs depend on lazy context/companion publication: a cold resolved call
+    // can populate its PIC before the callee has ever run. Context-using bodies
+    // and bodies without a companion still fail the live native-entry guards.
     // Publish the Program witness only after proving nargs == 1 and equality
     // with both stored Program keys; the unary continuation relies on this.
     entry.native_scalar_uvb = uvb;

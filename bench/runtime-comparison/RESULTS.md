@@ -9359,3 +9359,109 @@ qualify and audit before another commit. The current 3–4x native-dynamic and
 roughly 69x generic nested gaps show why complete call setup remains the priority.
 See the [62-item audit](FOLLOWUP-AUDIT.md#resolved-aot-method-entry-audit-2026-10-10)
 (15 Pass, 47 N/A, 0 Fail).
+
+## Early native admission and explicit integer method entry (2026-10-11)
+
+After integrating origin/develop through `f9aab72d3` (merge `5b65a7af1`),
+debugger inspection found that a cold resolved method can populate its dispatch
+cache before its callee AOT context exists. The immutable entry then lacks native
+admission even after the companion becomes available. Cache only the immutable
+signature/class/same-Program proofs early; continue checking receiver validity,
+body identity/readiness, companion availability, context use, debugger and stack
+state on every call. Avoid retrying the same prepared admission after a miss.
+
+Generic boxed-result integer calls now also use the existing v3/v2 companions
+with explicit `RuntimeConfig` and stack-limit arguments, as float calls already
+did. Prepared entries can use the existing deferred method context and compact
+frame; v1-only and uncached entries retain eager context. This is a runtime-only
+change: no compiler, exported ABI, header layout or runtime identity change.
+`QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION=1` and
+`QORE_DISABLE_AOT_GENERIC_NATIVE_INT_CONTINUATION=1` control the two changes.
+
+### Final comparison with Java
+
+Three randomized forks per runtime, three warmups and five 500 ms measurement
+windows per fork, count 4096; Java is Temurin 25.0.2/JMH. Values below are medians
+of fork means for complete workloads, not isolated call latency. Startup is
+excluded; observed fork ranges are descriptive, not confidence intervals.
+
+|!Workload|!Baseline Qore ns/element|!Qore ns/element|!Java ns/element|!Qore/Java
+|Nested context-using call|212.51|200.16|3.02|66.21x
+|Dynamic integer result|10.15|10.20|3.07|3.32x
+|Dynamic float result|11.53|11.75|3.48|3.38x
+|Boxed float method result|60.96|61.65|2.56|24.08x
+|Integer callback result|6.88|6.94|1.89|3.68x
+|Float callback result|8.90|8.81|2.78|3.17x
+|Polymorphic integer expression|10.19|10.20|2.55|4.00x
+|Polymorphic float expression|10.27|10.29|2.55|4.04x
+|Final-class method|1.53|1.54|0.89|1.73x
+|Monomorphic virtual method|3.44|3.40|1.67|2.03x
+|Arithmetic control|1.48|1.47|0.89|1.66x
+
+The nested target improves **5.81%** in this run, **5.98%** in a five-fork
+identical-executable/library control with both new flags disabled on the old
+side, and **4.56%** in a five-fork same-executable/different-library repeat.
+All three have separated observed ranges. The earlier explicit-entry screen and
+repeat improve 4.45% and 4.09%. This is a repeatable incremental gain, not Java
+parity or a general speedup.
+
+The main float-result control is 1.89% slower with separated ranges. Its focused
+repeat is 0.71% faster with overlap, and the identical-binary control is 0.47%
+slower with overlap: the slowdown did not repeat. Boxed-float main is 1.14%
+slower with overlap; control/repeat medians improve 0.21/0.85%, also overlapping.
+Arithmetic repeat is 1.78% slower with overlap. Small adverse integer/callback/
+polymorphic medians remain in the evidence; no proven zero-regression claim.
+
+### Development, qualification and costs
+
+The admission-only prototype produced a smaller nested gain, with a 1.85%
+boxed slowdown in its control (separated ranges) and 2.01% in its repeat
+(overlap). This led to the explicit integer entry refinement. Its first screen
+showed 2.32% callback and 1.39% arithmetic slowdowns with separated ranges;
+the callback repeat reversed and arithmetic ranges overlapped. All attempts,
+including the pre-change run, remain in the evidence.
+
+Initial qualification stopped at an obsolete native-leaf fixture assertion
+that required late native admission to remain absent. The fixture now checks
+immutable admission independently of live body eligibility, retains its
+pointer-immutability check, and exercises the old behavior with the early-admission
+flag disabled. Added generic-integer tests assert context restoration, published
+overflow diagnostics, null/full stack guards and caller-local ownership.
+Release/debug qualification then passed 95 selected files each: 377/384 cases,
+16940/17039 assertions, 12 standalone files each, one known release skip and
+no debug skips. The resolved-call fixture passes 232 assertions in baseline and
+candidate; the strengthened leaf fixture passes 240 in both builds. All 146
+native debug checks, 15 harness tests and 495 reference checks in each of Qore
+IR/AOT and interpreted/JIT Java pass.
+
+All 129 normalized non-bootstrap LLVM bodies are unchanged. Arm64 generic/name/
+resolved helper instruction counts grow from 1846/1690/1563 to 1901/1866/1767.
+Generic frame size stays at 592 bytes; name/resolved frames shrink from 608 to
+592 bytes. These are prologue sizes, not peak-stack measurements. No cold-call,
+saturation, full-suite, sanitizer or cross-platform improvement is claimed.
+
+The [evidence](results-native-method-admission-macos-arm64.json) retains all
+**397 jobs / 1985 measurement windows**, raw sample checksums, frozen identities,
+qualification hashes, rejected phases, debugger observations, reproduction
+scripts and implementation patch. No task builds, tests, profiles or evidence
+work overlapped timing. The
+[62-item audit](FOLLOWUP-AUDIT.md#early-native-method-admission-audit-2026-10-11)
+reports 18 Pass, 44 N/A and 0 Fail.
+
+### Remaining costs and next plan
+
+A separate ten-second, 1 ms profile still shows name dispatch (553 top-of-stack
+samples), type classification (487), generic dispatch (337), TLS lookup (323),
+discard (304), cache matching (228) and local setup (220). Counts include a
+sleeping signal thread and are qualitative, not additive CPU percentages.
+The release debugger trace confirms the nested callee now reaches its v3 entry
+with nonnull explicit context/stack-limit arguments; its outer context-using
+method still needs ordinary self/parameter setup, frame handling and filters.
+
+Next inspect direct scalar-return consumers: determine whether nested exact
+int/float calls can use native-result continuations instead of generic boxed
+dispatch without changing return/exception semantics. Then design an explicit
+receiver/RuntimeConfig entry for a conservative subset of context-using
+same-Program methods. Measure against this qualified runtime, retain live
+body/debugger/Program/stack checks and ownership/observability contracts, and
+qualify/audit each improvement separately.

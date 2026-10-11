@@ -318,6 +318,24 @@ follow-up, `--reuse-aot-for-baseline` is valid when both saved and current runti
 support `qore_rt_bind_method_int_unary_v1`; it isolates the runtime change with an
 identical executable.
 
+Native scalar admission facts can now be prepared before a callee's lazy AOT
+context exists. They describe only the resolved signature and Program/class
+identity; the live body, companion, self/argv, debugger and receiver checks still
+decide whether a call can execute. `QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION=1`
+restores the requirement that a companion already exist when the immutable PIC
+entry is built. Prepared admission misses proceed to the ordinary fallback
+without repeating the same native attempt with uncached proofs.
+
+Generic boxed-result integer method calls now use the existing v3/v2 companions
+with explicit `RuntimeConfig` and stack-limit arguments, as floating calls do.
+Prepared integer hits can use the same compact frame and deferred object/class
+context; v1-only or uncached entries retain eager context. Set
+`QORE_DISABLE_AOT_GENERIC_NATIVE_INT_CONTINUATION=1` to retain the integer v1
+entry on this route. Both switches are runtime-only: there is no exported ABI,
+header-layout or runtime-identity change, so compatible before/after libraries
+can use an identical AOT executable. Context-using outer method bodies still
+require ordinary parameter and self setup.
+
 Native method object/class save/restore uses the already-acquired live
 `RuntimeConfig`; proven pure method-v2/v3 continuations defer that work until
 overflow materialization, while ordinary native methods retain eager setup.
@@ -400,6 +418,13 @@ references, unassigned captures, unsupported bodies, foreign Programs and attach
 debuggers retain ordinary fallback. Disabled or absent native bindings are
 rejected before unnecessary metadata/TLS acquisition. Presence flags are sampled
 once at runtime, not toggled during measurement.
+
+The early-native-admission and explicit integer-entry measurements are in
+[RESULTS](RESULTS.md#early-native-admission-and-explicit-integer-method-entry-2026-10-11)
+and [the full evidence](results-native-method-admission-macos-arm64.json).
+The nested context-using workload improves roughly 4–6% across repeated runs;
+its remaining cost is still about 66x the retained Java workload. This does not
+establish a general call speedup or Java parity.
 
 ## Workloads and units
 

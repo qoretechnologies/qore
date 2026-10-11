@@ -764,9 +764,9 @@ static void checkGenericFloatMethods(QoreProgram* program, bool inline_method, b
     assert(!xsink);
     warm_args->push(QoreValue(1.25), &xsink);
     assert(!xsink);
-    // Publish a real cache entry while native admission is unavailable. Once
-    // restored, generic dispatch must discover the live companion without
-    // changing the immutable cache entry (also needed after debugger detach).
+    // Publish a real cache entry while the live body rejects native dispatch.
+    // Early admission records only immutable signature/Program proofs; after
+    // restoration it must discover the companion without changing the entry.
     ctx->uses_self = late;
     ValueHolder warm(program->callFunction(caller_name, *warm_args, &xsink), &xsink);
     ctx->uses_self = false;
@@ -776,7 +776,8 @@ static void checkGenericFloatMethods(QoreProgram* program, bool inline_method, b
     const auto* cache = caller_ctx->call_targets[slot].method_dispatch_cache.load(std::memory_order_acquire);
     assert(cache);
     const auto* admission = cache->entries[0].load(std::memory_order_acquire);
-    assert(admission && static_cast<bool>(admission->native_scalar_uvb) == !late);
+    const bool cached_admission = !late || !std::getenv("QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION");
+    assert(admission && static_cast<bool>(admission->native_scalar_uvb) == cached_admission);
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
     QoreObject* old_object = rc->getObject();
     const auto* old_class = rc->getClass();
@@ -794,7 +795,7 @@ static void checkGenericFloatMethods(QoreProgram* program, bool inline_method, b
         assert(rc->getObject() == old_object && rc->getClass() == old_class);
         return result;
     };
-    bool eager = late || std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
+    bool eager = !cached_admission || std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
     for (unsigned version = 1; version <= (inline_method ? 3u : 2u); ++version) {
         GenericFloatBindingProbe probe(ctx, object->get<QoreObject>(), version, eager);
         ValueHolder result(call(*object, QoreValue(1.25)), &xsink);
@@ -836,7 +837,7 @@ static void checkGenericFloatMethods(QoreProgram* program, bool inline_method, b
             }
         }
     }
-    assert(admission->native_scalar_uvb == (late ? nullptr : uvb));
+    assert(admission->native_scalar_uvb == (cached_admission ? uvb : nullptr));
     ValueHolder identity(program->callFunction("makeFloatIdentityProbe", nullptr, &xsink), &xsink);
     assert(!xsink);
     for (double value : {0.0, -0.0, 1.25, -3.0e307, -6.0e307,
@@ -895,6 +896,8 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
     assert((ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire) != nullptr) == inline_method);
     MethodStackProbe force_null(ctx, null_view);
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    QoreObject* saved_object = rc->getObject();
+    const auto* saved_class = rc->getClass();
     QoreProgram* caller = qore_get_call_program_context();
     size_t* limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
 #if defined(__aarch64__) || defined(__x86_64__)
@@ -911,6 +914,7 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
             *limit = saved_limit;
             ValueHolder result(value, &xsink);
             assert(qore_get_call_program_context() == caller);
+            assert(rc->getObject() == saved_object && rc->getClass() == saved_class);
             if (xsink) {
                 assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
                 ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
@@ -948,6 +952,7 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
 #endif
     ValueHolder result(program->callFunction(caller_name, *args, &xsink), &xsink);
     assert(!xsink && result->getAsBigInt() == 24 && qore_get_call_program_context() == caller);
+    assert(rc->getObject() == saved_object && rc->getClass() == saved_class);
     if (inline_method && !null_view) {
         checkMethod(program, caller_name, inline_method, true);
         if (limit) {
@@ -956,6 +961,7 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
                     MethodStackProbe forced(ctx, forced_null, true, object->get<QoreObject>());
                     ValueHolder failed(program->callFunction(caller_name, *args, &xsink), &xsink);
                     assert(xsink && qore_get_call_program_context() == caller);
+                    assert(rc->getObject() == saved_object && rc->getClass() == saved_class);
                     assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
                     ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
                     assert(!xsink);
@@ -977,6 +983,7 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
                 }
                 ValueHolder recovered(program->callFunction(caller_name, *args, &xsink), &xsink);
                 assert(!xsink && recovered->getAsBigInt() == 24 && qore_get_call_program_context() == caller);
+                assert(rc->getObject() == saved_object && rc->getClass() == saved_class);
             }
         }
     }
@@ -989,6 +996,7 @@ static QoreValue paddedMethodSweep(const void* ptr, const QoreListNode*, Runtime
     const auto& invocation = *static_cast<const LeafInvocation*>(ptr);
     checkMethod(invocation.program, "methodProbe", invocation.inline_method);
     checkMethod(invocation.program, "optionalMethodProbe", invocation.inline_method);
+    checkMethod(invocation.program, "genericIntMethodProbe", invocation.inline_method);
     return QoreValue(int64_t{24});
 }
 

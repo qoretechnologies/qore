@@ -46,6 +46,11 @@ class ResolvedMethodEntryTest inherits QUnit::Test {
                 assertRegex("call void @qore_rt_bind_method_float_unary_v1[^\n]*ResolvedEntry", ir);
                 foreach string runtime in (("", "QORE_DISABLE_AOT_RESOLVED_METHOD_CACHE=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
+                        "QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION=1 ",
+                        "QORE_DISABLE_AOT_GENERIC_NATIVE_INT_CONTINUATION=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
                         "QORE_DISABLE_AOT_GENERIC_METHOD_ADMISSION_CACHE=1 ",
                         "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
                         "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY=1 ",

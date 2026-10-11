@@ -49,6 +49,7 @@ class NativeLeafContextTest inherits QUnit::Test {
             "    NativeLeafMethodBase receiver = input; return receiver.next(value);\n}\n"
             "int sub optionalMethodArgumentProbe(*NativeLeafMethodBase receiver, auto value) {\n"
             "    return receiver.next(value);\n}\n"
+            "auto sub genericIntMethodProbe(auto receiver, auto value) { return receiver.next(value); }\n"
             "class NativeLeafFloatMethodBase { float next(float value) { return value + 7.0; } }\n"
             "class NativeLeafFloatMethodDerived inherits NativeLeafFloatMethodBase {\n"
             "    private { int leafContextMarker = 927; }\n"
@@ -130,7 +131,7 @@ class NativeLeafContextTest inherits QUnit::Test {
                     assertRegex("call i32 @qore_rt_try_method_float_unary_v1", body[0] ?? "",
                         name + " must exercise the float continuation");
                 }
-                foreach string name in (("genericFloatMethodProbe", "genericFloatLateProbe")) {
+                foreach string name in (("genericIntMethodProbe", "genericFloatMethodProbe", "genericFloatLateProbe")) {
                     *list<*string> body = regex_extract(output,
                         "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
                     assertTrue(!!body, name + " normal LLVM entry");
@@ -146,6 +147,7 @@ class NativeLeafContextTest inherits QUnit::Test {
                     + (map quote($1), objects).join(" ") + " 2>&1", \status);
                 assertEq(0, status, output);
                 foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION=1 ",
                         "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ")) {
                     output = backquote(env + runtime + quote(executable) + (inline_callback ? " inline" : " eager")
                         + (inline_method ? " inline" : " eager")
