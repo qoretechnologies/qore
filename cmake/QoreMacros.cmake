@@ -1976,6 +1976,16 @@ ENDMACRO (QORE_BINARY_MODULE_INTERN)
 
 MACRO (QORE_BINARY_MODULE_QORE _module_name _version _install_suffix)
     QORE_BINARY_MODULE_INTERN2(${_module_name} ${_version} "${_install_suffix}" 1 ${ARGN})
+    # a module of Qore must load only Qore's OpenSSL if it links OpenSSL itself (see QoreCheckSslConsumers.cmake);
+    # checked at the end of the module's directory, where its imported library targets are visible, after all its
+    # libraries are linked
+    if (COMMAND qore_check_module_ssl_consumers)
+        if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
+            cmake_language(DEFER CALL qore_check_module_ssl_consumers ${_module_name})
+        else()
+            qore_check_module_ssl_consumers(${_module_name})
+        endif()
+    endif()
 ENDMACRO (QORE_BINARY_MODULE_QORE)
 
 # macro for external binary modules; supports complex documentation generation with QORE_EXTERNAL_USER_MODULE as well

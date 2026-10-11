@@ -256,7 +256,9 @@ endfunction()
 # qore_check_module_ssl_consumers(<target>)
 #
 # A module that links OpenSSL itself must load only Qore's OpenSSL; another OpenSSL loaded by the libraries of a
-# module that does not link OpenSSL is reported as information.
+# module that does not link OpenSSL is reported as information.  Call it in the module's directory, after its
+# libraries are linked: imported library targets are visible only there (QORE_BINARY_MODULE_QORE() defers it to the
+# end of the directory).
 function(qore_check_module_ssl_consumers target)
     if (NOT TARGET "${target}")
         return()
