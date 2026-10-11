@@ -1,0 +1,271 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** RestSchemaReferenceDataOptions.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires RestSchemaActions
+%requires OpenApi3
+%requires PaddleDataProvider
+
+%exec-class RestSchemaReferenceDataOptionsTest
+
+# The fixed options of a reference data declaration (typically a page size) are sent with every request that fills
+# a dropdown: a value that the listing's schema rejects makes the dropdown fail every time it is opened, so the
+# action set checks each value against the listing's schema when it is built.
+public class RestSchemaReferenceDataOptionsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("RestSchemaReferenceDataOptions", "1.0") {
+        addTestCase("a fixed option is checked against its schema", \fixedOptionChecked());
+        addTestCase("a fixed body option is checked against its property schema", \bodyOptionChecked());
+        addTestCase("Paddle reference page sizes fit their listings' maximums", \paddlePageSizes());
+        addTestCase("every reference listing's fixed options fit its schema", \everyReferenceListing());
+        set_return_value(main());
+    }
+
+    # a listing whose page size is limited to 30 and whose status is an enumeration
+    private OpenApi3Schema listingSchema() {
+        return new OpenApi3Schema("listing", {
+            "openapi": "3.0.0",
+            "info": {"title": "listing", "version": "1.0"},
+            "paths": {
+                "/items": {
+                    "get": {
+                        "operationId": "list-items",
+                        "parameters": (
+                            {"name": "per_page", "in": "query", "schema": {"type": "integer", "minimum": 1,
+                                "maximum": 30}},
+                            {"name": "status", "in": "query", "schema": {"type": "string",
+                                "enum": ("active", "archived")}},
+                        ),
+                        "responses": {
+                            "200": {
+                                "description": "the items",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "data": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "id": {"type": "string"},
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    private RestSchemaActionSet buildListing(hash<auto> options) {
+        return new RestSchemaActionSet(listingSchema(), (
+            <RestSchemaActionInfo>{
+                "action": "list_items",
+                "method": "get",
+                "path": "/items",
+                "display_name": "List Items",
+                "short_desc": "List the items",
+                "desc": "Lists the items.",
+            },
+        ), {
+            "item": <RestSchemaReferenceDataInfo>{
+                "name": "item",
+                "action": "list_items",
+                "options": options,
+                "records_path": "data",
+                "value_field": "id",
+                "desc": "items",
+            },
+        });
+    }
+
+    # a search taking its page size in the request body: at its top level, and inside a paging object that is
+    # published as its properties
+    private RestSchemaActionSet buildSearch(hash<auto> options) {
+        hash<auto> response = {
+            "200": {
+                "description": "the items",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "data": {
+                                    "type": "array",
+                                    "items": {"type": "object", "properties": {"id": {"type": "string"}}},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        };
+        OpenApi3Schema schema("search", {
+            "openapi": "3.0.0",
+            "info": {"title": "search", "version": "1.0"},
+            "paths": {
+                "/search": {
+                    "post": {
+                        "operationId": "search-items",
+                        "requestBody": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "limit": {"type": "integer", "maximum": 50},
+                                            "pagination": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "per_page": {"type": "integer", "maximum": 30},
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        "responses": response,
+                    },
+                },
+            },
+        });
+        return new RestSchemaActionSet(schema, (
+            <RestSchemaActionInfo>{
+                "action": "search_items",
+                "method": "post",
+                "path": "/search",
+                "display_name": "Search Items",
+                "short_desc": "Search the items",
+                "desc": "Searches the items.",
+                "fields": {
+                    "pagination": <RestSchemaFieldOverlayInfo>{
+                        "lift": True,
+                    },
+                },
+            },
+        ), {
+            "item": <RestSchemaReferenceDataInfo>{
+                "name": "item",
+                "action": "search_items",
+                "options": options,
+                "records_path": "data",
+                "value_field": "id",
+                "desc": "items",
+            },
+        });
+    }
+
+    bodyOptionChecked() {
+        assertEq({"limit": 50, "per_page": 30},
+            buildSearch({"limit": 50, "per_page": 30}).getReferenceDataDecl("item").options);
+        # a body property
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "maximum: 50", \buildSearch(), {"limit": 100});
+        # a property of a body value published as its properties
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "maximum: 30", \buildSearch(), {"per_page": 200});
+    }
+
+    fixedOptionChecked() {
+        # values the schema accepts
+        assertEq({"per_page": 30, "status": "active"},
+            buildListing({"per_page": 30, "status": "active"}).getReferenceDataDecl("item").options);
+
+        # a page size above the listing's maximum
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "too big \\(maximum: 30", \buildListing(), {"per_page": 200});
+        # a value outside an enumeration
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "rejects", \buildListing(), {"status": "deleted"});
+    }
+
+    paddlePageSizes() {
+        RestSchemaActionSet set = PaddleSchema::getActionSet();
+        int checked = 0;
+        foreach hash<auto> i in (set.getReferenceDataDecls().pairIterator()) {
+            if (!i.value.options.hasKey("per_page")) {
+                continue;
+            }
+            # the maximum that the listing's operation declares for per_page in Paddle's schema
+            OpenApi3::OperationObject op = set.getOperationEx(i.value.action).getOperation();
+            *OpenApi3::ParameterBase param = op.parameters.per_page
+                ?? set.getOperationEx(i.value.action).getPathItem().parameters.per_page;
+            assertTrue(exists param, i.key + ": per_page is a parameter of " + i.value.action);
+            auto maximum = param.getSchema().maximum;
+            assertTrue(exists maximum, i.key + ": the schema limits per_page");
+            assertTrue(i.value.options.per_page <= maximum, sprintf("%s: per_page %d fits the maximum %d of %s",
+                i.key, i.value.options.per_page, maximum, i.value.action));
+            ++checked;
+        }
+        assertEq(6, checked);
+        # the transaction listing is capped lower than the others
+        assertEq(30, set.getReferenceDataDecl("paddle-transaction").options.per_page);
+    }
+
+    everyReferenceListing() {
+        # every module whose sources declare reference data; building its action sets checks the fixed options of
+        # each declaration against its listing's schema, and the sets are built when the module is loaded (a REST
+        # client module's sets by its data provider module)
+        string qlib = normalize_dir(get_script_dir() + "/../../../../qlib");
+        hash<string, bool> modules;
+        Dir top();
+        top.chdir(qlib);
+        foreach string dir in (top.listDirs()) {
+            if (dir == "RestSchemaActions") {
+                continue;
+            }
+            Dir subdir();
+            subdir.chdir(qlib + DirSep + dir);
+            foreach string file in (subdir.listFiles("\\.q[cm]$")) {
+                if (ReadOnlyFile::readTextFile(qlib + DirSep + dir + DirSep + file).find("RestSchemaReferenceDataInfo>")
+                        >= 0) {
+                    modules{dir} = True;
+                    break;
+                }
+            }
+        }
+        foreach string mod in (keys modules) {
+            *string dp = (mod =~ x/^(.*)RestClient$/)[0];
+            if (dp && is_dir(qlib + DirSep + dp + "DataProvider")) {
+                modules{dp + "DataProvider"} = True;
+            }
+        }
+        assertTrue(modules.PaddleDataProvider, "the scan finds the modules that declare reference data");
+        foreach string mod in (sort(keys modules)) {
+            try {
+                load_module(mod);
+                assertTrue(True, mod + " loads");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("", sprintf("%s: %s: %s", mod, ex.err, ex.desc));
+            }
+        }
+    }
+}

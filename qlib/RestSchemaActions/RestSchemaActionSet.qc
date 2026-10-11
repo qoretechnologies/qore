@@ -42,7 +42,12 @@ public hashdecl RestSchemaReferenceDataInfo {
     string action;
 
     #! Fixed options passed to that action
-    /** Typically a page size, so that populating a dropdown does not walk the whole collection.
+    /** Typically a page size, so that populating a dropdown does not walk the whole collection: set it to the
+        listing's own maximum, as declared by its operation, which can differ between listings of the same API.
+
+        Each value is checked against its option's schema when the action set is built (a page size above the
+        operation's maximum, for example, raises \c REST-SCHEMA-ACTION-ERROR), as the request validator would
+        reject it every time the dropdown is filled.
     */
     *hash<auto> options;
 
@@ -560,14 +565,21 @@ public class RestSchemaActionSet {
                     next = source.options_reference;
                 }
             }
-            # a fixed option that the listing action does not accept would fail only when a user opened a
-            # dropdown, so check it now
+            # a fixed option that the listing action does not accept, or a value that its schema rejects (ex: a
+            # page size above the operation's maximum), would fail only when a user opened a dropdown, so check
+            # it now
             RestSchemaActionOperation lop = opmap{rd.action};
             hash<string, hash<RestSchemaFlatFieldInfo>> flat = lop.getFlatMap();
-            foreach string opt in (keys rd.options) {
-                if (!exists flat{opt}) {
+            foreach hash<auto> o in (rd.options.pairIterator()) {
+                if (!exists flat{o.key}) {
                     throw "REST-SCHEMA-ACTION-ERROR", sprintf("reference data %y passes option %y to action %y, "
-                        "which does not declare it; options: %y", i.key, opt, rd.action, sort(keys flat));
+                        "which does not declare it; options: %y", i.key, o.key, rd.action, sort(keys flat));
+                }
+                try {
+                    lop.checkOptionValue(o.key, o.value);
+                } catch (hash<ExceptionInfo> ex) {
+                    throw "REST-SCHEMA-ACTION-ERROR", sprintf("reference data %y passes %y in option %y to action "
+                        "%y, which its schema rejects: %s: %s", i.key, o.value, o.key, rd.action, ex.err, ex.desc);
                 }
             }
             foreach string opt in (keys rd.options_from) {
