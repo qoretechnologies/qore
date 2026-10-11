@@ -10410,3 +10410,80 @@ Next AOT-first steps:
    locking and cross-Program fallback. Re-measure with matched baseline and Java.
 
 [Verified measurements, baseline profiles and qualification](results-scalar-member-context-macos-arm64.json).
+
+
+## Runtime-backed boxed AOT local freshness (2026-10-11)
+
+AOT remains the primary target; IR/JIT gains are secondary. This stage fixes a
+correctness defect required before further call/local-state elision; it is not
+a performance improvement. All source accesses being IR-lowered did not make
+ordinary AOT boxed parameter/body slots invisible to reflective callees.
+Successful and throwing callees could replace runtime slots while the caller
+kept stale cached receivers or payloads.
+
+The corrected compiler uses the adjusted private body-local set for reload
+exemptions and synchronizes ordinary boxed parameter stores to the same runtime
+slots. An initial prototype fixed replacement but lost assigned parameters after
+reload, reproduced in both focused controls and FsUtil::make_tmp_file. It was
+rejected; the final candidate corrects both storage and reload classification.
+The saved baseline fails six reflective groups and passes both assignment
+controls; the rejected prototype has the opposite failures. AST passes all eight.
+
+Native scalar allocas, private direct-entry arguments and private IR-only body
+storage retain their earlier contracts. This does not fix arbitrary IR/JIT or
+private-entry reflection. There is no helper ABI or serialized-format change;
+existing AOT artifacts require recompilation.
+
+Three-fork randomized before/after screen, run-grz85ic8: 54 jobs, 270 measured
+windows, three warmups, five 500-ms samples/fork, count 4096, seed 826151. Separate
+artifacts were compiled against frozen baseline/candidate libraries. Every raw
+timing was re-parsed, all summaries recomputed, and source/binary identities
+verified. Both builds pass 555 independent reference checks. All samples and
+regressions are retained; no owned inspection/build/test/profile overlapped timing.
+
+|!Workload|!Before ns/element|!After ns/element|!Increase|!Fork ranges separate
+|boxed_int_method_fallback|36.899892|46.993822|+27.355%|yes
+|boxed_float_method_fallback|41.315909|50.923088|+23.253%|yes
+|boxed_int_method_effect|249.342138|260.846541|+4.614%|yes
+|boxed_int_method_call|21.872929|32.508058|+48.622%|yes
+|boxed_float_method_call|28.277143|38.618948|+36.573%|yes
+|dynamic_int_result_call|9.921065|9.911814|-0.093%|no
+|dynamic_float_result_call|10.869217|11.169973|+2.767%|yes
+|indirect_int_result|6.722949|6.890138|+2.487%|yes
+|indirect_float_result|8.751906|8.776564|+0.282%|no
+
+The boxed-method workloads add roughly 10 ns/element. Even the pure native
+method branch currently joins a conservative caller-local invalidation path.
+Two smaller control increases have separated three-fork ranges; they are not
+discarded or labeled equivalent. These are whole-workload measurements, not
+isolated call latency or statistical equivalence. There is no fresh Java timing
+or claim that this stage narrows the Java gap.
+
+Release: 106 selected files, 389 cases, 31513 assertions, 15 standalones, 1 skipped.
+Debug: 106 selected files, 396 cases, 31612 assertions, 15 standalones, 0 skipped.
+Both additionally pass seven exception/stack fixtures. The new regression has
+1,150 assertions including native LLVM-entry/epoch checks, stripped -O0/-O3,
+native EH, split codegen, disable controls, special scalar/container values and
+replacement destruction counts. Also passed: 205 debug native checks, 17 harness
+tests and 555 references per IR/AOT/Java mode. No full-suite, sanitizer or
+cross-platform qualification is claimed.
+
+Next AOT-first work:
+
+1. Keep this measured correctness baseline and audit before committing. Do not
+   use the previously unchecked local-cache path as the correctness standard.
+2. Inspect generated code for calls to the stale-local helper when the cache
+   epoch is already fresh. Prototype a compiler-side epoch guard that bypasses
+   only the existing no-op helper path; retain all stale reloads and cleanup.
+   Compare against this corrected baseline and a compiler-disable control.
+3. Before native-edge invalidation elision, prove receiver/argument cleanup,
+   overwritten result cleanup and deferred local owners cannot invoke user
+   destructors, or preserve invalidation on those paths. Native status 1 and
+   same-Program admission alone are insufficient. Preserve arbitrary matched
+   fallback and normal/EH mutation visibility.
+4. Continue with effectful ordinary-call frame/local/TLS setup using explicit
+   RuntimeConfig and compile/bind-time effect proofs. Measure independently;
+   only then refresh matched Java comparisons. Do not retry an effectful body
+   after a partial update.
+
+[Verified measurements and qualification](results-aot-runtime-local-reload-macos-arm64.json).

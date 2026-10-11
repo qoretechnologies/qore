@@ -181,6 +181,17 @@ but must be recompiled to receive the fix. See the measured regressions as well
 as gains in [RESULTS.md](RESULTS.md#guarded-class-parameter-caches-2026-10-08)
 and the [optional-class follow-up](RESULTS.md#optional-class-freshness-2026-10-08).
 
+Ordinary runtime-backed boxed AOT parameters/body locals must reload after
+potentially mutating calls even when every source access is IR-lowered.
+Their stores must synchronize the same runtime slots; private direct-entry
+arguments and native allocas retain their separate contracts. The
+`AOTRuntimeLocalReload` regression covers replacement on return/throw, ownership
+and assignment synchronization in actual stripped native entries. Recompile old
+AOT artifacts to receive this correction; no helper ABI changes. The measured
+reload cost is a correctness tradeoff, not a claimed performance improvement.
+Pure-callee proofs do not by themselves authorize eliminating reloads when
+caller-side destructors or deferred cleanup can reenter Qore.
+
 An unrelated prepared **method** entry experiment was rejected after same-library
 compiler controls showed no benefit; it adds no supported flag or helper ABI.
 See [the negative result and retained diagnostic lifetime fix](RESULTS.md#prepared-method-entry-rejected-2026-10-09).

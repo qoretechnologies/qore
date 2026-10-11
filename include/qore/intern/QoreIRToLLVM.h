@@ -553,9 +553,11 @@ private:
     // and related runtime-stack synchronization when ownership permits.
     const std::unordered_set<const void*>* ir_only_locals_set = nullptr;
 
-    // Original IR-only set used only for reload decisions. AOT may remove body
-    // locals that need runtime ownership from ir_only_locals_set so StoreLocal
-    // still syncs them, but those locals remain invisible to AST callbacks.
+    // Locals with private storage that runtime callbacks cannot replace. AOT
+    // uses only its adjusted IR-only body locals: ordinary boxed parameters and
+    // runtime-owned body slots remain visible to reflective callees even when
+    // every source access was lowered to IR. Native allocas and direct-entry
+    // arguments are excluded separately by canReloadLocalFromRuntime().
     const std::unordered_set<const void*>* reload_exempt_locals_set = nullptr;
 
     // Phase 4: True when ALL locals in the function are invisible to AST

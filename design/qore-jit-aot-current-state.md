@@ -149,6 +149,42 @@ access that the plain function does not. `AOTPlainFunctionClassContext.qtest`
 compares this boundary with AST execution, including normal/invoke/callback
 calls, return filtering, caller-context restoration and native-EH AOT.
 
+### Runtime-backed boxed local freshness in AOT
+
+An ordinary AOT entry instantiates boxed parameter and body-local slots on the
+runtime stack. Lowering every source access to IR does not make those slots
+invisible: a callee can replace them with `set_local_var_value()` and either
+return or throw. Reload exemptions therefore use the adjusted private body-local
+set, not the original IR-only access classification. The bulk reload skip and
+per-local predicate must agree about this distinction.
+
+Ordinary boxed parameter assignments must also synchronize their runtime slots.
+Enabling reloads while leaving those stores alloca-only loses the assignment at
+the next call boundary. Required native scalar allocas and private direct-entry
+arguments retain their existing storage conventions; reloading a private
+argument from the runtime stack could alias an outer frame. Private IR-only
+string/body storage also retains its prior visibility contract. This correction
+does not establish general reflective visibility for private entries or IR/JIT.
+
+The existing lazy reload epochs, exception-path reloads, owned tracker/deferred
+cleanup and reflective class-parameter cache guards remain in use. No runtime
+helper ABI, serialized IR format or public language API changes. Existing AOT
+artifacts must be recompiled to receive the corrected storage/reload decisions.
+
+`AOTRuntimeLocalReload.qtest` compares ordinary-entry behavior with AST execution
+for boxed receiver/payload replacement, scalar/container representation changes,
+successful and throwing callees, destruction counts and written parameter
+controls. It asserts native LLVM entries and runtime-slot invalidation, using
+stripped `-O0`/`-O3` artifacts, native EH, split codegen and fallback controls.
+
+This is a correctness prerequisite for further AOT call optimization, not a
+speedup. The measured additional reload cost must be reported. A future native
+call effect proof must cover receiver/argument cleanup, overwritten result
+cleanup and deferred local owners as well as the callee body: a destructor can
+reenter Qore and mutate caller locals even after a pure scalar method. Neither
+same-Program admission nor a successful native helper result alone proves those
+cleanup effects absent.
+
 ### Checked AOT class-local initialization
 
 A normal initial assignment to a runtime-backed AOT body local with one required,

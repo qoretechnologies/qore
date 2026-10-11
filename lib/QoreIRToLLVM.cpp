@@ -11473,7 +11473,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     std::unordered_set<const void*> native_unsafe_locals
         = qore_ir_get_native_unsafe_locals(func, initially_assigned_locals);
 
-    // In AOT mode, remove pre-instantiated body locals from the IR-only set.
+    // In AOT mode, remove runtime-owned boxed locals from the IR-only set.
     // evalTiered pre-instantiates ALL body locals from all_body_locals on the
     // runtime stack, so StoreLocal must sync via qore_rt_assign_local_aot (which
     // adds a reference).  Without sync, the alloca holds the only reference while
@@ -11481,9 +11481,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // function exit. Proven-assigned native scalar locals carry no references;
     // exact string locals use the existing owned IR-local alloca cleanup. Both
     // can safely remain alloca-only and skip runtime synchronization.
-    // Parameters and other non-body locals remain IR-only.
+    // Ordinary boxed parameters must also sync assignments: reflective callees
+    // and later reloads read their real runtime slots. Direct-entry arguments
+    // remain private to their ABI and must never alias an outer runtime frame.
     aot_adjusted_ir_only.clear();
-    if (aot_mode && ir_only_locals_set && !func.all_body_locals.empty()) {
+    if (aot_mode && ir_only_locals_set) {
         aot_adjusted_ir_only = *ir_only_locals_set;
         static const bool native_aot_body_locals =
             std::getenv("QORE_DISABLE_AOT_NATIVE_BODY_LOCALS") == nullptr;
@@ -11505,15 +11507,30 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 aot_adjusted_ir_only.erase(key);
             }
         }
+        size_t boxed_param_count = 0;
+        for (const auto& entry : func.param_local_vars) {
+            if (boxed_param_count++ && !(boxed_param_count % 100)
+                    && qore_check_cancel(nullptr, "LLVM runtime-owned parameter classification")) {
+                error = "cancelled during LLVM runtime-owned parameter classification";
+                return false;
+            }
+            const LocalVar* lv = entry.second;
+            const void* key = reinterpret_cast<const void*>(lv);
+            if (!lv || (fast_entry_args && fast_entry_args->count(key))) {
+                continue;
+            }
+            const QoreTypeInfo* ti = lv->getTypeInfo();
+            bool native_scalar = !native_unsafe_locals.count(key)
+                && ((QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti))
+                    || QoreTypeInfo::isType(ti, NT_FLOAT)
+                    || QoreTypeInfo::isType(ti, NT_BOOLEAN));
+            if (!native_scalar) {
+                aot_adjusted_ir_only.erase(key);
+            }
+        }
         ir_only_locals_set = aot_adjusted_ir_only.empty()
             ? nullptr : &aot_adjusted_ir_only;
     }
-
-    // Phase 4: Check if ALL locals are reload-exempt, enabling bulk skip of
-    // reloadAllLocalsFromRuntime() after calls.
-    all_locals_reload_exempt = reload_exempt_locals_set
-        && func.total_local_count > 0
-        && reload_exempt_locals_set->size() == func.total_local_count;
 
     // Phase A: Identify body locals that can skip entry loads.
     aot_body_locals.clear();
@@ -11534,6 +11551,19 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
         }
     }
+
+    // Ordinary AOT entries instantiate boxed parameters and runtime-owned body
+    // locals. A reflective callee can replace those slots on either the return
+    // or exception path; IR-only access syntax is not a visibility proof. Only
+    // adjusted private body storage stays exempt here. The reload predicate
+    // separately excludes native allocas and private direct-entry arguments.
+    if (aot_mode) {
+        reload_exempt_locals_set = &ir_only_body_locals;
+    }
+    // Keep the bulk skip consistent with the per-local visibility decision.
+    all_locals_reload_exempt = reload_exempt_locals_set
+        && func.total_local_count > 0
+        && reload_exempt_locals_set->size() == func.total_local_count;
 
     // Phase 3: Identify IR-only locals that can use native (unboxed) allocas.
     // Typed scalar locals that are IR-only skip boxing/unboxing overhead entirely.
