@@ -115,7 +115,7 @@ class Bug2963Schema inherits SqlUtilTestSchema {
     }
 } # class Bug2963Schema
 
-#! A schema with default values that PostgreSQL returns in another form than they are declared
+#! A schema with types and default values that PostgreSQL returns in another form than they are declared
 class DefaultValueFormSchema inherits SqlUtilTestSchema {
     public {
         const TableName = "pgsql_test_default_forms";
@@ -140,6 +140,11 @@ class DefaultValueFormSchema inherits SqlUtilTestSchema {
             "str": {"native_type": "text", "default_value": "abc"},
             # expressions
             "ts_now": {"native_type": "timestamp", "default_value": "now()", "default_value_native": True},
+            # types declared with the names that the server returns in a short form
+            "float_long": {"native_type": "double precision"},
+            "varchar_long": {"native_type": "character varying", "size": 10},
+            "tstz_long": {"native_type": "timestamp with time zone"},
+            "time_long": {"native_type": "time without time zone"},
             "seq_next": {"native_type": "bigint", "default_value": "nextval('" + SequenceName + "'::regclass)",
                 "default_value_native": True},
         };
@@ -432,7 +437,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("sequence operators", \testSequenceOperators());
             addTestCase("analytic/window functions", \testAnalyticFunctions());
             addTestCase("default value", \testDefaultValue());
-            addTestCase("default values in the form PostgreSQL returns them", \defaultValueFormTest());
+            addTestCase("types and default values in the form PostgreSQL returns them", \defaultValueFormTest());
             addTestCase("pgsqlutil: schema align with trigger drop #2963", \test2963());
             addTestCase("concurrent multi-event trigger introspection", \concurrentTriggerIntrospectionTest());
             addTestCase("proxy bulk upsert", \proxyBulkUpsertTest());

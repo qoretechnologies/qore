@@ -217,6 +217,9 @@ $function$
     @subsection pgsqlsqlutilbasev116 PgsqlSqlUtilBase v1.16
     - a negative number default value of a column, which PostgreSQL returns quoted (ex: \c "'-1'::integer"), compares
       equal to its declared value: schema alignment changed the default value of such a column on every run
+    - a column declared with the long name of a type that PostgreSQL returns in a short form (ex:
+      \c "double precision", \c "character varying", \c "timestamp with time zone") compares equal to the column
+      read from the server: schema alignment changed the type of such a column on every run
     - Added targeted column-migration metadata for resumable offline upgrades, including
       relation identity, dependent objects, and UPDATE trigger functions.
 
@@ -4526,10 +4529,13 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private AbstractColumn addColumnImpl(string cname, hash opt, bool nullable = True) {
+        # the server returns the short names of types (ex: "float" for "double precision"); a declared type is given
+        # the same name, so that its column compares equal to the column read from the server
+        string native_type = PgsqlNameMap{opt.native_type} ?? opt.native_type;
         if (opt.precision)
-            return new PgsqlNumericColumn(cname, opt.native_type, opt.qore_type, opt.precision, nullable,
+            return new PgsqlNumericColumn(cname, native_type, opt.qore_type, opt.precision, nullable,
                 opt.default_value, opt.comment, 0, opt.scale);
-        return new PgsqlColumn(cname, opt.native_type, opt.qore_type, opt.size, nullable, opt.default_value,
+        return new PgsqlColumn(cname, native_type, opt.qore_type, opt.size, nullable, opt.default_value,
             opt.comment, 0);
     }
 
