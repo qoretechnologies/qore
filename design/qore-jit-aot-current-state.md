@@ -637,7 +637,7 @@ existing integer-forwarding proof is tried first. Companion pointers are appende
 to the runtime-owned context with release/acquire publication; no mutable member
 value or receiver is cached there.
 
-At the source read position, the helper resolves the member's internal storage
+At the source read position, the helper selects the member's internal storage
 context and acquires the ordinary object read lock. It rejects deleted objects,
 missing/NOTHING fields, references, enums and the wrong scalar family without
 evaluating, referencing or discarding the value. Immediate values and canonical
@@ -648,11 +648,31 @@ homogeneous type, without invoking a dynamic return conversion.
 
 Member-name XXH64 and XXH32 hashes are computed at compilation; the helper selects
 the runtime target width. Builds without the hash-map implementation use the same
-ordered-map lookup as ordinary reads. This removes per-read name hashing, not live
-member-context resolution or synchronization. The diagnostic frame and its reader
+ordered-map lookup as ordinary reads. This removes per-read name hashing, not
+synchronization. The diagnostic frame and its reader
 handshake remain published. The callee checks its own stack through the explicit
 runtime view; overflow materializes object/class context before raising and restores
 it afterward. The existing eager-context diagnostic control remains supported.
+
+A separate positive declaration proof can remove member-context lookup: for a
+user defining class, `QoreMemberInfo::isLocalInternal()` and exact declaring-class
+identity establish that `runtimeGetMemberContext()` always returns that defining
+class, even when a receiver subclass shadows the name. The companion receives the
+live variant's defining context; it never embeds the compile-time pointer. Class
+copies preserve the local/Internal declaration and retarget its declaring class.
+Parsing cannot modify committed user classes; native member addition cannot replace
+an existing declaration under its API contract, and inherited-member merging does
+not replace a local Internal declaration. AOT loading skips methods as well as
+members for pre-existing classes. No absent-member fact or metadata pointer is
+cached, so this does not rely on method epochs invalidating member additions.
+Public, ordinary private, inherited non-local and unknown declarations retain the
+ordinary context lookup. Both paths use the same locked live scalar extraction.
+
+`QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1` disables this declaration proof during
+compilation or restores ordinary lookup in the generated helper at runtime.
+Disabling member prehash also restores ordinary context lookup. Tests exercise
+both storage paths, including private shadowing, internal concurrent writers and
+direct native integer/float hit, miss, ownership and stack-context probes.
 
 `QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1` disables companion generation or runtime
 admission. `QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1` independently disables hash

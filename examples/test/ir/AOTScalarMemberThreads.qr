@@ -6,10 +6,22 @@
 class ScalarMemberThreadInt {
     public { auto delta = 17; }
     int next(int value) { return value + delta; }
+    set(auto value) { delta = value; }
 }
 class ScalarMemberThreadFloat {
     public { auto delta = 0.5; }
     float next(float value) { return value + delta; }
+    set(auto value) { delta = value; }
+}
+class ScalarMemberThreadInternalInt inherits ScalarMemberThreadInt {
+    private:internal { auto internal_delta = 17; }
+    int next(int value) { return value + internal_delta; }
+    set(auto value) { internal_delta = value; }
+}
+class ScalarMemberThreadInternalFloat inherits ScalarMemberThreadFloat {
+    private:internal { auto internal_delta = 0.5; }
+    float next(float value) { return value + internal_delta; }
+    set(auto value) { internal_delta = value; }
 }
 auto sub scalarMemberThreadCall(auto receiver, auto value) { return receiver.next(value); }
 
@@ -22,8 +34,8 @@ sub scalarMemberWriter(ScalarMemberThreadInt integer, ScalarMemberThreadFloat fl
         for (int i = 0; i < 200000; ++i) {
             # Alternate immediate and node-backed representations. Every scalar
             # read must complete under the ordinary object lock before replacement.
-            integer.delta = i & 1 ? 17 : 1125899906842624;
-            floating.delta = i & 1 ? 0.5 : -9.0e307;
+            integer.set(i & 1 ? 17 : 1125899906842624);
+            floating.set(i & 1 ? 0.5 : -9.0e307);
             if (!readers.getCount()) { return; }
         }
         throw "MEMBER-THREAD-TEST", "readers did not finish";
@@ -48,8 +60,10 @@ sub scalarMemberReader(auto integer, auto floating, Counter start, Counter reade
     } catch (hash<ExceptionInfo> ex) { failures.push(ex); }
 }
 
-ScalarMemberThreadInt integer();
-ScalarMemberThreadFloat floating();
+ScalarMemberThreadInt integer = ARGV[0] == "internal"
+    ? new ScalarMemberThreadInternalInt() : new ScalarMemberThreadInt();
+ScalarMemberThreadFloat floating = ARGV[0] == "internal"
+    ? new ScalarMemberThreadInternalFloat() : new ScalarMemberThreadFloat();
 for (int i = 0; i < 16; ++i) {
     if (scalarMemberThreadCall(integer, 1) != 18 || scalarMemberThreadCall(floating, 1.0) != 1.5) {
         throw "MEMBER-THREAD-TEST", "warmup failed";

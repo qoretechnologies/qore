@@ -40,6 +40,7 @@ class ScalarMemberEntryTest inherits QUnit::Test {
         TmpDir dir("qore-scalar-member-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ",
+                "QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1 ",
                 "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ",
                 "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ")) {
             foreach string level in (("-O0", "-O3")) {
@@ -47,11 +48,15 @@ class ScalarMemberEntryTest inherits QUnit::Test {
                 string ir = run((qcc, level, "--strip-source", "-o", executable, source),
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
                 bool enabled = prefix != "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ";
+                bool resolved = enabled && prefix != "QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1 "
+                    && prefix != "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ";
+                assertEq(resolved, regex(ir, "call i32 @qore_rt_try_load_member_int_internal_prehashed_v1"));
+                assertEq(resolved, regex(ir, "call i32 @qore_rt_try_load_member_float_internal_prehashed_v1"));
                 assertEq(enabled && prefix != "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ",
                     regex(ir, "call i32 @qore_rt_try_load_member_int_prehashed_v1"));
                 assertEq(enabled && prefix != "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ",
                     regex(ir, "call i32 @qore_rt_try_load_member_float_prehashed_v1"));
-                foreach string name in (("Int", "Override", "Float", "Auto", "Reference")) {
+                foreach string name in (("Int", "Override", "Float", "InternalFloat", "Auto", "Reference")) {
                     assertEq(enabled, regex(ir, "call void @qore_rt_bind_member_[^\n]*ScalarMember" + name
                         + "__next"), name + prefix + level);
                 }
@@ -60,6 +65,7 @@ class ScalarMemberEntryTest inherits QUnit::Test {
                         "ordinary body " + name);
                 }
                 foreach string runtime in (("", "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1 ",
                         "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
@@ -135,6 +141,7 @@ class ScalarMemberEntryTest inherits QUnit::Test {
                     }
                     assertRegex("call i32 @qore_rt_try_method_" + scalar + "_unary_v2", ir);
                     foreach string runtime in (("", "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ",
+                            "QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1 ",
                             "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ",
                             "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ")) {
                         assertEq(expected, run((executable,) + extra, runtime), name + prefix + level + runtime);
@@ -148,6 +155,7 @@ class ScalarMemberEntryTest inherits QUnit::Test {
         string expected = "scalar-member-threads: ok\n";
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
             assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source, "internal")), mode + " internal");
         }
         TmpDir dir("qore-member-writers-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
@@ -157,10 +165,14 @@ class ScalarMemberEntryTest inherits QUnit::Test {
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
                 assertRegex("call void @qore_rt_bind_member_int_v1[^\n]*ScalarMemberThreadInt__next", ir);
                 assertRegex("call void @qore_rt_bind_member_float_v1[^\n]*ScalarMemberThreadFloat__next", ir);
+                assertRegex("call i32 @qore_rt_try_load_member_int_internal_prehashed_v1", ir);
+                assertRegex("call i32 @qore_rt_try_load_member_float_internal_prehashed_v1", ir);
                 foreach string runtime in (("", "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1 ",
                         "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ")) {
                     assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                    assertEq(expected, run((executable, "internal"), runtime), prefix + level + runtime + " internal");
                 }
             }
         }

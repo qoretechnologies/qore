@@ -27910,9 +27910,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* output = ab.CreateAlloca(type, nullptr, "member_value");
                 llvm::Value* accepted;
                 if (qore_ir_use_prehashed_keys() && !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH")) {
-                    auto read = module.getOrInsertFunction(floating
-                            ? "qore_rt_try_load_member_float_prehashed_v1"
-                            : "qore_rt_try_load_member_int_prehashed_v1",
+                    const char* helper = scalar_member_internal
+                        ? (floating ? "qore_rt_try_load_member_float_internal_prehashed_v1"
+                                    : "qore_rt_try_load_member_int_internal_prehashed_v1")
+                        : (floating ? "qore_rt_try_load_member_float_prehashed_v1"
+                                    : "qore_rt_try_load_member_int_prehashed_v1");
+                    auto read = module.getOrInsertFunction(helper,
                         llvm::FunctionType::get(i32_type,
                             {ptr_type, ptr_type, i64_type, i32_type, ptr_type, ptr_type}, false));
                     QoreIRPrecomputedStringHash hash = qore_ir_precompute_string_hash(sminst->member_name);

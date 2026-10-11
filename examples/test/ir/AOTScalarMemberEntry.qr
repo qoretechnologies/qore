@@ -20,6 +20,14 @@ class ScalarMemberFloat {
     public { float delta = 65535.0; }
     float next(float value) { return delta - value; }
 }
+class ScalarMemberInternalFloat {
+    private:internal { auto delta = 65537.0; }
+    float next(float value) { return delta - value; }
+    set(auto value) { delta = value; }
+}
+class ScalarMemberInternalFloatInherited inherits ScalarMemberInternalFloat {
+    private:internal { float delta = 65541.0; }
+}
 class ScalarMemberAuto {
     public { auto delta = 7; }
     int next(int value) { return value + delta; }
@@ -64,6 +72,8 @@ ScalarMemberInt integer();
 ScalarMemberInherited inherited();
 ScalarMemberOverride overridden();
 ScalarMemberFloat floating();
+ScalarMemberInternalFloat internal_float();
+ScalarMemberInternalFloatInherited inherited_float();
 ScalarMemberAuto dynamic();
 int target = 41;
 ScalarMemberReference referenced(\target);
@@ -76,6 +86,8 @@ for (int round = 0; round < 32; ++round) {
     expectScalarMember(round + 17, scalarMemberBoxedCall(integer, round));
     expectScalarMemberFloat(65535.0 - round, scalarMemberFloatCall(floating, float(round)));
     expectScalarMemberFloat(65535.0 - round, scalarMemberBoxedCall(floating, float(round)));
+    expectScalarMemberFloat(65537.0 - round, scalarMemberFloatCall(internal_float, float(round)));
+    expectScalarMemberFloat(65537.0 - round, scalarMemberFloatCall(inherited_float, float(round)));
     expectScalarMember(round + 7, scalarMemberFallbackCall(dynamic, round));
     expectScalarMember(round + target, scalarMemberFallbackCall(referenced, round));
     expectScalarMember(round + 31, scalarMemberFallbackCall(effect, round));
@@ -94,11 +106,21 @@ foreach int value in ((0, 1, -1, 140737488355328, -140737488355329, 112589990684
 }
 foreach float value in ((0.0, -0.0, 1.25, -9.0e307, @inf@, -@inf@, @nan@)) {
     floating.delta = value;
+    internal_float.set(value);
+    inherited_float.set(value);
     for (int round = 0; round < 12; ++round) {
         expectScalarMemberFloat(value - float(round), scalarMemberFloatCall(floating, float(round)));
         expectScalarMemberFloat(value - float(round), scalarMemberBoxedCall(floating, float(round)));
+        expectScalarMemberFloat(value - float(round), scalarMemberFloatCall(internal_float, float(round)));
+        expectScalarMemberFloat(value - float(round), scalarMemberFloatCall(inherited_float, float(round)));
     }
 }
+internal_float.set(7);
+expectScalarMemberFloat(6.0, scalarMemberFloatCall(internal_float, 1.0));
+internal_float.set(NOTHING);
+expectScalarMemberFloat(-1.0, scalarMemberFloatCall(internal_float, 1.0));
+internal_float.set(ScalarMemberEnum::Seven);
+expectScalarMemberFloat(6.0, scalarMemberFloatCall(internal_float, 1.0));
 target = 53;
 expectScalarMember(54, scalarMemberFallbackCall(referenced, 1));
 dynamic.delta = ScalarMemberEnum::Seven;

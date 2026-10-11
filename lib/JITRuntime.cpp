@@ -485,6 +485,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_try_load_member_float_v1", reinterpret_cast<void*>(&qore_rt_try_load_member_float_v1) },
     { "qore_rt_try_load_member_int_prehashed_v1", reinterpret_cast<void*>(&qore_rt_try_load_member_int_prehashed_v1) },
     { "qore_rt_try_load_member_float_prehashed_v1", reinterpret_cast<void*>(&qore_rt_try_load_member_float_prehashed_v1) },
+    { "qore_rt_try_load_member_int_internal_prehashed_v1",
+        reinterpret_cast<void*>(&qore_rt_try_load_member_int_internal_prehashed_v1) },
+    { "qore_rt_try_load_member_float_internal_prehashed_v1",
+        reinterpret_cast<void*>(&qore_rt_try_load_member_float_internal_prehashed_v1) },
     { "qore_rt_try_load_closure_int_v1",
         reinterpret_cast<void*>(&qore_rt_try_load_closure_int_v1) },
     { "qore_rt_get_stack_limit_v1", reinterpret_cast<void*>(&qore_rt_get_stack_limit_v1) },
@@ -10433,6 +10437,34 @@ extern "C" DLLEXPORT int qore_rt_try_load_member_float_prehashed_v1(QoreObject* 
         return qore_rt_try_load_member_float_v1(object, name, class_ctx, result);
     }
     return object && name && result && qore_object_private::get(*object)->tryReadScalarMemberPrehashed(
+        name, qore_rt_select_precomputed_hash(hash64, hash32), class_ctx, nullptr, result);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_load_member_int_internal_prehashed_v1(QoreObject* object, const char* name,
+        uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, int64_t* result) {
+    if (!class_ctx) {
+        return 0;
+    }
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT")
+        && !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH");
+    if (!enabled) {
+        return qore_rt_try_load_member_int_prehashed_v1(object, name, hash64, hash32, class_ctx, result);
+    }
+    return object && name && result && qore_object_private::get(*object)->tryReadScalarMemberInternalPrehashed(
+        name, qore_rt_select_precomputed_hash(hash64, hash32), class_ctx, result, nullptr);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_load_member_float_internal_prehashed_v1(QoreObject* object, const char* name,
+        uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, double* result) {
+    if (!class_ctx) {
+        return 0;
+    }
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT")
+        && !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH");
+    if (!enabled) {
+        return qore_rt_try_load_member_float_prehashed_v1(object, name, hash64, hash32, class_ctx, result);
+    }
+    return object && name && result && qore_object_private::get(*object)->tryReadScalarMemberInternalPrehashed(
         name, qore_rt_select_precomputed_hash(hash64, hash32), class_ctx, nullptr, result);
 }
 

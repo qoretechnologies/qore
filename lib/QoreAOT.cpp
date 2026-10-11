@@ -1009,7 +1009,8 @@ static bool isAOTReceiverIntForwarder(const QoreIRFunction& ir, const UserVarian
 //! Every value is derived from the strict parameter, a same-family constant, or the guarded member.
 //! Unsupported bodies retain their ordinary entry; declarations alone never authorize a native read.
 static bool isAOTScalarMemberEligible(const QoreIRFunction& ir, const UserVariantBase* uvb,
-        const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, bool& internal_member) {
+    internal_member = false;
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
     if (std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY") || !method || method->isStatic() || !sig
             || !isAOTFastMethodCallEligible(variant) || !isAOTFastEntryEligible(&ir, uvb)
@@ -1037,11 +1038,23 @@ static bool isAOTScalarMemberEligible(const QoreIRFunction& ir, const UserVarian
                 }
                 break;
             }
-            case QoreIROpcode::LoadSelfMember:
+            case QoreIROpcode::LoadSelfMember: {
                 if (++reads != 1) {
                     return false;
                 }
+                // Only a positive local private:internal declaration is independent
+                // of the receiver hierarchy. It always selects the defining class's
+                // internal hash, including when a subclass shadows the member.
+                // Never embed a class pointer: the companion receives the live
+                // resolved variant's defining context, including imported copies.
+                const auto* mvb = dynamic_cast<const MethodVariantBase*>(variant);
+                const auto* defining = mvb ? mvb->getClassPriv() : nullptr;
+                const auto* member = static_cast<const QoreIRSelfMemberInstruction*>(inst.get());
+                const auto* info = defining && !defining->sys
+                    ? defining->runtimeGetMemberInfo(member->member_name.c_str(), defining) : nullptr;
+                internal_member = info && info->isLocalInternal() && info->getClass() == defining;
                 break;
+            }
             case QoreIROpcode::ConstInt:
                 if (floating) { return false; }
                 break;
@@ -21313,8 +21326,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     }
 
                     llvm::Function* scalar_member_entry = nullptr;
+                    bool scalar_member_internal = false;
                     if (method_ok && !metadata_only && !fn_outliner.active()
-                            && isAOTScalarMemberEligible(*ir_func, uvb, meth, variant)) {
+                            && isAOTScalarMemberEligible(*ir_func, uvb, meth, variant, scalar_member_internal)) {
                         const UserSignature* sig = uvb->getUserSignature();
                         bool floating = sig->getParamTypeInfo(0) == floatTypeInfo;
                         auto* scalar_ty = floating ? llvm::Type::getDoubleTy(ctx) : llvm::Type::getInt64Ty(ctx);
@@ -21338,7 +21352,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             sig->getReturnTypeInfo());
                         member_lowerer.setScalarMemberEntry(scalar_member_entry->getArg(1),
                             scalar_member_entry->getArg(2), scalar_member_entry->getArg(3),
-                            scalar_member_entry->getArg(4));
+                            scalar_member_entry->getArg(4), scalar_member_internal
+                                && !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT"));
                         member_lowerer.setAOTLocTableBase(static_cast<int32_t>(aot_locs_local.size()));
                         std::string member_error;
                         if (!member_lowerer.lowerFunction(*ir_func, module, member_error)) {

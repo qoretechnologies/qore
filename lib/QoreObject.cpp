@@ -1046,12 +1046,16 @@ int qore_object_private::tryAssignScalarMemberResolvedPrehashed(
     return 1;
 }
 
-template <bool Prehashed>
+template <bool Prehashed, bool Internal>
 bool qore_object_private::tryReadScalarMemberImpl(const char* mem, size_t hash,
         const qore_class_private* class_ctx, int64_t* integer, double* floating) const {
     assert(mem && (bool(integer) != bool(floating)));
-    const qore_class_private* member_class_ctx = qore_class_private::get(*theclass)->runtimeGetMemberContext(
-        mem, class_ctx);
+    const qore_class_private* member_class_ctx = class_ctx;
+    if constexpr (Internal) {
+        assert(class_ctx);
+    } else {
+        member_class_ctx = qore_class_private::get(*theclass)->runtimeGetMemberContext(mem, class_ctx);
+    }
     QoreSafeVarRWReadLocker sl(rml);
     if (status == OS_DELETED) {
         return false;
@@ -1091,6 +1095,11 @@ bool qore_object_private::tryReadScalarMember(const char* mem, const qore_class_
 bool qore_object_private::tryReadScalarMemberPrehashed(const char* mem, size_t hash,
         const qore_class_private* class_ctx, int64_t* integer, double* floating) const {
     return tryReadScalarMemberImpl<true>(mem, hash, class_ctx, integer, floating);
+}
+
+bool qore_object_private::tryReadScalarMemberInternalPrehashed(const char* mem, size_t hash,
+        const qore_class_private* class_ctx, int64_t* integer, double* floating) const {
+    return tryReadScalarMemberImpl<true, true>(mem, hash, class_ctx, integer, floating);
 }
 
 QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const {

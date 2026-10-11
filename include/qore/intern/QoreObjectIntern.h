@@ -438,7 +438,12 @@ public:
     DLLLOCAL bool tryReadScalarMemberPrehashed(const char* mem, size_t hash,
         const qore_class_private* class_ctx, int64_t* integer, double* floating) const;
 
-    template <bool Prehashed>
+    //! Same read after proving a local private:internal member; class_ctx is its defining/storage class.
+    //! The positive declaration proof must belong to the live method body. No value or receiver is cached.
+    DLLLOCAL bool tryReadScalarMemberInternalPrehashed(const char* mem, size_t hash,
+        const qore_class_private* class_ctx, int64_t* integer, double* floating) const;
+
+    template <bool Prehashed, bool Internal = false>
     DLLLOCAL bool tryReadScalarMemberImpl(const char* mem, size_t hash,
         const qore_class_private* class_ctx, int64_t* integer, double* floating) const;
 

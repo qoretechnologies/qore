@@ -1059,6 +1059,21 @@ int qore_rt_try_load_member_int_prehashed_v1(QoreObject* object, const char* nam
 int qore_rt_try_load_member_float_prehashed_v1(QoreObject* object, const char* name,
     uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, double* result);
 
+//! Read a member whose local private:internal storage context was proven by the compiler.
+//! @param object borrowed receiver already admitted by the full live native method guards
+//! @param name member name from the separately proven whole body
+//! @param hash64 compiler-computed XXH64 of name, seed zero
+//! @param hash32 compiler-computed XXH32 of name, seed zero
+//! @param class_ctx live variant's defining class; must contain the proven local Internal declaration
+//! @param result scalar output, untouched on miss
+//! @return one for a locked live primitive read, zero for an effect-free ordinary fallback
+//! @note Only storage-context lookup is removed; ownership, locking and actual value checks are unchanged.
+int qore_rt_try_load_member_int_internal_prehashed_v1(QoreObject* object, const char* name,
+    uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, int64_t* result);
+//! Floating counterpart with the same positive declaration proof and untouched-miss-output contract.
+int qore_rt_try_load_member_float_internal_prehashed_v1(QoreObject* object, const char* name,
+    uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, double* result);
+
 //! Publish a pure dynamic int(int) closure companion, idempotently for this exact normal body.
 //! @param ctx runtime-owned context, without per-instance captured values
 //! @param normal body identity checked again at dispatch

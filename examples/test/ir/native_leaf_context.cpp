@@ -1214,13 +1214,17 @@ private:
 template <typename Scalar>
 thread_local MemberEntryProbe<Scalar>* MemberEntryProbe<Scalar>::current = nullptr;
 
-template <typename Scalar>
+template <typename Scalar, bool Internal = false>
 static void checkMemberMethods(QoreProgram* program) {
     constexpr bool floating = std::is_same_v<Scalar, double>;
-    const char* caller_name = floating ? "memberFloatProbe" : "memberIntProbe";
-    const char* class_name = floating ? "NativeLeafMemberFloat" : "NativeLeafMemberInt";
+    const char* caller_name = Internal ? (floating ? "memberInternalFloatProbe" : "memberInternalIntProbe")
+        : (floating ? "memberFloatProbe" : "memberIntProbe");
+    const char* class_name = Internal ? (floating ? "NativeLeafMemberInternalFloat" : "NativeLeafMemberInternalInt")
+        : (floating ? "NativeLeafMemberFloat" : "NativeLeafMemberInt");
     ExceptionSink xsink;
-    ValueHolder owner(program->callFunction(floating ? "makeMemberFloatProbe" : "makeMemberIntProbe",
+    const char* factory = Internal ? (floating ? "makeMemberInternalFloatProbe" : "makeMemberInternalIntProbe")
+        : (floating ? "makeMemberFloatProbe" : "makeMemberIntProbe");
+    ValueHolder owner(program->callFunction(factory,
         nullptr, &xsink), &xsink);
     assert(!xsink && owner->getType() == NT_OBJECT);
     QoreObject* object = owner->get<QoreObject>();
@@ -1266,7 +1270,8 @@ static void checkMemberMethods(QoreProgram* program) {
         const size_t length = name ? std::strlen(name) : 0;
         const uint64_t hash64 = name ? XXH64(name, length, 0) : 0;
         const uint32_t hash32 = name ? XXH32(name, length, 0) : 0;
-        Scalar prehashed_result = result ? *result : 0;
+        const Scalar initial_result = result ? *result : 0;
+        Scalar prehashed_result = initial_result;
         int prehashed;
         int ordinary;
         if constexpr (floating) {
@@ -1280,7 +1285,32 @@ static void checkMemberMethods(QoreProgram* program) {
         }
         assert(prehashed == ordinary);
         assert(!result || !std::memcmp(&prehashed_result, result, sizeof(Scalar)));
+        if constexpr (Internal) {
+            Scalar internal_result = initial_result;
+            int resolved;
+            if constexpr (floating) {
+                resolved = qore_rt_try_load_member_float_internal_prehashed_v1(receiver, name, hash64, hash32,
+                    cls, result ? &internal_result : nullptr);
+                assert(!qore_rt_try_load_member_float_internal_prehashed_v1(receiver, name, hash64, hash32,
+                    nullptr, result ? &internal_result : nullptr));
+            } else {
+                resolved = qore_rt_try_load_member_int_internal_prehashed_v1(receiver, name, hash64, hash32,
+                    cls, result ? &internal_result : nullptr);
+                assert(!qore_rt_try_load_member_int_internal_prehashed_v1(receiver, name, hash64, hash32,
+                    nullptr, result ? &internal_result : nullptr));
+            }
+            assert(resolved == ordinary);
+            assert(!result || !std::memcmp(&internal_result, result, sizeof(Scalar)));
+        }
         return ordinary;
+    };
+    auto set = [&](QoreValue value) {
+        if constexpr (Internal) {
+            object->setMemberValue("delta", object->getClass(), value, &xsink);
+        } else {
+            object->setValue("delta", value, &xsink);
+        }
+        assert(!xsink);
     };
     auto equal = [](Scalar a, Scalar b) { return a == b || (std::isnan(a) && std::isnan(b)); };
     auto check = [&](bool boxed, int handled, Scalar expected) {
@@ -1305,7 +1335,7 @@ static void checkMemberMethods(QoreProgram* program) {
         values = {17, int64_t{1} << 50, -(int64_t{1} << 50)};
     }
     for (Scalar value : values) {
-        object->setValue("delta", QoreValue(value), &xsink);
+        set(QoreValue(value));
         assert(!xsink);
         Scalar output = -123;
         assert(read(object, "delta", &output) == 1 && equal(output, value));
@@ -1321,7 +1351,7 @@ static void checkMemberMethods(QoreProgram* program) {
     ValueHolder enumeration(program->callFunction("makeEnumProbe", nullptr, &xsink), &xsink);
     assert(!xsink);
     for (QoreValue value : {QoreValue(), *enumeration, floating ? QoreValue(int64_t{7}) : QoreValue(1.25)}) {
-        object->setValue("delta", value.refSelf(), &xsink);
+        set(value.refSelf());
         assert(!xsink);
         assert(!read(object, "delta", &output) && output == -123);
         MemberEntryProbe<Scalar> probe(ctx, enabled);
@@ -1330,7 +1360,7 @@ static void checkMemberMethods(QoreProgram* program) {
             check(true, fallback ? 2 : 0, arg);
         }
     }
-    object->setValue("delta", QoreValue(initial), &xsink);
+    set(QoreValue(initial));
     assert(!xsink);
     bool ready = ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
     assert(ready);
@@ -1393,6 +1423,8 @@ static QoreValue methodReceiverProbes(const void* ptr, const QoreListNode*, Runt
     checkGenericFloatMethods(invocation.program, invocation.inline_method, true);
     checkMemberMethods<int64_t>(invocation.program);
     checkMemberMethods<double>(invocation.program);
+    checkMemberMethods<int64_t, true>(invocation.program);
+    checkMemberMethods<double, true>(invocation.program);
     return QoreValue(int64_t{24});
 }
 

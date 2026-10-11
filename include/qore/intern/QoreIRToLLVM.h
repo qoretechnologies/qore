@@ -192,12 +192,14 @@ public:
     //! @param class_ctx method's defining class context
     //! @param runtime_config same-thread live runtime view
     //! @param accepted caller-owned flag cleared on a non-evaluating member-read miss
+    //! @param internal_member whole-body proof of a local private:internal member in the defining class
     void setScalarMemberEntry(llvm::Value* object, llvm::Value* class_ctx,
-            llvm::Value* runtime_config, llvm::Value* accepted) {
+            llvm::Value* runtime_config, llvm::Value* accepted, bool internal_member) {
         scalar_member_object = object;
         scalar_member_class_ctx = class_ctx;
         receiver_runtime_config = runtime_config;
         scalar_member_accepted = accepted;
+        scalar_member_internal = internal_member;
     }
 
     //! Set the name of an AOT self-recursive fast entry function.
@@ -387,6 +389,7 @@ private:
     llvm::Value* scalar_member_object = nullptr;
     llvm::Value* scalar_member_class_ctx = nullptr;
     llvm::Value* scalar_member_accepted = nullptr;
+    bool scalar_member_internal = false;
     //! the name of the generated native function, if not the IR function's own name; see setSymbolName()
     std::string symbol_name;
     const std::unordered_map<const void*, llvm::Value*>* fast_entry_args = nullptr;

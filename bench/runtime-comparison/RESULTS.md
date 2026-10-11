@@ -10300,3 +10300,113 @@ Next AOT-first steps:
 
 [Verified measurements and qualification](results-scalar-member-macos-arm64.json).
 [All 62 audit checks](FOLLOWUP-AUDIT.md#aot-scalar-member-companion-audit-2026-10-11).
+
+
+## AOT compile-time internal-member storage context (2026-10-11)
+
+After committing scalar-member companions as e292ebd63, origin/develop was fetched
+and merged at ba1be8003 (upstream 669783da1). Incoming changes concerned dependency
+source-manifest tooling, not runtime/compiler fast paths. Release/debug builds,
+qmods, manifest checks and relevant tests passed before freezing the merged baseline.
+
+The next profile-guided change proves a positive local `private:internal` declaration
+at AOT compilation. That declaration always uses the live variant's defining class
+as its storage context, including inherited methods on shadowing subclasses. The
+new read helper omits repeated context resolution while retaining the ordinary object
+read lock, current scalar checks, exact-body/Program guards and fallback. No member
+value or metadata pointer is cached, and no class pointer is embedded in the artifact.
+Public/private/non-local or unknown declarations retain ordinary context lookup.
+The design document records class immutability, copies and loader constraints.
+
+Five-fork before/after (`run-tsz0h7ud`): count 4096, three warmups, five 500 ms
+windows, randomized scheduling seed 826137; nine kernels, 90 jobs and 450 windows.
+Separately compiled artifacts use their matching private runtime identities. Values
+are medians of fork means in whole-workload ns/element, not isolated call latency.
+
+|!Workload|!Merged baseline|!Context proof|!Time reduction|!Observed fork ranges
+|Integer member method|43.018133|36.996074|13.999%|Separated
+|Float member method|45.098039|40.496524|10.203%|Separated
+|Effectful integer method|250.277898|247.621381|1.061%|Overlap
+|Boxed pure integer method|22.640571|22.280938|1.588%|Overlap
+|Boxed pure float method|28.281977|28.154367|0.451%|Overlap
+|Native integer call|10.162447|9.913253|2.452%|Overlap
+|Native float call|10.911720|11.094248|-1.673%|Overlap
+|Integer callback|6.800607|6.874009|-1.079%|Overlap
+|Float callback|8.759948|8.729424|0.348%|Overlap
+
+Only the two member workloads exercise the changed helper. All seven non-target
+control ranges overlap, so their median shifts are not attributed to this proof.
+No sample or slower fork was discarded; observed ranges are descriptive, not
+confidence intervals or evidence of zero regression.
+
+A separate balanced experiment uses one executable, one frozen library, one normalized
+library path and exact ordered-environment A/A modes. The disabled mode changes only
+the final character of an equal-length environment key to activate
+`QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1`. Kernel/fork blocks and mode order are
+randomized (seed 826139), with five forks, four kernels, 60 jobs and 300 windows.
+
+|!Balanced workload|!Enabled A|!Enabled B|!Context proof disabled|!Observed fork ranges
+|Integer member method|36.674118|36.476276|42.305069|Both enabled ranges separate from disabled
+|Float member method|40.351742|40.380136|45.645151|Both enabled ranges separate from disabled
+|Native float call|10.842452|10.861630|10.998530|Overlap
+|Integer callback|6.908422|6.853114|6.877203|Overlap
+
+The identical-binary control reproduces about 13-14% integer and 11.5-11.6% float
+member-workload reductions. A/A member ranges overlap. The effect is therefore not
+dependent on the separate-build layout comparison, although it is not a universal
+speedup or a guarantee of no regression. All 150 candidate-comparison jobs and
+750 windows are retained with raw-output, source, artifact and environment hashes.
+Background desktop activity was observed; no owned inspection, build, test or
+profiling work overlapped timing.
+
+Before this prototype, a fresh matched merged-baseline AOT/Java run (`run-ksiselid`,
+five forks, seed 826131, nine kernels, 90 jobs and 450 windows) established the
+remaining gaps below. This is not a matched Java comparison for the context-proof
+candidate; do not combine these Java values with later candidate timings.
+
+|!Merged-baseline workload|!AOT ns/element|!Java JIT ns/element|!AOT/Java
+|Integer member method|42.516370|2.526597|16.828x
+|Float member method|45.144125|2.517227|17.934x
+|Effectful integer method|249.823768|1.862001|134.169x
+|Boxed pure integer method|22.452567|2.508591|8.950x
+|Boxed pure float method|28.076048|2.544647|11.033x
+|Native integer call|10.107698|3.080169|3.282x
+|Native float call|11.027260|3.461558|3.186x
+|Integer callback|6.847464|1.876405|3.649x
+|Float callback|8.724958|2.684331|3.250x
+
+These are retained-call workloads, not isolated call instructions or general language
+speed ratios. Java no-inline directives include the effectful target; both languages
+reset and consume receiver counters. Exact-baseline serial profiles, with matched
+binary UUIDs and validated workload checksums, show remaining dispatch/stack setup,
+scalar local assignment and value ownership, read locking and member lookup. The
+effectful path additionally spends time in ordinary local/frame/TLS setup and member
+updates. Sample counts are qualitative, not causal timing percentages; the idle
+signal-wait thread is excluded from interpretation. No Java-parity claim is made.
+
+Release/debug qualification independently verifies the unchanged measured release
+library and all frozen production/test/benchmark sources. Release: 105 selected files,
+388 cases, 30,363 assertions, 15 standalones and one skip. Debug: 105 files, 395 cases,
+30,462 assertions, 15 standalones and no skips. Both additionally pass seven exception/
+stack fixtures. The member suite now has 825 assertions; native context has 604.
+Also passed: 205 debug native checks, 17 harness tests and 555 reference checks per
+IR, AOT, interpreted Java and Java JIT mode. New coverage includes internal float
+shadowing, concurrent internal writers, native integer/float hit and miss probes,
+special scalar encodings and compile/runtime disable controls. No full-suite,
+sanitizer, cross-platform or IR/JIT timing benefit is claimed.
+
+Next AOT-first steps:
+
+1. Commit this measured, qualified and audited stage on feature/performance; fetch
+   origin and merge origin/develop, inspect incoming changes and validate as needed.
+   Do not push; freeze the next baseline after any relink.
+2. Repair the saved pre-existing reflective auto-receiver exception reload defect
+   before broader caller-local or frame elision. Check ordinary AOT parameter and
+   body-local paths, successful and throwing callees, and ownership on replacement.
+   Measure the correction; do not mask it by weakening tests or hiding runtime slots.
+3. Target effectful ordinary AOT call setup and boxed caller local/value work using
+   explicit RuntimeConfig and compile/bind-time effects proofs where justified.
+   Preserve side effects exactly once, stack/debugger/reflection semantics, deletion,
+   locking and cross-Program fallback. Re-measure with matched baseline and Java.
+
+[Verified measurements, baseline profiles and qualification](results-scalar-member-context-macos-arm64.json).

@@ -292,6 +292,16 @@ unsupported operations and synchronized methods retain ordinary execution.
 hashes, or routes generated reads through the original runtime helper. Both target
 widths are emitted; field values and access context are still read live. The general
 compiler switch `QORE_DISABLE_AOT_PREHASHED_KEYS=1` also suppresses generation.
+
+`QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1` disables a separate positive declaration
+proof: a locally declared `private:internal` member uses the live method variant's
+defining class as its storage context, independent of receiver subclasses or
+shadowing. The compiler can therefore omit the per-read member-context lookup.
+No class pointer or mutable value is embedded or cached, and the ordinary object
+lock and actual scalar checks remain. Public, ordinary private, inherited non-local
+and unknown declarations keep normal lookup. The control works at compile time
+and runtime; disabling member prehash also restores normal context lookup.
+
 Compile separate artifacts when comparing compiler changes or different private
 runtime identities. Runtime-only on/off controls may use an identical executable.
 For small timing differences, include identical-executable A/A controls and account
