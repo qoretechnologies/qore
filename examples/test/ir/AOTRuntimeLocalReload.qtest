@@ -44,6 +44,7 @@ class RuntimeLocalReloadTest inherits QUnit::Test {
         }
         TmpDir dir("qore-runtime-local-reload-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "QORE_DISABLE_AOT_INLINE_RELOAD_GUARD=1 ",
                 "QORE_DISABLE_AOT_NAME_METHOD_BOXED_ARGUMENT=1 ",
                 "QORE_DISABLE_AOT_STABLE_UNTYPED_LOAD=1 ",
                 "QORE_DISABLE_AOT_NATIVE_BODY_LOCALS=1 QORE_DISABLE_AOT_STRING_BODY_LOCALS=1 ",
@@ -53,8 +54,11 @@ class RuntimeLocalReloadTest inherits QUnit::Test {
                 string ir = run((qcc, level, "--strip-source", "-o", executable, source),
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
                 foreach string caller in (cases) {
-                    assertRegex("local_reload_epoch", body(ir, caller),
+                    string entry = body(ir, caller);
+                    assertRegex("local_reload_epoch", entry,
                         caller + " native AOT runtime-slot invalidation " + prefix + level);
+                    assertEq(prefix != "QORE_DISABLE_AOT_INLINE_RELOAD_GUARD=1 ",
+                        regex(entry, "aot_local_cache_stale"), caller + " inline freshness guard " + prefix + level);
                 }
                 foreach string runtime in (("", "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
                         "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",

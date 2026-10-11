@@ -10487,3 +10487,106 @@ Next AOT-first work:
    after a partial update.
 
 [Verified measurements and qualification](results-aot-runtime-local-reload-macos-arm64.json).
+
+
+## AOT inline local-cache freshness guard (2026-10-11)
+
+AOT is the primary target. The compiler now compares the invocation-local
+reload/valid epochs before entering the existing stale-local helper. A fresh
+cache bypasses only the helper's no-op path; stale caches retain runtime-slot
+evaluation, reference ownership, deferred cleanup and exception behavior.
+Reflective class-parameter invalidation runs before this guard. No broader
+callee/caller-cleanup effect elision, helper ABI or IR/JIT lowering change.
+Existing AOT artifacts require recompilation.
+
+The baseline is the corrected runtime-backed local implementation committed
+as adf56d2b7, not the earlier unchecked cache. Its previously frozen binary
+was bound to that commit by verifying all relevant source blobs and artifact
+hashes; it was not relabeled as a post-commit rebuild. This optimization
+recovers a small part of the correctness cost, not the entire cost.
+
+Randomized before/after run-0pprtu4k: 3 forks, 3 warmups, 5 measured 500-ms
+windows/fork, count 4096, seed 826157; 54 jobs / 270 measured windows. Baseline
+and candidate use separately compiled AOT artifacts and frozen libraries.
+
+|!Workload|!Before ns/element|!After ns/element|!Time reduction|!Fork ranges separate
+|boxed_int_method_fallback|46.898586|45.644210|+2.675%|yes
+|boxed_float_method_fallback|51.536461|50.257742|+2.481%|yes
+|boxed_int_method_effect|259.065366|260.127695|-0.410%|no
+|boxed_int_method_call|32.576418|31.586730|+3.038%|yes
+|boxed_float_method_call|38.784436|37.390418|+3.594%|yes
+|dynamic_int_result_call|10.004055|10.026332|-0.223%|no
+|dynamic_float_result_call|11.274021|11.334172|-0.534%|no
+|indirect_int_result|6.886676|6.892805|-0.089%|no
+|indirect_float_result|8.841571|8.827635|+0.158%|no
+
+Balanced compile-time control aot-inline-reload-balanced-YE9rFD: 5 forks,
+3 warmups, 5 measured 500-ms windows/fork, count 4096, seed 826159; 105 jobs /
+525 measured windows. Both binaries use the identical frozen compiler and
+runtime library. The disabled binary is compiled with
+`QORE_DISABLE_AOT_INLINE_RELOAD_GUARD=1`; the enabled compilation uses a
+same-length inert key. All timed environments are identical and contain
+neither flag. Enabled A/A modes use the exact same executable and arguments.
+
+|!Workload|!Disabled ns/element|!Enabled A ns/element|!Enabled B ns/element|!Time reduction A / B
+|boxed_int_method_fallback|46.859678|45.652514|45.593849|+2.576% / +2.701%
+|boxed_float_method_fallback|51.496720|50.018627|49.740630|+2.870% / +3.410%
+|boxed_int_method_call|32.202249|31.134838|31.187605|+3.315% / +3.151%
+|boxed_float_method_call|38.559999|37.600350|37.325951|+2.489% / +3.200%
+|boxed_int_method_effect|262.854054|261.705347|259.800671|+0.437% / +1.162%
+|dynamic_float_result_call|11.249329|11.244426|11.144807|+0.044% / +0.929%
+|indirect_int_result|6.933228|6.868211|6.982783|+0.938% / -0.715%
+
+Both enabled ranges separate from disabled for integer/float member reads
+and integer pure calls. Float pure-call medians also improve, but enabled A
+contains a retained 53.982490 ns/element outlier fork and overlaps disabled;
+enabled B is separated. All A/A ranges overlap. Effectful methods, native
+float calls and integer callbacks have overlapping control ranges, so no
+speedup or equivalence is claimed for them. Every sample is retained.
+
+All 795 timing windows were independently replayed; summaries, source/binary
+identities, randomized job order and 555 reference results per measured mode
+were verified. No owned inspection, build, test or profiling overlapped timing.
+These are whole-workload medians of fork means, not isolated call latency,
+statistical equivalence or a general language comparison. No fresh Java
+timing or IR/JIT performance gain is claimed.
+
+The control executable native text grows from 233252 to 234068 bytes (+816 bytes,
++0.350%). This is one benchmark artifact, not a general code-size or compile-time claim.
+
+Release: 106 selected files, 389 cases, 31803 assertions, 15 standalones, 1 skipped.
+Debug: 106 selected files, 396 cases, 31902 assertions, 15 standalones, 0 skipped.
+Both additionally pass seven exception/stack fixtures. The extended reload
+regression has 1,440 assertions: normal LLVM entry and guard presence/absence,
+stripped -O0/-O3, return/throw, scalar/container values, ownership counts,
+written parameters, native EH, split compilation and fallback controls.
+Also passed: 205 debug native checks, 17 harness tests and 555 references per
+IR/AOT/Java mode. No full-suite, sanitizer or cross-platform claim.
+
+The up-to-date release module targets did not restore source links changed by
+the debug build. All 13 task-built module links were explicitly restored to
+their release artifacts and verified by target/content hash; the 1,440-assertion
+reload regression passed again with those links in place.
+
+Next AOT-first plan:
+
+1. Preserve this validated corrected baseline. Assess extending the existing
+   strong-slot/mutation-epoch cache to read-only auto parameters holding objects.
+   Require an existing entry owner, no address escape and exact live-slot
+   admission; prove reflective replacement/references and non-object fallback
+   behavior before implementation. Measure non-object controls too.
+2. Propagate the already-live
+   RuntimeConfig through matched ordinary scalar-method fallback; first prove
+   same-thread lifetime, Program-data presence and object/class restoration
+   across arbitrary reentry. Preserve cross-Program and debugger paths.
+3. Measure context lookup/setup independently on the effectful method workload.
+   Keep ordinary frames, observable parameter/body slots, return filtering and
+   destruction order. Do not borrow a PIC-owned call-name across a callee that
+   can replace the cache.
+4. Consider broader native field operations only with complete admission before
+   effects or a true continuation; never retry after a partial write. Any caller
+   reload elision must cover argument/receiver, overwritten result and deferred
+   owner destruction, not merely a pure callee.
+5. Re-run matched Java comparisons after a larger measured AOT improvement.
+
+[Verified measurements, controls and qualification](results-aot-inline-reload-guard-macos-arm64.json).

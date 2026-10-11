@@ -192,6 +192,15 @@ reload cost is a correctness tradeoff, not a claimed performance improvement.
 Pure-callee proofs do not by themselves authorize eliminating reloads when
 caller-side destructors or deferred cleanup can reenter Qore.
 
+`QORE_DISABLE_AOT_INLINE_RELOAD_GUARD=1` disables the compiler-side freshness
+comparison before the stale-local helper. With the guard enabled, equal
+invocation-local epochs bypass only the helper's existing no-op path; stale
+values still use the complete runtime reload and deferred ownership cleanup.
+Reflective class-parameter invalidation runs first. This AOT-only optimization
+does not remove caller invalidation or change IR/JIT lowering. The switch is
+compile-time only: recompile separate artifacts for on/off measurements, using
+the same runtime environment. See the [measurements and noisy controls](RESULTS.md#aot-inline-local-cache-freshness-guard-2026-10-11).
+
 An unrelated prepared **method** entry experiment was rejected after same-library
 compiler controls showed no benefit; it adds no supported flag or helper ABI.
 See [the negative result and retained diagnostic lifetime fix](RESULTS.md#prepared-method-entry-rejected-2026-10-09).

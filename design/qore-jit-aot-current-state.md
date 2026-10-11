@@ -185,6 +185,20 @@ reenter Qore and mutate caller locals even after a pure scalar method. Neither
 same-Program admission nor a successful native helper result alone proves those
 cleanup effects absent.
 
+The AOT compiler can bypass the stale-local helper when the invocation-local
+valid epoch already equals the current reload epoch. This exposes the helper's
+existing no-op branch to LLVM without changing invalidation or slot visibility.
+Reflective class-parameter mutation forcing runs before the comparison; stale
+values still use the complete helper, including reference evaluation, owned
+trackers, deferred cleanup and exception handling. This does not infer that a
+native call or its caller cleanup is effect-free.
+
+`QORE_DISABLE_AOT_INLINE_RELOAD_GUARD=1` restores unconditional helper calls at
+compilation for differential validation. It is not a runtime switch: compile
+separate artifacts to compare it. IR/JIT lowering and helper ABI are unchanged.
+The reload regression asserts both ordinary native entries and guard
+presence/absence, including stripped `-O0`/`-O3` output and fallback controls.
+
 ### Checked AOT class-local initialization
 
 A normal initial assignment to a runtime-backed AOT body local with one required,

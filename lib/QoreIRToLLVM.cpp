@@ -5315,6 +5315,20 @@ void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
             builder->CreateXor(epoch, rejected_epoch), valid), valid_epoch);
         builder->CreateStore(mutation_epoch, cache.observed_epoch);
     }
+    llvm::BasicBlock* reload_continue = nullptr;
+    if (aot_mode && !std::getenv("QORE_DISABLE_AOT_INLINE_RELOAD_GUARD")) {
+        // The runtime helper returns without evaluating the slot or touching
+        // ownership when these invocation-local epochs match. Expose only
+        // that no-op branch to LLVM; stale slots retain the complete helper,
+        // including reference evaluation and deferred cleanup. In particular,
+        // the reflective class-parameter invalidation above still runs first.
+        llvm::Value* valid = builder->CreateLoad(i64_type, valid_epoch);
+        llvm::Value* stale = builder->CreateICmpNE(valid, epoch, "aot_local_cache_stale");
+        auto* reload = llvm::BasicBlock::Create(ctx, "aot_local_reload", llvm_func);
+        reload_continue = llvm::BasicBlock::Create(ctx, "aot_local_reload_continue", llvm_func);
+        builder->CreateCondBr(stale, reload, reload_continue);
+        builder->SetInsertPoint(reload);
+    }
     if (aot_mode) {
         auto helper = module.getOrInsertFunction("qore_rt_reload_local_if_stale_aot",
                 llvm::FunctionType::get(void_type,
@@ -5336,6 +5350,10 @@ void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
         builder->CreateCall(helper,
                 {var_as_ptr, alloca_it->second, tracker_it->second,
                  deferred_it->second, valid_epoch, epoch, xsink_arg});
+    }
+    if (reload_continue) {
+        builder->CreateBr(reload_continue);
+        builder->SetInsertPoint(reload_continue);
     }
     if (cache_continue) {
         builder->CreateBr(cache_continue);
