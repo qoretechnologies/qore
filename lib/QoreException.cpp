@@ -89,11 +89,20 @@ QoreExceptionBase::QoreExceptionBase(QoreValue n_err, QoreValue n_desc, QoreValu
     while (w) {
         const QoreProgramLocation* override_loc = nullptr;
         if (repair_aot_locs && is_aot_frame(w)) {
+            bool logical = dynamic_cast<const QoreAOTLogicalStackFrameMarker*>(w);
             const QoreStackLocation* caller = w->getNext();
-            if (caller && is_aot_frame(caller) && (aot_j + 1) < aot_bt.size()) {
-                override_loc = aot_bt[aot_j + 1];
+            size_t caller_j = aot_j + (logical ? 0 : 1);
+            // A preflighted forwarding frame has no native PC. Its callee's
+            // stored call site is already exact, while the logical frame itself
+            // borrows the next real AOT caller's PC without advancing the index.
+            if (caller && is_aot_frame(caller)
+                    && !dynamic_cast<const QoreAOTLogicalStackFrameMarker*>(caller)
+                    && caller_j < aot_bt.size()) {
+                override_loc = aot_bt[caller_j];
             }
-            ++aot_j;
+            if (!logical) {
+                ++aot_j;
+            }
         }
         callStack->push(QoreThreadList::getCallStackHash(*w, override_loc), nullptr);
         w = w->getNext();

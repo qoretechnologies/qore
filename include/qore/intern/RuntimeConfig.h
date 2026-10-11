@@ -260,6 +260,10 @@ private:
     this middle publication frame does not repeat their stack checks. The sink
     parameter is retained for the common helper construction signature, but not used.
     All pointers belong to the current invocation/thread, including the cache.
+    A compiler-proven forwarding body may be represented by an additional
+    deferred method frame only after preflighting its exact pure inner target.
+    The inner frame must supply its explicit source call site; overflow
+    materializes the deferred chain in caller order before exception work.
 */
 class RuntimeConfigNativeLeafCallHelper {
 public:
@@ -280,7 +284,7 @@ protected:
     // and its first operation checks the live stack. Method-v1 stays eager.
     DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
         const QoreProgramLocation*& call_loc, RuntimeConfigNativeMethodContext& context,
-        ExceptionSink* xsink);
+        ExceptionSink* xsink, const QoreProgramLocation* caller_loc = nullptr);
     ~RuntimeConfigNativeLeafCallHelper() = default;
     DLLLOCAL void restoreEager();
     DLLLOCAL void restoreDeferred();
@@ -335,13 +339,15 @@ public:
         @param call_loc caller-location slot, initialized before publication
         @param context invocation-owned receiver/cache descriptor, alive until readers finish
         @param xsink retained for the common construction signature, not modified
+        @param caller_loc explicit forwarding call site, or null to use the current runtime location
         @note Object/class substitution is materialized before exception work;
             the caller must retain receiver ownership and all live admission guards.
     */
     __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelperFor(RuntimeConfig& rc,
             QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
-            RuntimeConfigNativeMethodContext& context, ExceptionSink* xsink)
-            : RuntimeConfigNativeLeafCallHelper(rc, stack_loc, call_loc, context, xsink) {
+            RuntimeConfigNativeMethodContext& context, ExceptionSink* xsink,
+            const QoreProgramLocation* caller_loc = nullptr)
+            : RuntimeConfigNativeLeafCallHelper(rc, stack_loc, call_loc, context, xsink, caller_loc) {
         static_assert(DeferMarkers, "method-v2 leaf contexts use deferred empty markers");
     }
     //! Restore installed state and unpublish the frame, waiting for diagnostic readers before it dies.

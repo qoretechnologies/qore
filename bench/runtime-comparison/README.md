@@ -983,3 +983,29 @@ so one AOT executable can be reused with the saved compatible before/after libra
 An additional same-binary control toggles only this flag for the before processes.
 See the [measurements](RESULTS.md#exact-scalar-returns-in-the-method-wrapper-2026-10-11)
 and [verified evidence](results-method-return-guard-macos-arm64.json).
+
+`QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT=1` disables the runtime forwarding-leaf
+shortcut (presence, sampled on first use). The compiler publishes the sole call
+slot and source location only after proving the entire outer body is
+`int forward(int value) { return self.method(value); }`. A warmed inner dispatch
+cache must then identify an exact, ready, same-Program, context-independent
+`int(int)` native-v2/v3 leaf under the outer method's defining-class context.
+The preflight also checks live body identity, receiver/type, dispatch epoch,
+parse options, argument state, debugger status, and parse-selected overloads.
+
+Only immediate integer inputs enter this shortcut. An absent proof, cache miss,
+different Program/options, reference, wide integer input, reflective override,
+context-using body, or unavailable native companion retains ordinary dispatch
+without changing arguments, ownership, TLS, or the exception sink on the miss.
+Successful calls skip outer TLS signature slots and Program/object substitution,
+but retain both logical stack frames and the explicit inner call site. The pure
+leaf's failing stack guard materializes both contexts in caller order before
+raising; native companions without PC maps are not counted as mapped frames in
+exception location recovery. No arbitrary receiver-aware body is marked pure.
+
+This changes compiler metadata and internal context layout/runtime identity;
+compile baseline/candidate AOT artifacts separately against their matching
+runtimes. The disable flag supports an additional same-binary/artifact control.
+
+See the [forwarding measurements](RESULTS.md#preflighted-same-program-forwarding-leaves-2026-10-11)
+and [verified evidence/audit](results-forward-leaf-preflight-macos-arm64.json).

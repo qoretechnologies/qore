@@ -519,6 +519,16 @@ public:
     DLLLOCAL virtual bool isAOTFrame() const = 0;
 };
 
+//! Internal AOT frame with no corresponding entry in the native PC-location registry.
+/** Used by compiler-proven unmapped scalar companions and bypassed forwarding
+    bodies. A direct callee of such a frame supplies an explicit call site.
+    Exception repair must not consume a native backtrace entry for this frame;
+    an innermost scalar companion installs its eager location before raising.
+    This separate marker leaves all existing vtables intact.
+*/
+class QoreAOTLogicalStackFrameMarker : public QoreAOTStackFrameMarker {
+};
+
 //! Stack location element abstract class for external binary modules
 /** @since %Qore 0.9
 */

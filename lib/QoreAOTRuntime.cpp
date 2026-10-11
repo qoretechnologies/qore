@@ -3831,6 +3831,24 @@ extern "C" DLLEXPORT void qore_rt_bind_receiver_int_method_v1(QoreAOTContext* ct
     ctx->receiver_int_method_entry_v1.store(entry, std::memory_order_release);
 }
 
+extern "C" DLLEXPORT void qore_rt_bind_receiver_int_method_v2(QoreAOTContext* ctx,
+        AotFunctionPtr normal, QoreAOTContext::ReceiverIntMethodEntryV1 entry, int32_t requires_pc_map,
+        int32_t slot, int32_t loc) {
+    qore_rt_bind_receiver_int_method_v1(ctx, normal, entry, requires_pc_map);
+    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal || slot < 0 || slot >= ctx->num_exprs
+            || loc < 0 || loc >= ctx->num_locs
+            || ctx->receiver_int_method_entry_v1.load(std::memory_order_acquire) != entry
+            || ctx->receiver_int_forward_ready.load(std::memory_order_acquire)) {
+        return;
+    }
+    AutoLocker al(g_aot_pc_attach_lock);
+    if (!ctx->receiver_int_forward_ready.load(std::memory_order_relaxed)) {
+        ctx->receiver_int_forward_slot = slot;
+        ctx->receiver_int_forward_loc = loc;
+        ctx->receiver_int_forward_ready.store(true, std::memory_order_release);
+    }
+}
+
 namespace {
 // Map a native PC to its source location via the registry, or nullptr if the PC is
 // not within a known AOT function.
@@ -3916,6 +3934,12 @@ const QoreProgramLocation* qore_aot_resolve_throw_location(const QoreProgramLoca
     }
     // Lock-free fast-path: no AOT code loaded -> nothing to do (common case).
     if (!g_aot_have_ranges.load(std::memory_order_acquire)) {
+        return nullptr;
+    }
+    // Pure native method-v2/v3 companions have no PC-map entry. Their guard
+    // installs the eager signature location before raising; unwinding past
+    // them would incorrectly report a mapped caller's source as the throw site.
+    if (dynamic_cast<const QoreAOTLogicalStackFrameMarker*>(get_runtime_stack_location())) {
         return nullptr;
     }
     AotUnwindState st;

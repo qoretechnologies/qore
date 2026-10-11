@@ -175,8 +175,10 @@ public:
 
     //! Publish the separately proven receiver-aware companion from this normal method entry.
     //! @param name module-local companion symbol, or empty for no companion
-    void setReceiverMethodBinding(const std::string& name) {
+    //! @param call sole forwarding instruction from the independently verified whole-body proof
+    void setReceiverMethodBinding(const std::string& name, const QoreIRDotEvalMethodDirectInstruction* call) {
         receiver_method_binding = name;
+        receiver_forward_call = call;
     }
 
     //! Pass an invocation-owned live RuntimeConfig to a receiver-aware fast entry.
@@ -364,6 +366,7 @@ private:
     // and initializes params from fast_entry_args instead of qore_rt_load_local().
     std::string fast_entry_name;
     std::string receiver_method_binding;
+    const QoreIRDotEvalMethodDirectInstruction* receiver_forward_call = nullptr;
     llvm::Value* receiver_runtime_config = nullptr;
     llvm::Value* dynamic_closure_arg = nullptr;
     llvm::Value* dynamic_closure_runtime_config = nullptr;

@@ -42,7 +42,7 @@ class ReceiverEntryTest inherits QUnit::Test {
                 assertEq(-1, generated.find("ROUND-TRIP FAIL"), "source-map serialization");
                 assertEq(-1, generated.find("round-trip MISMATCH"), "source-map round trip");
                 bool enabled = !prefix.startsWith("QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY");
-                assertEq(enabled, generated.find("qore_rt_bind_receiver_int_method_v1") >= 0,
+                assertEq(enabled, generated.find("qore_rt_bind_receiver_int_method_v2") >= 0,
                     "separate receiver companion binding");
                 if (enabled) {
                     *list<*string> body = regex_extract(generated,
@@ -61,6 +61,8 @@ class ReceiverEntryTest inherits QUnit::Test {
                     }
                 }
                 foreach string runtime in (("", "QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
                         "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
                         "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {

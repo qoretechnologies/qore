@@ -114,6 +114,34 @@ private:
     QoreAOTContext* ctx;
 };
 
+// Count execution of the ordinary receiver companion in this unshared Program.
+// A preflight hit bypasses it; a deliberately unpublished proof must execute it.
+class ForwardEntryProbe {
+public:
+    explicit ForwardEntryProbe(QoreAOTContext* ctx) : ctx(ctx),
+            saved(ctx->receiver_int_method_entry_v1.load(std::memory_order_acquire)) {
+        assert(saved && !current);
+        current = this;
+        ctx->receiver_int_method_entry_v1.store(invoke, std::memory_order_release);
+    }
+    ~ForwardEntryProbe() {
+        ctx->receiver_int_method_entry_v1.store(saved, std::memory_order_release);
+        current = nullptr;
+    }
+    unsigned calls = 0;
+private:
+    static thread_local ForwardEntryProbe* current;
+    QoreAOTContext* ctx;
+    QoreAOTContext::ReceiverIntMethodEntryV1 saved;
+    static uint64_t invoke(int64_t arg, uint64_t receiver, RuntimeConfig* rc,
+            QoreAOTContext* ctx, ExceptionSink* xsink) {
+        assert(current);
+        ++current->calls;
+        return current->saved(arg, receiver, rc, ctx, xsink);
+    }
+};
+thread_local ForwardEntryProbe* ForwardEntryProbe::current = nullptr;
+
 struct FloatMethodProbeState {
     QoreAOTContext::NativeFloatUnaryMethodEntryV3 target;
     QoreObject* object;
@@ -894,6 +922,32 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
     assert(ctx && ctx->pc_loc_fn == uvb->getCachedAOTFunction());
     assert(ctx->native_int_unary_method_entry_v2.load(std::memory_order_acquire));
     assert((ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire) != nullptr) == inline_method);
+    int forward_line = -1;
+    int caller_line = -1;
+    if (!std::strcmp(caller_name, "genericForwardMethodProbe")) {
+        const auto* caller_function = reinterpret_cast<const QoreFunction*>(program->findFunction(caller_name));
+        assert(caller_function);
+        caller_line = caller_function->first()->getUserVariantBase()->getUserSignature()->getParseLocation()->start_line;
+        const auto* forward_method = object->get<QoreObject>()->getClass()->findMethod("forward");
+        assert(forward_method);
+        const auto* forward_uvb = qore_method_private::get(*forward_method)->getFunction()->first()->getUserVariantBase();
+        auto* forward_ctx = forward_uvb->getCachedAOTContext();
+        assert(forward_ctx && forward_ctx->receiver_int_forward_ready.load(std::memory_order_acquire));
+        forward_line = forward_ctx->locs[forward_ctx->receiver_int_forward_loc]->start_line;
+        if (!std::getenv("QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION")) {
+            ForwardEntryProbe probe(forward_ctx);
+            ValueHolder result(program->callFunction(caller_name, *args, &xsink), &xsink);
+            assert(!xsink && result->getAsBigInt() == 24);
+            bool enabled = !std::getenv("QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT")
+                && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
+            assert(probe.calls == (enabled ? 0u : 1u));
+            forward_ctx->receiver_int_forward_ready.store(false, std::memory_order_release);
+            unsigned before = probe.calls;
+            ValueHolder missed(program->callFunction(caller_name, *args, &xsink), &xsink);
+            forward_ctx->receiver_int_forward_ready.store(true, std::memory_order_release);
+            assert(!xsink && missed->getAsBigInt() == 24 && probe.calls == before + 1);
+        }
+    }
     MethodStackProbe force_null(ctx, null_view);
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
     QoreObject* saved_object = rc->getObject();
@@ -967,19 +1021,34 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
                     assert(!xsink);
                     const auto* file = info->getKeyValue("file").get<const QoreStringNode>();
                     assert(file && !file->empty());
+                    assert(info->getKeyValue("line").getAsBigInt()
+                        == uvb->getUserSignature()->getParseLocation()->start_line);
                     const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
                     assert(stack);
                     bool published = false;
+                    bool forward_published = false;
                     for (size_t i = 0; i < stack->size(); ++i) {
                         const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
                         assert(frame);
                         const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
                         published |= name && std::strstr(name->c_str(), "NativeLeafMethodDerived");
+                        forward_published |= name && std::strstr(name->c_str(), "::forward");
+                        if (caller_line >= 0 && name && std::strstr(name->c_str(), "::forward")) {
+                            assert(frame->getKeyValue("line").getAsBigInt() == caller_line);
+                        }
+                        if (forward_line >= 0 && name && std::strstr(name->c_str(), "::next")) {
+                            if (frame->getKeyValue("line").getAsBigInt() != forward_line) {
+                                std::fprintf(stderr, "%s call-site line %lld, expected %d\n", name->c_str(),
+                                    static_cast<long long>(frame->getKeyValue("line").getAsBigInt()), forward_line);
+                            }
+                            assert(frame->getKeyValue("line").getAsBigInt() == forward_line);
+                        }
                         if (!(i % 100)) {
                             assert(!qore_check_cancel(&xsink, "forced method stack inspection"));
                         }
                     }
                     assert(published);
+                    assert(forward_line < 0 || forward_published);
                 }
                 ValueHolder recovered(program->callFunction(caller_name, *args, &xsink), &xsink);
                 assert(!xsink && recovered->getAsBigInt() == 24 && qore_get_call_program_context() == caller);
@@ -997,6 +1066,7 @@ static QoreValue paddedMethodSweep(const void* ptr, const QoreListNode*, Runtime
     checkMethod(invocation.program, "methodProbe", invocation.inline_method);
     checkMethod(invocation.program, "optionalMethodProbe", invocation.inline_method);
     checkMethod(invocation.program, "genericIntMethodProbe", invocation.inline_method);
+    checkMethod(invocation.program, "genericForwardMethodProbe", invocation.inline_method);
     return QoreValue(int64_t{24});
 }
 
@@ -1171,6 +1241,7 @@ static void check(bool inline_entry, bool inline_method) {
     }
     checkMethod(*program, "methodProbe", inline_method);
     checkMethod(*program, "optionalMethodProbe", inline_method);
+    checkMethod(*program, "genericForwardMethodProbe", inline_method);
     checkFloat(*program, inline_entry);
     invocation.bits = bits;
     invocation.cache = &cache;

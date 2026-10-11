@@ -184,11 +184,10 @@ Implemented and validated. Full core suite 789/789 under the gate; the gate logs
 mechanism's decision (LAZY/EAGER) alongside the eager-vs-lazy tag. Decision tally over
 ~96k AOT-frame exceptions:
 
-| tag       | decision=LAZY | decision=EAGER | meaning |
-|-----------|---------------|----------------|---------|
-| OK        | 61045 (all)   | 0              | identical either way ✓ |
-| IMPROVE   | 32073 (kept)  | 4256           | EAGER = over-deferred, *lost* improvement (safe, not a regression) |
-| REGRESS?  | ~110          | ~1040 (fixed)  | LAZY = residual mixed-stack bug |
+|!tag|!decision=LAZY|!decision=EAGER|!meaning
+|OK|61045 (all)|0|identical either way ✓
+|IMPROVE|32073 (kept)|4256|EAGER = over-deferred, *lost* improvement (safe, not a regression)
+|REGRESS?|~110|~1040 (fixed)|LAZY = residual mixed-stack bug
 
 vs the prior barrier/segment approach (296 REGRESS): all OK now resolve LAZY, ~91% of
 REGRESS? correctly defer, ~88% of IMPROVE preserved. `exception-location.qtest`
@@ -214,10 +213,9 @@ A/B on a hot AOT loop (`BenchMod::Bench::hot`, an LCG + modulo body, n=200M),
 compiled with the eager per-line updater force-kept vs removed (identical code
 otherwise), wall-clock over the whole process:
 
-| build | best | runs |
-|-------|------|------|
-| eager removed (lazy) | 90.3s | 90.3 / 93.4 |
-| eager per-line updater | 95.4s | 95.4 / 99.7 |
+|!build|!best|!runs
+|eager removed (lazy)|90.3s|90.3 / 93.4
+|eager per-line updater|95.4s|95.4 / 99.7
 
 ~5-6% faster with the updater removed (~1B per-line external calls eliminated,
 ~5.7ns each). The absolute times are dominated by NaN-boxed AOT arithmetic, so
@@ -237,3 +235,35 @@ calls with debug info (was 12 in this module's IR).
    the chosen branch.
 5. Validate (gate: REGRESS?→0, IMPROVE preserved; lazy-active 789/789).
 6. Step 6: remove the AOT eager updater (gated on debug-info-present); benchmark.
+
+## Unmapped scalar and forwarding frames
+
+Native method-v2/v3 companions re-emit a completely proven scalar body without
+DWARF or their own PC-location registration. They still publish a Qore call frame.
+A preflighted forwarding method can also retain its logical frame while bypassing
+its native body. Neither kind corresponds to an entry in the collected native
+location vector; counting it there shifts every subsequent repaired call site.
+
+`QoreAOTLogicalStackFrameMarker` is a separate internal subtype of the existing
+AOT marker. It changes no existing public stack-location vtable or layout. During
+exception repair, such a frame does not advance the native-location index. If its
+caller is a mapped AOT frame, the current vector index gives that caller's call
+site. If its caller is also logical, the stored explicit call site is retained.
+The innermost unmapped scalar frame uses its eager signature location, installed
+by the eager helper or by deferred-context materialization, rather than attributing
+the exception to the next mapped native caller.
+
+Forwarding admission is conditional on an existing inner PIC entry with the full
+receiver, type, defining-class access, same-Program, parse-option, argument and
+epoch key. Exact receivers retain their parse-selected variant. Both live AOT
+bodies and source-map readiness are checked; only a native-v2/v3 scalar leaf can
+justify removing reflection-visible outer slots. A miss has no runtime effects.
+The current proof covers one immediate integer argument and one self call, not
+arbitrary chains, constructors, cross-Program calls, or reflective overrides.
+
+Both diagnostic frames are initialized before publication. The inner frame's
+location comes from compiler-published call-site metadata, not stale caller TLS.
+On stack overflow, deferred marker/object/class/parse-option state is installed
+in caller order and restored independently by each RAII owner. Successful pure
+calls do not modify that compatibility state. Cross-thread readers only inspect
+the immutable published diagnostic frames; they cannot inspect private TLS slots.

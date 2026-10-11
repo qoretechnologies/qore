@@ -2379,12 +2379,13 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
 
 __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
         QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
-        RuntimeConfigNativeMethodContext& context, ExceptionSink*)
+        RuntimeConfigNativeMethodContext& context, ExceptionSink*, const QoreProgramLocation* caller_loc)
         : td(RuntimeConfigNativeAccess::getThreadData(rc)), method_context(&context),
           previous(td->native_leaf_context), state(ContextState::DeferredMarkers), target_kind(TargetKind::Method) {
     const auto& cache = context.cache;
     assert(cache.native_scalar_uvb && td->current_pgm == cache.native_scalar_program);
-    call_loc = td->runtime_loc ? td->runtime_loc : cache.native_scalar_uvb->getUserSignature()->getParseLocation();
+    call_loc = caller_loc ? caller_loc : td->runtime_loc ? td->runtime_loc
+        : cache.native_scalar_uvb->getUserSignature()->getParseLocation();
     td->native_leaf_context = this;
     old_stack = publish_pushed_stack_location(td, stack_loc);
     // Method-v2 has always re-emitted the complete non-throwing scalar proof,
@@ -2396,6 +2397,13 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
 __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() {
     if (state == ContextState::Materialized) {
         return;
+    }
+    // A preflighted forwarding pair publishes two logical frames without
+    // entering Qore. Install their private markers/context in caller order
+    // before the leaf guard constructs an exception. Each RAII owner restores
+    // exactly its own state, including when a later marker allocation fails.
+    if (previous) {
+        previous->materialize();
     }
     const UserVariantBase* uvb;
     QoreProgram* pgm;

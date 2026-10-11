@@ -35,7 +35,8 @@ class NativeLeafContextTest inherits QUnit::Test {
             "enum NativeLeafReceiverKind : int { Sample = 7 }\n"
             "NativeLeafReceiverKind sub makeEnumProbe() { return NativeLeafReceiverKind::Sample; }\n"
             "int sub methodReceiverProbe(code<int()> probe) { return probe(); }\n"
-            "class NativeLeafMethodBase { int next(int value) { return value + 7; } }\n"
+            "class NativeLeafMethodBase { int next(int value) { return value + 7; }\n"
+            "    int forward(int value) { return self.next(value); } }\n"
             "class NativeLeafMethodDerived inherits NativeLeafMethodBase {\n"
             "    private { int leafContextMarker = 927; }\n"
             "    int next(int value) { return value + 17; }\n}\n"
@@ -50,6 +51,7 @@ class NativeLeafContextTest inherits QUnit::Test {
             "int sub optionalMethodArgumentProbe(*NativeLeafMethodBase receiver, auto value) {\n"
             "    return receiver.next(value);\n}\n"
             "auto sub genericIntMethodProbe(auto receiver, auto value) { return receiver.next(value); }\n"
+            "auto sub genericForwardMethodProbe(auto receiver, auto value) { return receiver.forward(value); }\n"
             "class NativeLeafFloatMethodBase { float next(float value) { return value + 7.0; } }\n"
             "class NativeLeafFloatMethodDerived inherits NativeLeafFloatMethodBase {\n"
             "    private { int leafContextMarker = 927; }\n"
@@ -147,6 +149,7 @@ class NativeLeafContextTest inherits QUnit::Test {
                     + (map quote($1), objects).join(" ") + " 2>&1", \status);
                 assertEq(0, status, output);
                 foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT=1 ",
                         "QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION=1 ",
                         "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ")) {
                     output = backquote(env + runtime + quote(executable) + (inline_callback ? " inline" : " eager")

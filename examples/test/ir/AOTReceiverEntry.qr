@@ -50,6 +50,32 @@ class ReceiverConcurrent {
     int next(int value) { return value + 7; }
     int forward(int value) { return self.next(value); }
 }
+class ReceiverPure {
+    int next(int value) { return value + 17; }
+    int forward(int value) { return self.next(value); }
+}
+class ReceiverPureDerived inherits ReceiverPure {
+    int next(int value) { return value + 23; }
+}
+class ReceiverPureInspect inherits ReceiverPure {
+    int next(int value) {
+        expect(value, get_local_vars(1).value.value);
+        expect(self, get_local_vars(1).self.value);
+        return value + 29;
+    }
+}
+class ReceiverPurePrivate {
+    private:internal int next(int value) { return value + 31; }
+    int forward(int value) { return self.next(value); }
+}
+class ReceiverPurePrivateDerived inherits ReceiverPurePrivate {
+    private:internal int next(int value) { return value + 37; }
+}
+class ReceiverPureOverload {
+    int next(int value) { return value + 41; }
+    int next(auto value) { return int(value) + 43; }
+    int forward(int value) { return self.next(value); }
+}
 
 int sub callReceiver(auto receiver, int value) { return receiver.forward(value); }
 int sub callReceiverArgument(auto receiver, auto value) { return receiver.forward(value); }
@@ -70,6 +96,12 @@ ReceiverDerived derived();
 ReceiverInspect inspecting();
 ReceiverRecursive recursive();
 ReceiverFailure failing();
+ReceiverPure pure();
+ReceiverPureDerived pure_derived();
+ReceiverPureInspect pure_inspecting();
+ReceiverPurePrivate private_pure();
+ReceiverPurePrivateDerived private_derived();
+ReceiverPureOverload overloaded();
 Program foreign(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_ALLOW_DEBUGGER);
 foreign.parse("int sub run(object receiver, int value) { return receiver.forward(value); }", "receiver-foreign");
 for (int round = 0; round < 12; ++round) {
@@ -81,6 +113,14 @@ for (int round = 0; round < 12; ++round) {
         expect(value + 7, callReceiverArgument(base, \value));
         expect((value + 7) * 2, base.twice(value));
         expect(value + 7, foreign.callFunction("run", base, value));
+        expect(value + 17, callReceiver(pure, value));
+        expect(value + 23, callReceiver(pure_derived, value));
+        expect(value + 29, callReceiver(pure_inspecting, value));
+        expect(value + 31, callReceiver(private_pure, value));
+        expect(value + 31, callReceiver(private_derived, value));
+        expect(value + 41, callReceiver(overloaded, value));
+        expect(value + 17, callReceiverArgument(pure, \value));
+        expect(value + 17, foreign.callFunction("run", pure, value));
     }
     expect(8, callReceiver(recursive, 8));
     expect(5, callReceiver(failing, 5));

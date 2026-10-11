@@ -10,6 +10,7 @@ hashdecl NativeMethodFrameReadResult {
 
 class NativeReaderA {
     int next(int value) { return (value + 17) & 65535; }
+    int forward(int value) { return self.next(value); } # Keep line 13 for reader checks below.
 }
 class NativeReaderB inherits NativeReaderA {
     int next(int value) { return (value + 19) & 65535; }
@@ -19,7 +20,11 @@ int sub nativeMethodReaderBatch(NativeReaderA first, NativeReaderA second, bool 
     int value = 0;
     for (int i = 0; i < 4096; ++i) {
         NativeReaderA receiver = replace && (i & 1) ? first : second;
-        value = receiver.next(value);
+        if (replace) {
+            value = receiver.forward(value);
+        } else {
+            value = receiver.next(value);
+        }
     }
     return value;
 }
@@ -28,6 +33,12 @@ sub nativeMethodReaderCaller(Counter started, Counter readers, Counter done, Que
     on_exit done.dec();
     NativeReaderA first();
     NativeReaderB second();
+    # Populate both forwarded target keys before readers inspect the optimized path.
+    for (int warmup = 0; warmup < 16; ++warmup) {
+        if (nativeMethodReaderBatch(first, second, True) != 8192) {
+            failures.push("incorrect forwarding warmup result");
+        }
+    }
     started.dec();
     bool replace = False;
     while (readers.getCount()) {
@@ -48,6 +59,7 @@ sub nativeMethodReader(Counter readers, Counter done, Queue results) {
     hash<NativeMethodFrameReadResult> result();
     result.seen = 0;
     result.errors = ();
+    bool precise_forward_loc = !!ENV.QORE_TEST_FORWARD_FRAME_LOC;
     for (int i = 0; i < 400; ++i) {
         hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
         foreach hash<auto> tid_stack in (stacks.pairIterator()) {
@@ -68,7 +80,8 @@ sub nativeMethodReader(Counter readers, Counter done, Queue results) {
                 if (frame.type == "user" && !frame.function.empty()
                         && frame.function != "nativeMethodReaderCaller"
                         && frame.function != "nativeMethodReaderBatch" && frame.function != "NativeReaderA::next"
-                        && frame.function != "NativeReaderB::next" && frame.function != "next") {
+                        && frame.function != "NativeReaderB::next" && frame.function != "next"
+                        && frame.function != "NativeReaderA::forward" && frame.function != "forward") {
                     result.errors += sprintf("unexpected caller frame: %y", frame);
                 }
                 if (frame.function == "NativeReaderA::next" || frame.function == "NativeReaderB::next"
@@ -78,6 +91,17 @@ sub nativeMethodReader(Counter readers, Counter done, Queue results) {
                             || frame.endline < frame.line) {
                         result.errors += sprintf("invalid native frame: %y", frame);
                     }
+                }
+            }
+            for (int j = 0; j + 1 < tid_stack.value.size(); ++j) {
+                hash<CallStackInfo> leaf = tid_stack.value[j];
+                hash<CallStackInfo> forward_caller = tid_stack.value[j + 1];
+                # Only the explicitly requested, warmed AOT shortcut promises an exact
+                # foreign-thread call site; IR/JIT can expose the callee's eager location.
+                if (precise_forward_loc
+                        && (leaf.function == "NativeReaderA::next" || leaf.function == "NativeReaderB::next")
+                        && forward_caller.function == "NativeReaderA::forward" && leaf.line != 13) {
+                    result.errors += sprintf("incorrect forwarded call site: %y", leaf);
                 }
             }
         }

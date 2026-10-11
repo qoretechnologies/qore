@@ -496,11 +496,16 @@ static bool isNonThrowingScalarBody(const BatchCalleeInfo* info, bool& scalar_le
 void QoreIRToLLVM::emitNativeMethodBinding(llvm::Module& module, llvm::Function* normal) {
     if (aot_mode && fast_entry_name.empty() && !receiver_method_binding.empty()) {
         llvm::Function* companion = module.getFunction(receiver_method_binding);
-        assert(companion);
-        auto bind = module.getOrInsertFunction("qore_rt_bind_receiver_int_method_v1",
-            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type, i32_type}, false));
+        assert(companion && receiver_forward_call);
+        uint64_t bits;
+        memcpy(&bits, &receiver_forward_call->expr, sizeof(bits));
+        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(bits);
+        int32_t loc = receiver_forward_call->loc ? getOrAddAotLocIndex(receiver_forward_call->loc) : -1;
+        auto bind = module.getOrInsertFunction("qore_rt_bind_receiver_int_method_v2",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type, i32_type, i32_type, i32_type}, false));
         builder->CreateCall(bind, {aot_ctx_arg, normal, companion,
-            llvm::ConstantInt::get(i32_type, emit_debug_info)});
+            llvm::ConstantInt::get(i32_type, emit_debug_info), llvm::ConstantInt::get(i32_type, slot),
+            llvm::ConstantInt::getSigned(i32_type, loc)});
     }
     if (!aot_mode || !fast_entry_name.empty() || !current_ir_func
             || std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")) {

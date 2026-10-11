@@ -919,6 +919,19 @@ void qore_rt_bind_receiver_int_method_v1(QoreAOTContext* ctx,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
     uint64_t (*entry)(int64_t, uint64_t, RuntimeConfig*, QoreAOTContext*, ExceptionSink*), int32_t requires_pc_map);
 
+//! Publish a receiver companion and its whole-body unary self-forwarding proof.
+//! @param ctx runtime-owned context identifying this exact normal body
+//! @param normal immutable normal-body identity
+//! @param entry receiver-aware companion with the v1 calling convention
+//! @param requires_pc_map nonzero when the companion requires native-PC source locations
+//! @param slot call-target slot for the sole forwarded call
+//! @param loc location-table index for that call; a missing location disables forwarding preflight
+//! @note Idempotent publication does not prove the inner target pure; invocation must check it live.
+void qore_rt_bind_receiver_int_method_v2(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    uint64_t (*entry)(int64_t, uint64_t, RuntimeConfig*, QoreAOTContext*, ExceptionSink*),
+    int32_t requires_pc_map, int32_t slot, int32_t loc);
+
 //! Publish an optional exact-body scalar method companion with an explicit live RuntimeConfig.
 //! @param ctx runtime-owned context whose normal body must match
 //! @param normal immutable body identity, rechecked on every call

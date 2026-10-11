@@ -114,6 +114,8 @@ class NameMethodBoxedResultTest inherits QUnit::Test {
                 source = replace(source, "NativeReaderA receiver =", "auto receiver =");
                 assertTrue(source.find("value = receiver.next(value);") >= 0);
                 source = replace(source, "value = receiver.next(value);", "value = int(receiver.next(value));");
+                assertTrue(source.find("value = receiver.forward(value);") >= 0);
+                source = replace(source, "value = receiver.forward(value);", "value = int(receiver.forward(value));");
             } else if (floating) {
                 caller = "nativeFloatGenericDebugCall";
                 string original = "auto sub nativeFloatGenericDebugCall(auto receiver, float value) {\n"

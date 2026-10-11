@@ -9794,3 +9794,76 @@ This does not reach Java parity. Next is a preflighted forwarding path that can 
 its inner target is a same-Program scalar leaf before omitting outer TLS/slot setup,
 while preserving logical frames, access context and effect-free fallback.
 [Full evidence and all 62 audit items](results-method-return-guard-macos-arm64.json).
+
+
+## Preflighted same-Program forwarding leaves (2026-10-11)
+
+Baseline c59c38d3f. The compiler identifies a complete int(int) self-forwarding
+body and publishes its call slot/location. A warmed, exact same-Program inner scalar
+leaf permits bypassing outer TLS signature slots and Program/object substitution.
+Both logical frames and exact inner call site remain; stack overflow materializes
+contexts in caller order. Missing proofs, reflective overrides and cross-Program
+calls retain ordinary execution. Native scalar companions without PC maps are
+classified separately during exception location recovery.
+
+Apple M4 Pro/macOS arm64; three-fork main and five-fork same-binary control/repeat;
+three warmups, five 500 ms windows, count 4096, shuffled jobs. Baseline/candidate
+AOT artifacts are compiled separately because runtime identities differ. Flag
+controls reuse one identical candidate artifact/library. No task builds, tests,
+profiles or inspection overlap timing. Medians of fork means, ns/element; positive
+time reduction means faster. Not isolated call latency.
+
+|!Workload|!Before|!After|!Time reduction|!Java JIT|!After / Java
+|dynamic_int_result_fallback|158.059891|60.836028|61.511%|2.959057|20.559x
+|dynamic_int_result_call|10.560404|10.649496|-0.844%|3.208738|3.319x
+|dynamic_float_result_call|11.647297|11.534144|0.971%|3.590289|3.213x
+|boxed_float_method_call|62.715783|62.661235|0.087%|2.652631|23.622x
+|indirect_int_result|7.141286|7.246446|-1.473%|1.966966|3.684x
+|indirect_float_result|9.080841|9.152449|-0.789%|2.941780|3.111x
+|polymorphic_expression_call|10.611150|10.461332|1.412%|2.637804|3.966x
+|polymorphic_float_expression_call|10.729427|10.816367|-0.810%|2.691301|4.019x
+|method_call|1.581939|1.581328|0.039%|1.023843|1.545x
+|monomorphic_call|3.625226|3.546099|2.183%|1.727738|2.052x
+|arithmetic|1.521954|1.523436|-0.097%|1.017964|1.497x
+
+Five-fork controls and repeat:
+
+|!Comparison|!Workload|!Before / disabled|!After / enabled|!Time reduction
+|same binary|dynamic_int_result_fallback|159.021313|60.446351|61.989%
+|same binary|indirect_int_result|7.194435|7.159889|0.480%
+|same binary|monomorphic_call|3.543003|3.548546|-0.156%
+|separate binary repeat|dynamic_int_result_fallback|156.952946|60.396508|61.519%
+|separate binary repeat|indirect_int_result|7.114794|7.311431|-2.764%
+
+IR interpreter comparison:
+
+|!Workload|!Before|!After|!Time reduction
+|dynamic_int_result_fallback|1377.209191|1384.520091|-0.531%
+|boxed_float_method_call|787.433830|781.616778|0.739%
+
+Nested AOT improves 61.511% in main, 61.989% in the final same-binary control
+and 61.519% in the separate-binary repeat, all with separated observed ranges.
+Screening gains are 61.285%/62.140%; the AOT comparison accompanying IR gains
+61.571%. All 218 jobs / 1090 measurement windows are retained, including outliers.
+
+Integer callback medians are 1.172% slower in the separate-binary screen (separated
+ranges), 1.473% slower in main and 2.764% slower in the repeat (overlapping ranges).
+Same-binary controls instead show 0.611%/0.480% improvements. This does not establish
+a flag-path regression, but neither does it rule out a build-layout effect; the cause
+remains unresolved. No zero-regression claim. Other adverse medians remain above.
+IR changes overlap variation; no demonstrated IR benefit. Java parity is not reached.
+
+Qualification: 103 selected files per release/debug build, plus seven extra stack/
+exception fixtures per build; 153 debug native checks; 15 harness tests; 495 references
+per execution mode. Tests cover private/derived/reflective targets, overloads, deleted
+objects, references/wide values, cross-Program fallback, concurrent publication/readers,
+forced stack overflow and restoration with both eager/deferred controls. Reader
+fixture refinements after screening did not change the timed release binaries.
+
+A separate 10-second/1 ms sample shows remaining failed native-try, generic dispatch,
+value handling and RuntimeConfig/TLS lookup costs before preflight. Counts are
+qualitative, not additive CPU percentages; the sleeping signal thread remains in raw
+data. Next: enter this proven forwarding path directly from the typed native helper,
+reusing RuntimeConfig and native arguments/results while preserving all logical frames
+and effect-free fallback. Fetch/merge upstream after this audited commit first.
+[Full evidence, reproduction and all 62 audit items](results-forward-leaf-preflight-macos-arm64.json).

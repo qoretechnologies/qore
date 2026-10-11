@@ -461,6 +461,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_bind_method_int_unary_v1) },
     { "qore_rt_bind_receiver_int_method_v1",
         reinterpret_cast<void*>(&qore_rt_bind_receiver_int_method_v1) },
+    { "qore_rt_bind_receiver_int_method_v2",
+        reinterpret_cast<void*>(&qore_rt_bind_receiver_int_method_v2) },
     { "qore_rt_bind_method_int_unary_v2",
         reinterpret_cast<void*>(&qore_rt_bind_method_int_unary_v2) },
     { "qore_rt_bind_method_int_unary_v3",
@@ -17342,8 +17344,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_consume_args(
 
 // The name is owned by the immutable PIC entry. All observable members precede
 // the publishing helper, whose destructor waits for stack readers before return.
-template <bool Deferred = false>
-class QoreNativeMethodStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
+template <bool Deferred = false, bool Logical = false>
+class QoreNativeMethodStackLocation : public QoreStackLocation,
+        public std::conditional_t<Logical, QoreAOTLogicalStackFrameMarker, QoreAOTStackFrameMarker> {
 public:
     __attribute__((always_inline)) QoreNativeMethodStackLocation(RuntimeConfig& rc,
             const QoreAOTMethodDispatchCacheEntry& cache,
@@ -17383,12 +17386,12 @@ private:
 // field except the caller location. Borrow it rather than copying the name,
 // statement block and Program on each scalar call. The caller's AOT context
 // owns the entry, and the publishing helper waits for readers before exit.
-class QoreCompactNativeMethodStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
+class QoreCompactNativeMethodStackLocation : public QoreStackLocation, public QoreAOTLogicalStackFrameMarker {
 public:
     __attribute__((always_inline)) QoreCompactNativeMethodStackLocation(RuntimeConfig& rc,
             const QoreAOTMethodDispatchCacheEntry& cache, ExceptionSink* xsink,
-            RuntimeConfigNativeMethodContext& context)
-        : cache(cache), helper(rc, this, loc, context, xsink) {
+            RuntimeConfigNativeMethodContext& context, const QoreProgramLocation* caller_loc = nullptr)
+        : cache(cache), helper(rc, this, loc, context, xsink, caller_loc) {
     }
     __attribute__((always_inline)) ~QoreCompactNativeMethodStackLocation() override = default;
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
@@ -17523,7 +17526,11 @@ static QORE_ALWAYS_INLINE bool try_dispatch_native_scalar_method(QoreObject* obj
     // pure body must preserve method context on error and stack observation.
     RuntimeConfigNativeObjectHelper context(rc, object, CachedAdmission ? cache.native_scalar_class_ctx
         : METHV_const(cache.variant)->getClassPriv());
-    {
+    if (inline_entry || explicit_entry) {
+        // The re-emitted v2/v3 scalar body deliberately has no DWARF/PC map.
+        QoreNativeMethodStackLocation<false, true> frame(rc, cache, uvb, pgm, xsink);
+        invoke();
+    } else {
         QoreNativeMethodStackLocation<> frame(rc, cache, uvb, pgm, xsink);
         invoke();
     }
@@ -17553,6 +17560,10 @@ static QORE_ALWAYS_INLINE bool try_dispatch_native_method(QoreObject* object,
 }
 
 // Dispatch a method call on a QoreObject with pre-evaluated args.
+static bool try_dispatch_forwarded_int_leaf(QoreObject* object,
+    const QoreAOTMethodDispatchCacheEntry& outer, QoreAOTContext* outer_ctx,
+    uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result);
+
 // Same logic as AbstractMethodCallNode::exec(): if the runtime class matches
 // the parse-time class, use the resolved method pointer directly; otherwise
 // fall back to name-based lookup.
@@ -17596,6 +17607,14 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
             "already been deleted", qc->getName(), method->getName());
         result = toBits(QoreValue());
         return true;
+    }
+    if (native_cache && native_cache->native_scalar_uvb == uvb) {
+        QoreAOTContext* outer_ctx = uvb->getCachedAOTContext();
+        if (outer_ctx && outer_ctx->receiver_int_forward_ready.load(std::memory_order_acquire)
+                && try_dispatch_forwarded_int_leaf(o, *native_cache, outer_ctx,
+                    args, arg_cleanups, nargs, xsink, result)) {
+            return true;
+        }
     }
     const QoreTypeInfo* receiver_type_info = qore_get_object_receiver_type_info(o);
     // Both PIC callers already tried the prepared native admission. A live
@@ -18359,6 +18378,121 @@ qore_rt_find_aot_method_dispatch_cache_entry(
     return nullptr;
 }
 
+// The compiler proves the outer body is exactly return self.method(value).
+// Preflight the already-resolved inner call without installing outer TLS state
+// or running user code. A miss must leave arguments, ownership and sink intact.
+static bool try_dispatch_forwarded_int_leaf(QoreObject* object,
+        const QoreAOTMethodDispatchCacheEntry& outer, QoreAOTContext* outer_ctx,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT")
+        && !std::getenv("QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY")
+        && !std::getenv("QORE_DISABLE_IR_CONTEXT_ELISION")
+        && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")
+        && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION")
+        && !std::getenv("QORE_DISABLE_AOT_GENERIC_NATIVE_INT_CONTINUATION")
+        && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE")
+        && !std::getenv("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE")
+        && !std::getenv("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY")
+        && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
+    const auto* outer_uvb = outer.native_scalar_uvb;
+    if (!enabled || nargs != 1 || outer.nargs != 1 || outer.arg_types[0] != bigIntTypeInfo
+            || outer.arg_states[0] || !fromBits(args[0]).isInt()
+            || !outer_uvb->hasCachedAOT() || outer_ctx->pc_loc_fn != outer_uvb->getCachedAOTFunction()
+            || !outer_ctx->pc_loc_map_attached.load(std::memory_order_acquire) || outer_ctx->uses_argv) {
+        return false;
+    }
+    RuntimeConfig rc = RuntimeConfigNativeAccess::getCurrent();
+    QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(rc);
+    if (!pgm || pgm != outer.native_scalar_program || pgm != outer_ctx->pgm || pgm != object->getProgram()
+            || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+        return false;
+    }
+    QoreParseOptions po = outer_uvb->getParseOptions(pgm->getParseOptions());
+    // Equality is also a fixed-point proof for any live runtime PO override:
+    // installing the outer raw options cannot change the effective options.
+    // Calls with different options retain ordinary context installation.
+    if (po != RuntimeConfigNativeAccess::getParseOptions(rc)) {
+        return false;
+    }
+    int32_t slot = outer_ctx->receiver_int_forward_slot;
+    int32_t loc = outer_ctx->receiver_int_forward_loc;
+    assert(slot >= 0 && slot < outer_ctx->num_exprs && loc >= 0 && loc < outer_ctx->num_locs);
+    QoreAOTCallTarget& target = outer_ctx->call_targets[slot];
+    auto* cache = target.method_dispatch_cache.load(std::memory_order_acquire);
+    if (!cache || target.is_pseudo || target.is_static_method || (!target.method && !target.method_name)
+            || target.explicit_type_param_instantiation
+            || qore_rt_get_dot_eval_explicit_type_instantiation(outer_ctx, slot) || !outer_ctx->locs[loc]) {
+        return false;
+    }
+    const QoreClass* receiver_class = object->getClass();
+    const QoreTypeInfo* receiver_type = qore_get_object_receiver_type_info(object);
+    const qore_class_private* class_ctx = outer.native_scalar_class_ctx;
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*receiver_class, class_ctx)) {
+        class_ctx = nullptr;
+    }
+    bool resolved = target.method && (receiver_class == target.qc || receiver_class == target.method->getClass());
+    static const bool resolved_enabled = !std::getenv("QORE_DISABLE_AOT_RESOLVED_METHOD_CACHE");
+    if (resolved && !resolved_enabled) {
+        return false;
+    }
+    uint64_t epoch = qore_get_method_dispatch_epoch();
+    const QoreAOTMethodDispatchCacheEntry* inner = nullptr;
+    // Four immutable entries at most. A prior ordinary call has performed
+    // access and overload resolution under this exact defining-class context.
+    for (auto& cache_slot : cache->entries) {
+        const auto* candidate = cache_slot.load(std::memory_order_acquire);
+        if (candidate && candidate->receiver_class == receiver_class
+                && candidate->receiver_type_info == receiver_type && candidate->class_ctx == class_ctx
+                && candidate->native_scalar_program == pgm && candidate->parse_options == po
+                && candidate->dispatch_epoch == epoch && candidate->arg_types[0] == bigIntTypeInfo
+                && candidate->arg_states[0] == 0
+                && (!resolved || (candidate->method == target.method && candidate->variant == target.variant))) {
+            inner = candidate;
+            break;
+        }
+    }
+    if (!inner) {
+        return false;
+    }
+    const UserVariantBase* uvb = inner->native_scalar_uvb;
+    assert(uvb && inner->nargs == 1 && inner->caller_program == pgm && inner->object_program == pgm);
+    QoreAOTContext* ctx = uvb->getCachedAOTContext();
+    if (!ctx || !uvb->hasCachedAOT() || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
+            || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)
+            || ctx->uses_self || ctx->uses_argv || ctx->pgm != pgm) {
+        return false;
+    }
+    auto inline_entry = ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire);
+    auto entry = inline_entry ? nullptr : ctx->native_int_unary_method_entry_v2.load(std::memory_order_acquire);
+    if (!inline_entry && !entry) {
+        return false;
+    }
+    // Only now is the call handled. The inner complete-body proof excludes
+    // reflection, reentry, user exceptions and any observable outer locals.
+    result = toBits(QoreValue());
+    QoreValue value;
+    if (!*xsink && !RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
+        RuntimeConfigNativeMethodContext outer_context(rc, object, outer);
+        QoreCompactNativeMethodStackLocation outer_frame(rc, outer, xsink, outer_context);
+        RuntimeConfigNativeMethodContext inner_context(rc, object, *inner);
+        QoreCompactNativeMethodStackLocation inner_frame(rc, *inner, xsink, inner_context, outer_ctx->locs[loc]);
+        try {
+            int64_t arg = fromBits(args[0]).getAsBigInt();
+            value = QoreValue(inline_entry
+                ? inline_entry(arg, ctx, xsink, &rc, qore_rt_get_stack_limit_v1(&rc))
+                : entry(arg, ctx, xsink, &rc));
+        } catch (const QoreJITException&) {
+            // The leaf guard materializes both contexts before constructing its exception.
+        }
+    }
+    if (clearConsumedArgCleanups(arg_cleanups, 1, xsink) < 0 || *xsink) {
+        value.discard(xsink);
+    } else {
+        result = toBits(value);
+    }
+    return true;
+}
+
 template <typename Scalar>
 __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContext* caller_ctx,
         int32_t slot, uint64_t base_bits, Scalar arg, Scalar* result,
@@ -18491,7 +18625,7 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
         invoke();
     } else {
         RuntimeConfigNativeObjectHelper context(*rc, object, cached->native_scalar_class_ctx);
-        QoreNativeMethodStackLocation<> frame(*rc, *cached, uvb, pgm, xsink);
+        QoreNativeMethodStackLocation<false, true> frame(*rc, *cached, uvb, pgm, xsink);
         invoke();
     }
     return 1;

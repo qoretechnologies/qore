@@ -21066,7 +21066,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 static_cast<int32_t>(aot_locs_local.size()));
                         }
 
-                        lowerer.setReceiverMethodBinding(receiver_entry_name);
+                        lowerer.setReceiverMethodBinding(receiver_entry_name, receiver_entry
+                            ? static_cast<const QoreIRDotEvalMethodDirectInstruction*>(
+                                ir_func->blocks[0]->instructions[3].get()) : nullptr);
                         method_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
 
                         if (!method_ok && fn_outliner.active()) {

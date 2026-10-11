@@ -421,6 +421,12 @@ struct QoreAOTContext {
         QoreAOTContext*, ExceptionSink*);
     std::atomic<ReceiverIntMethodEntryV1> receiver_int_method_entry_v1{nullptr};
 
+    //! Whole-body forwarding proof, immutable after receiver_int_forward_ready's release publication.
+    //! A live matching inner pure-leaf entry is still required before eliding outer signature slots.
+    int32_t receiver_int_forward_slot = -1;
+    int32_t receiver_int_forward_loc = -1;
+    std::atomic<bool> receiver_int_forward_ready{false};
+
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
     ~QoreAOTContext();
