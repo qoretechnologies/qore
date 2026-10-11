@@ -942,3 +942,16 @@ identical-executable comparisons show modest 1.37–1.80% polymorphic median gai
 with overlapping fork ranges; RAII cleanup and both object references remain.
 See [normalized evidence](results-class-holder-macos-arm64.json) for all controls,
 binary identities and validation. This does not establish Java parity.
+
+`QORE_DISABLE_AOT_SCALAR_RETURN_GUARD=1` disables the exact-immediate scalar
+return guard during `qcc` compilation. For canonical `int`, `float` and `bool`
+contracts, an already-correct immediate value avoids full runtime return-type
+resolution/filtering. References, heap-boxed values, conversions and other
+contracts retain the full filter; both edges retain exception checking and
+cleanup. This is AOT-only. The compiler change updates runtime identity despite
+an unchanged exported ABI, so compile baseline/candidate artifacts separately
+against their matching runtimes. See the
+[results](RESULTS.md#aot-exact-immediate-scalar-returns-2026-10-11) and
+[evidence](results-scalar-return-guard-macos-arm64.json): the nested workload
+improves repeatedly by about 9-10%, but remains far from Java. Adverse boxed-float
+and monomorphic comparisons are retained; this is not a zero-regression claim.

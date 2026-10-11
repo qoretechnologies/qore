@@ -6476,6 +6476,31 @@ llvm::Value* QoreIRToLLVM::emitReturnTypeConversion(llvm::Module& module, llvm::
     alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
     registerInvokeCleanupAlloca(cleanup);
 
+    // Exact immediate scalars already satisfy their canonical return contract.
+    // They own no node, so the initialized cleanup slot can remain NOTHING.
+    // References, heap-boxed scalars, soft/optional types and mismatches still
+    // use the complete return filter, including normalization and ownership.
+    llvm::Value* immediate = nullptr;
+    if (aot_mode && boxed && !std::getenv("QORE_DISABLE_AOT_SCALAR_RETURN_GUARD")) {
+        if (return_type == bigIntTypeInfo) {
+            immediate = emitIsBoxedInt48(boxed);
+        } else if (return_type == floatTypeInfo) {
+            immediate = emitIsBoxedFloat(boxed);
+        } else if (return_type == boolTypeInfo) {
+            immediate = builder->CreateOr(
+                builder->CreateICmpEQ(boxed, llvm::ConstantInt::get(i64_type, VAL_TRUE)),
+                builder->CreateICmpEQ(boxed, llvm::ConstantInt::get(i64_type, VAL_FALSE)));
+        }
+    }
+    llvm::BasicBlock* immediate_bb = builder->GetInsertBlock();
+    llvm::BasicBlock* merge_bb = nullptr;
+    if (immediate) {
+        auto* coerce_bb = llvm::BasicBlock::Create(ctx, "scalar_return_coerce", llvm_func);
+        merge_bb = llvm::BasicBlock::Create(ctx, "scalar_return_merge", llvm_func);
+        builder->CreateCondBr(immediate, merge_bb, coerce_bb);
+        builder->SetInsertPoint(coerce_bb);
+    }
+
     llvm::Value* result;
     if (aot_mode) {
         llvm::Value* type_path = return_type
@@ -6502,6 +6527,16 @@ llvm::Value* QoreIRToLLVM::emitReturnTypeConversion(llvm::Module& module, llvm::
             result = builder->CreateCall(helper, {type_info, cleanup, xsink_arg});
         }
     }
+    if (merge_bb) {
+        llvm::BasicBlock* checked_bb = builder->GetInsertBlock();
+        builder->CreateBr(merge_bb);
+        builder->SetInsertPoint(merge_bb);
+        auto* merged = builder->CreatePHI(i64_type, 2, "scalar_return_value");
+        merged->addIncoming(boxed, immediate_bb);
+        merged->addIncoming(result, checked_bb);
+        result = merged;
+    }
+    // Keep the sink check on both edges, including a preexisting exception.
     emitExceptionCheck(module, llvm_func, inst);
     return result;
 }

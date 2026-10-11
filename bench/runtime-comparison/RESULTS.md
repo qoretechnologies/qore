@@ -9465,3 +9465,117 @@ receiver/RuntimeConfig entry for a conservative subset of context-using
 same-Program methods. Measure against this qualified runtime, retain live
 body/debugger/Program/stack checks and ownership/observability contracts, and
 qualify/audit each improvement separately.
+
+
+## AOT exact-immediate scalar returns (2026-10-11)
+
+The normal entry of the context-using nested method still filters its unknown
+boxed result against its declared scalar return type. Emit a short value-tag
+guard for pointer-exact canonical `int`, `float` and `bool` return contracts.
+An already-correct immediate scalar owns no node and needs neither type-path
+resolution nor assignment filtering. Keep cleanup initialized to NOTHING and
+retain the exception-sink check on both edges. Heap-boxed scalars, references,
+mismatches, soft/optional/enum types and other contracts use the existing full
+filter; timeout handling is unchanged.
+
+`QORE_DISABLE_AOT_SCALAR_RETURN_GUARD=1` controls emission at compile time.
+No exported ABI or header layout changes, but the compiler implementation is
+part of AOT runtime identity, which changes from `10e1d35f...` to `02b3335a...`.
+Actual before/after runs therefore compile separate executables against matching
+frozen runtimes. The compiler-flag control compiles two executables with the
+same candidate compiler/library. No identity check is bypassed. IR/JIT lowering
+is unchanged by this AOT-only guard.
+
+### Final comparison with Java
+
+Three randomized forks per runtime, three warmups and five 500 ms measurement
+windows per fork, count 4096; Java is Temurin 25.0.2/JMH. Values are medians of
+fork means for whole workloads, not isolated call latency. Startup is excluded;
+observed fork ranges are descriptive, not confidence intervals.
+
+|!Workload|!Baseline Qore ns/element|!Qore ns/element|!Java ns/element|!Qore/Java
+|Nested context-using call|199.29|179.11|3.01|59.42x
+|Dynamic integer result|10.18|10.04|3.07|3.27x
+|Dynamic float result|11.33|11.05|3.47|3.18x
+|Boxed float method result|61.45|61.61|2.55|24.16x
+|Integer callback result|6.91|6.79|1.89|3.60x
+|Float callback result|8.73|8.75|2.69|3.25x
+|Polymorphic integer expression|10.13|10.12|2.34|4.32x
+|Polymorphic float expression|10.32|10.18|2.55|3.99x
+|Final-class method|1.51|1.50|0.89|1.68x
+|Monomorphic virtual method|3.41|3.48|1.66|2.10x
+|Arithmetic control|1.42|1.42|0.89|1.60x
+
+The nested target improves **10.12%** in the final main run, **8.83%** in the
+five-fork same-compiler control, **9.95%** in a five-fork actual-baseline repeat
+and **9.82%** in an additional five-fork compiler control. All four have
+separated observed ranges. Earlier screen/control/repeat medians improve
+9.78/8.48/8.96%; the last has overlapping ranges due to a candidate outlier.
+This is a targeted repeated benefit, not Java parity or a general speedup.
+
+Adverse controls remain important. Monomorphic main/repeat medians are
+**2.05/2.11% slower**, both with overlapping ranges. Boxed-float main is 0.25%
+slower with separated ranges, and its actual-baseline repeat is **2.60% slower**
+with separated ranges. The same-runtime compiler control/repeat boxed medians
+are 0.25/0.40% slower with overlap; monomorphic compiler-control repeat is 0.40%
+faster with overlap. These controls do not reproduce the larger penalties,
+but do not erase or fix the adverse actual-baseline observations. Runtime/code
+layout and host variation are possible explanations, not established causes.
+
+The initial boxed-float screen was 2.27% adverse with separated ranges; its
+first repeat narrowed to 0.93% with overlap. The initial integer-callback
+2.02% adverse median (overlap) did not persist. Native-float final main/control/
+repeat medians improve 2.52/1.60/3.23%, all with separated ranges; this is a
+non-target observation, not evidence that its unchanged body acquired a new
+native-call optimization. All small signed changes remain in the evidence.
+
+### Qualification, evidence and limitations
+
+Release/debug each pass 101 selected files: 381/388 reported cases,
+27184/27283 assertions, 15 standalone files each, one known release skip and
+no debug skips. The new fixture passes 232 assertions per build across O0/O3,
+guard-disabled, EH, no-debug-info and split compilation. It covers 48-/64-bit
+integers, tag-colliding doubles, signed zero, infinities/NaNs, reference returns,
+soft/optional/timeout/enum contracts, conversions, invalid returns, owned locals
+and overridden nested calls. All 146 debug native checks, 15 harness tests and
+495 reference checks in each of Qore IR/AOT and interpreted/JIT Java pass.
+
+Early fixture development exposed differences on the unchanged baseline:
+IR handled return-filter errors outside a same-function catch, and IR/tiered
+reported six owned-local destructions where AST expected ten. The final fixture
+catches a nested typed-call error and uses AST as the AOT cleanup/filter
+reference. Baseline AST/JIT and eight AOT configurations pass. These baseline
+IR/tiered observations and failure logs are retained; this AOT change neither
+fixes them nor claims full fixture parity across modes.
+
+Only two of 129 non-bootstrap LLVM bodies change: the dispatch wrapper and the
+nested context-using method. Bootstrap metadata also changes. Inspected runtime
+helper instruction counts and prologue frame sizes remain unchanged; those are
+not peak-stack measurements. No full-suite, sanitizer, cold-call/saturation or
+cross-platform improvement is claimed. Known build warnings remain.
+
+The [evidence](results-scalar-return-guard-macos-arm64.json) retains all
+**319 jobs / 1595 measurement windows**, identities, raw-sample verification,
+qualification hashes, profile, implementation/test sources and reproduction
+scripts. No task build/test/profile/inspection/evidence work overlapped timing;
+unrelated editor processes were left untouched. The
+[62-item audit](FOLLOWUP-AUDIT.md#aot-scalar-return-guard-audit-2026-10-11)
+reports 15 Pass, 47 N/A and 0 Fail.
+
+### Remaining costs and next plan
+
+A separate ten-second, 1 ms profile shows name dispatch (584 top-of-stack
+samples), type classification (449), generic dispatch (391), discard (337),
+TLS lookup (308), cache matching (278) and local setup (232). It includes a
+sleeping signal thread; counts are qualitative, not additive CPU percentages.
+The generated nested entry still loads self/parameters through runtime/TLS
+helpers and uses ordinary method/frame/ownership setup.
+
+Next investigate direct native-return continuations and an explicit receiver/
+RuntimeConfig entry for eligible context-using same-Program methods. Existing
+direct-argument lowering can map a hidden receiver argument, but receiver
+ownership, defining-class access, logical frames, selected overload identity,
+exceptions, debugger fallback and live body/Program/stack checks must remain.
+Do not remove the pure-leaf `uses_self` restriction without a new entry contract.
+Keep boxed-float and monomorphic controls prominent in subsequent measurements;
+qualify, audit and commit each demonstrated improvement separately.
