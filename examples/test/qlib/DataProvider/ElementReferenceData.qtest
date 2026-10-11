@@ -1,0 +1,212 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestClientIo
+%requires RestSchemaActions
+
+%exec-class ElementReferenceDataTest
+
+#! A REST client that answers requests with the given response bodies in order, the last one repeated
+class CannedRestClient inherits RestClientIo::RestClientIo {
+    public {
+        #! the response bodies
+        list<auto> bodies;
+
+        #! the paths requested, in order
+        list<string> paths = ();
+    }
+
+    constructor(list<auto> bodies) : RestClientIo({"url": "http://localhost/api"}) {
+        self.bodies = bodies;
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        push paths, path;
+        return <RestClient::RestResponseInfo>{
+            "status_code": 200,
+            "body": bodies.size() > 1 ? shift bodies : bodies[0],
+            "headers": {},
+        };
+    }
+}
+
+#! An action option whose elements are reference data, with the provider that executes its action
+hashdecl ElementOptionInfo {
+    #! "app/action/option"
+    string label;
+    #! the name of the element reference data
+    string ref_data;
+    #! the action's options
+    hash<auto> options;
+    #! the provider of the action
+    AbstractDataProvider prov;
+}
+
+# A list option that declares element_ref_data offers its elements through getElementReferenceData(): the IDE fills
+# a list's dropdown with it and the reference-data lookup reads it.  A provider that declares element reference data
+# it cannot read leaves the dropdown empty without an error, so every provider is checked here.
+public class ElementReferenceDataTest inherits QUnit::Test {
+    private {
+        list<hash<ElementOptionInfo>> options = ();
+    }
+
+    constructor() : QUnit::Test("ElementReferenceData", "1.0") {
+        addTestCase("every provider supports the element reference data it declares", \supportTest());
+        addTestCase("a REST schema provider reads element reference data from its listing", \restSchemaReadTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # every module whose sources declare element reference data; the providers are found through the actions
+        # that the modules register
+        string qlib = normalize_dir(get_script_dir() + "/../../../../qlib");
+        hash<string, bool> modules;
+        Dir top();
+        top.chdir(qlib);
+        foreach string file in (top.listFiles("\\.qm$")) {
+            if (ElementReferenceDataTest::declaresElementReferenceData(qlib + DirSep + file)) {
+                modules{file.substr(0, -3)} = True;
+            }
+        }
+        foreach string dir in (top.listDirs()) {
+            Dir sub_dir();
+            sub_dir.chdir(qlib + DirSep + dir);
+            foreach string file in (sub_dir.listFiles("\\.q[cm]$")) {
+                if (ElementReferenceDataTest::declaresElementReferenceData(qlib + DirSep + dir + DirSep + file)) {
+                    modules{dir} = True;
+                    break;
+                }
+            }
+        }
+        map load_module($1), keys modules;
+
+        foreach hash<DataProviderAppInfo> app in (DataProviderActionCatalog::getAllAppsNoInit()) {
+            foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActionsNoInit(app.name)) {
+                *list<string> names = map $1.key, (action.options ?? {}).pairIterator(),
+                    $1.value.element_ref_data.val();
+                if (!names) {
+                    continue;
+                }
+                string label = app.name + "/" + action.action;
+                if (!app.scheme.val() || !action.path.val()) {
+                    throw "TEST-ERROR", sprintf("%s declares element reference data, and this test has no way to "
+                        "build its provider (scheme: %y, path: %y)", label, app.scheme, action.path);
+                }
+                AbstractDataProvider prov = ElementReferenceDataTest::getConnection(app.scheme).getDataProvider()
+                    .getChildProviderPath(action.path);
+                foreach string name in (names) {
+                    push options, <ElementOptionInfo>{
+                        "label": label + "/" + name,
+                        "ref_data": action.options{name}.element_ref_data,
+                        "options": action.options,
+                        "prov": prov,
+                    };
+                }
+            }
+        }
+    }
+
+    supportTest() {
+        assertTrue(options.size() >= 40, sprintf("the declared element reference data is found (%d options)",
+            options.size()));
+        hash<string, bool> apps = map {$1.label.split("/")[0]: True}, options;
+        foreach string app in (("Paddle", "Gmail", "Linear", "Github", "Gitlab")) {
+            assertTrue(apps{app}, app + " declares element reference data");
+        }
+        # every option whose element reference data its provider does not offer
+        list<string> unsupported = map sprintf("%s: %y (offered: %y)", $1.label, $1.ref_data,
+            keys $1.prov.getSupportedElementReferenceData()), options,
+            !($1.prov.getSupportedElementReferenceData(){$1.ref_data} ?? False);
+        assertEq((), unsupported, "getSupportedElementReferenceData() offers every declared element reference data");
+    }
+
+    restSchemaReadTest() {
+        int checked = 0;
+        list<string> failed = ();
+        foreach hash<ElementOptionInfo> opt in (options) {
+            if (!(opt.prov instanceof RestSchemaActionDataProvider)) {
+                continue;
+            }
+            RestSchemaActionDataProvider prov = cast<RestSchemaActionDataProvider>(opt.prov);
+            RestSchemaActionSet set = prov.getActionSet();
+            hash<RestSchemaReferenceDataInfo> rd = set.getReferenceDataDecl(opt.ref_data);
+            # one record of the listing, where the declaration reads it, after the listing of the values that
+            # partition it, if any
+            CannedRestClient rest(ElementReferenceDataTest::getListings(set, rd, "v-1"));
+            # a header that a connection supplies to the listing, such as a tenant, is sent by the client
+            RestSchemaActionOperation listing = set.getReferenceDataSet(opt.ref_data).getOperationEx(rd.action);
+            map rest.addDefaultHeaders({$1.wire_name: "x"}), listing.getConnectionHeaders();
+            RestSchemaActionDataProvider reader(set, prov.getActionOperation(), rest);
+            # the options that scope the listing have values
+            hash<auto> action_opts = map {$1: "x"}, (rd.options_from ?? {}).values();
+            try {
+                *list<hash<AllowedValueInfo>> values = reader.getElementReferenceData(opt.ref_data, action_opts);
+                list<string> read = keys (map {$1.value.toString(): True}, values);
+                if (read != ("v-1",) || !rest.paths) {
+                    push failed, sprintf("%s: read %y with %d request(s)", opt.label, read, rest.paths.size());
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                push failed, sprintf("%s: %s: %s", opt.label, ex.err, ex.desc);
+            }
+            ++checked;
+        }
+        assertTrue(checked >= 30, sprintf("the REST schema options are read (%d)", checked));
+        assertEq((), failed, "each listing gives the elements its records");
+    }
+
+    #! Returns True if the source declares element reference data
+    private static bool declaresElementReferenceData(string path) {
+        return ReadOnlyFile::readTextFile(path) =~ /"element_ref_data"\s*:|element_ref_data\s*=[^=]/;
+    }
+
+    #! Returns a connection of the scheme that sends nothing until it is used
+    private static AbstractConnection getConnection(string scheme) {
+        hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme(scheme);
+        # the first set of required options, and the credentials an authorization flow requires
+        list<string> names = ("token", "oauth2_client_id", "oauth2_client_secret");
+        if (info.required_options.val()) {
+            names += map $1, info.required_options.split("|")[0].split(","), $1 != "url";
+        }
+        hash<auto> opts = map {$1: "x"}, names, info.options{$1};
+        return info.cls.newObject("element-reference-data", "test", "http://localhost/api", {"monitor": False},
+            opts);
+    }
+
+    #! Returns the responses to the requests that read a declaration: those of the listing of the values that
+    #! partition it, if any, and then its own
+    private static list<auto> getListings(RestSchemaActionSet set, hash<RestSchemaReferenceDataInfo> rd,
+            string value) {
+        list<auto> rv = ();
+        if (rd.options_reference.val()) {
+            # a partition is passed to the next request, so it has the shape of an identifier
+            rv = ElementReferenceDataTest::getListings(set, set.getReferenceDataDecl(rd.options_reference),
+                "00000000-0000-4000-8000-000000000001");
+        }
+        push rv, ElementReferenceDataTest::getListing(rd, value);
+        return rv;
+    }
+
+    #! Returns a listing response that holds one record with the given value where the declaration reads it
+    private static auto getListing(hash<RestSchemaReferenceDataInfo> rd, string value) {
+        hash<auto> record = rd.record_filter ?? {};
+        list<string> path = rd.value_field.split(".");
+        auto node = value;
+        while (path) {
+            node = {pop path: node};
+        }
+        record += node;
+        auto listing = rd.single_record ? record : (record,);
+        foreach string name in (reverse(rd.records_path ?? ())) {
+            listing = {name: listing};
+        }
+        return listing;
+    }
+}

@@ -119,6 +119,16 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
         return op;
     }
 
+    #! Returns the action set that declares this provider's operation and the reference data of its options
+    /** @return the action set; a provider built from it and @ref getActionOperation() with another REST client
+        executes the same action
+
+        @since RestSchemaActions 1.0
+    */
+    RestSchemaActionSet getActionSet() {
+        return action_set;
+    }
+
     #! Returns the flattened request type
     private *AbstractDataProviderType getRequestTypeImpl() {
         return op.getRequestType();
@@ -332,10 +342,43 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
     }
 
     #! Returns the reference data this action's options can offer
+    /** @return the names of the reference data of this action's options and of the elements of its list options
+        (a declaration's listing gives the same records for a value and for an element), as keys supported in calls
+        to @ref DataProvider::AbstractDataProvider::getReferenceData() "getReferenceData()"
+    */
     *hash<string, bool> getSupportedReferenceData() {
         hash<string, bool> rv = {};
         map rv{$1} = True, getReferenceDataNames();
         return rv ?: NOTHING;
+    }
+
+    #! Returns the reference data that the elements of this action's list options can offer
+    /** @return the names of the reference data declared by this action's options as \c element_ref_data, as keys
+        supported in calls to
+        @ref DataProvider::AbstractDataProvider::getElementReferenceData() "getElementReferenceData()"
+
+        @since RestSchemaActions 1.0
+    */
+    *hash<string, bool> getSupportedElementReferenceData() {
+        hash<string, bool> rv = {};
+        map rv{$1} = True, getReferenceDataNames(True);
+        return rv ?: NOTHING;
+    }
+
+    #! Populates the dropdown of a list option's elements by executing the action that lists their values
+    /** A reference data declaration lists records, and the same records give the value of an option and the elements
+        of a list option, so element reference data is read as @ref getReferenceDataImpl() reads reference data.
+
+        @param type the name of the reference data declaration
+        @param action_opts the action's options; those that scope the listing are taken from them
+
+        @return the allowed values of the elements, or nothing if \a type is not declared or an option that scopes
+        the listing has no value
+
+        @since RestSchemaActions 1.0
+    */
+    private *list<hash<AllowedValueInfo>> getElementReferenceDataImpl(string type, *hash<auto> action_opts) {
+        return getReferenceDataImpl(type, action_opts);
     }
 
     #! Populates a dropdown by executing the action that lists its values
@@ -512,12 +555,16 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
     }
 
     #! Returns the names of the reference data referenced by this action's options
-    private list<string> getReferenceDataNames() {
+    /** @param elements_only only the names that the options declare as \c element_ref_data
+
+        @return the names of the reference data
+    */
+    private list<string> getReferenceDataNames(bool elements_only = False) {
         hash<string, bool> rv = {};
         *hash<string, AbstractDataField> fields = op.getRequestFields();
         foreach hash<auto> i in (fields.pairIterator()) {
             *hash<auto> attr = i.value.getAttributes();
-            map rv{$1} = True, (attr.ref_data, attr.element_ref_data), $1.val();
+            map rv{$1} = True, (elements_only ? NOTHING : attr.ref_data, attr.element_ref_data), $1.val();
         }
         return keys rv;
     }

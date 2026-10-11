@@ -273,6 +273,7 @@ public class PaddleDataProviderTest inherits QUnit::Test {
         addTestCase("action paths resolve", \actionPathTest());
         addTestCase("narrowed archive variant", \archiveVariantTest());
         addTestCase("reference data", \referenceDataTest());
+        addTestCase("element reference data", \elementReferenceDataTest());
         addTestCase("request reconstruction", \requestReconstructionTest());
         addTestCase("response contract", \responseContractTest());
         addTestCase("option types", \optionTypeTest());
@@ -484,6 +485,32 @@ public class PaddleDataProviderTest inherits QUnit::Test {
             }
         }
         assertTrue(checked >= 15, "the application offers dropdowns on its identifier options");
+    }
+
+    elementReferenceDataTest() {
+        # a filter that takes a list of records offers each element from the listing of that kind of record,
+        # through getElementReferenceData(), which is how the elements of a list option are read
+        FakePaddleRestClient rest();
+        PaddleDataProvider dp(rest);
+        AbstractDataProvider list_customers = dp.getChildProviderEx("list_customers");
+        assertEq({"paddle-customer": True}, list_customers.getSupportedElementReferenceData());
+        rest.push_response({"body": {"data": (
+            {"id": "ctm_01h8xce4x86pq3byrwgc7k4qbn", "name": "Sam Miller", "email": "sam@example.com"},
+            {"id": "ctm_01h8xce4x86pq3byrwgc7k4qbp", "email": "jo@example.com"},
+        )}});
+        *list<hash<AllowedValueInfo>> values = list_customers.getElementReferenceData("paddle-customer");
+        assertEq(("ctm_01h8xce4x86pq3byrwgc7k4qbn", "ctm_01h8xce4x86pq3byrwgc7k4qbp"), map $1.value, values);
+        assertEq("GET", rest.last().method);
+        assertRegex("^/customers\\?", rest.last().path, "the customer listing fills the elements");
+
+        # each list filter of the transaction listing offers its own kind of record
+        assertEq({"paddle-customer": True, "paddle-subscription": True, "paddle-transaction": True},
+            dp.getChildProviderEx("list_transactions").getSupportedElementReferenceData());
+        rest.push_response({"body": {"data": ({"id": "txn_01h8xce4x86pq3byrwgc7k4qbq"},)}});
+        assertEq(("txn_01h8xce4x86pq3byrwgc7k4qbq",), map $1.value,
+            dp.getChildProviderEx("list_transactions").getElementReferenceData("paddle-transaction"));
+        assertRegex("^/transactions\\?.*per_page=30", rest.last().path,
+            "the transaction listing is read with its own page size");
     }
 
     requestReconstructionTest() {
