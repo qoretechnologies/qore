@@ -43,6 +43,7 @@ class AutoLocalValueTagsTest inherits QUnit::Test {
         }
         TmpDir dir("qore-auto-local-value-tags-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "QORE_DISABLE_AOT_STABLE_UNTYPED_LOAD=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
@@ -53,8 +54,12 @@ class AutoLocalValueTagsTest inherits QUnit::Test {
                         "(?s)define [^\n]*@" + name
                             + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
                     assertTrue(!!body, name + " normal LLVM entry");
+                    bool stable = name == "readUntyped" && !prefix.startsWith("QORE_DISABLE_");
+                    assertEq(stable, regex(body[0] ?? "", "call i8 @qore_rt_deref_stable_local_v2"),
+                        name + " caches only repeated stable parameter reads");
+                    # Writable body locals and read-once parameters keep the ordinary helper.
                     assertRegex("call i64 @qore_rt_deref_if_reference", body[0] ?? "",
-                        name + " exercises the changed helper");
+                        name + " retains ordinary body-local / read-once handling");
                 }
                 foreach string runtime in (("", "QORE_DISABLE_IR_CONTEXT_ELISION=1 ",
                         "QORE_DISABLE_FUNCREF_FAST_CALL=1 ", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ")) {

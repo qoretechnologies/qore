@@ -1,0 +1,42 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class NativeStableUntypedLoadTest
+
+class NativeStableUntypedLoadTest inherits QUnit::Test {
+    constructor() : Test("stable untyped parameter classification", "1.0", \ARGV) {
+        addTestCase("raw references are reevaluated and returned targets remain owned", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private check() {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        TmpDir dir("qore-stable-untyped-load-");
+        string executable = dir.path + "/classification-test";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++17", "-pthread", "-g",
+            "-I" + root + "/include", "-I" + libdir + "/include",
+            get_script_dir() + "/native_stable_untyped_load.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", executable);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        foreach string level in (("-O0", "-O3")) {
+            int status;
+            string output = backquote((map quote($1), args).join(" ") + " " + level + " 2>&1", \status);
+            assertEq(0, status, output);
+            output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+                + " " + quote(executable) + " 2>&1", \status);
+            assertEq(0, status, output);
+            assertEq("stable-untyped-load-native: ok\n", output);
+        }
+    }
+}

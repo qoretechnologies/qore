@@ -1,0 +1,36 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+%allow-weak-references
+
+class ProbeBox { int next() { return 7; } }
+int sub probeStable(auto value) { return int(value) + int(value); }
+int sub probeOnce(auto value) { return int(value); }
+int sub probeWritten(auto value) {
+    int first = int(value);
+    value = 11;
+    return first + int(value);
+}
+int sub probeCaptured(auto value) {
+    code<int()> read = int sub () { return int(value); };
+    return read() + read();
+}
+int sub probeAddress(auto value) {
+    reference<auto> alias = \value;
+    alias = 13;
+    return int(value);
+}
+int sub probeReference(reference<auto> value) { return int(value) + int(value); }
+int sub probeWeak(auto value) {
+    ProbeBox owner();
+    value := owner;
+    return int(value.next()) + int(value.next());
+}
+int sub probeHandler(auto value) {
+    on_exit { printf("handler: %y\n", value); }
+    return int(value) + int(value);
+}
+our int target = 23;
+printf("%d:%d:%d:%d:%d:%d:%d:%d\n", probeStable(5), probeOnce(5), probeWritten(5),
+    probeCaptured(5), probeAddress(5), probeReference(\target), probeWeak(NOTHING), probeHandler(5));

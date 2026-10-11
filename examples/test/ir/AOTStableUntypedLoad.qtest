@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class StableUntypedLoadTest
+
+class StableUntypedLoadTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("stable untyped parameter eligibility", "1.0", \ARGV) {
+        addTestCase("only stable repeated parameter loads cache their classification", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTStableUntypedLoad.qr";
+        string expected = "handler: 5\n10:5:16:10:13:46:14:10\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-stable-untyped-load-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_STABLE_UNTYPED_LOAD=1 ", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string name in (("probeStable", "probeOnce", "probeWritten", "probeCaptured",
+                        "probeAddress", "probeReference", "probeWeak", "probeHandler")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name
+                            + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " normal LLVM entry");
+                    bool eligible = name == "probeStable" && !prefix.startsWith("QORE_DISABLE_");
+                    assertEq(eligible, regex(body[0] ?? "", "call i8 @qore_rt_deref_stable_local_v2"),
+                        name + " eligibility " + prefix + level);
+                }
+                assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_IR_CONTEXT_ELISION=1 "),
+                    "full context " + prefix + level);
+            }
+        }
+    }
+}

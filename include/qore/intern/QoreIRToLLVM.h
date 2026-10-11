@@ -336,6 +336,11 @@ private:
     std::unordered_set<const void*> aot_class_param_cache_candidates;
     std::unordered_map<const void*, AotClassParamCache> aot_class_param_caches;
 
+    // A stable untyped parameter may still contain a raw reference. Remember
+    // only a successful non-reference classification, never its evaluated value.
+    std::unordered_set<const void*> aot_stable_untyped_params;
+    std::unordered_map<const void*, llvm::AllocaInst*> aot_untyped_non_reference_flags;
+
     using NativeConversionCache =
         std::unordered_map<const LocalVar*,
             std::pair<llvm::BasicBlock*, llvm::Value*>>;

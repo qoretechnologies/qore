@@ -409,6 +409,16 @@ uint64_t qore_rt_make_opaque_value(uint64_t value, ExceptionSink* xsink);
 //! variable stack.
 uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink);
 
+//! Classifies a stable untyped parameter, evaluating only reference inputs.
+/** @param val borrowed NaN-boxed local value
+    @param reference_result receives the owned evaluated result only when returning 0; never retained
+    @param xsink exception sink for reference evaluation
+    @return 1 for a non-reference input (val is unchanged), 0 after reference evaluation, including errors
+    @note Only compiler-proven stable parameters may cache a return of 1. A return of 0 must never
+        cache the reference target: evaluation must remain at every original load.
+*/
+uint8_t qore_rt_deref_stable_local_v2(uint64_t val, uint64_t* reference_result, ExceptionSink* xsink);
+
 //! Run all cleanup actions from an array of pointers to NaN-boxed cleanup slots.
 void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink);
 

@@ -8858,3 +8858,135 @@ Dynamic native workloads in main still take 3.49–3.85 times Java's time;
 generic fallback takes about 104.5 times. IR and context-using/cross-Program calls
 remain separate large gaps. The [audit](FOLLOWUP-AUDIT.md#native-program-proof-audit-2026-10-10)
 records all 62 checks: 13 Pass, 49 N/A, 0 Fail. No Java-parity claim.
+
+## Stable untyped parameter loads (2026-10-10)
+
+Retain invocation-local non-reference classification for compiler-proven stable
+untyped parameters. Main dynamic integer/float time falls 8.81%/5.55%; the
+five-fork same-runtime compiler control confirms 10.81%/8.62%, with disjoint fork
+ranges for both workloads in both trials. These are whole-workload improvements,
+not isolated call costs; Java remains 3.65/3.33 times faster in main.
+
+The classifier runs lazily at the first original load. A successful non-reference
+classification can be reused, but neither the value nor an object pointer is
+cached. Actual references evaluate at every read in original order. Cache
+freshness runs first; runtime reloads normalize reference values before replacing
+local bits. Compiler writes, references to the local, captures, weak assignment,
+AST-visible locals and opaque AST local access are excluded. Single-read,
+loop-free functions retain the ordinary helper. The function-wide loop indicator
+is conservative: it does not prove that the particular load is on a loop path.
+
+Returning an i8 classification rather than passing the flag address to the
+runtime lets LLVM promote the invocation-local flag. Existing ownership, frame
+publication, debugger, cancellation, stack and Program admission remain. The
+old reference helper has identical normalized arm64 instructions. The new
+internal header changes RUID; no incompatible same-executable library swap is
+used. The compile-only switch is QORE_DISABLE_AOT_STABLE_UNTYPED_LOAD.
+
+### Qualification and experiments
+
+Baseline is 889f0d148 plus an empty patch, using its previously qualified frozen
+binaries with original provenance retained. Final candidate is that parent plus
+the frozen implementation patch; a future commit hash is not invented. Release
+and debug each pass 91 integration files plus the new exclusion driver (92 files):
+374/381 cases, 16470/16569 assertions, 12 standalone files each, one known release
+skip and no debug skips. The value-tag driver has 272 assertions, exclusion
+driver 134 and native raw-reference driver six (plus its C++ assertions) per
+build. Coverage includes O0/O3, EH, stripped/no-debug, split compilation,
+fallback switches, captured/written/weak/reference locals and owned reference
+results. Support qmods were rebuilt sequentially. All 495 reference checks per
+mode pass (release IR/AOT/Java-int/Java-JIT, debug IR/AOT), plus 15 harness tests
+and 146 native debug checks. No full-suite, sanitizer or cross-platform claim.
+
+All eight trials are retained: 540 jobs / 2700 measurement windows, including
+baseline and superseded screens. Final candidate accounts for 180 jobs / 900
+windows. Source and binaries were frozen before timing; no task builds, tests,
+profiles or evidence processing overlapped timing. Each raw checksum/window,
+summary and binary/source identity was independently revalidated.
+
+The initial v1 experiment passed the flag address to runtime. It improved the
+targeted calls but added stack-byte flag reloads; generic fallback slowed 1.68%
+with disjoint ranges in its whole-build trial. V2 returns classification and
+removes that flag escape; its three-fork screen retained a slow integer fork.
+The final profitability gate additionally excludes loop-free read-once functions.
+The count-one v1 trial is dominated by roughly 2 microseconds of invocation and
+harness work and cannot rule out small isolated first-read regressions. None of
+these earlier binaries is relabelled as the final candidate.
+
+A reflection probe's set_local_var_value call reports UNKNOWN-VARIABLE in
+IR/JIT/tiered and AOT on both baseline and candidate, including generic-entry and
+full-context controls; AST succeeds. An earlier iterator-reference argument probe
+also showed an existing AST versus IR/AOT argument-binding difference. Neither
+limitation is claimed fixed or used as successful coverage. The native regression
+test directly supplies and mutates a raw ReferenceNode to validate reevaluation
+and ownership without that binding confound.
+
+### Measurements
+
+Apple M4 Pro, macOS arm64 release; count 4096, three warmup and five 500 ms
+measurement windows per fork. Median fork means in ns/iteration; startup excluded.
+Local Temurin 25.0.2 JIT retains the target calls. Qore and Java representation and
+inlining contracts differ. Observed fork ranges are not confidence intervals.
+
+Main, three forks, run-clbqtfc4:
+
+|!Kernel|!Before ns|!After ns|!Reduction %|!Java JIT ns|!After / Java
+|dynamic_int_result_call|11.553|10.535|8.81|2.890|3.65
+|dynamic_float_result_call|12.568|11.871|5.55|3.561|3.33
+|indirect_int_result|6.990|7.047|-0.81|1.934|3.64
+|indirect_float_result|9.239|9.019|2.38|2.853|3.16
+|dynamic_int_result_fallback|311.805|320.429|-2.77|3.019|106.16
+|boxed_float_method_call|64.546|64.232|0.49|2.609|24.62
+|polymorphic_expression_call|10.627|10.525|0.96|2.596|4.05
+|polymorphic_float_expression_call|10.703|10.797|-0.88|2.626|4.11
+|indirect_float|9.383|9.453|-0.75|1.698|5.57
+|arithmetic|1.499|1.506|-0.46|1.004|1.50
+
+Same-runtime enabled/disabled compiler control, five forks, run-c68ft9wh:
+
+|!Kernel|!Disabled ns|!Enabled ns|!Reduction %|!Disabled fork range|!Enabled fork range
+|dynamic_int_result_call|11.719|10.453|10.81|11.634–11.860|10.381–10.471
+|dynamic_float_result_call|12.846|11.740|8.62|12.651–13.143|11.596–11.987
+|dynamic_int_result_fallback|314.369|309.884|1.43|309.920–317.331|306.907–315.545
+|boxed_float_method_call|66.340|63.485|4.30|64.781–66.781|63.143–63.816
+|indirect_int_result|6.911|7.014|-1.49|6.901–7.066|6.877–7.079
+|indirect_float_result|8.950|8.919|0.36|8.872–8.978|8.898–9.179
+|arithmetic|1.501|1.498|0.19|1.498–1.540|1.489–1.508
+
+Fallback slows 2.77% in main with disjoint ranges, but improves 1.43% in the
+same-runtime control with overlapping ranges. A focused five-fork whole-build
+repeat, run-c0n4x0bc, measures 308.864 to 308.986 ns (-0.04%), with overlapping
+307.804–311.395 / 305.709–310.244 ranges. The main regression does not reproduce;
+its cause remains unresolved, not erased or attributed confidently to noise.
+
+Indirect integer-result calls slow 0.81% in main (disjoint ranges), 1.49% in the
+compiler control and 1.96% in the focused repeat (both overlapping). The latter
+is 6.912 to 7.047 ns, ranges 6.847–6.999 / 6.891–7.132. This adverse median trend
+remains a caveat, not a claimed speedup. Boxed-float improves 4.30% in the compiler
+control with disjoint ranges but only 0.49% in main with overlap. Other controls
+show mixed small changes; all raw samples remain in the evidence.
+
+### Next optimization plan
+
+Two separate ten-second 1 ms profiles after timing locate remaining costs. The
+floating workload records 4432 top-of-stack samples in the native method helper,
+421 in frame unpublication and 378 in stack checks; the former repeated reference
+check helper is no longer a >=5-sample top-of-stack entry. Fallback spreads work
+across generic dispatch, type checks, parameter instantiation, local/frame setup,
+TLS, string construction and cleanup. Nested inclusive counts are not additive;
+profiling is qualitative and its windows are not benchmark samples.
+
+Next inspect repeated diagnostic method-name construction in generic dispatch
+for immutable metadata reuse, with the fallback workload as primary and native
+and callback workloads as controls. Validate stack names, exceptions, Program
+boundaries and deoptimization before retaining any measured reduction. Then
+investigate reusable native dispatch proofs while preserving live body,
+debugger/access and diagnostic-frame lifetime checks. Avoid replacing required
+runtime observability with an unsafe raw function-pointer call.
+
+Generic fallback remains about 106 times Java in main, boxed floating results
+about 25 times, and retained native dynamic calls about 3.3–3.6 times. IR and
+cross-Program paths remain separate gaps. The [audit](FOLLOWUP-AUDIT.md#stable-untyped-load-audit-2026-10-10)
+records all 62 checks: 18 Pass, 44 N/A, 0 Fail. Full identities, raw samples,
+earlier screens and reproduction scripts are in
+[the evidence](results-stable-untyped-load-macos-arm64.json). No Java parity claim.

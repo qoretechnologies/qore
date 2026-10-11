@@ -2015,25 +2015,36 @@ extern "C" DLLEXPORT void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t*
     *valid_epoch = epoch;
 }
 
+static inline uint64_t qore_rt_eval_reference_node(AbstractQoreNode* node, ExceptionSink* xsink) {
+    // Dereference the reference like VarRefNode::evalImpl() does. The reference
+    // stays in the alloca; only the target is returned with an extra reference.
+    bool needs_deref = true;
+    QoreValue result = node->eval(needs_deref, xsink);
+    if (!needs_deref && result.hasNode()) {
+        result = result.refSelf();
+    }
+    return toBits(result);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_deref_if_reference(uint64_t val, ExceptionSink* xsink) {
     QoreValue v = fromBits(val);
-    // hasNode() accepts only non-null pointer representations. For those,
-    // getType() is the node tag; avoid its generic scalar/enum classification
-    // on every untyped local load. isPointer() also preserves opaque pointers,
-    // while inline values (including enums) remain untouched as before.
+    // isPointer() also preserves opaque pointers; inline values (including
+    // enums) remain untouched. Avoid generic scalar/enum type classification.
+    AbstractQoreNode* node = v.isPointer() ? v.getPtr() : nullptr;
+    return node && node->getType() == NT_REFERENCE ? qore_rt_eval_reference_node(node, xsink) : val;
+}
+
+extern "C" DLLEXPORT uint8_t qore_rt_deref_stable_local_v2(uint64_t val, uint64_t* reference_result,
+        ExceptionSink* xsink) {
+    QoreValue v = fromBits(val);
     AbstractQoreNode* node = v.isPointer() ? v.getPtr() : nullptr;
     if (node && node->getType() == NT_REFERENCE) {
-        // Dereference the reference like VarRefNode::evalImpl() does.
-        // The reference node stays in the alloca (not deref'd here);
-        // only the target value is returned with an extra reference.
-        bool needs_deref = true;
-        QoreValue result = node->eval(needs_deref, xsink);
-        if (!needs_deref && result.hasNode()) {
-            result = result.refSelf();
-        }
-        return toBits(result);
+        *reference_result = qore_rt_eval_reference_node(node, xsink);
+        return 0;
     }
-    return val;
+    // Return the classification instead of exposing the caller's flag address;
+    // LLVM can promote that invocation-local flag to SSA/register storage.
+    return 1;
 }
 
 extern "C" DLLEXPORT void qore_rt_clear_local(LocalVar* var, ExceptionSink* xsink) {

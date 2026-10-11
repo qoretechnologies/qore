@@ -11672,6 +11672,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     stable_scalar_loads.clear();
     aot_class_param_cache_candidates.clear();
     aot_class_param_caches.clear();
+    aot_stable_untyped_params.clear();
+    aot_untyped_non_reference_flags.clear();
     stable_int_conversions.clear();
     stable_float_conversions.clear();
     nanboxed_values.clear();
@@ -12019,7 +12021,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     std::unordered_set<const LocalVar*> stored_locals;
     std::unordered_map<uint32_t, std::vector<QoreIROpcode>> value_operand_users;
     std::unordered_set<uint32_t> hashdecl_initializer_values;
+    bool function_has_loop = false;
     for (const auto& block : func.blocks) {
+        function_has_loop = function_has_loop || block->is_loop_header;
         bool entry_block = block.get() == func.blocks.front().get();
         for (const auto& inst_ptr : block->instructions) {
             if (!inst_ptr) {
@@ -12643,6 +12647,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 && QoreTypeInfo::getUniqueReturnClass(value_type)
                 && preinstantiated_entry_cleanup_by_local.count(key)
                 && canReloadLocalFromRuntime(key);
+            bool cache_untyped_param = parameter_locals.count(local) && !local->isTopLevel() && !local->isSelf()
+                && !owner_has_parse_reference && !closure_capture_counts.count(local)
+                && !weak_assigned_locals.count(key) && !QoreTypeInfo::hasType(local->getTypeInfo())
+                // A single static load may execute repeatedly in a loop, but
+                // caching a single load in a loop-free function can only add cost.
+                && (loads.size() > 1 || function_has_loop);
             // value_type removes an optional contract's NOTHING alternative.
             // Check complexity on the declared type: folding *Generic<T> can
             // discard its parameters and must not admit it as a plain class.
@@ -12664,11 +12674,20 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 } else {
                     cache_class_param = false;
                 }
+                // is_ref means "may hold a reference" for every untyped
+                // parameter, not an address escape. The runtime classifier
+                // deliberately retains per-read evaluation for that case.
+                if (load->is_closure || !load->result.isValid()) {
+                    cache_untyped_param = false;
+                }
             }
             if (cache_class_param) {
                 if (!std::getenv("QORE_DISABLE_AOT_CLASS_PARAM_CACHE")) {
                     aot_class_param_cache_candidates.insert(key);
                 }
+            }
+            if (cache_untyped_param && !std::getenv("QORE_DISABLE_AOT_STABLE_UNTYPED_LOAD")) {
+                aot_stable_untyped_params.insert(key);
             }
         }
     }
@@ -15392,10 +15411,56 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // reference nodes because the type system prevents it.
                     if (linst->local
                             && !QoreTypeInfo::hasType(linst->local->getTypeInfo())) {
-                        auto deref_fn = module.getOrInsertFunction(
-                            "qore_rt_deref_if_reference",
-                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-                        loaded = builder->CreateCall(deref_fn, {loaded, xsink_arg});
+                        if (aot_stable_untyped_params.count(key)) {
+                            auto* flag_type = llvm::Type::getInt8Ty(ctx);
+                            auto flag_it = aot_untyped_non_reference_flags.find(key);
+                            if (flag_it == aot_untyped_non_reference_flags.end()) {
+                                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                                    llvm_func->getEntryBlock().begin());
+                                auto* flag = ab.CreateAlloca(flag_type, nullptr, "untyped_non_reference");
+                                ab.CreateStore(llvm::ConstantInt::get(flag_type, 0), flag);
+                                flag_it = aot_untyped_non_reference_flags.emplace(key, flag).first;
+                            }
+                            // Compiler writes/escapes are excluded. Runtime reloads
+                            // resolve references before replacing the cached bits.
+                            // A raw reference never sets the flag, so its evaluation
+                            // still occurs at every original load, in the same order.
+                            llvm::Value* known = builder->CreateLoad(flag_type, flag_it->second);
+                            llvm::BasicBlock* ready_bb = builder->GetInsertBlock();
+                            llvm::BasicBlock* check_bb = llvm::BasicBlock::Create(ctx,
+                                "untyped_reference_check", llvm_func);
+                            llvm::BasicBlock* reference_bb = llvm::BasicBlock::Create(ctx,
+                                "untyped_reference_result", llvm_func);
+                            llvm::BasicBlock* done_bb = llvm::BasicBlock::Create(ctx,
+                                "untyped_reference_done", llvm_func);
+                            builder->CreateCondBr(builder->CreateICmpNE(known,
+                                llvm::ConstantInt::get(flag_type, 0)), done_bb, check_bb);
+                            builder->SetInsertPoint(check_bb);
+                            llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                                llvm_func->getEntryBlock().begin());
+                            auto* reference_result = ab.CreateAlloca(i64_type, nullptr, "untyped_reference_value");
+                            auto deref_fn = module.getOrInsertFunction("qore_rt_deref_stable_local_v2",
+                                llvm::FunctionType::get(flag_type, {i64_type, ptr_type, ptr_type}, false));
+                            llvm::Value* non_reference = builder->CreateCall(deref_fn,
+                                {loaded, reference_result, xsink_arg});
+                            builder->CreateStore(non_reference, flag_it->second);
+                            builder->CreateCondBr(builder->CreateICmpNE(non_reference,
+                                llvm::ConstantInt::get(flag_type, 0)), done_bb, reference_bb);
+                            builder->SetInsertPoint(reference_bb);
+                            llvm::Value* checked = builder->CreateLoad(i64_type, reference_result);
+                            builder->CreateBr(done_bb);
+                            builder->SetInsertPoint(done_bb);
+                            auto* result = builder->CreatePHI(i64_type, 3, "untyped_value");
+                            result->addIncoming(loaded, ready_bb);
+                            result->addIncoming(loaded, check_bb);
+                            result->addIncoming(checked, reference_bb);
+                            loaded = result;
+                        } else {
+                            auto deref_fn = module.getOrInsertFunction(
+                                "qore_rt_deref_if_reference",
+                                llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                            loaded = builder->CreateCall(deref_fn, {loaded, xsink_arg});
+                        }
                     }
                     nanboxed_values.insert(inst->result.id);
                     if (assigned_non_nothing_locals.count(key)) {

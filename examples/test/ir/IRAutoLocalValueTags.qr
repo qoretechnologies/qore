@@ -11,7 +11,11 @@ sub expect(auto expected, auto actual) {
             expected, expected.fullType(), actual, actual.fullType());
     }
 }
-auto sub readUntyped(auto value) { return value; }
+auto sub readUntyped(auto value) {
+    auto result = NOTHING;
+    for (int i = 0; i < 4; ++i) { result = value; }
+    return result;
+}
 auto sub readIteratorLocal(ListIterator<auto> iterator) {
     auto value = iterator.getValue();
     return value;

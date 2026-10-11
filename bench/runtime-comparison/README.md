@@ -847,6 +847,25 @@ Useful source references:
 
 See [RESULTS.md](RESULTS.md) for the initial measurements and follow-up targets.
 
+`QORE_DISABLE_AOT_STABLE_UNTYPED_LOAD=1` disables invocation-local caching of a
+stable untyped parameter's non-reference classification. Set it during `qcc`
+compilation, not just execution. The compiler excludes written, captured,
+reference-addressed, weak-assigned and AST-visible locals, and rejects opaque
+AST local access. Read-once parameters in loop-free functions stay on the ordinary
+path; the loop-presence profitability test is conservative and function-wide.
+Only the classification is cached: current local bits, freshness checks and
+ownership remain live, while actual references are evaluated on every original
+read. The new internal `qore_rt_deref_stable_local_v2` returns its classification
+without exposing the flag address, allowing LLVM to keep the flag in registers.
+The v2 suffix distinguishes uncommitted experimental artifacts. The internal
+header changes AOT runtime identity, so baseline comparisons compile separate
+executables; same-runtime controls compile with the switch off/on. Do not run a
+new artifact against the old runtime by bypassing its identity check.
+See the [measurements](RESULTS.md#stable-untyped-parameter-loads-2026-10-10) and
+[full evidence](results-stable-untyped-load-macos-arm64.json), including rejected
+experiments and adverse controls. This is an AOT optimization, not an IR speedup
+or Java-parity claim.
+
 The [object-admission follow-up](RESULTS.md#object-admission-specialization-2026-10-09)
 specializes strong/opaque node checks without changing caller code. Its identical-
 executable before/after measurements show a repeated polymorphic-kernel benefit,
