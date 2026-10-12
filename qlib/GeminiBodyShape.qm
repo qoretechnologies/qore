@@ -76,6 +76,7 @@ module GeminiBodyShape {
     - @ref openAiToolChoiceToGeminiConfig() — adapt OpenAI \c tool_choice
       to Gemini \c toolConfig
     - @ref normalizeGenerationConfig() — model-specific generation controls, applied after body overrides
+    - @ref lowestThinkingLevel() — the thinking level that a budget of zero selects on Gemini 3.x
     - @ref applyCachedContent() — make a request use a cached content resource
       (explicit prompt caching)
     - @ref shapeCachedContentBody() / @ref shapeCacheExpiration() — the bodies
@@ -107,9 +108,11 @@ module GeminiBodyShape {
     Supported levels depend on the model; for example Gemini 3.1 Pro does not support \c minimal.
     An explicit native thinking level in \c body_options takes precedence.
 
-    Numeric \c reasoning_token_budget values (including zero and -1) are omitted on Gemini 3.x, since a token
-    budget has no exact thinking-level equivalent. Without an explicit level, the model default applies.
-    Gemini 3.x cannot fully disable thinking; \c disable_reasoning is therefore not mapped to a level.
+    Numeric \c reasoning_token_budget values are omitted on Gemini 3.x, since a token budget has no exact
+    thinking-level equivalent, except zero: Gemini 3.x cannot turn thinking off, so a budget of zero selects the
+    lowest thinking level that the model supports (see @ref lowestThinkingLevel()), so that thinking tokens do not
+    use up a small output budget. Without an explicit level, other budgets (including -1) leave the model default.
+    \c disable_reasoning is not mapped to a level.
     Older models, including Gemini 2.5, retain sampling parameters and numeric thinking budgets. Generic
     \c reasoning_effort is ignored for these models; Gemini 2.5's generateContent API does not accept thinking levels.
 
@@ -229,7 +232,8 @@ try {
     @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
     - initial release
     - Gemini 3.x uses qualitative thinking levels and omits deprecated sampling parameters and numeric budgets;
-      Gemini 2.5 retains its existing controls (see @ref geminibodyshapegeneration)
+      a budget of zero selects the lowest thinking level that the model supports, since Gemini 3.x cannot turn
+      thinking off; Gemini 2.5 retains its existing controls (see @ref geminibodyshapegeneration)
     - explicit prompt caching: @ref shapeChatBody() takes a \c cached_content reference and then leaves out
       \c systemInstruction, \c tools and \c toolConfig, which belong to the cached content
       (@ref shapeCachedContentBody()); providers take it from
@@ -1538,6 +1542,27 @@ public bool sub usesThinkingLevel(string model) {
     return model =~ /^gemini-3([.-]|$)/;
 }
 
+#! Returns the lowest thinking level that a Gemini 3.x model supports
+/** Gemini 3.x cannot turn thinking off; this is the level that a thinking budget of zero selects.  Gemini 3.x Flash
+    models, including Flash-Lite, support \c MINIMAL; other Gemini 3.x models, such as Gemini 3.1 Pro, support
+    \c LOW at the lowest.  The Gemini API and Vertex AI do not declare the thinking levels that a model supports, so
+    the level follows the model family in its name; \c LOW, which every Gemini 3.x model supports, is returned for a
+    model that is not a Flash model.
+
+    @param model a bare model ID or a Gemini/Vertex model resource name
+
+    @return \c "MINIMAL" or \c "LOW"
+
+    @par Example
+    @code{.py}
+string level = GeminiBodyShape::lowestThinkingLevel("gemini-3.1-pro-preview"); # "LOW"
+    @endcode
+*/
+public string sub lowestThinkingLevel(string model) {
+    model =~ s/^.*\///;
+    return model =~ /^gemini-3(\.[0-9]+)?-flash(-|$)/ ? "MINIMAL" : "LOW";
+}
+
 #! Applies Gemini 3 generation-parameter compatibility rules after all body overrides
 /** Removes deprecated sampling parameters and numeric thinking budgets for Gemini 3.x.
     Other model families retain their existing request body. Both REST camelCase names and protobuf
@@ -1548,9 +1573,10 @@ public bool sub usesThinkingLevel(string model) {
     @return the normalized request body; the caller's hash is not modified
     @throw GEMINI-GENERATION-CONFIG-ERROR configuration objects or thinking levels are invalid, or both
         spellings of a configuration object are supplied
-    @note Numeric budgets have no exact level equivalent and are omitted on Gemini 3.x, including zero
-        and the dynamic budget -1. Supply an explicit thinking level to override the model default.
-        Supported levels depend on the model; Gemini 3.x cannot fully disable thinking.
+    @note Numeric budgets have no exact level equivalent and are omitted on Gemini 3.x, including the dynamic
+        budget -1, which leave the model default; a budget of zero without an explicit thinking level selects the
+        lowest level that the model supports (@ref lowestThinkingLevel()), since Gemini 3.x cannot turn thinking
+        off. Supply an explicit thinking level to override the model default. Supported levels depend on the model.
 
     @par Example
     A support-ticket classifier can request low reasoning effort while allowing the model to manage sampling:
@@ -1564,6 +1590,13 @@ public hash<auto> sub normalizeGenerationConfig(string model, hash<auto> body) {
     if (!usesThinkingLevel(model)) {
         return body;
     }
+    # the hashes written below are untyped copies: a caller's hash can have narrower value types than the values set
+    # here (ex: a thinkingConfig hash<string, int> with only a budget, which gets a thinking level)
+    {
+        hash<auto> copy = {};
+        copy += body;
+        body = copy;
+    }
     if (exists body.generationConfig && exists body.generation_config) {
         throw "GEMINI-GENERATION-CONFIG-ERROR", "use only one of generationConfig and generation_config";
     }
@@ -1574,7 +1607,8 @@ public hash<auto> sub normalizeGenerationConfig(string model, hash<auto> body) {
     if (config.typeCode() != NT_HASH) {
         throw "GEMINI-GENERATION-CONFIG-ERROR", "generationConfig must be a hash";
     }
-    hash<auto> gen = cast<hash>(config) - ("temperature", "topP", "topK", "top_p", "top_k");
+    hash<auto> gen = {};
+    gen += cast<hash>(config) - ("temperature", "topP", "topK", "top_p", "top_k");
     if (exists gen.thinkingConfig && exists gen.thinking_config) {
         throw "GEMINI-GENERATION-CONFIG-ERROR", "use only one of thinkingConfig and thinking_config";
     }
@@ -1583,7 +1617,9 @@ public hash<auto> sub normalizeGenerationConfig(string model, hash<auto> body) {
         if (thinking.typeCode() != NT_HASH) {
             throw "GEMINI-GENERATION-CONFIG-ERROR", "thinkingConfig must be a hash";
         }
-        hash<auto> tc = cast<hash>(thinking) - ("thinkingBudget", "thinking_budget");
+        auto budget = thinking.thinkingBudget ?? thinking.thinking_budget;
+        hash<auto> tc = {};
+        tc += cast<hash>(thinking) - ("thinkingBudget", "thinking_budget");
         if (exists tc.thinkingLevel && exists tc.thinking_level) {
             throw "GEMINI-GENERATION-CONFIG-ERROR", "use only one of thinkingLevel and thinking_level";
         }
@@ -1593,6 +1629,10 @@ public hash<auto> sub normalizeGenerationConfig(string model, hash<auto> body) {
                 throw "GEMINI-GENERATION-CONFIG-ERROR", "thinkingLevel must be minimal, low, medium, or high";
             }
             tc.thinkingLevel = toupper(level);
+        } else if ((budget.typeCode() == NT_INT || budget.typeCode() == NT_FLOAT || budget.typeCode() == NT_NUMBER)
+                && budget == 0) {
+            # thinking cannot be turned off: a budget of zero asks for as little thinking as the model allows
+            tc.thinkingLevel = lowestThinkingLevel(model);
         }
         if (tc) {
             gen.thinkingConfig = tc;
@@ -1647,7 +1687,8 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
         - \c max_output_tokens (\c int): mapped to \c generationConfig.maxOutputTokens
         - \c temperature (\c float): mapped to \c generationConfig.temperature
         - \c reasoning_token_budget (\c *int): mapped to
-          \c generationConfig.thinkingConfig.thinkingBudget for models before Gemini 3
+          \c generationConfig.thinkingConfig.thinkingBudget for models before Gemini 3; on Gemini 3.x, zero selects
+          the lowest thinking level that the model supports (@ref lowestThinkingLevel())
         - \c reasoning_effort (\c *string): Gemini 3.x \c thinkingLevel; \c xhigh and \c max map to \c HIGH
         - \c extra_body (<tt>*hash&lt;auto&gt;</tt>): merged into the final body so
           callers can pass through provider-specific knobs without

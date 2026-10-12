@@ -57,6 +57,7 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
         addTestCase("model family detection", \models());
         addTestCase("sampling and budget migration preserves other fields", \normalization());
         addTestCase("snake case aliases and empty configs", \aliases());
+        addTestCase("a budget of zero selects the lowest thinking level on Gemini 3", \zeroBudget());
         addTestCase("invalid config rejects before sending", \invalid());
         addTestCase("chat shaping handles reasoning effort", \shaping());
         addTestCase("both providers resolve options before normalization", \providers());
@@ -71,6 +72,15 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
         foreach string model in (("", "gemini-2.5-flash", "models/gemini-2.5-pro", "gemini-30-flash",
                 "custom-gemini-3", "some-model", "gemini-4-preview")) {
             assertFalse(GeminiBodyShape::usesThinkingLevel(model), model);
+        }
+        # the lowest thinking level: MINIMAL for Flash models, LOW for the others
+        foreach string model in (("gemini-3-flash-preview", "gemini-3.7-flash", "gemini-3.1-flash-lite",
+                "models/gemini-3.5-flash", "projects/p/locations/global/publishers/google/models/gemini-3.8-flash")) {
+            assertEq("MINIMAL", GeminiBodyShape::lowestThinkingLevel(model), model);
+        }
+        foreach string model in (("gemini-3-pro-preview", "gemini-3.1-pro-preview", "models/gemini-3.1-pro-preview",
+                "gemini-3.5-ultra", "gemini-3-flashy")) {
+            assertEq("LOW", GeminiBodyShape::lowestThinkingLevel(model), model);
         }
     }
 
@@ -95,8 +105,59 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
             body = GeminiBodyShape::normalizeGenerationConfig("gemini-3-flash-preview", {
                 "generationConfig": {"thinkingConfig": {"thinkingBudget": budget}},
             });
-            assertEq({}, body.generationConfig, "numeric budgets leave the model default on 3.x");
+            if (budget) {
+                assertEq({}, body.generationConfig, "other numeric budgets leave the model default on 3.x");
+            } else {
+                assertEq({"thinkingConfig": {"thinkingLevel": "MINIMAL"}}, body.generationConfig,
+                    "a budget of zero selects the lowest level on 3.x");
+            }
         }
+    }
+
+    # Gemini 3.x cannot turn thinking off: a budget of zero selects the lowest level that the model supports, so that
+    # thinking tokens do not use up a small output budget
+    zeroBudget() {
+        foreach hash<auto> i in ({
+                "gemini-3.7-flash": "MINIMAL",
+                "gemini-3.1-flash-lite": "MINIMAL",
+                "projects/p/locations/global/publishers/google/models/gemini-3.7-flash": "MINIMAL",
+                "gemini-3.1-pro-preview": "LOW",
+                "gemini-3-pro-preview": "LOW",
+            }.pairIterator()) {
+            hash<auto> body = GeminiBodyShape::normalizeGenerationConfig(i.key, {"generationConfig": {
+                "maxOutputTokens": 180, "thinkingConfig": {"thinkingBudget": 0, "includeThoughts": False},
+            }});
+            assertEq({"maxOutputTokens": 180, "thinkingConfig": {"thinkingLevel": i.value, "includeThoughts": False}},
+                body.generationConfig, i.key);
+            # the snake case spelling
+            body = GeminiBodyShape::normalizeGenerationConfig(i.key, {"generation_config": {
+                "thinking_config": {"thinking_budget": 0},
+            }});
+            assertEq({"thinkingConfig": {"thinkingLevel": i.value}}, body.generationConfig, i.key);
+            # an explicit level wins
+            body = GeminiBodyShape::normalizeGenerationConfig(i.key, {"generationConfig": {
+                "thinkingConfig": {"thinkingBudget": 0, "thinkingLevel": "high"},
+            }});
+            assertEq({"thinkingConfig": {"thinkingLevel": "HIGH"}}, body.generationConfig, i.key);
+        }
+        # Gemini 2.5 keeps the budget of zero, which turns thinking off there
+        foreach string model in (("gemini-2.5-flash", "projects/p/locations/global/publishers/google/models/"
+                "gemini-2.5-flash")) {
+            hash<auto> body = GeminiBodyShape::normalizeGenerationConfig(model, {"generationConfig": {
+                "maxOutputTokens": 180, "thinkingConfig": {"thinkingBudget": 0},
+            }});
+            assertEq({"maxOutputTokens": 180, "thinkingConfig": {"thinkingBudget": 0}}, body.generationConfig, model);
+        }
+        # the chat body
+        hash<auto> body = GeminiBodyShape::shapeChatBody((), NOTHING, NOTHING, {
+            "model": "gemini-3.7-flash", "max_output_tokens": 180, "reasoning_token_budget": 0,
+        });
+        assertEq({"maxOutputTokens": 180, "thinkingConfig": {"thinkingLevel": "MINIMAL"}}, body.generationConfig);
+        body = GeminiBodyShape::shapeChatBody((), NOTHING, NOTHING, {
+            "model": "gemini-2.5-flash", "max_output_tokens": 180, "reasoning_token_budget": 0,
+        });
+        assertEq({"maxOutputTokens": 180, "thinkingConfig": {"thinkingBudget": 0}},
+            body.generationConfig{"maxOutputTokens", "thinkingConfig"});
     }
 
     aliases() {
@@ -201,8 +262,26 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
             foreach GeminiBodyShape::AbstractGeminiModelProvider provider in ((
                     new CaptureGeminiProvider(defaults, rest), new CaptureVertexProvider(defaults, rest))) {
                 provider.complete("", "invoice");
-                assertEq({"maxOutputTokens": 4096}, rest.body.generationConfig,
-                    "unsupported numeric budgets and disable_reasoning leave Gemini 3 model defaults");
+                if (budget) {
+                    assertEq({"maxOutputTokens": 4096}, rest.body.generationConfig,
+                        "unsupported numeric budgets and disable_reasoning leave Gemini 3 model defaults");
+                } else {
+                    assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "MINIMAL"}},
+                        rest.body.generationConfig, "a budget of zero selects the lowest level");
+                }
+            }
+        }
+        # a budget of zero per call, as a classifier with a small output budget sends it
+        defaults.reasoning_token_budget = 1024;
+        foreach GeminiBodyShape::AbstractGeminiModelProvider provider in ((
+                new CaptureGeminiProvider(defaults, rest), new CaptureVertexProvider(defaults, rest))) {
+            foreach hash<auto> i in ({"gemini-3.7-flash": "MINIMAL", "gemini-3.1-pro-preview": "LOW"}.pairIterator()) {
+                provider.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "classify"},), NOTHING,
+                    <QoreLlmUtils::LlmRequestOptions>{"model": i.key, "max_output_tokens": 180,
+                        "reasoning_token_budget": 0});
+                assertEq({"maxOutputTokens": 180, "thinkingConfig": {"thinkingLevel": i.value}},
+                    rest.body.generationConfig, i.key);
+                assertTrue(rest.path.find("/" + i.key + ":generateContent") >= 0, rest.path);
             }
         }
         config.model = "gemini-2.5-flash";
