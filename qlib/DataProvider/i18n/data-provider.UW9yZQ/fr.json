@@ -44,8 +44,8 @@
           "message": "Filtre DPQL"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.ZHBxbF93aGVyZQ.short_desc": {
-          "source": "A DPQL string filter expression",
-          "message": "Expression de filtre sous forme de chaîne DPQL"
+          "source": "A filter condition written in DPQL",
+          "message": "Condition de filtre écrite en DPQL"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.ZHBxbF93aGVyZQ.desc": {
           "source": "A DPQL string expression to filter records; use this option when writing the predicate directly as text instead of using the expression builder",

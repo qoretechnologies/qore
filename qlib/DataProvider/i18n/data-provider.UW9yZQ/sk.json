@@ -44,8 +44,8 @@
           "message": "Filter DPQL"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.ZHBxbF93aGVyZQ.short_desc": {
-          "source": "A DPQL string filter expression",
-          "message": "Reťazcový filtrovací výraz DPQL"
+          "source": "A filter condition written in DPQL",
+          "message": "Podmienka filtra zapísaná v DPQL"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.ZHBxbF93aGVyZQ.desc": {
           "source": "A DPQL string expression to filter records; use this option when writing the predicate directly as text instead of using the expression builder",

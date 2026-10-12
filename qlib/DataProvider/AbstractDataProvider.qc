@@ -1733,8 +1733,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                         <DataProviderArgInfo>{
                             "display_name": "Boolean",
                             "short_desc": "A boolean expression or value",
-                            "desc": "A boolean expression or value; all conditions must be `True` for the "
-                                "overall expression to return `True`",
+                            "desc": "A condition; every one must be true",
                         },
                     ),
                     "varargs": True,
@@ -1764,8 +1763,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                         <DataProviderArgInfo>{
                             "display_name": "Boolean",
                             "short_desc": "A boolean expression or value",
-                            "desc": "A boolean expression or value; at least one condition must be `True` for the "
-                                "overall expression to return `True`",
+                            "desc": "A condition; at least one must be true",
                         },
                     ),
                     "varargs": True,
@@ -6042,8 +6040,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             *hash<string, hash<DataProviderExpressionInfo>> expmap) {
         *hash<DataProviderExpressionInfo> expinfo = expmap{exp} ?? expmap{OperatorAliasMap{exp}};
         if (!expinfo) {
-            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expression %y is invalid; known expressions: %y", exp,
-                keys expmap);
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("There is no operation %y", exp);
         }
         if (!(expinfo.role & role)) {
             throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expression %y is invalid in role %y; valid "
@@ -6472,8 +6469,10 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         hash<DataProviderExpressionInfo> expinfo = AbstractDataProvider::verifyExpressionTree(role, expmap, caps, exp,
             fields);
         if (!AbstractDataProvider::isArgTypeCompatible(expected_type, expinfo.return_type)) {
-            throw "DATA-PROVIDER-EXPRESSION-ERROR", AbstractDataProvider::getTypeMismatchMessage(expected_type,
-                expinfo.return_type, sprintf("expression %y", expinfo.name));
+            # the message is a sentence of its own here
+            string msg = AbstractDataProvider::getTypeMismatchMessage(expected_type, expinfo.return_type,
+                sprintf("expression %y", expinfo.name));
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", msg[0].upr() + msg.substr(1);
         }
     }
 
@@ -6611,8 +6610,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             return;
         }
         if (!AbstractDataProvider::isArgTypeCompatible(sig.type, arg_type)) {
-            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("argument %d of expression %y: %s", pos + 1,
-                expinfo.name, AbstractDataProvider::getTypeMismatchMessage(sig.type, arg_type, arg_desc));
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("Value %d of %y: %s", pos + 1, expinfo.name,
+                AbstractDataProvider::getTypeMismatchMessage(sig.type, arg_type, arg_desc));
         }
     }
 
@@ -6620,12 +6619,11 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     private static string getTypeMismatchMessage(AbstractDataProviderType expected_type,
             AbstractDataProviderType arg_type, string arg_desc) {
         if (expected_type.hasType() && expected_type.getBaseTypeName() == "bool") {
-            return sprintf("expecting a condition, but %s returns a %y value, which cannot be used as a condition; "
-                "compare it explicitly instead (ex: @status == \"open\" or @x != \"\")", arg_desc,
-                arg_type.getName());
+            return sprintf("The condition %s evaluates to %y, but it must evaluate to true or false. Compare the "
+                "value instead, for example @status == \"open\".", arg_desc, arg_type.getName());
         }
-        return sprintf("expecting a %y value, but %s returns a %y value instead", expected_type.getName(), arg_desc,
-            arg_type.getName());
+        return sprintf("%s gives %y, but %y is needed here.", arg_desc, arg_type.getName(),
+            expected_type.getName());
     }
 
     #! Returns the number of arguments that a call to an expression must provide
@@ -6761,8 +6759,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             AbstractDataProviderType expected_type, hash<DataProviderExpression> exp) {
         AbstractDataProvider::verifyExpressionArgs(role, expinfo, caps, exp);
         if (!expected_type.isAssignableFrom(expinfo.return_type)) {
-            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expecting a %y value, but expression %y returns a %y "
-                "value instead", expected_type.getName(), expinfo.name, expinfo.return_type.getName());
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("The expression %y gives %y, but %y is needed here.",
+                expinfo.name, expinfo.return_type.getName(), expected_type.getName());
         }
     }
 
@@ -6804,8 +6802,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                 return;
             case ST_Value:
                 if (is_exp || is_ref || is_tmpl) {
-                    throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expression %y argument %d/%d expects a value; "
-                        "got %y instead", expinfo.name, pos + 1, values.size(),
+                    throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("Value %d of %y must be a value; it is %y",
+                        pos + 1, expinfo.name,
                         is_exp ? "nested expression" : (is_ref ? "field reference" : "template reference"));
                 }
                 if (!arginfo.type.isAssignableFrom(Type::getType(val))) {
@@ -6815,8 +6813,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                 return;
             case ST_Field:
                 if (!is_ref) {
-                    throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expression %y argument %d/%d expects a field "
-                        "reference; got %y instead", expinfo.name, pos + 1, values.size(),
+                    throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("Value %d of %y must be a field of the records; "
+                        "it is %y", pos + 1, expinfo.name,
                         is_exp ? "nested expression" : (is_tmpl ? "template reference" : "value"));
                 }
                 return;
