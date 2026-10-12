@@ -42,7 +42,7 @@
 # enable all warnings
 
 module SqlUtil {
-    version = "3.7.0";
+    version = "3.8.0";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -119,6 +119,10 @@ module SqlUtil {
       bodies
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
+
+    @subsection sqlutilv3_8_0 SqlUtil v3.8.0
+    - Added bounded, read-only partition catalog paging for allocation inventory without recursive
+      partition inspection or table-data scans.
 
     @subsection sqlutilv3_7_0 SqlUtil v3.7.0
     - Added getColumnMigrationInfo() for inspecting dependencies and relation identity before
@@ -2586,6 +2590,24 @@ public namespace SqlUtil {
         *int estimated_row_count;
         #! Allocated partition storage in bytes when the driver exposes physical size metadata
         *int size_bytes;
+    }
+
+    #! Lightweight direct-child identity; no bounds, row estimates, sizes, or recursive children
+    /** @since SqlUtil 3.8.0 */
+    public hashdecl PartitionCatalogEntry {
+        string name;            #!< Canonical partition name
+        string schema;          #!< Physical schema name
+        string relation_name;   #!< Physical relation name
+        string sql_name;        #!< Driver-quoted qualified relation name
+        hash<auto> driver;      #!< Driver identity and relation-kind metadata
+    }
+
+    #! A bounded page of direct partition identities
+    /** @since SqlUtil 3.8.0 */
+    public hashdecl PartitionCatalogPage {
+        list<hash<PartitionCatalogEntry>> entries; #!< At most the requested number of direct children
+        *hash<auto> next_cursor; #!< Opaque continuation, absent on the final page
+        bool exhausted;         #!< No further children were visible to this query
     }
 
     #! Partition lookup result hash

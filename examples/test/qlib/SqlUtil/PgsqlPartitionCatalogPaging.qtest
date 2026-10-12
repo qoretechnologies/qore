@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%try-module pgsql
+%define NoPgsql
+%endtry
+%exec-class PartitionCatalogPagingTest
+
+class PartitionCatalogPagingTest inherits Test {
+    private { int serial = 0; }
+    constructor() : Test("bounded partition catalog paging", "1.0", \ARGV) {
+        addTestCase("bounded complete walk with nested and quoted identities", \walk());
+        addTestCase("empty and fresh observations without transaction completion", \fresh());
+        addTestCase("invalid budgets, cursors and offline tables", \invalid());
+        addTestCase("cursor rejects another or recreated parent", \stale());
+        set_return_value(main());
+    }
+    private hash<auto> fixture() {
+%ifdef NoPgsql
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) { testSkip("set QORE_DB_CONNSTR_PGSQL to a disposable database"); }
+        Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
+        string schema = sprintf("catalog_page_%d_%d", getpid(), ++serial);
+        ds.execRaw("create schema " + schema);
+        ds.execRaw("create table " + schema + ".parent (id int) partition by range(id)");
+        ds.execRaw("create table " + schema + ".other (id int) partition by range(id)");
+        ds.commit();
+        return {"ds": ds, "schema": schema, "table": AbstractTable::getTable(ds, schema + ".parent")};
+    }
+    private cleanup(hash<auto> f) {
+        f.ds.rollback();
+        f.ds.execRaw("drop schema " + f.schema + " cascade"); f.ds.commit();
+        assertFalse(exists f.ds.selectRow("select 1 from pg_catalog.pg_namespace where nspname=%v", f.schema));
+        f.ds.commit();
+    }
+    private populate(hash<auto> f) {
+        for (int i = 0; i < 7; ++i) {
+            f.ds.execRaw(sprintf("create table %s.p%d partition of %s.parent for values from (%d) to (%d)",
+                f.schema, i, f.schema, i * 100, (i + 1) * 100));
+        }
+        f.ds.execRaw("create table " + f.schema + ".\"order\" partition of " + f.schema
+            + ".parent for values from (700) to (800) partition by range(id)");
+        f.ds.execRaw("create table " + f.schema + ".grandchild partition of " + f.schema
+            + ".\"order\" for values from (700) to (800)");
+        f.ds.commit();
+    }
+    private walk() {
+        hash<auto> f = fixture(); on_exit cleanup(f); populate(f);
+        f.ds.beginTransaction();
+        assertTrue(f.table.supportsPartitionCatalogPaging());
+        *hash<auto> cursor;
+        list<string> names = ();
+        int last_oid = 0;
+        int pages = 0;
+        while (True) {
+            assertTrue(++pages <= 4, "walk is finite");
+            hash<PartitionCatalogPage> page = f.table.listPartitionCatalogPage(2, cursor);
+            assertEq(2, page.entries.size());
+            foreach hash<PartitionCatalogEntry> entry in (page.entries) {
+                names += entry.name;
+                assertEq(f.schema, entry.schema);
+                assertTrue(entry.driver.pgsql.relation_oid > last_oid);
+                assertFalse(entry.driver.pgsql.detach_pending);
+                last_oid = entry.driver.pgsql.relation_oid;
+                assertFalse(inlist("bound_from", entry.keys()), "no bounds inspection");
+                assertFalse(inlist("subpartitions", entry.keys()), "no recursive materialization");
+                assertFalse(inlist("size_bytes", entry.keys()), "no physical-size inspection");
+                if (entry.relation_name == "order") {
+                    assertEq("p", entry.driver.pgsql.relation_kind);
+                    assertTrue(entry.sql_name.find("\"order\"") >= 0);
+                } else { assertEq("r", entry.driver.pgsql.relation_kind); }
+            }
+            if (page.exhausted) { assertFalse(exists page.next_cursor); break; }
+            assertTrue(exists page.next_cursor); cursor = page.next_cursor;
+        }
+        assertEq(8, names.size());
+        assertFalse(inlist(f.schema + ".grandchild", names));
+        assertTrue(f.ds.currentThreadInTransaction(), "paging does not finish caller transaction");
+    }
+    private fresh() {
+        hash<auto> f = fixture(); on_exit cleanup(f);
+        auto empty = f.table.listPartitionCatalogPage(1000, NOTHING);
+        assertEq((), empty.entries); assertTrue(empty.exhausted); assertFalse(exists empty.next_cursor);
+        populate(f);
+        assertEq(8, f.table.listPartitionCatalogPage(1000, NOTHING).entries.size(), "no stale empty cache");
+        f.ds.execRaw("create table " + f.schema + ".added partition of " + f.schema
+            + ".parent for values from (800) to (900)");
+        assertEq(9, f.table.listPartitionCatalogPage(1000, NOTHING).entries.size());
+        f.ds.rollback();
+        assertEq(8, f.table.listPartitionCatalogPage(1000, NOTHING).entries.size(), "uncommitted DDL rolled back");
+    }
+    private invalid() {
+        hash<auto> f = fixture(); on_exit cleanup(f); populate(f);
+        foreach int budget in ((-1, 0, 1001)) {
+            assertThrows("PARTITION-CATALOG-ERROR", sub() { f.table.listPartitionCatalogPage(budget, NOTHING); });
+        }
+        hash<auto> cursor = f.table.listPartitionCatalogPage(1, NOTHING).next_cursor;
+        foreach hash<auto> bad in (({}, cursor + {"extra": 1}, cursor + {"contract": "wrong"},
+                cursor + {"parent_oid": "1"}, cursor + {"after_oid": 0}, cursor + {"after_oid": 4294967296})) {
+            assertThrows("PARTITION-CATALOG-ERROR", sub() { f.table.listPartitionCatalogPage(1, bad); });
+        }
+        AbstractTable manual = AbstractTable::getTable(f.ds, f.schema + ".parent");
+        manual.setupTable({"columns": {"id": {"qore_type": Type::Int}}});
+        assertFalse(manual.supportsPartitionCatalogPaging());
+        assertThrows("PARTITION-NOT-SUPPORTED", sub() { manual.listPartitionCatalogPage(1, NOTHING); });
+    }
+    private stale() {
+        hash<auto> f = fixture(); on_exit cleanup(f); populate(f);
+        hash<auto> cursor = f.table.listPartitionCatalogPage(1, NOTHING).next_cursor;
+        AbstractTable other = AbstractTable::getTable(f.ds, f.schema + ".other");
+        assertThrows("PARTITION-CATALOG-ERROR", sub() { other.listPartitionCatalogPage(1, cursor); });
+        f.ds.execRaw("drop table " + f.schema + ".parent cascade");
+        assertThrows("PARTITION-CATALOG-ERROR", sub() { f.table.listPartitionCatalogPage(1, cursor); });
+        f.ds.execRaw("create table " + f.schema + ".parent (id int) partition by range(id)");
+        assertThrows("PARTITION-CATALOG-ERROR", sub() { f.table.listPartitionCatalogPage(1, cursor); });
+        assertTrue(f.table.listPartitionCatalogPage(1, NOTHING).exhausted);
+    }
+}

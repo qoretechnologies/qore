@@ -7962,6 +7962,17 @@ if (table.supportsPartitionRead()) {
         return supportsPartitions() && supportsTargetedPartitionLookupImpl();
     }
 
+    #! Returns whether bounded live partition catalog paging is available
+    /** @return True for a live table whose driver implements listPartitionCatalogPage()
+        @throw DBI-ERROR capability discovery failed
+        @par Example
+        Check this capability before inventorying a large retention allocation in bounded pages.
+        @since SqlUtil 3.8.0
+    */
+    bool supportsPartitionCatalogPaging() {
+        return !manual && supportsPartitions() && supportsPartitionCatalogPagingImpl();
+    }
+
     #! Returns whether the driver can prove emptiness and drop one partition under the same database locks
     /** @return True when @ref dropEmptyPartition() is available
         @throw DBI-ERROR capability discovery failed
@@ -8058,6 +8069,34 @@ if (table.supportsConcurrentPartitionDetach()) {
         on_exit l.unlock();
 
         return getPartitionsUnlocked();
+    }
+
+    #! Reads a bounded page of lightweight direct-child partition identities
+    /** @param maximum_partitions maximum entries to return, from 1 through 1000
+        @param cursor an unmodified next_cursor from this table's preceding page, or nothing to start
+        @return entries and an opaque continuation; exhausted marks the final page
+        @throw PARTITION-CATALOG-ERROR invalid page size, cursor, or parent identity
+        @throw PARTITION-NOT-SUPPORTED offline table or unsupported driver
+        @throw DBI-ERROR catalog query failed
+        @par Example
+        A retention planner can collect names in pages of 100, reject nested partitions, and only then
+        inspect selected bounds with getPartition(). It must enforce its own total inventory budget.
+        @note This reads fresh catalog metadata without filling the partition cache, inspecting bounds or
+        sizes, recursing, or committing. A cursor is data, not a lock, snapshot, or authorization. Hold
+        external DDL exclusion or a consistent database snapshot for a complete stable walk. Cursors must
+        not be reused across databases or connections; the driver also checks the live parent identity.
+        @since SqlUtil 3.8.0
+    */
+    hash<PartitionCatalogPage> listPartitionCatalogPage(int maximum_partitions, *hash<auto> cursor) {
+        if (maximum_partitions < 1 || maximum_partitions > 1000) {
+            throw "PARTITION-CATALOG-ERROR", "page size must be between 1 and 1000";
+        }
+        l.lock();
+        on_exit l.unlock();
+        if (!supportsPartitionCatalogPaging()) {
+            throw "PARTITION-NOT-SUPPORTED", "bounded live partition catalog paging is not supported";
+        }
+        return listPartitionCatalogPageImpl(maximum_partitions, cursor);
     }
 
     #! returns one partition by canonical name without loading the complete catalog when supported
@@ -12495,6 +12534,14 @@ on_exit printf("SQL> %s\n", sql);
     #! returns @ref True "True" if the driver implements targeted canonical-name partition lookup
     private bool supportsTargetedPartitionLookupImpl() {
         return False;
+    }
+
+    private bool supportsPartitionCatalogPagingImpl() {
+        return False;
+    }
+
+    private hash<PartitionCatalogPage> listPartitionCatalogPageImpl(int maximum_partitions, *hash<auto> cursor) {
+        throw "PARTITION-NOT-SUPPORTED", "bounded live partition catalog paging is not supported";
     }
 
     #! Drivers must explicitly implement the locking, identity and visibility guarantee

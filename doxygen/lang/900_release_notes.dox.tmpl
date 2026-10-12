@@ -671,6 +671,14 @@
     @ref SqlUtil::AbstractTable::getColumnByteSizes() "getColumnByteSizes()".
     @endparblock
 
+    @par Bounded Partition Catalog Discovery
+    @parblock
+    SqlUtil can enumerate PostgreSQL partitions in bounded pages without recursively inspecting child
+    partitions or scanning their data. Applications can inspect identities first and enforce a total
+    discovery budget before requesting detailed metadata; see
+    @ref SqlUtil::AbstractTable::listPartitionCatalogPage() "listPartitionCatalogPage()".
+    @endparblock
+
     @par Safe Removal of Empty Retention Partitions
     @parblock
     SqlUtil can now remove an empty PostgreSQL partition while excluding concurrent inserts. The operation
