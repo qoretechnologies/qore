@@ -26,7 +26,7 @@
 %requires qore >= 1.14
 
 # requires the SqlUtil module
-%requires SqlUtil >= 3.7
+%requires SqlUtil >= 3.8
 %requires json
 
 # don't use "$" signs for variables and class members, assume local variable scope
@@ -37,7 +37,7 @@
 # enable all warnings
 
 module PgsqlSqlUtilBase {
-    version = "1.16";
+    version = "1.17";
     desc = "base user module for working with PostgreSQL SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -213,6 +213,10 @@ $function$
     @ref SqlUtil::AbstractDatabase::getAlignFunctionSql() "AbstractDatabase::getAlignFunctionSql()" for example.
 
     @section pgsql_relnotes Release Notes
+
+    @subsection pgsqlsqlutilbasev117 PgsqlSqlUtilBase v1.17
+    - Added bounded direct-child partition catalog pages with parent-bound identity cursors,
+      including nested and pending-detach identities without recursive inspection.
 
     @subsection pgsqlsqlutilbasev116 PgsqlSqlUtilBase v1.16
     - a negative number default value of a column, which PostgreSQL returns quoted (ex: \c "'-1'::integer"), compares
@@ -4813,6 +4817,50 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private bool supportsTargetedPartitionLookupImpl() {
         return True;
+    }
+
+    private bool supportsPartitionCatalogPagingImpl() {
+        return True;
+    }
+
+    private hash<PartitionCatalogPage> listPartitionCatalogPageImpl(int maximum_partitions, *hash<auto> cursor) {
+        int after_oid = 0;
+        if (exists cursor) {
+            if (cursor.size() != 3 || cursor.contract != "pgsql-partition-catalog-v1"
+                || cursor.parent_oid.typeCode() != NT_INT || cursor.after_oid.typeCode() != NT_INT
+                || cursor.parent_oid < 1 || cursor.parent_oid > 4294967295
+                || cursor.after_oid < 1 || cursor.after_oid > 4294967295) {
+                throw "PARTITION-CATALOG-ERROR", "invalid partition catalog cursor";
+            }
+            after_oid = cursor.after_oid;
+        }
+        *hash<auto> parent = ds.selectRow("select c.oid::bigint as parent_oid from pg_catalog.pg_class c "
+            "join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+            "where n.nspname = %v and c.relname = %v and c.relkind = 'p'", schema, name);
+        if (!parent || (exists cursor && cursor.parent_oid != parent.parent_oid)) {
+            throw "PARTITION-CATALOG-ERROR", "partitioned parent is missing or the cursor belongs to another parent";
+        }
+        getServerVersion();
+        string pending = server_version_major >= 14 ? "i.inhdetachpending" : "false";
+        list<hash<auto>> rows = ds.selectRows("select cn.nspname as schema, c.relname as relation_name, "
+            "c.oid::bigint as relation_oid, c.relkind::text as relation_kind, " + pending + " as detach_pending "
+            "from pg_catalog.pg_inherits i join pg_catalog.pg_class c on c.oid = i.inhrelid "
+            "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
+            "where i.inhparent = %v::oid and i.inhrelid > %v::oid "
+            "order by i.inhrelid limit %v", parent.parent_oid, after_oid, maximum_partitions + 1) ?? ();
+        bool exhausted = rows.size() <= maximum_partitions;
+        list<hash<PartitionCatalogEntry>> entries = ();
+        foreach hash<auto> row in (rows) {
+            if (entries.size() == maximum_partitions) { break; }
+            entries += hash<PartitionCatalogEntry>{"name": getCanonicalPartitionName(row.schema, row.relation_name),
+                "schema": row.schema, "relation_name": row.relation_name,
+                "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
+                "driver": {"pgsql": {"parent_oid": parent.parent_oid, "relation_oid": row.relation_oid,
+                    "relation_kind": row.relation_kind, "detach_pending": row.detach_pending}}};
+            after_oid = row.relation_oid;
+        }
+        return hash<PartitionCatalogPage>{"entries": entries, "exhausted": exhausted, "next_cursor": exhausted ? NOTHING
+            : {"contract": "pgsql-partition-catalog-v1", "parent_oid": parent.parent_oid, "after_oid": after_oid}};
     }
 
     private bool supportsEmptyPartitionDropImpl() {
