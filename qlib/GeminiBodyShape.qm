@@ -76,7 +76,7 @@ module GeminiBodyShape {
     - @ref openAiToolChoiceToGeminiConfig() — adapt OpenAI \c tool_choice
       to Gemini \c toolConfig
     - @ref normalizeGenerationConfig() — model-specific generation controls, applied after body overrides
-    - @ref lowestThinkingLevel() — the thinking level that a budget of zero selects on Gemini 3.x
+    - @ref lowestThinkingLevel() — the thinking level that a budget of zero selects on Gemini 3.x (\c LOW)
     - @ref applyCachedContent() — make a request use a cached content resource
       (explicit prompt caching)
     - @ref shapeCachedContentBody() / @ref shapeCacheExpiration() — the bodies
@@ -110,8 +110,8 @@ module GeminiBodyShape {
 
     Numeric \c reasoning_token_budget values are omitted on Gemini 3.x, since a token budget has no exact
     thinking-level equivalent, except zero: Gemini 3.x cannot turn thinking off, so a budget of zero selects the
-    lowest thinking level that the model supports (see @ref lowestThinkingLevel()), so that thinking tokens do not
-    use up a small output budget. Without an explicit level, other budgets (including -1) leave the model default.
+    lowest thinking level that every provider accepts for the model, \c LOW (see @ref lowestThinkingLevel()), so that
+    thinking tokens do not use up a small output budget. Without an explicit level, other budgets (including -1) leave the model default.
     \c disable_reasoning is not mapped to a level.
     Older models, including Gemini 2.5, retain sampling parameters and numeric thinking budgets. Generic
     \c reasoning_effort is ignored for these models; Gemini 2.5's generateContent API does not accept thinking levels.
@@ -232,8 +232,8 @@ try {
     @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
     - initial release
     - Gemini 3.x uses qualitative thinking levels and omits deprecated sampling parameters and numeric budgets;
-      a budget of zero selects the lowest thinking level that the model supports, since Gemini 3.x cannot turn
-      thinking off; Gemini 2.5 retains its existing controls (see @ref geminibodyshapegeneration)
+      a budget of zero selects the lowest thinking level that every provider accepts, \c LOW, since Gemini 3.x
+      cannot turn thinking off; Gemini 2.5 retains its existing controls (see @ref geminibodyshapegeneration)
     - explicit prompt caching: @ref shapeChatBody() takes a \c cached_content reference and then leaves out
       \c systemInstruction, \c tools and \c toolConfig, which belong to the cached content
       (@ref shapeCachedContentBody()); providers take it from
@@ -1542,25 +1542,23 @@ public bool sub usesThinkingLevel(string model) {
     return model =~ /^gemini-3([.-]|$)/;
 }
 
-#! Returns the lowest thinking level that a Gemini 3.x model supports
-/** Gemini 3.x cannot turn thinking off; this is the level that a thinking budget of zero selects.  Gemini 3.x Flash
-    models, including Flash-Lite, support \c MINIMAL; other Gemini 3.x models, such as Gemini 3.1 Pro, support
-    \c LOW at the lowest.  The Gemini API and Vertex AI do not declare the thinking levels that a model supports, so
-    the level follows the model family in its name; \c LOW, which every Gemini 3.x model supports, is returned for a
-    model that is not a Flash model.
+#! Returns the lowest thinking level that every provider accepts for a Gemini 3.x model
+/** Gemini 3.x cannot turn thinking off; this is the level that a thinking budget of zero selects: \c LOW, which every
+    Gemini 3.x model accepts on both the Gemini API and Vertex AI.  \c MINIMAL is not used: Vertex AI rejects it for
+    Gemini 3.x Flash models (\c "Thinking level is unsupported: THINKING_LEVEL_MINIMAL"), Gemini 3.1 Pro does not
+    support it, and neither API declares the thinking levels that a model supports.
 
     @param model a bare model ID or a Gemini/Vertex model resource name
 
-    @return \c "MINIMAL" or \c "LOW"
+    @return \c "LOW"
 
     @par Example
     @code{.py}
-string level = GeminiBodyShape::lowestThinkingLevel("gemini-3.1-pro-preview"); # "LOW"
+string level = GeminiBodyShape::lowestThinkingLevel("gemini-3.7-flash"); # "LOW"
     @endcode
 */
 public string sub lowestThinkingLevel(string model) {
-    model =~ s/^.*\///;
-    return model =~ /^gemini-3(\.[0-9]+)?-flash(-|$)/ ? "MINIMAL" : "LOW";
+    return "LOW";
 }
 
 #! Applies Gemini 3 generation-parameter compatibility rules after all body overrides
@@ -1575,8 +1573,8 @@ public string sub lowestThinkingLevel(string model) {
         spellings of a configuration object are supplied
     @note Numeric budgets have no exact level equivalent and are omitted on Gemini 3.x, including the dynamic
         budget -1, which leave the model default; a budget of zero without an explicit thinking level selects the
-        lowest level that the model supports (@ref lowestThinkingLevel()), since Gemini 3.x cannot turn thinking
-        off. Supply an explicit thinking level to override the model default. Supported levels depend on the model.
+        lowest level that every provider accepts, \c LOW (@ref lowestThinkingLevel()), since Gemini 3.x cannot turn
+        thinking off. Supply an explicit thinking level to override the model default. Supported levels depend on the model.
 
     @par Example
     A support-ticket classifier can request low reasoning effort while allowing the model to manage sampling:
@@ -1688,7 +1686,7 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
         - \c temperature (\c float): mapped to \c generationConfig.temperature
         - \c reasoning_token_budget (\c *int): mapped to
           \c generationConfig.thinkingConfig.thinkingBudget for models before Gemini 3; on Gemini 3.x, zero selects
-          the lowest thinking level that the model supports (@ref lowestThinkingLevel())
+          the lowest thinking level that every provider accepts, \c LOW (@ref lowestThinkingLevel())
         - \c reasoning_effort (\c *string): Gemini 3.x \c thinkingLevel; \c xhigh and \c max map to \c HIGH
         - \c extra_body (<tt>*hash&lt;auto&gt;</tt>): merged into the final body so
           callers can pass through provider-specific knobs without

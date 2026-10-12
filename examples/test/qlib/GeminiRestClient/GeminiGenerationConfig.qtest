@@ -73,13 +73,11 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
                 "custom-gemini-3", "some-model", "gemini-4-preview")) {
             assertFalse(GeminiBodyShape::usesThinkingLevel(model), model);
         }
-        # the lowest thinking level: MINIMAL for Flash models, LOW for the others
+        # the lowest level that every provider accepts: Vertex AI rejects MINIMAL for Flash models
+        # ("Thinking level is unsupported: THINKING_LEVEL_MINIMAL") and Gemini 3.1 Pro does not support it
         foreach string model in (("gemini-3-flash-preview", "gemini-3.7-flash", "gemini-3.1-flash-lite",
-                "models/gemini-3.5-flash", "projects/p/locations/global/publishers/google/models/gemini-3.8-flash")) {
-            assertEq("MINIMAL", GeminiBodyShape::lowestThinkingLevel(model), model);
-        }
-        foreach string model in (("gemini-3-pro-preview", "gemini-3.1-pro-preview", "models/gemini-3.1-pro-preview",
-                "gemini-3.5-ultra", "gemini-3-flashy")) {
+                "models/gemini-3.5-flash", "projects/p/locations/global/publishers/google/models/gemini-3.8-flash",
+                "gemini-3-pro-preview", "gemini-3.1-pro-preview", "models/gemini-3.1-pro-preview")) {
             assertEq("LOW", GeminiBodyShape::lowestThinkingLevel(model), model);
         }
     }
@@ -108,7 +106,7 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
             if (budget) {
                 assertEq({}, body.generationConfig, "other numeric budgets leave the model default on 3.x");
             } else {
-                assertEq({"thinkingConfig": {"thinkingLevel": "MINIMAL"}}, body.generationConfig,
+                assertEq({"thinkingConfig": {"thinkingLevel": "LOW"}}, body.generationConfig,
                     "a budget of zero selects the lowest level on 3.x");
             }
         }
@@ -118,9 +116,9 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
     # thinking tokens do not use up a small output budget
     zeroBudget() {
         foreach hash<auto> i in ({
-                "gemini-3.7-flash": "MINIMAL",
-                "gemini-3.1-flash-lite": "MINIMAL",
-                "projects/p/locations/global/publishers/google/models/gemini-3.7-flash": "MINIMAL",
+                "gemini-3.7-flash": "LOW",
+                "gemini-3.1-flash-lite": "LOW",
+                "projects/p/locations/global/publishers/google/models/gemini-3.7-flash": "LOW",
                 "gemini-3.1-pro-preview": "LOW",
                 "gemini-3-pro-preview": "LOW",
             }.pairIterator()) {
@@ -152,7 +150,7 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
         hash<auto> body = GeminiBodyShape::shapeChatBody((), NOTHING, NOTHING, {
             "model": "gemini-3.7-flash", "max_output_tokens": 180, "reasoning_token_budget": 0,
         });
-        assertEq({"maxOutputTokens": 180, "thinkingConfig": {"thinkingLevel": "MINIMAL"}}, body.generationConfig);
+        assertEq({"maxOutputTokens": 180, "thinkingConfig": {"thinkingLevel": "LOW"}}, body.generationConfig);
         body = GeminiBodyShape::shapeChatBody((), NOTHING, NOTHING, {
             "model": "gemini-2.5-flash", "max_output_tokens": 180, "reasoning_token_budget": 0,
         });
@@ -266,16 +264,17 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
                     assertEq({"maxOutputTokens": 4096}, rest.body.generationConfig,
                         "unsupported numeric budgets and disable_reasoning leave Gemini 3 model defaults");
                 } else {
-                    assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "MINIMAL"}},
+                    assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "LOW"}},
                         rest.body.generationConfig, "a budget of zero selects the lowest level");
                 }
             }
         }
-        # a budget of zero per call, as a classifier with a small output budget sends it
+        # a budget of zero per call, as a classifier with a small output budget sends it: both providers, Flash and Pro,
+        # send LOW, which Vertex AI accepts for Flash models (it rejects MINIMAL)
         defaults.reasoning_token_budget = 1024;
         foreach GeminiBodyShape::AbstractGeminiModelProvider provider in ((
                 new CaptureGeminiProvider(defaults, rest), new CaptureVertexProvider(defaults, rest))) {
-            foreach hash<auto> i in ({"gemini-3.7-flash": "MINIMAL", "gemini-3.1-pro-preview": "LOW"}.pairIterator()) {
+            foreach hash<auto> i in ({"gemini-3.7-flash": "LOW", "gemini-3.1-pro-preview": "LOW"}.pairIterator()) {
                 provider.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "classify"},), NOTHING,
                     <QoreLlmUtils::LlmRequestOptions>{"model": i.key, "max_output_tokens": 180,
                         "reasoning_token_budget": 0});
