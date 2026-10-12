@@ -392,6 +392,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_try_assign_pinned_class_local_aot_throwing_v1",
         reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_throwing_v1) },
     { "qore_rt_get_class_local_slot_aot_v1", reinterpret_cast<void*>(&qore_rt_get_class_local_slot_aot_v1) },
+    { "qore_rt_get_auto_local_slot_aot_v1", reinterpret_cast<void*>(&qore_rt_get_auto_local_slot_aot_v1) },
+    { "qore_rt_assign_auto_local_slot_aot_v1", reinterpret_cast<void*>(&qore_rt_assign_auto_local_slot_aot_v1) },
+    { "qore_rt_assign_auto_local_slot_aot_throwing_v1",
+        reinterpret_cast<void*>(&qore_rt_assign_auto_local_slot_aot_throwing_v1) },
     { "qore_rt_try_assign_pinned_class_local_aot_v2",
         reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_v2) },
     { "qore_rt_try_assign_pinned_class_local_aot_throwing_v2",
@@ -409,6 +413,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot_throwing) },
     { "qore_rt_instantiate_local_aot", reinterpret_cast<void*>(&qore_rt_instantiate_local_aot) },
     { "qore_rt_uninstantiate_local_aot", reinterpret_cast<void*>(&qore_rt_uninstantiate_local_aot) },
+    { "qore_rt_pop_body_local_aot_v1", reinterpret_cast<void*>(&qore_rt_pop_body_local_aot_v1) },
     { "qore_rt_pop_closure_var_aot", reinterpret_cast<void*>(&qore_rt_pop_closure_var_aot) },
     { "qore_rt_pop_closure_var", reinterpret_cast<void*>(&qore_rt_pop_closure_var) },
     { "qore_rt_load_local_weak", reinterpret_cast<void*>(&qore_rt_load_local_weak) },
@@ -12678,8 +12683,8 @@ extern "C" DLLEXPORT void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t 
     qore_rt_assign_local(ctx->locals[idx], val, xsink);
 }
 
-extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak_aot(QoreAOTContext* ctx, int32_t idx,
-        uint64_t val, ExceptionSink* xsink) {
+static inline void qore_rt_assign_scalar_local_aot(QoreAOTContext* ctx, int32_t idx,
+        uint64_t val, LocalVarValue* prepared_slot, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     enum class ScalarStoreMode : uint8_t { Generic, Guarded, Direct };
     // One immutable configuration and initialization guard for both diagnostic
@@ -12692,10 +12697,42 @@ extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak_aot(QoreAOTContext* ctx
             ? ScalarStoreMode::Guarded : ScalarStoreMode::Direct;
     }();
     if (scalar_store != ScalarStoreMode::Generic && !*xsink && ctx->locals[idx]
-            && ctx->locals[idx]->tryAssignAOTScalarValue(fromBits(val), scalar_store == ScalarStoreMode::Direct)) {
+            && ctx->locals[idx]->tryAssignAOTScalarValue(fromBits(val),
+                scalar_store == ScalarStoreMode::Direct, prepared_slot)) {
         return;
     }
     qore_rt_assign_local_eval_weak(ctx->locals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak_aot(QoreAOTContext* ctx, int32_t idx,
+        uint64_t val, ExceptionSink* xsink) {
+    qore_rt_assign_scalar_local_aot(ctx, idx, val, nullptr, xsink);
+}
+
+extern "C" DLLEXPORT void* qore_rt_get_auto_local_slot_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, RuntimeConfig* rc) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_AUTO_LOCAL_SLOT");
+    if (!enabled || !ctx || idx < 0 || idx >= ctx->num_locals || !rc
+            || RuntimeConfigNativeAccess::getProgram(*rc) != ctx->pgm
+            || !ctx->locals[idx] || ctx->locals[idx]->getTypeInfo() != autoTypeInfo) {
+        return nullptr;
+    }
+    // The compiler proves ordinary body-slot ownership, after instantiation.
+    // Per-store declaration checks remain live even when a slot was prepared.
+    return RuntimeConfigNativeAccess::getAOTBodyLocalSlot(*rc, ctx->locals[idx]);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_auto_local_slot_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, void* prepared_slot, ExceptionSink* xsink) {
+    qore_rt_assign_scalar_local_aot(ctx, idx, value, static_cast<LocalVarValue*>(prepared_slot), xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_auto_local_slot_aot_throwing_v1(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, void* prepared_slot, ExceptionSink* xsink) {
+    qore_rt_assign_auto_local_slot_aot_v1(ctx, idx, value, prepared_slot, xsink);
+    if (*xsink) {
+        throw QoreJITException();
+    }
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTContext* ctx,
@@ -12981,6 +13018,16 @@ extern "C" DLLEXPORT void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, i
     // corresponds to scope exit (like the end of a foreach loop body) and
     // should only clear the value, not pop the variable from the stack.
     qore_rt_clear_local(ctx->locals[idx], xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_pop_body_local_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    assert(ctx->locals[idx] && !ctx->locals[idx]->closureUse());
+    // Unlike an ordinary AOT wrapper, a direct fast entry pushes these slots
+    // itself. Merely clearing them leaves a recursive child's binding above
+    // its parent's, so later lookup and a prepared parent address disagree.
+    qore_rt_uninstantiate_local(ctx->locals[idx], xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_pop_closure_var_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {

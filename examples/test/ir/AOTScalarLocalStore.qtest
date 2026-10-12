@@ -44,10 +44,11 @@ class ScalarLocalStoreTest inherits QUnit::Test {
                 string executable = dir.path + "/fixture";
                 string ir = run((qcc, level, "--strip-source", "-o", executable, source),
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
-                assertRegex("call void @qore_rt_assign_local_eval_weak_aot", ir,
-                    "fixture retains ordinary runtime local assignment");
+                assertRegex("(?:call|invoke) void @qore_rt_assign_(?:local_eval_weak_aot|auto_local_slot_aot)", ir,
+                    "fixture retains checked runtime local assignment");
                 foreach string runtime in (("", "QORE_DISABLE_AOT_SCALAR_LOCAL_STORE=1 ",
                         "QORE_DISABLE_AOT_DIRECT_SCALAR_STORE=1 ",
+                        "QORE_DISABLE_AOT_AUTO_LOCAL_SLOT=1 ",
                         "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
                     assertEq(expected, run((executable,), runtime), prefix + level + runtime);
                 }

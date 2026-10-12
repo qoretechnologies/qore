@@ -1225,11 +1225,38 @@ without conversion and copied directly into the runtime slot; assignment and
 ownership flags are unchanged. The broader scalar-local control takes precedence.
 Both controls use one immutable, thread-safe first-use configuration; presence
 (even an empty value or `0`) disables the selected shortcut. Set them before
-process startup. Declaration checks and thread-local slot lookup remain live.
+process startup. Declaration checks remain live. Ordinary lookup is retained
+unless an invocation-local auto slot is prepared as described below.
 The private-header change alters the AOT runtime identity, so compare matching,
 separately compiled before/after artifacts; candidate A/A and runtime on/off
 controls can use an identical executable. This does not change IR/JIT local
 assignment, widen fast-path admission or establish Java parity.
+
+`QORE_DISABLE_AOT_AUTO_LOCAL_SLOT=1` disables preparation of ordinary `auto`
+body-local storage. During compilation it omits the getter and prepared-slot
+assignment helper. At runtime, presence sampled on the getter's first use makes
+it return null, so the identical executable performs ordinary lookup on every
+assignment. Empty values and `0` also disable preparation. This control does
+not disable direct primitive copying, declaration/live-slot guards or the
+fast-entry body-pop correctness correction; the broader scalar-local control
+still takes precedence over the primitive shortcut.
+
+By default, eligible AOT entries acquire the actual body-slot address after
+instantiation and pass it to checked assignments. The address is invocation-local
+and survives recursive stack growth, but not function exit. Values, flags and
+owners are never cached by this mechanism; runtime publication, reflection,
+reloads, generic fallback and destruction remain. Parameters, captured/typed
+locals, private IR-only storage and no-coerce assignments are excluded.
+Direct fast entries pop their own body slots on exit; wrapper-owned entries
+retain wrapper cleanup. New versioned helpers and the runtime identity change
+require separate matching before/after compilation. A runtime on/off comparison
+isolates prepared lookup, not all code-generation or cleanup changes.
+
+See [prepared auto-slot measurements and compile-time controls](RESULTS.md#prepared-ordinary-auto-aot-body-slots-2026-10-12),
+[all verified samples](results-aot-auto-local-slot-macos-arm64.json), and the
+[62-check audit](FOLLOWUP-AUDIT.md#prepared-ordinary-auto-aot-body-slots-audit-2026-10-12).
+Boxed-call gains repeat, but list-construction and native-float adverse results
+remain explicit; this is not a universal speedup or a Java-parity claim.
 
 See [AOT scalar-store measurements](RESULTS.md#aot-scalar-local-replacement-2026-10-11) and [verified evidence/audit](results-aot-scalar-local-store-macos-arm64.json).
 

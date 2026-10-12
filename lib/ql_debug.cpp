@@ -40,6 +40,9 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/LocalVar.h"
+#include "qore/intern/JITRuntime.h"
+#include "qore/intern/QoreAOT.h"
+#include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/UnicodeByteOrder.h"
 
 #include <map>
@@ -381,7 +384,7 @@ static void ut_local_discard(UnitTestCounters& c) {
 }
 
 //! Exercise scalar-store admission itself, not just results obtainable by fallback.
-static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_store) {
+static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_store, bool prepared) {
     ExceptionSink xsink;
     struct LocalScope {
         LocalVar var;
@@ -401,15 +404,73 @@ static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_stor
     }
     for (QoreValue value : {QoreValue(false), QoreValue(true), QoreValue(int64_t{7}),
             QoreValue(-(int64_t{1} << 46)), QoreValue(2.5), QoreValue(-0.0)}) {
-        UT_ASSERT(c, local.var.tryAssignAOTScalarValue(value, direct_store),
+        UT_ASSERT(c, local.var.tryAssignAOTScalarValue(value, direct_store, prepared ? slot : nullptr),
             "immediate scalar replacement is handled");
         QoreValue actual = slot->val.getValue();
         UT_ASSERT_EQ(c, value.getType(), actual.getType(), "scalar store preserves the value type");
         UT_ASSERT(c, actual.rawBits() == value.rawBits(), "scalar store preserves exact value bits");
     }
+    if (prepared) {
+        // This fixture borrows a stack array; the ordinary AOT context destructor
+        // owns/frees its locals array, so detach it before that destructor runs.
+        struct BorrowedLocalContext : QoreAOTContext {
+            ~BorrowedLocalContext() {
+                locals = nullptr;
+            }
+        } context;
+        LocalVar* locals[] = {&local.var};
+        context.locals = locals;
+        context.num_locals = 1;
+        RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+        context.pgm = RuntimeConfigNativeAccess::getProgram(rc);
+        UT_ASSERT(c, context.pgm, "prepared-slot getter has a live Program context");
+        UT_ASSERT(c, qore_rt_get_auto_local_slot_aot_v1(&context, 0, &rc)
+            == (std::getenv("QORE_DISABLE_AOT_AUTO_LOCAL_SLOT") ? nullptr : slot),
+            "same-Program getter supplies the actual live slot unless disabled");
+        UT_ASSERT(c, !qore_rt_get_auto_local_slot_aot_v1(&context, -1, &rc), "negative slot is rejected");
+        UT_ASSERT(c, !qore_rt_get_auto_local_slot_aot_v1(&context, 1, &rc), "past-end slot is rejected");
+        UT_ASSERT(c, !qore_rt_get_auto_local_slot_aot_v1(&context, 0, nullptr), "absent context is rejected");
+        context.pgm = nullptr;
+        UT_ASSERT(c, !qore_rt_get_auto_local_slot_aot_v1(&context, 0, &rc),
+            "a different Program cannot prepare this slot");
+
+        // Growing and shrinking separately allocated stack blocks must not move
+        // this invocation's slot, even for recursive bindings of the same LocalVar.
+        struct NestedSlots {
+            LocalVar& var;
+            ExceptionSink& xsink;
+            unsigned count = 0;
+            ~NestedSlots() {
+                while (count) {
+                    --count;
+                    var.uninstantiate(&xsink);
+                }
+            }
+        };
+        uint64_t outer_bits = slot->val.getValue().rawBits();
+        {
+            NestedSlots nested{local.var, xsink};
+            static_assert(QORE_THREAD_STACK_BLOCK < 100, "bounded native stack-growth fixture");
+            for (unsigned i = 0; i <= QORE_THREAD_STACK_BLOCK; ++i) {
+                local.var.instantiate(QoreValue(int64_t{41}));
+                ++nested.count;
+            }
+            LocalVarValue* inner = thread_try_find_lvar(&local.var);
+            UT_ASSERT(c, inner && inner != slot, "recursive binding has distinct storage");
+            UT_ASSERT(c, local.var.tryAssignAOTScalarValue(QoreValue(int64_t{42}), direct_store, inner),
+                "prepared recursive binding is handled");
+            UT_ASSERT_EQ(c, outer_bits, slot->val.getValue().rawBits(), "recursive store leaves outer storage unchanged");
+        }
+        UT_ASSERT(c, thread_try_find_lvar(&local.var) == slot, "outer prepared slot survives block growth and pop");
+        UT_ASSERT(c, local.var.tryAssignAOTScalarValue(QoreValue(3.5), direct_store, slot),
+            "outer prepared slot is usable after recursive return");
+        UT_ASSERT(c, slot->val.getValue().rawBits() == QoreValue(3.5).rawBits(),
+            "prepared store publishes exact bits after recursive return");
+    }
     auto miss = [&](QoreValue value) {
         uint64_t before = slot->val.getValue().rawBits();
-        UT_ASSERT(c, !local.var.tryAssignAOTScalarValue(value, direct_store), "unsupported store is not handled");
+        UT_ASSERT(c, !local.var.tryAssignAOTScalarValue(value, direct_store, prepared ? slot : nullptr),
+            "unsupported store is not handled");
         UT_ASSERT_EQ(c, before, slot->val.getValue().rawBits(), "a miss preserves the slot");
     };
     for (QoreValue value : {QoreValue(), QoreValue::makeNull(), QoreValue::makeChar('x'),
@@ -449,22 +510,25 @@ static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_stor
     miss(QoreValue(3.5));
     {
         LocalScope typed("native_scalar_typed_control", floatTypeInfo, xsink);
-        UT_ASSERT(c, !typed.var.tryAssignAOTScalarValue(QoreValue(3.5), direct_store),
+        UT_ASSERT(c, !typed.var.tryAssignAOTScalarValue(QoreValue(3.5), direct_store,
+            prepared ? thread_try_find_lvar(&typed.var) : nullptr),
             "typed declaration keeps ordinary binding");
     }
     {
         LocalVar missing("native_scalar_missing", autoTypeInfo);
-        UT_ASSERT(c, !missing.tryAssignAOTScalarValue(QoreValue(3.5), direct_store),
+        UT_ASSERT(c, !missing.tryAssignAOTScalarValue(QoreValue(3.5), direct_store, nullptr),
             "uninstantiated slot keeps normal error path");
     }
     UT_ASSERT(c, !xsink, "scalar-store admission tests raise no exception");
 }
 
 static void ut_aot_scalar_local_store(UnitTestCounters& c) {
-    // Exercise the direct primitive copy and the diagnostic control against the
+    // Exercise direct/generic storage and prepared/looked-up slots against the
     // same live-slot admission, bit-preservation and ownership assertions.
-    ut_aot_scalar_local_store_mode(c, false);
-    ut_aot_scalar_local_store_mode(c, true);
+    ut_aot_scalar_local_store_mode(c, false, false);
+    ut_aot_scalar_local_store_mode(c, true, false);
+    ut_aot_scalar_local_store_mode(c, false, true);
+    ut_aot_scalar_local_store_mode(c, true, true);
 }
 
 //! the I/O thread count of a process in a container with a CPU limit: the cgroup CPU quota files

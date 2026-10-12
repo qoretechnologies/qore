@@ -358,12 +358,12 @@ private:
     // Snapshots backed by existing unmodified entry owners, never new references.
     std::unordered_map<const LocalVar*, llvm::Value*> aot_pinned_entry_values;
     // Borrowed storage, not a value/owner: ordinary body slots survive until function exit.
-    std::unordered_map<const LocalVar*, llvm::Value*> aot_class_local_slots;
+    std::unordered_map<const LocalVar*, llvm::Value*> aot_body_local_slots;
     // Immutable declaration constraints only; object acceptance is checked at every store.
     std::unordered_map<const LocalVar*, llvm::Value*> aot_class_local_constraints;
-    llvm::BasicBlock* aot_class_local_slot_entry = nullptr;
-    llvm::Instruction* aot_class_local_slot_anchor = nullptr;
-    llvm::Value* aot_class_local_runtime_config = nullptr;
+    llvm::BasicBlock* aot_body_local_slot_entry = nullptr;
+    llvm::Instruction* aot_body_local_slot_anchor = nullptr;
+    llvm::Value* aot_body_local_runtime_config = nullptr;
     std::unordered_map<uint32_t, const LocalVar*> stable_scalar_loads;
 
     // Read-only class parameters retain their ordinary runtime slots and entry
@@ -609,6 +609,9 @@ private:
     bool local_reload_boundary_cleanup_pending = false;
     // Propagate cancellation from native handler cache emission to lowerFunction().
     bool native_handler_cache_cancelled = false;
+    // Cleanup emission is shared by normal and exceptional exits; cancelled
+    // scans must reject the whole function, never publish partial cleanup.
+    bool local_cleanup_cancelled = false;
 
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
@@ -1570,6 +1573,11 @@ private:
     // Resolve eligible pre-instantiated body-local storage once after the native entry guard.
     llvm::Value* getAOTClassLocalSlot(const LocalVar* local, llvm::Module& module,
         llvm::Function* llvm_func);
+    llvm::Value* getAOTAutoLocalSlot(const LocalVar* local, llvm::Module& module,
+        llvm::Function* llvm_func);
+    // Common emission after eligibility checks; each function invocation owns its handle.
+    llvm::Value* getAOTBodyLocalSlot(const LocalVar* local, llvm::Module& module,
+        llvm::Function* llvm_func, bool auto_local);
     llvm::Value* getAOTClassLocalConstraint(const LocalVar* local, llvm::Value* slot,
         llvm::Module& module);
 

@@ -930,17 +930,22 @@ public:
         @param value borrowed immediate scalar input
         @param direct_store use representation-proven primitive extraction;
         false retains generic scalar storage for diagnostic comparisons
+        @param prepared_slot optional same-thread, same-invocation body storage;
+        the compiler must acquire it after instantiation and never retain it
+        beyond the invocation. nullptr performs the ordinary live lookup.
         @return true if stored without an exception, false without side effects
         when ordinary assignment is required
     */
-    DLLLOCAL bool tryAssignAOTScalarValue(QoreValue value, bool direct_store) const {
+    DLLLOCAL bool tryAssignAOTScalarValue(QoreValue value, bool direct_store,
+            LocalVarValue* prepared_slot) const {
         if (closure_use || is_self || is_top_level || read_only || no_narrowing
                 || typeInfo != autoTypeInfo || refTypeInfo
                 || type_info_needs_substitution || ref_type_info_needs_substitution
                 || (!value.isInt() && !value.isFloat() && !value.isBool())) {
             return false;
         }
-        LocalVarValue* slot = get_var();
+        LocalVarValue* slot = prepared_slot ? prepared_slot : get_var();
+        assert(!prepared_slot || (prepared_slot->local_var == this && !prepared_slot->frame_boundary));
         if (!slot || slot->finalized || slot->block_cleared || !slot->val.assigned
                 || slot->val.static_assignment || slot->val.fixed_type
                 || (slot->val.type != QV_Int && slot->val.type != QV_Float && slot->val.type != QV_Bool)) {

@@ -1,0 +1,127 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+thread_local bool inspect = !!ARGV;
+thread_local int drops = 0;
+sub expect(auto wanted, auto actual) {
+    if (wanted !== actual) {
+        throw "AUTO-SLOT-TEST", sprintf("wanted %y, got %y", wanted, actual);
+    }
+}
+sub overwriteValue(auto next) {
+    set_local_var_value(1, "value", next);
+}
+class AutoSlotOwner {
+    destructor() {
+        ++drops;
+        # Reenter Qore and grow its local stack while ordinary node replacement
+        # is running; primitive slot preparation must not bypass this cleanup.
+        expect(9, autoSlotRecursive(8));
+    }
+}
+auto sub autoSlotRecursive(int depth) {
+    auto value = depth;
+    auto floating = float(depth) + 0.5;
+    if (depth) {
+        expect(depth, autoSlotRecursive(depth - 1));
+        # A direct fast entry must pop its own body slots, not leave cleared
+        # recursive-child bindings above the parent's runtime-visible locals.
+        expect(depth, value);
+        expect(float(depth) + 0.5, floating);
+    }
+    value = depth + 1;
+    floating = float(depth) + 0.75;
+    # The baseline's source-specialized recursive entries do not expose a
+    # complete reflected local map. Keep runtime storage visible to the call,
+    # check recursive values here, and test reflected contents in autoSlotReflect.
+    expect(NT_HASH, get_local_vars(0).typeCode());
+    expect(float(depth) + 0.75, floating);
+    return value;
+}
+auto sub autoSlotReflect(auto next) {
+    auto value = 1.25;
+    value = next;
+    hash<auto> vars = get_local_vars(0);
+    if (inspect) {
+        expect(next, vars.value.value);
+        # Keep the setter's frame: source inlining changes the meaning of its
+        # stack-depth argument in the baseline as well as in the candidate.
+        code<auto(auto)> write = \overwriteValue();
+        write("reflective replacement");
+        expect("reflective replacement", value);
+    }
+    value = False;
+    vars = get_local_vars(0);
+    if (inspect) {
+        expect(False, vars.value.value);
+    }
+    return value;
+}
+sub autoSlotBlock(int count) {
+    for (int i = 0; i < count; ++i) {
+        auto value = 1.25;
+        value = i;
+        # Preserve runtime-visible storage without requiring the baseline's
+        # incomplete reflected map for repeatedly entered block locals.
+        expect(NT_HASH, get_local_vars(0).typeCode());
+        expect(i, value);
+        value = float(i) + 0.5;
+        expect(float(i) + 0.5, value);
+        if (i % 2) {
+            continue;
+        }
+    }
+}
+auto sub autoSlotCaptured(auto next) {
+    auto value = 1.25;
+    code<auto()> read = auto sub() { return value; };
+    value = next;
+    return read();
+}
+auto sub autoSlotParameter(auto value, auto next) {
+    value = next;
+    expect(NT_HASH, get_local_vars(0).typeCode());
+    return value;
+}
+int sub autoSlotTyped(auto next) {
+    softint value = 1;
+    value = next;
+    return value;
+}
+sub autoSlotCleanup(bool unwind) {
+    auto value = new AutoSlotOwner();
+    expect(NT_HASH, get_local_vars(0).typeCode());
+    if (unwind) {
+        throw "AUTO-SLOT-UNWIND", "test";
+    }
+    value = 7;
+    expect(7, value);
+    value = new AutoSlotOwner();
+    value = 2.5;
+    expect(2.5, value);
+}
+
+expect(73, autoSlotRecursive(72));
+code<auto(int)> recursive = \autoSlotRecursive();
+expect(73, recursive(72));
+foreach auto next in ((True, 7, 2.5, -0.0, 9223372036854775807, -3.0e307,
+        "text", (1, 2), {"a": 1}, NOTHING)) {
+    expect(False, autoSlotReflect(next));
+    expect(next, autoSlotCaptured(next));
+    expect(next, autoSlotParameter(1.25, next));
+}
+autoSlotBlock(16);
+expect(21, autoSlotTyped("21"));
+autoSlotCleanup(False);
+expect(2, drops);
+try {
+    autoSlotCleanup(True);
+    throw "AUTO-SLOT-TEST", "missing exception";
+} catch (hash<ExceptionInfo> ex) {
+    expect("AUTO-SLOT-UNWIND", ex.err);
+}
+expect(3, drops);
+printf("auto-local-slot: ok\n");

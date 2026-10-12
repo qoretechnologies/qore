@@ -46,6 +46,7 @@
 #include "qore/intern/xxhash.h"
 
 #include <qore/QorePluginLLVM.h>
+#include <llvm/ADT/SmallVector.h>
 
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
@@ -3572,17 +3573,33 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
 }
 
 void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
+    if (local_cleanup_cancelled) {
+        return;
+    }
+    size_t cleanup_steps = 0;
+    auto cancelled = [&]() {
+        if (++cleanup_steps % 100 == 0
+                && qore_check_cancel(nullptr, "LLVM local cleanup emission")) {
+            local_cleanup_cancelled = true;
+        }
+        return local_cleanup_cancelled;
+    };
     // Uninstantiate entry-block locals at function exit.
     // Non-entry-block locals have their own UninstantiateLocal instructions
     // in the IR that handle their lifecycle.
     if (aot_mode) {
         auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local_aot",
                 llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+        auto body_pop_helper = module.getOrInsertFunction("qore_rt_pop_body_local_aot_v1",
+                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
         auto pop_helper = module.getOrInsertFunction("qore_rt_pop_closure_var_aot",
                 llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
         std::unordered_set<const void*> body_local_set;
         if (current_ir_func) {
             for (LocalVar* var : current_ir_func->all_body_locals) {
+                if (cancelled()) {
+                    return;
+                }
                 body_local_set.insert(reinterpret_cast<const void*>(var));
             }
         }
@@ -3594,11 +3611,17 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
         if (current_ir_func) {
             std::unordered_set<const void*> entry_local_set;
             for (LocalVar* var : entry_locals) {
+                if (cancelled()) {
+                    return;
+                }
                 entry_local_set.insert(reinterpret_cast<const void*>(var));
             }
             // Reverse iterate to match instantiation order symmetry
             for (auto it = current_ir_func->all_body_locals.rbegin();
                     it != current_ir_func->all_body_locals.rend(); ++it) {
+                if (cancelled()) {
+                    return;
+                }
                 LocalVar* var = *it;
                 if (!var) {
                     continue;
@@ -3607,7 +3630,10 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
                 if (!var->closureUse()) {
                     if (!fast_entry_name.empty() && !ir_only_body_locals.count(key)) {
                         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
-                        builder->CreateCall(helper, {aot_ctx_arg,
+                        // Match this entry's own push, not a wrapper-owned
+                        // clear. This also restores the parent's binding after
+                        // recursion, before its next runtime-local reload.
+                        builder->CreateCall(body_pop_helper, {aot_ctx_arg,
                                 llvm::ConstantInt::get(i32_type, slot), xsink_arg});
                     }
                     continue;
@@ -3624,7 +3650,15 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
             }
         }
         for (auto it = entry_locals.rbegin(); it != entry_locals.rend(); ++it) {
+            if (cancelled()) {
+                return;
+            }
             const void* key = reinterpret_cast<const void*>(*it);
+            if (!(*it)->closureUse() && body_local_set.count(key)) {
+                // Mirrors emitLocalInstantiation: these were pushed by the
+                // fast-entry body loop above, or are owned by the wrapper.
+                continue;
+            }
             if (pre_instantiated_locals &&
                     pre_instantiated_locals->count(key)) {
                 // Signature locals are caller-owned and must be popped by the
@@ -3647,6 +3681,9 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
         auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
                 llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
         for (auto it = entry_locals.rbegin(); it != entry_locals.rend(); ++it) {
+            if (cancelled()) {
+                return;
+            }
             const void* key = reinterpret_cast<const void*>(*it);
             if ((pre_instantiated_locals && pre_instantiated_locals->count(key))
                     || ir_only_body_locals.count(key)) {
@@ -5620,35 +5657,54 @@ llvm::Value* QoreIRToLLVM::getAOTClassLocalSlot(const LocalVar* local, llvm::Mod
             || QoreTypeInfo::isReference(ti)) {
         return nullptr;
     }
-    auto found = aot_class_local_slots.find(local);
-    if (found != aot_class_local_slots.end()) {
+    return getAOTBodyLocalSlot(local, module, llvm_func, false);
+}
+
+llvm::Value* QoreIRToLLVM::getAOTAutoLocalSlot(const LocalVar* local, llvm::Module& module,
+        llvm::Function* llvm_func) {
+    if (!aot_mode || !local || !aot_body_locals.count(local) || local->closureUse()
+            || local->isSelf() || local->isTopLevel() || !strcmp(local->getName(), "self")
+            || local->isReadOnly() || local->getTypeInfoForLValue() != autoTypeInfo
+            || ir_only_body_locals.count(local) || !current_ir_func || current_ir_func->blocks.empty()
+            || std::getenv("QORE_DISABLE_AOT_AUTO_LOCAL_SLOT")) {
+        return nullptr;
+    }
+    return getAOTBodyLocalSlot(local, module, llvm_func, true);
+}
+
+llvm::Value* QoreIRToLLVM::getAOTBodyLocalSlot(const LocalVar* local, llvm::Module& module,
+        llvm::Function* llvm_func, bool auto_local) {
+    auto found = aot_body_local_slots.find(local);
+    if (found != aot_body_local_slots.end()) {
         return found->second;
     }
-    if (!aot_class_local_slot_entry || aot_class_local_slot_entry->getParent() != llvm_func) {
+    if (!aot_body_local_slot_entry || aot_body_local_slot_entry->getParent() != llvm_func) {
         return nullptr;
     }
     // Fast entries instantiate their own body slots inside the logical entry.
     // Insert after that prologue, not at its first instruction (which could
     // resolve the recursive caller's slot before the callee slot exists).
-    llvm::IRBuilder<> eb(aot_class_local_slot_entry, aot_class_local_slot_entry->getFirstInsertionPt());
-    if (aot_class_local_slot_anchor) {
-        eb.SetInsertPoint(aot_class_local_slot_anchor->getParent(),
-            std::next(aot_class_local_slot_anchor->getIterator()));
+    llvm::IRBuilder<> eb(aot_body_local_slot_entry, aot_body_local_slot_entry->getFirstInsertionPt());
+    if (aot_body_local_slot_anchor) {
+        eb.SetInsertPoint(aot_body_local_slot_anchor->getParent(),
+            std::next(aot_body_local_slot_anchor->getIterator()));
     }
-    if (!aot_class_local_runtime_config) {
+    if (!aot_body_local_runtime_config) {
         auto acquire = module.getOrInsertFunction("qore_rt_get_fast_runtime_config",
             llvm::FunctionType::get(ptr_type, {}, false));
-        aot_class_local_runtime_config = eb.CreateCall(acquire, {}, "class_local_runtime_config");
+        aot_body_local_runtime_config = eb.CreateCall(acquire, {}, "class_local_runtime_config");
     } else {
-        auto* acquire = llvm::cast<llvm::Instruction>(aot_class_local_runtime_config);
+        auto* acquire = llvm::cast<llvm::Instruction>(aot_body_local_runtime_config);
         eb.SetInsertPoint(acquire->getParent(), std::next(acquire->getIterator()));
     }
-    auto get_slot = module.getOrInsertFunction("qore_rt_get_class_local_slot_aot_v1",
+    auto get_slot = module.getOrInsertFunction(auto_local ? "qore_rt_get_auto_local_slot_aot_v1"
+        : "qore_rt_get_class_local_slot_aot_v1",
         llvm::FunctionType::get(ptr_type, {ptr_type, i32_type, ptr_type}, false));
     int32_t index = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(local);
     llvm::Value* slot = eb.CreateCall(get_slot,
-        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, index), aot_class_local_runtime_config}, "class_local_slot");
-    aot_class_local_slots.emplace(local, slot);
+        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, index), aot_body_local_runtime_config},
+        auto_local ? "auto_local_slot" : "class_local_slot");
+    aot_body_local_slots.emplace(local, slot);
     return slot;
 }
 
@@ -11214,6 +11270,7 @@ bool QoreIRToLLVM::checkNoAotExecutableExprFallback(llvm::Function* llvm_func, s
 
 bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error) {
     native_handler_cache_cancelled = false;
+    local_cleanup_cancelled = false;
     current_ir_func = &func;
     current_module = &module;
     initTypes();
@@ -11870,11 +11927,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_exact_class_guards.clear();
     stable_exact_receiver_loads.clear();
     aot_pinned_entry_values.clear();
-    aot_class_local_slots.clear();
+    aot_body_local_slots.clear();
     aot_class_local_constraints.clear();
-    aot_class_local_slot_entry = nullptr;
-    aot_class_local_slot_anchor = nullptr;
-    aot_class_local_runtime_config = nullptr;
+    aot_body_local_slot_entry = nullptr;
+    aot_body_local_slot_anchor = nullptr;
+    aot_body_local_runtime_config = nullptr;
     stable_scalar_loads.clear();
     aot_class_param_cache_candidates.clear();
     aot_class_param_caches.clear();
@@ -12049,9 +12106,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         builder->SetInsertPoint(block_map[func.blocks.front().get()]);
         emitNativeMethodBinding(module, llvm_func);
         emitLocalInstantiation(module);
-        aot_class_local_slot_entry = builder->GetInsertBlock();
-        if (!aot_class_local_slot_entry->empty()) {
-            aot_class_local_slot_anchor = &aot_class_local_slot_entry->back();
+        aot_body_local_slot_entry = builder->GetInsertBlock();
+        if (!aot_body_local_slot_entry->empty()) {
+            aot_body_local_slot_anchor = &aot_body_local_slot_entry->back();
         }
         preCreateLocalAllocas(module, llvm_func);
 
@@ -13516,6 +13573,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         unsigned effect_resume_instruction = 0;
         llvm::BasicBlock* effect_resume_join = nullptr;
         for (const auto& inst_ptr : block->instructions) {
+            if (local_cleanup_cancelled) {
+                error = "cancelled during LLVM local cleanup emission";
+                return false;
+            }
             if (native_handler_cache_cancelled) {
                 error = "cancelled during LLVM native handler slot cache setup";
                 return false;
@@ -14118,6 +14179,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
 
+    if (local_cleanup_cancelled) {
+        error = "cancelled during LLVM local cleanup emission";
+        return false;
+    }
     if (native_handler_cache_cancelled) {
         error = "cancelled during LLVM native handler slot cache setup";
         return false;
@@ -16647,14 +16712,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         aot_helper_name = "qore_rt_assign_class_local_result_aot_v1";
                         aot_helper_throwing_name = "qore_rt_assign_class_local_result_aot_throwing_v1";
                     }
+                    llvm::Value* auto_slot = !return_class_store_result && !use_no_coerce
+                        ? getAOTAutoLocalSlot(linst->local, module, llvm_func) : nullptr;
+                    llvm::SmallVector<llvm::Type*, 5> assign_types{ptr_type, i32_type, i64_type};
+                    llvm::SmallVector<llvm::Value*, 5> assign_args{aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), boxed};
+                    if (auto_slot) {
+                        aot_helper_name = "qore_rt_assign_auto_local_slot_aot_v1";
+                        aot_helper_throwing_name = "qore_rt_assign_auto_local_slot_aot_throwing_v1";
+                        assign_types.push_back(ptr_type);
+                        assign_args.push_back(auto_slot);
+                    }
+                    assign_types.push_back(ptr_type);
+                    assign_args.push_back(xsink_arg);
                     auto aot_ft = llvm::FunctionType::get(return_class_store_result ? i64_type : void_type,
-                            {ptr_type, i32_type, i64_type, ptr_type}, false);
+                            assign_types, false);
                     auto assign_helper = module.getOrInsertFunction(aot_helper_name, aot_ft);
                     auto assign_helper_throwing = module.getOrInsertFunction(
                             aot_helper_throwing_name, aot_ft);
                     llvm::Value* assigned = emitMaybeInvoke(assign_helper, assign_helper_throwing,
-                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
-                             boxed, xsink_arg},
+                            assign_args,
                             module, llvm_func, inst);
                     if (return_class_store_result) {
                         stored_result = assigned;

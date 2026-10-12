@@ -1669,6 +1669,31 @@ int qore_rt_try_assign_pinned_class_local_aot_throwing_v1(QoreAOTContext* ctx, i
     its value, but the pre-instantiated storage remains until function exit.
 */
 void* qore_rt_get_class_local_slot_aot_v1(QoreAOTContext* ctx, int32_t idx, RuntimeConfig* rc);
+
+//! Resolve an ordinary auto body-local slot after this invocation's instantiation.
+/** @param ctx current AOT function context
+    @param idx compiler-proven noncaptured runtime-backed auto body-local slot
+    @param rc live same-thread context; must belong to ctx's Program
+    @return borrowed slot handle, or nullptr to retain ordinary assignment lookup
+    @note The caller owns the slot lifetime until function exit. Block exit clears
+    its value without popping storage; parameters and closure slots are excluded.
+    No declaration decision, primitive value or live slot flags are cached.
+*/
+void* qore_rt_get_auto_local_slot_aot_v1(QoreAOTContext* ctx, int32_t idx, RuntimeConfig* rc);
+//! Assign with optional invocation-local storage, retaining all ordinary declaration and live-value checks.
+/** @param ctx current AOT function context
+    @param idx same body-local index supplied to the slot getter
+    @param value borrowed NaN-boxed input
+    @param prepared_slot result of qore_rt_get_auto_local_slot_aot_v1 in this invocation, or nullptr
+    @param xsink exception sink; all unsupported assignments keep ordinary handling
+    @note The actual runtime slot is updated; no value owner or reflection reload is elided.
+*/
+void qore_rt_assign_auto_local_slot_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+//! Native-EH counterpart; throws QoreJITException on a populated exception sink.
+void qore_rt_assign_auto_local_slot_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+
 //! Checked pinned initializer with an optional prepared slot; v1 ownership and fallback contract.
 //! @param prepared_slot handle from qore_rt_get_class_local_slot_aot_v1 for this ctx/idx/invocation
 int qore_rt_try_assign_pinned_class_local_aot_v2(QoreAOTContext* ctx, int32_t idx,
@@ -1724,6 +1749,15 @@ void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xs
 
 //! Uninstantiate a local variable via AOT context slot (clear only, no pop)
 void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! Pop ordinary body storage owned by a direct AOT fast entry.
+/** @param ctx current AOT function context
+    @param idx noncaptured body local instantiated by this entry, in reverse push order
+    @param xsink receives any exception from destruction
+    @note Use only at function exit, including exceptional exit. Ordinary wrapper-owned
+    entries and block exits retain clear-only handling. No slot handle survives this pop.
+*/
+void qore_rt_pop_body_local_aot_v1(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 //! Pop a closure-use variable from the cvstack via AOT context slot
 //! Unlike qore_rt_uninstantiate_local_aot (which only clears), this properly pops

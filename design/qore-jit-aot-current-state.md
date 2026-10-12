@@ -215,8 +215,9 @@ the actual runtime slot, so reflection and subsequent reloads see the result.
 Neither side owns a node, so there is no conversion, reference scan, allocation,
 destructor or reentry to perform. Wide boxed integers, escaped floats, enums,
 nodes, weak/opaque values and reference-backed storage retain ordinary
-assignment. Declaration checks and the thread-local slot lookup are still
-performed per assignment; this is not a prepared-slot optimization.
+assignment. Declaration checks remain live per assignment. Without a prepared
+body-slot handle (described below), the helper also performs the ordinary
+thread-local slot lookup on every assignment.
 
 `QORE_DISABLE_AOT_DIRECT_SCALAR_STORE=1` restores the prior generic scalar
 storage operation after the same admission guards. The broader
@@ -238,6 +239,60 @@ block-map observation is required only in AST. Debug-native checks invoke both
 storage modes directly, asserting admission, exact bits, unchanged slots on
 rejection and node ownership. The optimization changes the AOT helper, not the
 interpreter or JIT local-store paths.
+
+### Prepared ordinary-auto body slots in AOT
+
+For normal checked assignments to an ordinary runtime-backed `auto` body local,
+AOT can resolve the actual runtime storage once per invocation. The compiler
+excludes parameters, captured/self/top-level/read-only locals, non-auto lvalue
+types, private IR-only storage and no-coerce assignments. The getter is inserted
+after the entry's local-instantiation prologue and native stack guard, not at
+the first instruction of a recursive callee before its own bindings exist.
+
+`qore_rt_get_auto_local_slot_aot_v1` takes the current AOT context, local index
+and borrowed same-thread `RuntimeConfig`. A missing context, mismatched Program
+or unsupported/unavailable slot returns null. The handle lives in generated
+invocation-local SSA, not a shared `QoreAOTContext` cache. It borrows storage,
+never a value or reference owner. Ordinary block exits clear values without
+popping that storage; recursive calls and stack-block growth retain the outer
+slot's address. No handle may survive its invocation's cleanup.
+
+`qore_rt_assign_auto_local_slot_aot_v1` uses the handle only to avoid lookup in
+the existing primitive-store shortcut. Every declaration, input and live-slot
+guard remains. A null handle uses ordinary lookup; an unsupported assignment
+keeps the original generic path, including weak/reference handling, ownership,
+destruction and errors. The native-EH counterpart preserves exception-sink
+propagation. Assignments still publish into the real slot, and caller reloads
+and reflective mutation are not elided.
+
+Direct AOT fast entries bypass the ordinary wrapper and instantiate their own
+runtime-backed ordinary body slots. Their function-exit cleanup must therefore
+pop those slots in reverse push order, using `qore_rt_pop_body_local_aot_v1`.
+Merely clearing them leaves a recursive child's binding above its parent's.
+The later entry-local cleanup skips ordinary body slots already handled by
+this loop. Wrapper-owned entries and block exits retain their existing
+clear-only behavior; captured locals retain their separate closure-stack
+lifecycle. Stack-guard failures before instantiation do not run body pops.
+
+`QORE_DISABLE_AOT_AUTO_LOCAL_SLOT` disables preparation when present during
+compilation. At runtime, presence sampled on the getter's first use makes it
+return null, retaining per-assignment lookup in the same executable. Neither
+control disables the body-pop correctness fix or the older scalar-store
+shortcut. No existing exported helper signature or serialized IR format changes;
+new versioned helpers and the changed runtime identity require matching,
+separately compiled before/after AOT artifacts.
+
+`AOTAutoLocalSlot.qtest` covers recursive parent values before overwrite,
+stack-block growth, repeated block lifetimes, representation changes, captured
+and typed fallbacks, destruction/reentry, exceptional cleanup and generated
+normal/fast-entry ownership at `-O0`/`-O3`, including stripped-source, native-EH,
+split, no-debug and disabled modes. Existing incomplete reflected maps for
+source-specialized recursion and repeated block locals remain explicit; this
+optimization does not claim to repair those maps. The native unit checks
+exercise prepared and looked-up slots with both primitive-store modes.
+`AOTLocalCleanupCancellation.qtest` verifies cancellation during cleanup
+emission rejects the partial LLVM function and permits reuse of the same
+lowerer after clearing cancellation, for both normal and fast entries.
 
 ### Checked AOT class-local initialization
 

@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AutoLocalSlotTest
+
+class AutoLocalSlotTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("AOT invocation-local auto slots", "1.0", \ARGV) {
+        addTestCase("prepared storage preserves recursive lifetime and live state", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTAutoLocalSlot.qr";
+        string expected = "auto-local-slot: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        assertEq(expected, run((qore, "--exec-mode=ast", source, "inspect")), "AST reflection reference");
+        TmpDir dir("qore-auto-local-slot-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ", "QORE_DISABLE_AOT_AUTO_LOCAL_SLOT=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool enabled = !prefix.startsWith("QORE_DISABLE_AOT_AUTO_LOCAL_SLOT");
+                foreach string name in (("autoSlotRecursive", "autoSlotReflect", "autoSlotCleanup")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name + "_(?![^\n]*_fast_)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " LLVM definition");
+                    assertEq(enabled, regex(body[0] ?? "", "call ptr @qore_rt_get_auto_local_slot_aot_v1"),
+                        name + " invocation-local slot " + prefix + level);
+                    assertEq(enabled, regex(body[0] ?? "", "(?:call|invoke) void @qore_rt_assign_auto_local_slot_aot"),
+                        name + " prepared assignment " + prefix + level);
+                    assertFalse(regex(body[0] ?? "", "qore_rt_pop_body_local_aot_v1"),
+                        name + " wrapper retains ownership of ordinary body slots");
+                }
+                foreach string name in (("autoSlotCaptured", "autoSlotParameter", "autoSlotTyped")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " LLVM definition");
+                    assertFalse(regex(body[0] ?? "", "qore_rt_get_auto_local_slot_aot_v1"),
+                        name + " keeps ordinary storage " + prefix + level);
+                }
+                *list<*string> fast_body = regex_extract(ir,
+                    "(?s)define [^\n]*@autoSlotRecursive_[^\n]*_fast_[^\n]*\n(.*?)\n\\}");
+                assertTrue(!!fast_body, "recursive direct fast entry LLVM definition");
+                assertTrue(regex(fast_body[0] ?? "", "call void @qore_rt_pop_body_local_aot_v1"),
+                    "recursive direct entry pops its own body slots");
+                if (enabled) {
+                    assertTrue(regex(fast_body[0] ?? "",
+                        "(?s)call void @qore_rt_instantiate_local_aot.*call ptr @qore_rt_get_auto_local_slot_aot_v1"),
+                        "recursive direct entry prepares storage after instantiation");
+                }
+                foreach string runtime in (("", "QORE_DISABLE_AOT_AUTO_LOCAL_SLOT=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_LOCAL_STORE=1 ", "QORE_DISABLE_AOT_DIRECT_SCALAR_STORE=1 ",
+                        "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
+                    assertEq(expected, run((executable, "inspect"), runtime), prefix + level + runtime);
+                }
+            }
+        }
+        string executable = dir.path + "/with-source";
+        run((qcc, "-O3", "-o", executable, source));
+        assertEq(expected, run((executable, "inspect")), "source-retaining artifact");
+    }
+}

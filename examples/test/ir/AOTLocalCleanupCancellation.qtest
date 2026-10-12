@@ -1,0 +1,84 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class LocalCleanupCancellationTest
+
+class LocalCleanupCancellationTest inherits QUnit::Test {
+    private {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+    }
+
+    constructor() : Test("AOT compiler local-cleanup cancellation", "1.0", \ARGV) {
+        addTestCase("cancelled cleanup is not published and the lowerer recovers", \native());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private string llvmConfig() {
+        if (ENV.LLVM_CONFIG) {
+            return ENV.LLVM_CONFIG;
+        }
+        # Prefer the exact tool selected by this build over a different LLVM
+        # installed on PATH. File access is test setup, outside a sandbox.
+        string cache = libdir + "/CMakeCache.txt";
+        if (is_file(cache)) {
+            string contents = File::readTextFile(cache);
+            *list<*string> match = regex_extract(contents,
+                "(?m)^LLVM_CONFIG_EXECUTABLE:FILEPATH=([^\r\n]+)");
+            if (match && is_executable(match[0])) {
+                return match[0];
+            }
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/llvm-config";
+            if (is_executable(path)) {
+                return path;
+            }
+        }
+        throw "TEST-SETUP-ERROR", "set LLVM_CONFIG to the llvm-config matching this Qore build";
+    }
+
+    private native() {
+        TmpDir dir("qore-local-cleanup-cancellation-");
+        string executable = dir.path + "/cleanup-test";
+        string llvm_config = llvmConfig();
+        string llvm_include = trim(run((llvm_config, "--includedir")));
+        string llvm_lib = trim(run((llvm_config, "--libdir")));
+        list<string> llvm_link = split(" ", trim(run((llvm_config, "--libs", "--system-libs"))));
+        # Internal headers also need the build's dependency paths (CPATH for
+        # nonstandard prefixes, as in NativeLeafContext). -O2 folds the null
+        # return-type argument in the inline private fast-entry setter; its
+        # general type-query implementation is intentionally not exported.
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-O2", "-g", "-DHAVE_UNIX_CONFIG_H",
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir,
+            "-I" + llvm_include, get_script_dir() + "/aot_local_cleanup_cancellation.cpp",
+            "-L" + libdir, "-L" + llvm_lib, "-Wl,-rpath," + libdir,
+            "-Wl,-rpath," + llvm_lib, "-lqore") + llvm_link + ("-o", executable);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        run(args);
+        string expected = "aot-local-cleanup-cancellation: ok\n";
+        assertEq(expected, run((executable,)));
+        assertEq(expected, run((executable,), "QORE_AOT_EH=1 "));
+    }
+}

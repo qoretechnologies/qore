@@ -11216,3 +11216,170 @@ covering argument/receiver/result cleanup and reentry, not just a pure
 same-Program callee. Neither follow-up is implemented by this change.
 
 [Verified measurements, adverse controls and qualification](results-aot-direct-scalar-store-macos-arm64.json).
+
+## Prepared ordinary-auto AOT body slots (2026-10-12)
+
+This change resolves eligible runtime-backed auto body-local storage once after
+callee instantiation and passes the borrowed address to checked assignments.
+It removes repeated slot lookup, not declaration/input/live-state checks,
+runtime publication, reflection, caller reloads or ownership handling. The
+handle is invocation-local, never shared or retained beyond cleanup. Parameters,
+captured/self/top/read-only/typed locals, private IR-only storage and no-coerce
+assignments are excluded. No existing helper ABI is removed.
+
+The first recursive fixture exposed a prerequisite correctness problem: direct
+fast entries pushed ordinary body slots but only cleared them on return. The
+strengthened baseline test fails before the parent overwrites its value; reverse
+body-slot pops fix it. Wrapper-owned entries and block exits remain clear-only,
+and captured locals retain their separate lifecycle. This fix is not disabled
+for performance comparisons. Cleanup emission also checks compiler cancellation
+every 100 scanned locals, rejects the partial function and permits reuse of the
+same lowerer. There is no new runtime hot-path cancellation polling.
+
+QORE_DISABLE_AOT_AUTO_LOCAL_SLOT is a presence control: at compilation it omits
+the getter/prepared assignment; at first runtime getter use it returns null,
+retaining lookup in the identical executable. Neither mode disables the cleanup
+fix or existing scalar-store shortcuts. Before/after use separately compiled,
+matching frozen compiler/runtime pairs because the runtime identity changed.
+
+### Selected qualification
+
+Release: 114 files, 417 cases / 34417 assertions, 15 standalones and 9 skipped.
+Debug: 114 files, 424 cases / 34516 assertions, 15 standalones and 8 skipped.
+Both builds pass seven exception/stack fixtures and IR/AOT reference grids.
+All 385 focused native checks, 17 harness tests, 555 references in each restored
+IR/AOT/Java-interpreted/Java-JIT mode and eight restored-release smoke fixtures
+pass. All 13 owned release qmod aliases/artifacts are restored and verified;
+unrelated aliases are unchanged. Eight Linux-only RSS checks per build are
+skipped on this Mac, plus the release debug-only short-string check. The native
+unit wrapper separately skips in release and executes in debug.
+
+The new auto-slot fixture has 331 assertions across AST/IR/JIT/tiered and AOT
+O0/O3, native-EH, split, no-debug, stripped-source and disabled configurations.
+It covers recursion beyond one stack block, repeated block lifetimes, reflective
+mutation, captured/typed/parameter fallbacks, representation changes, destruction,
+reentry and unwind. The existing incomplete source-specialized recursive/block
+reflection maps remain documented; full block-map inspection is AST-only.
+The compiler-cancellation fixture adds eight assertions with normal/fast entries,
+both rejection checkpoints, LLVM verification and same-lowerer recovery.
+This is not full-repository, sanitizer, leak or cross-platform qualification.
+
+Candidate identity: f78cd8166016eca2f463407c74f1f54254dcd15958dcc2ecbcb9d27f9b7ab000.
+Qualification: 50c298d8b1915c8ac68ac55aa8b5e5b28fc0df56750b8550b832863f3082f13c.
+
+### Initial screen and longer confirmation
+
+The first screen has 360 windows: six kernels, four Qore modes, three forks,
+three warmups and five 500-ms windows, count 4096, order seed 108126. Boxed int/float
+gains have separated observed baseline/off ranges, but list build is 1.205-1.959%
+slower with separated baseline ranges. No sample is removed.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Runtime disabled
+|boxed integer method|27.4263|25.7060 / 25.9442|6.273% / 5.404%|27.4722
+|boxed float method|34.2432|32.2182 / 32.3284|5.914% / 5.592%|34.0462
+|member updates|96.7754|94.7669 / 94.9249|2.075% / 1.912%|96.8115
+|native integer result|10.2619|10.1678 / 10.1655|0.918% / 0.940%|10.1385
+|list build|82.4490|84.0641 / 83.4423|-1.959% / -1.205%|83.1157
+|list mutation|228.4857|225.4465 / 225.3863|1.330% / 1.357%|226.4048
+
+The fixed longer confirmation has 600 windows: the same six kernels/four modes,
+five forks, three warmups and five 750-ms windows, count 4096, seed 109127. Boxed
+int/float gains repeat against baseline/off with separated ranges. Member-update,
+native-int and list-mutation comparisons overlap. List build is 1.459-2.852%
+slower with overlapping ranges; this does not erase the earlier result. All
+A/A ranges overlap. Neither run times Java.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Runtime disabled
+|boxed integer method|27.5608|25.6865 / 26.0591|6.801% / 5.449%|27.7258
+|boxed float method|34.4672|32.3994 / 32.3951|5.999% / 6.012%|33.9778
+|member updates|96.4847|95.1503 / 95.3594|1.383% / 1.166%|97.7370
+|native integer result|10.3882|10.0966 / 10.1206|2.807% / 2.576%|10.1089
+|list build|82.2832|83.4834 / 84.6300|-1.459% / -2.852%|84.2805
+|list mutation|228.7899|226.5672 / 226.2598|0.971% / 1.106%|226.4852
+
+### Matched Java comparison
+
+Archive aot-auto-slot-final-bench-xwg61goo has 165 jobs / 825 measured windows:
+eleven kernels, baseline, enabled A/A, same-binary runtime-off and Java JIT,
+three forks, three warmups, five 500-ms windows, count 4096, seed 117129. Java uses
+Temurin 25.0.2/JMH 1.37 with checked generated target dontinline hints. All modes
+pass 555 references; source/artifact hashes and library selection are verified.
+No other owned work overlaps timing. Every raw window is independently replayed.
+
+Values are medians of fork means in whole-workload ns/element, not isolated
+call latency. Positive reductions mean less elapsed time. Runtime contracts,
+representation, ownership and synchronization differ between Qore and Java.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Runtime disabled|!Java JIT|!Enabled / Java
+|boxed integer method|27.6506|26.1308 / 25.6985|5.496% / 7.060%|28.1138|2.3446|11.15 / 10.96x
+|boxed float method|35.0381|32.9671 / 32.9212|5.911% / 6.042%|34.6775|2.5595|12.88 / 12.86x
+|member updates|97.8814|96.0037 / 96.9536|1.918% / 0.948%|98.5485|1.8693|51.36 / 51.87x
+|read-only integer member|42.3394|40.5357 / 40.8622|4.260% / 3.489%|42.3764|2.5726|15.76 / 15.88x
+|read-only float member|47.1359|45.7988 / 45.2370|2.837% / 4.029%|47.3563|2.5234|18.15 / 17.93x
+|native integer result|10.4031|10.1207 / 10.3155|2.714% / 0.842%|10.1012|3.0596|3.31 / 3.37x
+|native float result|11.2862|11.5123 / 11.4955|-2.003% / -1.854%|11.3595|3.4678|3.32 / 3.31x
+|indirect integer result|6.9083|6.8807 / 6.9232|0.400% / -0.215%|6.9313|1.8778|3.66 / 3.69x
+|indirect float result|8.8476|8.8337 / 8.8337|0.157% / 0.158%|8.8615|2.7879|3.17 / 3.17x
+|list build|83.4258|85.3845 / 84.6187|-2.348% / -1.430%|84.7275|2.5397|33.62 / 33.32x
+|list mutation|229.2804|228.7152 / 230.0634|0.246% / -0.342%|230.9583|4.0667|56.24 / 56.57x
+
+Both boxed-call targets, read-only members and member updates improve against
+baseline/off with separated observed ranges. Native-int baseline ranges separate
+but its off comparisons overlap, so its gain is not attributed to slot lookup.
+Indirect controls overlap. Native float is 1.854-2.003% slower: enabled-A baseline
+ranges separate, enabled-B overlaps. List build is 1.430-2.348% slower with
+separated baseline ranges in both arms; off comparisons overlap. List mutation
+has mixed medians and separated A/A ranges. Read-only float A/A also separates.
+Observed ranges are descriptive, not confidence intervals or causal proof.
+
+Verification: bb74556ce1a422df22bc83c8408a60c1cc4e557825f1049b0644e1b7b4b23713.
+
+### Compile-time control and retention
+
+The adverse controls prompted a separate fixed 300-window run, not a replacement
+sample: four kernels, five modes, three forks, three warmups, five 750-ms windows,
+count 4096, seed 118130. The extra executable is compiled with preparation disabled
+and uses the same candidate runtime/environment as enabled A/A. Symbol checks
+confirm no auto-slot getter/store while retaining correct body-slot pops. All
+five modes pass 555 references and matching-library checks. No Java timing here.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Runtime disabled|!Compile disabled
+|boxed integer method|27.5009|25.7439 / 25.8379|6.389% / 6.047%|27.8311|27.6095
+|boxed float method|34.0078|32.2915 / 32.5480|5.047% / 4.293%|34.0260|33.4435
+|native float result|11.1933|11.2793 / 11.4125|-0.769% / -1.959%|11.4533|11.1818
+|list build|83.0201|83.0851 / 84.0030|-0.078% / -1.184%|83.0320|83.3694
+
+Boxed integer gains 6.047-6.389% against baseline and 6.417-6.757% against compile-off;
+boxed float gains 4.293-5.047% and 2.678-3.445%, respectively. All these ranges
+separate, as do both runtime-off target comparisons. List build remains 0.078-1.184%
+slower in median, with overlapping baseline/runtime-off/compile-off ranges.
+Native float remains 0.769-1.959% slower, also with overlapping comparisons.
+All A/A ranges overlap. This does not establish equivalence, diagnose the
+earlier slowdowns or invalidate the separated adverse results in previous runs.
+
+Verification: 68ee94799be319b01fb9f2f360f0ad25f0c20435379517cec94048f0d5d58e82.
+
+Retention decision: retain the repeated boxed-call improvement with the modest
+adverse list/native-float results explicitly recorded, not as a universal
+execution speedup. All 2085 windows across four runs remain in the evidence.
+Disabling preparation has not isolated a separated list-build cost; the cleanup
+correctness fix is retained in every candidate control. No IR/JIT timing gain,
+Java parity, regression-free result or causal code-layout explanation is claimed.
+
+Four serial diagnostic profiles are excluded from timing evidence. Before/after
+list profiles show generic local assignment/lvalue cleanup, list/type checks,
+value ref/discard and list operations. Resolved Mach-O call inventories show no
+auto-slot helper in listBuild; the fast-entry call difference is clear-to-pop
+cleanup. Equal call counts/profile similarity do not prove equal runtime cost.
+Boxed profiles still show runtime-local reload/evaluation, per-store checks,
+typed method dispatch, ownership and stack/frame bookkeeping. Waiting signal
+thread samples are not application CPU work; sample weights are not latency
+attribution.
+
+Next: investigate prepared access for caller reloads and hoist only proved
+immutable declaration checks. Keep live slot/receiver guards, actual publication,
+cleanup/reentry semantics and observability. Typed list assignment/coercion is a
+separate execution bottleneck. The fastest retained-call workloads remain about
+3-4x Java; boxed calls about 11-13x and member updates about 52x in this matched run.
+
+[All verified samples, qualification and audit](results-aot-auto-local-slot-macos-arm64.json).
