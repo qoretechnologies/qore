@@ -80,6 +80,9 @@ module PerplexityRestClient {
 
     @subsection perplexityrestclientv1_0 PerplexityRestClient v1.0
     - initial release
+    - the provider factory reports, with @ref PerplexityRestClient::PerplexityLlmProviderFactory::getModelInfo()
+      "PerplexityLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
+      reasoning_always_on): \c sonar-reasoning-pro and \c sonar-deep-research
 */
 
 #! the PerplexityRestClient namespace contains all the objects in the PerplexityRestClient module
@@ -517,6 +520,28 @@ public class PerplexityLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProv
             "supports_structured_output": True,
             "supports_multimodal": False,
         };
+    }
+    #! Returns the provider's information for a model
+    /** The Sonar reasoning and deep research models cannot turn reasoning off (@ref
+        QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on").
+
+        Evidence:
+        - https://docs.perplexity.ai/docs/legacy/sonar/models/sonar-reasoning-pro: "The \c sonar-reasoning-pro model is
+          designed to output a <think> section containing reasoning tokens, immediately followed by a valid JSON
+          object"
+        - https://docs.perplexity.ai/docs/legacy/sonar/models/sonar-deep-research: the reasoning effort is \c low,
+          \c medium (the default) or \c high, with no setting that turns reasoning off
+        - \c sonar and \c sonar-pro are "Non-reasoning model"s; the deprecated \c sonar-reasoning has not been
+          verified
+
+        @param model the model ID that calls are made with
+
+        @since PerplexityRestClient 1.0
+    */
+    hash<QoreLlmUtils::LlmProviderInfo> getModelInfo(string model) {
+        hash<QoreLlmUtils::LlmProviderInfo> info = getInfo();
+        info.reasoning_always_on = inlist(model, ("sonar-reasoning-pro", "sonar-deep-research"));
+        return info;
     }
 }
 }

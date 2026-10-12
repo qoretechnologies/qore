@@ -598,6 +598,10 @@ public class CohereLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
 #! Factory for @ref CohereLlmProvider
 public class CohereLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    # reasoning: Cohere's reasoning models can turn thinking off, so getModelInfo() reports the provider's information
+    # (LlmProviderInfo::reasoning_always_on is False) for every model; evidence: https://docs.cohere.com/docs/reasoning:
+    # "For reasoning models, thinking is enabled by default", and the \c thinking type "disabled" "turns off thinking"
+
     string getMode() {
         return "cohere";
     }

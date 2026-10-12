@@ -99,6 +99,9 @@ printf("%Y\n", ans.body);
     - verify authentication with the account listing endpoint without generating tokens
     - repair previously saved ping paths and automatic connection URLs on load
     - associate connections with the Fireworks AI application
+    - the provider factory reports, with @ref FireworksRestClient::FireworksLlmProviderFactory::getModelInfo()
+      "FireworksLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
+      reasoning_always_on): the GPT-OSS models and MiniMax M2
 
     @subsection FireworksRestClientv1_0 FireworksRestClient v1.0
     - initial release
@@ -365,6 +368,24 @@ public class FireworksLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvi
             "supports_structured_output": True,
             "supports_multimodal": True,
         };
+    }
+    #! Returns the provider's information for a model
+    /** The GPT-OSS models and MiniMax M2 cannot turn reasoning off (@ref
+        QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on").
+
+        Evidence, https://docs.fireworks.ai/api-reference/post-chatcompletions: GPT-OSS 120B and 20B accept "only
+        'low', 'medium', or 'high'. Does not support 'none', false, or integer values"; "MiniMax M2: Reasoning is
+        required (always on)"; the Qwen3, GLM, Kimi and DeepSeek V3.2 and V4 models use "'none' or false to disable",
+        and "Thinking-only models reject this value", which have not been verified one by one.
+
+        @param model the model ID that calls are made with
+
+        @since FireworksRestClient 1.1
+    */
+    hash<QoreLlmUtils::LlmProviderInfo> getModelInfo(string model) {
+        hash<QoreLlmUtils::LlmProviderInfo> info = getInfo();
+        info.reasoning_always_on = model =~ /^accounts\/fireworks\/models\/(gpt-oss-(20b|120b)|minimax-m2)$/;
+        return info;
     }
 }
 }

@@ -107,6 +107,9 @@ printf("%Y\n", ans.body);
 
     @subsection SGLangRestClientv1_0 SGLangRestClient v1.0
     - initial release
+    - the provider factory reports, with @ref SGLangRestClient::SGLangLlmProviderFactory::getModelInfo()
+      "SGLangLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
+      reasoning_always_on): DeepSeek-R1, the Qwen3 thinking models and the GPT-OSS models
 */
 
 #! the SGLangRestClient namespace contains all the objects in the SGLangRestClient module
@@ -440,6 +443,33 @@ public class SGLangLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvider
             "supports_structured_output": True,
             "supports_multimodal": True,
         };
+    }
+    #! Returns the provider's information for a model
+    /** Models that always reason cannot turn reasoning off (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on
+        "LlmProviderInfo::reasoning_always_on"); they are recognized when the served model name is the Hugging Face
+        model ID.
+
+        Evidence:
+        - https://docs.sglang.ai/advanced_features/separate_reasoning.html: "Qwen3-Thinking (e.g.,
+          Qwen3-235B-A22B-Thinking-2507): Use qwen3 or qwen3-thinking parser, always thinks"; standard Qwen3 "supports
+          enable_thinking in chat templates", and DeepSeek-V3.1/V3.2 is a "Hybrid model supporting both thinking and
+          non-thinking modes"
+        - https://docs.aws.amazon.com/bedrock/latest/userguide/kb-test-configure-reasoning.html: "Model reasoning is
+          always enabled for the DeepSeek-R1 model"
+        - GPT-OSS has the reasoning efforts \c low, \c medium and \c high and no setting that turns reasoning off
+          (https://console.groq.com/docs/api-reference, https://docs.fireworks.ai/api-reference/post-chatcompletions)
+        - the DeepSeek-R1 distillations and Kimi K2 Thinking have not been verified
+
+        @param model the model ID that calls are made with
+
+        @since SGLangRestClient 1.0
+    */
+    hash<QoreLlmUtils::LlmProviderInfo> getModelInfo(string model) {
+        hash<QoreLlmUtils::LlmProviderInfo> info = getInfo();
+        info.reasoning_always_on = model =~ /(^|\/)deepseek-r1(-0528)?$/i
+            || model =~ /(^|\/)qwen3-[^\/]*-thinking(-[0-9]{4})?$/i
+            || model =~ /(^|\/)gpt-oss-(20b|120b)$/i;
+        return info;
     }
 }
 }

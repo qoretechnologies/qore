@@ -110,6 +110,9 @@ printf("%Y\n", ans.body);
     - synchronous clients honor deferred connection requests
     - JSON request serialization is explicit for synchronous and asynchronous clients
     - API version choices and authentication checks match the live service
+    - the provider factory reports, with @ref GroqRestClient::GroqLlmProviderFactory::getModelInfo()
+      "GroqLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c reasoning_always_on):
+      \c openai/gpt-oss-20b and \c openai/gpt-oss-120b
 
     @subsection GroqRestClientv1_0 GroqRestClient v1.0
     - initial release
@@ -455,6 +458,25 @@ public class GroqLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFa
             "supports_structured_output": True,
             "supports_multimodal": True,
         };
+    }
+    #! Returns the provider's information for a model
+    /** The GPT-OSS models cannot turn reasoning off (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on
+        "LlmProviderInfo::reasoning_always_on").
+
+        Evidence, https://console.groq.com/docs/api-reference: "\c openai/gpt-oss-20b and \c openai/gpt-oss-120b
+        support 'low', 'medium', or 'high'. 'medium' is the default value. Values outside a model's supported set are
+        rejected with a 400."; "qwen3 models support \c none to disable reasoning".
+        https://console.groq.com/docs/reasoning: with \c reasoning_format \c "hidden", "The model will still reason,
+        but the reasoning content will not be returned in the response."
+
+        @param model the model ID that calls are made with
+
+        @since GroqRestClient 1.1
+    */
+    hash<QoreLlmUtils::LlmProviderInfo> getModelInfo(string model) {
+        hash<QoreLlmUtils::LlmProviderInfo> info = getInfo();
+        info.reasoning_always_on = model =~ /^openai\/gpt-oss-(20b|120b)$/;
+        return info;
     }
 }
 }
