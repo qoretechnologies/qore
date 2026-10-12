@@ -77,6 +77,8 @@ module GeminiBodyShape {
       to Gemini \c toolConfig
     - @ref normalizeGenerationConfig() — model-specific generation controls, applied after body overrides
     - @ref lowestThinkingLevel() — the thinking level that a budget of zero selects on Gemini 3.x (\c LOW)
+    - @ref minimumThinkingBudget() — the budget that a budget of zero selects on Gemini 2.5 Pro (\c 128)
+    - @ref reasoningAlwaysOn() — whether a model spends reasoning tokens even with a budget of zero
     - @ref applyCachedContent() — make a request use a cached content resource
       (explicit prompt caching)
     - @ref shapeCachedContentBody() / @ref shapeCacheExpiration() — the bodies
@@ -115,7 +117,9 @@ module GeminiBodyShape {
     each model with \c reasoning_always_on (@ref QoreLlmUtils::AbstractLlmProviderFactory::getModelInfo()
     "getModelInfo()"), so that a caller can leave room for them. Without an explicit level, other budgets (including
     -1) leave the model default. \c disable_reasoning is not mapped to a level.
-    Older models, including Gemini 2.5, retain sampling parameters and numeric thinking budgets. Generic
+    Older models, including Gemini 2.5, retain sampling parameters and numeric thinking budgets; Gemini 2.5 Pro cannot
+    turn thinking off either and rejects a budget of zero, so a budget of zero selects its smallest budget, 128 (see
+    @ref minimumThinkingBudget()). Generic
     \c reasoning_effort is ignored for these models; Gemini 2.5's generateContent API does not accept thinking levels.
 
     @par Example
@@ -236,6 +240,9 @@ try {
     - Gemini 3.x uses qualitative thinking levels and omits deprecated sampling parameters and numeric budgets;
       a budget of zero selects the lowest thinking level that every provider accepts, \c LOW, since Gemini 3.x
       cannot turn thinking off; Gemini 2.5 retains its existing controls (see @ref geminibodyshapegeneration)
+    - a thinking budget of zero selects the smallest budget of Gemini 2.5 Pro, 128, which cannot turn thinking off
+      and rejected a budget of zero (@ref minimumThinkingBudget()); @ref reasoningAlwaysOn() says which models spend
+      reasoning tokens even with a budget of zero
     - explicit prompt caching: @ref shapeChatBody() takes a \c cached_content reference and then leaves out
       \c systemInstruction, \c tools and \c toolConfig, which belong to the cached content
       (@ref shapeCachedContentBody()); providers take it from
@@ -1563,9 +1570,108 @@ public string sub lowestThinkingLevel(string model) {
     return "LOW";
 }
 
+#! Returns the smallest thinking budget that a Gemini 2.5 model accepts
+/** Gemini 2.5 Pro cannot turn thinking off: it accepts thinking budgets from 128 to 32768 and rejects a budget of
+    zero.  Its smallest budget is what a thinking budget of zero selects for it.
+
+    Evidence:
+    - https://ai.google.dev/gemini-api/docs/thinking and
+      https://cloud.google.com/vertex-ai/generative-ai/docs/thinking: the budget of Gemini 2.5 Pro ranges from 128 to
+      32768 and thinking cannot be turned off; Gemini 2.5 Flash and Flash-Lite turn it off with a budget of zero
+    - measured on Vertex AI on 2026-10-12, with a 1.4 KB classifier prompt and a forced function call:
+      gemini-2.5-pro answers a budget of zero with HTTP 400 (\c "The model does not support setting thinking_budget
+      to 0"), and with a budget of 128 spends 79 reasoning tokens; gemini-2.5-flash and gemini-2.5-flash-lite spend
+      none with a budget of zero
+
+    @param model a bare model ID or a Gemini/Vertex model resource name
+
+    @return \c 128 for Gemini 2.5 Pro; \c 0 for the other models, including Gemini 3.x, which selects thinking
+    levels instead of budgets (see @ref lowestThinkingLevel())
+
+    @par Example
+    @code{.py}
+int budget = GeminiBodyShape::minimumThinkingBudget("gemini-2.5-pro"); # 128
+    @endcode
+
+    @since GeminiBodyShape 1.0
+*/
+public int sub minimumThinkingBudget(string model) {
+    model =~ s/^.*\///;
+    return model =~ /^gemini-2\.5-pro([.-]|$)/ ? 128 : 0;
+}
+
+#! Returns whether a model always spends reasoning tokens, even with a thinking budget of zero
+/** Gemini 3.x selects thinking levels, and even the lowest one, \c LOW (@ref lowestThinkingLevel()), spends reasoning
+    tokens: measured on Vertex AI on 2026-10-12 with a 1.4 KB classifier prompt and a forced function call,
+    gemini-3.7-flash spends 75 reasoning tokens, and on real classifier calls 100 to 175.  Gemini 2.5 Pro cannot go
+    below a budget of 128 (@ref minimumThinkingBudget()).
+
+    @param model a bare model ID or a Gemini/Vertex model resource name
+
+    @return @ref True for Gemini 3.x and Gemini 2.5 Pro
+
+    @par Example
+    @code{.py}
+bool always_on = GeminiBodyShape::reasoningAlwaysOn("gemini-2.5-pro"); # True
+    @endcode
+
+    @since GeminiBodyShape 1.0
+*/
+public bool sub reasoningAlwaysOn(string model) {
+    return usesThinkingLevel(model) || minimumThinkingBudget(model) > 0;
+}
+
+#! Gives a thinking budget of zero the smallest budget that the model accepts
+/** Gemini 2.5 Pro rejects a budget of zero (@ref minimumThinkingBudget()); other models are returned unchanged.
+
+    @param model the selected model ID or resource name
+    @param body the complete request body, including provider-specific overrides
+
+    @return the request body; the caller's hash is not modified
+*/
+hash<auto> sub raiseZeroThinkingBudget(string model, hash<auto> body) {
+    int minimum = minimumThinkingBudget(model);
+    if (!minimum) {
+        return body;
+    }
+    foreach string gen_key in (("generationConfig", "generation_config")) {
+        auto gen = body{gen_key};
+        if (gen.typeCode() != NT_HASH) {
+            continue;
+        }
+        foreach string tc_key in (("thinkingConfig", "thinking_config")) {
+            auto thinking = gen{tc_key};
+            if (thinking.typeCode() != NT_HASH) {
+                continue;
+            }
+            foreach string budget_key in (("thinkingBudget", "thinking_budget")) {
+                auto budget = thinking{budget_key};
+                if ((budget.typeCode() == NT_INT || budget.typeCode() == NT_FLOAT || budget.typeCode() == NT_NUMBER)
+                        && budget == 0) {
+                    # untyped copies: a caller's hash can have narrower value types than the budget set here
+                    hash<auto> tc = {};
+                    tc += thinking;
+                    tc{budget_key} = minimum;
+                    thinking = tc;
+                    hash<auto> new_gen = {};
+                    new_gen += gen;
+                    new_gen{tc_key} = tc;
+                    gen = new_gen;
+                    hash<auto> new_body = {};
+                    new_body += body;
+                    new_body{gen_key} = new_gen;
+                    body = new_body;
+                }
+            }
+        }
+    }
+    return body;
+}
+
 #! Applies Gemini 3 generation-parameter compatibility rules after all body overrides
 /** Removes deprecated sampling parameters and numeric thinking budgets for Gemini 3.x.
-    Other model families retain their existing request body. Both REST camelCase names and protobuf
+    Other model families retain their existing request body, except that a thinking budget of zero selects the smallest
+    budget of Gemini 2.5 Pro, which rejects zero (@ref minimumThinkingBudget()). Both REST camelCase names and protobuf
     snake_case aliases are handled. A supplied thinking level is normalized to uppercase.
 
     @param model the selected model ID or resource name
@@ -1588,7 +1694,7 @@ hash<auto> body = GeminiBodyShape::normalizeGenerationConfig("gemini-3.1-pro-pre
 */
 public hash<auto> sub normalizeGenerationConfig(string model, hash<auto> body) {
     if (!usesThinkingLevel(model)) {
-        return body;
+        return raiseZeroThinkingBudget(model, body);
     }
     # the hashes written below are untyped copies: a caller's hash can have narrower value types than the values set
     # here (ex: a thinkingConfig hash<string, int> with only a budget, which gets a thinking level)
@@ -1687,7 +1793,8 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
         - \c max_output_tokens (\c int): mapped to \c generationConfig.maxOutputTokens
         - \c temperature (\c float): mapped to \c generationConfig.temperature
         - \c reasoning_token_budget (\c *int): mapped to
-          \c generationConfig.thinkingConfig.thinkingBudget for models before Gemini 3; on Gemini 3.x, zero selects
+          \c generationConfig.thinkingConfig.thinkingBudget for models before Gemini 3, where zero selects the
+          smallest budget of Gemini 2.5 Pro, \c 128 (@ref minimumThinkingBudget()); on Gemini 3.x, zero selects
           the lowest thinking level that every provider accepts, \c LOW (@ref lowestThinkingLevel())
         - \c reasoning_effort (\c *string): Gemini 3.x \c thinkingLevel; \c xhigh and \c max map to \c HIGH
         - \c extra_body (<tt>*hash&lt;auto&gt;</tt>): merged into the final body so

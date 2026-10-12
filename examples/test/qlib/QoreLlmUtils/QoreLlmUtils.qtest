@@ -3202,9 +3202,20 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("compatible", compatible.complete("fixture", "fixture").content);
         assertEq("/v1/chat/completions", gemini_handler.requests[0].path,
             "model names alone must not switch compatible servers to Responses");
-        assertThrows("LLM-CONFIG-ERROR", sub () {
-            backend.chatCompletions({"model": "gpt-6-astra", "reasoning_effort": "none", "messages": ()});
-        });
+        # models that cannot turn reasoning off reject reasoning_effort none before the request is sent
+        foreach string model in (("gpt-6-astra", "gpt-6.1-sol", "o4-mini", "gpt-5-mini", "gpt-5.5-pro")) {
+            assertThrows("LLM-CONFIG-ERROR", "lowest effort", sub () {
+                backend.chatCompletions({"model": model, "reasoning_effort": "none", "messages": ()});
+            }, NOTHING, model);
+        }
+        # other GPT-6 models turn reasoning off
+        foreach string model in (("gpt-6-luna", "gpt-6-sol")) {
+            installGeminiHandler({"/v1/responses": {"code": 200, "body": responsesFixture()}});
+            backend.chatCompletions({"model": model, "reasoning_effort": "none",
+                "messages": ({"role": "user", "content": "fixture"},)});
+            assertEq("/v1/responses", gemini_handler.requests[0].path, model);
+            assertEq({"effort": "none"}, gemini_handler.requests[0].body.reasoning, model);
+        }
     }
 
     openAiResponsesFailureTest() {
@@ -4926,6 +4937,31 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         body = gemini_handler.requests[0].body;
         assertEq("disabled", body.thinking.type,
             "disable_reasoning turns Anthropic thinking off");
+        assertFalse(body.hasKey("output_config"));
+
+        # models that accept thinking disabled
+        foreach string model in (("claude-opus-5", "claude-sonnet-5", "claude-haiku-5-5", "claude-opus-4-8")) {
+            installGeminiHandler({"/v1/messages": reply});
+            llm.chat(msgs, NOTHING, <LlmRequestOptions>{"model": model, "disable_reasoning": True});
+            body = gemini_handler.requests[0].body;
+            assertEq({"type": "disabled"}, body.thinking, model);
+            assertFalse(body.hasKey("output_config"), model);
+        }
+        # models that cannot turn thinking off reject thinking disabled with HTTP 400; they get their lowest effort
+        foreach string model in (("claude-fable-5", "claude-fable-5-1", "claude-mythos-5", "claude-mythos-5-1",
+                "claude-mythos-preview", "claude-opus-5-5", "claude-opus-5-5-20261015")) {
+            installGeminiHandler({"/v1/messages": reply});
+            llm.chat(msgs, NOTHING, <LlmRequestOptions>{"model": model, "disable_reasoning": True,
+                "reasoning_effort": "high"});
+            body = gemini_handler.requests[0].body;
+            assertEq({"type": "adaptive"}, body.thinking, model);
+            assertEq({"effort": "low"}, body.output_config, model);
+        }
+        # Claude Sonnet 5.5 rejects thinking disabled too; it turns off the thinking before its answer
+        installGeminiHandler({"/v1/messages": reply});
+        llm.chat(msgs, NOTHING, <LlmRequestOptions>{"model": "claude-sonnet-5-5", "disable_reasoning": True});
+        body = gemini_handler.requests[0].body;
+        assertEq({"type": "between_tools"}, body.thinking);
         assertFalse(body.hasKey("output_config"));
 
         # reasoning_effort -> adaptive thinking at the requested effort

@@ -58,7 +58,7 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
         addTestCase("sampling and budget migration preserves other fields", \normalization());
         addTestCase("snake case aliases and empty configs", \aliases());
         addTestCase("a budget of zero selects the lowest thinking level on Gemini 3", \zeroBudget());
-        addTestCase("model info says that Gemini 3 cannot turn reasoning off", \modelInfo());
+        addTestCase("model info says that Gemini 3 and Gemini 2.5 Pro cannot turn reasoning off", \modelInfo());
         addTestCase("invalid config rejects before sending", \invalid());
         addTestCase("chat shaping handles reasoning effort", \shaping());
         addTestCase("both providers resolve options before normalization", \providers());
@@ -80,6 +80,23 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
                 "models/gemini-3.5-flash", "projects/p/locations/global/publishers/google/models/gemini-3.8-flash",
                 "gemini-3-pro-preview", "gemini-3.1-pro-preview", "models/gemini-3.1-pro-preview")) {
             assertEq("LOW", GeminiBodyShape::lowestThinkingLevel(model), model);
+        }
+        # Gemini 2.5 Pro cannot turn thinking off: it rejects a budget of zero and accepts 128 to 32768
+        foreach string model in (("gemini-2.5-pro", "gemini-2.5-pro-preview-06-05", "models/gemini-2.5-pro",
+                "projects/p/locations/global/publishers/google/models/gemini-2.5-pro")) {
+            assertEq(128, GeminiBodyShape::minimumThinkingBudget(model), model);
+            assertTrue(GeminiBodyShape::reasoningAlwaysOn(model), model);
+        }
+        # a budget of zero turns thinking off on the other Gemini 2.5 models
+        foreach string model in (("gemini-2.5-flash", "gemini-2.5-flash-lite", "models/gemini-2.5-flash-lite",
+                "gemini-2.5-professional", "custom-model", "")) {
+            assertEq(0, GeminiBodyShape::minimumThinkingBudget(model), model);
+            assertFalse(GeminiBodyShape::reasoningAlwaysOn(model), model);
+        }
+        # Gemini 3.x selects thinking levels, and none of them turns thinking off
+        foreach string model in (("gemini-3.7-flash", "gemini-3.1-pro-preview", "models/gemini-3.5-flash")) {
+            assertEq(0, GeminiBodyShape::minimumThinkingBudget(model), model);
+            assertTrue(GeminiBodyShape::reasoningAlwaysOn(model), model);
         }
     }
 
@@ -147,6 +164,32 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
             }});
             assertEq({"maxOutputTokens": 180, "thinkingConfig": {"thinkingBudget": 0}}, body.generationConfig, model);
         }
+        # Gemini 2.5 Pro rejects a budget of zero, so it gets the smallest budget that it accepts
+        foreach string model in (("gemini-2.5-pro", "projects/p/locations/global/publishers/google/models/"
+                "gemini-2.5-pro")) {
+            hash<auto> body = GeminiBodyShape::normalizeGenerationConfig(model, {"generationConfig": {
+                "maxOutputTokens": 180, "temperature": 0.0, "thinkingConfig": {"thinkingBudget": 0,
+                "includeThoughts": False},
+            }});
+            assertEq({"maxOutputTokens": 180, "temperature": 0.0, "thinkingConfig": {"thinkingBudget": 128,
+                "includeThoughts": False}}, body.generationConfig, model);
+            # the snake case spelling, in a hash with narrow value types
+            hash<string, int> thinking = {"thinking_budget": 0};
+            body = GeminiBodyShape::normalizeGenerationConfig(model, {"generation_config": {
+                "thinking_config": thinking,
+            }});
+            assertEq({"thinking_config": {"thinking_budget": 128}}, body.generation_config, model);
+            # other budgets are kept
+            foreach int budget in ((-1, 128, 1024)) {
+                body = GeminiBodyShape::normalizeGenerationConfig(model, {"generationConfig": {
+                    "thinkingConfig": {"thinkingBudget": budget},
+                }});
+                assertEq({"thinkingConfig": {"thinkingBudget": budget}}, body.generationConfig, model);
+            }
+            # no thinking configuration
+            assertEq({"generationConfig": {"maxOutputTokens": 180}}, GeminiBodyShape::normalizeGenerationConfig(model,
+                {"generationConfig": {"maxOutputTokens": 180}}), model);
+        }
         # the chat body
         hash<auto> body = GeminiBodyShape::shapeChatBody((), NOTHING, NOTHING, {
             "model": "gemini-3.7-flash", "max_output_tokens": 180, "reasoning_token_budget": 0,
@@ -157,9 +200,15 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
         });
         assertEq({"maxOutputTokens": 180, "thinkingConfig": {"thinkingBudget": 0}},
             body.generationConfig{"maxOutputTokens", "thinkingConfig"});
+        body = GeminiBodyShape::shapeChatBody((), NOTHING, NOTHING, {
+            "model": "gemini-2.5-pro", "max_output_tokens": 180, "reasoning_token_budget": 0,
+        });
+        assertEq({"maxOutputTokens": 180, "thinkingConfig": {"thinkingBudget": 128}},
+            body.generationConfig{"maxOutputTokens", "thinkingConfig"});
     }
 
-    # both providers report, for each model, whether hidden reasoning can be turned off: not on Gemini 3.x
+    # both providers report, for each model, whether hidden reasoning can be turned off: not on Gemini 3.x or Gemini 2.5
+    # Pro
     modelInfo() {
         foreach QoreLlmUtils::AbstractLlmProviderFactory factory in ((new GeminiRestClient::GeminiLlmProviderFactory(),
                 new VertexAiRestClient::VertexAiLlmProviderFactory())) {
@@ -172,7 +221,13 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
                 # the rest is the provider's information
                 assertEq(info - "reasoning_always_on", model_info - "reasoning_always_on", model);
             }
-            foreach string model in (("gemini-2.5-flash", "gemini-2.5-pro", "models/gemini-2.5-flash", "custom-model")) {
+            # Gemini 2.5 Pro cannot turn thinking off either
+            foreach string model in (("gemini-2.5-pro", "models/gemini-2.5-pro",
+                    "projects/p/locations/global/publishers/google/models/gemini-2.5-pro")) {
+                assertTrue(factory.getModelInfo(model).reasoning_always_on, factory.getMode() + " " + model);
+            }
+            foreach string model in (("gemini-2.5-flash", "gemini-2.5-flash-lite", "models/gemini-2.5-flash",
+                    "custom-model")) {
                 assertEq(info, factory.getModelInfo(model), factory.getMode() + " " + model);
             }
         }

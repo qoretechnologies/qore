@@ -1,0 +1,265 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreLlmTypes
+%requires OpenAiRestClient
+%requires AzureOpenAiRestClient
+
+%exec-class LlmReasoningAlwaysOnTest
+
+#! Every LLM provider says, for each model, whether the model can turn hidden reasoning off
+/** The models in @ref LlmReasoningAlwaysOnTest::AlwaysOn cannot turn reasoning off; the evidence for each family is in
+    the provider module that reports it.  The models in @ref LlmReasoningAlwaysOnTest::CanTurnOff turn reasoning off, are
+    not reasoning models, or have not been verified, and are reported like the provider as a whole.
+*/
+class LlmReasoningAlwaysOnTest inherits QUnit::Test {
+    public {
+        #! models that cannot turn reasoning off, by provider mode
+        const AlwaysOn = {
+            "http": (
+                # no reasoning_effort below "low"
+                "o1", "o1-pro", "o3", "o3-mini", "o4-mini", "o4-mini-2025-04-16", "o3-mini-2025-01-31", "gpt-5-codex",
+                # no reasoning_effort below "minimal"
+                "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5-2025-08-07", "gpt-5-mini-2025-08-07", "models/gpt-5-nano",
+                # no reasoning_effort below "medium" or "high"
+                "gpt-5-pro", "gpt-5.2-pro", "gpt-5.4-pro", "gpt-5.5-pro",
+                # no reasoning_effort below "low"
+                "gpt-6-astra", "gpt-6.1-sol",
+                # the case of a model ID does not matter
+                "GPT-5-Mini",
+            ),
+            "azure-openai": (
+                "o1", "o1-pro", "o3", "o3-mini", "o4-mini", "o4-mini-2025-04-16", "gpt-5", "gpt-5-mini", "gpt-5-nano",
+                "gpt-5-codex", "gpt-5-pro",
+            ),
+            "anthropic": (
+                "claude-fable-5", "claude-fable-5-1", "claude-mythos-5", "claude-mythos-5-1", "claude-mythos-preview",
+                "claude-opus-5-5", "claude-opus-5-5-20261015", "claude-sonnet-5-5",
+            ),
+            "gemini": (
+                "gemini-3.7-flash", "gemini-3.1-pro-preview", "models/gemini-3.5-flash", "gemini-2.5-pro",
+                "models/gemini-2.5-pro",
+            ),
+            "vertex-ai": (
+                "gemini-3.7-flash", "projects/p/locations/global/publishers/google/models/gemini-3.7-flash",
+                "gemini-2.5-pro", "projects/p/locations/global/publishers/google/models/gemini-2.5-pro",
+            ),
+            "mistral": (
+                "magistral-medium-2509", "magistral-small-2509", "magistral-medium-2506", "magistral-small-2507",
+            ),
+            "grok": (
+                "grok-4.5", "grok-4.6", "grok-4.7", "grok-4.5-latest",
+            ),
+            "perplexity": (
+                "sonar-reasoning-pro", "sonar-deep-research",
+            ),
+            "groq": (
+                "openai/gpt-oss-20b", "openai/gpt-oss-120b",
+            ),
+            "together": (
+                "openai/gpt-oss-20b", "openai/gpt-oss-120b",
+            ),
+            "fireworks": (
+                "accounts/fireworks/models/gpt-oss-20b", "accounts/fireworks/models/gpt-oss-120b",
+                "accounts/fireworks/models/minimax-m2",
+            ),
+            "ollama": (
+                "gpt-oss", "gpt-oss:20b", "gpt-oss:120b", "gpt-oss:latest",
+            ),
+            "bedrock": (
+                "deepseek.r1-v1:0", "us.deepseek.r1-v1:0", "openai.gpt-oss-20b-1:0", "openai.gpt-oss-120b-1:0",
+                "gov.openai.gpt-oss-120b-1:0", "anthropic.claude-fable-5", "anthropic.claude-mythos-5-1",
+                "us.anthropic.claude-opus-5-5", "anthropic.claude-sonnet-5-5-v1:0", "global.anthropic.claude-fable-5-1",
+            ),
+            "sglang": (
+                "deepseek-ai/DeepSeek-R1", "deepseek-ai/DeepSeek-R1-0528", "Qwen/Qwen3-235B-A22B-Thinking-2507",
+                "Qwen/Qwen3-30B-A3B-Thinking-2507", "openai/gpt-oss-120b", "openai/gpt-oss-20b",
+            ),
+        };
+
+        #! models that turn reasoning off, are not reasoning models, or have not been verified, by provider mode
+        const CanTurnOff = {
+            "http": (
+                # reasoning_effort "none"
+                "gpt-5.1", "gpt-5.2", "gpt-5.3-codex", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.5",
+                "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-luna", "gpt-6-sol",
+                # not reasoning models
+                "gpt-4.1-mini", "gpt-4o", "gpt-5-chat-latest",
+                # not verified
+                "o3-pro", "gpt-6.1-luna", "o5", "custom-model", "",
+            ),
+            "azure-openai": (
+                # reasoning_effort "none", which Azure also documents for the GPT-6 models
+                "gpt-5.1", "gpt-5.1-codex", "gpt-5.1-codex-max", "gpt-5.1-codex-mini", "gpt-5.2", "gpt-5.4", "gpt-5.5",
+                "gpt-5.6", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna",
+                # not verified, or not a deployment named after its model
+                "o1-mini", "gpt-5.5-pro", "my-chat-deployment", "",
+            ),
+            "anthropic": (
+                # thinking disabled
+                "claude-opus-5", "claude-sonnet-5", "claude-haiku-5-5", "claude-opus-4-8", "claude-opus-4-7",
+                "claude-sonnet-4-6", "claude-haiku-4-5", "claude-opus-4-5-20251101",
+                # not verified
+                "claude-fable-5-2", "claude-opus-5-6", "claude-sonnet-5-55", "custom-model", "",
+            ),
+            "gemini": (
+                "gemini-2.5-flash", "gemini-2.5-flash-lite", "models/gemini-2.5-flash", "custom-model", "",
+            ),
+            "vertex-ai": (
+                "gemini-2.5-flash", "gemini-2.5-flash-lite",
+                "projects/p/locations/global/publishers/google/models/gemini-2.5-flash", "custom-model", "",
+            ),
+            "deepseek": (
+                # thinking disabled
+                "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash",
+                # retired aliases
+                "deepseek-chat", "deepseek-reasoner", "",
+            ),
+            "mistral": (
+                # reasoning_effort "none"
+                "mistral-large-4", "mistral-medium-3-5", "mistral-small-latest", "magistral-medium-latest",
+                "magistral-small-latest",
+                # not reasoning models
+                "mistral-large-latest", "mistral-large-2512",
+                # not verified
+                "magistral-medium", "custom-model", "",
+            ),
+            "grok": (
+                # reasoning_effort "none", or not a reasoning model
+                "grok-4.3", "grok-4.20-0309-non-reasoning",
+                # not verified
+                "grok-4.20-0309-reasoning", "grok-3-mini", "grok-build-0.1", "grok-4.8", "grok-4.55", "",
+            ),
+            "perplexity": (
+                # not reasoning models
+                "sonar", "sonar-pro",
+                # deprecated, not verified
+                "sonar-reasoning", "",
+            ),
+            "groq": (
+                # reasoning_effort "none"
+                "qwen/qwen3.8-27b", "qwen/qwen3-32b",
+                # not verified
+                "llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b", "",
+            ),
+            "together": (
+                # reasoning disabled
+                "deepseek-ai/DeepSeek-V4-Pro-0813", "zai-org/GLM-5.2", "moonshotai/Kimi-K3", "Qwen/Qwen3.6-Plus",
+                # not verified
+                "deepseek-ai/DeepSeek-R1", "",
+            ),
+            "fireworks": (
+                # reasoning_effort "none"
+                "accounts/fireworks/models/qwen3-235b-a22b", "accounts/fireworks/models/glm-4p6",
+                "accounts/fireworks/models/kimi-k3",
+                # not verified
+                "accounts/fireworks/models/deepseek-r1", "accounts/fireworks/models/minimax-m2p1", "",
+            ),
+            "ollama": (
+                # think false, or not verified
+                "qwen3:8b", "deepseek-r1:8b", "llama3.3", "gpt-oss-custom", "",
+            ),
+            "cohere": (
+                # thinking disabled
+                "command-a-reasoning-08-2025", "command-a-03-2025", "",
+            ),
+            "bedrock": (
+                # thinking or reasoning disabled
+                "anthropic.claude-opus-5", "us.anthropic.claude-sonnet-5", "anthropic.claude-opus-4-6-v1",
+                "amazon.nova-2-lite-v1:0",
+                # not verified
+                "openai.gpt-6.1-sol", "anthropic.claude-fable-5-2", "",
+            ),
+            "sglang": (
+                # enable_thinking, or not verified
+                "Qwen/Qwen3-8B", "deepseek-ai/DeepSeek-V3.2", "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+                "moonshotai/Kimi-K2-Thinking", "my-served-model", "",
+            ),
+        };
+    }
+
+    constructor() : Test("LlmReasoningAlwaysOn", "1.0", \ARGV) {
+        addTestCase("every provider has an expectation", \coverageTest());
+        addTestCase("models that cannot turn reasoning off", \alwaysOnTest());
+        addTestCase("models that can turn reasoning off", \canTurnOffTest());
+        addTestCase("OpenAI lowest reasoning efforts", \openAiLowestEffortTest());
+        addTestCase("Azure OpenAI lowest reasoning efforts", \azureLowestEffortTest());
+        set_return_value(main());
+    }
+
+    coverageTest() {
+        # a provider that is added to the registry needs to be verified
+        assertEq(sort(keys LlmProviderRegistry::ProviderModuleMap), sort(keys CanTurnOff));
+        # every provider with models that cannot turn reasoning off also has models that can, or are not verified
+        assertEq((), (select keys AlwaysOn, !CanTurnOff.hasKey($1)));
+        foreach string mode in (keys CanTurnOff) {
+            assertFalse(LlmProviderRegistry::getFactory(mode).getInfo().reasoning_always_on,
+                "the provider as a whole: " + mode);
+        }
+    }
+
+    alwaysOnTest() {
+        foreach hash<auto> i in (AlwaysOn.pairIterator()) {
+            AbstractLlmProviderFactory factory = LlmProviderRegistry::getFactory(i.key);
+            hash<LlmProviderInfo> info = factory.getInfo();
+            foreach string model in (i.value) {
+                hash<LlmProviderInfo> model_info = factory.getModelInfo(model);
+                assertTrue(model_info.reasoning_always_on, i.key + " " + model);
+                # the rest is the provider's information
+                assertEq(info - "reasoning_always_on", model_info - "reasoning_always_on", i.key + " " + model);
+            }
+        }
+    }
+
+    canTurnOffTest() {
+        foreach hash<auto> i in (CanTurnOff.pairIterator()) {
+            AbstractLlmProviderFactory factory = LlmProviderRegistry::getFactory(i.key);
+            hash<LlmProviderInfo> info = factory.getInfo();
+            foreach string model in (i.value) {
+                assertEq(info, factory.getModelInfo(model), i.key + " " + model);
+            }
+        }
+    }
+
+    openAiLowestEffortTest() {
+        map assertEq($1.value, OpenAiRestClient::OpenAiLlmProvider::getLowestReasoningEffort($1.key), $1.key), {
+            "o1": "low",
+            "o3-mini": "low",
+            "o4-mini-2025-04-16": "low",
+            "gpt-5": "minimal",
+            "gpt-5-nano": "minimal",
+            "gpt-5-mini-2025-08-07": "minimal",
+            "gpt-5-pro": "high",
+            "gpt-5-codex": "low",
+            "models/gpt-5": "minimal",
+            "gpt-5.2-pro": "medium",
+            "gpt-5.5-pro": "medium",
+            "gpt-6-astra": "low",
+            "gpt-6.1-sol": "low",
+        }.pairIterator();
+        map assertEq(NOTHING, OpenAiRestClient::OpenAiLlmProvider::getLowestReasoningEffort($1), $1),
+            ("gpt-5.1", "gpt-5.6-luna", "gpt-6-luna", "gpt-6-sol", "gpt-4.1-mini", "gpt-5-chat-latest", "o3-pro",
+             "o1-mini", "custom-model", "");
+    }
+
+    azureLowestEffortTest() {
+        map assertEq($1.value, AzureOpenAiRestClient::AzureOpenAiLlmProvider::getAzureLowestReasoningEffort($1.key),
+            $1.key), {
+            "o1": "low",
+            "o4-mini": "low",
+            "gpt-5-codex": "low",
+            "gpt-5": "minimal",
+            "gpt-5-nano-2025-08-07": "minimal",
+            "gpt-5-pro": "high",
+        }.pairIterator();
+        # Azure documents the reasoning effort none for the GPT-6 models
+        map assertEq(NOTHING, AzureOpenAiRestClient::AzureOpenAiLlmProvider::getAzureLowestReasoningEffort($1), $1),
+            ("gpt-6-astra", "gpt-6.1-sol", "gpt-5.1", "gpt-5.5-pro", "o1-mini", "my-chat-deployment", "");
+    }
+}

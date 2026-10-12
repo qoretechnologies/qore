@@ -86,6 +86,9 @@ printf("%Y\n", ans.body);
     @subsection MistralRestClientv1_2 MistralRestClient v1.2
     - support prompt-cache routing keys for synchronous and streaming LLM requests
     - expose model-specific reasoning choices for application policy adapters
+    - the provider factory reports, with @ref MistralRestClient::MistralLlmProviderFactory::getModelInfo()
+      "MistralLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
+      reasoning_always_on): the dated Magistral models
 
     @subsection MistralRestClientv1_1 MistralRestClient v1.1
     - support reasoning responses and streams, preserving reasoning across tool and conversation turns
@@ -472,6 +475,30 @@ public class MistralLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvide
             "supports_structured_output": True,
             "supports_multimodal": True,
         };
+    }
+    #! Returns the provider's information for a model
+    /** The Magistral models that reason natively cannot turn reasoning off (@ref
+        QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on").
+
+        Evidence:
+        - https://docs.mistral.ai/resources/deprecated/native-reasoning: "Native reasoning models always generate
+          thinking traces without any extra parameters"; these are the dated Magistral models, such as
+          \c magistral-medium-2509 and \c magistral-small-2509
+        - the reasoning models of @ref MistralRestClient::MistralRestClientBase::getModelReasoningEfforts()
+          "MistralRestClientBase::getModelReasoningEfforts()", including the \c magistral-medium-latest and
+          \c magistral-small-latest aliases, accept the reasoning effort \c "none" (verified against the reasoning API
+          on 2026-10-07); https://docs.mistral.ai/capabilities/reasoning/ describes it as "The model thinks minimally
+          and the thinking chunk is omitted from the response", and whether it spends reasoning tokens has not been
+          measured
+
+        @param model the model ID that calls are made with
+
+        @since MistralRestClient 1.2
+    */
+    hash<QoreLlmUtils::LlmProviderInfo> getModelInfo(string model) {
+        hash<QoreLlmUtils::LlmProviderInfo> info = getInfo();
+        info.reasoning_always_on = model =~ /^magistral-(small|medium)-[0-9]{4}$/;
+        return info;
     }
 }
 }

@@ -103,8 +103,9 @@ stream.close();
 
     @subsection GeminiRestClientv1_0 GeminiRestClient v1.0
     - the provider factory reports, with @ref GeminiRestClient::GeminiLlmProviderFactory::getModelInfo()
-      "GeminiLlmProviderFactory::getModelInfo()", that Gemini 3.x models cannot turn hidden reasoning off
-      (\c reasoning_always_on)
+      "GeminiLlmProviderFactory::getModelInfo()", that Gemini 3.x and Gemini 2.5 Pro models cannot turn hidden
+      reasoning off (\c reasoning_always_on); a reasoning budget of zero no longer fails on Gemini 2.5 Pro, which
+      rejected it
     - the provider info no longer asks callers for JSON text tool payloads
       (\c prefers_stringified_tool_payloads is @ref False): with the tool parameter schemas shaped for Gemini, the
       model fills nested tool payloads natively
@@ -642,15 +643,17 @@ public class GeminiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvider
     }
 
     #! Returns the provider's information for a model
-    /** Gemini 3.x models cannot turn hidden reasoning off (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on
-        "LlmProviderInfo::reasoning_always_on"): a reasoning budget of zero selects the lowest thinking level, whose
-        reasoning tokens come out of the output budget (see @ref geminibodyshapegeneration).
+    /** Gemini 3.x and Gemini 2.5 Pro models cannot turn hidden reasoning off
+        (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on"): a reasoning
+        budget of zero selects the lowest thinking level of Gemini 3.x and the smallest thinking budget of Gemini 2.5
+        Pro, whose reasoning tokens come out of the output budget (see @ref geminibodyshapegeneration and
+        @ref GeminiBodyShape::reasoningAlwaysOn() for the evidence).
 
         @param model the model ID or resource name that calls are made with
     */
     hash<QoreLlmUtils::LlmProviderInfo> getModelInfo(string model) {
         hash<QoreLlmUtils::LlmProviderInfo> info = getInfo();
-        info.reasoning_always_on = GeminiBodyShape::usesThinkingLevel(model);
+        info.reasoning_always_on = GeminiBodyShape::reasoningAlwaysOn(model);
         return info;
     }
 }

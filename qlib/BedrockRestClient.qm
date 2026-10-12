@@ -130,6 +130,10 @@ hash<ChatResponse> r = p.chat((
     - derives persistent runtime endpoints from the configured AWS region
     - verifies credentials without inference by listing foundation models
     - signs the encoded model identifiers in Converse and embedding requests without extra URI escaping
+    - the provider factory reports, with @ref BedrockRestClient::BedrockLlmProviderFactory::getModelInfo()
+      "BedrockLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off
+      (\c reasoning_always_on): DeepSeek-R1, the GPT-OSS models, Claude Fable 5 and 5.1, Claude Mythos 5, 5.1 and
+      Preview, Claude Opus 5.5 and Claude Sonnet 5.5
 
     @subsection bedrockrestclient_v1_0 BedrockRestClient v1.0
     - initial release
@@ -1139,6 +1143,43 @@ public class BedrockLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvide
             "supports_structured_output": False,  # no native response_format in Converse
             "supports_multimodal": True,
         };
+    }
+    #! Returns the provider's information for a model
+    /** DeepSeek-R1, the GPT-OSS models, and the Claude models whose thinking cannot be turned off cannot turn
+        reasoning off (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on");
+        model IDs and cross-region inference profile IDs (such as \c "us.deepseek.r1-v1:0") are recognized.
+
+        Evidence:
+        - https://docs.aws.amazon.com/bedrock/latest/userguide/kb-test-configure-reasoning.html: "Model reasoning is
+          always enabled for the DeepSeek-R1 model. The model does not support toggling the reasoning capability on
+          and off."
+        - https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-openai.html: "the model reasoning,
+          surrounded by <reasoning> tags, precedes the text content of the response"; GPT-OSS has the reasoning
+          efforts \c low, \c medium and \c high and no setting that turns reasoning off
+          (https://console.groq.com/docs/api-reference, https://docs.fireworks.ai/api-reference/post-chatcompletions)
+        - https://docs.aws.amazon.com/bedrock/latest/userguide/claude-messages-adaptive-thinking.html: "Claude Fable
+          5.1, Claude Mythos 5.1, Claude Mythos 5, and Claude Fable 5 only support adaptive thinking"; Claude Mythos
+          Preview, Claude Opus 5.5 and Claude Sonnet 5.5 cannot turn thinking off either (see
+          https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting)
+        - Amazon Nova 2 turns reasoning off with \c reasoningConfig \c {"type": "disabled"}, its default
+          (https://docs.aws.amazon.com/nova/latest/nova2-userguide/extended-thinking.html), and Claude Opus 5 and
+          Claude Sonnet 5 accept \c thinking \c {"type": "disabled"}
+
+        @param model the model ID or inference profile ID that calls are made with
+
+        @note This provider does not map reasoning options: a call uses the model's default reasoning, and Claude
+        Opus 5 and Claude Sonnet 5 think by default ("Adaptive thinking is on by default on Claude Sonnet 5 and Claude
+        Opus 5")
+
+        @since BedrockRestClient 1.1
+    */
+    hash<QoreLlmUtils::LlmProviderInfo> getModelInfo(string model) {
+        hash<QoreLlmUtils::LlmProviderInfo> info = getInfo();
+        string id = model.lwr();
+        info.reasoning_always_on = id =~ /^([a-z-]+\.)?deepseek\.r1-v1:0$/
+            || id =~ /^([a-z-]+\.)?openai\.gpt-oss-(20b|120b)-1:0$/
+            || id =~ /^([a-z-]+\.)?anthropic\.claude-((fable|mythos)-5(-1)?|mythos-preview|opus-5-5|sonnet-5-5)(-[0-9]{8})?(-v[0-9]+(:[0-9]+)?)?$/;
+        return info;
     }
 }
 

@@ -595,6 +595,13 @@ hash<QoreLlmUtils::LlmBackendConfig> sub applyDeepSeekDefaults(
 
 #! Factory for @ref DeepSeekLlmProvider
 public class DeepSeekLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    # reasoning: every current DeepSeek model can turn thinking off, so getModelInfo() reports the provider's
+    # information (LlmProviderInfo::reasoning_always_on is False) for every model; evidence:
+    # https://api-docs.deepseek.com/guides/thinking_mode: {"thinking": {"type": "enabled/disabled"}}, "Thinking mode is
+    # enabled by default"; https://api-docs.deepseek.com/updates: the legacy model names deepseek-chat and
+    # deepseek-reasoner pointed to the non-thinking and thinking modes of deepseek-v4-flash and were discontinued on
+    # 2026-07-24
+
     string getMode() {
         return "deepseek";
     }

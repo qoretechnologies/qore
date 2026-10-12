@@ -108,6 +108,13 @@ stream.close();
 
     @subsection AnthropicRestClientv1_0 AnthropicRestClient v1.0
     - initial release
+    - the provider factory reports, with @ref AnthropicRestClient::AnthropicLlmProviderFactory::getModelInfo()
+      "AnthropicLlmProviderFactory::getModelInfo()", which Claude models cannot turn thinking off
+      (\c reasoning_always_on): Claude Fable 5 and 5.1, Claude Mythos 5, 5.1 and Preview, Claude Opus 5.5 and Claude
+      Sonnet 5.5
+    - @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" no longer makes requests fail on
+      the Claude models that reject \c thinking \c {"type": "disabled"}: Claude Sonnet 5.5 turns off its thinking
+      before its first answer, and the models whose thinking is always on think at the lowest effort
 */
 
 %requires json
@@ -1058,12 +1065,59 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         }
     }
 
+    #! Returns whether a Claude model cannot turn thinking off
+    /** These models spend reasoning tokens even with the least thinking that they allow, and the reasoning tokens
+        come out of the \c max_tokens of the call.
+
+        Evidence:
+        - https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting: "Models marked Always on
+          cannot turn thinking off": Claude Fable 5 and 5.1, Claude Mythos 5 and 5.1, Claude Mythos Preview and Claude
+          Opus 5.5 reject \c thinking \c {"type": "disabled"}
+        - https://platform.claude.com/docs/en/build-with-claude/effort: on Claude Opus 5.5, "Adaptive thinking is
+          always on and can't be turned off", and "At lower effort levels, Claude still thinks on sufficiently
+          difficult problems"
+        - the same pages: Claude Sonnet 5.5 rejects \c "disabled" as well; \c {"type": "between_tools"} only turns
+          off its thinking before its first answer, and it still thinks after tool results
+        - Claude Opus 5, Claude Sonnet 5, Claude Haiku 5.5 and the Claude 4 models accept \c "disabled"; Claude Opus 5
+          and Claude Haiku 5.5 only at the effort \c high or below, which includes their default effort
+
+        @param model the model ID; a snapshot date suffix is ignored
+
+        @return @ref True for Claude Fable 5 and 5.1, Claude Mythos 5, 5.1 and Preview, Claude Opus 5.5 and Claude
+        Sonnet 5.5; @ref False for other models, including models that have not been verified
+
+        @par Example
+        @code{.py}
+bool always_on = AnthropicLlmProvider::reasoningAlwaysOn("claude-opus-5-5"); # True
+        @endcode
+
+        @since AnthropicRestClient 1.0
+    */
+    public static bool reasoningAlwaysOn(string model) {
+        return thinkingIsAlwaysOn(model) || thinksBetweenTools(model);
+    }
+
+    #! True for the Claude models whose thinking is always on, whatever the request says
+    private static bool thinkingIsAlwaysOn(string model) {
+        string id = model.lwr();
+        return id =~ /^claude-(fable|mythos)-5(-1)?(-[0-9]{8})?$/
+            || id =~ /^claude-mythos-preview(-[0-9]{8})?$/
+            || id =~ /^claude-opus-5-5(-[0-9]{8})?$/;
+    }
+
+    #! True for the Claude models that turn off their thinking only before their first answer
+    private static bool thinksBetweenTools(string model) {
+        return model.lwr() =~ /^claude-sonnet-5-5(-[0-9]{8})?$/;
+    }
+
     #! Builds an Anthropic Messages API request body
     #! Adds the Anthropic reasoning controls the caller asked for
     /** Maps the provider-neutral reasoning options onto the Messages API:
 
         - @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning maps to
-          \c thinking.type \c "disabled"
+          \c thinking.type \c "disabled"; models that reject it get the least thinking that they allow: Claude Sonnet
+          5.5 gets \c thinking.type \c "between_tools", and the models whose thinking is always on (see
+          @ref reasoningAlwaysOn()) get adaptive thinking at the lowest effort, \c low
         - @ref QoreLlmUtils::LlmRequestOptions::reasoning_effort maps to
           \c output_config.effort, with \c thinking.type \c "adaptive"
 
@@ -1089,7 +1143,21 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         *bool disable_reasoning = getRequestDisableReasoning(opts);
         if (disable_reasoning) {
-            body.thinking = {"type": "disabled"};
+            string model = body.model ?? "";
+            if (thinkingIsAlwaysOn(model)) {
+                # "disabled" is rejected with HTTP 400 at every effort
+                body.thinking = {"type": "adaptive"};
+                hash<auto!> output_config;
+                if (body.output_config.typeCode() == NT_HASH) {
+                    output_config += body.output_config;
+                }
+                output_config.effort = "low";
+                body.output_config = output_config;
+            } else if (thinksBetweenTools(model)) {
+                body.thinking = {"type": "between_tools"};
+            } else {
+                body.thinking = {"type": "disabled"};
+            }
             return body;
         }
         *string effort = getRequestReasoningEffort(opts);
@@ -1320,6 +1388,26 @@ public class AnthropicLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvi
             "supports_structured_output": True,
             "supports_multimodal": True,
         };
+    }
+
+    #! Returns the provider's information for a model
+    /** Claude models whose thinking cannot be turned off (see
+        @ref AnthropicRestClient::AnthropicLlmProvider::reasoningAlwaysOn() "AnthropicLlmProvider::reasoningAlwaysOn()"
+        for the models and the evidence) are reported with
+        @ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on".
+
+        @param model the model ID that calls are made with
+
+        @note A reasoning token budget is not mapped on Anthropic: a call without
+        @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" or a reasoning effort uses the
+        model's default, and Claude Opus 5, Claude Sonnet 5 and Claude Haiku 5.5 think by default
+
+        @since AnthropicRestClient 1.0
+    */
+    hash<QoreLlmUtils::LlmProviderInfo> getModelInfo(string model) {
+        hash<QoreLlmUtils::LlmProviderInfo> info = getInfo();
+        info.reasoning_always_on = AnthropicLlmProvider::reasoningAlwaysOn(model);
+        return info;
     }
 }
 }

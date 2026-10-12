@@ -94,6 +94,9 @@ printf("%Y\n", ans.body);
     - automatic connections always use the service URL and identify the Together AI app
     - JSON serialization is configured consistently for direct and connection-created clients
     - the authenticated model catalog ping performs no inference; an invalid API key fails the ping
+    - the provider factory reports, with @ref TogetherRestClient::TogetherLlmProviderFactory::getModelInfo()
+      "TogetherLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
+      reasoning_always_on): \c openai/gpt-oss-20b and \c openai/gpt-oss-120b
 
     @subsection TogetherRestClientv1_0 TogetherRestClient v1.0
     - initial release
@@ -373,6 +376,24 @@ public class TogetherLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvid
             "supports_structured_output": True,
             "supports_multimodal": True,
         };
+    }
+    #! Returns the provider's information for a model
+    /** The GPT-OSS models cannot turn reasoning off (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on
+        "LlmProviderInfo::reasoning_always_on").
+
+        Evidence, https://docs.together.ai/docs/inference/chat/reasoning: the hybrid models support "both reasoning
+        and non-reasoning modes via \c reasoning={"enabled": True/False}", while GPT-OSS has an "Adjustable effort",
+        \c low, \c medium or \c high, and no setting that turns reasoning off.  The models that are available only
+        for dedicated inference, such as DeepSeek-R1, have not been verified.
+
+        @param model the model ID that calls are made with
+
+        @since TogetherRestClient 1.1
+    */
+    hash<QoreLlmUtils::LlmProviderInfo> getModelInfo(string model) {
+        hash<QoreLlmUtils::LlmProviderInfo> info = getInfo();
+        info.reasoning_always_on = model =~ /^openai\/gpt-oss-(20b|120b)$/;
+        return info;
     }
 }
 }

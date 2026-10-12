@@ -121,6 +121,9 @@ stream.close();
 
     @subsection GrokRestClientv1_0 GrokRestClient v1.0
     - initial release
+    - the provider factory reports, with @ref GrokRestClient::GrokLlmProviderFactory::getModelInfo()
+      "GrokLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c reasoning_always_on):
+      Grok 4.5, 4.6 and 4.7
 */
 
 %requires json
@@ -588,6 +591,25 @@ public class GrokLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFa
             "supports_structured_output": True,
             "supports_multimodal": True,
         };
+    }
+    #! Returns the provider's information for a model
+    /** Grok 4.5, 4.6 and 4.7 cannot turn reasoning off (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on
+        "LlmProviderInfo::reasoning_always_on").
+
+        Evidence, https://docs.x.ai/docs/guides/reasoning: "\c grok-4.7, \c grok-4.6, and \c grok-4.5 support the
+        \c reasoning_effort parameter ... If not specified, \c reasoning_effort defaults to "high". Reasoning cannot be
+        disabled."; their lowest effort is \c low.  \c grok-4.3 accepts the reasoning effort \c none
+        (https://docs.x.ai/developers/models/grok-4.3.md), and \c grok-4.20-0309-non-reasoning does not reason;
+        \c grok-4.20-0309-reasoning, \c grok-build-0.1 and \c grok-3-mini have not been verified.
+
+        @param model the model ID that calls are made with
+
+        @since GrokRestClient 1.0
+    */
+    hash<QoreLlmUtils::LlmProviderInfo> getModelInfo(string model) {
+        hash<QoreLlmUtils::LlmProviderInfo> info = getInfo();
+        info.reasoning_always_on = model =~ /^grok-4\.[567](-latest)?$/;
+        return info;
     }
 }
 }

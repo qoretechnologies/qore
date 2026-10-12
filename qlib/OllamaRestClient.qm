@@ -79,6 +79,9 @@ module OllamaRestClient {
 
     @subsection OllamaRestClientv1_0 OllamaRestClient v1.0
     - initial release
+    - the provider factory reports, with @ref OllamaRestClient::OllamaLlmProviderFactory::getModelInfo()
+      "OllamaLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
+      reasoning_always_on): the GPT-OSS models
 */
 
 %requires json
@@ -318,6 +321,24 @@ public class OllamaLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvider
             "supports_structured_output": True,
             "supports_multimodal": True,
         };
+    }
+    #! Returns the provider's information for a model
+    /** The GPT-OSS models cannot turn reasoning off (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on
+        "LlmProviderInfo::reasoning_always_on").
+
+        Evidence, https://docs.ollama.com/capabilities/thinking: \c think \c false "request[s] no thinking output, if
+        the model permits it", and the thinking values of GPT-OSS are \c "low", \c "medium" and \c "high", with
+        \c "medium" the default, so that it cannot be turned off.  The thinking values of other models depend on the
+        model (\c /api/show) and have not been verified.
+
+        @param model the model ID that calls are made with
+
+        @since OllamaRestClient 1.0
+    */
+    hash<QoreLlmUtils::LlmProviderInfo> getModelInfo(string model) {
+        hash<QoreLlmUtils::LlmProviderInfo> info = getInfo();
+        info.reasoning_always_on = model =~ /^gpt-oss(:[^\/]*)?$/;
+        return info;
     }
 }
 }
