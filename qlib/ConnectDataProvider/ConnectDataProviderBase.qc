@@ -183,7 +183,7 @@ public class ConnectDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Returns provider description
     *string getDesc() {
-        return sprintf("Connect RPC provider for %s", m_opts.url);
+        return sprintf("Connect RPC provider for %s", get_masked_url(m_opts.url));
     }
 
     #! Returns the options

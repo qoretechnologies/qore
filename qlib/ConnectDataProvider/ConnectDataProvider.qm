@@ -226,6 +226,7 @@ auto result = provider.getChildProvider("Greeter/SayHello").doRequest({"name": "
     @section connectdataproviderrelnotes Release Notes
 
     @subsection connectdataprovider_v1_0 ConnectDataProvider Module Version 1.0
+    - the data provider descriptions give the URL without its password
     - initial release
 */
 

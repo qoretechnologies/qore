@@ -120,7 +120,7 @@ public class ConnectMethodDataProvider inherits DataProvider::AbstractDataProvid
 
     #! Returns provider description
     *string getDesc() {
-        return sprintf("Connect method '%s/%s' on %s", m_service, m_method, m_opts.url);
+        return sprintf("Connect method '%s/%s' on %s", m_service, m_method, get_masked_url(m_opts.url));
     }
 
     #! Returns the request type

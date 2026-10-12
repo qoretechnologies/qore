@@ -259,6 +259,7 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @section websocketclient_relnotes WebSocketClient Module Release History
 
     @subsection wsc_v2_5 v2.5
+    - the connect and reconnect log messages give the URL without its password
     - fixed a bug where a \c wss:// WebSocket connection in the default \c "auto" HTTP-version mode failed
       instead of connecting when the server negotiated HTTP/2 or HTTP/3 but could not establish the
       WebSocket over that connection (for example a reverse proxy such as nginx, which negotiates H2/H3 but
@@ -2934,7 +2935,7 @@ ws.setEventQueue();
     private reconnectPreamble() {
         # disconnect if still connected
         disconnectIntern();
-        logInfo("Reconnect to %y", url);
+        logInfo("Reconnect to %y", get_masked_url(url));
     }
 
     #! Connects to the server when reconnecting
@@ -3210,7 +3211,7 @@ ws.setEventQueue();
 
     #! Finalize connection (shared between HTTP/1.1 and HTTP/2)
     private finishConnect() {
-        logInfo("Connected to %y (http2: %y, http3: %y)", url, http2_websocket, http3_websocket);
+        logInfo("Connected to %y (http2: %y, http3: %y)", get_masked_url(url), http2_websocket, http3_websocket);
         ++num_connects;
         cid = seq.next();
     }

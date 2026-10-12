@@ -79,6 +79,7 @@ module RestSchemaDataProvider {
     @section restschemamdataprovider_relnotes Release Notes
 
     @subsection restschemamdataprovider_v2_4 RestSchemaDataProvider v2.4
+    - the data provider description gives the URL without its password
     - serialize OpenAPI parameter \c content before URI escaping, including JSON objects and arrays
     - OpenAPI multipart binary request fields accept named <tt>FileDataType</tt> values without losing
       filename or media type metadata; existing raw binary inputs remain supported

@@ -330,6 +330,7 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
     @section filelocationhandler_relnotes Release Notes
 
     @subsection filelocationhandler_v3_0 FileLocationHandler v3.0
+    - location errors give the location without its password
     - binary streams and stream readers of \c ftp(s):// locations deliver the file as it is received instead of
       reading the whole file into memory first, and an error in an FTP or SFTP transfer is raised by the stream
       instead of ending it as if the file were complete

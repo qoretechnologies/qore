@@ -1085,7 +1085,7 @@ getHandlerNames
         # check for unknown options
         if (validate_unknown && opts && (*hash<auto> erropts = opts - (keys handler_opts))) {
             throw "LOCATION-ERROR", sprintf("file location %y has unsupported %s option(s): %y; supported "
-                "options: %y", location, read ? "read" : "write", keys erropts, keys handler_opts);
+                "options: %y", get_masked_url(location), read ? "read" : "write", keys erropts, keys handler_opts);
         }
 
         # check for required and default option values; fix types
@@ -1103,8 +1103,8 @@ getHandlerNames
                 if (exists i.value.default_value) {
                     opts{i.key} = i.value.default_value;
                 } else if (i.value.required) {
-                    throw "LOCATION-ERROR", sprintf("file location %y is missing required option %y", location,
-                        i.key);
+                    throw "LOCATION-ERROR", sprintf("file location %y is missing required option %y",
+                        get_masked_url(location), i.key);
                 }
             }
         }
@@ -1207,7 +1207,7 @@ getHandlerNames
         *AbstractFileLocationHandler handler = cache{info.scheme};
         if (!handler) {
             throw "LOCATION-ERROR", sprintf("unknown location scheme %y in location %y; known location schemes: %y",
-                info.scheme, location, keys cache);
+                info.scheme, get_masked_url(location), keys cache);
         }
         info.handler = handler;
 
@@ -1248,7 +1248,7 @@ getHandlerNames
         auto v = parse_to_qore_value(opt_str);
         if (v.typeCode() != NT_HASH) {
             if (!v.strp()) {
-                throw "LOCATION-ERROR", sprintf("option value in %y cannot be parsed", location);
+                throw "LOCATION-ERROR", sprintf("option value in %y cannot be parsed", get_masked_url(location));
             }
             v = {v: True};
         }

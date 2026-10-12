@@ -143,6 +143,9 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - the debug message of a failed OAuth2 token request no longer contains the request body (with the client secret, a
+      refresh token, a password or an authorization code) and gives the request headers with their credentials redacted;
+      the ping debug message gives the URL without its password
     - synchronous requests with \c error_passthru enabled retain the normal bounded OAuth2 token
       refresh and retry behavior on authentication errors, including generic API calls with status policies
     - restored the documented \c oauth2_auto_refresh default of \c True when the option is omitted
@@ -3362,9 +3365,12 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     private hash<auto> doOAuth2LoginRequest(string url, hash<auto> login, *reference<hash<auto>> info,
             *string real_url) {
         on_success debug("OAuth2: POST to %y successful", real_url ?? url);
-        on_error debug("OAuth2: POST to %y failed: %s: %s request: %y headers: %y body: %y response: %y headers: %y "
-            "body: %y", real_url ?? url, $1.err, $1.desc, info."request-uri", info.headers, info."request-body",
-            info."response-uri", info."response-headers-raw", info."response-body");
+        # the request body (client secret, refresh token, password or authorization code) is not logged, and the
+        # request headers are logged with their credentials redacted
+        on_error debug("OAuth2: POST to %y failed: %s: %s request: %y headers: %y response: %y headers: %y body: %y",
+            get_masked_url(real_url ?? url), $1.err, $1.desc, info."request-uri",
+            RestDiagnostics::headers(info.headers), info."response-uri", info."response-headers-raw",
+            info."response-body");
 
         # get auth headers
         *hash<auto> hdr = getOAuth2AuthHeaders();
@@ -6078,7 +6084,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
         }
 
         string http_version = real_opts.http_version ?? "auto";
-        rc.debug("RestConnecton ping: start ping: %s %y path: %y http_version: %y hdr: %y", method, rc.getURL(),
+        rc.debug("RestConnecton ping: start ping: %s %y path: %y http_version: %y hdr: %y", method, rc.getSafeURL(),
             path, http_version, RestDiagnostics::headers(headers));
         state = SPS_REST_PING;
         poller = rc.startPollSendRecv(method, path, body, headers);

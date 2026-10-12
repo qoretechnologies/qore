@@ -288,7 +288,7 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
         if (connect) {
             if (!opts.readonly && (!is_writeable(urlh.path) || !dir.exists()))
                 throw "CONNECTION-ERROR", sprintf("connection %y (type %y url %y) points to non-existent, "
-                    "inaccessible, or read-only directory %y", name, urlh.protocol, url, urlh.path);
+                    "inaccessible, or read-only directory %y", name, urlh.protocol, safe_url, urlh.path);
         }
         return dir;
     }

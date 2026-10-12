@@ -633,7 +633,7 @@ public class McpClient {
 
         mgr = createConnectionManager();
 
-        logDebug("McpClient created for URL: %s", url);
+        logDebug("McpClient created for URL: %s", get_masked_url(url));
     }
 
     #! Destructor - closes the connection

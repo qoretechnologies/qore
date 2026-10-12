@@ -517,7 +517,7 @@ string ver = client.getVersion();
 
         if (resp.status_code < 200 || resp.status_code >= 300) {
             throw "JSONRPCCLIENTIO-HTTP-ERROR",
-                sprintf("HTTP error %d from %s", resp.status_code, url);
+                sprintf("HTTP error %d from %s", resp.status_code, get_masked_url(url));
         }
 
         if (!resp.body) {
@@ -548,7 +548,7 @@ string ver = client.getVersion();
 
         if (resp.status_code < 200 || resp.status_code >= 300) {
             throw "JSONRPCCLIENTIO-HTTP-ERROR",
-                sprintf("HTTP error %d from %s", resp.status_code, url);
+                sprintf("HTTP error %d from %s", resp.status_code, get_masked_url(url));
         }
 
         if (!resp.body) {

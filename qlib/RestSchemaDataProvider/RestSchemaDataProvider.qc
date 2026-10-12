@@ -225,7 +225,7 @@ public class RestSchemaDataProvider inherits RestSchemaDataProviderCommon {
             url = schema.getTargetUrl();
         }
         string type = isSwagger() ? "Swagger/OpenAPI 2.0" : "OpenAPI 3.0";
-        return sprintf("%s data provider for URL `%s` and URI path `%s`", type, url, uri_path);
+        return sprintf("%s data provider for URL `%s` and URI path `%s`", type, get_masked_url(url), uri_path);
     }
 
     #! Returns @ref True if the given string is inline schema content rather than a file/URL path

@@ -82,7 +82,7 @@ public class A2aClientDataProviderBase inherits DataProvider::AbstractDataProvid
             return options.a2a;
         }
         if (options.url) {
-            @debug("Creating A2A client from URL: %y", options.url);
+            @debug("Creating A2A client from URL: %y", get_masked_url(options.url));
             return new A2aClient(options.url);
         }
         return NOTHING;

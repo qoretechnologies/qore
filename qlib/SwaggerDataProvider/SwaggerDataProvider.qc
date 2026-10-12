@@ -243,7 +243,7 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
                 url += "/" + schema.basePath;
             }
         }
-        return sprintf("Swagger/OpenAPI data provider for URL `%s` and URI path `%s`", url, uri_path);
+        return sprintf("Swagger/OpenAPI data provider for URL `%s` and URI path `%s`", get_masked_url(url), uri_path);
     }
 
     #! Sets the schema and display name

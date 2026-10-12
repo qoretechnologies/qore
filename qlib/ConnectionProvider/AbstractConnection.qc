@@ -1230,7 +1230,7 @@ scheme://user:pass@hostname:port/path
         # check for control characters
         if (url =~ /[\x00-\x1f]/) {
             throw "CONNECTION-URL-ERROR", sprintf("Connection url %y is invalid, because it contains control "
-                "characters", url);
+                "characters", get_masked_url(url));
         }
         urlh = parseUrl(self.url);
         safe_url = getSafeUrl(self.urlh);

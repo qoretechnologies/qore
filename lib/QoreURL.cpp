@@ -84,7 +84,7 @@ public:
         zero();
         parse_intern(url, options, xsink);
         if (xsink && !*xsink && !isValid()) {
-            xsink->raiseException("PARSE-URL-ERROR", "URL '%s' cannot be parsed", url);
+            xsink->raiseException("PARSE-URL-ERROR", "URL '%s' cannot be parsed", q_mask_url_password(url).c_str());
         }
         return isValid() ? 0 : -1;
     }
@@ -271,7 +271,7 @@ private:
             if (right_bracket == std::string::npos) {
                 if (xsink) {
                     xsink->raiseException("PARSE-URL-ERROR", "URL '%s' has an IPv6 address without a closing ']'",
-                        buf);
+                        q_mask_url_password(buf).c_str());
                 }
                 invalidate();
                 return;
@@ -280,7 +280,7 @@ private:
             if (right_bracket + 1 < sbuf.size() && sbuf[right_bracket + 1] != ':') {
                 if (xsink) {
                     xsink->raiseException("PARSE-URL-ERROR", "URL '%s' has invalid characters after the IPv6 "
-                        "address", buf);
+                        "address", q_mask_url_password(buf).c_str());
                 }
                 invalidate();
                 return;
@@ -300,7 +300,7 @@ private:
                 if (port_start + 1 == sbuf.size()) {
                     if (xsink) {
                         xsink->raiseException("PARSE-URL-ERROR", "URL '%s' has an invalid empty port specification",
-                            buf);
+                            q_mask_url_password(buf).c_str());
                     }
                     invalidate();
                     return;
@@ -310,7 +310,8 @@ private:
                     if (!isdigit(sbuf[i])) {
                         if (xsink)
                             xsink->raiseException("PARSE-URL-ERROR", "URL '%s' has an invalid non-numeric character "
-                                "in the port specification (char: '%c' ue: %lld sbuf: '%s')", buf, sbuf[i],
+                                "in the port specification (char: '%c' ue: %lld sbuf: '%s')",
+                                q_mask_url_password(buf).c_str(), sbuf[i],
                                 username_end, sbuf.c_str());
                         invalidate();
                         return;
@@ -393,9 +394,49 @@ private:
 
     static void doInvalidPortException(ExceptionSink* xsink, const char* buf) {
         xsink->raiseException("PARSE-URL-ERROR", "URL '%s' has an invalid port value; it must be between 0 and 65535",
-            buf);
+            q_mask_url_password(buf).c_str());
     }
 };
+
+std::string q_mask_url_password(const char* url) {
+    std::string str(url ? url : "");
+    size_t start = str.find("://");
+    start = start == std::string::npos ? 0 : start + 3;
+    // a URL that can be parsed: the password that the parser finds is masked where it appears
+    {
+        qore_url_private url_priv;
+        url_priv.parse(str.c_str());
+        if (url_priv.isValid()) {
+            if (!url_priv.password || url_priv.password->empty()) {
+                return str;
+            }
+            std::string needle = std::string(":") + url_priv.password->c_str() + "@";
+            size_t pos = str.find(needle, start);
+            if (pos != std::string::npos) {
+                str.replace(pos + 1, url_priv.password->size(), "<masked>");
+                return str;
+            }
+        }
+    }
+    // otherwise any text between the first ':' and the last '@' before a query or fragment is taken for a password
+    size_t stop = str.find_first_of("?#", start);
+    if (stop == std::string::npos) {
+        stop = str.size();
+    }
+    if (stop == start) {
+        return str;
+    }
+    size_t at = str.rfind('@', stop - 1);
+    if (at == std::string::npos || at < start) {
+        return str;
+    }
+    size_t colon = str.find(':', start);
+    if (colon == std::string::npos || colon > at) {
+        return str;
+    }
+    str.replace(colon + 1, at - colon - 1, "<masked>");
+    return str;
+}
 
 QoreURL::QoreURL() : priv(new qore_url_private) {
 }
@@ -951,7 +992,7 @@ static int uri_check_strict(const char* what, const QoreString& value, Exception
         if (c == '%' && (i + 2 >= len || !isxdigit(static_cast<unsigned char>(p[i + 1]))
                 || !isxdigit(static_cast<unsigned char>(p[i + 2])))) {
             xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has a malformed percent-encoded octet at byte "
-                "offset %lld", what, p, (long long)i);
+                "offset %lld", what, q_mask_url_password(p).c_str(), (long long)i);
             return -1;
         }
     }
@@ -1017,7 +1058,7 @@ static int uri_check_chars(const char* what, const char* part, const char* full,
             if (i + 2 >= len || !uri_is_hexdig(static_cast<unsigned char>(p[i + 1]))
                     || !uri_is_hexdig(static_cast<unsigned char>(p[i + 2]))) {
                 xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has a malformed percent-encoded octet in its "
-                    "%s", what, full, part);
+                    "%s", what, q_mask_url_password(full).c_str(), part);
                 return -1;
             }
             i += 2;
@@ -1029,14 +1070,15 @@ static int uri_check_chars(const char* what, const char* part, const char* full,
                 continue;
             }
             xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has a non-ASCII octet (code %d) in its %s; a URI "
-                "can only contain ASCII, and RESOLVE_URL_ASCII was given", what, full, (int)c, part);
+                "can only contain ASCII, and RESOLVE_URL_ASCII was given", what, q_mask_url_password(full).c_str(),
+                (int)c, part);
             return -1;
         }
         if (uri_is_unreserved(c) || uri_is_sub_delim(c) || (c && strchr(extra, c))) {
             continue;
         }
         xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has an invalid character '%c' (code %d) in its %s; "
-            "RFC 3986 does not allow it there", what, full, (char)c, (int)c, part);
+            "RFC 3986 does not allow it there", what, q_mask_url_password(full).c_str(), (char)c, (int)c, part);
         return -1;
     }
     return 0;
@@ -1184,13 +1226,13 @@ static int uri_check_authority(const char* what, const char* full, const std::st
         const size_t close = rest.find(']');
         if (close == std::string::npos) {
             xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has an unterminated IP literal in its authority; "
-                "RFC 3986 requires \"[\" ( IPv6address / IPvFuture ) \"]\"", what, full);
+                "RFC 3986 requires \"[\" ( IPv6address / IPvFuture ) \"]\"", what, q_mask_url_password(full).c_str());
             return -1;
         }
         host_end = close + 1;
         if (host_end < rest.size() && rest[host_end] != ':') {
             xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has characters after the IP literal in its "
-                "authority; only a \":\" port can follow \"]\"", what, full);
+                "authority; only a \":\" port can follow \"]\"", what, q_mask_url_password(full).c_str());
             return -1;
         }
     } else {
@@ -1210,7 +1252,7 @@ static int uri_check_authority(const char* what, const char* full, const std::st
             }
             if (!uri_is_digit(static_cast<unsigned char>(port[i]))) {
                 xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has an invalid port '%s' in its authority; "
-                    "RFC 3986 allows only digits", what, full, port.c_str());
+                    "RFC 3986 allows only digits", what, q_mask_url_password(full).c_str(), port.c_str());
                 return -1;
             }
         }
@@ -1225,7 +1267,8 @@ static int uri_check_authority(const char* what, const char* full, const std::st
                 return -1;
             }
             xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has an invalid IP literal '%s' in its authority; "
-                "RFC 3986 requires an IPv6address or an IPvFuture", what, full, host.c_str());
+                "RFC 3986 requires an IPv6address or an IPvFuture", what, q_mask_url_password(full).c_str(),
+                host.c_str());
             return -1;
         }
         return 0;
@@ -1241,13 +1284,13 @@ static int uri_check_path(const char* what, const char* full, const QoreUriRefer
         // path-abempty = *( "/" segment )
         if (!ref.path.empty() && ref.path[0] != '/') {
             xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has an authority and a path that does not begin "
-                "with \"/\"; RFC 3986 requires path-abempty there", what, full);
+                "with \"/\"; RFC 3986 requires path-abempty there", what, q_mask_url_password(full).c_str());
             return -1;
         }
     } else if (ref.path.size() >= 2 && ref.path[0] == '/' && ref.path[1] == '/') {
         // without an authority a path cannot begin with "//" (RFC 3986 section 3.3): it would be read back as one
         xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has no authority and a path that begins with \"//\"; "
-            "it would be taken for an authority", what, full);
+            "it would be taken for an authority", what, q_mask_url_password(full).c_str());
         return -1;
     }
     // every segment is *pchar and "/" separates them; the extra rule for the first segment of a relative-path
@@ -1258,7 +1301,8 @@ static int uri_check_path(const char* what, const char* full, const QoreUriRefer
 int QoreUriReference::validate(const char* what, const char* full, bool ascii_only, ExceptionSink* xsink) const {
     if (has_scheme && !isValidScheme(scheme.c_str(), scheme.size())) {
         xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has an invalid scheme '%s'; RFC 3986 requires "
-            "ALPHA *( ALPHA / DIGIT / \"+\" / \"-\" / \".\" )", what, full, scheme.c_str());
+            "ALPHA *( ALPHA / DIGIT / \"+\" / \"-\" / \".\" )", what, q_mask_url_password(full).c_str(),
+            scheme.c_str());
         return -1;
     }
     if (has_authority && uri_check_authority(what, full, authority, ascii_only, xsink)) {
@@ -1301,7 +1345,7 @@ QoreStringNode* qore_resolve_url(const QoreString& base, const QoreString& refer
     }
     if (!base_ref.has_scheme && !(options & QRU_RELATIVE_BASE)) {
         xsink->raiseException("RESOLVE-URL-ERROR", "base URI '%s' has no scheme; a base URI must be absolute",
-            b->c_str());
+            q_mask_url_password(b->c_str()).c_str());
         return nullptr;
     }
     QoreUriReference ref;
@@ -1312,12 +1356,12 @@ QoreStringNode* qore_resolve_url(const QoreString& base, const QoreString& refer
     if (strict) {
         if (base_ref.hasColonInFirstRelativeSegment()) {
             xsink->raiseException("RESOLVE-URL-ERROR", "base URI '%s' is a relative-path reference whose first "
-                "segment contains a colon", b->c_str());
+                "segment contains a colon", q_mask_url_password(b->c_str()).c_str());
             return nullptr;
         }
         if (ref.hasColonInFirstRelativeSegment()) {
             xsink->raiseException("RESOLVE-URL-ERROR", "URI reference '%s' is a relative-path reference whose "
-                "first segment contains a colon; prefix it with \"./\"", r->c_str());
+                "first segment contains a colon; prefix it with \"./\"", q_mask_url_password(r->c_str()).c_str());
             return nullptr;
         }
         // the octet scan above only rejects what can appear nowhere; this is the component grammar itself

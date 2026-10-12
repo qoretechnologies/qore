@@ -2322,7 +2322,7 @@ struct qore_httpclient_priv {
         std::string base_path = connection.path.empty()
             ? (default_path.empty() ? std::string("/") : default_path)
             : connection.path;
-        QoreStringMaker what("request URL '%s'", str->c_str());
+        QoreStringMaker what("request URL '%s'", q_mask_url_password(str->c_str()).c_str());
         return resolveRequestTargetUnlocked(xsink, "HTTP-CLIENT-URL-ERROR", what.c_str(), str->c_str(),
             str->size(), connection, base_path, rv.conn, rv.target);
     }
@@ -2425,7 +2425,8 @@ struct qore_httpclient_priv {
         QoreURL url(str);
 
         if (!url.isValid()) {
-            xsink->raiseException("HTTP-CLIENT-URL-ERROR", "URL '%s' cannot be parsed", str);
+            xsink->raiseException("HTTP-CLIENT-URL-ERROR", "URL '%s' cannot be parsed",
+                q_mask_url_password(str).c_str());
             return -1;
         }
 
@@ -2464,7 +2465,8 @@ struct qore_httpclient_priv {
         QoreURL url(pstr);
 
         if (!url.isValid()) {
-            xsink->raiseException("HTTP-CLIENT-URL-ERROR", "proxy URL '%s' cannot be parsed", pstr);
+            xsink->raiseException("HTTP-CLIENT-URL-ERROR", "proxy URL '%s' cannot be parsed",
+                q_mask_url_password(pstr).c_str());
             return -1;
         }
 
@@ -2772,8 +2774,6 @@ struct qore_httpclient_priv {
     }
 
     DLLLOCAL const char* checkMethod(ExceptionSink* xsink, const char* meth, bool& bodyp) const {
-        method_map.find(meth);
-
         // check if method is valid
         method_map_t::const_iterator i = method_map.find(meth);
         if (i == method_map.end()) {

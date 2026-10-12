@@ -75,6 +75,7 @@ module SwaggerDataProvider {
     @section swaggerdataprovider_relnotes Release Notes
 
     @subsection swaggerdataprovider_v1_4 SwaggerDataProvider v1.4
+    - the data provider description gives the URL without its password
     - migrated from @ref RestClient::RestClient "RestClient" (synchronous HTTP/1.x) to
       @ref RestClientIo::RestClientIo "RestClientIo" (async HTTP/1.x, HTTP/2, and HTTP/3) as the
       default REST transport; this enables HTTP/2 and HTTP/3 support with concurrent request

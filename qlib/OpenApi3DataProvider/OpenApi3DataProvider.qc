@@ -243,7 +243,7 @@ public class OpenApi3DataProvider inherits OpenApi3DataProviderCommon {
                 }
             }
         }
-        return sprintf("OpenAPI 3 data provider for URL `%s` and URI path `%s`", url, uri_path);
+        return sprintf("OpenAPI 3 data provider for URL `%s` and URI path `%s`", get_masked_url(url), uri_path);
     }
 
     #! Sets the schema and display name

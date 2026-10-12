@@ -260,12 +260,12 @@ public class HttpClientIoPollOperation inherits HttpClientIo::HttpClientRequestP
     static hash<auto> splitUrl(string url) {
         *list<*string> parts = (url =~ x/^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^\/?#]*)([^#]*)/s);
         if (!parts || !parts[1].val()) {
-            throw "HTTP-CLIENT-URL-ERROR", sprintf("URL %y has no host", url);
+            throw "HTTP-CLIENT-URL-ERROR", sprintf("URL %y has no host", get_masked_url(url));
         }
         string scheme = parts[0].lwr();
         if (scheme != "http" && scheme != "https") {
             throw "HTTP-CLIENT-URL-ERROR", sprintf("URL %y has unsupported scheme %y; expecting \"http\" or "
-                "\"https\"", url, scheme);
+                "\"https\"", get_masked_url(url), scheme);
         }
         # user information is never part of the origin
         string authority = parts[1];
@@ -517,7 +517,7 @@ public class HttpPingPollOperation inherits HttpClientIoPollOperation {
         self.err_code = err_code;
         if (logger) {
             logger.logArgs("INFO", sprintf("%s async ping start: method=%s path=%y url=%y",
-                log_prefix, self.method, self.path, base_url));
+                log_prefix, self.method, self.path, get_masked_url(base_url)));
         }
     }
 
@@ -571,7 +571,7 @@ public class HttpRequestPollOperation inherits HttpClientIoPollOperation {
                 HttpClientIoPollOperation::getOptions("http-request", http_opts), logger) {
         if (logger) {
             logger.logArgs("INFO", sprintf("HttpRequest async start: method=%s path=%y url=%y",
-                self.method, self.path, base_url));
+                self.method, self.path, get_masked_url(base_url)));
         }
     }
 }

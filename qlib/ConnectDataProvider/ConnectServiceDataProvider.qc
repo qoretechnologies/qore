@@ -95,7 +95,7 @@ public class ConnectServiceDataProvider inherits DataProvider::AbstractDataProvi
 
     #! Returns provider description
     *string getDesc() {
-        return sprintf("Connect service '%s' on %s", m_service, m_opts.url);
+        return sprintf("Connect service '%s' on %s", m_service, get_masked_url(m_opts.url));
     }
 
     #! Returns a child provider for the given method name

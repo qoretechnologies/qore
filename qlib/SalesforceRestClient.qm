@@ -147,6 +147,7 @@ rc.bulkJobClose(h.id);
     @section salesforcerestclientrelnotes Release Notes
 
     @subsection salesforcerestclientv2_1 SalesforceRestClient v2.1
+    - debug messages give the URL without its password
     - the API list of a polling ping is decoded by the rules shared by all HTTP clients instead of as ISO-8859-1
       without a charset (see @ref Qore::decode_http_body() "decode_http_body()")
     - @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection" polling pings are made with a
@@ -1231,7 +1232,7 @@ sfrest.logout();
         # set the URL to the Salesforce.com URL for REST API calls
         setURL(instance_url + ah.url);
 
-        debug("SalesforceRestClient: API set to %y %y URL: %y", api_used, ah, getURL());
+        debug("SalesforceRestClient: API set to %y %y URL: %y", api_used, ah, getSafeURL());
     }
 
     #! Return OAuth2 options
