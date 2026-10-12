@@ -118,7 +118,7 @@ module DataProvider {
                     },
                     "dpql_where": <DataProviderOptionInfo>{
                         "display_name": "DPQL Filter",
-                        "short_desc": "A DPQL string filter expression",
+                        "short_desc": "A filter condition written in DPQL",
                         "desc": "A DPQL string expression to filter records; use this option when writing the "
                             "predicate directly as text instead of using the expression builder",
                         "type": AbstractDataProviderTypeMap."*string",
@@ -1390,6 +1390,10 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_9 DataProvider v3.9
+    - the messages about conditions and expressions are written in plain language: the errors of expression
+      verification, the DPQL diagnostics \c DPQL-E040, \c DPQL-E042, \c DPQL-E043, \c DPQL-W004, \c DPQL-W006 and
+      \c DPQL-E100, and the descriptions of the condition operators and of the filter options; the codes and
+      severities of the diagnostics are unchanged
     - DPQL validation (@ref DataProvider::DataProvider::validateDpqlExpression() "validateDpqlExpression()") reports
       arithmetic operands that the operator cannot combine (\c DPQL-E050), such as a hash plus a number, which
       evaluates to the number, and comparisons whose result is the same for every record (\c DPQL-W006), such as

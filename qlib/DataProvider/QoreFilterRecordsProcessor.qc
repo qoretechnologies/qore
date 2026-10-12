@@ -45,7 +45,7 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
         const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "where_cond": <DataProviderOptionInfo>{
                 "display_name": "Filter Expression",
-                "short_desc": "A structured filter expression",
+                "short_desc": "A filter condition built in the editor",
                 "desc": "A structured filter expression (`hash<DataProviderExpression>`) built by "
                     "the expression builder, or a DPQL string for text-based configuration",
                 "type": (AbstractDataProviderTypeMap."*hash", AbstractDataProviderTypeMap."*string"),
@@ -53,9 +53,9 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
             },
             "dpql_where": <DataProviderOptionInfo>{
                 "display_name": "DPQL Filter",
-                "short_desc": "A DPQL string filter expression",
-                "desc": "A DPQL string expression to parse and use as the filter condition; for example "
-                    "`@status == \"active\" && @score >= 90`",
+                "short_desc": "A filter condition written in DPQL",
+                "desc": "The filter condition, written in DPQL: the records for which it is true are passed on; for "
+                    "example `@status == \"active\" && @score >= 90`",
                 "type": AbstractDataProviderTypeMap."*string",
                 # DPQL text is data: expanding templates in it would break its own template references and escapes
                 "supports_expressions": False,
@@ -94,8 +94,7 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Filters records based on a `where_cond` or `dpql_where` expression; "
-            "records matching the condition are passed through, non-matching records are dropped";
+        return "Passes on the records for which the filter condition is true.";
     }
 
     #! Returns data provider static info

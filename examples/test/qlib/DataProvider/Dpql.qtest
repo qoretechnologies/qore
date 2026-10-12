@@ -4343,7 +4343,7 @@ public class DpqlTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex) {
                 caught = True;
                 assertEq("DATA-PROVIDER-EXPRESSION-ERROR", ex.err);
-                assertTrue(ex.desc =~ /index/, "error should mention 'index'");
+                assertEq(sprintf("There is no operation %y", DP_FUNC_INDEX), ex.desc);
             }
             assertTrue(caught, "verifyExpression should reject unknown top-level index operator");
         }
@@ -6259,7 +6259,7 @@ public class DpqlTest inherits QUnit::Test {
         list<hash<DpqlDiagnostic>> diags = getDiagnostics("@age > @age", "DPQL-W006", fields);
         assertEq(1, diags.size(), "a field compared with itself is reported");
         assertEq("warning", diags[0].severity);
-        assertEq("Comparison '@age > @age' is always false for every record: it compares a value with itself",
+        assertEq("This comparison is always false, for every record: it compares a value with itself",
             diags[0].message);
         assertRegex("always true", getDiagnostics("@name == @name", "DPQL-W006", fields)[0].message);
         assertRegex("always true", getDiagnostics("@age <= @age", "DPQL-W006", fields)[0].message);
@@ -6271,7 +6271,7 @@ public class DpqlTest inherits QUnit::Test {
         assertEq(1, getDiagnostics("@f == @f", "DPQL-W006", fields).size(), "an unknown field as well");
 
         # two literal values, with the result that evaluation gives
-        assertRegex("'1 == 1' is always true.*both sides are literal values",
+        assertRegex("^This comparison is always true, for every record: both sides are literal values$",
             getDiagnostics("1 == 1", "DPQL-W006", fields)[0].message);
         assertRegex("always false", getDiagnostics("2 < 1", "DPQL-W006", fields)[0].message);
         assertRegex("always true", getDiagnostics("\"a\" < \"b\"", "DPQL-W006", fields)[0].message);
@@ -6338,7 +6338,7 @@ public class DpqlTest inherits QUnit::Test {
                 '@age == 1 && str-func()', fields, bool_expmap);
             list<hash<DpqlDiagnostic>> warnings = select diags, $1.code == "DPQL-W004";
             assertTrue(warnings.size() > 0, "should warn about string-returning func in && context");
-            assertTrue(warnings[0].message.find("cannot be used as a condition") >= 0,
+            assertTrue(warnings[0].message.find("must evaluate to true or false") >= 0,
                 "message should say that the value cannot be a condition");
         }
 
@@ -6514,10 +6514,8 @@ public class DpqlTest inherits QUnit::Test {
                 '1 == 1', fields, all_exprs, server_exprs);
             list<hash<DpqlDiagnostic>> e040 = select diags, $1.code == "DPQL-E040";
             assertEq(1, e040.size(), "DPQL-E040: no field ref");
-            assertTrue(e040[0].message.find("record field") >= 0,
-                "DPQL-E040: message mentions record field");
-            assertTrue(e040[0].message.find("@field_name") >= 0,
-                "DPQL-E040: message contains example");
+            assertEq("A search condition must compare at least one field of the records, for example "
+                "@status == \"open\".", e040[0].message, "DPQL-E040 message");
         }
 
         # --- DPQL-E041: local-only op with field ref ---
@@ -6548,7 +6546,26 @@ public class DpqlTest inherits QUnit::Test {
                 '@name == "a" && @age > 1', fields, all_exprs, no_logic_server);
             list<hash<DpqlDiagnostic>> e043 = select diags, $1.code == "DPQL-E043";
             assertEq(1, e043.size(), "DPQL-E043: unsupported AND");
-            assertTrue(e043[0].message.find("&&") >= 0, "DPQL-E043: mentions operator");
+            assertEq("This data provider cannot search with && at the top level. Join the conditions with "
+                "operators it supports, or search in separate steps.", e043[0].message, "DPQL-E043 message");
+        }
+
+        # --- DPQL-E042: a field reference inside an operator that is evaluated locally ---
+
+        {
+            hash<string, hash<DataProviderExpressionInfo>> no_not_server = {};
+            foreach string k in (keys server_exprs) {
+                if (k != DP_SEARCH_OP_NOT) {
+                    no_not_server{k} = server_exprs{k};
+                }
+            }
+            list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
+                '@name == "a" && !@active', fields, all_exprs, no_not_server);
+            list<hash<DpqlDiagnostic>> e042 = select diags, $1.code == "DPQL-E042";
+            assertEq(1, e042.size(), "DPQL-E042: field reference in a local NOT");
+            assertEq("error", e042[0].severity);
+            assertEq("@active cannot be used inside !: this data provider compares fields only at the top level. "
+                "Move the comparison of @active out of !.", e042[0].message, "DPQL-E042 message");
         }
 
         # --- DPQL-E044: Server op missing field ref ---
@@ -8199,22 +8216,22 @@ public class DpqlTest inherits QUnit::Test {
 
         # string and date results cannot be conditions, at any depth, also as the condition of ternary
         map assertRegex($1.value, getArgTypeError($1.key) ?? "<accepted>", $1.key), {
-            "lwr(@a) && @b == 1": "^argument 1 of expression \"&&\": expecting a condition, but expression "
-                "\"lwr\" returns a \"string\" value, which cannot be used as a condition; compare it explicitly "
-                "instead \\(ex: @status == \"open\" or @x != \"\"\\)$",
-            "@b == 1 || toString(@a)": "^argument 2 of expression \"\\|\\|\": expecting a condition, but "
-                "expression \"toString\" returns a \"string\"",
-            "!lwr(@a)": "^argument 1 of expression \"!\": .*\"lwr\" returns a \"string\"",
-            "!now()": "^argument 1 of expression \"!\": .*\"now\" returns a \"date\"",
-            "@a == 1 && toDate(@b)": "\"toDate\" returns a \"date\"",
-            "@a == 1 && (@b > 2 || !trim(@c))": "^argument 1 of expression \"!\": .*\"trim\" returns a "
+            "lwr(@a) && @b == 1": "^Value 1 of \"&&\": The condition expression \"lwr\" evaluates to \"string\", "
+                "but it must evaluate to true or false\\. Compare the value instead, for example "
+                "@status == \"open\"\\.$",
+            "@b == 1 || toString(@a)": "^Value 2 of \"\\|\\|\": The condition expression \"toString\" evaluates "
+                "to \"string\"",
+            "!lwr(@a)": "^Value 1 of \"!\": .*\"lwr\" evaluates to \"string\"",
+            "!now()": "^Value 1 of \"!\": .*\"now\" evaluates to \"date\"",
+            "@a == 1 && toDate(@b)": "\"toDate\" evaluates to \"date\"",
+            "@a == 1 && (@b > 2 || !trim(@c))": "^Value 1 of \"!\": .*\"trim\" evaluates to "
                 "\"string\".*\\(in an argument of expression \"\\|\\|\"\\).*\\(in an argument of expression "
                 "\"&&\"\\)",
-            "@a == 1 && (@b > 2 || (@c < 3 && days(1)))": "\"days\" returns a \"date\" value.*in an argument of "
+            "@a == 1 && (@b > 2 || (@c < 3 && days(1)))": "\"days\" evaluates to \"date\".*in an argument of "
                 "expression \"\\|\\|\".*in an argument of expression \"&&\"",
-            "ternary(lwr(@a), 1, 2) == 1": "^argument 1 of expression \"ternary\": expecting a condition, but "
-                "expression \"lwr\" returns a \"string\".*in an argument of expression \"==\"",
-            "ternary(@a > 1, 1, 2) == 1 && concat(@a, @b)": "\"concat\" returns a \"string\"",
+            "ternary(lwr(@a), 1, 2) == 1": "^Value 1 of \"ternary\": The condition expression \"lwr\" evaluates "
+                "to \"string\".*in an argument of expression \"==\"",
+            "ternary(@a > 1, 1, 2) == 1 && concat(@a, @b)": "\"concat\" evaluates to \"string\"",
         }.pairIterator();
 
         # arguments that are not conditions are checked by assignability
@@ -8224,14 +8241,14 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(NOTHING, getArgTypeError(text), text);
         }
         map assertRegex($1.value, getArgTypeError($1.key) ?? "<accepted>", $1.key), {
-            "lwr(size(@a)) == \"x\"": "^argument 1 of expression \"lwr\": expecting a \"string\" value, but "
-                "expression \"size\" returns a \"int\" value instead",
-            "get_year(lwr(@a)) > 2000": "^argument 1 of expression \"get_year\": expecting a \"date\" value, but "
-                "expression \"lwr\" returns a \"string\"",
-            "substr(@a, lwr(@b)) == \"x\"": "^argument 2 of expression \"substr\": expecting a \"int\" value, but "
-                "expression \"lwr\" returns a \"string\"",
-            "@a == 1 && lwr(size(@b)) == \"x\"": "\"size\" returns a \"int\" value instead.*in an argument of "
-                "expression \"==\".*in an argument of expression \"&&\"",
+            "lwr(size(@a)) == \"x\"": "^Value 1 of \"lwr\": expression \"size\" gives \"int\", but \"string\" is "
+                "needed here\\. \\(in an argument of expression \"==\"\\)$",
+            "get_year(lwr(@a)) > 2000": "^Value 1 of \"get_year\": expression \"lwr\" gives \"string\", but "
+                "\"date\" is needed here",
+            "substr(@a, lwr(@b)) == \"x\"": "^Value 2 of \"substr\": expression \"lwr\" gives \"string\", but "
+                "\"int\" is needed here",
+            "@a == 1 && lwr(size(@b)) == \"x\"": "\"size\" gives \"int\", but \"string\" is needed here\\..*in an "
+                "argument of expression \"==\".*in an argument of expression \"&&\"",
         }.pairIterator();
 
         # field references are checked with the type of the field, if known
@@ -8243,20 +8260,19 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(NOTHING, getArgTypeError(text, fields), text);
         }
         map assertRegex($1.value, getArgTypeError($1.key, fields) ?? "<accepted>", $1.key), {
-            "@name && @flag": "^argument 1 of expression \"&&\": expecting a condition, but field \"name\" returns "
-                "a \"string\" value, which cannot be used as a condition",
-            "@flag || @opt_name": "^argument 2 of expression \"\\|\\|\": .*field \"opt_name\" returns a \"\\*string\"",
-            "!@soft_name": "field \"soft_name\" returns a \"softstring\"",
-            "!@created": "field \"created\" returns a \"date\"",
-            "@flag && @opt_created": "field \"opt_created\" returns a \"\\*date\"",
-            "@customer.name && @flag": "field \"customer.name\" returns a \"string\"",
-            "@flag && (@count > 1 || !@customer.since)": "field \"customer.since\" returns a \"date\".*in an "
+            "@name && @flag": "^Value 1 of \"&&\": The condition field \"name\" evaluates to \"string\", but it "
+                "must evaluate to true or false",
+            "@flag || @opt_name": "^Value 2 of \"\\|\\|\": .*field \"opt_name\" evaluates to \"\\*string\"",
+            "!@soft_name": "field \"soft_name\" evaluates to \"softstring\"",
+            "!@created": "field \"created\" evaluates to \"date\"",
+            "@flag && @opt_created": "field \"opt_created\" evaluates to \"\\*date\"",
+            "@customer.name && @flag": "field \"customer.name\" evaluates to \"string\"",
+            "@flag && (@count > 1 || !@customer.since)": "field \"customer.since\" evaluates to \"date\".*in an "
                 "argument of expression \"\\|\\|\"",
-            "ternary(@name, 1, 2) == 1": "argument 1 of expression \"ternary\": .*field \"name\" returns a "
-                "\"string\"",
-            "lwr(@count) == \"x\"": "^argument 1 of expression \"lwr\": expecting a \"string\" value, but field "
-                "\"count\" returns a \"int\" value instead",
-            "get_year(@name) > 2000": "expecting a \"date\" value, but field \"name\" returns a \"string\"",
+            "ternary(@name, 1, 2) == 1": "Value 1 of \"ternary\": .*field \"name\" evaluates to \"string\"",
+            "lwr(@count) == \"x\"": "^Value 1 of \"lwr\": field \"count\" gives \"int\", but \"string\" is needed "
+                "here\\. \\(in an argument of expression \"==\"\\)$",
+            "get_year(@name) > 2000": "field \"name\" gives \"string\", but \"date\" is needed here",
         }.pairIterator();
         # without the fields, field references are not checked
         assertEq(NOTHING, getArgTypeError("@name && @flag"));
@@ -8297,21 +8313,49 @@ public class DpqlTest inherits QUnit::Test {
                 }
             };
             map assertEq(NOTHING, verify_error($1), $1), ("opt-int", "opt-bool", "opt-num", "opt-list");
-            map assertRegex("expecting a condition, but expression \"" + $1 + "\" returns", verify_error($1) ?? "",
+            map assertRegex("The condition expression \"" + $1 + "\" evaluates to", verify_error($1) ?? "",
                 $1), ("opt-str", "soft-str", "opt-date");
+        }
+
+        # an argument that must be a field, and one that must be a value
+        {
+            hash<DataProviderExpressionInfo> fx = <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "fx",
+                "display_name": "fx",
+                "short_desc": "A test operation",
+                "desc": "A test operation",
+                "symbol": "fx()",
+                "args": (DataProviderSignatureFieldType, DataProviderSignatureStringValueType),
+                "arg_info": (<DataProviderArgInfo>{"display_name": "field"},
+                    <DataProviderArgInfo>{"display_name": "value"}),
+                "return_type": AbstractDataProviderTypeMap."bool",
+            };
+            AbstractDataProvider::verifyExpression(ER_Search, fx, LC_All, AbstractDataProviderTypeMap."bool",
+                <DataProviderExpression>{"exp": "fx", "args": (<DataProviderFieldReference>{"field": "a"}, "x")});
+            assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "^Value 1 of \"fx\" must be a field of the records; it is "
+                "\"value\"$", \AbstractDataProvider::verifyExpression(), (ER_Search, fx, LC_All,
+                AbstractDataProviderTypeMap."bool", <DataProviderExpression>{"exp": "fx", "args": ("a", "x")}));
+            assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "^Value 2 of \"fx\" must be a value; it is \"field "
+                "reference\"$", \AbstractDataProvider::verifyExpression(), (ER_Search, fx, LC_All,
+                AbstractDataProviderTypeMap."bool", <DataProviderExpression>{"exp": "fx", "args": (
+                    <DataProviderFieldReference>{"field": "a"}, <DataProviderFieldReference>{"field": "b"})}));
         }
 
         # the type of a whole expression is checked the same way
         AbstractDataProvider::verifyExpression(ER_Search, DataProviderGenericExpressions, LC_All,
             AbstractDataProviderTypeMap."bool", DataProvider::parseDpqlExpression("size(@a)"));
-        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "^expecting a condition, but expression \"lwr\" returns a "
-            "\"string\" value", \AbstractDataProvider::verifyExpression(), (ER_Search, DataProviderGenericExpressions,
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "^The condition expression \"lwr\" evaluates to \"string\", "
+            "but it must evaluate to true or false\\. Compare the value instead, for example @status == \"open\"\\.$",
+            \AbstractDataProvider::verifyExpression(), (ER_Search, DataProviderGenericExpressions,
             LC_All, AbstractDataProviderTypeMap."bool", DataProvider::parseDpqlExpression("lwr(@a)")));
-        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "^expecting a \"date\" value, but expression \"lwr\" returns",
-            \AbstractDataProvider::verifyExpression(), (ER_Search, DataProviderGenericExpressions, LC_All,
-            AbstractDataProviderTypeMap."date", DataProvider::parseDpqlExpression("lwr(@a)")));
+        # the message is a sentence of its own
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "^Expression \"lwr\" gives \"string\", but \"date\" is "
+            "needed here\\.$", \AbstractDataProvider::verifyExpression(), (ER_Search, DataProviderGenericExpressions,
+            LC_All, AbstractDataProviderTypeMap."date", DataProvider::parseDpqlExpression("lwr(@a)")));
         # the overload with an expression definition (used for SQL generation) keeps strict assignability
-        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "expecting a \"bool\" value, but expression \"size\" returns",
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "^The expression \"size\" gives \"int\", but \"bool\" is "
+            "needed here\\.$",
             \AbstractDataProvider::verifyExpression(), (ER_Search, DataProviderGenericExpressions.size, LC_All,
             AbstractDataProviderTypeMap."bool", DataProvider::parseDpqlExpression("size(@a)")));
 
@@ -8357,9 +8401,10 @@ public class DpqlTest inherits QUnit::Test {
             "@active || toNumber(@name)", "lwr(@name) == \"x\"");
         map assertRegex($1.value, (select DataProvider::validateDpqlExpression($1.key, parser_fields),
             $1.code == "DPQL-W004")[0].message ?? "<no warning>", $1.key), {
-            "@name && @age == 1": "Argument 1 of '&&' has type 'string', which cannot be used as a condition",
-            "@age == 1 || @status": "Argument 2 of '\\|\\|' has type 'string', which cannot be used as a condition",
-            "!@name": "Argument 1 of '!' has type 'string', which cannot be used as a condition",
+            "@name && @age == 1": "^Part 1 of the AND evaluates to string, but each part of a condition must "
+                "evaluate to true or false\\. Compare the value instead, for example @status == \"open\"\\.$",
+            "@age == 1 || @status": "^Part 2 of the OR evaluates to string, but each part of a condition must",
+            "!@name": "^Part 1 of the NOT evaluates to string, but each part of a condition must",
             "lwr(@age) == \"x\"": "has type 'int', expected 'string'",
         }.pairIterator();
     }

@@ -1,0 +1,124 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires json
+
+%exec-class NoQorusInMessagesTest
+
+#! The messages of the DataProvider and DPQL modules do not name Qorus
+/** Qore is used outside Qorus: a message, description or catalog text of these modules must not name it.  Comments
+    (license headers, references to issues) are not messages.
+*/
+class NoQorusInMessagesTest inherits QUnit::Test {
+    private {
+        string qlib_dir;
+    }
+
+    public {
+        #! the source directories checked
+        const SourceDirs = ("DataProvider", "DpqlWebSocket");
+
+        #! the catalog directories checked
+        const CatalogDirs = ("DataProvider/i18n",);
+
+        #! strings and comments of Qore source: double- and single-quoted strings, block comments and line comments
+        const TokenRegex = "(\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*'|/\\*.*?\\*/|#[^\\n]*)";
+    }
+
+    constructor() : QUnit::Test("NoQorusInMessages", "1.0", \ARGV) {
+        qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
+        addTestCase("the check", \checkTest());
+        addTestCase("source strings", \sourceTest());
+        addTestCase("catalogs", \catalogTest());
+        set_return_value(main());
+    }
+
+    #! Returns the strings of Qore source text that name Qorus
+    static list<string> qorusStrings(string text) {
+        list<string> rv = ();
+        foreach *string tok in (regex_extract(text, TokenRegex, RE_Global | RE_DotAll)) {
+            if (tok && (tok[0] == "\"" || tok[0] == "'") && tok.lwr().find("qorus") >= 0) {
+                rv += tok;
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the texts of a catalog that name Qorus
+    static list<string> qorusCatalogTexts(auto v) {
+        list<string> rv = ();
+        switch (v.typeCode()) {
+            case NT_HASH:
+                map rv += NoQorusInMessagesTest::qorusCatalogTexts($1), v.values();
+                break;
+            case NT_LIST:
+                map rv += NoQorusInMessagesTest::qorusCatalogTexts($1), v;
+                break;
+            case NT_STRING:
+                if (v.lwr().find("qorus") >= 0) {
+                    rv += v;
+                }
+                break;
+        }
+        return rv;
+    }
+
+    #! Returns the files below a directory with a name matching a regular expression
+    static list<string> files(string dir, string name_regex) {
+        list<string> rv = ();
+        Dir d();
+        d.chdir(dir);
+        foreach string f in (d.listFiles()) {
+            if (f.regex(name_regex)) {
+                rv += dir + "/" + f;
+            }
+        }
+        foreach string sub_dir in (d.listDirs()) {
+            rv += NoQorusInMessagesTest::files(dir + "/" + sub_dir, name_regex);
+        }
+        return rv;
+    }
+
+    checkTest() {
+        # a message names Qorus
+        assertEq(("\"Qorus has no operation %y\"",), qorusStrings("throw \"X\", sprintf(\"Qorus has no operation %y\", "
+            "op);"));
+        assertEq(("'a qorus-specific option'",), qorusStrings("string s = 'a qorus-specific option';"));
+        assertEq(("\"the \\\"Qorus\\\" server\"",), qorusStrings("string s = \"the \\\"Qorus\\\" server\";"));
+        # comments are not messages, and a quote in a comment does not start a string
+        assertEq((), qorusStrings("# Qorus Integration Engine\n/** see Qorus's issue \"542\"\n*/\nstring s = \"x\";"));
+        assertEq((), qorusStrings("string s = \"# not a comment\"; # it's Qorus\nstring t = \"y\";"));
+        # catalog texts
+        assertEq(("Runs in Qorus",), qorusCatalogTexts({"a": {"source": "Runs in Qorus", "message": "x"}}));
+        assertEq((), qorusCatalogTexts({"a": {"source": "Runs anywhere", "message": "y"}}));
+    }
+
+    sourceTest() {
+        int n = 0;
+        foreach string dir in (SourceDirs) {
+            foreach string file in (files(qlib_dir + "/" + dir, "\\.q[cm]$")) {
+                ++n;
+                assertEq((), qorusStrings(ReadOnlyFile::readTextFile(file)), file);
+            }
+        }
+        assertGt(100, n, "the DataProvider and DPQL sources are checked");
+    }
+
+    catalogTest() {
+        int n = 0;
+        foreach string dir in (CatalogDirs) {
+            foreach string file in (files(qlib_dir + "/" + dir, "\\.json$")) {
+                ++n;
+                assertEq((), qorusCatalogTexts(parse_json(ReadOnlyFile::readTextFile(file))), file);
+            }
+        }
+        assertGt(10, n, "the DataProvider catalogs are checked");
+    }
+}

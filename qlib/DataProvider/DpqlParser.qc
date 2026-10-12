@@ -350,8 +350,8 @@ public class DpqlParser {
         if (!expressionHasFieldRef(exp)) {
             diags += <DpqlDiagnostic>{
                 "severity": "error",
-                "message": "Search expressions query data provider records — at least one condition "
-                    "must reference a record field (e.g., `@field_name == value`)",
+                "message": "A search condition must compare at least one field of the records, for example "
+                    "@status == \"open\".",
                 "code": "DPQL-E040",
                 "line": 1,
                 "column": 1,
@@ -382,9 +382,8 @@ public class DpqlParser {
                 string op_name = exp.exp == DP_OP_AND ? "&&" : "||";
                 diags += <DpqlDiagnostic>{
                     "severity": "error",
-                    "message": sprintf("This data provider does not support '%s' at the top level. "
-                        "Combine conditions using operators the provider supports, or restructure "
-                        "as separate queries.", op_name),
+                    "message": sprintf("This data provider cannot search with %s at the top level. Join the "
+                        "conditions with operators it supports, or search in separate steps.", op_name),
                     "code": "DPQL-E043",
                     "line": 1,
                     "column": 1,
@@ -491,9 +490,9 @@ public class DpqlParser {
                 string op_sym = getOpSymbol(parent_op);
                 diags += <DpqlDiagnostic>{
                     "severity": "error",
-                    "message": sprintf("Field reference '@%s' cannot appear inside '%s' — this operator "
-                        "is evaluated locally after the server query returns. Move the field "
-                        "reference to a top-level server operator condition.", arg.field, op_sym),
+                    "message": sprintf("@%s cannot be used inside %s: this data provider compares fields only "
+                        "at the top level. Move the comparison of @%s out of %s.", arg.field, op_sym, arg.field,
+                        op_sym),
                     "code": "DPQL-E042",
                     "line": 1,
                     "column": 1,
@@ -611,15 +610,15 @@ public class DpqlParser {
 
         # Validate logical operator arguments (&&, ||, !): their operands are conditions
         if (exp.exp == DP_OP_AND || exp.exp == DP_OP_OR || exp.exp == DP_SEARCH_OP_NOT) {
-            string op_name = exp.exp == DP_OP_AND ? "&&" : (exp.exp == DP_OP_OR ? "||" : "!");
+            string op_name = exp.exp == DP_OP_AND ? "AND" : (exp.exp == DP_OP_OR ? "OR" : "NOT");
             for (int i = 0; i < exp.args.size(); ++i) {
                 *AbstractDataProviderType arg_type = inferArgType(exp.args[i]);
                 if (arg_type && !AbstractDataProvider::isConditionType(arg_type)) {
                     diags += <DpqlDiagnostic>{
                         "severity": "warning",
-                        "message": sprintf("Argument %d of '%s' has type '%s', which cannot be used as a condition; "
-                            "compare it explicitly instead (ex: @status == \"open\" or @x != \"\")",
-                            i + 1, op_name, arg_type.getName()),
+                        "message": sprintf("Part %d of the %s evaluates to %s, but each part of a condition must "
+                            "evaluate to true or false. Compare the value instead, for example "
+                            "@status == \"open\".", i + 1, op_name, arg_type.getName()),
                         "code": "DPQL-W004",
                         "line": 1,
                         "column": 1,
@@ -2015,15 +2014,9 @@ public class DpqlParser {
         } else {
             return;
         }
-        string text;
-        try {
-            text = sprintf("'%s' ", DataProvider::serializeDpqlExpression(exp, expressions));
-        } catch (hash<ExceptionInfo> ex) {
-            # the warning does not need the text of the comparison
-        }
         diags += <DpqlDiagnostic>{
             "severity": "warning",
-            "message": sprintf("Comparison %sis always %s for every record: %s", text, result ? "true" : "false",
+            "message": sprintf("This comparison is always %s, for every record: %s", result ? "true" : "false",
                 reason),
             "code": "DPQL-W006",
             "line": 1,

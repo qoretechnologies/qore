@@ -346,7 +346,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "type": DET_Operator,
             "name": DP_OP_HAS_VALUE,
             "display_name": "has value",
-            "short_desc": "Returns True if the argument has a truthy value",
+            "short_desc": "True when the value counts as true (not 0, not empty)",
             "desc": "Returns `True` if the argument has a value that can be converted to boolean `True`",
             "symbol": "val",
             "render_template": "$arg[0].val()",
@@ -490,7 +490,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "type": DET_Operator,
             "name": DP_OP_TERNARY,
             "display_name": "ternary (?:)",
-            "short_desc": "Conditional expression: returns second arg if first is true, third otherwise",
+            "short_desc": "Gives the second value when the condition is true, and the third otherwise",
             "desc": "Evaluates the first argument as a boolean; if true, returns the second argument; "
                 "otherwise returns the third argument",
             "symbol": "?:",
@@ -500,8 +500,8 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "arg_info": (
                 <DataProviderArgInfo>{
                     "display_name": "Condition",
-                    "short_desc": "The boolean condition to evaluate",
-                    "desc": "The boolean condition to evaluate",
+                    "short_desc": "The condition that decides which value is given",
+                    "desc": "The condition that decides which value is given",
                     "label_after": "?",
                 },
                 <DataProviderArgInfo>{
@@ -2939,7 +2939,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 <DataProviderArgInfo>{
                     "display_name": "Filter Expression",
                     "short_desc": "Optional filter condition",
-                    "desc": "Optional boolean expression; only elements where this evaluates to True are included",
+                    "desc": "Optional condition: only the elements for which it is true are kept",
                     "default_value": True,
                 },
             ),
@@ -3000,7 +3000,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 <DataProviderArgInfo>{
                     "display_name": "Predicate Expression",
                     "short_desc": "Expression evaluated for each source item",
-                    "desc": "Expression evaluated for each source item; truthy results keep the item",
+                    "desc": "A condition checked for each item; the items for which it is true are kept",
                 },
             ),
             "return_type": AbstractDataProviderTypeMap."list",
@@ -3094,7 +3094,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "role": ER_All,
             "name": DP_OP_ANY,
             "display_name": "any",
-            "short_desc": "Returns True if any source item or predicate result is truthy",
+            "short_desc": "True when the condition is true for at least one item",
             "desc": "Returns True if any source item is truthy. With two arguments, the first argument is a "
                 "predicate expression and the second is the source; evaluation short-circuits on the first match",
             "symbol": "any",
@@ -3159,7 +3159,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "role": ER_All,
             "name": DP_OP_ALL,
             "display_name": "all",
-            "short_desc": "Returns True if all predicate results are truthy",
+            "short_desc": "True when the condition is true for every item",
             "desc": "Returns True if the predicate expression evaluates to True for all source items. Empty "
                 "sources return True. The first argument is the predicate expression and the second is the source",
             "symbol": "all",
@@ -3384,7 +3384,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "role": ER_All,
             "name": DP_OP_TAKEWHILE,
             "display_name": "takewhile",
-            "short_desc": "Returns source items while a predicate remains truthy",
+            "short_desc": "Gives the items up to the first one for which the condition is false",
             "desc": "Returns items from a list or hash source until the predicate expression first evaluates to "
                 "False. Hash sources return key/value records",
             "symbol": "takewhile",
@@ -3439,7 +3439,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "role": ER_All,
             "name": DP_OP_TAKEUNTIL,
             "display_name": "takeuntil",
-            "short_desc": "Returns source items until a predicate becomes truthy",
+            "short_desc": "Gives the items up to the first one for which the condition is true",
             "desc": "Returns items from a list or hash source until the predicate expression first evaluates to "
                 "True. The matching item is not included. Hash sources return key/value records",
             "symbol": "takeuntil",
@@ -3525,7 +3525,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 <DataProviderArgInfo>{
                     "display_name": "Filter Expression",
                     "short_desc": "Optional filter condition",
-                    "desc": "Optional boolean expression; only elements where this evaluates to True are included",
+                    "desc": "Optional condition: only the elements for which it is true are kept",
                     "default_value": True,
                 },
             ),

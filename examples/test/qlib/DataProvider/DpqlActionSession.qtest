@@ -384,6 +384,17 @@ class DpqlActionSessionTest inherits QUnit::Test {
         assertEq(False, r2.pushdown.fully_pushdownable, "regex not in server set -> not pushdownable");
         assertTrue(r2.success, "regex is still evaluable client-side -> verifies");
         assertEq(True, r2.evaluation.result, "\"John\" matches /John/ -> True");
+
+        # a condition that is not pushed down and cannot be evaluated locally
+        hash<auto> r3 = session.handleAction("dpql-eval", {
+            "text": "@age / 0 > 1",
+            "record": {"name": "John", "age": 25},
+        });
+        assertFalse(r3.success, "a condition that fails locally and is not pushed down does not verify");
+        list<hash<auto>> e100 = select r3.diagnostics, $1.code == "DPQL-E100";
+        assertEq(1, e100.size(), "DPQL-E100 is reported");
+        assertEq("error", e100[0].severity);
+        assertRegex("^The search condition could not be checked here: DIVISION-BY-ZERO: ", e100[0].message);
     }
 
     testSchemaAwareKeyCompletions() {

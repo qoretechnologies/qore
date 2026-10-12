@@ -476,8 +476,8 @@ public class DpqlActionSession {
                     diags += <DpqlDiagnostic>{
                         "severity": "error",
                         "code": "DPQL-E100",
-                        "message": sprintf("expression failed local evaluation and is not "
-                            "pushed down to the provider: %s: %s", ex.err, ex.desc),
+                        "message": sprintf("The search condition could not be checked here: %s: %s", ex.err,
+                            ex.desc),
                         "line": 1,
                         "column": 1,
                         "end_line": 1,
