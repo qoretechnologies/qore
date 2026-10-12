@@ -294,6 +294,52 @@ exercise prepared and looked-up slots with both primitive-store modes.
 emission rejects the partial LLVM function and permits reuse of the same
 lowerer after clearing cancellation, for both normal and fast entries.
 
+### Prepared runtime-backed AOT local reloads
+
+The stale-cache reload path can reuse an invocation-local body-slot address,
+independently of prepared assignment storage. `getAOTReloadLocalSlot` requires
+an ordinary runtime-backed AOT body local and excludes parameters, captures,
+self (including the reserved name), top-level and IR-only locals. Existing
+reload eligibility also excludes native, weak-assigned and reload-exempt
+locals. Typed and read-only body locals can be read; auto-store declaration
+restrictions are not appropriate for reload admission.
+
+`qore_rt_get_reload_local_slot_aot_v1` accepts the AOT context, local index and
+borrowed live `RuntimeConfig`. It checks the Program and storage availability,
+returning null for ordinary lookup when preparation is unavailable. Emission
+uses the same post-instantiation anchor as body-store preparation, with a
+separate per-function map. Handles are neither shared in the AOT context nor
+retained beyond invocation cleanup. Recursive calls and block clearing do not
+invalidate the containing invocation's ordinary slot address.
+
+After the existing freshness and class-parameter mutation guards, a non-null
+handle selects `qore_rt_reload_prepared_local_if_stale_aot_v1`; a null handle
+selects the existing reload helper. The prepared helper takes seven arguments:
+slot, cache, current owner, deferred owner, valid-epoch address, current epoch
+and exception sink. It still invokes `LocalVarValue::eval` and the ordinary
+loaded-reference handling. Only the `LocalVar`/TLS/stack lookup is omitted.
+
+Both helpers share the existing ownership protocol. Equal epochs are a no-op.
+Otherwise, both old owners are snapshotted before potentially reentrant
+evaluation; the new cache/current owner and old current owner as deferred are
+published before old deferred cleanup. The valid epoch is published last,
+including on sink failure. No evaluated value, type, ownership flag or
+reference-evaluation result is cached by slot preparation. Eager runtime reload
+paths outside this stale-cache helper are unchanged.
+
+`QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD` omits this preparation at compilation;
+presence at first runtime getter use instead returns null in the same binary.
+The flag and compiler map are independent of class/auto store controls. No
+existing helper interface or serialized IR format is changed; new versioned
+symbols and runtime identity still require matching compiler and runtime
+artifacts. No IR/JIT timing benefit is established by this AOT path.
+
+The reload and auto-slot fixtures exercise compile/runtime controls, independent
+store controls, reflection, recursion and cleanup. Debug native checks force
+both looked-up and non-null prepared reloads, checking fresh epochs, exact node
+owner counts, deferred destruction/reentry, cleanup exceptions, block clearing
+and reassignment. They also check getter rejection and typed read-only storage.
+
 ### Checked AOT class-local initialization
 
 A normal initial assignment to a runtime-backed AOT body local with one required,

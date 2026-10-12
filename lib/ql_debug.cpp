@@ -531,6 +531,151 @@ static void ut_aot_scalar_local_store(UnitTestCounters& c) {
     ut_aot_scalar_local_store_mode(c, true, true);
 }
 
+//! Observe publication ordering while a reload releases its previous deferred owner.
+class UtReloadDeferredString : public QoreStringNode {
+public:
+    UtReloadDeferredString(UnitTestCounters& counters, LocalVarValue& slot, uint64_t& cache,
+            uint64_t& tracker, uint64_t& deferred, uint64_t& valid_epoch, uint64_t old_tracker,
+            ExceptionSink& xsink, bool fail)
+        : QoreStringNode("reload deferred cleanup"), counters(counters), slot(slot), cache(cache),
+          tracker(tracker), deferred(deferred), valid_epoch(valid_epoch), old_tracker(old_tracker),
+          xsink(xsink), fail(fail) {
+    }
+
+    ~UtReloadDeferredString() override {
+        UT_ASSERT_EQ(counters, QoreValue(int64_t{27}).rawBits(), cache, "cache is published before cleanup");
+        UT_ASSERT_EQ(counters, cache, tracker, "new owning tracker is published before cleanup");
+        UT_ASSERT_EQ(counters, old_tracker, deferred, "old tracker is deferred before cleanup");
+        UT_ASSERT_EQ(counters, 0, valid_epoch, "epoch is not published before cleanup");
+        // The actual slot may change during cleanup. Do not substitute this
+        // later value for the one evaluated before the destructor ran.
+        slot.syncValue(QoreValue(int64_t{73}), &xsink);
+        uint64_t nested_cache = QoreValue().rawBits(), nested_tracker = nested_cache;
+        uint64_t nested_deferred = nested_cache, nested_epoch = 0;
+        qore_rt_reload_prepared_local_if_stale_aot_v1(&slot, &nested_cache, &nested_tracker,
+            &nested_deferred, &nested_epoch, 1, &xsink);
+        UT_ASSERT_EQ(counters, QoreValue(int64_t{73}).rawBits(), nested_cache,
+            "reentrant evaluation sees the current slot");
+        qore_rt_decref(nested_tracker, &xsink);
+        qore_rt_decref(nested_deferred, &xsink);
+        if (fail) {
+            xsink.raiseException("RELOAD-CLEANUP-TEST", "deferred owner cleanup failure");
+        }
+    }
+
+private:
+    UnitTestCounters& counters;
+    LocalVarValue& slot;
+    uint64_t &cache, &tracker, &deferred, &valid_epoch;
+    uint64_t old_tracker;
+    ExceptionSink& xsink;
+    bool fail;
+};
+
+static void ut_aot_prepared_local_reload(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    struct LocalScope {
+        LocalVar var;
+        ExceptionSink& xsink;
+        LocalScope(const char* name, const QoreTypeInfo* ti, ExceptionSink& sink) : var(name, ti), xsink(sink) {
+            var.instantiate(QoreValue(int64_t{27}));
+        }
+        ~LocalScope() { var.uninstantiate(&xsink); }
+    } local("native_prepared_reload", autoTypeInfo, xsink);
+    LocalVarValue* slot = thread_try_find_lvar(&local.var);
+    UT_ASSERT(c, slot, "reload fixture has a runtime slot");
+    if (!slot) {
+        return;
+    }
+    struct BorrowedLocalContext : QoreAOTContext {
+        ~BorrowedLocalContext() { locals = nullptr; }
+    } context;
+    LocalVar* locals[] = {&local.var};
+    context.locals = locals;
+    context.num_locals = 1;
+    RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+    context.pgm = RuntimeConfigNativeAccess::getProgram(rc);
+    auto expected_slot = [&](LocalVarValue* value) {
+        return std::getenv("QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD") ? nullptr : value;
+    };
+    UT_ASSERT(c, context.pgm, "reload getter has a live Program");
+    UT_ASSERT(c, qore_rt_get_reload_local_slot_aot_v1(&context, 0, &rc) == expected_slot(slot),
+        "reload getter resolves actual storage independently of store controls");
+    UT_ASSERT(c, !qore_rt_get_reload_local_slot_aot_v1(nullptr, 0, &rc), "null AOT context is rejected");
+    UT_ASSERT(c, !qore_rt_get_reload_local_slot_aot_v1(&context, -1, &rc), "negative reload index is rejected");
+    UT_ASSERT(c, !qore_rt_get_reload_local_slot_aot_v1(&context, 1, &rc), "past-end reload index is rejected");
+    UT_ASSERT(c, !qore_rt_get_reload_local_slot_aot_v1(&context, 0, nullptr), "null runtime context is rejected");
+    context.pgm = nullptr;
+    UT_ASSERT(c, !qore_rt_get_reload_local_slot_aot_v1(&context, 0, &rc), "foreign Program is rejected");
+    context.pgm = RuntimeConfigNativeAccess::getProgram(rc);
+    {
+        LocalScope typed("native_typed_reload", bigIntTypeInfo, xsink);
+        typed.var.setReadOnly();
+        locals[0] = &typed.var;
+        UT_ASSERT(c, qore_rt_get_reload_local_slot_aot_v1(&context, 0, &rc)
+            == expected_slot(thread_try_find_lvar(&typed.var)), "typed read-only storage can be read");
+        locals[0] = &local.var;
+    }
+    // Force the non-null helper itself even when testing the getter's disabled
+    // control: matching results from the generic fallback alone are insufficient.
+    for (bool prepared : {false, true}) {
+        for (bool fail : {false, true}) {
+            slot->syncValue(QoreValue(int64_t{27}), &xsink);
+            ReferenceHolder<QoreStringNode> old(new QoreStringNode("old reload tracker"), &xsink);
+            uint64_t tracker = QoreValue(old->refSelf()).rawBits();
+            uint64_t cache = tracker, deferred = QoreValue().rawBits(), valid_epoch = 0;
+            ReferenceHolder<QoreStringNode> owner(new UtReloadDeferredString(c, *slot, cache,
+                tracker, deferred, valid_epoch, tracker, xsink, fail), &xsink);
+            deferred = QoreValue(owner.release()).rawBits();
+            uint64_t before_deferred = deferred;
+            auto reload = [&](uint64_t epoch) {
+                if (prepared) {
+                    qore_rt_reload_prepared_local_if_stale_aot_v1(slot, &cache, &tracker,
+                        &deferred, &valid_epoch, epoch, &xsink);
+                } else {
+                    qore_rt_reload_local_if_stale(&local.var, &cache, &tracker,
+                        &deferred, &valid_epoch, epoch, &xsink);
+                }
+            };
+            reload(0);
+            UT_ASSERT_EQ(c, tracker, cache, "fresh reload does not change cache");
+            UT_ASSERT_EQ(c, before_deferred, deferred, "fresh reload does not release owners");
+            UT_ASSERT_EQ(c, 2, old->reference_count(), "fresh reload retains tracker ownership");
+            reload(1);
+            UT_ASSERT(c, static_cast<bool>(xsink) == fail, "cleanup exceptions are preserved");
+            xsink.clear();
+            UT_ASSERT_EQ(c, 1, valid_epoch, "epoch is published after cleanup even on sink failure");
+            UT_ASSERT_EQ(c, QoreValue(int64_t{27}).rawBits(), cache, "reload keeps its pre-cleanup result");
+            UT_ASSERT_EQ(c, QoreValue(int64_t{73}).rawBits(), slot->val.getValue().rawBits(),
+                "cleanup's reflective replacement remains in the runtime slot");
+            UT_ASSERT_EQ(c, 2, old->reference_count(), "deferred old tracker still owns exactly one reference");
+            reload(2);
+            UT_ASSERT_EQ(c, 1, old->reference_count(), "next stale reload releases the deferred owner once");
+            UT_ASSERT_EQ(c, QoreValue(int64_t{73}).rawBits(), cache, "next stale reload observes replacement");
+            slot->del(&xsink);
+            reload(3);
+            UT_ASSERT_EQ(c, QoreValue().rawBits(), cache, "cleared block reloads NOTHING through the same slot");
+            slot->syncValue(QoreValue(false), &xsink);
+            reload(4);
+            UT_ASSERT_EQ(c, QoreValue(false).rawBits(), cache, "reassigned block reuses the same slot");
+            slot->syncValue(QoreValue(old->refSelf()), &xsink);
+            reload(5);
+            UT_ASSERT_EQ(c, QoreValue(*old).rawBits(), cache, "node reload publishes the actual object");
+            UT_ASSERT_EQ(c, 3, old->reference_count(), "node reload has holder, runtime-slot and tracker owners");
+            reload(5);
+            UT_ASSERT_EQ(c, 3, old->reference_count(), "fresh node reload adds no ownership");
+            slot->del(&xsink);
+            reload(6);
+            UT_ASSERT_EQ(c, 2, old->reference_count(), "cleared node remains owned by the deferred tracker");
+            reload(7);
+            UT_ASSERT_EQ(c, 1, old->reference_count(), "following reload releases the last tracker owner");
+            qore_rt_decref(tracker, &xsink);
+            qore_rt_decref(deferred, &xsink);
+        }
+    }
+    UT_ASSERT(c, !xsink, "prepared reload native checks leave no exception");
+}
+
 //! the I/O thread count of a process in a container with a CPU limit: the cgroup CPU quota files
 static void ut_cgroup_cpu_limit(UnitTestCounters& c) {
     // cgroup v2 cpu.max: "<quota> <period>" or "max <period>"
@@ -6102,6 +6247,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     UnitTestCounters c;
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
+    ut_aot_prepared_local_reload(c);
     ut_qorevalue_operator_bool_null(c);
     ut_string_data_helper(c);
     ut_string_compare_soft_and_concat_chars(c);
@@ -6119,6 +6265,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     UnitTestCounters c;
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
+    ut_aot_prepared_local_reload(c);
 
     ut_qorevalue_operator_bool_null(c);
     ut_string_data_helper(c);

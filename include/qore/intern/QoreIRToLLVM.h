@@ -359,6 +359,8 @@ private:
     std::unordered_map<const LocalVar*, llvm::Value*> aot_pinned_entry_values;
     // Borrowed storage, not a value/owner: ordinary body slots survive until function exit.
     std::unordered_map<const LocalVar*, llvm::Value*> aot_body_local_slots;
+    // Independent preparation/control from stores, even for the same local.
+    std::unordered_map<const LocalVar*, llvm::Value*> aot_reload_local_slots;
     // Immutable declaration constraints only; object acceptance is checked at every store.
     std::unordered_map<const LocalVar*, llvm::Value*> aot_class_local_constraints;
     llvm::BasicBlock* aot_body_local_slot_entry = nullptr;
@@ -1575,9 +1577,12 @@ private:
         llvm::Function* llvm_func);
     llvm::Value* getAOTAutoLocalSlot(const LocalVar* local, llvm::Module& module,
         llvm::Function* llvm_func);
+    llvm::Value* getAOTReloadLocalSlot(const LocalVar* local, llvm::Module& module,
+        llvm::Function* llvm_func);
+    enum class AotBodyLocalSlotKind { Class, Auto, Reload };
     // Common emission after eligibility checks; each function invocation owns its handle.
     llvm::Value* getAOTBodyLocalSlot(const LocalVar* local, llvm::Module& module,
-        llvm::Function* llvm_func, bool auto_local);
+        llvm::Function* llvm_func, AotBodyLocalSlotKind kind);
     llvm::Value* getAOTClassLocalConstraint(const LocalVar* local, llvm::Value* slot,
         llvm::Module& module);
 

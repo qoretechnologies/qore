@@ -1622,6 +1622,32 @@ void qore_rt_reload_local_if_stale_aot(QoreAOTContext* ctx, int32_t idx, uint64_
         uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
         ExceptionSink* xsink);
 
+//! Resolve compiler-proven ordinary AOT body-local storage after its instantiation.
+/** @param ctx current AOT context
+    @param idx body-local index, never a parameter, capture, self or top-level local
+    @param rc borrowed live same-thread invocation context
+    @return borrowed slot, or nullptr to retain ordinary reload lookup
+    @note The slot is valid only during this invocation, including nested calls and block clears.
+    No value, ownership or live-state flags are cached. The first-use presence control
+    QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD returns nullptr independently of store-slot controls.
+*/
+void* qore_rt_get_reload_local_slot_aot_v1(QoreAOTContext* ctx, int32_t idx, RuntimeConfig* rc);
+
+//! Reload through a non-null invocation-local slot with the ordinary evaluation/ownership protocol.
+/** @param prepared_slot non-null result of qore_rt_get_reload_local_slot_aot_v1 in this invocation
+    @param cache caller's borrowed local-value cache
+    @param tracker caller's owning current reload tracker
+    @param deferred caller's owning previous reload tracker
+    @param valid_epoch caller's last completed reload epoch
+    @param epoch current caller invalidation epoch
+    @param xsink exception sink, including reference evaluation and deferred destruction failures
+    @note Matching epochs are a no-op. Owners are snapshotted before evaluation, values are
+    published before old deferred cleanup, and the epoch is published last, as in generic reloads.
+*/
+void qore_rt_reload_prepared_local_if_stale_aot_v1(void* prepared_slot, uint64_t* cache,
+        uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
+        ExceptionSink* xsink);
+
 //! Assign to a local variable via AOT context slot
 void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 void qore_rt_assign_local_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);

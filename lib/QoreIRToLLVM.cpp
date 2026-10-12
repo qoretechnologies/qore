@@ -5372,10 +5372,31 @@ void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
                     {ptr_type, i32_type, ptr_type, ptr_type, ptr_type, ptr_type,
                      i64_type, ptr_type}, false));
         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+        llvm::BasicBlock* prepared_continue = nullptr;
+        if (llvm::Value* prepared = getAOTReloadLocalSlot(static_cast<const LocalVar*>(key),
+                module, llvm_func)) {
+            auto* reload = llvm::BasicBlock::Create(ctx, "aot_prepared_local_reload", llvm_func);
+            auto* fallback = llvm::BasicBlock::Create(ctx, "aot_local_reload_lookup", llvm_func);
+            prepared_continue = llvm::BasicBlock::Create(ctx, "aot_prepared_reload_continue", llvm_func);
+            builder->CreateCondBr(builder->CreateIsNotNull(prepared), reload, fallback);
+            builder->SetInsertPoint(reload);
+            auto prepared_helper = module.getOrInsertFunction("qore_rt_reload_prepared_local_if_stale_aot_v1",
+                llvm::FunctionType::get(void_type,
+                    {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i64_type, ptr_type}, false));
+            builder->CreateCall(prepared_helper,
+                {prepared, alloca_it->second, tracker_it->second, deferred_it->second,
+                 valid_epoch, epoch, xsink_arg});
+            builder->CreateBr(prepared_continue);
+            builder->SetInsertPoint(fallback);
+        }
         builder->CreateCall(helper,
                 {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
                  alloca_it->second, tracker_it->second, deferred_it->second,
                  valid_epoch, epoch, xsink_arg});
+        if (prepared_continue) {
+            builder->CreateBr(prepared_continue);
+            builder->SetInsertPoint(prepared_continue);
+        }
     } else {
         auto helper = module.getOrInsertFunction("qore_rt_reload_local_if_stale",
                 llvm::FunctionType::get(void_type,
@@ -5657,7 +5678,7 @@ llvm::Value* QoreIRToLLVM::getAOTClassLocalSlot(const LocalVar* local, llvm::Mod
             || QoreTypeInfo::isReference(ti)) {
         return nullptr;
     }
-    return getAOTBodyLocalSlot(local, module, llvm_func, false);
+    return getAOTBodyLocalSlot(local, module, llvm_func, AotBodyLocalSlotKind::Class);
 }
 
 llvm::Value* QoreIRToLLVM::getAOTAutoLocalSlot(const LocalVar* local, llvm::Module& module,
@@ -5669,13 +5690,26 @@ llvm::Value* QoreIRToLLVM::getAOTAutoLocalSlot(const LocalVar* local, llvm::Modu
             || std::getenv("QORE_DISABLE_AOT_AUTO_LOCAL_SLOT")) {
         return nullptr;
     }
-    return getAOTBodyLocalSlot(local, module, llvm_func, true);
+    return getAOTBodyLocalSlot(local, module, llvm_func, AotBodyLocalSlotKind::Auto);
+}
+
+llvm::Value* QoreIRToLLVM::getAOTReloadLocalSlot(const LocalVar* local, llvm::Module& module,
+        llvm::Function* llvm_func) {
+    if (!aot_mode || !local || !aot_body_locals.count(local) || local->closureUse()
+            || local->isSelf() || local->isTopLevel() || !strcmp(local->getName(), "self")
+            || ir_only_body_locals.count(local) || !current_ir_func || current_ir_func->blocks.empty()
+            || (fast_entry_args && fast_entry_args->count(local))
+            || std::getenv("QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD")) {
+        return nullptr;
+    }
+    return getAOTBodyLocalSlot(local, module, llvm_func, AotBodyLocalSlotKind::Reload);
 }
 
 llvm::Value* QoreIRToLLVM::getAOTBodyLocalSlot(const LocalVar* local, llvm::Module& module,
-        llvm::Function* llvm_func, bool auto_local) {
-    auto found = aot_body_local_slots.find(local);
-    if (found != aot_body_local_slots.end()) {
+        llvm::Function* llvm_func, AotBodyLocalSlotKind kind) {
+    auto& slots = kind == AotBodyLocalSlotKind::Reload ? aot_reload_local_slots : aot_body_local_slots;
+    auto found = slots.find(local);
+    if (found != slots.end()) {
         return found->second;
     }
     if (!aot_body_local_slot_entry || aot_body_local_slot_entry->getParent() != llvm_func) {
@@ -5697,14 +5731,18 @@ llvm::Value* QoreIRToLLVM::getAOTBodyLocalSlot(const LocalVar* local, llvm::Modu
         auto* acquire = llvm::cast<llvm::Instruction>(aot_body_local_runtime_config);
         eb.SetInsertPoint(acquire->getParent(), std::next(acquire->getIterator()));
     }
-    auto get_slot = module.getOrInsertFunction(auto_local ? "qore_rt_get_auto_local_slot_aot_v1"
-        : "qore_rt_get_class_local_slot_aot_v1",
+    const char* helper = kind == AotBodyLocalSlotKind::Reload ? "qore_rt_get_reload_local_slot_aot_v1"
+        : kind == AotBodyLocalSlotKind::Auto ? "qore_rt_get_auto_local_slot_aot_v1"
+        : "qore_rt_get_class_local_slot_aot_v1";
+    const char* name = kind == AotBodyLocalSlotKind::Reload ? "reload_local_slot"
+        : kind == AotBodyLocalSlotKind::Auto ? "auto_local_slot" : "class_local_slot";
+    auto get_slot = module.getOrInsertFunction(helper,
         llvm::FunctionType::get(ptr_type, {ptr_type, i32_type, ptr_type}, false));
     int32_t index = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(local);
     llvm::Value* slot = eb.CreateCall(get_slot,
         {aot_ctx_arg, llvm::ConstantInt::get(i32_type, index), aot_body_local_runtime_config},
-        auto_local ? "auto_local_slot" : "class_local_slot");
-    aot_body_local_slots.emplace(local, slot);
+        name);
+    slots.emplace(local, slot);
     return slot;
 }
 
@@ -11928,6 +11966,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     stable_exact_receiver_loads.clear();
     aot_pinned_entry_values.clear();
     aot_body_local_slots.clear();
+    aot_reload_local_slots.clear();
     aot_class_local_constraints.clear();
     aot_body_local_slot_entry = nullptr;
     aot_body_local_slot_anchor = nullptr;

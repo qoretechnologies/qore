@@ -1258,6 +1258,34 @@ See [prepared auto-slot measurements and compile-time controls](RESULTS.md#prepa
 Boxed-call gains repeat, but list-construction and native-float adverse results
 remain explicit; this is not a universal speedup or a Java-parity claim.
 
+`QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD=1` independently disables prepared
+body-local access for stale AOT cache reloads. During compilation it omits the
+reload-slot getter and prepared-reload helper. At runtime, presence sampled on
+the getter's first use makes it return null, so the identical executable uses
+ordinary local lookup. Empty values and `0` also disable preparation. This flag
+does not disable store-slot preparation, the inline freshness guard, reflective
+invalidation or body-slot cleanup. Store-slot controls do not disable reload
+preparation either.
+
+Eligible ordinary body slots are resolved after this invocation's local
+instantiation and retained only until its cleanup. Unlike auto-store admission,
+reading does not require an auto declaration or a writable local. Parameters,
+self, captures, top-level and IR-only storage are excluded; existing native,
+weak-assigned and reload-exempt exclusions still apply. Null handles retain the
+ordinary fallback. The handle caches storage, not its value or ownership.
+
+The prepared helper still evaluates the live slot and its references. It
+snapshots the old owners before evaluation, publishes the new cache and owner
+chain before releasing the old deferred value, and publishes the completed
+epoch last, including when cleanup raises an exception. It does not remove
+reloads or change reference-counting and destruction semantics. New versioned
+helpers and the runtime identity require matching, separately compiled
+before/after artifacts. This is AOT-specific code generation; an IR/JIT speedup
+has not been measured for this change.
+
+See [prepared-reload measurements and current Java comparison](RESULTS.md#prepared-runtime-backed-aot-local-reloads-2026-10-12)
+and [verified evidence/audit](results-aot-prepared-local-reload-macos-arm64.json).
+
 See [AOT scalar-store measurements](RESULTS.md#aot-scalar-local-replacement-2026-10-11) and [verified evidence/audit](results-aot-scalar-local-store-macos-arm64.json).
 
 See [direct primitive-store measurements and longer confirmation](RESULTS.md#direct-aot-primitive-local-replacement-2026-10-12),

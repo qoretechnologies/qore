@@ -382,6 +382,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_reload_chain_clear", reinterpret_cast<void*>(&qore_rt_reload_chain_clear) },
     { "qore_rt_reload_local_if_stale", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale) },
     { "qore_rt_reload_local_if_stale_aot", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_aot) },
+    { "qore_rt_get_reload_local_slot_aot_v1", reinterpret_cast<void*>(&qore_rt_get_reload_local_slot_aot_v1) },
+    { "qore_rt_reload_prepared_local_if_stale_aot_v1", reinterpret_cast<void*>(&qore_rt_reload_prepared_local_if_stale_aot_v1) },
     { "qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot) },
     { "qore_rt_assign_class_local_result_aot_v1",
         reinterpret_cast<void*>(&qore_rt_assign_class_local_result_aot_v1) },
@@ -2019,9 +2021,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* x
     return toBits(rv);
 }
 
-extern "C" DLLEXPORT void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache,
-        uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
-        ExceptionSink* xsink) {
+template <typename Load>
+static inline void qore_rt_reload_local_if_stale_impl(uint64_t* cache, uint64_t* tracker,
+        uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch, ExceptionSink* xsink,
+        const Load& load) {
     assert(cache && tracker && deferred && valid_epoch);
     if (*valid_epoch == epoch) {
         return;
@@ -2029,13 +2032,37 @@ extern "C" DLLEXPORT void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t*
 
     uint64_t old_tracker = *tracker;
     uint64_t old_deferred = *deferred;
-    uint64_t reloaded = qore_rt_load_local(var, xsink);
+    // Evaluation can reenter Qore. Both old owners must be captured before it,
+    // and the previous deferred owner must survive publication of the new value.
+    uint64_t reloaded = load();
 
     *cache = reloaded;
     *tracker = reloaded;
     *deferred = old_tracker;
     qore_rt_decref(old_deferred, xsink);
     *valid_epoch = epoch;
+}
+
+extern "C" DLLEXPORT void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache,
+        uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
+        ExceptionSink* xsink) {
+    qore_rt_reload_local_if_stale_impl(cache, tracker, deferred, valid_epoch, epoch, xsink,
+        [var, xsink]() { return qore_rt_load_local(var, xsink); });
+}
+
+extern "C" DLLEXPORT void qore_rt_reload_prepared_local_if_stale_aot_v1(void* prepared_slot,
+        uint64_t* cache, uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch,
+        uint64_t epoch, ExceptionSink* xsink) {
+    auto* slot = static_cast<LocalVarValue*>(prepared_slot);
+    assert(slot && slot->local_var && !slot->frame_boundary);
+    qore_rt_reload_local_if_stale_impl(cache, tracker, deferred, valid_epoch, epoch, xsink,
+        [slot, xsink]() {
+            // Delegate to the same slot evaluation and loaded-reference handling
+            // as LocalVar::eval. Only lookup is omitted; this may still reenter.
+            bool needs_deref = true;
+            QoreValue result = slot->eval(needs_deref, xsink);
+            return toBits(qore_rt_deref_loaded_var_value(result, needs_deref, xsink));
+        });
 }
 
 static inline uint64_t qore_rt_eval_reference_node(AbstractQoreNode* node, ExceptionSink* xsink) {
@@ -12676,6 +12703,19 @@ extern "C" DLLEXPORT void qore_rt_reload_local_if_stale_aot(QoreAOTContext* ctx,
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_reload_local_if_stale(ctx->locals[idx], cache, tracker, deferred,
             valid_epoch, epoch, xsink);
+}
+
+extern "C" DLLEXPORT void* qore_rt_get_reload_local_slot_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, RuntimeConfig* rc) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD");
+    if (!enabled || !ctx || idx < 0 || idx >= ctx->num_locals || !rc
+            || RuntimeConfigNativeAccess::getProgram(*rc) != ctx->pgm
+            || !ctx->locals[idx] || !strcmp(ctx->locals[idx]->getName(), "self")) {
+        return nullptr;
+    }
+    // Compiler-proven body ownership excludes parameters and private IR slots.
+    // Reads need no assignment-type admission; actual evaluation remains live.
+    return RuntimeConfigNativeAccess::getAOTBodyLocalSlot(*rc, ctx->locals[idx]);
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
