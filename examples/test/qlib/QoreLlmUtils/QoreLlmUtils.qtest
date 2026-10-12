@@ -265,6 +265,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \registryRegisterDeregisterTest());
         addTestCase("LlmBackend provider registry - duplicate registration rejected",
             \registryDuplicateRejectedTest());
+        addTestCase("LlmBackend provider registry - model info defaults to the provider info",
+            \registryModelInfoDefaultTest());
         addTestCase("LlmBackend provider registry - unknown mode",
             \registryUnknownModeTest());
         addTestCase("LlmBackendConfig hashdecl defaults", \hashdeclDefaultsTest());
@@ -5158,6 +5160,16 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         AbstractLlmProviderFactory looked_up = LlmProviderRegistry::getFactoryEx("test-fake");
         assertEq("test-fake", looked_up.getMode());
         assertTrue(inlist("test-fake", LlmProviderRegistry::knownProviderModes()));
+    }
+
+    # a factory that does not override getModelInfo() gives the provider's information for every model
+    registryModelInfoDefaultTest() {
+        FakeLlmProviderFactory fake();
+        hash<LlmProviderInfo> info = fake.getInfo();
+        assertFalse(info.reasoning_always_on);
+        foreach string model in (("gemini-3.7-flash", "any-model", "")) {
+            assertEq(info, fake.getModelInfo(model), model);
+        }
     }
 
     registryDuplicateRejectedTest() {

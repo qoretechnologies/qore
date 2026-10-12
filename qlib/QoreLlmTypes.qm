@@ -87,6 +87,10 @@ module QoreLlmTypes {
     - @ref QoreLlmUtils::LlmRequestOptions::cached_content "LlmRequestOptions::cached_content" for explicit prompt
       caching and @ref QoreLlmUtils::LlmTokenUsage::reasoning_in_output "LlmTokenUsage::reasoning_in_output",
       which says whether the reasoning tokens are part of the output tokens
+    - @ref QoreLlmUtils::AbstractLlmProviderFactory::getModelInfo() "AbstractLlmProviderFactory::getModelInfo()"
+      returns the information of a provider for a model, with
+      @ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on" for a model that
+      cannot turn hidden reasoning off
 */
 
 #! Provider-neutral LLM types and abstract classes (shared with QoreLlmUtils)
@@ -714,6 +718,18 @@ public hashdecl LlmProviderInfo {
     bool supports_reasoning_effort = False;
     #! True when the provider maps @ref LlmRequestOptions::reasoning_token_budget for supported models
     bool supports_reasoning_token_budget = False;
+    #! True when the model cannot turn hidden reasoning off
+    /** A @ref LlmRequestOptions::reasoning_token_budget "reasoning_token_budget" of zero (or
+        @ref LlmRequestOptions::disable_reasoning "disable_reasoning") still spends reasoning tokens, and they come out
+        of the same output budget as the visible response: a caller that limits the output tokens of a call needs to
+        leave room for them, or the visible response can be cut off.
+
+        This is a property of a model, which @ref AbstractLlmProviderFactory::getModelInfo() reports; the information
+        of the provider as a whole (@ref AbstractLlmProviderFactory::getInfo()) leaves it @ref False.
+
+        @since QoreLlmTypes 1.0
+    */
+    bool reasoning_always_on = False;
     #! True when callers should avoid sending large unused tool catalogues
     /** Some providers use constrained decoding over the full tool/function
         declaration set; for those providers, a large stable catalogue can be
@@ -793,6 +809,29 @@ public class AbstractLlmProviderFactory {
             "display_name": getDisplayName(),
             "module_name": Class::getClass(self).getModuleName(),
         };
+    }
+
+    #! Returns information about the provider for a given model
+    /** Some capabilities depend on the model that calls are made with, such as
+        @ref LlmProviderInfo::reasoning_always_on; concrete factories override this method to set them.  The default
+        implementation returns @ref getInfo(), the information of the provider as a whole.
+
+        @param model the model ID or resource name that calls are made with
+
+        @return the provider's information for the model
+
+        @par Example
+        @code{.py}
+hash<LlmProviderInfo> info = LlmProviderRegistry::getFactory("vertex-ai").getModelInfo("gemini-3.7-flash");
+if (info.reasoning_always_on) {
+    # leave room for reasoning tokens in the output budget of a call with reasoning_token_budget = 0
+}
+        @endcode
+
+        @since QoreLlmTypes 1.0
+    */
+    hash<LlmProviderInfo> getModelInfo(string model) {
+        return getInfo();
     }
 }
 

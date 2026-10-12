@@ -110,9 +110,11 @@ module GeminiBodyShape {
 
     Numeric \c reasoning_token_budget values are omitted on Gemini 3.x, since a token budget has no exact
     thinking-level equivalent, except zero: Gemini 3.x cannot turn thinking off, so a budget of zero selects the
-    lowest thinking level that every provider accepts for the model, \c LOW (see @ref lowestThinkingLevel()), so that
-    thinking tokens do not use up a small output budget. Without an explicit level, other budgets (including -1) leave the model default.
-    \c disable_reasoning is not mapped to a level.
+    lowest thinking level that every provider accepts for the model, \c LOW (see @ref lowestThinkingLevel()). Even
+    \c LOW spends reasoning tokens, and they come out of the output budget: the provider factories report this for
+    each model with \c reasoning_always_on (@ref QoreLlmUtils::AbstractLlmProviderFactory::getModelInfo()
+    "getModelInfo()"), so that a caller can leave room for them. Without an explicit level, other budgets (including
+    -1) leave the model default. \c disable_reasoning is not mapped to a level.
     Older models, including Gemini 2.5, retain sampling parameters and numeric thinking budgets. Generic
     \c reasoning_effort is ignored for these models; Gemini 2.5's generateContent API does not accept thinking levels.
 

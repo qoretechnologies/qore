@@ -58,6 +58,7 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
         addTestCase("sampling and budget migration preserves other fields", \normalization());
         addTestCase("snake case aliases and empty configs", \aliases());
         addTestCase("a budget of zero selects the lowest thinking level on Gemini 3", \zeroBudget());
+        addTestCase("model info says that Gemini 3 cannot turn reasoning off", \modelInfo());
         addTestCase("invalid config rejects before sending", \invalid());
         addTestCase("chat shaping handles reasoning effort", \shaping());
         addTestCase("both providers resolve options before normalization", \providers());
@@ -156,6 +157,25 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
         });
         assertEq({"maxOutputTokens": 180, "thinkingConfig": {"thinkingBudget": 0}},
             body.generationConfig{"maxOutputTokens", "thinkingConfig"});
+    }
+
+    # both providers report, for each model, whether hidden reasoning can be turned off: not on Gemini 3.x
+    modelInfo() {
+        foreach QoreLlmUtils::AbstractLlmProviderFactory factory in ((new GeminiRestClient::GeminiLlmProviderFactory(),
+                new VertexAiRestClient::VertexAiLlmProviderFactory())) {
+            hash<QoreLlmUtils::LlmProviderInfo> info = factory.getInfo();
+            assertFalse(info.reasoning_always_on, factory.getMode());
+            foreach string model in (("gemini-3.7-flash", "gemini-3.1-pro-preview", "gemini-3-flash-preview",
+                    "models/gemini-3.5-flash", "projects/p/locations/global/publishers/google/models/gemini-3.7-flash")) {
+                hash<QoreLlmUtils::LlmProviderInfo> model_info = factory.getModelInfo(model);
+                assertTrue(model_info.reasoning_always_on, factory.getMode() + " " + model);
+                # the rest is the provider's information
+                assertEq(info - "reasoning_always_on", model_info - "reasoning_always_on", model);
+            }
+            foreach string model in (("gemini-2.5-flash", "gemini-2.5-pro", "models/gemini-2.5-flash", "custom-model")) {
+                assertEq(info, factory.getModelInfo(model), factory.getMode() + " " + model);
+            }
+        }
     }
 
     aliases() {
