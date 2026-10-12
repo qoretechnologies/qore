@@ -1219,6 +1219,22 @@ normal assignment, as do weak/opaque/node inputs and replacement of owned nodes.
 The shortcut updates the actual runtime slot; it does not introduce a separate
 unobservable local cache. It does not change the interpreter's assignment path.
 
+`QORE_DISABLE_AOT_DIRECT_SCALAR_STORE=1` independently restores generic scalar
+storage after those same guards. By default, proven primitives are extracted
+without conversion and copied directly into the runtime slot; assignment and
+ownership flags are unchanged. The broader scalar-local control takes precedence.
+Both controls use one immutable, thread-safe first-use configuration; presence
+(even an empty value or `0`) disables the selected shortcut. Set them before
+process startup. Declaration checks and thread-local slot lookup remain live.
+The private-header change alters the AOT runtime identity, so compare matching,
+separately compiled before/after artifacts; candidate A/A and runtime on/off
+controls can use an identical executable. This does not change IR/JIT local
+assignment, widen fast-path admission or establish Java parity.
+
 See [AOT scalar-store measurements](RESULTS.md#aot-scalar-local-replacement-2026-10-11) and [verified evidence/audit](results-aot-scalar-local-store-macos-arm64.json).
+
+See [direct primitive-store measurements and longer confirmation](RESULTS.md#direct-aot-primitive-local-replacement-2026-10-12),
+[all verified samples](results-aot-direct-scalar-store-macos-arm64.json), and the
+[62-check audit](FOLLOWUP-AUDIT.md#direct-aot-primitive-local-replacement-audit-2026-10-12).
 
 See [native scalar-key measurements](RESULTS.md#aot-native-scalar-dispatch-key-2026-10-11) and [verified evidence/audit](results-native-scalar-key-macos-arm64.json).

@@ -381,7 +381,7 @@ static void ut_local_discard(UnitTestCounters& c) {
 }
 
 //! Exercise scalar-store admission itself, not just results obtainable by fallback.
-static void ut_aot_scalar_local_store(UnitTestCounters& c) {
+static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_store) {
     ExceptionSink xsink;
     struct LocalScope {
         LocalVar var;
@@ -401,14 +401,15 @@ static void ut_aot_scalar_local_store(UnitTestCounters& c) {
     }
     for (QoreValue value : {QoreValue(false), QoreValue(true), QoreValue(int64_t{7}),
             QoreValue(-(int64_t{1} << 46)), QoreValue(2.5), QoreValue(-0.0)}) {
-        UT_ASSERT(c, local.var.tryAssignAOTScalarValue(value), "immediate scalar replacement is handled");
+        UT_ASSERT(c, local.var.tryAssignAOTScalarValue(value, direct_store),
+            "immediate scalar replacement is handled");
         QoreValue actual = slot->val.getValue();
         UT_ASSERT_EQ(c, value.getType(), actual.getType(), "scalar store preserves the value type");
         UT_ASSERT(c, actual.rawBits() == value.rawBits(), "scalar store preserves exact value bits");
     }
     auto miss = [&](QoreValue value) {
         uint64_t before = slot->val.getValue().rawBits();
-        UT_ASSERT(c, !local.var.tryAssignAOTScalarValue(value), "unsupported store is not handled");
+        UT_ASSERT(c, !local.var.tryAssignAOTScalarValue(value, direct_store), "unsupported store is not handled");
         UT_ASSERT_EQ(c, before, slot->val.getValue().rawBits(), "a miss preserves the slot");
     };
     for (QoreValue value : {QoreValue(), QoreValue::makeNull(), QoreValue::makeChar('x'),
@@ -448,13 +449,22 @@ static void ut_aot_scalar_local_store(UnitTestCounters& c) {
     miss(QoreValue(3.5));
     {
         LocalScope typed("native_scalar_typed_control", floatTypeInfo, xsink);
-        UT_ASSERT(c, !typed.var.tryAssignAOTScalarValue(QoreValue(3.5)), "typed declaration keeps ordinary binding");
+        UT_ASSERT(c, !typed.var.tryAssignAOTScalarValue(QoreValue(3.5), direct_store),
+            "typed declaration keeps ordinary binding");
     }
     {
         LocalVar missing("native_scalar_missing", autoTypeInfo);
-        UT_ASSERT(c, !missing.tryAssignAOTScalarValue(QoreValue(3.5)), "uninstantiated slot keeps normal error path");
+        UT_ASSERT(c, !missing.tryAssignAOTScalarValue(QoreValue(3.5), direct_store),
+            "uninstantiated slot keeps normal error path");
     }
     UT_ASSERT(c, !xsink, "scalar-store admission tests raise no exception");
+}
+
+static void ut_aot_scalar_local_store(UnitTestCounters& c) {
+    // Exercise the direct primitive copy and the diagnostic control against the
+    // same live-slot admission, bit-preservation and ownership assertions.
+    ut_aot_scalar_local_store_mode(c, false);
+    ut_aot_scalar_local_store_mode(c, true);
 }
 
 //! the I/O thread count of a process in a container with a CPU limit: the cgroup CPU quota files

@@ -12681,9 +12681,18 @@ extern "C" DLLEXPORT void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t 
 extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak_aot(QoreAOTContext* ctx, int32_t idx,
         uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
-    static const bool scalar_store = !std::getenv("QORE_DISABLE_AOT_SCALAR_LOCAL_STORE");
-    if (scalar_store && !*xsink && ctx->locals[idx]
-            && ctx->locals[idx]->tryAssignAOTScalarValue(fromBits(val))) {
+    enum class ScalarStoreMode : uint8_t { Generic, Guarded, Direct };
+    // One immutable configuration and initialization guard for both diagnostic
+    // controls; fallback-heavy assignments do not pay a second acquire load.
+    static const ScalarStoreMode scalar_store = []() {
+        if (std::getenv("QORE_DISABLE_AOT_SCALAR_LOCAL_STORE")) {
+            return ScalarStoreMode::Generic;
+        }
+        return std::getenv("QORE_DISABLE_AOT_DIRECT_SCALAR_STORE")
+            ? ScalarStoreMode::Guarded : ScalarStoreMode::Direct;
+    }();
+    if (scalar_store != ScalarStoreMode::Generic && !*xsink && ctx->locals[idx]
+            && ctx->locals[idx]->tryAssignAOTScalarValue(fromBits(val), scalar_store == ScalarStoreMode::Direct)) {
         return;
     }
     qore_rt_assign_local_eval_weak(ctx->locals[idx], val, xsink);

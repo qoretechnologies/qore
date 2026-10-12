@@ -10867,3 +10867,104 @@ Final verified measurements SHA-256: e861f91b34a91a2ed0bcca7f07d59d789c1d905050c
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug each pass 111 selected files, seven exception/stack fixtures and IR/AOT reference checks; 205 debug native checks, 17 harness tests and 555 references per IR/AOT/Java mode. Expanded effect fixture passes 452 assertions; real native-entry fixture passes 652. Coverage includes exact partial resumes, wide ownership, reentrant parameter replacement, error frames, cross-Program fallback, debugger/foreign-thread readers, concurrency and cancellation. Thirteen owned release qmod aliases restored, unrelated aliases unchanged, five smoke fixtures rerun. Not full-suite/sanitizer/cross-platform coverage.
 
 [Verified measurements, adverse controls and qualification](results-aot-effect-member-prefix-macos-arm64.json).
+
+
+## Direct AOT primitive local replacement audit (2026-10-12)
+
+Applied audit-changes to three C++ files, the scalar-store qtest/qr pair,
+design/benchmark documentation and verified measurements. The main agent
+read the skill and applicable module, sandboxing, cancellation and table
+guides; unchanged guide hashes were revalidated during final review.
+
+All 62 individual checks: **17 Pass, 45 N/A, 0 Fail**.
+
+The first selected qualification passed release but failed debug compilation:
+four debug-only callers still used the old helper signature. The correction
+explicitly tests both storage modes and passes 257 debug native assertions.
+Its release qore/qcc/libqore/runtime-identity artifacts match the measured v2
+bytes, but the corrected source was frozen and qualified again. Failed logs,
+initial qmod-setup failure and adverse measurements are preserved.
+
+This audit accepts only the measured AOT primitive-store improvement.
+It does not claim universal improvement, isolated-call latency, IR/JIT gains
+or Java parity. Observed fork ranges are not confidence intervals.
+
+Release: 112 selected files, 415 cases, 34062 assertions, 15 standalones, 9 skipped.
+Debug: 112 selected files, 422 cases, 34161 assertions, 15 standalones, 8 skipped.
+
+Final measurement archive: aot-direct-store-final-bench-t0lc4ek6.
+Frozen candidate identity SHA-256: 8d1bbcfd88b8775b6026bfe9d842552afa6b951c836df02fc46fa549c56ed478.
+Qualification SHA-256: 158a3bfcaddfad85c5757d25f934a0fb1c37d35cd04df54faaa4539d407d6c0a.
+Final verified measurements SHA-256: 331d155e2c640c9d1d323043491d5c2c6a05f40a2dd9c69c258be89b6e5ba55c.
+
+Fixed longer confirmation: aot-direct-store-confirm-bench-kaxnh5da.
+Confirmation verification SHA-256: 882697e2568827c292f5144e0b5e7cc9540cf6931bce925036fd27d9c2112e2e.
+Eight Linux-only RSS checks per build skip on macOS; release also skips a
+debug-only short-string check. Its separate native-unit wrapper skips while
+debug runs it. Value/representation checks still run; no leak-check claim.
+
+|!Check|!Status|!Evidence
+|1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, module registration, separated module source or QPP class. No optimization release note.
+|2. Entry exists in doxygen/lang/900_release_notes.dox.tmpl (for modules in the Qore repo; external modules have release notes in their .qm)|N/A|No new Qore module, module registration, separated module source or QPP class. No optimization release note.
+|3. qore_user_module() or qore_external_user_module() call in CMakeLists.txt|N/A|No new Qore module, module registration, separated module source or QPP class. No optimization release note.
+|4. Module added to QMOD list in CMakeLists.txt|N/A|No new Qore module, module registration, separated module source or QPP class. No optimization release note.
+|5. .qm file has @section &lt;lowercasemodname&gt;intro as first doc section — must be all lowercase (e.g., avrodataproviderintro, not AvroDataProviderintro)|N/A|No new Qore module, module registration, separated module source or QPP class. No optimization release note.
+|6. %modern in .qm file — no redundant %new-style, %require-types, %strict-args, %enable-all-warnings|N/A|No new Qore module, module registration, separated module source or QPP class. No optimization release note.
+|7. No parse directives (%requires, %modern, %new-style) in separated .qc files (check OUTSIDE of @code blocks only)|N/A|No new Qore module, module registration, separated module source or QPP class. No optimization release note.
+|8. No %include usage (deprecated for modules)|N/A|No new Qore module, module registration, separated module source or QPP class. No optimization release note.
+|9. Copyright 2026 on all new files|Pass|The new measurement record carries 2026 copyright and MIT licensing; changed scalar fixtures already carry matching notices.
+|10. Directory layout: .qm inside qlib/&lt;ModuleName&gt;/ directory (not at qlib/&lt;ModuleName&gt;.qm for multi-file modules)|N/A|No new Qore module, module registration, separated module source or QPP class. No optimization release note.
+|11. No second .qm for the same module at qlib/&lt;ModuleName&gt;.qm|N/A|No new Qore module, module registration, separated module source or QPP class. No optimization release note.
+|12. ns=Qore::XX matches the QoreNamespace constructor path|N/A|No new Qore module, module registration, separated module source or QPP class. No optimization release note.
+|13. %modern directive present|Pass|Both AOTScalarLocalStore.qtest and its qr fixture use %modern.
+|14. Executable permission set (chmod +x)|Pass|Both scalar fixtures are executable; the qr helper executable bit was corrected during review.
+|15. Uses %prepend-module-path  before %requires for in-repo modules|Pass|The qtest prepends the repository module path before bundled QUnit/FsUtil requirements. The qr script has no module dependency.
+|16. External module dependencies use %try-module — except modules delivered with Qore itself (DataProvider, ConnectionProvider, QUnit, etc.) which use hard %requires|Pass|Only bundled QUnit/FsUtil are required; no external module dependency added.
+|17. No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks|N/A|No production filesystem operation added.
+|18. No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks|N/A|No production network operation added.
+|19. If filesystem/network ops exist, verify QoreSandboxManagerHelper usage|N/A|No new filesystem/network operation requiring a sandbox helper.
+|20. No File::, Dir::, Socket::, HTTPClient:: usage without justification|Pass|Fixture subprocesses use their existing owned TmpDir, quoted paths and checked statuses. No new File/Dir/Socket/HTTPClient operation.
+|21. All for/while loops that could iterate &gt;100 times have qore_check_cancel() checks|Pass|Production changes add no loops. The reused debug-native loops have six and four entries and are invoked twice; no unbounded scan is introduced.
+|22. Uses qore_check_cancel() (NOT deprecated qore_check_io_interrupt())|N/A|No cancellation polling site is added or changed; no deprecated interrupt helper introduced.
+|23. Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations|N/A|No new long-running loop requiring a polling interval.
+|24. No blocking operations without cancellation support|Pass|No new I/O wait, object lock, callback or reentry. Existing stack/cancellation protocols and fallback paths remain intact.
+|25. Every action has display_name, short_desc (plain text, &lt;80 chars), desc (markdown)|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|26. Every action has options populated via getActionOptionFromFields() — without this, the action shows an empty, unusable form|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|27. Every action has output_type set to a typed data type constant (e.g., MyResponseDataType) — not omitted|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|28. DPAT_API actions: provider has "supports_request": True and implements doRequestImpl()|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|29. DPAT_FIND actions: every option exists in SearchOptions, getRecordTypeImpl() returns *hash&lt;string, AbstractDataField&gt;|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|30. Scheme-based apps (with "scheme" in registerApp): actions use "path" and do NOT use "cls" — having both scheme and cls causes a runtime error|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|31. Single-key hash slices use trailing comma: Fields{"key",} (without trailing comma, Fields{"key"} returns the value, not a hash)|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|32. Typed data type classes exist for request and response types — inherit HashDataType, have const Fields hash, call addQoreFields(Fields) in constructor, export public constant at bottom (e.g., public const MyDataType = new MyDataType();)|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|33. Request/input types use public Fields (enables ClassName::Fields in action registration)|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|34. Response/output types use private Fields|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|35. Each field in data types has display_name, type, and desc (markdown-formatted)|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|36. Input fields have example_value where useful (string fields, endpoint URIs, SQL queries, etc.)|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|37. Fields with finite allowed values use allowed_values with AllowedValueInfo containing both value and display_name (Title Case, human-readable) — never bare values, never described only in text|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|38. Password/secret fields have "sensitive": True|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|39. groups uses AppGroup enum values from qlib/DataProvider/AppGroup.qc|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|40. App logo stored as separate file, loaded at module level in Priv namespace|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|41. App desc uses markdown: bullet list of capabilities, links to project website, business-language explanation of value|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|42. display_name is user-friendly ("Apache Avro" not "avro")|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|43. short_desc is plain text, under 80 chars, single sentence — no markdown|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|44. desc uses markdown: backticks for code/field refs ( field_name ,  True ,  pdf ), \n\n for paragraphs, -  bullet lists for enumerations, bold for caveats|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|45. Descriptions use plain business language relating to common challenges — not just technical "what" but "why" and "when to use"|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|46. No bare True/False/NOTHING — must be backtick-wrapped in desc|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|47. No bare field/option names in prose — must use backticks|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|48. Long descriptions (&gt;500 chars) use bold section headers and bullet lists|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|49. Factory registration in Qore repo: every factory name registered in qlib/DataProvider/DataProvider.qc → FactoryMap (without this, module loads but doesn't appear in Qorus apps)|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|50. getRecordTypeImpl() signature: must be private *hash&lt;string, AbstractDataField&gt; getRecordTypeImpl(*hash&lt;auto&gt; search_options) — NOT returning *AbstractDataProviderType|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|51. Dependency JARs committed (for JNI modules): JAR files in qlib/*/jar/ may be gitignored — use git add -f to ensure they're tracked, otherwise CI compilation fails|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|52. JAR install rules in CMakeLists.txt for all dependency JARs|N/A|No DataProvider action/app, data type, factory, record-type override or JNI/JAR change.
+|53. No workarounds: No TODOs, FIXMEs, stubs, or partially-implemented features|Pass|General representation-based primitive storage, not benchmark-name checks or padding. No stub, TODO, weakened guard or default argument hiding stale debug callers. Initial two-boolean mode was replaced by one immutable enum configuration.
+|54. Exception safety: C++ uses ReferenceHolder for Qore allocations, std::unique_ptr for C++ allocations, *xsink checked after every fallible operation|Pass|Immediate incoming and old primitive storage cannot own nodes. Direct copying allocates nothing and invokes no conversion or destructor; all flags remain unchanged. Pending-sink and ordinary throwing-wrapper behavior is retained. Native fixture allocations use existing ValueHolder/ReferenceHolder and scope cleanup.
+|55. Thread safety: All mutable shared state protected by std::lock_guard&lt;std::mutex&gt; or documented as immutable-after-construction|Pass|One function-local const enum has thread-safe initialization. Slot access remains on the current thread through the existing lookup; captured/reference-backed/shared storage is excluded. No mutable shared cache or cross-invocation slot is introduced.
+|56. Type safety: Strongly-typed code&lt;return(args)&gt; instead of untyped code; static_cast instead of C casts; typed hashdecls for results; enums where appropriate|Pass|Actual immediate tags select getInt/getDouble/getBool, then the matching QV storage tag. No getAs conversion, signed arithmetic or pointer reinterpretation is introduced. Enums, escaped floats, wide boxed integers and nodes retain ordinary assignment. Existing callbacks remain strongly typed.
+|57. Performance: No O(n²) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply|Pass|Constant-time primitive replacement avoids generic type/conversion/node-cleanup calls after unchanged admission. Fixed five-fork confirmation gains with separated baseline/off ranges: boxed_int_method_call/enabled-a 11.289% less time; boxed_int_method_call/enabled-b 10.904% less time; boxed_float_method_call/enabled-a 5.969% less time; boxed_float_method_call/enabled-b 6.339% less time. All 2835 historical/final windows retained and replayed. The Java matrix has overlapping enabled-B target ranges and separated list-mutation A/A arms; it prompted this confirmation, not sample exclusion or a source change. Adverse controls: Java matrix: indirect_float_result/enabled-a 0.388% slower (overlapping ranges); Java matrix: indirect_float_result/enabled-b 0.538% slower (overlapping ranges); Java matrix: list_mutate/enabled-a 1.161% slower (overlapping ranges); confirmation: list_build/enabled-a 0.806% slower (overlapping ranges); confirmation: list_build/enabled-b 0.605% slower (overlapping ranges); confirmation: list_mutate/enabled-a 0.769% slower (overlapping ranges); confirmation: list_mutate/enabled-b 0.048% slower (overlapping ranges). The original list-build regression and v2 overlapping control changes remain recorded; no causal claim from code layout or sample shares.
+|58. Error handling: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable|Pass|Declaration/input/live-slot guards precede any mutation. Finalized, cleared, absent, unassigned, static, fixed, typed, captured, reference and substituted cases retain ordinary handling. False leaves the slot untouched; existing exception-sink and compiler index contracts are unchanged.
+|59. Documentation: Doxygen @param, @return, @throw on all public methods; @par Example with realistic business scenarios; @note for important caveats|Pass|Internal direct_store parameter and borrowed-value/miss contract documented. Design and README explain actual-slot publication, diagnostic precedence/first-use presence semantics, matching-runtime artifact requirements and still-live declaration/TLS lookup. Results state workload units, controls and limitations. No new public method or exported ABI.
+|60. QPP flags: [flags=CONSTANT] on methods that never throw; [flags=RET_VALUE_ONLY] on methods that throw but have no side effects|N/A|No QPP method or flag change.
+|61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new index arithmetic, buffer or user-controlled format string. Measurement environment values are explicitly allowlisted; inherited connection data is represented only by an environment hash.
+|62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Both builds pass 112 selected integration files and seven exception/stack fixtures; 257 debug native checks, 17 harness tests and 555 references per IR/AOT/Java mode. Scalar fixture covers primitive transitions, types, signed zero, infinities, NaNs, integer boundaries and ownership/reference/fallback cases at AST/IR/JIT/tiered and AOT O0/O3/EH/split/no-debug. Native tests verify both storage modes directly, including exact bits and rejection without mutation. All13 owned release qmods restored with unrelated aliases unchanged, six release smoke fixtures rerun. Pre-existing block-map reflection limitation remains explicit; no full-suite/sanitizer/cross-platform claim.
+
+[Verified measurements and qualification](results-aot-direct-scalar-store-macos-arm64.json).

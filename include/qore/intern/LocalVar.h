@@ -928,10 +928,12 @@ public:
         closure lock or recursive-reference scan can be involved. The actual
         thread-local slot is updated, so subsequent reflection sees the value.
         @param value borrowed immediate scalar input
+        @param direct_store use representation-proven primitive extraction;
+        false retains generic scalar storage for diagnostic comparisons
         @return true if stored without an exception, false without side effects
         when ordinary assignment is required
     */
-    DLLLOCAL bool tryAssignAOTScalarValue(QoreValue value) const {
+    DLLLOCAL bool tryAssignAOTScalarValue(QoreValue value, bool direct_store) const {
         if (closure_use || is_self || is_top_level || read_only || no_narrowing
                 || typeInfo != autoTypeInfo || refTypeInfo
                 || type_info_needs_substitution || ref_type_info_needs_substitution
@@ -944,8 +946,25 @@ public:
                 || (slot->val.type != QV_Int && slot->val.type != QV_Float && slot->val.type != QV_Bool)) {
             return false;
         }
-        // Reuse the normal storage operation. Both guards exclude any owned
-        // node, so there is no removed value or unconsumed input to release.
+        // Admission proves an already assigned, non-fixed scalar slot and an
+        // immediate input. Copy the primitive without type conversion, retaining
+        // every ownership/assignment flag and publishing to the actual slot.
+        // Neither side can own a node or participate in object-reference scans.
+        if (direct_store) {
+            if (value.isInt()) {
+                slot->val.v.i = value.getInt();
+                slot->val.type = QV_Int;
+            } else if (value.isFloat()) {
+                slot->val.v.f = value.getDouble();
+                slot->val.type = QV_Float;
+            } else {
+                assert(value.isBool());
+                slot->val.v.b = value.getBool();
+                slot->val.type = QV_Bool;
+            }
+            return true;
+        }
+        // Diagnostic control uses the previous operation after the same guards.
         AbstractQoreNode* removed = slot->val.assignAssume(value);
         assert(!removed);
         (void)removed;

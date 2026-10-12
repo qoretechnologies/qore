@@ -11040,3 +11040,179 @@ validation. Neither lead is implemented or measured here, and neither is a
 proven cure for the control regressions. Continue publishing adverse results.
 
 [Verified frozen measurements and candidate status](results-aot-effect-member-prefix-macos-arm64.json).
+
+
+## Direct AOT primitive local replacement (2026-10-12)
+
+This runtime-only AOT follow-up replaces generic scalar storage with direct
+primitive extraction after the existing declaration/input/live-slot guards.
+It changes neither admission nor runtime-slot visibility. Old and new values
+cannot own nodes, so no conversion, destructor, reference scan or allocation
+is needed. The ordinary fallback remains, including typed/reference/captured
+locals, nodes, wide boxed integers, escaped floats and enum identity.
+
+The new first-use presence control QORE_DISABLE_AOT_DIRECT_SCALAR_STORE
+restores the previous generic scalar operation after identical admission.
+QORE_DISABLE_AOT_SCALAR_LOCAL_STORE still disables the entire shortcut and
+takes precedence. One immutable enum combines both controls into one static
+initialization guard. Declaration checks and TLS/runtime-slot lookup are
+still performed per assignment; they are not claimed as eliminated.
+
+The first candidate used two separate static booleans. Its independently
+verified 660-window screen improved boxed calls but slowed list build by
+3.767–4.403%, with separated observed fork ranges. The 750-window compact
+control repeat preserved call gains and left list build 0.638–0.929% slower
+than its matched baseline, with overlapping ranges. List mutation and native
+integer comparisons also overlapped. Neither result establishes equivalence
+or the cause of the earlier regression: list build uses another, unchanged
+no-coerce assignment helper. Instrumented profiles are diagnostic only,
+excluded from timing evidence; they still show local reload and lookup work.
+
+Initial qualification passed release, then debug compilation found four
+native test callers using the old one-argument helper signature. Corrected
+tests explicitly exercise both direct and generic modes. The debug build
+passes 257 native checks, including exact bits and rejection without slot
+or ownership mutation. Its rebuilt release qore/qcc/libqore/runtime-identity
+artifacts are byte-identical to the compact candidate. Nevertheless, the
+corrected source was frozen and selected qualification repeated. Both this
+failure and the earlier missing-generated-qmod-alias setup failure are kept
+in the evidence, not counted as successful runs.
+
+### Corrected-source qualification
+
+Release: 112 selected files, 415 cases / 34062 assertions, 15 standalones and 9 skipped.
+Debug: 112 selected files, 422 cases / 34161 assertions, 15 standalones and 8 skipped.
+
+Both builds pass seven exception/stack fixtures and IR/AOT reference grids.
+All 257 debug native checks, 17 harness tests and 555 references per
+IR/AOT/Java-interpreted/Java-JIT mode pass. Thirteen owned qmod aliases are
+restored and content-verified against release artifacts; unrelated aliases
+are unchanged. Six restored-release regression fixtures pass. This is not
+the full repository suite, sanitizer testing or cross-platform coverage.
+Eight NaN-boxing resident-memory checks per build require Linux
+/proc/self/smaps_rollup and are skipped on this Mac; value/representation
+checks still run. Release also skips one debug-only short-string check.
+The separate native-unit wrapper skips in release and runs in debug.
+
+Candidate identity SHA-256: 8d1bbcfd88b8775b6026bfe9d842552afa6b951c836df02fc46fa549c56ed478.
+Qualification SHA-256: 158a3bfcaddfad85c5757d25f934a0fb1c37d35cd04df54faaa4539d407d6c0a.
+
+### Final matched AOT/Java comparison
+
+Archive aot-direct-store-final-bench-t0lc4ek6 contains 165 jobs / 825 measured windows:
+eleven kernels, three forks, three warmups and five 500-ms samples per fork,
+count 4096, randomized kernel/fork blocks with seed 847913. Five interleaved
+modes are the post-merge baseline, corrected candidate A/A, same-candidate
+direct-store-disabled, and Temurin 25.0.2 with JMH 1.37. Separately compiled
+Qore artifacts use matching frozen compiler/runtime pairs; candidate A/A and
+on/off share one executable. Library selection, source/artifact hashes, all
+555 references per mode and generated Java target no-inline hints are checked.
+No other owned build, test, profile or inspection overlaps timing.
+
+Values are medians of fork means, in whole-workload ns/element; lower is
+better. Positive reductions mean less elapsed time. These include loops,
+representation, ownership and bookkeeping, not isolated call latency.
+Qore and Java compute matching results but do not have identical runtime
+contracts. List workloads include their complete passes, not a single store.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Direct disabled|!Java JIT|!Enabled / Java
+|boxed integer method|30.8726|27.5662 / 27.8877|10.710% / 9.669%|31.1826|2.3244|11.86 / 12.00x
+|boxed float method|37.2223|34.8622 / 34.8967|6.341% / 6.248%|38.1776|2.5522|13.66 / 13.67x
+|member updates|102.8618|98.2055 / 97.7927|4.527% / 4.928%|102.7119|1.8915|51.92 / 51.70x
+|read-only integer member|45.6111|42.2649 / 41.9829|7.336% / 7.955%|46.8084|2.5384|16.65 / 16.54x
+|read-only float member|51.0062|47.0904 / 46.9408|7.677% / 7.970%|51.2254|2.5484|18.48 / 18.42x
+|native integer result|10.5815|10.3450 / 10.5055|2.235% / 0.718%|10.3947|3.0720|3.37 / 3.42x
+|native float result|11.3825|11.2944 / 11.1732|0.774% / 1.839%|11.2514|3.4664|3.26 / 3.22x
+|indirect integer result|6.9317|6.9200 / 6.8718|0.169% / 0.865%|7.0003|1.8845|3.67 / 3.65x
+|indirect float result|8.8353|8.8696 / 8.8828|-0.388% / -0.538%|8.8753|2.6528|3.34 / 3.35x
+|list build|84.2808|84.0400 / 83.2658|0.286% / 1.204%|84.0528|2.5837|32.53 / 32.23x
+|list mutation|232.4295|235.1289 / 231.7627|-1.161% / 0.287%|231.8858|4.1309|56.92 / 56.10x
+
+All final before/after comparisons are recorded below with their observed
+fork-range relationship. Separation is descriptive, not a confidence interval
+or proof of causation; an overlap does not establish equivalence.
+
+|!Workload|!Enabled arm|!Elapsed-time reduction|!Observed fork ranges
+|boxed integer method|enabled-a|10.710%|separated
+|boxed integer method|enabled-b|9.669%|overlap
+|boxed float method|enabled-a|6.341%|separated
+|boxed float method|enabled-b|6.248%|overlap
+|member updates|enabled-a|4.527%|separated
+|member updates|enabled-b|4.928%|separated
+|read-only integer member|enabled-a|7.336%|separated
+|read-only integer member|enabled-b|7.955%|separated
+|read-only float member|enabled-a|7.677%|separated
+|read-only float member|enabled-b|7.970%|separated
+|native integer result|enabled-a|2.235%|overlap
+|native integer result|enabled-b|0.718%|overlap
+|native float result|enabled-a|0.774%|overlap
+|native float result|enabled-b|1.839%|separated
+|indirect integer result|enabled-a|0.169%|overlap
+|indirect integer result|enabled-b|0.865%|overlap
+|indirect float result|enabled-a|-0.388%|overlap
+|indirect float result|enabled-b|-0.538%|overlap
+|list build|enabled-a|0.286%|overlap
+|list build|enabled-b|1.204%|overlap
+|list mutation|enabled-a|-1.161%|overlap
+|list mutation|enabled-b|0.287%|overlap
+
+Both target medians improve in this Java matrix, but enabled-B has noisy
+forks: the boxed-integer range overlaps baseline, and the boxed-float range
+overlaps both baseline and disabled. In particular, the float enabled-B
+fork means span 34.5997–44.7781 ns. The list-mutation A/A arms also separate.
+These observations prompted the fixed longer confirmation below; no sample
+was removed, and no source change was made between these runs.
+
+### Fixed longer confirmation
+
+Archive aot-direct-store-confirm-bench-kaxnh5da contains 120 jobs / 600 windows:
+six kernels, four Qore configurations, five forks, three warmups and five
+750-ms windows, count 4096, randomized order seed 951427. Matching frozen
+compiler/runtime pairs, A/A identity, on/off controls, source/artifact
+hashes, library selection and all 555 references are verified again.
+Java is compiled and reference-checked but not timed here; the Java ratios
+above come only from the matched Java matrix. No other owned work overlaps
+the confirmation timings. This is a separate run, not a replacement sample.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Direct disabled
+|boxed integer method|30.7152|27.2478 / 27.3659|11.289% / 10.904%|30.9099
+|boxed float method|36.7555|34.5615 / 34.4255|5.969% / 6.339%|37.8685
+|member updates|102.4810|97.4491 / 97.0714|4.910% / 5.279%|102.0608
+|native integer result|10.4505|10.3126 / 10.1950|1.319% / 2.445%|10.3810
+|list build|82.1631|82.8251 / 82.6599|-0.806% / -0.605%|82.6518
+|list mutation|227.2860|229.0337 / 227.3948|-0.769% / -0.048%|225.4036
+
+Both boxed targets and member updates improve with separated observed
+ranges against baseline and same-binary disabled controls in both A/A arms.
+Boxed integer improves 10.904–11.289% versus baseline, boxed float
+5.969–6.339%, and member updates 4.910–5.279%. Native-integer baseline
+comparisons also separate (1.319–2.445% less time), but on/off overlaps;
+that change cannot be attributed to direct primitive copying.
+
+Adverse controls remain: list construction takes 0.605–0.806% more time
+and list mutation 0.048–0.769% more versus baseline, with overlapping
+ranges. Their on/off comparisons also overlap. This does not establish
+equivalence or erase the initial list-build regression. All A/A ranges
+overlap in this confirmation. The target gains are retained with these
+explicit limits, not as a universal execution speedup.
+
+Confirmation verification SHA-256: 882697e2568827c292f5144e0b5e7cc9540cf6931bce925036fd27d9c2112e2e.
+
+Every raw window is retained, including slower controls and noisy forks.
+All 2835 windows across the initial, compact-control, Java and confirmation runs have
+independent replay records. No ratios combine Java from a different run.
+Final verification SHA-256: 331d155e2c640c9d1d323043491d5c2c6a05f40a2dd9c69c258be89b6e5ba55c.
+
+The improvement is specific to the AOT local-store helper. No new IR/JIT
+timing gain or Java parity is claimed. The existing fixture limitation on
+repeated block-local reflection remains documented: all modes check values,
+while the complete reflected block map is required only in AST.
+
+Next: prepare immutable ordinary-auto declaration facts and stable
+invocation-local body-slot handles after callee instantiation, preserving
+live slot flags, recursion, fallback and actual runtime publication. Caller
+reload work remains another measured target, but skipping it requires proof
+covering argument/receiver/result cleanup and reentry, not just a pure
+same-Program callee. Neither follow-up is implemented by this change.
+
+[Verified measurements, adverse controls and qualification](results-aot-direct-scalar-store-macos-arm64.json).

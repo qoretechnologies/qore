@@ -7,6 +7,10 @@
 %allow-opaque-references
 
 sub expect(auto expected, auto actual, string probe = "") {
+    if (expected.fullType() == "float" && actual.fullType() == "float"
+            && expected.nanp() && actual.nanp()) {
+        return;
+    }
     if (expected !== actual) {
         throw "SCALAR-STORE-TEST", sprintf("%s: expected %y (%s), got %y (%s)",
             probe, expected, expected.fullType(), actual, actual.fullType());
@@ -92,7 +96,8 @@ code<auto()> cleanup = \objectCleanup();
 code<auto(bool)> reuse = \blockReuse();
 for (int round = 0; round < 8; ++round) {
     foreach auto next in ((False, True, 7, -9, 140737488355327, 140737488355328,
-            -140737488355329, 9223372036854775807, 1.25, -1.25, -0.0, -3.0e307,
+            -140737488355328, -140737488355329, 9223372036854775807,
+            1.25, -1.25, 0.0, -0.0, -3.0e307, @inf@, -@inf@, @nan@, -@nan@,
             NOTHING, NULL, c'x', "short", "a longer string value", (1, 2), {"value": 3},
             ScalarStoreEnum::Value)) {
         expect(next, replaceValue(1.25, next));
@@ -100,6 +105,17 @@ for (int round = 0; round < 8; ++round) {
         expect(2.5, replaceValue(next, 2.5));
         expect(next, capturedValue(next));
         expect(next, handlerValue(next));
+        # Exercise every primitive storage family as the replaced value, including
+        # signed zero and nonfinite floats. The incoming matrix also covers values
+        # that must fall back (wide integers, escaped floats, enums and nodes).
+        foreach auto first in ((False, True, 0, -7, 1.25, -0.0, @nan@, -@inf@)) {
+            auto actual = replaceValue(first, next);
+            expect(next, actual, "primitive replacement");
+            expect(next.fullType(), actual.fullType(), "primitive replacement type");
+            if (next.fullType() == "float") {
+                expect(sprintf("%g", next), sprintf("%g", actual), "float representation");
+            }
+        }
         if (next.fullType() == "float") {
             expect(sprintf("%g", next), sprintf("%g", replaceValue(1.25, next)));
         }

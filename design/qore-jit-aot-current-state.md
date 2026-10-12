@@ -199,6 +199,46 @@ separate artifacts to compare it. IR/JIT lowering and helper ABI are unchanged.
 The reload regression asserts both ordinary native entries and guard
 presence/absence, including stripped `-O0`/`-O3` output and fallback controls.
 
+### Direct primitive replacement in ordinary AOT locals
+
+The checked/eval-weak AOT assignment helper can replace an already assigned
+primitive in an ordinary `auto` local without generic value conversion. It
+retains the existing declaration and live-slot admission: captured, self,
+top-level, read-only, no-narrowing, reference and substituted declarations are
+excluded, as are absent, finalized, block-cleared, unassigned, static and
+fixed-type slots. Both the old storage and incoming value must be primitive;
+the incoming value must be an immediate integer, float or boolean.
+
+After admission, the helper copies the matching primitive and updates the
+storage tag. It leaves all ownership and assignment flags unchanged and writes
+the actual runtime slot, so reflection and subsequent reloads see the result.
+Neither side owns a node, so there is no conversion, reference scan, allocation,
+destructor or reentry to perform. Wide boxed integers, escaped floats, enums,
+nodes, weak/opaque values and reference-backed storage retain ordinary
+assignment. Declaration checks and the thread-local slot lookup are still
+performed per assignment; this is not a prepared-slot optimization.
+
+`QORE_DISABLE_AOT_DIRECT_SCALAR_STORE=1` restores the prior generic scalar
+storage operation after the same admission guards. The broader
+`QORE_DISABLE_AOT_SCALAR_LOCAL_STORE=1` disables admission altogether and takes
+precedence. Presence, including an empty value or `0`, disables the corresponding
+shortcut; one thread-safe immutable configuration samples the flags on first
+helper use. Set controls before process startup. No exported helper signature
+or serialized IR format changes, but the private-header change alters the AOT
+runtime identity: before/after builds require separately compiled artifacts
+with matching runtimes. Same-runtime on/off can reuse one executable.
+
+`AOTScalarLocalStore.qtest` compares AST/IR/JIT/tiered results and normal,
+source-stripped, native-EH, split and no-debug AOT at `-O0`/`-O3`. It exercises
+primitive-family transitions, signed zero, infinities, NaNs, immediate-integer
+boundaries and fallback representations, with type/format checks, references,
+destruction and runtime-slot observation. Its existing block-local reflection
+limitation remains explicit: all modes check repeated values, while full
+block-map observation is required only in AST. Debug-native checks invoke both
+storage modes directly, asserting admission, exact bits, unchanged slots on
+rejection and node ownership. The optimization changes the AOT helper, not the
+interpreter or JIT local-store paths.
+
 ### Checked AOT class-local initialization
 
 A normal initial assignment to a runtime-backed AOT body local with one required,
