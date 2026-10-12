@@ -10611,9 +10611,11 @@ The final compiler excludes scalar/container-only parameters from the new
 guard. Dynamic pseudo receivers can still reject at runtime; a string
 `toInt()` loop/short-call probe has overlapping on/off and A/A ranges.
 
-The established call kernels enter their loop functions through private
-direct entries, whose arguments have a separate ownership/visibility contract.
-They do not use this cache. The initial nine-kernel screen showed no gain
+Eight of the nine established control kernels have compiler-emitted private
+direct-entry paths, whose arguments have a separate ownership/visibility contract
+and do not use this cache. The effectful kernel has an ordinary entry with no
+cache admission; this control group is not exclusively a private-entry test.
+The initial nine-kernel screen showed no gain
 and a small separated float-callback slowdown; the final recheck below has
 overlapping ranges for every kernel. No private-fast-call gain is claimed.
 
@@ -10650,7 +10652,7 @@ on/off range and every A/A range overlaps. The earlier three-fork narrowed
 screen retained noisy list/string controls, motivating this longer run.
 Overlapping ranges are not proof of equivalence. No short-call gain is claimed.
 
-Final private-entry recheck `run-8b07knyd`: 3 forks, 3 warmups, 5 measured
+Final nine-kernel recheck `run-8b07knyd`: 3 forks, 3 warmups, 5 measured
 500-ms windows, count 4096, seed 827223; 54 jobs / 270 measured windows.
 
 |!Existing workload|!Before ns/element|!After ns/element|!Time reduction|!Fork ranges separate
