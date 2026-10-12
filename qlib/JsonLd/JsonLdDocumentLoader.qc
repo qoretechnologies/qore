@@ -98,7 +98,7 @@ public class HttpJsonLdDocumentLoader inherits AbstractJsonLdDocumentLoader {
     hash<JsonLdRemoteDocument> loadDocument(string url, *hash<JsonLdLoadDocumentOptions> opts) {
         if (url !~ /^https?:\/\//i) {
             throwJsonLdError(JSONLD_ERR_LOADING_DOCUMENT_FAILED,
-                sprintf("unsupported URL scheme: %y", url));
+                sprintf("unsupported URL scheme: %y", get_masked_url(url)));
         }
 
         # Build Accept header for content negotiation
@@ -198,7 +198,7 @@ public class HttpJsonLdDocumentLoader inherits AbstractJsonLdDocumentLoader {
                     ++context_count;
                     if (context_count > 1) {
                         throwJsonLdError(JSONLD_ERR_MULTIPLE_CONTEXT_LINK_HEADERS,
-                            sprintf("multiple context Link headers found for %y", url));
+                            sprintf("multiple context Link headers found for %y", get_masked_url(url)));
                     }
                     context_url = url_match[0];
                     if (!isAbsoluteIri(context_url)) {

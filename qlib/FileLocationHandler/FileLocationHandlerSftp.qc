@@ -244,7 +244,7 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
             file = basename(url_info.path);
         }
         if (!file) {
-            throw "LOCATION-ERROR", sprintf("SFTP location %y missing file path", location);
+            throw "LOCATION-ERROR", sprintf("SFTP location %y missing file path", get_masked_url(location));
         }
         # dynamically load the ssh2 module
         try {

@@ -1480,6 +1480,10 @@ data decode_http_body(*string content_type, binary body, string assumed_encoding
 
     @return the URL string passed without any password information
 
+    @throw PARSE-URL-ERROR the URL cannot be parsed; the message of the exception has any password masked
+
+    @see get_masked_url() for a function that never throws, for messages and logs
+
     @since %Qore 1.13
 */
 string get_safe_url(string url) [flags=NAMED_ARGS] {
@@ -1534,6 +1538,29 @@ string get_safe_url(string url) [flags=NAMED_ARGS] {
     }
 
     return rv.release();
+}
+
+//! Returns a URL with any password masked, for messages and logs
+/** Unlike @ref get_safe_url(), this function never throws an exception, so it can be used to report an error with a
+    URL that cannot be parsed: a URL that can be parsed has the password that the parser finds replaced with
+    \c "<masked>" where it appears, and in any other string the text between the first \c ':' and the last \c '@'
+    before any query or fragment is masked.  The rest of the string is returned as given.
+
+    @param url the URL to process
+
+    @return the URL with any password replaced with \c "<masked>"; a URL without a password is returned unchanged
+
+    @par Example:
+    @code{.py}
+logger.info("connecting to %s", get_masked_url(url));
+    @endcode
+
+    @see get_safe_url()
+
+    @since %Qore 3.0
+*/
+string get_masked_url(string url) [flags=CONSTANT,NAMED_ARGS] {
+    return new QoreStringNode(q_mask_url_password(url->c_str()), url->getEncoding());
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments

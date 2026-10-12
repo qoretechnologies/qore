@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class GetMaskedUrlTest
+
+#! get_masked_url(), and the URL errors of the builtin classes and functions, which mask the password of the URL
+class GetMaskedUrlTest inherits QUnit::Test {
+    private {
+        string secret = "qore-secret-" + get_random_string(12);
+    }
+
+    constructor() : QUnit::Test("get_masked_url", "1.0", \ARGV) {
+        addTestCase("get_masked_url()", \maskTest());
+        addTestCase("URL parse errors", \parseErrorTest());
+        addTestCase("HTTP and FTP client URL errors", \clientErrorTest());
+        addTestCase("URL resolution errors", \resolveErrorTest());
+        set_return_value(main());
+    }
+
+    #! Returns a random string
+    private static string get_random_string(int len) {
+        string rv;
+        for (int i = 0; i < len; ++i) {
+            rv += chr(ord("a") + rand() % 26);
+        }
+        return rv;
+    }
+
+    maskTest() {
+        map assertEq($1.value, get_masked_url(replace($1.key, "SECRET", secret)), $1.key), {
+            "https://user:SECRET@host:8080/p?q=1": "https://user:<masked>@host:8080/p?q=1",
+            "ftp://:SECRET@host/f": "ftp://:<masked>@host/f",
+            "pgsql:user/SECRET@db%host": "pgsql:<masked>@db%host",
+            # a password with the separators of a path and of the user information
+            "http://user:a/b@c" + "SECRET@host/x": "http://user:<masked>@host/x",
+            # not a valid URL
+            "http://user:SECRET@[bad": "http://user:<masked>@[bad",
+            "http://user:SECRET@:99999/x": "http://user:<masked>@:99999/x",
+        }.pairIterator();
+        # nothing to mask
+        map assertEq($1, get_masked_url($1), $1), ("https://user@host/p", "https://host/p", "http://host:8080/a@b",
+            "not a url", "", "https://host/p?q=1");
+    }
+
+    parseErrorTest() {
+        foreach string url in ("http://user:" + secret + "@[bad", "http://user:" + secret + "@:99999",
+                "http://user:" + secret + "@host:12a", "http://user:" + secret + "@[::1]x") {
+            *hash<ExceptionInfo> ex = getException(\parse_url(), (url,));
+            assertEq("PARSE-URL-ERROR", ex.err, url);
+            assertEq(-1, ex.desc.find(secret), url);
+            assertRegex("http://user:<masked>@", ex.desc, url);
+            ex = getException(\get_safe_url(), (url,));
+            assertEq("PARSE-URL-ERROR", ex.err, url);
+            assertEq(-1, ex.desc.find(secret), url);
+        }
+    }
+
+    clientErrorTest() {
+        HTTPClient hc();
+        *hash<ExceptionInfo> ex = getException(\hc.setURL(), ("http://user:" + secret + "@[bad",));
+        assertEq("HTTP-CLIENT-URL-ERROR", ex.err);
+        assertEq("URL 'http://user:<masked>@[bad' cannot be parsed", ex.desc);
+        ex = getException(\hc.setProxyURL(), ("http://user:" + secret + "@[bad",));
+        assertEq("HTTP-CLIENT-URL-ERROR", ex.err);
+        assertEq("proxy URL 'http://user:<masked>@[bad' cannot be parsed", ex.desc);
+
+        FtpClient fc();
+        ex = getException(\fc.setURL(), ("ftp://user:" + secret + "@/x",));
+        assertEq("FTP-URL-ERROR", ex.err);
+        assertEq("no hostname given in URL 'ftp://user:<masked>@/x'", ex.desc);
+    }
+
+    resolveErrorTest() {
+        *hash<ExceptionInfo> ex = getException(\resolve_url(), ("//user:" + secret + "@host/x", "y"));
+        assertEq("RESOLVE-URL-ERROR", ex.err);
+        assertEq("base URI '//user:<masked>@host/x' has no scheme; a base URI must be absolute", ex.desc);
+    }
+
+    #! Returns the exception that a call raises, if any
+    private static *hash<ExceptionInfo> getException(code c, list<auto> args) {
+        try {
+            call_function_args(c, args);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+}

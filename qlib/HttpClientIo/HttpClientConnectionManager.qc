@@ -2018,10 +2018,10 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         try {
             url_info = parse_url(url);
         } catch (hash<ExceptionInfo> ex) {
-            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL %y: %s", url, ex.desc);
+            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL %y: %s", get_masked_url(url), ex.desc);
         }
         if (!url_info.host) {
-            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL: %y (missing host)", url);
+            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL: %y (missing host)", get_masked_url(url));
         }
         if (isUnixSocketTarget(url_info)) {
             if (!url_info.protocol) {

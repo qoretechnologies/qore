@@ -117,7 +117,7 @@ public class InvalidConnection inherits AbstractConnection {
     #! throws an exception because the object is invalid
     private object getImpl(bool connect = True, *hash<auto> rtopts) {
         throw "INVALID-CONNECTION", sprintf("connection %y (type %y url %y) is invalid and therefore could not "
-            "be loaded: %s", name, urlh.protocol, url, error);
+            "be loaded: %s", name, urlh.protocol, safe_url, error);
     }
 
     #! returns \c "invalid"

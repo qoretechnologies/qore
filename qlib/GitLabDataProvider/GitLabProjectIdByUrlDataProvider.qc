@@ -244,7 +244,7 @@ public class GitLabProjectIdByUrlDataProvider inherits DataProvider::AbstractDat
         try {
             info = parse_url(url);
         } catch (hash<ExceptionInfo> ex) {
-            throw "GITLAB-PROJECT-URL-ERROR", sprintf("cannot parse %y as a URL: %s: %s", url, ex.err,
+            throw "GITLAB-PROJECT-URL-ERROR", sprintf("cannot parse %y as a URL: %s: %s", get_masked_url(url), ex.err,
                 ex.desc);
         }
         *string path = info.path;

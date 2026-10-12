@@ -4341,6 +4341,13 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - The errors of URLs no longer contain the password of the URL: the \c PARSE-URL-ERROR exceptions of
+      @ref Qore::parse_url() "parse_url()", @ref Qore::get_safe_url() "get_safe_url()" and every other parser of a
+      URL, the \c RESOLVE-URL-ERROR exceptions of @ref Qore::resolve_url() "resolve_url()", and the URL errors of
+      @ref Qore::HTTPClient "HTTPClient" and @ref Qore::FtpClient "FtpClient" give the URL with its password replaced
+      by \c "<masked>"; the new @ref Qore::get_masked_url() "get_masked_url()" function does the same for messages
+      and logs, also for a string that is not a valid URL, and the connection, client and data provider modules
+      delivered with %Qore use it in their errors and logs
     - Fixed functions that format, escape, or encode text in an encoding that is not compatible with ASCII (UTF-16,
       EBCDIC): @ref Qore::sprintf() "sprintf()" and related functions with such a format string,
       @ref Qore::regex_escape() "regex_escape()" and @ref <string>::regexEscape() "<string>::regexEscape()" wrote a

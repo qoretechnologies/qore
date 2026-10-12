@@ -96,6 +96,7 @@ if (!h) {
     @section pop3client_relnotes Pop3Client Module Release Notes
 
     @subsection pop3client_v2_1 Pop3Client 2.1
+    - URL errors give the URL without its password
     - Added non-blocking ping support using the %Qore polling API:
       - @ref Pop3Client::Pop3Connection::supportsPollingApi() "Pop3Connection::supportsPollingApi()": returns @ref True
       - @ref Pop3Client::Pop3Connection::startPollConnect() "Pop3Connection::startPollConnect()": starts a non-blocking
@@ -342,7 +343,7 @@ Pop3Client pop3("pop3s://pop.gmail.com", {
 
         if (hurl.username) {
             if (!exists hurl.password) {
-                throw "POP3-URL-ERROR", sprintf("Have username but not password in POP3 URL: %y", url);
+                throw "POP3-URL-ERROR", sprintf("Have username but not password in POP3 URL: %y", get_masked_url(url));
             }
             if (username.val()) {
                 throw "POP3-URL-ERROR", sprintf("Have username in URL: %y and also as an option: %y",
@@ -362,7 +363,7 @@ Pop3Client pop3("pop3s://pop.gmail.com", {
             pass = hurl.password;
         } else {
             if (!username.val()) {
-                throw "POP3-URL-ERROR", sprintf("Missing username option for POP3 connection: %y", url);
+                throw "POP3-URL-ERROR", sprintf("Missing username option for POP3 connection: %y", get_masked_url(url));
             }
             user = username;
             if (password.val()) {
@@ -374,7 +375,8 @@ Pop3Client pop3("pop3s://pop.gmail.com", {
             } else if (token.val()) {
                 self.token = token;
             } else {
-                throw "POP3-URL-ERROR", sprintf("Missing both password and token in POP3 connection: %y", url);
+                throw "POP3-URL-ERROR", sprintf("Missing both password and token in POP3 connection: %y",
+                    get_masked_url(url));
             }
         }
 

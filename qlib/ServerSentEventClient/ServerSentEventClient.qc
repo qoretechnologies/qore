@@ -1299,7 +1299,7 @@ sse.setEventQueue();
             }
         }
 
-        logInfo("Connected to %y (open: %y content encoding: %y chunked: %y)", hc.getURL(), hc.isOpen(),
+        logInfo("Connected to %y (open: %y content encoding: %y chunked: %y)", hc.getSafeURL(), hc.isOpen(),
             content_encoding, chunked ?? False);
         ++num_connects;
         cid = seq.next();

@@ -749,7 +749,8 @@ struct qore_ftp_private {
     DLLLOCAL void setURLIntern(const QoreString* url_str, ExceptionSink* xsink) {
         QoreURL url(url_str);
         if (!url.getHost()) {
-            xsink->raiseException("FTP-URL-ERROR", "no hostname given in URL '%s'", url_str->c_str());
+            xsink->raiseException("FTP-URL-ERROR", "no hostname given in URL '%s'",
+                q_mask_url_password(url_str->c_str()).c_str());
             return;
         }
 

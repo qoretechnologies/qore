@@ -180,6 +180,8 @@ module EmpathicBuildingDataProvider {
     @section empathicbuildingdataprovider_relnotes Release Notes
 
     @subsection empathicbuildingdataprovider_v1_2 EmpathicBuildingDataProvider v1.2
+    - the debug message of a failed login or token refresh no longer contains the request body (with the password or the
+      refresh token) and gives the request headers with their credentials redacted
     - migrated to the async multiplexed @ref RestClientIo::RestClientIo "RestClientIo"
       transport (HTTP/1.1/2/3) on the default build path; the \c restclient data provider
       option is widened to @ref RestClient::AbstractRestClient "AbstractRestClient"

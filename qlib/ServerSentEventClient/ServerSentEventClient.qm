@@ -138,6 +138,7 @@ sse.observersReady();
     @section serversenteventclient_relnotes ServerSentEventClient Release History
 
     @subsection serversenteventclient_v1_1 Version 1.1
+    - the connect log message gives the URL without its password
     - @ref ServerSentEventClient::ServerSentEventClientDataProvider "ServerSentEventClientDataProvider" receives
       events with @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo"; a synchronous client
       given in the \c sseclient option is converted, and a new constructor accepts an asynchronous client; the data

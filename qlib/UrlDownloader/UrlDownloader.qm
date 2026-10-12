@@ -90,6 +90,7 @@ try {
     @section urldownloader_relnotes Release Notes
 
     @subsection urldownloader_v1_0 UrlDownloader v1.0
+    - errors and log messages give a URL without its password (see @ref Qore::get_masked_url() "get_masked_url()")
     - initial release
 */
 

@@ -132,7 +132,7 @@ public class UrlDownloader {
         {
             AutoLock al(m);
             if (cancelled) {
-                throw "DOWNLOAD-CANCELLED", sprintf("%s: the download was cancelled", url), res;
+                throw "DOWNLOAD-CANCELLED", sprintf("%s: the download was cancelled", get_masked_url(url)), res;
             }
             if (tid) {
                 throw "DOWNLOAD-ERROR", "a download is already in progress", res;
@@ -176,7 +176,7 @@ public class UrlDownloader {
                 err.desc = "the download was cancelled";
             }
             res.cause = err;
-            throw code, sprintf("%s: %s", url, err.desc), res;
+            throw code, sprintf("%s: %s", get_masked_url(url), err.desc), res;
         }
         return res;
     }
@@ -303,7 +303,7 @@ public class UrlDownloader {
             throw "DOWNLOAD-URL-ERROR", ex.desc;
         }
         if (!info.host) {
-            throw "DOWNLOAD-URL-ERROR", sprintf("URL %y has no host", url);
+            throw "DOWNLOAD-URL-ERROR", sprintf("URL %y has no host", get_masked_url(url));
         }
         return info;
     }
@@ -482,7 +482,7 @@ public class UrlDownloader {
         int deadline = opts.max_time ? clock_getmillis() + opts.max_time : 0;
         string path = decode_url(info.path ?? "");
         if (!path || path =~ /\/$/) {
-            throw "DOWNLOAD-URL-ERROR", sprintf("URL %y does not name a file", url);
+            throw "DOWNLOAD-URL-ERROR", sprintf("URL %y does not name a file", get_masked_url(url));
         }
         FtpClient fc(UrlDownloader::getUrlWithoutUserInfo(url, info));
         if (opts.user) {

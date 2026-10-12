@@ -138,6 +138,8 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @section connectionproviderrelnotes Release Notes
 
     @subsection connectionprovider_3_1 ConnectionProvider 3.1
+    - the errors of invalid connections, of connection URLs with control characters and of inaccessible filesystem
+      directories, and the URL errors and log messages of HTTP connections, give the URL without its password
     - added @ref ConnectionProvider::connection_option_override() "connection_option_override()" (defined in the
       @c DataProvider module with @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo") to derive a
       connection option from the option of another connection scheme without resetting the members that are not

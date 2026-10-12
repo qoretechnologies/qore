@@ -92,7 +92,7 @@ class FileLocationHandlerFtpPollOperation inherits Qore::AbstractPollOperation<a
             remote_dir = dirname(url_info.path);
         }
         if (!remote_file.val()) {
-            throw "LOCATION-ERROR", sprintf("FTP location %y missing file path", url);
+            throw "LOCATION-ERROR", sprintf("FTP location %y missing file path", get_masked_url(url));
         }
         bool secure = scheme == "ftps";
         # NOTE: positional arguments are required here; the named form fails with
@@ -103,7 +103,7 @@ class FileLocationHandlerFtpPollOperation inherits Qore::AbstractPollOperation<a
 
     #! Returns the goal of the operation
     string getGoal() {
-        return sprintf("FTP retrieve %y", url);
+        return sprintf("FTP retrieve %y", get_masked_url(url));
     }
 
     #! Returns the current state
@@ -152,7 +152,7 @@ class FileLocationHandlerFtpPollOperation inherits Qore::AbstractPollOperation<a
                     *hash<FtpClientIo::FtpCommandResult> resp = op.getCommandResult();
                     if ((resp.code / 100) != 2) {
                         throw "LOCATION-ERROR", sprintf("cannot change to directory %y for FTP location "
-                            "%y: %s", remote_dir, url, resp.message);
+                            "%y: %s", remote_dir, get_masked_url(url), resp.message);
                     }
                     state = SPS_GET;
                     op.submitGet(remote_file);
@@ -352,7 +352,7 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
             file = basename(url_info.path);
         }
         if (!file) {
-            throw "LOCATION-ERROR", sprintf("FTP location %y missing file path", location);
+            throw "LOCATION-ERROR", sprintf("FTP location %y missing file path", get_masked_url(location));
         }
         FtpClient f(url: location);
         f.connect();

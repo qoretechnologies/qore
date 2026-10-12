@@ -94,7 +94,7 @@ public class McpClientDataProviderBase inherits DataProvider::AbstractDataProvid
             return options.mcp;
         }
         if (options.url) {
-            @debug("Creating MCP client from URL: %y", options.url);
+            @debug("Creating MCP client from URL: %y", get_masked_url(options.url));
             return new McpClient(options.url, {
                 "name": options.client_name ?? "QoreDataProvider",
                 "version": options.client_version ?? "1.0",

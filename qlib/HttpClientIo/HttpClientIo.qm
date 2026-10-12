@@ -152,6 +152,7 @@ manager.closeAll();
     @section httpclientio_relnotes Release Notes
 
     @subsection httpclientio_v1_0 Version 1.0
+    - URL errors give the URL without its password
     Initial (not yet released) version of the unified %HttpClientIo module —
     HTTP/1.1, HTTP/2, and HTTP/3 client I/O behind a single API, as currently
     implemented:

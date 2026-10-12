@@ -1561,6 +1561,12 @@ static inline bool qore_parse_options_support_ir(const QoreParseOptions& po) {
 */
 DLLLOCAL std::string qore_describe_missing_ir_parse_options(const QoreParseOptions& po);
 
+//! Returns a URL with any password replaced by \c "<masked>", for messages; never fails
+/** A URL that can be parsed has the password that the parser finds masked where it appears; otherwise, any text
+    between the first \c ':' and the last \c '@' before a query or fragment is taken for a password and masked.
+*/
+DLLLOCAL std::string q_mask_url_password(const char* url);
+
 DLLLOCAL extern QoreString YamlNullString;
 
 DLLLOCAL extern bool q_disable_gc;
