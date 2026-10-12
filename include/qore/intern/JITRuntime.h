@@ -1040,6 +1040,36 @@ void qore_rt_bind_member_float_v1(QoreAOTContext* ctx,
     double (*entry)(double, QoreObject*, const qore_class_private*, RuntimeConfig*, int*,
         QoreAOTContext*, ExceptionSink*));
 
+struct QoreAOTEffectMemberIntEntryV1;
+//! Publish an immutable update-prefix/continuation pair for the exact normal AOT body.
+//! @param ctx method context
+//! @param normal matching normal entry
+//! @param entries module-owned native entry, continuation and prefix length
+//! @note The immutable descriptor must outlive the context; conflicting bindings are never replaced.
+void qore_rt_bind_effect_member_int_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), const QoreAOTEffectMemberIntEntryV1* entries);
+//! Non-evaluating update probe; no effect on a miss and exactly one update on success.
+//! @param object borrowed receiver
+//! @param name member name
+//! @param class_ctx admitted defining-class context
+//! @param delta 1 or -1
+//! @return one if updated, zero if this operation requires the cold continuation
+int qore_rt_try_update_member_int_v1(QoreObject* object, const char* name,
+    const qore_class_private* class_ctx, int64_t delta);
+
+//! Same update probe with both target-width name hashes computed at compile time.
+//! @param object borrowed receiver, alive throughout this call
+//! @param name member name matching both precomputed hashes
+//! @param hash64 XXH64 of name with seed zero
+//! @param hash32 XXH32 of name with seed zero
+//! @param class_ctx admitted defining-class context, or nullptr for public access
+//! @param delta 1 or -1
+//! @return one after exactly one synchronized update, zero without effects when ordinary execution is needed
+//! @note Internal compiler ABI: hashes must match name. No access, storage, locking or representation check
+//! is omitted. Neither outcome allocates, changes node ownership, or enters Qore code.
+int qore_rt_try_update_member_int_prehashed_v1(QoreObject* object, const char* name,
+    uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, int64_t delta);
+
 //! Copy live primitive storage under the ordinary object read lock, never evaluating references.
 //! @param object borrowed receiver
 //! @param name member name

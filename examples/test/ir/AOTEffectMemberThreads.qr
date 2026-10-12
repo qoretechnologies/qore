@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+
+class EffectThreadCounter {
+    public { auto first = 0; auto second = 0; auto delta = 17; }
+    int next(int value) { ++first; --second; return (value + delta) & 65535; }
+}
+auto sub effectThreadCall(auto receiver, int value) { return receiver.next(value); }
+
+sub effectThreadWorker(auto receiver, Counter start, Counter readers, Counter done, Queue failures) {
+    on_exit { readers.dec(); done.dec(); }
+    try {
+        start.dec();
+        if (start.waitForZero(10000)) { throw "EFFECT-THREAD-TEST", "worker start timeout"; }
+        for (int i = 0; i < 8000; ++i) {
+            auto value = effectThreadCall(receiver, 1);
+            if (type(value) != "integer" || (value != 18 && value != 20)) {
+                throw "EFFECT-THREAD-TEST", sprintf("invalid return: %y", value);
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) { failures.push(ex); }
+}
+sub effectThreadWriter(EffectThreadCounter receiver, Counter start, Counter readers,
+        Counter done, Queue failures) {
+    on_exit done.dec();
+    try {
+        start.dec();
+        if (start.waitForZero(10000)) { throw "EFFECT-THREAD-TEST", "writer start timeout"; }
+        for (int i = 0; i < 2000000; ++i) {
+            # The float representation forces a cold suffix after both updates.
+            # Concurrent callers must never repeat those already committed updates.
+            receiver.delta = i & 1 ? 17 : 19.0;
+            if (!readers.getCount()) { return; }
+        }
+        throw "EFFECT-THREAD-TEST", "workers did not finish";
+    } catch (hash<ExceptionInfo> ex) { failures.push(ex); }
+}
+
+sub checkEffectWriters(bool wide) {
+    EffectThreadCounter receiver();
+    for (int i = 0; i < 16; ++i) {
+        if (effectThreadCall(receiver, 1) != 18) { throw "EFFECT-THREAD-TEST", "warmup"; }
+    }
+    int first = wide ? 140737488355320 : 0;
+    int second = wide ? -140737488355320 : 0;
+    receiver.first = first;
+    receiver.second = second;
+    Counter start(5);
+    Counter readers(4);
+    Counter done(5);
+    Queue failures();
+    background effectThreadWriter(receiver, start, readers, done, failures);
+    for (int i = 0; i < 4; ++i) {
+        background effectThreadWorker(receiver, start, readers, done, failures);
+    }
+    if (done.waitForZero(60s)) { throw "EFFECT-THREAD-TEST", "completion timeout"; }
+    if (failures.size()) { throw "EFFECT-THREAD-TEST", failures.get(1000); }
+    if (receiver.first != first + 32000 || receiver.second != second - 32000) {
+        throw "EFFECT-THREAD-TEST", sprintf("updates lost or repeated: %y/%y", receiver.first, receiver.second);
+    }
+}
+
+int sub effectCancelSpin(auto receiver, Counter ready) {
+    int value = 1;
+    for (int i = 0; i < 16; ++i) { value = effectThreadCall(receiver, value); }
+    ready.dec();
+    for (int i = 0; i < 50000000; ++i) { value = effectThreadCall(receiver, value); }
+    return value;
+}
+sub checkEffectCancellation(bool cold) {
+    EffectThreadCounter receiver();
+    receiver.delta = cold ? 19.0 : 17;
+    Counter ready(1);
+    Counter done(1);
+    int tid;
+    string error = "NO-CANCELLATION";
+    bool pending = False;
+    bool valid = False;
+    background sub () {
+        on_exit done.dec();
+        tid = gettid();
+        try { effectCancelSpin(receiver, ready); }
+        catch (hash<ExceptionInfo> ex) {
+            error = ex.err;
+            pending = thread_cancelled();
+            clear_thread_cancel();
+            # Cancellation may interrupt an ordinary prefix between its two
+            # updates; it must not replay the first update or lose later reuse.
+            int first = receiver.first;
+            int second = receiver.second;
+            valid = first >= 16 && (first + second == 0 || first + second == 1);
+            int value = effectThreadCall(receiver, 1);
+            valid = valid && value == (cold ? 20 : 18) && receiver.first == first + 1
+                && receiver.second == second - 1;
+        }
+    }();
+    if (ready.waitForZero(30s)) { throw "EFFECT-CANCEL-TEST", "worker did not start"; }
+    cancel_thread(tid, "effect member cancellation");
+    if (done.waitForZero(30s)) { throw "EFFECT-CANCEL-TEST", "worker did not finish"; }
+    if (error != "THREAD-CANCELLED" || !pending || !valid) {
+        throw "EFFECT-CANCEL-TEST", sprintf("error=%s pending=%y valid=%y", error, pending, valid);
+    }
+}
+
+foreach bool cold in ((False, True)) {
+    checkEffectWriters(cold);
+    checkEffectCancellation(cold);
+}
+printf("effect-member-threads: ok\n");

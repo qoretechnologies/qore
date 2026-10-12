@@ -45,8 +45,10 @@ class ScalarMemberEntryTest inherits QUnit::Test {
                 "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
+                # Keep helper-presence checks specific to read-only companions;
+                # effect-aware entries have independent admission and controls.
                 string ir = run((qcc, level, "--strip-source", "-o", executable, source),
-                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                    prefix + "QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY=1 QORE_DUMP_LLVM_IR=1 ");
                 bool enabled = prefix != "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ";
                 bool resolved = enabled && prefix != "QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1 "
                     && prefix != "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ";

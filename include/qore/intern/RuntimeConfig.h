@@ -216,7 +216,7 @@ private:
 struct QorePreparedFunctionRefV3;
 struct QoreAOTMethodDispatchCacheEntry;
 
-//! Invocation-owned object context for a compiler-proven pure native method.
+//! Invocation-owned object context for a compiler-proven non-reentrant native method.
 /** Keep alive until its leaf helper has unpublished the diagnostic frame and
     restored any materialized state. Construction only borrows the receiver and
     immutable cache; it neither changes context nor extends object lifetime.
@@ -248,15 +248,18 @@ private:
     DLLLOCAL void restore(ThreadData* td);
 };
 
-//! Deferred context for a prepared pure scalar callback-v3 or method-v2 callee.
-/** Keep as the last member of its published stack location. The callee can
-    only evaluate native scalar operations or enter the full stack guard; it
-    cannot read or change the deferred context, allocate, or reenter Qore.
+//! Deferred context for a prepared non-reentrant native scalar callee.
+/** Keep as the last member of its published stack location. The callee may
+    evaluate native scalar operations, perform bounded locked member probes
+    through explicit receiver/class arguments, or enter the full stack guard.
+    Member probes cannot allocate, release ownership, reenter Qore, or inspect
+    the deferred TLS/local context. An effect-prefix miss must unpublish this
+    borrowed frame before its ordinary cold continuation can enter generic code.
     Diagnostic stack publication is always retained. Empty local/closure
-    markers are private to this thread and unobservable by the pure body. The
+    markers are private to this thread and unobservable by the admitted body. The
     integer-result path materializes them before any stack exception; floating
     results retain eager markers after measured regressions from deferring them.
-    Requires the dispatch helper's entry guard and a guarded pure callee entry:
+    Requires the dispatch helper's entry guard and a guarded native callee entry:
     this middle publication frame does not repeat their stack checks. The sink
     parameter is retained for the common helper construction signature, but not used.
     All pointers belong to the current invocation/thread, including the cache.

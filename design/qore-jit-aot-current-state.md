@@ -759,6 +759,74 @@ stack and ownership guards remain in place. Diagnostic controls are sampled on
 first use of their path; set them before starting the process. A packed shared
 options snapshot was measured and rejected, not retained.
 
+### Guarded AOT member-update prefixes
+
+An additional `int(int)` companion admits a bounded prefix of standalone implicit
+self-member increment/decrement statements followed by the existing single-read
+scalar proof. The whole body must fit one block and 64 IR instructions, with no
+body locals, explicit self-local access, opaque AST access or generic signature
+substitution. Each prefix statement is exactly a matching push/update/discard
+triplet with no exception target or dynamic path operand. Update results cannot
+feed the suffix; the scalar proof starts with an empty SSA set at that boundary.
+Unsupported methods keep their ordinary entry.
+
+The normal body publishes an immutable, module-owned fast-entry/continuation pair
+for its exact body identity. Release/acquire publication installs the descriptor
+before the shared integer member-companion pointer. Read-only and update-prefix
+proofs are mutually exclusive; neither binder replaces an existing binding.
+No receiver, mutable member value or per-invocation progress is shared there.
+
+The fast entry receives the argument, receiver, defining class and live
+`RuntimeConfig` explicitly. Each update resolves access/storage against the live
+receiver and takes its own ordinary object write lock. Only existing inline
+integer storage whose unit-step result also fits inline may be changed. A miss
+does not create storage, evaluate a reference, release ownership or change a
+value. XXH64/XXH32 member-name hashes are computed at compilation, but access,
+storage selection, deletion, representation and locking checks remain live.
+The suffix read has its own lock at its source position: reads are not hoisted
+and the statement sequence is not made atomic by combining locks.
+
+The accepted result distinguishes success (one), an effect-free read-only miss
+(zero), and an update-prefix miss (completed updates plus two). The latter pops
+the compact borrowed frame before installing an ordinary observable method
+frame, self/argument slots and object/class context. The cold entry skips exactly
+the completed statements, not their remaining suffix, and never requests a
+whole-body replay. PIC-owned diagnostic metadata is copied before generic
+reentry can retire the caller cache. Return declaration validation remains
+inside the callee frame; normal cleanup and the post-cleanup filter still run.
+Wide arguments and cold returns retain ordinary ownership.
+
+Ordinary AOT bodies containing generic lvalue operations now keep runtime-backed
+parameter slots and use the existing publication/reload protocol. Such operations
+can release a node whose destructor reflects into the active frame. The cold
+continuation therefore observes parameter replacement instead of retaining a
+stale native argument. This is not a general solution for every private direct
+entry or other hidden reentry path. Caller-PIC retirement tests likewise do not
+establish arbitrary active-callee-context replacement safety.
+
+`QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY=1` disables generation or publication of
+the pair. The existing deferred-context disable also prevents publication.
+`QORE_DISABLE_AOT_EFFECT_MEMBER_PREHASH=1` separately disables generated update
+hashes or routes the new helper through its ordinary lookup implementation.
+`QORE_DISABLE_AOT_PREHASHED_KEYS=1` suppresses prehash generation globally.
+Read-only companion controls remain independent. Set controls before startup.
+These new additive helpers and companion metadata require matching compiler/
+runtime artifacts; an old executable does not gain a companion by relinking.
+The optimization is AOT-specific, with AST/IR/JIT used as correctness references.
+
+`AOTEffectMemberEntry.qtest` covers partial-prefix misses, representation boundaries,
+references, internal shadowing, destructor reflection/throws, return-error frames,
+cross-Program calls, debugger/frame readers, concurrency and cancellation.
+`NativeLeafContext.qtest` additionally intercepts the real compiled pair to prove
+fast hits and exact resume counts, verifies v1/v2 result ownership and caller-PIC
+retirement, and forces stack errors on initial and registered foreign threads.
+Measured gains and adverse controls are recorded in the runtime-comparison results.
+The corrected revision passed selected release/debug qualification and fresh
+matched AOT/Java measurements: member-update work takes about 55% less time than
+the preceding committed baseline, with a roughly 1% boxed-integer regression and
+slower native-integer medians retained as explicit tradeoffs. No Java parity,
+whole-suite, sanitizer or cross-platform claim is made.
+
 ### Checked inline self-member integer updates
 
 The shared LLVM lowering already routes direct self-member assignment, compound

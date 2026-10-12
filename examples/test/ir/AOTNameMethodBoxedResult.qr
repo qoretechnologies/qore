@@ -106,7 +106,10 @@ auto sub boxedDeletedResult(auto receiver, int value) {
     try {
         for (int i = 0; i < 32; ++i) {
             if (i == 16) { delete doomed; }
-            auto result = receiver.next(value);
+            # Deletion can reenter and change runtime-backed parameters. Keep
+            # this site's native-argument contract explicit after the reload;
+            # boxedArgumentDeletedResult separately covers the boxed argument.
+            auto result = receiver.next(int(value));
         }
         return "accepted deleted object";
     } catch (hash<ExceptionInfo> ex) { return ex.err; }

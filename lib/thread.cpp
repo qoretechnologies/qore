@@ -420,7 +420,7 @@ public:
     uintptr_t runtime_loc_sp = 0;
     // current dynamic runtime statement
     const AbstractStatement* runtime_statement = nullptr;
-    // Same-thread deferred context for an admitted pure native scalar leaf.
+    // Same-thread deferred context for an admitted non-reentrant native scalar leaf.
     // Never read by stack observers; they use the independently published frame.
     RuntimeConfigNativeLeafCallHelper* native_leaf_context = nullptr;
     const char* parse_code = nullptr; // the current function, method, or closure being parsed
@@ -2388,9 +2388,10 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
         : cache.native_scalar_uvb->getUserSignature()->getParseLocation();
     td->native_leaf_context = this;
     old_stack = publish_pushed_stack_location(td, stack_loc);
-    // Method-v2 has always re-emitted the complete non-throwing scalar proof,
-    // with qore_rt_check_stack_v2 before any body work. As for callback-v3,
-    // publish before that guard; it materializes this context on overflow.
+    // Admitted method companions check the live stack before any body work.
+    // Scalar operations and bounded explicit-context member probes cannot
+    // reenter; generic cold work starts only after this borrowed frame is gone.
+    // As for callback-v3, publish before the guard so overflow materializes it.
 }
 
 // Never pull exception-only context traffic back into the successful call path.
@@ -2418,7 +2419,7 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
         parse_loc = callback_cache->parse_loc;
     }
     // Cross-thread observers inspect the published diagnostic chain, not these
-    // thread-private variable stacks. The pure body cannot observe them or
+    // thread-private variable stacks. The admitted body cannot observe them or
     // reenter Qore. Install both markers before exception/context construction.
     if (state == ContextState::DeferredMarkers) {
         tlpd = td->tlpd;

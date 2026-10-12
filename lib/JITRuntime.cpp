@@ -481,6 +481,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_bind_closure_int_unary_v1) },
     { "qore_rt_bind_member_int_v1", reinterpret_cast<void*>(&qore_rt_bind_member_int_v1) },
     { "qore_rt_bind_member_float_v1", reinterpret_cast<void*>(&qore_rt_bind_member_float_v1) },
+    { "qore_rt_bind_effect_member_int_v1", reinterpret_cast<void*>(&qore_rt_bind_effect_member_int_v1) },
+    { "qore_rt_try_update_member_int_v1", reinterpret_cast<void*>(&qore_rt_try_update_member_int_v1) },
+    { "qore_rt_try_update_member_int_prehashed_v1",
+        reinterpret_cast<void*>(&qore_rt_try_update_member_int_prehashed_v1) },
     { "qore_rt_try_load_member_int_v1", reinterpret_cast<void*>(&qore_rt_try_load_member_int_v1) },
     { "qore_rt_try_load_member_float_v1", reinterpret_cast<void*>(&qore_rt_try_load_member_float_v1) },
     { "qore_rt_try_load_member_int_prehashed_v1", reinterpret_cast<void*>(&qore_rt_try_load_member_int_prehashed_v1) },
@@ -10390,7 +10394,8 @@ extern "C" DLLEXPORT void qore_rt_bind_method_float_unary_v3(QoreAOTContext* ctx
 
 extern "C" DLLEXPORT void qore_rt_bind_member_int_v1(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), QoreAOTContext::ScalarMemberIntEntry entry) {
-    if (ctx && normal && entry && ctx->pc_loc_fn == normal
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
+    if (enabled && ctx && normal && entry && ctx->pc_loc_fn == normal
             && !ctx->scalar_member_int_entry.load(std::memory_order_relaxed)) {
         QoreAOTContext::ScalarMemberIntEntry expected = nullptr;
         ctx->scalar_member_int_entry.compare_exchange_strong(expected, entry,
@@ -10400,7 +10405,8 @@ extern "C" DLLEXPORT void qore_rt_bind_member_int_v1(QoreAOTContext* ctx,
 
 extern "C" DLLEXPORT void qore_rt_bind_member_float_v1(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), QoreAOTContext::ScalarMemberFloatEntry entry) {
-    if (ctx && normal && entry && ctx->pc_loc_fn == normal
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
+    if (enabled && ctx && normal && entry && ctx->pc_loc_fn == normal
             && !ctx->scalar_member_float_entry.load(std::memory_order_relaxed)) {
         QoreAOTContext::ScalarMemberFloatEntry expected = nullptr;
         ctx->scalar_member_float_entry.compare_exchange_strong(expected, entry,
@@ -10412,6 +10418,45 @@ extern "C" DLLEXPORT int qore_rt_try_load_member_int_v1(QoreObject* object, cons
         const qore_class_private* class_ctx, int64_t* result) {
     return object && name && result
         && qore_object_private::get(*object)->tryReadScalarMember(name, class_ctx, result, nullptr);
+}
+
+extern "C" DLLEXPORT void qore_rt_bind_effect_member_int_v1(QoreAOTContext* ctx,
+        uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), const QoreAOTEffectMemberIntEntryV1* entries) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY")
+        && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
+    if (!enabled || !ctx || !normal || !entries || !entries->fast || !entries->resume
+            || !entries->updates || entries->updates > 21 || ctx->pc_loc_fn != normal) {
+        return;
+    }
+    const QoreAOTEffectMemberIntEntryV1* expected = nullptr;
+    if (!ctx->effect_member_int_entry.compare_exchange_strong(expected, entries,
+            std::memory_order_acq_rel, std::memory_order_acquire) && expected != entries) {
+        return;
+    }
+    // Publish the continuation descriptor before the shared member entry. A
+    // racing binder acquires that publication before forwarding the fast entry.
+    // Read-only and effectful whole-body proofs are mutually exclusive; never
+    // replace a binding established for another body or companion.
+    QoreAOTContext::ScalarMemberIntEntry expected_entry = nullptr;
+    ctx->scalar_member_int_entry.compare_exchange_strong(expected_entry, entries->fast,
+        std::memory_order_release, std::memory_order_relaxed);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_update_member_int_v1(QoreObject* object, const char* name,
+        const qore_class_private* class_ctx, int64_t delta) {
+    return object && name && (delta == 1 || delta == -1)
+        && qore_object_private::get(*object)->tryUpdateInlineIntMember(name, class_ctx, delta);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_update_member_int_prehashed_v1(QoreObject* object, const char* name,
+        uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, int64_t delta) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_EFFECT_MEMBER_PREHASH");
+    if (!enabled) {
+        return qore_rt_try_update_member_int_v1(object, name, class_ctx, delta);
+    }
+    return object && name && (delta == 1 || delta == -1)
+        && qore_object_private::get(*object)->tryUpdateInlineIntMemberPrehashed(
+            name, qore_rt_select_precomputed_hash(hash64, hash32), class_ctx, delta);
 }
 
 extern "C" DLLEXPORT int qore_rt_try_load_member_float_v1(QoreObject* object, const char* name,
@@ -10822,6 +10867,8 @@ QORE_TYPED_FUNCREF_RESULT(bool, int64_t, 3)
            stack frame's pgm so runtime_get_parse_options_stack() walks back to
            the caller's program, matching CEH semantics. If nullptr, falls back
            to uvb->pgm.
+    @param allow_deopt whether a guard failure may replay the whole body; false for
+           effectful continuations that have already executed a statement prefix
 */
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig);
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig,
@@ -10831,7 +10878,7 @@ template <typename ExecFn>
 static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call_name,
         ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink,
         QoreProgram* caller_pgm = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
-        QoreProgram* exec_pgm = nullptr) {
+        QoreProgram* exec_pgm = nullptr, bool allow_deopt = true) {
     QoreProgram* runtime_pgm = exec_pgm ? exec_pgm : uvb->pgm;
     if (uvb->hasCachedAOT() && !uvb->ensureAOTContext(call_name.c_str(), xsink)) {
         return;
@@ -10943,7 +10990,10 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     }
 
     // Check for JIT guard failure or recompilation invalidation requesting deopt to AST
-    if (!*xsink && (qore_jit_deopt_requested() || fn_invalidated)) {
+    // An effectful AOT continuation must never replay the whole body, even if
+    // generic work in its remaining suffix leaves a JIT deoptimization request.
+    bool deopt_requested = !*xsink && qore_jit_deopt_requested();
+    if (allow_deopt && !*xsink && (deopt_requested || fn_invalidated)) {
         // Ensure body locals are on thread stack for AST execution
         if (skip_body_locals) {
             for (LocalVar* lv : body_locals) {
@@ -18676,9 +18726,13 @@ __attribute__((noinline)) static int qore_rt_dispatch_matched_scalar_method(Qore
         args, nullptr, 1, xsink, *result, &cached) ? 2 : 0;
 }
 
+__attribute__((noinline)) static int64_t qore_rt_resume_effect_member_int(QoreObject* object,
+    const QoreAOTMethodDispatchCacheEntry& cached, QoreAOTContext* ctx,
+    const QoreAOTEffectMemberIntEntryV1& entries, int32_t completed, int64_t arg, ExceptionSink* xsink);
+
 // Called only after the complete PIC key and live body/Program/debugger checks.
-// A guard miss cannot enter user code or acquire ownership; retrying the normal
-// body therefore preserves reference evaluation and exception/frame semantics.
+// A read-only miss returns zero and may retry the normal body. Effectful misses
+// return completed-updates + 2 and must resume without replaying the prefix.
 template <bool Deferred, typename Scalar>
 __attribute__((noinline)) static bool qore_rt_try_scalar_member_method(QoreObject* object,
         const QoreAOTMethodDispatchCacheEntry& cached, QoreAOTContext* ctx, Scalar arg,
@@ -18718,8 +18772,75 @@ __attribute__((noinline)) static bool qore_rt_try_scalar_member_method(QoreObjec
     if (!accepted && !*xsink) {
         return false;
     }
+    if constexpr (std::is_same_v<Scalar, int64_t>) {
+        if (accepted > 1 && !*xsink) {
+            // Native helpers cannot reenter. Unpublish their borrowed frame
+            // before installing the ordinary observable continuation context.
+            const auto* entries = ctx->effect_member_int_entry.load(std::memory_order_acquire);
+            assert(entries && entries->fast == entry);
+            result = qore_rt_resume_effect_member_int(object, cached, ctx, *entries, accepted - 2, arg, xsink);
+            return true;
+        }
+    }
     result = *xsink ? 0 : value;
     return true;
+}
+
+// A cold entry resumes only at a proven statement boundary. Establish the
+// ordinary observable signature/context before any remaining operation can
+// evaluate a reference or reenter Qore. No eligibility or dispatch retry occurs.
+__attribute__((noinline)) static int64_t qore_rt_resume_effect_member_int(QoreObject* object,
+        const QoreAOTMethodDispatchCacheEntry& cached, QoreAOTContext* ctx,
+        const QoreAOTEffectMemberIntEntryV1& entries, int32_t completed, int64_t arg, ExceptionSink* xsink) {
+    assert(completed >= 0 && static_cast<uint32_t>(completed) <= entries.updates);
+    // Snapshot all PIC-owned metadata before generic code can replace the
+    // caller's AOT context. The published ordinary frame owns its name copy.
+    const std::string name = cached.call_name;
+    const UserVariantBase* uvb = cached.native_scalar_uvb;
+    QoreProgram* pgm = cached.native_scalar_program;
+    const qore_class_private* class_ctx = cached.native_scalar_class_ctx;
+    const UserSignature* sig = uvb->getUserSignature();
+    const QoreTypeInfo* receiver_type = qore_get_object_receiver_type_info(object);
+    auto resume = entries.resume;
+    ProgramThreadCountContextHelper ptcch(xsink, pgm, true);
+    if (*xsink) {
+        return 0;
+    }
+    ThreadFrameBoundaryHelper boundary(true);
+    ObjectSubstitutionHelper object_context(object, class_ctx);
+    QoreValue value;
+    {
+        struct Slots {
+            const UserSignature* sig;
+            ExceptionSink* xsink;
+            bool self = false;
+            bool param = false;
+            ~Slots() {
+                if (param) { sig->lv[0]->uninstantiate(xsink); }
+                if (self) { sig->selfid->uninstantiateSelf(); }
+            }
+        } slots{sig, xsink};
+        if (sig->selfid) {
+            sig->selfid->instantiateSelf(object);
+            slots.self = true;
+        }
+        ValueHolder argument(QoreValue(arg), xsink);
+        sig->lv[0]->instantiate(*argument);
+        argument.release();
+        slots.param = true;
+        execJITWithDeopt(uvb, name, [&](ExceptionSink* xs, bool&) {
+            return resume(completed, ctx, xs);
+        }, value, xsink, pgm, receiver_type, pgm, false);
+    }
+    // Retain the ordinary post-cleanup return filter, including a parameter
+    // replaced through reflection. The compiled return already performs its
+    // declaration check inside the observable method frame.
+    if (!*xsink) {
+        QoreTypeInfo::acceptAssignment(bigIntTypeInfo, "<return statement>", value, xsink);
+    }
+    int64_t result = *xsink ? 0 : value.getAsBigInt();
+    value.discard(xsink);
+    return result;
 }
 
 // The non-deferred diagnostic policy keeps its original context/frame protocol,
@@ -18864,17 +18985,16 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
             }
         }();
         if (member_entry) {
-            static const bool member_enabled = !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
-            if (member_enabled) {
-                static const bool defer_member_context =
-                    !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
-                if (defer_member_context
-                        ? qore_rt_try_scalar_member_method<true>(object, *cached, ctx, arg, *result,
-                            xsink, *rc, member_entry)
-                        : qore_rt_try_scalar_member_method<false>(object, *cached, ctx, arg, *result,
-                            xsink, *rc, member_entry)) {
-                    return 1;
-                }
+            // Each binder applies its own diagnostic policy before publishing;
+            // successful reads and updates share one typed dispatch branch.
+            static const bool defer_member_context =
+                !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
+            if (defer_member_context
+                    ? qore_rt_try_scalar_member_method<true>(object, *cached, ctx, arg, *result,
+                        xsink, *rc, member_entry)
+                    : qore_rt_try_scalar_member_method<false>(object, *cached, ctx, arg, *result,
+                        xsink, *rc, member_entry)) {
+                return 1;
             }
         }
         return matched_fallback();

@@ -11490,6 +11490,55 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
     std::unordered_set<const void*> native_unsafe_locals
         = qore_ir_get_native_unsafe_locals(func, initially_assigned_locals);
+    bool runtime_lvalue_params = effect_member_resume != nullptr;
+    if (aot_mode && !fast_entry_args && !func.param_local_vars.empty()) {
+        // Generic lvalue operations may evaluate references or release an
+        // object whose destructor reflects into this frame. Syntactic IR-only
+        // parameter access does not make its ordinary runtime slot private.
+        // Guarded native companions have a separate no-reentry proof and pass
+        // their arguments explicitly, so they do not need these reloads.
+        size_t reentry_scan_count = 0;
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (reentry_scan_count++ && !(reentry_scan_count % 100)
+                        && qore_check_cancel(nullptr, "LLVM lvalue parameter visibility")) {
+                    error = "cancelled during LLVM lvalue parameter visibility";
+                    return false;
+                }
+                switch (inst->opcode) {
+                    case QoreIROpcode::LValuePathAssign:
+                    case QoreIROpcode::LValuePathCompound:
+                    case QoreIROpcode::LValuePathUnary:
+                    case QoreIROpcode::LValuePathBinaryMut:
+                    case QoreIROpcode::LValuePathTernary:
+                        runtime_lvalue_params = true;
+                        break;
+                    default:
+                        break;
+                }
+                if (runtime_lvalue_params) {
+                    break;
+                }
+            }
+            if (runtime_lvalue_params) {
+                break;
+            }
+        }
+    }
+    if (runtime_lvalue_params) {
+        // Retain boxed caches for ordinary parameters so writes publish to
+        // their slots and later loads use the existing epoch/reload protocol.
+        // This also covers cold effect continuations after a partial prefix.
+        size_t runtime_parameter_count = 0;
+        for (const auto& entry : func.param_local_vars) {
+            if (runtime_parameter_count++ && !(runtime_parameter_count % 100)
+                    && qore_check_cancel(nullptr, "LLVM lvalue parameter classification")) {
+                error = "cancelled during LLVM lvalue parameter classification";
+                return false;
+            }
+            native_unsafe_locals.insert(reinterpret_cast<const void*>(entry.second));
+        }
+    }
 
     // In AOT mode, remove runtime-owned boxed locals from the IR-only set.
     // evalTiered pre-instantiates ALL body locals from all_body_locals on the
@@ -13464,6 +13513,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
         }
 
+        unsigned effect_resume_instruction = 0;
+        llvm::BasicBlock* effect_resume_join = nullptr;
         for (const auto& inst_ptr : block->instructions) {
             if (native_handler_cache_cancelled) {
                 error = "cancelled during LLVM native handler slot cache setup";
@@ -13472,6 +13523,19 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             const QoreIRInstruction* inst = inst_ptr.get();
             if (!inst) {
                 continue;
+            }
+            // Resume only at proven statement boundaries. The skipped prefix has
+            // no SSA users outside its discarded update, and no callbacks occur
+            // on its native path. Branch before location updates or debug hooks.
+            if (effect_member_resume && effect_resume_instruction < effect_member_updates * 3
+                    && effect_resume_instruction % 3 == 0) {
+                assert(inst->opcode == QoreIROpcode::PushTempMark);
+                auto* update = llvm::BasicBlock::Create(ctx, "effect_remaining_update", llvm_func);
+                effect_resume_join = llvm::BasicBlock::Create(ctx, "effect_update_done", llvm_func);
+                builder->CreateCondBr(builder->CreateICmpUGT(effect_member_resume,
+                    llvm::ConstantInt::get(i32_type, effect_resume_instruction / 3)),
+                    effect_resume_join, update);
+                builder->SetInsertPoint(update);
             }
             const QoreIRStringConsumerCallInstruction* string_consumer_call =
                 nullptr;
@@ -13642,6 +13706,19 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 }
                 return false;
             }
+
+            if (effect_member_resume && effect_resume_instruction < effect_member_updates * 3
+                    && effect_resume_instruction % 3 == 2) {
+                assert(inst->opcode == QoreIROpcode::DiscardTemps && effect_resume_join);
+                if (!qoreGetTerminator(builder->GetInsertBlock())) {
+                    builder->CreateBr(effect_resume_join);
+                }
+                builder->SetInsertPoint(effect_resume_join);
+                effect_resume_join = nullptr;
+                // The skipped path did not install the previous statement's location.
+                last_runtime_line = -1;
+            }
+            ++effect_resume_instruction;
             if (fused_string_call
                     && aot_hash_string_extraction_instruction != inst) {
                 aot_hash_string_extraction_cache.clear();
@@ -14178,6 +14255,56 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
         llvm::Module& module, std::string& error) {
     printd(3, "LLVM-LOWER: opcode=%d result=%%%d\n", (int)inst->opcode, inst->result.id);
+    if (scalar_member_object && effect_member_updates && inst->opcode == QoreIROpcode::LValuePathUnary) {
+        const auto* update = static_cast<const QoreIRLValuePathInstruction*>(inst);
+        assert(effect_member_completed < effect_member_updates && update->path.size() == 1);
+        int64_t delta = update->unary_op == LVUnaryOp::PreInc || update->unary_op == LVUnaryOp::PostInc ? 1 : -1;
+        llvm::Value* name = builder->CreateGlobalString(update->path[0].name);
+        llvm::Value* step = llvm::ConstantInt::getSigned(i64_type, delta);
+        llvm::Value* accepted;
+        if (qore_ir_use_prehashed_keys() && !std::getenv("QORE_DISABLE_AOT_EFFECT_MEMBER_PREHASH")) {
+            auto helper = module.getOrInsertFunction("qore_rt_try_update_member_int_prehashed_v1",
+                llvm::FunctionType::get(i32_type,
+                    {ptr_type, ptr_type, i64_type, i32_type, ptr_type, i64_type}, false));
+            QoreIRPrecomputedStringHash hash = qore_ir_precompute_string_hash(update->path[0].name);
+            accepted = builder->CreateCall(helper, {scalar_member_object, name,
+                llvm::ConstantInt::get(i64_type, hash.hash64), llvm::ConstantInt::get(i32_type, hash.hash32),
+                scalar_member_class_ctx, step});
+        } else {
+            auto helper = module.getOrInsertFunction("qore_rt_try_update_member_int_v1",
+                llvm::FunctionType::get(i32_type, {ptr_type, ptr_type, ptr_type, i64_type}, false));
+            accepted = builder->CreateCall(helper, {scalar_member_object, name, scalar_member_class_ctx, step});
+        }
+        auto* success = llvm::BasicBlock::Create(ctx, "effect_updated", llvm_func);
+        auto* miss = llvm::BasicBlock::Create(ctx, "effect_resume", llvm_func);
+        builder->CreateCondBr(builder->CreateICmpNE(accepted, llvm::ConstantInt::get(i32_type, 0)), success, miss);
+        builder->SetInsertPoint(miss);
+        builder->CreateStore(llvm::ConstantInt::get(i32_type, effect_member_completed + 2), scalar_member_accepted);
+        if (!error_return_block) {
+            error_return_block = llvm::BasicBlock::Create(ctx, "error_return", llvm_func);
+        }
+        builder->CreateBr(error_return_block);
+        builder->SetInsertPoint(success);
+        ++effect_member_completed;
+        // The whole-body proof requires the update result to be discarded.
+        values[inst->result.id] = llvm::ConstantInt::get(i64_type, 0);
+        return true;
+    }
+    if (scalar_member_object && effect_member_updates && (inst->opcode == QoreIROpcode::AndAny
+            || inst->opcode == QoreIROpcode::OrAny || inst->opcode == QoreIROpcode::XorAny)) {
+        llvm::Value* lhs = getVal(inst->operands[0].id, error);
+        llvm::Value* rhs = getVal(inst->operands[1].id, error);
+        if (!lhs || !rhs || lhs->getType() != i64_type || rhs->getType() != i64_type
+                || nanboxed_values.count(inst->operands[0].id)
+                || nanboxed_values.count(inst->operands[1].id)) {
+            error = "invalid effect-member integer bitwise proof";
+            return false;
+        }
+        values[inst->result.id] = inst->opcode == QoreIROpcode::AndAny ? builder->CreateAnd(lhs, rhs)
+            : inst->opcode == QoreIROpcode::OrAny ? builder->CreateOr(lhs, rhs) : builder->CreateXor(lhs, rhs);
+        known_not_nothing_values.insert(inst->result.id);
+        return true;
+    }
     if (scalar_member_object && (inst->opcode == QoreIROpcode::AddAny
             || inst->opcode == QoreIROpcode::SubAny || inst->opcode == QoreIROpcode::MulAny)) {
         // The separate whole-body proof establishes homogeneous SSA inputs;
@@ -28001,7 +28128,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCondBr(builder->CreateICmpNE(accepted,
                     llvm::ConstantInt::get(i32_type, 0)), success, miss);
                 builder->SetInsertPoint(miss);
-                builder->CreateStore(llvm::ConstantInt::get(i32_type, 0), scalar_member_accepted);
+                builder->CreateStore(llvm::ConstantInt::get(i32_type,
+                    effect_member_updates ? effect_member_completed + 2 : 0), scalar_member_accepted);
                 if (!error_return_block) {
                     error_return_block = llvm::BasicBlock::Create(ctx, "error_return", llvm_func);
                 }

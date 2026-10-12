@@ -202,6 +202,18 @@ public:
         scalar_member_internal = internal_member;
     }
 
+    //! Extend a scalar member companion with a proven standalone update prefix.
+    //! @param updates number of leading push/update/discard statement triplets
+    void setEffectMemberEntry(unsigned updates) { effect_member_updates = updates; }
+
+    //! Compile an ordinary continuation that skips already-completed update statements.
+    //! @param completed invocation-owned count; no skipped result is used by the suffix
+    //! @param updates compiler-proven number of leading update statements
+    void setEffectMemberResume(llvm::Value* completed, unsigned updates) {
+        effect_member_resume = completed;
+        effect_member_updates = updates;
+    }
+
     //! Set the name of an AOT self-recursive fast entry function.
     //! When set, self-recursive CallDirect instructions in AOT mode emit direct
     //! LLVM calls to this function instead of going through qore_rt_call_direct_aot.
@@ -390,6 +402,9 @@ private:
     llvm::Value* scalar_member_class_ctx = nullptr;
     llvm::Value* scalar_member_accepted = nullptr;
     bool scalar_member_internal = false;
+    unsigned effect_member_updates = 0;
+    unsigned effect_member_completed = 0;
+    llvm::Value* effect_member_resume = nullptr;
     //! the name of the generated native function, if not the IR function's own name; see setSymbolName()
     std::string symbol_name;
     const std::unordered_map<const void*, llvm::Value*>* fast_entry_args = nullptr;

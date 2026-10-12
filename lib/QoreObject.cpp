@@ -1091,6 +1091,52 @@ int qore_object_private::getLValueOrUpdateIntMember(const char* key,
     return 0;
 }
 
+template <bool Prehashed>
+bool qore_object_private::tryUpdateInlineIntMemberImpl(const char* key, size_t hash,
+        const qore_class_private* class_ctx, int64_t delta) {
+    assert(delta == 1 || delta == -1);
+    const qore_class_private* member_class_ctx = nullptr;
+    // The non-throwing access check selects exactly the ordinary storage context.
+    // No member or internal hash may be created by an admission probe.
+    if (checkMemberAccess(key, class_ctx, member_class_ctx)) {
+        return false;
+    }
+    QoreSafeVarRWWriteLocker sl(rml);
+    if (status == OS_DELETED) {
+        return false;
+    }
+    QoreHashNode* odata = member_class_ctx ? getInternalData(member_class_ctx) : data;
+    HashMember* member = nullptr;
+    if (odata) {
+        if constexpr (Prehashed) {
+            member = odata->priv->findMemberPrehashed(key, hash);
+        } else {
+            member = odata->priv->findMember(key);
+        }
+    }
+    if (!member || !member->val.isInt()) {
+        return false;
+    }
+    // An inline input cannot overflow int64_t with this unit delta. As in
+    // getLValueOrUpdateIntMember, existing integers bypass declaration filtering.
+    int64_t value = member->val.getAsBigInt() + delta;
+    if (!QoreValue::fitsInline(value)) {
+        return false;
+    }
+    member->val.set(value);
+    return true;
+}
+
+bool qore_object_private::tryUpdateInlineIntMember(const char* key,
+        const qore_class_private* class_ctx, int64_t delta) {
+    return tryUpdateInlineIntMemberImpl<false>(key, 0, class_ctx, delta);
+}
+
+bool qore_object_private::tryUpdateInlineIntMemberPrehashed(const char* key, size_t hash,
+        const qore_class_private* class_ctx, int64_t delta) {
+    return tryUpdateInlineIntMemberImpl<true>(key, hash, class_ctx, delta);
+}
+
 template <bool Prehashed, bool Internal>
 bool qore_object_private::tryReadScalarMemberImpl(const char* mem, size_t hash,
         const qore_class_private* class_ctx, int64_t* integer, double* floating) const {

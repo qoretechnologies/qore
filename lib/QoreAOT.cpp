@@ -1009,10 +1009,12 @@ static bool isAOTReceiverIntForwarder(const QoreIRFunction& ir, const UserVarian
 //! Every value is derived from the strict parameter, a same-family constant, or the guarded member.
 //! Unsupported bodies retain their ordinary entry; declarations alone never authorize a native read.
 static bool isAOTScalarMemberEligible(const QoreIRFunction& ir, const UserVariantBase* uvb,
-        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, bool& internal_member) {
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, bool& internal_member,
+        unsigned first_instruction = 0) {
     internal_member = false;
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
-    if (std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY") || !method || method->isStatic() || !sig
+    if ((!first_instruction && std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY"))
+            || !method || method->isStatic() || !sig
             || !isAOTFastMethodCallEligible(variant) || !isAOTFastEntryEligible(&ir, uvb)
             || ir.has_opaque_ast_local_access || ir.has_explicit_self_local_access
             || !ir.all_body_locals.empty() || ir.blocks.size() != 1
@@ -1027,7 +1029,9 @@ static bool isAOTScalarMemberEligible(const QoreIRFunction& ir, const UserVarian
     }
     std::unordered_set<uint32_t> scalars;
     unsigned reads = 0;
-    for (const auto& inst : ir.blocks[0]->instructions) {
+    const auto& instructions = ir.blocks[0]->instructions;
+    for (size_t index = first_instruction; index < instructions.size(); ++index) {
+        const auto& inst = instructions[index];
         bool binary = false;
         switch (inst->opcode) {
             case QoreIROpcode::LoadLocal: {
@@ -1070,6 +1074,14 @@ static bool isAOTScalarMemberEligible(const QoreIRFunction& ir, const UserVarian
                 if (floating) { return false; }
                 binary = true;
                 break;
+            case QoreIROpcode::AndAny:
+            case QoreIROpcode::OrAny:
+            case QoreIROpcode::XorAny:
+                // The effect companion's live member guard proves integer
+                // operands even when an auto member prevents typed IR here.
+                if (floating || !first_instruction) { return false; }
+                binary = true;
+                break;
             case QoreIROpcode::AddFloat:
             case QoreIROpcode::SubFloat:
             case QoreIROpcode::MulFloat:
@@ -1101,6 +1113,38 @@ static bool isAOTScalarMemberEligible(const QoreIRFunction& ir, const UserVarian
         }
     }
     return false;
+}
+
+//! Admit standalone member updates followed by the existing scalar/member expression proof.
+//! Prefix results are discarded before the next statement, so no live SSA value crosses a resume point.
+static unsigned getAOTEffectMemberPrefix(const QoreIRFunction& ir, const UserVariantBase* uvb,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, bool& internal_member) {
+    if (std::getenv("QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY") || ir.blocks.size() != 1
+            || ir.blocks[0]->instructions.size() > 64 || !uvb
+            || uvb->getUserSignature()->numParams() != 1
+            || uvb->getUserSignature()->getParamTypeInfo(0) != bigIntTypeInfo) {
+        return 0;
+    }
+    const auto& instructions = ir.blocks[0]->instructions;
+    unsigned prefix = 0;
+    while (prefix + 2 < instructions.size()
+            && instructions[prefix]->opcode == QoreIROpcode::PushTempMark
+            && instructions[prefix + 1]->opcode == QoreIROpcode::LValuePathUnary
+            && instructions[prefix + 2]->opcode == QoreIROpcode::DiscardTemps) {
+        const auto* update = static_cast<const QoreIRLValuePathInstruction*>(instructions[prefix + 1].get());
+        // Only implicit self members: no dynamic path operands, callbacks or explicit self local.
+        if (update->path.size() != 1 || update->path[0].kind != LVPathStepKind::SelfMember
+                || update->path[0].name.empty() || !update->operands.empty()
+                || update->unary_op < LVUnaryOp::PreInc || update->unary_op > LVUnaryOp::PostDec
+                || instructions[prefix]->exception_target || update->exception_target
+                || instructions[prefix + 2]->exception_target
+                || instructions[prefix]->temp_scope_id != instructions[prefix + 2]->temp_scope_id) {
+            return 0;
+        }
+        prefix += 3;
+    }
+    return prefix && isAOTScalarMemberEligible(ir, uvb, method, variant, internal_member, prefix)
+        ? prefix / 3 : 0;
 }
 
 //! Check if an AOT function has self-recursive CallDirect instructions.
@@ -21382,6 +21426,87 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         bind_builder.CreateCall(bind, {normal->getArg(0), normal, scalar_member_entry});
                     }
 
+                    llvm::Function* effect_member_fast = nullptr;
+                    llvm::Function* effect_member_resume = nullptr;
+                    bool effect_member_internal = false;
+                    unsigned effect_updates = method_ok && !metadata_only && !fn_outliner.active()
+                        ? getAOTEffectMemberPrefix(*ir_func, uvb, meth, variant, effect_member_internal) : 0;
+                    if (effect_updates) {
+                        const UserSignature* sig = uvb->getUserSignature();
+                        auto* ptr_ty = llvm::PointerType::get(ctx, 0);
+                        auto* int_ty = llvm::Type::getInt64Ty(ctx);
+                        auto* count_ty = llvm::Type::getInt32Ty(ctx);
+                        std::string fast_name = ir_func->name + "_effect_member_int_v1";
+                        std::string resume_name = ir_func->name + "_effect_member_resume_v1";
+                        effect_member_fast = llvm::Function::Create(llvm::FunctionType::get(int_ty,
+                            {int_ty, ptr_ty, ptr_ty, ptr_ty, ptr_ty, ptr_ty, ptr_ty}, false),
+                            llvm::Function::ExternalLinkage, fast_name, module);
+                        effect_member_resume = llvm::Function::Create(llvm::FunctionType::get(int_ty,
+                            {count_ty, ptr_ty, ptr_ty}, false), llvm::Function::ExternalLinkage, resume_name, module);
+                        effect_member_fast->setVisibility(llvm::GlobalValue::HiddenVisibility);
+                        effect_member_resume->setVisibility(llvm::GlobalValue::HiddenVisibility);
+                        // The fast body borrows one native scalar. The continuation
+                        // deliberately loads ordinary runtime slots, including reloads
+                        // after a generic update/reference can reenter and change them.
+                        for (bool resume : {false, true}) {
+                            auto* function = resume ? effect_member_resume : effect_member_fast;
+                            std::unordered_map<const void*, llvm::Value*> params;
+                            std::unordered_map<const void*, BatchCalleeParamKind> kinds;
+                            if (!resume) {
+                                params.emplace(sig->lv[0], function->getArg(0));
+                                kinds.emplace(sig->lv[0], BatchCalleeParamKind::NativeInt);
+                            }
+                            QoreIRToLLVM effect_lowerer(ctx);
+                            effect_lowerer.setAOTMode(&slots);
+                            effect_lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                            effect_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+                            effect_lowerer.setDeferredExceptionChecking(false);
+                            effect_lowerer.setFastEntryMode(function->getName().str(),
+                                resume ? nullptr : &params, resume ? nullptr : &kinds, nullptr,
+                                resume ? BatchCalleeReturnKind::Boxed : BatchCalleeReturnKind::NativeInt,
+                                bigIntTypeInfo);
+                            // The cold return keeps the ordinary declaration's
+                            // validation inside its observable frame, at the
+                            // compiled return location. The outer call helper's
+                            // post-cleanup filter alone would lose that frame.
+                            if (resume) {
+                                effect_lowerer.setEffectMemberResume(function->getArg(0), effect_updates);
+                            } else {
+                                effect_lowerer.setScalarMemberEntry(function->getArg(1), function->getArg(2),
+                                    function->getArg(3), function->getArg(4), effect_member_internal
+                                        && !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT"));
+                                effect_lowerer.setEffectMemberEntry(effect_updates);
+                            }
+                            effect_lowerer.setAOTLocTableBase(static_cast<int32_t>(aot_locs_local.size()));
+                            std::string effect_error;
+                            if (!effect_lowerer.lowerFunction(*ir_func, module, effect_error)) {
+                                ++failed_count;
+                                setAOTCompileFatal(fatal_error, "method", variant_key,
+                                    "effect-member LLVM lowering", effect_error);
+                                delete ir_func;
+                                return;
+                            }
+                            for (const auto& loc : effect_lowerer.getAOTLocTable()) {
+                                AOTCompiledFuncWithSlots::AOTLocEntry entry;
+                                entry.start_line = loc.start_line;
+                                entry.end_line = loc.end_line;
+                                entry.file = loc.file;
+                                aot_locs_local.push_back(std::move(entry));
+                            }
+                        }
+                        auto* descriptor_type = llvm::StructType::get(ctx, {ptr_ty, ptr_ty, count_ty});
+                        auto* descriptor = new llvm::GlobalVariable(module, descriptor_type, true,
+                            llvm::GlobalValue::InternalLinkage, llvm::ConstantStruct::get(descriptor_type,
+                                {effect_member_fast, effect_member_resume,
+                                 llvm::ConstantInt::get(count_ty, effect_updates)}), fast_name + "_entries");
+                        llvm::Function* normal = module.getFunction(ir_func->name);
+                        llvm::IRBuilder<> bind_builder(&normal->getEntryBlock(),
+                            normal->getEntryBlock().getFirstInsertionPt());
+                        auto bind = module.getOrInsertFunction("qore_rt_bind_effect_member_int_v1",
+                            llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {ptr_ty, ptr_ty, ptr_ty}, false));
+                        bind_builder.CreateCall(bind, {normal->getArg(0), normal, descriptor});
+                    }
+
                     // Restore the original method before metadata extraction
                     // and debug-IR serialization (serialized IR must never
                     // contain CallAOTHelper).
@@ -21419,6 +21544,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             AOTPcLocFuncEntry pc;
                             pc.symbol = scalar_member_entry->getName().str();
                             cf.pc_companions.push_back(std::move(pc));
+                        }
+                        if (effect_member_fast) {
+                            for (auto* function : {effect_member_fast, effect_member_resume}) {
+                                AOTPcLocFuncEntry pc;
+                                pc.symbol = function->getName().str();
+                                cf.pc_companions.push_back(std::move(pc));
+                            }
                         }
                         // Scan IR function for required features
                         cf.feature_flags = scanIRFeatureFlags(*ir_func);

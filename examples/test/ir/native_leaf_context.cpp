@@ -1248,9 +1248,11 @@ static void checkMemberMethods(QoreProgram* program) {
     const auto* uvb = qore_method_private::get(*method)->getFunction()->first()->getUserVariantBase();
     assert(uvb && uvb->hasCachedAOT());
     auto* ctx = uvb->getCachedAOTContext();
-    assert(ctx && ctx->uses_self && MemberEntryProbe<Scalar>::binding(ctx).load(std::memory_order_acquire));
+    assert(ctx && ctx->uses_self);
+    const bool published = !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
+    assert(bool(MemberEntryProbe<Scalar>::binding(ctx).load(std::memory_order_acquire)) == published);
     const bool admitted = !std::getenv("QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION");
-    const bool enabled = admitted && !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
+    const bool enabled = admitted && published;
     const bool fallback = admitted && !std::getenv("QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK");
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
     QoreObject* old_object = rc->getObject();
@@ -1406,6 +1408,334 @@ static void checkMemberMethods(QoreProgram* program) {
     check(false, 0, -123);
 }
 
+// An unshared Program's pair is replaced together for the lifetime of this
+// test-only probe. Both adapters execute the real compiler-produced entries;
+// a correct ordinary fallback cannot satisfy the fast/resume hit assertions.
+class EffectEntryProbe {
+public:
+    explicit EffectEntryProbe(QoreAOTContext* ctx, bool overflow = false,
+            QoreAOTCallTarget* retire_target = nullptr)
+            : ctx(ctx), saved(ctx->effect_member_int_entry.load(std::memory_order_acquire)),
+              overflow(overflow), retire_target(retire_target) {
+        assert(saved && !current && saved->fast == ctx->scalar_member_int_entry.load(std::memory_order_acquire));
+        intercepted = {invoke, resume, saved->updates};
+        current = this;
+        ctx->effect_member_int_entry.store(&intercepted, std::memory_order_release);
+        ctx->scalar_member_int_entry.store(invoke, std::memory_order_release);
+    }
+    ~EffectEntryProbe() {
+        assert(calls);
+        ctx->scalar_member_int_entry.store(saved->fast, std::memory_order_release);
+        ctx->effect_member_int_entry.store(saved, std::memory_order_release);
+        current = nullptr;
+    }
+    unsigned calls = 0;
+    unsigned resumes = 0;
+    unsigned retirements = 0;
+    int accepted = -1;
+    int completed = -1;
+private:
+    static inline thread_local EffectEntryProbe* current = nullptr;
+    QoreAOTContext* ctx;
+    const QoreAOTEffectMemberIntEntryV1* saved;
+    QoreAOTEffectMemberIntEntryV1 intercepted{};
+    bool overflow;
+    QoreAOTCallTarget* retire_target;
+    static int64_t invoke(int64_t arg, QoreObject* object, const qore_class_private* cls, RuntimeConfig* rc,
+            int* accepted, QoreAOTContext* ctx, ExceptionSink* xsink) {
+        assert(current && current->ctx == ctx && object && cls && *accepted == 1);
+        ++current->calls;
+        struct RestoreLimit {
+            size_t* address = nullptr;
+            size_t saved = 0;
+            ~RestoreLimit() { if (address) { *address = saved; } }
+        } limit;
+        if (current->overflow) {
+#if defined(__aarch64__) || defined(__x86_64__)
+            limit.address = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
+            assert(limit.address);
+            limit.saved = *limit.address;
+            *limit.address = get_stack_pos() + 4096;
+#else
+            assert(false && "forced effect limit requires a native stack view");
+#endif
+        }
+        int64_t result = current->saved->fast(arg, object, cls, rc, accepted, ctx, xsink);
+        current->accepted = *accepted;
+        if (current->overflow) {
+            assert(*xsink && result == 0 && *accepted == 1);
+            *limit.address = limit.saved;
+            assert(rc->getObject() == object && rc->getClass() == cls);
+            ExceptionSink probe_sink;
+            uint64_t bits = qore_rt_load_self_member("leafContextMarker", &probe_sink);
+            QoreValue value;
+            std::memcpy(&value, &bits, sizeof(value));
+            ValueHolder marker(value, &probe_sink);
+            assert(!probe_sink && marker->getAsBigInt() == 927);
+        }
+        return result;
+    }
+    static uint64_t resume(int32_t completed, QoreAOTContext* ctx, ExceptionSink* xsink) {
+        assert(current && current->ctx == ctx);
+        ++current->resumes;
+        current->completed = completed;
+        if (current->retire_target) {
+            // Generic reentry can retire the caller's PIC storage. Only the
+            // callee context remains live here; the continuation must already
+            // own its diagnostic name and stop borrowing the old descriptor.
+            // This Program is unshared, with no concurrent cache users.
+            auto* retired = current->retire_target->method_dispatch_cache.exchange(
+                nullptr, std::memory_order_acq_rel);
+            assert(retired);
+            delete retired;
+            current->retire_target = nullptr;
+            ++current->retirements;
+        }
+        return current->saved->resume(completed, ctx, xsink);
+    }
+};
+
+static void checkEffectMethods(QoreProgram* program) {
+    ExceptionSink xsink;
+    ValueHolder owner(program->callFunction("makeEffectIntProbe", nullptr, &xsink), &xsink);
+    assert(!xsink && owner->getType() == NT_OBJECT);
+    QoreObject* object = owner->get<QoreObject>();
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+    args->push(owner->refSelf(), &xsink);
+    args->push(QoreValue(int64_t{1}), &xsink);
+    assert(!xsink);
+    for (unsigned i = 0; i < 16; ++i) {
+        ValueHolder value(program->callFunction("effectIntProbe", *args, &xsink), &xsink);
+        assert(!xsink && value->getType() == NT_INT && value->getAsBigInt() == 18);
+    }
+    int slot;
+    QoreAOTContext* caller = getMethodProbeContext(program, "effectIntProbe", slot);
+    const auto* method = object->getClass()->findMethod("next");
+    assert(method);
+    const auto* uvb = qore_method_private::get(*method)->getFunction()->first()->getUserVariantBase();
+    assert(uvb && uvb->hasCachedAOT());
+    auto* ctx = uvb->getCachedAOTContext();
+    assert(ctx && ctx->uses_self);
+    const bool published = !std::getenv("QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY")
+        && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
+    const auto* descriptor = ctx->effect_member_int_entry.load(std::memory_order_acquire);
+    assert(bool(descriptor) == published);
+    assert(bool(ctx->scalar_member_int_entry.load(std::memory_order_acquire)) == published);
+    if (descriptor) {
+        assert(descriptor->updates == 2 && descriptor->resume
+            && descriptor->fast == ctx->scalar_member_int_entry.load(std::memory_order_acquire));
+        // Wrong-body, malformed and conflicting publication must leave both
+        // bindings intact, including when a matching normal body runs again.
+        qore_rt_bind_effect_member_int_v1(ctx, caller->pc_loc_fn, descriptor);
+        QoreAOTEffectMemberIntEntryV1 invalid = *descriptor;
+        invalid.updates = 0;
+        qore_rt_bind_effect_member_int_v1(ctx, ctx->pc_loc_fn, &invalid);
+        invalid.updates = 22;
+        qore_rt_bind_effect_member_int_v1(ctx, ctx->pc_loc_fn, &invalid);
+        invalid = *descriptor;
+        qore_rt_bind_effect_member_int_v1(ctx, ctx->pc_loc_fn, &invalid);
+        assert(ctx->effect_member_int_entry.load(std::memory_order_acquire) == descriptor);
+        assert(ctx->scalar_member_int_entry.load(std::memory_order_acquire) == descriptor->fast);
+    }
+    const bool admitted = !std::getenv("QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION");
+    const bool enabled = admitted && published;
+    const bool fallback = admitted && !std::getenv("QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK");
+    RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    QoreObject* old_object = rc->getObject();
+    const auto* old_class = rc->getClass();
+    auto set = [&](const char* name, QoreValue value) {
+        object->setValue(name, value, &xsink);
+        assert(!xsink);
+    };
+    auto counters = [&](int64_t first, int64_t second) {
+        ValueHolder a(object->getReferencedMemberNoMethod("first", &xsink), &xsink);
+        ValueHolder b(object->getReferencedMemberNoMethod("second", &xsink), &xsink);
+        assert(!xsink && a->getAsBigInt() == first && b->getAsBigInt() == second);
+    };
+    // Compare the actual update helpers, including rejecting malformed calls
+    // before effects. A precomputed hash changes lookup only, not admission.
+    const auto* cls = qore_class_private::get(*object->getClass());
+    for (bool prehashed : {false, true}) {
+        auto update = [&](QoreObject* receiver, const char* name, int64_t delta,
+                const qore_class_private* context) {
+            if (!prehashed) {
+                return qore_rt_try_update_member_int_v1(receiver, name, context, delta);
+            }
+            size_t length = name ? std::strlen(name) : 0;
+            return qore_rt_try_update_member_int_prehashed_v1(receiver, name,
+                name ? XXH64(name, length, 0) : 0, name ? XXH32(name, length, 0) : 0, context, delta);
+        };
+        set("first", QoreValue(int64_t{0}));
+        set("second", QoreValue(int64_t{20}));
+        assert(!update(nullptr, "first", 1, cls));
+        assert(!update(object, nullptr, 1, cls));
+        assert(!update(object, "first", 0, cls));
+        assert(!update(object, "first", 2, cls));
+        assert(!update(object, "missing", 1, cls));
+        assert(!update(object, "leafContextMarker", 1, nullptr));
+        counters(0, 20);
+        assert(update(object, "first", 1, nullptr));
+        assert(update(object, "second", -1, cls));
+        counters(1, 19);
+        set("first", QoreValue((int64_t{1} << 47) - 1));
+        set("second", QoreValue(-(int64_t{1} << 47)));
+        assert(!update(object, "first", 1, cls) && !update(object, "second", -1, cls));
+        counters((int64_t{1} << 47) - 1, -(int64_t{1} << 47));
+        set("first", QoreValue(0.0));
+        assert(!update(object, "first", 1, cls));
+        ValueHolder unchanged(object->getReferencedMemberNoMethod("first", &xsink), &xsink);
+        assert(!xsink && unchanged->getType() == NT_FLOAT && unchanged->getAsFloat() == 0.0);
+    }
+    auto invoke = [&](int64_t arg, int64_t* value, uint64_t* boxed = nullptr) {
+        return boxed ? qore_rt_try_method_int_unary_v2(caller, slot, owner->rawBits(), arg,
+            value, boxed, &xsink, rc) : qore_rt_try_method_int_unary_v1(caller, slot, owner->rawBits(),
+                arg, value, &xsink, rc);
+    };
+    struct Case { int64_t first; int64_t second; bool floating; int completed; };
+    for (const Case& test : {Case{0, 20, false, -1}, Case{(int64_t{1} << 47) - 1, 20, false, 0},
+            Case{0, -(int64_t{1} << 47), false, 1}, Case{0, 20, true, 2}}) {
+        for (int64_t arg : {int64_t{1}, int64_t{1} << 60}) {
+            for (bool boxed : {false, true}) {
+                set("first", QoreValue(test.first));
+                set("second", QoreValue(test.second));
+                set("delta", test.floating ? QoreValue(17.0) : QoreValue(int64_t{17}));
+                int64_t result = -123;
+                uint64_t bits = 0x123456789abcdef0;
+                int handled;
+                if (enabled) {
+                    EffectEntryProbe probe(ctx);
+                    handled = invoke(arg, &result, boxed ? &bits : nullptr);
+                    assert(probe.calls == 1 && probe.resumes == unsigned(test.completed >= 0));
+                    assert(probe.accepted == (test.completed < 0 ? 1 : test.completed + 2));
+                    assert(probe.completed == test.completed);
+                } else {
+                    handled = invoke(arg, &result, boxed ? &bits : nullptr);
+                }
+                bool expected_exception = test.floating && handled;
+                if (bool(xsink) != expected_exception || handled != (enabled ? 1 : boxed && fallback ? 2 : 0)) {
+                    const auto* err = xsink.getExceptionErr().get<const QoreStringNode>();
+                    std::fprintf(stderr, "effect probe: completed=%d arg=%lld boxed=%d handled=%d error=%s\n",
+                        test.completed, static_cast<long long>(arg), boxed, handled, err ? err->c_str() : "none");
+                }
+                assert(bool(xsink) == expected_exception && handled == (enabled ? 1 : boxed && fallback ? 2 : 0));
+                assert(rc->getObject() == old_object && rc->getClass() == old_class);
+                if (expected_exception) {
+                    assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("RUNTIME-TYPE-ERROR"));
+                    ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+                    assert(!xsink && info);
+                    const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+                    assert(stack);
+                    unsigned frames = 0;
+                    for (size_t i = 0; i < stack->size(); ++i) {
+                        const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                        assert(frame);
+                        const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                        frames += name && name->equal("NativeLeafEffectInt::next");
+                        if (!(i % 100)) { assert(!qore_check_cancel(&xsink, "effect return frame inspection")); }
+                    }
+                    assert(frames == 1);
+                }
+                int64_t expected = arg + 17;
+                if (handled == 2) {
+                    QoreValue value;
+                    std::memcpy(&value, &bits, sizeof(value));
+                    ValueHolder owned(value, &xsink);
+                    assert(result == -123);
+                    assert(expected_exception ? owned->isNothing()
+                        : owned->getType() == NT_INT && owned->getAsBigInt() == expected);
+                } else {
+                    assert(bits == 0x123456789abcdef0
+                        && result == (handled ? expected_exception ? 0 : expected : -123));
+                }
+                counters(test.first + !!handled, test.second - !!handled);
+            }
+        }
+    }
+    set("first", QoreValue(int64_t{0}));
+    set("second", QoreValue(int64_t{20}));
+    set("delta", QoreValue(int64_t{17}));
+    int64_t result = -123;
+    bool ready = ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
+    assert(ready && !invoke(1, &result) && result == -123);
+    ctx->pc_loc_map_attached.store(ready, std::memory_order_release);
+    auto normal = ctx->pc_loc_fn;
+    ctx->pc_loc_fn = nullptr;
+    assert(!invoke(1, &result) && result == -123);
+    ctx->pc_loc_fn = normal;
+    counters(0, 20);
+    if (enabled && qore_rt_get_stack_limit_v1(rc)) {
+        {
+            EffectEntryProbe probe(ctx, true);
+            assert(invoke(1, &result) == 1 && result == 0 && xsink);
+            assert(probe.calls == 1 && !probe.resumes);
+            assert(rc->getObject() == old_object && rc->getClass() == old_class);
+            assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+            ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+            assert(!xsink && info);
+            const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+            assert(stack);
+            unsigned frames = 0;
+            for (size_t i = 0; i < stack->size(); ++i) {
+                const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                assert(frame);
+                const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                frames += name && name->equal("NativeLeafEffectInt::next");
+                if (!(i % 100)) { assert(!qore_check_cancel(&xsink, "effect member frame inspection")); }
+            }
+            assert(frames == 1);
+        }
+        counters(0, 20);
+        xsink.raiseException("EFFECT-PENDING", "pre-existing exception");
+        assert(invoke(1, &result) == 1 && result == 0 && xsink);
+        assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("EFFECT-PENDING"));
+        xsink.clear();
+        counters(0, 20);
+        assert(invoke(1, &result) == 1 && result == 18 && !xsink);
+        counters(1, 19);
+    }
+    if (enabled) {
+        for (bool boxed : {false, true}) {
+            set("delta", QoreValue(int64_t{17}));
+            ValueHolder warmed(program->callFunction("effectIntProbe", *args, &xsink), &xsink);
+            assert(!xsink && warmed->getAsBigInt() == 18);
+            set("first", QoreValue(int64_t{0}));
+            set("second", QoreValue(int64_t{20}));
+            set("delta", QoreValue(17.0));
+            uint64_t bits = 0x123456789abcdef0;
+            {
+                EffectEntryProbe probe(ctx, false, &caller->call_targets[slot]);
+                assert(invoke(1, &result, boxed ? &bits : nullptr) == 1 && result == 0 && xsink);
+                assert(probe.calls == 1 && probe.resumes == 1 && probe.retirements == 1);
+                assert(probe.accepted == 4 && probe.completed == 2);
+            }
+            assert(!caller->call_targets[slot].method_dispatch_cache.load(std::memory_order_acquire));
+            assert(bits == 0x123456789abcdef0);
+            assert(rc->getObject() == old_object && rc->getClass() == old_class);
+            assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("RUNTIME-TYPE-ERROR"));
+            ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+            assert(!xsink && info);
+            const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+            assert(stack);
+            unsigned frames = 0;
+            for (size_t i = 0; i < stack->size(); ++i) {
+                const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                assert(frame);
+                const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                frames += name && name->equal("NativeLeafEffectInt::next");
+                if (!(i % 100)) { assert(!qore_check_cancel(&xsink, "retired effect cache frame inspection")); }
+            }
+            assert(frames == 1);
+            counters(1, 19);
+        }
+        set("delta", QoreValue(int64_t{17}));
+        ValueHolder rewarmed(program->callFunction("effectIntProbe", *args, &xsink), &xsink);
+        assert(!xsink && rewarmed->getAsBigInt() == 18);
+        counters(2, 18);
+    }
+    object->doDelete(&xsink);
+    assert(!xsink && !invoke(1, &result));
+}
+
 // Enter through a normal compiled function so probes inherit the same real
 // source parse policy as the warmed callers; the external host's policy differs.
 static QoreValue methodReceiverProbes(const void* ptr, const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
@@ -1425,6 +1755,7 @@ static QoreValue methodReceiverProbes(const void* ptr, const QoreListNode*, Runt
     checkMemberMethods<double>(invocation.program);
     checkMemberMethods<int64_t, true>(invocation.program);
     checkMemberMethods<double, true>(invocation.program);
+    checkEffectMethods(invocation.program);
     return QoreValue(int64_t{24});
 }
 

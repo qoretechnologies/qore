@@ -10835,3 +10835,208 @@ effects and cross-Program fallback. Refresh matched Java comparisons after a
 further meaningful AOT gain; Java efficiency remains an open goal.
 
 [Verified measurements, qualification and archived experiments](results-aot-call-member-runtime-macos-arm64.json).
+
+
+## AOT member-update prefix candidate (2026-10-12)
+
+Status: the corrected revision passed selected release/debug qualification and
+fresh matched AOT/Java measurement verification. Historical intermediate results
+are retained below; the final corrected-artifact comparison follows them. Every
+comparison binds its own frozen artifacts, not a mixture of revisions.
+
+AOT now emits a bounded native member-update prefix with an ordinary cold
+continuation. A miss resumes after exactly the completed updates instead of
+replaying them. The suffix reads its member at the original source position;
+each operation retains its own object lock. Explicit receiver, defining class
+and RuntimeConfig arguments avoid eager context setup on the non-reentrant
+native path. Generic cold work receives ordinary visible argument slots and
+a callee frame that remains present during return validation. Compile-time
+name hashes remove repeated hashing, not live access/storage checks.
+
+The final measured candidate is `aot-effect-prehash-candidate-6pytrs13`, identity
+SHA-256 `97e47e8f6f8a1d0aab7f5090187a66d27b228807cb3eb1b64168390e1766e2d6`.
+Before is qualified commit 21b2b072b7, using its frozen pre-commit artifact.
+The intermediate candidate includes the effect companion and cold return-frame
+fix but not prehashed updates. Each uses its matching frozen compiler/runtime.
+
+The prehash matrix contains 135 jobs / 675 measured windows: nine unchanged
+kernels, three forks, three warmups and five 500-ms samples, count 4096, order
+seed 831211. Before, intermediate, enabled-A/B and prehash-disabled runs are
+interleaved. A/B use the identical executable and ordered environment; on/off
+differs by one character of an equal-length diagnostic key. Library aliases
+have equal-length paths. Loader tracing and helper-symbol checks confirm the
+selected artifacts. All five configurations pass 555 reference checks.
+
+These are medians of per-fork means in whole-workload ns/element, not isolated
+call latency. Positive percentages mean less time than the matched baseline.
+
+|!Workload|!Before|!Enabled A|!Enabled B|!Time reduction A / B
+|boxed_int_method_effect|245.9551|109.1240|108.6490|+55.633% / +55.826%
+|boxed_int_method_fallback|47.3868|47.5930|47.3057|-0.435% / +0.171%
+|boxed_float_method_fallback|52.3227|53.1140|53.2946|-1.512% / -1.858%
+|boxed_int_method_call|32.4804|32.6200|32.5014|-0.430% / -0.065%
+|boxed_float_method_call|39.5552|39.2979|39.5002|+0.650% / +0.139%
+|dynamic_int_result_call|10.8211|11.0609|11.1563|-2.216% / -3.097%
+|dynamic_float_result_call|12.3739|11.8230|11.9588|+4.452% / +3.355%
+|indirect_int_result|7.2735|7.3204|7.3648|-0.644% / -1.255%
+|indirect_float_result|9.3851|9.4210|9.3298|-0.383% / +0.589%
+
+The effectful workload is 2.25–2.26 times faster than the qualified baseline.
+Prehashing alone improves the intermediate 111.5091 ns result by 2.139–2.565%,
+and the same-binary runtime-off result (112.0419 ns) by 2.604–3.028%. Both
+comparisons have separated observed fork ranges in both enabled arms; A/A
+ranges overlap. This is a targeted gain, not a universal improvement.
+
+The native-integer-result control is 2.2–3.1% slower than baseline, with
+separated ranges in both enabled arms. Its prehash-disabled result is also
+slower (11.2607 ns), while comparisons against the intermediate candidate
+overlap; prehash lookup is not established as the cause. The read-only float
+control is 1.5–1.9% slower, with only enabled-B separating baseline. Most other
+controls overlap. The preceding run's 1.2–1.3% separated-range pure-integer
+regression does not clearly reproduce here, but remains in the evidence.
+Observed ranges are not confidence intervals, and overlap is not equivalence.
+
+Read-only disassembly comparisons find unchanged normalized caller/callee
+bodies for the inspected boxed/native-result kernels. The integer runtime-v2
+dispatcher remains 487 instructions with different branch lowering/layout;
+other helper sizes also vary. Normalization masks relocation/address details.
+This does not establish complete binary equivalence or a cycle-level cause
+for the small control regressions.
+
+### Matched Java comparison for the preceding candidate
+
+The earlier observation-fixed candidate has its own fresh matched Java run:
+`aot-effect-member-observation-bench-qbf98y1s`, 162 jobs / 810 measured windows,
+nine kernels and six interleaved configurations. It uses Temurin 25.0.2 and
+JMH 1.37 with generated no-inline hints for the actual target methods. Each
+configuration passes 555 references. The same fork/warmup/sample/count settings
+apply, with seed 831107. One noisy native-integer baseline fork is retained.
+
+Do not combine these Java numbers with the newer prehash candidate above.
+This table compares only the AOT and Java artifacts timed together in that run.
+
+|!Workload|!AOT enabled A / B ns/element|!Java JIT ns/element|!AOT / Java
+|member updates|111.8450 / 111.9033|1.9341|57.8–57.9x
+|read-only integer member|48.3162 / 47.6062|2.6837|17.7–18.0x
+|read-only float member|51.9708 / 51.7979|2.6495|19.6x
+|boxed integer method|32.4803 / 32.4468|2.6584|12.2x
+|boxed float method|39.4246 / 39.1483|2.6830|14.6–14.7x
+|native integer result|10.9522 / 10.9306|2.9413|3.7x
+|native float result|11.7318 / 11.8329|3.6309|3.2–3.3x
+|indirect integer result|7.3342 / 7.3072|1.9805|3.7x
+|indirect float result|9.4213 / 9.2659|2.8794|3.2–3.3x
+
+Java parity is not reached. Qore's dynamic member storage, per-operation locks,
+boxed caller bookkeeping and observable runtime state remain materially
+different costs; this workload comparison does not assign a cost to each one.
+
+All 1485 windows from these two complete runs were independently replayed;
+all adverse samples are retained. No owned build, test, profile or inspection
+overlapped timing. Published environment values use an explicit allowlist;
+the full environment is represented only by a hash. An initial Java attempt
+stopped on an unrecognized JMH deprecation warning after three jobs and is
+excluded as incomplete, not presented as a completed result. The exact warning
+was allowlisted and the complete matched run uses the documented Temurin JVM.
+
+The earlier release screen passed 13 cases / 7212 assertions, 17 harness checks
+and 555 references each for IR and AOT. New probes cover actual fast/resume
+hits, partial-prefix ownership, return-error frames and caller-PIC retirement;
+they do not prove arbitrary active-callee replacement or all private-entry
+reflection paths. Broader release qualification has since passed 111 selected
+files, 398 cases / 34011 assertions, 15 standalone fixtures and one skip. Debug
+passed 111 files, 405 cases / 34110 assertions, 15 standalones and no skips.
+Both also passed seven exception/stack fixtures and native/reference checks;
+205 debug native checks, 17 harness tests and 555 references in each IR/AOT/
+Java-interpreted/Java-JIT mode passed. All 13 owned qmod aliases were restored
+and verified, with unrelated aliases unchanged and five release smoke fixtures
+rerun. The audit then added compiler parameter-scan cancellation polling and a
+129-parameter regression, and clarified helper/context contracts. That revised
+source subsequently passed the separate qualification and fresh measurements
+below. No full-suite, sanitizer or cross-platform claim.
+
+### Final corrected-source qualification and matched Java comparison
+
+The corrected frozen candidate is `aot-effect-final2-candidate-ilvmt6iz`, identity
+SHA-256 `46fbbaff96bf9345b6353a6a449a28579e56c258f9a1a1c1a3de6eaf9fb27399`.
+It contains the compiler parameter-scan cancellation fix, corrected 129-parameter
+fixture and clarified helper/context contracts. The first new-fixture attempt
+failed because Qore does not support the introduced list.push syntax; its logs
+and source snapshot are preserved. Qore push statements corrected the fixture,
+which then passed four cases and 452 assertions in release and debug.
+
+Release passed 111 selected files, 399 cases / 34027 assertions, 15 standalones
+and one skip. Debug passed 111 files, 406 cases / 34126 assertions, 15 standalones
+and no skips. Both passed seven exception/stack fixtures and IR/AOT reference
+grids. All 205 debug native checks, 17 harness tests and 555 references per
+IR/AOT/Java-interpreted/Java-JIT mode passed. Thirteen owned qmod aliases were
+restored to release and content-verified, unrelated aliases were unchanged,
+and five restored-release smoke fixtures passed. Independent qualification
+record SHA-256: `a59609557e5efe21189ee8680be84edcbef87de874ac47ffbec7cb1893fad900`.
+
+Fresh archive `aot-effect-final2-bench-0wmb720q` contains 162 jobs / 810 measured
+windows: the same nine kernels, three forks, three warmups and five 500-ms
+samples per fork, count 4096, randomized order seed 831307. Six interleaved modes
+are qualified baseline 21b2b072b7, the prehash candidate, corrected enabled-A/B,
+corrected effect-entry-disabled, and Temurin 25.0.2/JMH 1.37. Each Qore revision
+uses its separately compiled matching frozen compiler/runtime. A/A and runtime
+on/off reuse the identical corrected executable. The final disabled control
+disables the whole effect companion, not only prehashing. All six modes pass
+555 references; loader paths and generated Java target no-inline hints were
+verified. No owned build, test, profile or inspection overlapped timing.
+
+The table is one matched comparison. Values are medians of fork means in
+whole-workload ns/element, including loops, representation and bookkeeping;
+they are not isolated call latency. Positive reductions mean less elapsed time.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Java JIT|!Enabled / Java
+|member updates|242.3041|107.3614 / 108.4253|55.691% / 55.252%|1.9116|56.16 / 56.72x
+|read-only integer member|47.3979|48.5314 / 48.5907|-2.391% / -2.517%|2.6748|18.14 / 18.17x
+|read-only float member|53.7084|54.0298 / 53.8973|-0.598% / -0.352%|2.5946|20.82 / 20.77x
+|boxed integer method|32.2797|32.6222 / 32.6204|-1.061% / -1.055%|2.6524|12.30 / 12.30x
+|boxed float method|39.3433|39.2211 / 38.8058|0.311% / 1.366%|2.6577|14.76 / 14.60x
+|native integer result|10.2719|10.4900 / 10.6078|-2.123% / -3.269%|3.0762|3.41 / 3.45x
+|native float result|11.9715|11.9898 / 12.2075|-0.153% / -1.972%|3.5681|3.36 / 3.42x
+|indirect integer result|7.3719|7.3188 / 7.3217|0.720% / 0.680%|1.9598|3.73 / 3.74x
+|indirect float result|9.2538|9.2650 / 9.2967|-0.121% / -0.464%|2.9336|3.16 / 3.17x
+
+The target is 2.23–2.26 times faster than the committed baseline, with separated
+observed fork ranges in both enabled arms. Its same-binary disabled result is
+270.1539 ns; enabling the companion reduces that by 59.865–60.259%, also with
+separated ranges. Compared with the preceding prehash candidate's 109.5354 ns,
+the corrected medians are 1.013–1.985% lower, but ranges overlap: no additional
+runtime speedup is established for the compiler-only audit correction.
+
+The pure boxed-integer regression reappears: 1.055–1.061% slower than baseline
+with separated ranges in both arms, and 0.592–0.598% slower than the preceding
+prehash candidate, also separated. Its disabled result is 32.8601 ns, so the
+effect entry being enabled is not established as the cause. Native-integer
+medians remain 2.123–3.269% slower than baseline; ranges overlap in this run,
+without erasing the earlier separated-range regression. Read-only integer
+medians are 2.391–2.517% slower with overlapping baseline ranges; only enabled-A
+separates from the preceding candidate. Other baseline control comparisons
+overlap. These are accepted, explicitly tracked tradeoffs for the scoped
+member-update gain, not a universal improvement or proof of equivalence.
+
+No samples were dropped. In particular, the enabled-A indirect-integer fork
+means span 7.2063–14.0349 ns and the preceding effect candidate spans
+107.9440–129.0236 ns; these noisy forks remain in the raw record and ranges.
+Observed ranges are not confidence intervals. All 810 final windows were
+independently replayed; final verification SHA-256 is
+`e861f91b34a91a2ed0bcca7f07d59d789c1d905050c02659c4fd5f1385d3c1e9`.
+The public record retains all 2295 windows across the three complete runs.
+Java parity remains unachieved, including same-Program calls. This is primarily
+an AOT compiler/runtime gain; no new IR/JIT timing benefit is claimed.
+The [complete audit](FOLLOWUP-AUDIT.md#aot-member-update-prefix-and-cold-continuation-audit-2026-10-12)
+records all 62 checks: 19 Pass, 43 N/A and no remaining failures. Strict table
+validation passed for all four changed documentation files.
+
+Next: profile the qualified boxed caller, then separately measure immediate
+scalar-store specialization and preparation of immutable auto-local facts and
+stable invocation-local slots. Keep actual runtime-slot publication and live
+ownership/reentry checks. A separate write-lock lead is to attempt uncontended
+acquisition under the existing mutex before registering a waiter, retrying after
+registration before any wait; it requires dedicated contention/notification
+validation. Neither lead is implemented or measured here, and neither is a
+proven cure for the control regressions. Continue publishing adverse results.
+
+[Verified frozen measurements and candidate status](results-aot-effect-member-prefix-macos-arm64.json).

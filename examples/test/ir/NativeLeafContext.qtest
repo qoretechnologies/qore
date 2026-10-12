@@ -99,6 +99,12 @@ class NativeLeafContextTest inherits QUnit::Test {
             "NativeLeafMemberInternalFloat sub makeMemberInternalFloatProbe() { return new NativeLeafMemberInternalFloat(); }\n"
             "auto sub memberInternalIntProbe(auto receiver, auto value) { return receiver.next(value); }\n"
             "auto sub memberInternalFloatProbe(auto receiver, auto value) { return receiver.next(value); }\n");
+        file.write("class NativeLeafEffectInt {\n"
+            "    public { auto first = 0; auto second = 20; auto delta = 17; }\n"
+            "    private:internal { int leafContextMarker = 927; }\n"
+            "    int next(int value) { ++first; --second; return value + delta; }\n}\n"
+            "NativeLeafEffectInt sub makeEffectIntProbe() { return new NativeLeafEffectInt(); }\n"
+            "auto sub effectIntProbe(auto receiver, auto value) { return receiver.next(value); }\n");
         file.close();
         string control = dir.path + "/control.qr";
         file.open2(control, O_WRONLY | O_CREAT | O_TRUNC);
@@ -142,6 +148,8 @@ class NativeLeafContextTest inherits QUnit::Test {
                 assertRegex("qore_rt_bind_method_float_unary_v2[^\n]*NativeLeafFloatMethodDerived", output);
                 assertRegex("qore_rt_bind_member_int_v1[^\n]*NativeLeafMemberInt", output);
                 assertRegex("qore_rt_bind_member_float_v1[^\n]*NativeLeafMemberFloat", output);
+                assertRegex("qore_rt_bind_effect_member_int_v1[^\n]*NativeLeafEffectInt", output);
+                assertRegex("call i32 @qore_rt_try_update_member_int_prehashed_v1", output);
                 assertRegex("call i32 @qore_rt_try_load_member_int_prehashed_v1", output);
                 assertRegex("call i32 @qore_rt_try_load_member_float_prehashed_v1", output);
                 bool internal_context = prefix.find("SCALAR_MEMBER_CONTEXT") < 0;
@@ -195,7 +203,9 @@ class NativeLeafContextTest inherits QUnit::Test {
                 output = backquote((map quote($1), args).join(" ") + " "
                     + (map quote($1), objects).join(" ") + " 2>&1", \status);
                 assertEq(0, status, output);
-                foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                foreach string runtime in (("QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY=1 ", "",
+                        "QORE_DISABLE_AOT_EFFECT_MEMBER_PREHASH=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
                         "QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1 ",
                         "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ",
                         "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ",

@@ -52,6 +52,8 @@
 #include "qore/intern/qore_aot_deps.h"
 
 class AbstractStatement;
+struct QoreAOTContext;
+struct QoreAOTEffectMemberIntEntryV1;
 
 //! Map a path for final AOT output without changing the physical source used by the compiler.
 /** @param path physical source path, or nullptr for an absent location
@@ -437,8 +439,9 @@ struct QoreAOTContext {
     int32_t receiver_int_forward_loc = -1;
     std::atomic<bool> receiver_int_forward_ready{false};
 
-    //! Whole-body-proven, single-member scalar companions. Receiver and defining class are borrowed;
-    //! each source member read is synchronized and can clear accepted for effect-free ordinary fallback.
+    //! Whole-body-proven scalar companions. Receiver and defining class are borrowed;
+    //! each source member operation is synchronized. accepted starts at one for success;
+    //! zero requests an effect-free ordinary fallback, and values above one resume an update prefix.
     //! Append-only; no serialized layout change or value cached in this shared context.
     using ScalarMemberIntEntry = int64_t (*)(int64_t, QoreObject*, const qore_class_private*, RuntimeConfig*,
         int*, QoreAOTContext*, ExceptionSink*);
@@ -446,6 +449,12 @@ struct QoreAOTContext {
         int*, QoreAOTContext*, ExceptionSink*);
     std::atomic<ScalarMemberIntEntry> scalar_member_int_entry{nullptr};
     std::atomic<ScalarMemberFloatEntry> scalar_member_float_entry{nullptr};
+
+    //! A bounded update-prefix/scalar-suffix proof. Fast misses report completed updates + 2;
+    //! the cold entry skips exactly those statements, using ordinary runtime-bound parameters.
+    //! accepted remains one when the native result is final. Neither path replays completed effects.
+    //! Immutable module-owned metadata, published before scalar_member_int_entry by the matching body.
+    std::atomic<const QoreAOTEffectMemberIntEntryV1*> effect_member_int_entry{nullptr};
 
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
@@ -486,6 +495,13 @@ struct QoreAOTContext {
 
 //! Attach a context's deferred native PC-to-source map before its function executes.
 DLLLOCAL void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx);
+
+//! Immutable versioned pair emitted in native module storage, never a per-call allocation.
+struct QoreAOTEffectMemberIntEntryV1 {
+    QoreAOTContext::ScalarMemberIntEntry fast;
+    uint64_t (*resume)(int32_t, QoreAOTContext*, ExceptionSink*);
+    uint32_t updates;
+};
 
 //! Compile-time slot assignment map for AOT pointer indirection.
 /** Assigns monotonically increasing slot indices to each unique pointer encountered

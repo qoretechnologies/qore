@@ -373,6 +373,21 @@ integer, float, number and reference-backed update workloads, read-only methods,
 plain methods, dynamic-result and indirect-call controls, including adverse results.
 See [measurements and remaining regression](RESULTS.md#aot-self-member-updates-and-scalar-context-layout-2026-10-12).
 
+`QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY=1` disables a separate AOT companion for
+bounded standalone member-update prefixes followed by a scalar/member expression.
+On a live representation miss, its ordinary continuation skips only completed
+updates; it never replays their effects. Access, deletion and per-statement object
+locks remain. Runtime parameters are visible during cold reentry, and the ordinary
+callee frame covers return validation. The deferred-context disable also prevents
+publication of this companion; read-only companion controls are independent.
+
+`QORE_DISABLE_AOT_EFFECT_MEMBER_PREHASH=1` disables only compile-time update-name
+hashing, or restores ordinary lookup in the new helper at runtime. It does not
+disable the update companion. The global compiler prehash switch also suppresses
+these hashes. Set all diagnostic controls before process startup. These changes
+require recompilation with the matching runtime; IR/JIT timing gains are not claimed.
+See [qualified measurements and remaining regressions](RESULTS.md#aot-member-update-prefix-candidate-2026-10-12).
+
 Compile separate artifacts when comparing compiler changes or different private
 runtime identities. Runtime-only on/off controls may use an identical executable.
 For small timing differences, include identical-executable A/A controls and account

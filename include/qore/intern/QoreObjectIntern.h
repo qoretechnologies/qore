@@ -497,6 +497,34 @@ public:
     DLLLOCAL int getLValueOrUpdateIntMember(const char* key, const qore_class_private* class_ctx,
             LValueHelper& lvh, int64_t delta, int64_t& previous, ExceptionSink* xsink);
 
+    //! Try a non-evaluating inline-integer update; a miss leaves the object unchanged.
+    /** @param key member name
+        @param class_ctx admitted method's defining context
+        @param delta 1 or -1
+        @return true only after one synchronized update; false requires a continuation at this operation
+        @note Does not create storage, resolve references, allocate, or enter Qore code.
+    */
+    DLLLOCAL bool tryUpdateInlineIntMember(const char* key, const qore_class_private* class_ctx, int64_t delta);
+
+    //! Same synchronized update probe with a compiler-computed storage-key hash.
+    /** @param key member name
+        @param hash name hash for this target's storage implementation
+        @param class_ctx admitted method's defining context, or nullptr for public access
+        @param delta 1 or -1
+        @return true after exactly one update; false leaves storage unchanged for the cold continuation
+        @note The hash must match key. Access/storage context is resolved against the live receiver;
+        neither outcome creates storage, evaluates references, allocates or enters Qore code.
+    */
+    DLLLOCAL bool tryUpdateInlineIntMemberPrehashed(const char* key, size_t hash,
+        const qore_class_private* class_ctx, int64_t delta);
+
+    //! Shared non-evaluating update implementation.
+    //! @tparam Prehashed whether hash is a valid target-width hash of key
+    //! @copydetails tryUpdateInlineIntMemberPrehashed
+    template <bool Prehashed>
+    DLLLOCAL bool tryUpdateInlineIntMemberImpl(const char* key, size_t hash,
+        const qore_class_private* class_ctx, int64_t delta);
+
     // lock not held on entry
     DLLLOCAL void doDeleteIntern(ExceptionSink* xsink);
 
