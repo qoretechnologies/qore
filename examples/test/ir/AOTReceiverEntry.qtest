@@ -65,6 +65,11 @@ class ReceiverEntryTest inherits QUnit::Test {
                         "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 ",
                         "QORE_DISABLE_AOT_FORWARD_CLASS_CONTEXT_CACHE=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "
+                            + "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "
+                            + "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 "
+                            + "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
                         "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
                         "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {

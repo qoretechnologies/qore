@@ -10703,3 +10703,135 @@ argument slots, return filtering and cleanup. Measure effectful methods and
 native controls before acceptance. Java parity remains an open goal.
 
 [Verified measurements, controls, qualification and archived prototypes](results-aot-object-param-cache-macos-arm64.json).
+
+
+## AOT self-member updates and scalar context layout (2026-10-12)
+
+AOT is the primary target. This runtime change speeds direct self-member
+integer updates and removes duplicate object-context bookkeeping from their
+shared lvalue path. Scalar-member dispatch acquires its typed companion once
+and specializes deferred/eager context helpers; the non-deferred pure method
+invocation is outlined so its storage does not enlarge the usual deferred call.
+Access, same-Program, live-body, debugger, stack, frame and ownership guards
+remain. No exported helper signature or serialized layout changes.
+
+The update admission is actual inline integer representation, not declared
+type. Both old and new values must fit inline storage. It resolves access and
+storage once, retains the normal existence pin and write lock, and cannot
+call user code or change graph/ownership counts on success. Every miss continues
+the same locked ordinary lvalue, including references/conversions, without
+retrying lookup or replaying effects. Generic bookkeeping and destructor
+ordering remain. Assignment/compound paths also avoid recording context twice.
+
+Compatible existing AOT binaries already calling these helpers can benefit
+from the updated runtime. Shared LLVM self-member lowering also uses them in
+JIT mode; the IR interpreter is unchanged. Scalar companions are AOT-specific.
+No IR/JIT performance gain is inferred from these AOT timings.
+
+Untimed compatibility checks reused both frozen executables without recompilation:
+old executable/new runtime and new executable/old runtime each passed all 555
+reference checks. Loader tracing confirmed the intended runtime in both directions;
+the private runtime-identity headers are byte-identical. This is compatibility
+evidence, not a cross-runtime timing claim.
+
+Final frozen candidate: `aot-local-options-candidate-Ecp99t`, identity SHA-256
+`933879cccd53c6d949c80de210d23f51c29030d6908beca095acdd2afbc235e6`.
+Before is the qualified 6a1eb5c8fe object-parameter-cache baseline, bound to
+its existing pre-commit artifact; no post-commit rebuild is implied. The
+intermediate comparison is frozen eager-outline candidate uMrtQT.
+
+Final matrix: nine canonical kernels plus four independently checked member
+declaration variants; 195 jobs / 975 measured windows. Each run uses three
+forks, three warmups and five 500-ms measurements, count 4096, order seed 829601.
+Five interleaved modes are before, preceding candidate, enabled-A/B and
+integer-update disabled. A/B use identical executable, library, argv and
+ordered environment. On/off differs by the last character of equal-length
+environment keys and disables only inline integer updating, not context
+deduplication or dispatch specialization. All five modes pass 555 reference
+checks. Diagnostic switches must be set before startup; the update switch
+is sampled on the first representation-eligible operation.
+
+Values are medians of per-fork means in whole-workload ns/element, not isolated
+call latency. Positive percentages mean less time than the matched baseline.
+
+|!Workload|!Before|!Enabled A|!Enabled B|!Time reduction A / B
+|boxed_int_method_effect|258.899080|227.883955|228.146854|+11.980% / +11.878%
+|boxed_int_method_fallback|45.974129|44.361233|44.602004|+3.508% / +2.985%
+|boxed_float_method_fallback|50.102350|48.779746|49.370985|+2.640% / +1.460%
+|boxed_int_method_call|31.304956|30.428202|29.889474|+2.801% / +4.522%
+|boxed_float_method_call|37.634267|37.036168|37.152807|+1.589% / +1.279%
+|dynamic_int_result_call|10.011062|10.171123|10.142688|-1.599% / -1.315%
+|dynamic_float_result_call|11.210544|11.161244|11.399148|+0.440% / -1.682%
+|indirect_int_result|6.942505|6.879014|6.940407|+0.915% / +0.030%
+|indirect_float_result|8.834082|8.812167|8.810703|+0.248% / +0.265%
+|auto member update variant|262.148678|230.421941|230.423798|+12.103% / +12.102%
+|float member update variant|263.699649|250.369135|252.750278|+5.055% / +4.152%
+|number member update variant|295.710001|277.060753|279.300211|+6.307% / +5.549%
+|reference member update variant|305.954760|296.464856|299.375947|+3.102% / +2.150%
+
+Typed and auto integer-update workloads improve about 12%; their same-binary
+update on/off comparisons also separate in both enabled arms. Float and number
+update workloads improve 4–6% against baseline while retaining generic arithmetic.
+Reference medians improve 2–3%, but enabled-B overlaps baseline and both enabled
+arms are 1.8–2.8% slower than the update-disabled control with separated ranges.
+That adverse control is retained; its cause is not established.
+
+The tiny dynamic-integer control remains 1.3–1.6% slower than baseline, with
+both observed ranges separate. This is an accepted, explicitly tracked tradeoff
+for the broader AOT gains, not a universal improvement. Plain integer/float
+A/A ranges also separate; small median movements are not independently causal
+evidence. Dynamic-float A/B medians straddle baseline. Overlapping observed
+ranges do not prove equivalence; these ranges are not confidence intervals.
+
+Earlier experiments and regressions remain archived. The first update attempt
+repeated generic lookup and regressed auto/number fallback about 4%; it was
+replaced by a same-lvalue continuation. Canonical-int-only admission was then
+expanded by representation proof. Duplicate context bookkeeping was removed
+after reviewing its lookup callers, with node-conversion/destructor reentry
+coverage added. No reproduced crash or unrelated bug fix is claimed.
+
+A packed diagnostic options snapshot and a likely-branch hint were not
+retained. A frozen old/new executable/library crossover isolated an earlier
+large dynamic-integer slowdown to the runtime artifact: library-only swaps
+were 7.7–9.7% slower, while an executable-only swap overlapped. This identifies
+the artifact, not a microarchitectural cause. Outlining eager contexts reduced
+v1 caller frames to 320 bytes and v2 to 368 bytes. Restoring path-local switches
+then recovered most of the dynamic-integer slowdown: the final run improves
+6.4–6.6% versus the preceding outline candidate. Its float member-read control
+gives back 0.9–2.2% versus that intermediate candidate, while remaining faster
+than the qualified baseline. Instruction counts include cold paths; no padding
+or lucky-address explanation is asserted.
+
+The four-kernel focused candidate screen adds 300 retained windows. All 1275
+current-candidate windows were independently replayed from raw output; all
+adverse samples were retained. Earlier checkpoint summaries, identities and
+artifact references remain in the evidence record and local raw archives.
+No owned inspection/build/test/profile overlapped timing. Published environment
+values are explicitly allowlisted; inherited environment values are not exported.
+
+Release: 110 selected files, 395 cases, 33527 assertions, 15 standalones, 1 skipped.
+Debug: 110 selected files, 402 cases, 33626 assertions, 15 standalones, 0 skipped.
+Both additionally pass seven exception/stack fixtures and native/reference
+checks. Also passed: 205 debug native checks, 17 harness tests and 555 references
+per IR/AOT/Java mode. All 13 owned source qmod aliases are restored and content-
+verified against release artifacts, with unrelated aliases unchanged. Four
+targeted regressions pass again after restoration. No full-suite, sanitizer,
+cross-platform, fresh Java timing or Java-parity claim.
+
+The new 192-assertion wrapper exercises all four updates in AST/IR/JIT/tiered
+and stripped AOT O0/O3, native EH, no-debug-info and split compilation, with
+public/private/internal storage and the update switch on/off. Its inner checks
+cover 48-bit boundaries, wide values, optional/generic/soft declarations,
+enums, floats/numbers, references, deletion, closures, removed members,
+exception-after-effect, reentrant node destruction, cold initialization on
+separate objects and atomic concurrent updates on shared storage. Existing
+receiver/member/boxed-result fixtures add combined diagnostic-control coverage.
+
+Next AOT-first work: isolate the remaining tiny dynamic-call runtime cost with
+same-executable cross-runtime controls; evaluate compile-time member metadata
+and explicit RuntimeConfig propagation only with complete live access/storage/
+lifetime proofs. Preserve statement-level locking, observability, reflection,
+effects and cross-Program fallback. Refresh matched Java comparisons after a
+further meaningful AOT gain; Java efficiency remains an open goal.
+
+[Verified measurements, qualification and archived experiments](results-aot-call-member-runtime-macos-arm64.json).

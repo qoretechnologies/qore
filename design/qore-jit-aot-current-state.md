@@ -750,6 +750,55 @@ untouched miss outputs, boxed fallback ownership, forced callee overflow and con
 restoration on initial and foreign threads. These are AOT-specific companions;
 IR/JIT execution remains a correctness reference, not a claimed performance gain.
 
+Runtime dispatch acquires the typed member companion once and passes it to a
+context-policy-specialized helper. Deferred and eager policies retain their
+respective frame/context protocols, but the eager policy's larger local storage
+does not inflate the deferred helper's stack. The non-deferred pure scalar-method
+invocation is also outlined for this reason. All PIC, live-body, Program, debugger,
+stack and ownership guards remain in place. Diagnostic controls are sampled on
+first use of their path; set them before starting the process. A packed shared
+options snapshot was measured and rejected, not retained.
+
+### Checked inline self-member integer updates
+
+The shared LLVM lowering already routes direct self-member assignment, compound
+assignment and increment/decrement through runtime helpers in AOT and JIT code.
+The update helper now resolves access/type/storage once and takes the ordinary
+object write lock and existence pin. If both the current value and its incremented
+or decremented result fit the inline integer representation, it updates in place
+without constructing an object-count hierarchy. This is a representation proof,
+not a declared-type shortcut: ordinary integer updates also accept an existing
+integer before consulting the declaration. No node ownership, recursive graph
+count or container count changes on this path, and it cannot call user code.
+
+Every miss hands the same locked lvalue to the ordinary operation, including
+reference resolution and conversion; it never restarts lookup or repeats a write.
+Wide integers, inline-boundary transitions, enums, floats, numbers, references,
+missing values and node conversions retain ordinary behavior. Access checks,
+internal/inherited storage selection, deletion checks and one lock per operation
+remain. No lock is held across source statements. The shared self-member lvalue
+helper also stops recording the object context twice: its lookup already records
+it. Assignment, compound and generic update continuations retain that single
+context and their normal deferred destruction/graph bookkeeping.
+
+`QORE_DISABLE_SELF_MEMBER_INT_UPDATE=1` disables only the inline integer update,
+not context deduplication or scalar-method helper specialization. It is sampled
+on the first representation-eligible operation, so set it before process startup.
+Initialization reads the environment only; no Qore callback or second object lock
+is acquired. Non-integer and wide-result misses do not initialize this control.
+`AOTSelfMemberIntUpdate.qtest` covers all four operations, representation boundaries,
+internal shadowing, generic/optional/soft declarations, destructor reentry,
+references, removed/deleted storage and concurrent cold/shared-object updates.
+
+These changes are runtime implementations of existing exported helpers, not new
+helper signatures, serialized layouts or a new calling convention. Compatible
+existing AOT artifacts that call those helpers can benefit from the updated
+runtime; artifacts using other lowering paths do not acquire new calls merely by
+relinking. The self-member changes also apply to JIT-generated helper calls; the
+IR interpreter is unchanged. Performance acceptance is based on AOT measurements,
+not an inferred IR/JIT gain. The measured tiny dynamic-integer control retains a
+1.3–1.6% regression against the qualified baseline; Java parity remains open.
+
 ### Guarded AOT method entries after typed assignment
 
 Exact boxed-local analysis can prove a receiver assigned and non-NOTHING while

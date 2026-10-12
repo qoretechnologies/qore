@@ -1,0 +1,235 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+class IntUpdate {
+    public { int value = 0; }
+    set(int value) { self.value = value; }
+    int get() { return value; }
+    int preInc() { return ++value; }
+    int postInc() { return value++; }
+    int preDec() { return --value; }
+    int postDec() { return value--; }
+    discardResults() { ++value; value++; --value; value--; }
+    int effect(int input) { ++value; return input + value; }
+    int resetAndIncrement() { remove value; return ++value; }
+    fail() { ++value; throw "UPDATE-THROW", "after increment"; }
+    code<int()> closure() { return int sub () { return ++value; }; }
+}
+class InheritedUpdate inherits IntUpdate {
+    # Must not replace the base class's storage when its methods execute.
+    private:internal { int shadow_value = 73; }
+    int shadow() { return shadow_value; }
+}
+class GenericUpdate<T> {
+    private:internal { T value; }
+    set(T value) { self.value = value; }
+    T get() { return value; }
+    auto preInc() { return ++value; }
+    auto postInc() { return value++; }
+    auto preDec() { return --value; }
+    auto postDec() { return value--; }
+}
+class DynamicUpdate {
+    private { auto value; }
+    set(auto value) { self.value = value; }
+    auto get() { return value; }
+    auto preInc() { return ++value; }
+    auto postInc() { return value++; }
+    auto preDec() { return --value; }
+    auto postDec() { return value--; }
+}
+class UpdateDrop {
+    public { static int drops = 0; static int observed = 0; }
+    private { DynamicUpdate owner; }
+    constructor(DynamicUpdate input) { owner = input; }
+    destructor() {
+        # Conversion must release the old object after unlocking its owner.
+        UpdateDrop::observed = int(owner.get());
+        ++UpdateDrop::drops;
+    }
+}
+class OptionalUpdate {
+    private:internal { *int value; }
+    set(int input) { value = input; }
+    clear() { value = NOTHING; }
+    auto get() { return value; }
+    auto preInc() { return ++value; }
+    auto postInc() { return value++; }
+    auto preDec() { return --value; }
+    auto postDec() { return value--; }
+}
+class SoftUpdate {
+    private:internal { softint value = 0; }
+    set(softint input) { value = input; }
+    int get() { return value; }
+    int preInc() { return ++value; }
+    int postInc() { return value++; }
+    int preDec() { return --value; }
+    int postDec() { return value--; }
+}
+class ReferenceUpdate {
+    private { reference<int> value; }
+    constructor(reference<int> target) { value = \target; }
+    set(int input) { value = input; }
+    int get() { return value; }
+    int preInc() { return ++value; }
+    int postInc() { return value++; }
+    int preDec() { return --value; }
+    int postDec() { return value--; }
+}
+class DeletedMemberUpdate {
+    private { int counter = 0; }
+    int run() { delete self; return ++counter; }
+}
+enum UpdateEnum : int { Seven = 7 }
+
+sub expectUpdate(auto expected, auto actual) {
+    if (expected != actual) {
+        throw "MEMBER-UPDATE-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+sub checkUpdate(auto receiver, int initial) {
+    receiver.set(initial);
+    expectUpdate(initial + 1, receiver.preInc());
+    expectUpdate(initial + 1, receiver.get());
+    expectUpdate(initial + 1, receiver.postInc());
+    expectUpdate(initial + 2, receiver.get());
+    expectUpdate(initial + 1, receiver.preDec());
+    expectUpdate(initial + 1, receiver.get());
+    expectUpdate(initial + 1, receiver.postDec());
+    expectUpdate(initial, receiver.get());
+}
+sub updateWorker(auto receiver, Counter start, Counter done, Queue failures) {
+    on_exit done.dec();
+    try {
+        start.dec();
+        if (start.waitForZero(10000)) { throw "MEMBER-UPDATE-TEST", "start timeout"; }
+        for (int i = 0; i < 4000; ++i) {
+            if (i & 1) { receiver.preInc(); } else { receiver.postInc(); }
+        }
+    } catch (hash<ExceptionInfo> ex) { failures.push(ex); }
+}
+
+# Race the first eligible update on distinct objects. Diagnostic initialization
+# must not acquire another object lock while one receiver is locked.
+list<auto> cold_receivers = (new IntUpdate(), new IntUpdate(), new DynamicUpdate(), new DynamicUpdate());
+foreach auto receiver in (cold_receivers) { receiver.set(0); }
+Counter cold_start(4);
+Counter cold_done(4);
+Queue cold_failures();
+foreach auto receiver in (cold_receivers) {
+    background updateWorker(receiver, cold_start, cold_done, cold_failures);
+}
+if (cold_done.waitForZero(60000)) { throw "MEMBER-UPDATE-TEST", "cold update completion timeout"; }
+if (cold_failures.size()) { throw "MEMBER-UPDATE-TEST", cold_failures.get(1000); }
+foreach auto receiver in (cold_receivers) { expectUpdate(4000, receiver.get()); }
+
+IntUpdate integer();
+InheritedUpdate inherited();
+GenericUpdate<int> generic();
+DynamicUpdate dynamic();
+OptionalUpdate optional();
+SoftUpdate soft();
+int target = 0;
+ReferenceUpdate referenced(\target);
+foreach auto receiver in ((integer, inherited, generic, dynamic, optional, soft, referenced)) {
+    # Include both transitions out of inline storage and transitions back into it.
+    foreach int initial in ((0, 7, -7, 140737488355326, 140737488355327,
+            140737488355328, -140737488355330, -140737488355329,
+            -140737488355328, 1125899906842624, -1125899906842624)) {
+        for (int round = 0; round < 16; ++round) { checkUpdate(receiver, initial); }
+    }
+}
+expectUpdate(-1125899906842624, target);
+optional.clear();
+expectUpdate(1, optional.preInc());
+expectUpdate(2, optional.preInc());
+optional.clear();
+expectUpdate(-1, optional.preDec());
+expectUpdate(-1, optional.postDec());
+expectUpdate(-2, optional.get());
+soft.set("7");
+expectUpdate(7, soft.postInc());
+expectUpdate(8, soft.get());
+expectUpdate(73, inherited.shadow());
+integer.set(11);
+integer.discardResults();
+expectUpdate(11, integer.get());
+expectUpdate(19, integer.effect(7));
+expectUpdate(12, integer.get());
+bool threw = False;
+try { integer.fail(); }
+catch (hash<ExceptionInfo> ex) {
+    expectUpdate("UPDATE-THROW", ex.err);
+    threw = True;
+}
+expectUpdate(True, threw);
+expectUpdate(13, integer.get());
+code<int()> increment = integer.closure();
+expectUpdate(14, increment());
+expectUpdate(14, integer.get());
+expectUpdate(1, integer.resetAndIncrement());
+expectUpdate(1, integer.get());
+
+# Non-integer representations first take generic conversion or arithmetic.
+foreach auto initial in ((UpdateEnum::Seven, 7.0, number(7), "7", NOTHING)) {
+    dynamic.set(initial);
+    int expected = initial == NOTHING ? 0 : 7;
+    expectUpdate(expected + 1, dynamic.preInc());
+    expectUpdate(expected + 1, dynamic.postInc());
+    expectUpdate(expected + 1, dynamic.preDec());
+    expectUpdate(expected + 1, dynamic.postDec());
+    expectUpdate(expected, dynamic.get());
+}
+
+# Convert away the last stored reference to a node that points back at its
+# owner. Check all four generic updates and repeated graph-count transitions;
+# its destructor reenters the owner and must observe the completed update.
+for (int round = 0; round < 16; ++round) {
+    for (int op = 0; op < 4; ++op) {
+        dynamic.set(new UpdateDrop(dynamic));
+        auto result;
+        switch (op) {
+            case 0: result = dynamic.preInc(); break;
+            case 1: result = dynamic.postInc(); break;
+            case 2: result = dynamic.preDec(); break;
+            case 3: result = dynamic.postDec(); break;
+        }
+        int updated = op < 2 ? 1 : -1;
+        expectUpdate(op & 1 ? 0 : updated, result);
+        expectUpdate(updated, dynamic.get());
+        expectUpdate(round * 4 + op + 1, UpdateDrop::drops);
+        expectUpdate(updated, UpdateDrop::observed);
+    }
+}
+
+delete integer;
+bool rejected = False;
+try { increment(); }
+catch (hash<ExceptionInfo> ex) {
+    expectUpdate("OBJECT-ALREADY-DELETED", ex.err);
+    rejected = True;
+}
+expectUpdate(True, rejected);
+DeletedMemberUpdate deleted_inside();
+rejected = False;
+try { deleted_inside.run(); }
+catch (hash<ExceptionInfo> ex) {
+    expectUpdate("OBJECT-ALREADY-DELETED", ex.err);
+    rejected = True;
+}
+expectUpdate(True, rejected);
+
+# A single member update must stay atomic; never hold a lock across statements.
+inherited.set(0);
+Counter start(4);
+Counter done(4);
+Queue failures();
+for (int i = 0; i < 4; ++i) { background updateWorker(inherited, start, done, failures); }
+if (done.waitForZero(60000)) { throw "MEMBER-UPDATE-TEST", "completion timeout"; }
+if (failures.size()) { throw "MEMBER-UPDATE-TEST", failures.get(1000); }
+expectUpdate(16000, inherited.get());
+expectUpdate(73, inherited.shadow());
+printf("self-member-int-update: ok\n");

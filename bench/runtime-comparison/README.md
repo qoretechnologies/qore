@@ -359,6 +359,20 @@ lock and actual scalar checks remain. Public, ordinary private, inherited non-lo
 and unknown declarations keep normal lookup. The control works at compile time
 and runtime; disabling member prehash also restores normal context lookup.
 
+`QORE_DISABLE_SELF_MEMBER_INT_UPDATE=1` is a runtime-only control for direct
+self-member increment/decrement helpers. A locked inline integer whose result
+also fits inline storage can bypass generic lvalue bookkeeping. All other values
+continue with the same locked lvalue, including reference resolution. The control
+does not disable removal of duplicate object-context bookkeeping or the separate
+scalar-method context-policy specialization, so on/off is not a control for the
+entire change. Set diagnostic environment controls before process startup; this
+one is sampled on the first representation-eligible update. AOT and JIT code
+using the existing self-member helpers can benefit from the updated runtime;
+the IR interpreter is unchanged. The final AOT measurements include typed/auto
+integer, float, number and reference-backed update workloads, read-only methods,
+plain methods, dynamic-result and indirect-call controls, including adverse results.
+See [measurements and remaining regression](RESULTS.md#aot-self-member-updates-and-scalar-context-layout-2026-10-12).
+
 Compile separate artifacts when comparing compiler changes or different private
 runtime identities. Runtime-only on/off controls may use an identical executable.
 For small timing differences, include identical-executable A/A controls and account

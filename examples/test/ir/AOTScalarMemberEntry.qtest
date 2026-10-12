@@ -69,6 +69,13 @@ class ScalarMemberEntryTest inherits QUnit::Test {
                         "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "
+                            + "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "
+                            + "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "
+                            + "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 "
+                            + "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
                         "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
                         "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ")) {

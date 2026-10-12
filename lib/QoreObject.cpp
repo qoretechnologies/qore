@@ -1046,6 +1046,51 @@ int qore_object_private::tryAssignScalarMemberResolvedPrehashed(
     return 1;
 }
 
+int qore_object_private::getLValueOrUpdateIntMember(const char* key,
+        const qore_class_private* class_ctx, LValueHelper& lvh, int64_t delta,
+        int64_t& previous, ExceptionSink* xsink) {
+    assert(delta == 1 || delta == -1);
+    const QoreTypeInfo* member_type = nullptr;
+    const qore_class_private* member_class_ctx = nullptr;
+    if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, member_type)) {
+        return -1;
+    }
+    // Use the same lock/existence-pin handoff as getLValue(), including on fallback.
+    qore_object_lock_handoff_helper qolhh(this, lvh.vl);
+    if (status == OS_DELETED) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED",
+            "write attempted to member \"%s\" in an already-deleted object", key);
+        return -1;
+    }
+    QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
+    HashMember* member = odata->priv->findCreateMember(key);
+    // makeIntQv() also accepts an existing integer before consulting its
+    // declaration. The inline tag excludes enums, references and owned nodes.
+    if (member->val.isInt()) {
+        int64_t old_value = member->val.getAsBigInt();
+        int64_t new_value = old_value + delta;
+        if (QoreValue::fitsInline(new_value)) {
+            // Snapshot the diagnostic switch on first eligible use. Initialization
+            // only reads the environment; it cannot enter Qore code or take another
+            // object lock. Non-integer and wide-result misses avoid this guard.
+            static const bool disable_int_update = std::getenv("QORE_DISABLE_SELF_MEMBER_INT_UPDATE") != nullptr;
+            if (!disable_int_update) {
+                // Both values are immediate: no ownership, recursive graph or container-count
+                // change, no allocation and no user callback. All guards precede the update.
+                member->val.set(new_value);
+                previous = old_value;
+                return 1;
+            }
+        }
+    }
+    // Continue the ordinary operation without another lookup or lock/unlock pair.
+    // Missing storage is created exactly as for getLValue(..., for_remove=false).
+    qolhh.stayLocked();
+    lvh.setValue(member->val, member_type);
+    lvh.setObjectContext(this);
+    return 0;
+}
+
 template <bool Prehashed, bool Internal>
 bool qore_object_private::tryReadScalarMemberImpl(const char* mem, size_t hash,
         const qore_class_private* class_ctx, int64_t* integer, double* floating) const {

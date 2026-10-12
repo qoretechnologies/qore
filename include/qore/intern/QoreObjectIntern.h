@@ -481,6 +481,22 @@ public:
             const qore_class_private* member_class_ctx, QoreValue value,
             qore_type_t expected_type, ExceptionSink* xsink);
 
+    //! Updates an inline integer member or prepares its ordinary lvalue under the same lock.
+    /** @param key member name
+        @param class_ctx current method's class context
+        @param lvh receives the locked lvalue when generic evaluation is required
+        @param delta increment (1) or decrement (-1)
+        @param previous receives the old integer only on success
+        @param xsink exception sink
+        @return 1 when updated, 0 with the lvalue prepared, -1 on access/deletion error
+        @note Retains ordinary access checks and one write lock per operation. On 0, continue
+        generic evaluation with lvh, including reference resolution; never restart the lookup.
+        Only inline-to-inline integer updates bypass lvalue bookkeeping, regardless
+        of the declaration: ordinary integer updates also skip filtering an existing int.
+    */
+    DLLLOCAL int getLValueOrUpdateIntMember(const char* key, const qore_class_private* class_ctx,
+            LValueHelper& lvh, int64_t delta, int64_t& previous, ExceptionSink* xsink);
+
     // lock not held on entry
     DLLLOCAL void doDeleteIntern(ExceptionSink* xsink);
 

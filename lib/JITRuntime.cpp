@@ -13720,8 +13720,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_ternary_aot(int op, QoreAOTContext*
 }
 
 // --- LValuePath runtime helpers ---
+// With previous supplied, delta selects a checked integer update: 1 means it
+// completed; 0 means the ordinary (possibly reference-resolved) lvalue is ready.
 static int qore_rt_get_self_member_lvalue(const char* member_name,
-        LValueHelper& lvh, ExceptionSink* xsink) {
+        LValueHelper& lvh, ExceptionSink* xsink, int64_t delta = 0,
+        int64_t* previous = nullptr) {
     QoreObject* obj = runtime_get_stack_object();
     if (!obj) {
         xsink->raiseException("LVALUE-ERROR",
@@ -13732,12 +13735,20 @@ static int qore_rt_get_self_member_lvalue(const char* member_name,
         return -1;
     }
     qore_object_private* obj_private = qore_object_private::get(*obj);
-    if (qore_object_private::getLValue(*obj, member_name, lvh,
-            runtime_get_class(), false, xsink)) {
-        return -1;
+    if (previous) {
+        int result = obj_private->getLValueOrUpdateIntMember(member_name,
+            runtime_get_class(), lvh, delta, *previous, xsink);
+        if (result) {
+            return result;
+        }
+    } else {
+        if (qore_object_private::getLValue(*obj, member_name, lvh,
+                runtime_get_class(), false, xsink)) {
+            return -1;
+        }
     }
-    lvh.setObjectContext(obj_private);
-
+    // Both lookup paths already recorded the object's context. Recording it a
+    // second time duplicates the object-count hierarchy and its vector storage.
     const ReferenceNode* ref = lvh.getReference();
     if (!ref) {
         return 0;
@@ -14076,8 +14087,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
         return toBits(QoreValue());
     }
     LValueHelper lvh(xsink);
-    if (qore_rt_get_self_member_lvalue(member_name, lvh, xsink)) {
+    LVUnaryOp op = static_cast<LVUnaryOp>(unary_op);
+    int64_t delta = op == LVUnaryOp::PreInc || op == LVUnaryOp::PostInc ? 1 : -1;
+    int64_t previous;
+    int updated = qore_rt_get_self_member_lvalue(member_name, lvh, xsink, delta, &previous);
+    if (updated < 0) {
         return toBits(QoreValue());
+    }
+    if (updated) {
+        bool post = op == LVUnaryOp::PostInc || op == LVUnaryOp::PostDec;
+        return toBits(QoreValue(post ? previous : previous + delta));
     }
     QoreValue res;
     switch (static_cast<LVUnaryOp>(unary_op)) {
@@ -18660,24 +18679,17 @@ __attribute__((noinline)) static int qore_rt_dispatch_matched_scalar_method(Qore
 // Called only after the complete PIC key and live body/Program/debugger checks.
 // A guard miss cannot enter user code or acquire ownership; retrying the normal
 // body therefore preserves reference evaluation and exception/frame semantics.
-template <typename Scalar>
+template <bool Deferred, typename Scalar>
 __attribute__((noinline)) static bool qore_rt_try_scalar_member_method(QoreObject* object,
         const QoreAOTMethodDispatchCacheEntry& cached, QoreAOTContext* ctx, Scalar arg,
-        Scalar& result, ExceptionSink* xsink, RuntimeConfig& rc) {
-    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
-    if (!enabled) {
-        return false;
-    }
-    auto entry = [&]() {
-        if constexpr (std::is_same_v<Scalar, double>) {
-            return ctx->scalar_member_float_entry.load(std::memory_order_acquire);
-        } else {
-            return ctx->scalar_member_int_entry.load(std::memory_order_acquire);
-        }
-    }();
-    if (!entry) {
-        return false;
-    }
+        Scalar& result, ExceptionSink* xsink, RuntimeConfig& rc,
+        Scalar (*entry)(Scalar, QoreObject*, const qore_class_private*, RuntimeConfig*,
+            int*, QoreAOTContext*, ExceptionSink*)) {
+    // The caller acquired the append-only companion and selected the context
+    // policy. Do not reload that entry or repeat diagnostic switch guards here.
+    // Separate instantiations keep the ordinary context's storage off the
+    // deferred path's stack without changing either frame publication protocol.
+    assert(entry);
     if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
         result = 0;
         return true;
@@ -18693,8 +18705,7 @@ __attribute__((noinline)) static bool qore_rt_try_scalar_member_method(QoreObjec
             }
         }
     };
-    static const bool defer_context = !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
-    if (defer_context) {
+    if constexpr (Deferred) {
         RuntimeConfigNativeMethodContext context(rc, object, cached);
         QoreCompactNativeMethodStackLocation frame(rc, cached, xsink, context);
         invoke();
@@ -18709,6 +18720,29 @@ __attribute__((noinline)) static bool qore_rt_try_scalar_member_method(QoreObjec
     }
     result = *xsink ? 0 : value;
     return true;
+}
+
+// The non-deferred diagnostic policy keeps its original context/frame protocol,
+// but its larger storage must not enlarge every ordinary deferred native call.
+// The caller has already checked the complete live key, body and stack guard.
+template <typename Scalar>
+__attribute__((noinline)) static void qore_rt_invoke_eager_scalar_method(QoreObject* object,
+        const QoreAOTMethodDispatchCacheEntry& cached, QoreAOTContext* ctx, Scalar arg,
+        Scalar& result, ExceptionSink* xsink, RuntimeConfig& rc,
+        Scalar (*inline_entry)(Scalar, QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*),
+        Scalar (*entry)(Scalar, QoreAOTContext*, ExceptionSink*, RuntimeConfig*)) {
+    RuntimeConfigNativeObjectHelper context(rc, object, cached.native_scalar_class_ctx);
+    QoreNativeMethodStackLocation<false, true> frame(rc, cached, cached.native_scalar_uvb,
+        cached.native_scalar_program, xsink);
+    if (!*xsink) {
+        try {
+            result = inline_entry
+                ? inline_entry(arg, ctx, xsink, &rc, qore_rt_get_stack_limit_v1(&rc))
+                : entry(arg, ctx, xsink, &rc);
+        } catch (const QoreJITException&) {
+            // The sink owns the exception; frame/context restoration remains RAII.
+        }
+    }
 }
 
 template <typename Scalar, bool MatchedFallback = false>
@@ -18822,14 +18856,26 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
         }
         // Do not enter another helper for ordinary context-using bodies. The
         // existing forwarding hit also stays ahead of this independent proof.
-        bool member_ready;
-        if constexpr (floating) {
-            member_ready = ctx->scalar_member_float_entry.load(std::memory_order_acquire) != nullptr;
-        } else {
-            member_ready = ctx->scalar_member_int_entry.load(std::memory_order_acquire) != nullptr;
-        }
-        if (member_ready && qore_rt_try_scalar_member_method(object, *cached, ctx, arg, *result, xsink, *rc)) {
-            return 1;
+        auto member_entry = [&]() {
+            if constexpr (floating) {
+                return ctx->scalar_member_float_entry.load(std::memory_order_acquire);
+            } else {
+                return ctx->scalar_member_int_entry.load(std::memory_order_acquire);
+            }
+        }();
+        if (member_entry) {
+            static const bool member_enabled = !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
+            if (member_enabled) {
+                static const bool defer_member_context =
+                    !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
+                if (defer_member_context
+                        ? qore_rt_try_scalar_member_method<true>(object, *cached, ctx, arg, *result,
+                            xsink, *rc, member_entry)
+                        : qore_rt_try_scalar_member_method<false>(object, *cached, ctx, arg, *result,
+                            xsink, *rc, member_entry)) {
+                    return 1;
+                }
+            }
         }
         return matched_fallback();
     }
@@ -18877,9 +18923,8 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
         QoreCompactNativeMethodStackLocation frame(*rc, *cached, xsink, context);
         invoke();
     } else {
-        RuntimeConfigNativeObjectHelper context(*rc, object, cached->native_scalar_class_ctx);
-        QoreNativeMethodStackLocation<false, true> frame(*rc, *cached, uvb, pgm, xsink);
-        invoke();
+        qore_rt_invoke_eager_scalar_method(object, *cached, ctx, arg, *result,
+            xsink, *rc, inline_entry, entry);
     }
     return 1;
 }
