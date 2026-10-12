@@ -465,6 +465,20 @@ which can otherwise erase a generic class's arguments. Optional object locals
 are excluded from IR-only storage just like required objects, preserving runtime
 slot synchronization, reflective visibility and scope cleanup.
 
+Ordinary read-only `auto` parameters can also use this cache when a direct
+`LoadLocal` result is used as a method receiver. This is a profitability
+heuristic, not a static proof of object type: the existing entry owner and
+runtime-backed reload support are required, and the runtime must still prove
+an identical ordinary strong-object slot. Non-object, reference and weak slots
+keep ordinary reloads. Scalar/container-only parameters are not charged for
+this new guard; dynamic pseudo receivers can still reach and reject admission.
+Reflective writes revoke reuse before reentry, without caching method dispatch,
+access checks or receiver deletion status. Private direct-entry arguments are
+excluded. `QORE_DISABLE_AOT_OBJECT_PARAM_CACHE=1` disables this extension at
+compilation; `QORE_DISABLE_AOT_CLASS_PARAM_CACHE=1` disables both caches.
+This is AOT-only, reuses the existing helper ABI, and requires recompilation.
+See [the measurements and rejected broader heuristic](../bench/runtime-comparison/RESULTS.md#aot-object-valued-auto-parameter-cache-2026-10-11).
+
 `ThreadLocalVariableData` owns a same-thread, per-Program 64-bit mutation epoch.
 Both reflective assignment APIs reach the target stack's `setVarValue()`, which
 increments the epoch before lvalue resolution or assignment can reenter Qore.

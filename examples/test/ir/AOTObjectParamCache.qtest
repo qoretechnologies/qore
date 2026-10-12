@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ObjectParamCacheTest
+
+class ObjectParamCacheTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("guarded AOT object-valued auto parameters", "1.0", \ARGV) {
+        addTestCase("admission, replacement, aliases and fallback", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private string body(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " ordinary LLVM entry");
+        return found[0] ?? "";
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTObjectParamCache.qr";
+        string expected = "6:12:1:42:101:110:15\n10:10:1:10\n60\n51\n1\n110:102:101\n"
+            "1:OBJECT-ALREADY-DELETED\nobject-param-cache: ok\nobject-param-extra: ok\n";
+        assertEq(expected, run((qore, "--exec-mode=ast", source)), "AST reference");
+        TmpDir dir("qore-object-param-cache-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "QORE_DISABLE_AOT_CLASS_PARAM_CACHE=1 ",
+                "QORE_DISABLE_AOT_OBJECT_PARAM_CACHE=1 ",
+                "QORE_DISABLE_AOT_STABLE_UNTYPED_LOAD=1 ",
+                "QORE_DISABLE_AOT_INLINE_RELOAD_GUARD=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string name in (("objectCacheStable", "objectCacheReference", "objectCacheInvalid",
+                        "objectCacheFailedWrite", "objectCacheDestructor", "objectCacheRecursive",
+                        "objectCacheFailedAliasWrite", "objectCacheDeleted", "objectCacheThrow",
+                        "objectCacheValues", "objectCacheOptional", "objectCacheMaybeReceiver")) {
+                    bool enabled = prefix != "QORE_DISABLE_AOT_CLASS_PARAM_CACHE=1 "
+                        && (name == "objectCacheOptional" || prefix != "QORE_DISABLE_AOT_OBJECT_PARAM_CACHE=1 ");
+                    string entry = body(ir, name);
+                    assertEq(enabled, regex(entry, "call ptr @qore_rt_get_class_param_epoch_aot_v1"),
+                        name + " guarded admission " + prefix + level);
+                    assertEq(enabled, regex(entry, "class_param_mutation_epoch"),
+                        name + " reflective invalidation " + prefix + level);
+                }
+                foreach string name in (("objectCachePassthrough", "objectCacheWritten", "objectCacheCaptured",
+                        "objectCacheByReference", "objectCacheWeak", "objectCacheGeneric",
+                        "objectCacheAddress", "objectCacheHandler", "objectCacheNonObject")) {
+                    assertFalse(regex(body(ir, name), "call ptr @qore_rt_get_class_param_epoch_aot_v1"),
+                        name + " excluded admission " + prefix + level);
+                }
+                foreach string name in (("objectCacheStable", "objectCacheReference", "objectCacheValues")) {
+                    *list<*string> fast = regex_extract(ir,
+                        "(?s)define internal [^\n]*@" + name + "_[^\n]*_fast_[^\n]*\\([^\n]*"
+                        "ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!fast, name + " private entry exists " + prefix + level);
+                    assertFalse(regex(fast[0] ?? "", "qore_rt_get_class_param_epoch_aot_v1"),
+                        name + " private argument must not alias an outer runtime slot " + prefix + level);
+                }
+                foreach string runtime in (("", "QORE_DISABLE_IR_CONTEXT_ELISION=1 ",
+                        "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+}

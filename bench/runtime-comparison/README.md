@@ -164,7 +164,8 @@ some misses). The flag is sampled once and the helper ABI is unchanged. See
 do not attribute all cross-library variation to this branch.
 
 `QORE_DISABLE_AOT_CLASS_PARAM_CACHE=1` at compilation disables guarded reuse of
-read-only class parameter caches. The default admits only unwritten,
+read-only class parameter caches, including the `auto` extension below.
+For declared class parameters, admission requires unwritten,
 unescaped, noncaptured, nonweak, nongeneric parameters with an existing entry
 owner and an identical ordinary strong runtime slot. Required and optional
 plain-class contracts are supported; an initial `NOTHING`, reference or weak
@@ -180,6 +181,42 @@ Compile both artifacts separately; newly compiled callers need the additive
 but must be recompiled to receive the fix. See the measured regressions as well
 as gains in [RESULTS.md](RESULTS.md#guarded-class-parameter-caches-2026-10-08)
 and the [optional-class follow-up](RESULTS.md#optional-class-freshness-2026-10-08).
+
+`QORE_DISABLE_AOT_OBJECT_PARAM_CACHE=1` at compilation disables the extension
+to ordinary read-only `auto` parameters used directly as method receivers.
+An existing entry owner, runtime-backed reload support and an identical strong
+runtime slot are still required. Direct receiver use predicts profitability,
+not object type; non-object, reference and weak slots keep normal reloads.
+Reflective writes revoke reuse before reentry. Scalar/container-only parameters
+and private direct-entry arguments are excluded. This AOT-only extension uses
+the existing helper ABI; recompile artifacts to benefit. The class-cache switch
+above also disables it. No IR/JIT or private-fast-call gain is claimed.
+
+The [ordinary-entry companion](ordinary_params.qr) forces ordinary entries with
+`call_function`. Its CLI is `check` or `NAME COUNT WARMUP SAMPLES MS SEED`, with
+names `int`, `float`, `string`, `list`, `hash` or `object` followed by `_loop`
+or `_short`. Each loop iteration has two reads and one retained callback;
+object reads are field-reading method calls. Short cases enter a function on
+every iteration. Reference totals are `2*n*seed + n*(n-1)/2` for loops and
+`2*n*seed` for short cases. Results are whole-workload ns/iteration, not isolated
+call latency. There is no Java counterpart for this companion.
+
+For a manual smoke check, compile enabled and disabled artifacts separately
+with the same compiler and matching runtime loader path. Set the switch only
+on the disabled compilation, not at execution:
+
+```sh
+ordinary_probe_dir=$(mktemp -d /tmp/qore-ordinary-params.XXXXXX)
+env DYLD_LIBRARY_PATH="$PWD/build" build/qcc -O3 --strip-source -o "$ordinary_probe_dir/ordinary-onx" bench/runtime-comparison/ordinary_params.qr
+env DYLD_LIBRARY_PATH="$PWD/build" QORE_DISABLE_AOT_OBJECT_PARAM_CACHE=1 build/qcc -O3 --strip-source -o "$ordinary_probe_dir/ordinary-off" bench/runtime-comparison/ordinary_params.qr
+env DYLD_LIBRARY_PATH="$PWD/build" "$ordinary_probe_dir/ordinary-onx" check
+env DYLD_LIBRARY_PATH="$PWD/build" "$ordinary_probe_dir/ordinary-off" check
+```
+
+These commands use task-owned output paths and print reference outputs; the
+recorded experiment independently checks all 144 totals. Its measurements use
+frozen compiler/runtime identities, randomized independent forks and A/A
+controls, not a single smoke run. See [the gain and control results](RESULTS.md#aot-object-valued-auto-parameter-cache-2026-10-11).
 
 Ordinary runtime-backed boxed AOT parameters/body locals must reload after
 potentially mutating calls even when every source access is IR-lowered.

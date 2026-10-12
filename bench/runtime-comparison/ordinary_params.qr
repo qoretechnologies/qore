@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+# Ordinary boxed-entry companion: call_function deliberately avoids private ABI
+# entry points. Long loops amortize entry work; short cases pay it on every call.
+class AutoParamValue {
+    private { int value; }
+    constructor(int v) { value = v; }
+    int read() { return value; }
+}
+int sub autoParamTick(int value) { return value; }
+int sub autoParamScalar(int count, auto value, code<int(int)> callback) {
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        total += int(value);
+        total += callback(i);
+        total += int(value);
+    }
+    return total;
+}
+int sub autoParamList(int count, auto value, code<int(int)> callback) {
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        total += int(value[0]);
+        total += callback(i);
+        total += int(value[0]);
+    }
+    return total;
+}
+int sub autoParamHash(int count, auto value, code<int(int)> callback) {
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        total += int(value.value);
+        total += callback(i);
+        total += int(value.value);
+    }
+    return total;
+}
+int sub autoParamObject(int count, auto value, code<int(int)> callback) {
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        total += int(value.read());
+        total += callback(i);
+        total += int(value.read());
+    }
+    return total;
+}
+int sub autoParamDispatch(string name, int count, int seed, code<int(int)> callback) {
+    string kind = name.split("_")[0];
+    string target;
+    auto value;
+    switch (kind) {
+        case "int": target = "autoParamScalar"; value = seed; break;
+        case "float": target = "autoParamScalar"; value = float(seed) + 0.25; break;
+        case "string": target = "autoParamScalar"; value = string(seed); break;
+        case "list": target = "autoParamList"; value = (seed,); break;
+        case "hash": target = "autoParamHash"; value = {"value": seed}; break;
+        case "object": target = "autoParamObject"; value = new AutoParamValue(seed); break;
+        default: throw "BENCH-ARGUMENT-ERROR", "unknown value type";
+    }
+    if (name =~ /_loop$/) {
+        return int(call_function(target, count, value, callback));
+    }
+    if (name !~ /_short$/) {
+        throw "BENCH-ARGUMENT-ERROR", "unknown entry shape";
+    }
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        total += int(call_function(target, 1, value, callback));
+    }
+    return total;
+}
+int sub integerArg(int index, int minimum, int maximum) {
+    if (index >= ARGV.size() || ARGV[index] !~ /^\d+$/) {
+        throw "BENCH-ARGUMENT-ERROR", "missing or invalid integer argument";
+    }
+    int value = ARGV[index].toInt();
+    if (value < minimum || value > maximum) {
+        throw "BENCH-ARGUMENT-ERROR", "integer argument outside supported range";
+    }
+    return value;
+}
+sub main() {
+    code<int(int)> callback = \autoParamTick();
+    if (ARGV == ("check",)) {
+        foreach string name in (("int_loop", "float_loop", "string_loop", "list_loop", "hash_loop", "object_loop",
+                "int_short", "float_short", "string_short", "list_short", "hash_short", "object_short")) {
+            foreach int count in ((0, 1, 17, 257)) {
+                foreach int seed in ((0, 7, 31)) {
+                    printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed,
+                        autoParamDispatch(name, count, seed, callback));
+                }
+            }
+        }
+        return;
+    }
+    if (ARGV.size() != 6) {
+        throw "BENCH-ARGUMENT-ERROR", "expected check | NAME COUNT WARMUP SAMPLES MS SEED";
+    }
+    string name = ARGV[0];
+    int count = integerArg(1, 1, 1000000);
+    int warmup = integerArg(2, 0, 1000);
+    int samples = integerArg(3, 1, 1000);
+    int duration_us = integerArg(4, 1, 60000) * 1000;
+    int seed = integerArg(5, 0, 65535);
+    for (int sample = -warmup; sample < samples; ++sample) {
+        int checksum = 0;
+        int calls = 0;
+        int start = clock_get_monotonic_us();
+        int elapsed;
+        do {
+            seed = (seed + 1) & 65535;
+            checksum ^= autoParamDispatch(name, count, seed, callback);
+            ++calls;
+            elapsed = clock_get_monotonic_us() - start;
+        } while (elapsed < duration_us);
+        printf("%s\t%s\t%d\t%d\t%d\t%d\n", sample < 0 ? "WARMUP" : "SAMPLE",
+            name, elapsed, calls, count, checksum);
+    }
+}
+main();

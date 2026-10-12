@@ -12817,6 +12817,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // That permits admission only when the runtime helper verifies the
             // identical strong-object slot; absent/reference/weak values fall back.
             size_t stable_load_count = 0;
+            bool has_direct_receiver_load = false;
             for (const QoreIRLocalInstruction* load : loads) {
                 if (stable_load_count++ && !(stable_load_count % 100)
                         && qore_check_cancel(nullptr,
@@ -12838,11 +12839,29 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 if (load->is_closure || !load->result.isValid()) {
                     cache_untyped_param = false;
                 }
+                has_direct_receiver_load = has_direct_receiver_load
+                    || dot_eval_base_candidates.count(load->result.id);
             }
             if (cache_class_param) {
                 if (!std::getenv("QORE_DISABLE_AOT_CLASS_PARAM_CACHE")) {
                     aot_class_param_cache_candidates.insert(key);
                 }
+            }
+            if (cache_untyped_param && has_direct_receiver_load
+                    && preinstantiated_entry_cleanup_by_local.count(key)
+                    && canReloadLocalFromRuntime(key)
+                    && !std::getenv("QORE_DISABLE_AOT_CLASS_PARAM_CACHE")
+                    && !std::getenv("QORE_DISABLE_AOT_OBJECT_PARAM_CACHE")) {
+                // An auto load's is_ref flag means its runtime type is unknown,
+                // not that the parameter's address escaped. The existing entry
+                // owner pins an admitted object; the runtime epoch helper still
+                // requires the identical ordinary strong-object slot. References,
+                // weak values and non-objects keep reloads, and a reflective write
+                // permanently revokes reuse for this invocation, before reentry.
+                // Restrict the profitability heuristic to direct receiver uses:
+                // scalar/container-only parameters otherwise pay rejection costs
+                // on every invocation and read. This is not an object type proof.
+                aot_class_param_cache_candidates.insert(key);
             }
             if (cache_untyped_param && !std::getenv("QORE_DISABLE_AOT_STABLE_UNTYPED_LOAD")) {
                 aot_stable_untyped_params.insert(key);

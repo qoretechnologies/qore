@@ -10590,3 +10590,114 @@ Next AOT-first plan:
 5. Re-run matched Java comparisons after a larger measured AOT improvement.
 
 [Verified measurements, controls and qualification](results-aot-inline-reload-guard-macos-arm64.json).
+
+
+## AOT object-valued auto-parameter cache (2026-10-11)
+
+AOT is the primary target. Ordinary read-only `auto` parameters used directly
+as method receivers can now reuse the existing strong-object parameter cache.
+The compiler requires an existing entry owner and runtime-backed reload
+support; the runtime still proves the identical ordinary strong-object slot.
+References, weak values and non-objects keep normal reloads. Reflective writes
+permanently revoke reuse for the invocation before assignment can reenter.
+No new helper ABI, serialized representation or IR/JIT optimization is added.
+Recompile AOT artifacts to receive the optimization.
+
+A direct receiver use is a profitability heuristic, not a proof of object
+type. The first prototype admitted all otherwise-eligible auto parameters:
+its ordinary object loop improved, but rejected float loads regressed
+1.91–1.96% in both on/off control legs. That broader heuristic is not retained.
+The final compiler excludes scalar/container-only parameters from the new
+guard. Dynamic pseudo receivers can still reject at runtime; a string
+`toInt()` loop/short-call probe has overlapping on/off and A/A ranges.
+
+The established call kernels enter their loop functions through private
+direct entries, whose arguments have a separate ownership/visibility contract.
+They do not use this cache. The initial nine-kernel screen showed no gain
+and a small separated float-callback slowdown; the final recheck below has
+overlapping ranges for every kernel. No private-fast-call gain is claimed.
+
+The new [ordinary-entry companion](ordinary_params.qr) uses `call_function`
+to force normal native entries. Loop iterations contain two reads and one
+retained callback; short cases enter a function for every iteration. The
+object loop contains two field-reading method calls. Timings are whole-
+workload ns/iteration, not isolated call latency or a comparison to Java.
+Independent checks use `2*n*seed + n*(n-1)/2` for loops and `2*n*seed`
+for short cases, across four counts and three seeds (144 checks).
+
+Five-fork confirmation `aot-object-param-narrowed-confirm-OlXzzt`: 3 warmups,
+5 measured 500-ms windows/fork, count 4096, order seed 827211; 160 jobs /
+800 measured windows. Before is frozen commit 21de4a0c0 source state, bound
+to the existing pre-commit-built artifact without claiming a post-commit
+rebuild. Before/after AOT artifacts were compiled separately. On/off use
+the same frozen compiler/library, a same-length inert/disable compilation
+key and identical runtime environments without either key. A/A modes use
+the identical enabled executable and command arguments.
+
+|!Workload|!Before ns/iteration|!Disabled ns/iteration|!Enabled A|!Enabled B|!On/off time reduction A / B
+|int_loop|41.285705|42.203583|41.762183|42.321396|+1.046% / -0.279%
+|float_loop|45.972207|46.538480|46.287681|46.069862|+0.539% / +1.007%
+|string_loop|62.260685|61.860063|62.529980|61.473361|-1.083% / +0.625%
+|list_loop|57.041646|57.047235|57.011047|57.359508|+0.063% / -0.547%
+|hash_loop|73.157941|73.914856|73.813343|73.821903|+0.137% / +0.126%
+|object_loop|272.836770|268.233233|230.627336|232.288853|+14.020% / +13.400%
+|object_short|1007.361326|999.187528|991.219309|1003.854853|+0.797% / -0.467%
+|string_short|721.325342|726.378280|730.531231|727.103213|-0.572% / -0.100%
+
+Object-loop on/off time reduction is 13.4–14.0%; both enabled fork ranges
+separate from disabled. Before/after time reduction is 15.47%. Every other
+on/off range and every A/A range overlaps. The earlier three-fork narrowed
+screen retained noisy list/string controls, motivating this longer run.
+Overlapping ranges are not proof of equivalence. No short-call gain is claimed.
+
+Final private-entry recheck `run-8b07knyd`: 3 forks, 3 warmups, 5 measured
+500-ms windows, count 4096, seed 827223; 54 jobs / 270 measured windows.
+
+|!Existing workload|!Before ns/element|!After ns/element|!Time reduction|!Fork ranges separate
+|boxed_int_method_fallback|47.801277|47.813069|-0.025%|no
+|boxed_float_method_fallback|53.043110|52.418595|+1.177%|no
+|boxed_int_method_effect|274.524106|276.157859|-0.595%|no
+|boxed_int_method_call|33.019359|32.845157|+0.528%|no
+|boxed_float_method_call|39.689802|39.777147|-0.220%|no
+|dynamic_int_result_call|10.440689|10.460683|-0.191%|no
+|dynamic_float_result_call|11.845319|11.681226|+1.385%|no
+|indirect_int_result|7.127313|7.215299|-1.234%|no
+|indirect_float_result|9.141430|9.130610|+0.118%|no
+
+Companion native text: 55588 → 55752 bytes (+164, +0.295%).
+This is one artifact, not a general code-size or compilation-time claim.
+
+All 2276 measurement windows across six runs were retained and replayed,
+including the rejected prototype and all adverse/noisy controls. Frozen
+source/binary identities bind timing to qualification. No owned inspection,
+build, test or profiling overlapped timing. Environment values are explicitly
+allowlisted; the full environment is recorded only as a hash, not exported values.
+
+Release: 107 selected files, 390 cases, 32909 assertions, 15 standalones, 1 skipped.
+Debug: 107 selected files, 397 cases, 33008 assertions, 15 standalones, 0 skipped.
+Both additionally pass seven exception/stack fixtures and reference/native
+checks. The selected files include the new 1106-assertion cache regression. It verifies ordinary
+entry admission and private-entry exclusion, stripped O0/O3, native EH,
+split compilation, compiler/runtime controls, references, failed writes,
+deletion, destructor replacement, throw, recursion and non-object values.
+All 13 task-owned source qmod links were restored and content-verified
+against release artifacts, with unrelated links unchanged. Cache and
+runtime-local regressions pass again after restoration. Also passed:
+205 debug native checks, 17 harness checks and 555 references per IR/AOT/Java
+mode. No fresh Java timing, full-suite, sanitizer or cross-platform claim.
+
+Initial fixture attempts exercised pre-existing private-entry caller-frame
+visibility limitations. The final ordinary-entry fixture passes AST and
+stripped O0/O3 on the frozen baseline too; those limitations are not newly
+fixed. A helper assertion initially counted an unrelated typed parameter
+cache; the fixture was made unambiguous and rerun. Failed attempts remain
+archived with the other evidence.
+
+Next AOT-first work: carry the already-live `RuntimeConfig` through matched
+ordinary scalar-method fallback. Prove same-thread lifetime and live Program
+data before avoiding redundant TLS lookup/setup; preserve independent object/
+class restoration, cross-Program fallback, debugger paths, observable frames,
+argument slots, return filtering and cleanup. Measure effectful methods and
+native controls before acceptance. Java parity remains an open goal.
+
+[Verified measurements, controls, qualification and archived prototypes](results-aot-object-param-cache-macos-arm64.json).
