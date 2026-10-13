@@ -1163,12 +1163,14 @@ val = "string";      # OK
     such strings were handled one byte per character, so lengths and offsets counted bytes, substrings and
     reversed strings were invalid, \c upr() changed Japanese text in ISO-2022-JP, and hash keys kept the escape
     sequences.  Such an encoding is no longer compatible with ASCII (ISO-2022-JP was before).  Functions that work
-    with the byte positions of characters now raise an \c UNSUPPORTED-ENCODING exception for such a string, as do
-    reading characters one at a time or a number of characters at a time from a stream or file
-    (@ref Qore::StreamReader::readString() "StreamReader::readString()" with a positive count,
-    @ref Qore::ReadOnlyFile::read() "ReadOnlyFile::read()" with a positive count, and
-    @ref Qore::ReadOnlyFile::getchar() "ReadOnlyFile::getchar()"), since the next read would not have the shift
-    state of the previous one (qoretechnologies/qorus#709); read such text in lines, all at once, or as bytes.
+    with the byte positions of characters now raise an \c UNSUPPORTED-ENCODING exception for such a string.
+    Characters of text in such an encoding can be read one at a time or a number of characters at a time from a
+    stream or file (@ref Qore::StreamReader::readString() "StreamReader::readString()",
+    @ref Qore::ReadOnlyFile::read() "ReadOnlyFile::read()", and
+    @ref Qore::ReadOnlyFile::getchar() "ReadOnlyFile::getchar()"): readers keep the shift state between reads, so
+    a read that ends inside a shifted run is continued in it by the next read, and each string read starts and ends
+    in the initial shift state; before, such reads returned invalid strings and mixed the bytes of shifted runs with
+    the characters after them.
     @endparblock
 
     @par A Default Character Encoding That Is Not Compatible With ASCII Is Refused

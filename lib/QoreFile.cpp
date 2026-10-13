@@ -484,7 +484,10 @@ int QoreFile::close(ExceptionSink* xsink) {
 }
 
 void QoreFile::setEncoding(const QoreEncoding* cs) {
+    AutoLocker al(priv->m);
     priv->charset = cs;
+    // text in the new encoding starts in the initial shift state
+    priv->resetDecoder();
 }
 
 int QoreFile::setEncoding(const QoreEncoding* cs, ExceptionSink* xsink) {
@@ -494,6 +497,8 @@ int QoreFile::setEncoding(const QoreEncoding* cs, ExceptionSink* xsink) {
     }
 
     priv->charset = cs;
+    // text in the new encoding starts in the initial shift state
+    priv->resetDecoder();
     return 0;
 }
 
@@ -567,6 +572,7 @@ void QoreFile::makeSpecial(int sfd) {
     priv->is_open = true;
     priv->filename.clear();
     priv->charset = QCS_DEFAULT;
+    priv->resetDecoder();
     priv->special_file = true;
     priv->fd = sfd;
 }
@@ -688,6 +694,8 @@ size_t QoreFile::setPos(size_t pos) {
     if (!priv->is_open)
         return -1;
 
+    // the text at the new position is read from the initial shift state
+    priv->resetDecoder();
     return lseek(priv->fd, pos, SEEK_SET);
 }
 
@@ -700,6 +708,8 @@ size_t QoreFile::setPos(size_t pos, ExceptionSink* xsink) {
     if (!priv->is_open)
         return -1;
 
+    // the text at the new position is read from the initial shift state
+    priv->resetDecoder();
     return lseek(priv->fd, pos, SEEK_SET);
 }
 
@@ -713,19 +723,20 @@ size_t QoreFile::getPos() const {
 }
 
 QoreStringNode* QoreFile::getchar(ExceptionSink* xsink) {
-    if (q_check_char_read_encoding(priv->charset, xsink)) {
-        return nullptr;
-    }
-    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(priv->charset));
-
-    int c;
     {
         AutoLocker al(priv->m);
         if (priv->checkNonBlock(xsink) || priv->checkReadOpen(xsink)) {
             return nullptr;
         }
 
-        c = priv->readChar();
+        // a character of text in a stateful encoding is read in the shift state left by the text read before it
+        if (priv->useDecoder(true)) {
+            return priv->readDecoderChar(xsink);
+        }
+
+        SimpleRefHolder<QoreStringNode> str(new QoreStringNode(priv->charset));
+
+        int c = priv->readChar();
         if (c < 0) {
             return nullptr;
         }
@@ -760,9 +771,8 @@ QoreStringNode* QoreFile::getchar(ExceptionSink* xsink) {
 
             str->concat((char)c);
         }
+        return str.release();
     }
-
-    return str.release();
 }
 
 QoreStringNode* QoreFile::getchar() {

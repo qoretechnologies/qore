@@ -186,6 +186,8 @@ struct qore_qf_private {
     //! if data should be included in file events
     bool event_data = false;
     bool in_non_block = false;
+    //! keeps the shift state of text in a stateful encoding between reads of characters; protected by the lock
+    QoreStatefulTextDecoder decoder;
 
     DLLLOCAL qore_qf_private(const QoreEncoding* cs) : charset(cs) {
     }
@@ -199,6 +201,7 @@ struct qore_qf_private {
 
     DLLLOCAL int close_intern(bool detach = false) {
         filename.clear();
+        decoder.reset();
 
         int rc;
         if (is_open) {
@@ -248,6 +251,8 @@ struct qore_qf_private {
             return -1;
         }
         filename = file.filename;
+        // text from the new target starts in the initial shift state
+        decoder.reset();
 
         return 0;
     }
@@ -276,6 +281,7 @@ struct qore_qf_private {
         if (cs)
             charset = cs;
         is_open = true;
+        decoder.reset();
         return 0;
     }
 
@@ -677,10 +683,67 @@ struct qore_qf_private {
 
     DLLLOCAL QoreStringNode* readString(qore_offset_t size, int timeout_ms, const char* mname, ExceptionSink* xsink) {
         qore_file_read_deadline read_deadline(timeout_ms);
-        return q_read_string(xsink, size, charset,
-            [this, &read_deadline, mname](void* dest, size_t limit, ExceptionSink* read_xsink) {
-                return readData(dest, limit, read_deadline, mname, read_xsink);
-            });
+        f_read_t my_read = [this, &read_deadline, mname](void* dest, size_t limit, ExceptionSink* read_xsink) {
+            return readData(dest, limit, read_deadline, mname, read_xsink);
+        };
+        {
+            AutoLocker al(m);
+            // characters of text in a stateful encoding are read in the shift state left by the text read before
+            // them; the lock serializes the use of the decoder
+            if (useDecoder(size > 0)) {
+                return decoder.readChars(charset, size, my_read, xsink);
+            }
+        }
+        return q_read_string(xsink, size, charset, my_read);
+    }
+
+    //! returns true if text is read with the decoder; the lock must be held
+    /** @param char_read true for a read of a number of characters, which needs the decoder in a stateful encoding;
+        other reads of text need it once the decoder has been used, as the text continues in its shift state
+    */
+    DLLLOCAL bool useDecoder(bool char_read) const {
+        return qore_encoding_private::isStateful(charset) && (char_read || decoder.active());
+    }
+
+    //! returns a function object that reads bytes from the file for the decoder; the lock must be held
+    DLLLOCAL f_read_t getDecoderReadFunc() {
+        return [this](void* dest, size_t limit, ExceptionSink* xsink) -> qore_offset_t {
+            ssize_t rc = read(dest, limit);
+            if (rc < 0) {
+                xsink->raiseErrnoException("FILE-READ-ERROR", errno, "error reading file");
+                return -1;
+            }
+            return rc;
+        };
+    }
+
+    //! reads a line with the decoder; the lock must be held
+    /** @param eol the end-of-line marker in UTF-8, or empty for any of \c "\n", \c "\r", or \c "\r\n"
+
+        @return 0 if data was read, -1 if no data was read (end of file) or an exception was raised
+    */
+    DLLLOCAL int readDecoderLine(const std::string& eol, QoreString& str, bool incl_eol, ExceptionSink* xsink) {
+        // a terminal is not read past a carriage return
+        SimpleRefHolder<QoreStringNode> line(decoder.readLine(charset, eol, !incl_eol, !isatty(fd),
+            getDecoderReadFunc(), xsink));
+        if (!line) {
+            return -1;
+        }
+        // the line is in the encoding of the file, as \a str
+        assert(line->getEncoding() == str.getEncoding());
+        str.concat(line->c_str(), line->size());
+        return 0;
+    }
+
+    //! returns the decoder to the initial shift state; the lock must be held
+    DLLLOCAL void resetDecoder() {
+        decoder.reset();
+    }
+
+    //! reads one character of text in a stateful encoding; the lock must be held
+    DLLLOCAL QoreStringNode* readDecoderChar(ExceptionSink* xsink) {
+        assert(qore_encoding_private::isStateful(charset));
+        return decoder.readChars(charset, 1, getDecoderReadFunc(), xsink);
     }
 
     DLLLOCAL char* readBlock(qore_offset_t &size, int timeout_ms, const char* mname, ExceptionSink* xsink) {
@@ -745,7 +808,10 @@ struct qore_qf_private {
     DLLLOCAL QoreStringNode* readLine(bool incl_eol, ExceptionSink* xsink) {
         QoreStringNodeHolder str(new QoreStringNode(charset));
 
-        int rc = readLine(**str, incl_eol);
+        int rc = readLine(**str, incl_eol, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
 
         if (rc == -2) {
             xsink->raiseException("FILE-READLINE-ERROR", "file has not been opened");
@@ -854,7 +920,15 @@ struct qore_qf_private {
                 xsink->raiseException("FILE-READLINE-ERROR", "file has not been opened");
                 return nullptr;
             }
-            rc = readUntilMarker(marker, **str, incl_eol, std::string(), xsink);
+            if (useDecoder(false)) {
+                TempEncodingHelper eol_utf8(eol, QCS_UTF8, xsink);
+                if (!eol_utf8) {
+                    return nullptr;
+                }
+                rc = readDecoderLine(std::string(eol_utf8->c_str(), eol_utf8->size()), **str, incl_eol, xsink);
+            } else {
+                rc = readUntilMarker(marker, **str, incl_eol, std::string(), xsink);
+            }
         }
         if (*xsink) {
             return nullptr;
@@ -870,6 +944,17 @@ struct qore_qf_private {
 
         if (!is_open)
             return -2;
+
+        // text in a stateful encoding that continues the text read with the decoder is read with it
+        if (useDecoder(false)) {
+            if (xsink) {
+                return readDecoderLine(std::string(), str, incl_eol, xsink);
+            }
+            ExceptionSink local_xsink;
+            int rc = readDecoderLine(std::string(), str, incl_eol, &local_xsink);
+            local_xsink.clear();
+            return rc;
+        }
 
         // the end-of-line characters are not single ASCII bytes in an encoding that is not ASCII-compatible
         // (UTF-16, EBCDIC); they are searched for in the encoding of the file

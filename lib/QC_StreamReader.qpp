@@ -98,11 +98,13 @@ string str = sr.read(len);
 
     @throw STREAM-ENCODING-ERROR this exception is thrown if invalid character data is detected on the stream; this exception is not thrown when \a limit is negative, in such cases the input data is not verified
     @throw ENCODING-BYTE-ORDER-ERROR the text is in a form of UTF-16 or UTF-32 and the start of the text read is in the other byte order than the encoding; see @ref Qore::check_unicode_byte_order() "check_unicode_byte_order()"
-    @throw UNSUPPORTED-ENCODING \a limit is positive and the text is in a stateful @ref character_encoding "character encoding" (ex: \c "UTF-7", \c "ISO-2022-JP"), in which the bytes of the characters after the ones read depend on the shift state at their end, which a following read would not have; such text can be read in lines, all at once, or as bytes (support for keeping the shift state between reads is planned: qoretechnologies/qorus#709)
 
     @note
     - a short read (a string returned with fewer characters than requested) indicates that there is no more data left in the stream
     - other stream read errors could be thrown here depending on the underlying @ref InputStream implementation
+    - text in a stateful @ref character_encoding "character encoding" (ex: \c "UTF-7", \c "ISO-2022-JP", \c "IBM930") is read in the shift state left by the characters read before it, so a number of characters can be read at a time; each string returned is valid on its own (it starts and ends in the initial shift state, so its bytes can differ from the bytes read), and no bytes after the characters returned are read; once characters have been read, lines and all of the remaining text are read in the same shift state; the shift state is reset when the encoding is changed; \c STREAM-ENCODING-ERROR is also raised in such an encoding if the data ends in the middle of a character or shift sequence
+
+    @since %Qore 2.3 text in a stateful @ref character_encoding "character encoding" can be read a number of characters at a time
  */
 *string StreamReader::readString(int limit = -1) [flags=NAMED_ARGS] {
     return sr->readString(limit, xsink);
@@ -121,8 +123,11 @@ string line = sr.readLine("\n");
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the \a line_separator argument has a different @ref character_encoding "character encoding" from the data's and an error occurs during encoding conversion
     @throw ENCODING-BYTE-ORDER-ERROR the text is in a form of UTF-16 or UTF-32 and the start of the text read is in the other byte order than the encoding; see @ref Qore::check_unicode_byte_order() "check_unicode_byte_order()"
+    @throw STREAM-ENCODING-ERROR the text is in a stateful @ref character_encoding "character encoding", characters were read with StreamReader::readString() before, and the text has an invalid byte sequence or ends in the middle of a character or shift sequence
 
-    @note other stream read errors could be thrown here depending on the underlying @ref InputStream implementation
+    @note
+    - other stream read errors could be thrown here depending on the underlying @ref InputStream implementation
+    - after characters of text in a stateful @ref character_encoding "character encoding" have been read with StreamReader::readString(), the line is read in the shift state left by them, and the line returned starts and ends in the initial shift state
  */
 *string StreamReader::readLine(*string line_separator, bool trim_line = True) [flags=NAMED_ARGS] {
     return sr->readLine(line_separator, trim_line, xsink);
