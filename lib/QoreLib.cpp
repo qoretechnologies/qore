@@ -3550,34 +3550,40 @@ int QoreStatefulTextDecoder::open(const QoreEncoding* enc, ExceptionSink* xsink)
 }
 
 int QoreStatefulTextDecoder::decode(const char* buf, size_t len, std::string& out, ExceptionSink* xsink) {
-    pending.append(buf, len);
-    char* in = &pending[0];
-    size_t in_left = pending.size();
-    while (in_left) {
-        char obuf[1024];
-        char* op = obuf;
-        size_t out_left = sizeof(obuf);
-        size_t rc = cd->iconv(&in, &in_left, &op, &out_left, xsink);
-        int err = errno;
-        out.append(obuf, op - obuf);
-        if (rc != static_cast<size_t>(-1)) {
-            continue;
+    // the bytes are given to iconv one at a time after the pending bytes, so that its input never ends with a
+    // character cut off after complete characters: Apple's libiconv then decodes the bytes of the incomplete
+    // character as characters of their own and reports success (UTF-7 "+ZeVnL" gives "日nL", ISO-2022-JP
+    // "ESC $ B F | K" gives "日K") instead of failing with EINVAL, as it does when they are its only input
+    for (size_t i = 0; i < len; ++i) {
+        pending.push_back(buf[i]);
+        char* in = &pending[0];
+        size_t in_left = pending.size();
+        while (in_left) {
+            char obuf[64];
+            char* op = obuf;
+            size_t out_left = sizeof(obuf);
+            size_t rc = cd->iconv(&in, &in_left, &op, &out_left, xsink);
+            int err = errno;
+            out.append(obuf, op - obuf);
+            if (rc != static_cast<size_t>(-1)) {
+                continue;
+            }
+            if (err == E2BIG) {
+                continue;
+            }
+            if (err == EINVAL) {
+                // the start of a character or shift sequence: it is decoded with its next byte
+                break;
+            }
+            if (err != ECANCELED) {
+                xsink->raiseException("STREAM-ENCODING-ERROR", "invalid byte sequence read according to the input "
+                    "encoding: '%s'", cd_enc->getCode());
+            }
+            assert(*xsink);
+            return -1;
         }
-        if (err == E2BIG) {
-            continue;
-        }
-        if (err == EINVAL) {
-            // the start of a character or shift sequence: its other bytes are decoded with it at the next read
-            break;
-        }
-        if (err != ECANCELED) {
-            xsink->raiseException("STREAM-ENCODING-ERROR", "invalid byte sequence read according to the input "
-                "encoding: '%s'", cd_enc->getCode());
-        }
-        assert(*xsink);
-        return -1;
+        pending.erase(0, pending.size() - in_left);
     }
-    pending.erase(0, pending.size() - in_left);
     return 0;
 }
 

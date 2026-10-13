@@ -28,6 +28,8 @@ class BoundedTransactionTest inherits QUnit::Test {
         addTestCase("maintenance setup and writes preserve the caller mutation declaration", \maintenanceDeclaration());
         addTestCase("offline maintenance has a separate finite budget and preserves stricter limits", \offline());
         addTestCase("offline maintenance can complete beyond the online transaction ceiling", \offlineLong());
+        addTestCase("offline rewrite limits only lock waits and preserves stricter session limits", \rewrite());
+        addTestCase("offline rewrite runs one statement beyond every bounded statement limit", \rewriteLong());
         set_return_value(main());
     }
 
@@ -103,6 +105,8 @@ class BoundedTransactionTest inherits QUnit::Test {
             assertThrows("TRANSACTION-LIMIT-NOT-SUPPORTED", sub() {
                 f.table.beginBoundedOfflineMaintenanceTransaction(50, 100, 900000);
             });
+            assertFalse(f.ds.currentThreadInTransaction());
+            assertThrows("TRANSACTION-LIMIT-NOT-SUPPORTED", sub() { f.table.beginOfflineRewriteTransaction(50); });
             assertFalse(f.ds.currentThreadInTransaction());
             return;
         }
@@ -199,6 +203,83 @@ class BoundedTransactionTest inherits QUnit::Test {
         f.ds.commit();
         assertEq(original, readSettings(f.ds));
         assertEq(19, f.table.selectRow().value.toInt());
+        f.ds.commit();
+    }
+
+    private rewrite() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        foreach int lock in ((0, -1, 60001)) {
+            assertThrows("OPTION-ERROR", sub() { f.table.beginOfflineRewriteTransaction(lock); });
+            assertFalse(f.ds.currentThreadInTransaction());
+        }
+        f.ds.beginTransaction();
+        assertThrows("TRANSACTION-ERROR", sub() { f.table.beginOfflineRewriteTransaction(100); });
+        assertTrue(f.ds.currentThreadInTransaction(), "rejecting a nested call does not rollback its caller");
+        f.ds.rollback();
+        f.ds.setAutoCommit(True);
+        assertThrows("AUTOCOMMIT-ERROR", sub() { f.table.beginOfflineRewriteTransaction(100); });
+        f.ds.setAutoCommit(False);
+
+        # Defaults: only the lock wait is installed; no statement or transaction deadline is added.
+        hash<string, int> original = readSettings(f.ds);
+        f.ds.commit();
+        assertEq({"lock_timeout_ms": 0, "statement_timeout_ms": 0, "transaction_timeout_ms": 0}, original,
+            "the fixture starts from unlimited session defaults");
+        hash<string, int> limits = f.table.beginOfflineRewriteTransaction(100);
+        assertEq({"lock_timeout_ms": 100, "statement_timeout_ms": 0, "transaction_timeout_ms": 0}, limits);
+        assertEq(limits, readSettings(f.ds));
+        assertEq("read committed", readModes(f.ds).isolation);
+        assertEq("off", readModes(f.ds).row_security);
+        f.table.update({"value": 21}, {"id": 1});
+        f.ds.rollback();
+        assertEq(original, readSettings(f.ds), "rollback restores the session defaults");
+        assertEq(0, f.table.selectRow().value.toInt());
+        f.ds.commit();
+
+        # A real exclusive lock held by another backend fails the rewrite at the lock wait.
+        Datasource holder = connection(False);
+        on_exit { holder.rollback(); holder.close(); }
+        holder.execRaw("lock table " + f.name + " in access exclusive mode");
+        f.table.beginOfflineRewriteTransaction(100);
+        date start = now_us();
+        *hash<ExceptionInfo> failure;
+        try { f.table.update({"value": 22}, {"id": 1}); }
+        catch (hash<ExceptionInfo> ex) { failure = ex; }
+        f.ds.rollback();
+        holder.rollback();
+        assertEq("DBI:PGSQL:ERROR", failure.err);
+        assertEq("55P03", failure.arg.alterr);
+        assertTrue(now_us() - start < 10s, "the lock wait, not an unbounded wait, ends the blocked statement");
+
+        # Stricter session settings remain effective for every deadline.
+        f.ds.execRaw("set lock_timeout = '50ms'");
+        f.ds.execRaw("set statement_timeout = '150ms'");
+        f.ds.execRaw("set transaction_timeout = '5s'");
+        f.ds.commit();
+        original = readSettings(f.ds);
+        f.ds.commit();
+        limits = f.table.beginOfflineRewriteTransaction(100);
+        assertEq({"lock_timeout_ms": 50, "statement_timeout_ms": 150, "transaction_timeout_ms": 5000}, limits);
+        assertEq(limits, readSettings(f.ds));
+        failure = NOTHING;
+        try { f.ds.execRaw("select 1 from pg_sleep(1)"); }
+        catch (hash<ExceptionInfo> ex) { failure = ex; }
+        assertEq("57014", failure.arg.alterr, "the stricter session statement timeout still cancels");
+        f.ds.rollback();
+        assertEq(original, readSettings(f.ds));
+        f.ds.commit();
+    }
+
+    private rewriteLong() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        f.table.beginOfflineRewriteTransaction(100);
+        f.table.update({"value": 23}, {"id": 1});
+        # One statement crosses the 60-second ceiling of every bounded statement limit.
+        f.ds.execRaw("select 1 from pg_sleep(61)");
+        f.ds.commit();
+        assertEq(23, f.table.selectRow().value.toInt());
         f.ds.commit();
     }
 
