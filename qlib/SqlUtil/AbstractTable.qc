@@ -807,6 +807,55 @@ table.commit();
             True, 900000);
     }
 
+    #! Begins an offline table rewrite whose only added limit is the database lock wait
+    /** For offline schema maintenance where a single statement is proportional to the table size, such
+        as a column type change that rewrites the table and rebuilds its indexes. Establishes the same fresh
+        snapshots, complete-row visibility and transaction-local settings as
+        @ref beginBoundedMaintenanceTransaction() and limits every lock wait, so a blocked rewrite fails
+        instead of waiting indefinitely. No statement or transaction deadline is added; stricter session
+        settings, including a session statement or transaction timeout, remain effective.
+
+        @param lock_timeout_ms maximum database lock wait, in milliseconds
+        @return effective limits with the same keys as @ref beginBoundedTransaction(); a statement or
+            transaction value of 0 means that no deadline applies
+        @throw OPTION-ERROR unless 1 <= lock <= 60000
+        @throw TRANSACTION-ERROR if a transaction already exists
+        @throw AUTOCOMMIT-ERROR if the datasource has autocommit enabled
+        @throw TRANSACTION-LIMIT-NOT-SUPPORTED if bounded maintenance is unavailable
+        @throw DBI-ERROR if transaction setup fails
+        @note The caller must exclude writers and competing maintenance for the entire offline operation
+            and provision storage for a complete copy of the rewritten relation before starting. Duration
+            is not bounded. All commit/WAL and complete-transaction recovery caveats of
+            @ref beginBoundedTransaction() apply.
+        @par Example
+        An offline schema upgrade converts a large table's column type in one transaction, waiting at most
+        five seconds for the exclusive table lock, so ordinary background maintenance can be interrupted:
+        @code{.py}
+hash<string, int> limits = table.beginOfflineRewriteTransaction(5000);
+on_error table.rollback();
+foreach string sql in (table.getModifyColumnSql("part_period", new_definition)) {
+    ds.exec(sql);
+}
+table.commit();
+        @endcode
+        @since SqlUtil 3.10.0
+    */
+    hash<string, int> beginOfflineRewriteTransaction(int lock_timeout_ms) {
+        if (lock_timeout_ms < 1 || lock_timeout_ms > 60000) {
+            throw "OPTION-ERROR", "an offline rewrite lock wait requires 1 <= lock <= 60000 ms";
+        }
+        if (ds.currentThreadInTransaction()) {
+            throw "TRANSACTION-ERROR", "bounded transaction requires an idle datasource";
+        }
+        if (!supportsBoundedMaintenanceTransactions()) {
+            throw "TRANSACTION-LIMIT-NOT-SUPPORTED", "the database driver does not support bounded transactions";
+        }
+        ds.beginTransaction();
+        on_error ds.rollback();
+        prepareBoundedMaintenanceTransactionImpl();
+        return beginOfflineRewriteTransactionImpl(lock_timeout_ms);
+    }
+
     private hash<string, int> beginBoundedTransactionIntern(int lock_timeout_ms, int statement_timeout_ms,
             int transaction_timeout_ms, bool maintenance, int maximum_transaction_ms = 60000) {
         if (lock_timeout_ms < 1 || statement_timeout_ms < lock_timeout_ms
@@ -841,6 +890,10 @@ table.commit();
 
     private hash<string, int> beginBoundedTransactionImpl(int lock_timeout_ms, int statement_timeout_ms,
             int transaction_timeout_ms) {
+        throw "TRANSACTION-LIMIT-NOT-SUPPORTED", "the database driver does not support bounded transactions";
+    }
+
+    private hash<string, int> beginOfflineRewriteTransactionImpl(int lock_timeout_ms) {
         throw "TRANSACTION-LIMIT-NOT-SUPPORTED", "the database driver does not support bounded transactions";
     }
 

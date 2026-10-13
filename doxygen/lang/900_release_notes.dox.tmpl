@@ -671,6 +671,9 @@
     Maintenance that rechecks ownership after locking can also request fresh read snapshots and
     rejection of policy-hidden rows, with the same deadlines and no changes to session defaults; see
     @ref SqlUtil::AbstractTable::beginBoundedMaintenanceTransaction() "beginBoundedMaintenanceTransaction()".
+    Offline schema changes that rewrite a whole table in one statement can limit only their lock waits, so a
+    blocked rewrite fails promptly while a large rewrite is not cut short; see
+    @ref SqlUtil::AbstractTable::beginOfflineRewriteTransaction() "beginOfflineRewriteTransaction()".
     @endparblock
 
     @par Measuring Large Database Values Before Maintenance
