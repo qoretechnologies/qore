@@ -116,7 +116,8 @@ module GeminiBodyShape {
     \c LOW spends reasoning tokens, and they come out of the output budget: the provider factories report this for
     each model with \c reasoning_always_on (@ref QoreLlmUtils::AbstractLlmProviderFactory::getModelInfo()
     "getModelInfo()"), so that a caller can leave room for them. Without an explicit level, other budgets (including
-    -1) leave the model default. \c disable_reasoning is not mapped to a level.
+    -1) leave the model default. \c disable_reasoning selects the least thinking of the Gemini 3.x and Gemini 2.5
+    models like a budget of zero, and wins over \c reasoning_effort; it is not mapped for other models.
     Older models, including Gemini 2.5, retain sampling parameters and numeric thinking budgets; Gemini 2.5 Pro cannot
     turn thinking off either and rejects a budget of zero, so a budget of zero selects its smallest budget, 128 (see
     @ref minimumThinkingBudget()). Generic
@@ -243,6 +244,7 @@ try {
     - a thinking budget of zero selects the smallest budget of Gemini 2.5 Pro, 128, which cannot turn thinking off
       and rejected a budget of zero (@ref minimumThinkingBudget()); @ref reasoningAlwaysOn() says which models spend
       reasoning tokens even with a budget of zero
+    - \c disable_reasoning selects the least thinking of the Gemini 3.x and Gemini 2.5 models, like a budget of zero
     - explicit prompt caching: @ref shapeChatBody() takes a \c cached_content reference and then leaves out
       \c systemInstruction, \c tools and \c toolConfig, which belong to the cached content
       (@ref shapeCachedContentBody()); providers take it from
@@ -1600,6 +1602,16 @@ public int sub minimumThinkingBudget(string model) {
     return model =~ /^gemini-2\.5-pro([.-]|$)/ ? 128 : 0;
 }
 
+#! True for the models whose thinking controls a reasoning budget of zero and disable_reasoning have been verified on
+/** Gemini 3.x selects its lowest thinking level, and Gemini 2.5 Pro, Flash and Flash-Lite turn thinking off or select
+    their smallest budget (https://cloud.google.com/vertex-ai/generative-ai/docs/thinking; measured on Vertex AI on
+    2026-10-12).  Other models have not been verified.
+*/
+bool sub reasoningOffVerified(string model) {
+    model =~ s/^.*\///;
+    return usesThinkingLevel(model) || model =~ /^gemini-2\.5-(pro|flash|flash-lite)([.-]|$)/;
+}
+
 #! Returns whether a model always spends reasoning tokens, even with a thinking budget of zero
 /** Gemini 3.x selects thinking levels, and even the lowest one, \c LOW (@ref lowestThinkingLevel()), spends reasoning
     tokens: measured on Vertex AI on 2026-10-12 with a 1.4 KB classifier prompt and a forced function call,
@@ -1797,6 +1809,8 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
           smallest budget of Gemini 2.5 Pro, \c 128 (@ref minimumThinkingBudget()); on Gemini 3.x, zero selects
           the lowest thinking level that every provider accepts, \c LOW (@ref lowestThinkingLevel())
         - \c reasoning_effort (\c *string): Gemini 3.x \c thinkingLevel; \c xhigh and \c max map to \c HIGH
+        - \c disable_reasoning (\c *bool): selects the least thinking of the Gemini 3.x and Gemini 2.5 models, like a
+          budget of zero, and wins over \c reasoning_effort; not mapped for other models
         - \c extra_body (<tt>*hash&lt;auto&gt;</tt>): merged into the final body so
           callers can pass through provider-specific knobs without
           modifying this shaper
@@ -1911,15 +1925,21 @@ public hash<GeminiChatRequest> sub shapeChatRequest(list<hash<QoreLlmUtils::Chat
         "maxOutputTokens": resolved.max_output_tokens,
         "temperature": resolved.temperature,
     };
-    if (usesThinkingLevel(resolved.model ?? "") && resolved.reasoning_effort.typeCode() != NT_NOTHING) {
-        string effort = toupper(resolved.reasoning_effort);
+    auto reasoning_effort = resolved.reasoning_effort;
+    auto reasoning_token_budget = resolved.reasoning_token_budget;
+    # disable_reasoning asks for the least thinking of the Gemini 3.x and 2.5 models, like a budget of zero
+    if (resolved.disable_reasoning && reasoningOffVerified(resolved.model ?? "")) {
+        reasoning_effort = NOTHING;
+        reasoning_token_budget = 0;
+    }
+    if (usesThinkingLevel(resolved.model ?? "") && reasoning_effort.typeCode() != NT_NOTHING) {
+        string effort = toupper(reasoning_effort);
         generation_config.thinkingConfig = {
             "thinkingLevel": ("XHIGH", "MAX").contains(effort) ? "HIGH" : effort,
         };
-    } else if (exists resolved.reasoning_token_budget
-            && resolved.reasoning_token_budget.typeCode() != NT_NOTHING) {
+    } else if (exists reasoning_token_budget && reasoning_token_budget.typeCode() != NT_NOTHING) {
         generation_config.thinkingConfig = {
-            "thinkingBudget": resolved.reasoning_token_budget,
+            "thinkingBudget": reasoning_token_budget,
         };
     }
     if (output_schema) {
@@ -2841,6 +2861,7 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             "temperature": getRequestTemperature(opts),
             "reasoning_token_budget": getRequestReasoningTokenBudget(opts),
             "reasoning_effort": getRequestReasoningEffort(opts),
+            "disable_reasoning": getRequestDisableReasoning(opts),
             "cached_content": cached_content,
         };
         hash<GeminiChatRequest> request = GeminiBodyShape::shapeChatRequest(messages, tools,

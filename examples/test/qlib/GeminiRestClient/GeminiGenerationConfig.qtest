@@ -205,6 +205,23 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
         });
         assertEq({"maxOutputTokens": 180, "thinkingConfig": {"thinkingBudget": 128}},
             body.generationConfig{"maxOutputTokens", "thinkingConfig"});
+        # disable_reasoning asks for the least thinking of the Gemini 3.x and 2.5 models
+        map assertEq($1.value, GeminiBodyShape::shapeChatBody((), NOTHING, NOTHING, {
+            "model": $1.key, "max_output_tokens": 180, "disable_reasoning": True, "reasoning_effort": "high",
+            "reasoning_token_budget": 1024,
+        }).generationConfig.thinkingConfig, $1.key), {
+            "gemini-3.7-flash": {"thinkingLevel": "LOW"},
+            "gemini-3.1-pro-preview": {"thinkingLevel": "LOW"},
+            "gemini-2.5-flash": {"thinkingBudget": 0},
+            "gemini-2.5-flash-lite": {"thinkingBudget": 0},
+            "gemini-2.5-pro": {"thinkingBudget": 128},
+            "projects/p/locations/global/publishers/google/models/gemini-2.5-pro": {"thinkingBudget": 128},
+        }.pairIterator();
+        # other models have not been verified: disable_reasoning is not mapped
+        body = GeminiBodyShape::shapeChatBody((), NOTHING, NOTHING, {
+            "model": "gemini-2.0-flash", "max_output_tokens": 180, "disable_reasoning": True,
+        });
+        assertFalse(exists body.generationConfig.thinkingConfig);
     }
 
     # both providers report, for each model, whether hidden reasoning can be turned off: not on Gemini 3.x or Gemini 2.5
@@ -329,7 +346,6 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
         }
         hash<QoreLlmUtils::LlmBackendConfig> defaults = config;
         delete defaults.reasoning_effort;
-        defaults.disable_reasoning = True;
         foreach int budget in ((-1, 0, 1024)) {
             defaults.reasoning_token_budget = budget;
             foreach GeminiBodyShape::AbstractGeminiModelProvider provider in ((
@@ -337,13 +353,28 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
                 provider.complete("", "invoice");
                 if (budget) {
                     assertEq({"maxOutputTokens": 4096}, rest.body.generationConfig,
-                        "unsupported numeric budgets and disable_reasoning leave Gemini 3 model defaults");
+                        "unsupported numeric budgets leave Gemini 3 model defaults");
                 } else {
                     assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "LOW"}},
                         rest.body.generationConfig, "a budget of zero selects the lowest level");
                 }
             }
         }
+        # disable_reasoning selects the lowest level whatever the budget, and wins over an effort
+        defaults.disable_reasoning = True;
+        foreach int budget in ((-1, 0, 1024)) {
+            defaults.reasoning_token_budget = budget;
+            foreach GeminiBodyShape::AbstractGeminiModelProvider provider in ((
+                    new CaptureGeminiProvider(defaults, rest), new CaptureVertexProvider(defaults, rest))) {
+                provider.complete("", "invoice");
+                assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "LOW"}},
+                    rest.body.generationConfig, "disable_reasoning selects the lowest level");
+                provider.complete("", "invoice", NOTHING, <QoreLlmUtils::LlmRequestOptions>{"reasoning_effort": "high"});
+                assertEq({"maxOutputTokens": 4096, "thinkingConfig": {"thinkingLevel": "LOW"}},
+                    rest.body.generationConfig, "disable_reasoning wins over an effort");
+            }
+        }
+        delete defaults.disable_reasoning;
         # a budget of zero per call, as a classifier with a small output budget sends it: both providers, Flash and Pro,
         # send LOW, which Vertex AI accepts for Flash models (it rejects MINIMAL)
         defaults.reasoning_token_budget = 1024;

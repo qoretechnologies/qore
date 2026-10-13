@@ -115,6 +115,11 @@ stream.close();
     - @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" no longer makes requests fail on
       the Claude models that reject \c thinking \c {"type": "disabled"}: Claude Sonnet 5.5 turns off its thinking
       before its first answer, and the models whose thinking is always on think at the lowest effort
+    - a reasoning token budget of zero turns thinking off like
+      @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" on Claude 4.5 and later models;
+      requests for earlier models are unchanged
+    - the provider factory reports which Claude models reject a forced tool choice
+      (\c rejects_forced_tool_choice): Claude Opus 5.5, Claude Sonnet 5.5, Claude Fable 5.1 and Claude Mythos 5.1
 */
 
 %requires json
@@ -1097,6 +1102,34 @@ bool always_on = AnthropicLlmProvider::reasoningAlwaysOn("claude-opus-5-5"); # T
         return thinkingIsAlwaysOn(model) || thinksBetweenTools(model);
     }
 
+    #! Returns whether a Claude model rejects a forced tool choice
+    /** A request with \c tool_choice \c {"type": "any"} or \c {"type": "tool", ...} fails with HTTP 400 on these
+        models.
+
+        Evidence:
+        - https://platform.claude.com/docs/en/build-with-claude/thinking ("Response prefill and forced tool use"):
+          "The exceptions are Claude Opus 5.5, Claude Sonnet 5.5, Claude Fable 5.1, and Claude Mythos 5.1, which reject
+          forced tool use on every request with a 400 error. On those models, use \c tool_choice: {"type": "auto"} with
+          strict tool use or structured outputs instead."
+        - measured on Bedrock on 2026-10-13: Claude Opus 5.5 and Claude Sonnet 5.5 answer a forced tool choice with
+          HTTP 400 ("tool_choice: type "tool" and "any" are not supported for this model"), and Claude Opus 5 answers
+          it with the tool call; Claude Fable 5.1 and Claude Mythos 5.1 were not available to measure
+
+        @param model the model ID; a snapshot date suffix is ignored
+
+        @return @ref True for Claude Opus 5.5, Claude Sonnet 5.5, Claude Fable 5.1 and Claude Mythos 5.1
+
+        @par Example
+        @code{.py}
+bool rejects = AnthropicLlmProvider::rejectsForcedToolChoice("claude-sonnet-5-5"); # True
+        @endcode
+
+        @since AnthropicRestClient 1.0
+    */
+    public static bool rejectsForcedToolChoice(string model) {
+        return model.lwr() =~ /^claude-(opus-5-5|sonnet-5-5|fable-5-1|mythos-5-1)(-[0-9]{8})?$/;
+    }
+
     #! True for the Claude models whose thinking is always on, whatever the request says
     private static bool thinkingIsAlwaysOn(string model) {
         string id = model.lwr();
@@ -1110,6 +1143,17 @@ bool always_on = AnthropicLlmProvider::reasoningAlwaysOn("claude-opus-5-5"); # T
         return model.lwr() =~ /^claude-sonnet-5-5(-[0-9]{8})?$/;
     }
 
+    #! True for the Claude models that accept \c thinking \c {"type": "disabled"}
+    /** Evidence: https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting lists the thinking
+        types that each model rejects: Claude Opus 5 and Claude Haiku 5.5 accept \c "disabled" at the effort \c high
+        or below, and Claude Sonnet 5, Claude Opus 4.8, 4.7, 4.6 and 4.5, Claude Sonnet 4.6 and 4.5 and Claude Haiku
+        4.5 accept it; measured on Bedrock on 2026-10-13, Claude Opus 5 answers with no thinking with
+        \c "disabled", and thinks with no \c thinking parameter.  Earlier Claude models have not been verified.
+    */
+    private static bool acceptsThinkingDisabled(string model) {
+        return model.lwr() =~ /^claude-(opus-5|sonnet-5|haiku-5-5|opus-4-[5-8]|sonnet-4-[56]|haiku-4-5)(-[0-9]{8})?$/;
+    }
+
     #! Builds an Anthropic Messages API request body
     #! Adds the Anthropic reasoning controls the caller asked for
     /** Maps the provider-neutral reasoning options onto the Messages API:
@@ -1118,6 +1162,9 @@ bool always_on = AnthropicLlmProvider::reasoningAlwaysOn("claude-opus-5-5"); # T
           \c thinking.type \c "disabled"; models that reject it get the least thinking that they allow: Claude Sonnet
           5.5 gets \c thinking.type \c "between_tools", and the models whose thinking is always on (see
           @ref reasoningAlwaysOn()) get adaptive thinking at the lowest effort, \c low
+        - a @ref QoreLlmUtils::LlmRequestOptions::reasoning_token_budget "reasoning_token_budget" of zero without a
+          reasoning effort is mapped like \c disable_reasoning for the models whose thinking controls have been
+          verified (Claude 4.5 and later); other budgets are not mapped
         - @ref QoreLlmUtils::LlmRequestOptions::reasoning_effort maps to
           \c output_config.effort, with \c thinking.type \c "adaptive"
 
@@ -1131,7 +1178,7 @@ bool always_on = AnthropicLlmProvider::reasoningAlwaysOn("claude-opus-5-5"); # T
         predictable budget should set one of the two options rather than
         relying on the model default.
 
-        @ref QoreLlmUtils::LlmRequestOptions::reasoning_token_budget is
+        A nonzero @ref QoreLlmUtils::LlmRequestOptions::reasoning_token_budget is
         deliberately NOT mapped: Anthropic removed numeric thinking budgets
         with Claude Opus 4.7 and rejects them with HTTP 400.
 
@@ -1141,9 +1188,10 @@ bool always_on = AnthropicLlmProvider::reasoningAlwaysOn("claude-opus-5-5"); # T
     */
     private hash<auto> addReasoningControls(hash<auto> body,
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        *bool disable_reasoning = getRequestDisableReasoning(opts);
-        if (disable_reasoning) {
-            string model = body.model ?? "";
+        string model = body.model ?? "";
+        # disable_reasoning is mapped for every model, as before; a budget of zero only for the verified models
+        if (getRequestDisableReasoning(opts) || (getRequestReasoningOff(opts) && (thinkingIsAlwaysOn(model)
+                || thinksBetweenTools(model) || acceptsThinkingDisabled(model)))) {
             if (thinkingIsAlwaysOn(model)) {
                 # "disabled" is rejected with HTTP 400 at every effort
                 body.thinking = {"type": "adaptive"};
@@ -1394,7 +1442,11 @@ public class AnthropicLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvi
     /** Claude models whose thinking cannot be turned off (see
         @ref AnthropicRestClient::AnthropicLlmProvider::reasoningAlwaysOn() "AnthropicLlmProvider::reasoningAlwaysOn()"
         for the models and the evidence) are reported with
-        @ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on".
+        @ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on", and Claude
+        models that reject a forced tool choice (see
+        @ref AnthropicRestClient::AnthropicLlmProvider::rejectsForcedToolChoice()
+        "AnthropicLlmProvider::rejectsForcedToolChoice()") with
+        @ref QoreLlmUtils::LlmProviderInfo::rejects_forced_tool_choice "LlmProviderInfo::rejects_forced_tool_choice".
 
         @param model the model ID that calls are made with
 
@@ -1407,6 +1459,7 @@ public class AnthropicLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvi
     hash<QoreLlmUtils::LlmProviderInfo> getModelInfo(string model) {
         hash<QoreLlmUtils::LlmProviderInfo> info = getInfo();
         info.reasoning_always_on = AnthropicLlmProvider::reasoningAlwaysOn(model);
+        info.rejects_forced_tool_choice = AnthropicLlmProvider::rejectsForcedToolChoice(model);
         return info;
     }
 }

@@ -184,12 +184,39 @@ class LlmReasoningAlwaysOnTest inherits QUnit::Test {
         };
     }
 
+    public {
+        #! models that reject a forced tool choice, by provider mode
+        const RejectsForcedToolChoice = {
+            "anthropic": (
+                "claude-opus-5-5", "claude-opus-5-5-20261015", "claude-sonnet-5-5", "claude-fable-5-1",
+                "claude-mythos-5-1",
+            ),
+            "bedrock": (
+                "anthropic.claude-opus-5-5", "us.anthropic.claude-opus-5-5", "global.anthropic.claude-sonnet-5-5",
+                "anthropic.claude-sonnet-5-5-v1:0", "us.anthropic.claude-fable-5-1", "anthropic.claude-mythos-5-1",
+            ),
+        };
+
+        #! models that accept a forced tool choice, or have not been verified, by provider mode
+        const AcceptsForcedToolChoice = {
+            "anthropic": (
+                "claude-opus-5", "claude-sonnet-5", "claude-fable-5", "claude-mythos-5", "claude-mythos-preview",
+                "claude-haiku-5-5", "claude-opus-4-8", "claude-fable-5-2", "claude-opus-5-6", "custom-model", "",
+            ),
+            "bedrock": (
+                "us.anthropic.claude-opus-5", "anthropic.claude-fable-5", "us.deepseek.r1-v1:0",
+                "amazon.nova-2-lite-v1:0", "",
+            ),
+        };
+    }
+
     constructor() : Test("LlmReasoningAlwaysOn", "1.0", \ARGV) {
         addTestCase("every provider has an expectation", \coverageTest());
         addTestCase("models that cannot turn reasoning off", \alwaysOnTest());
         addTestCase("models that can turn reasoning off", \canTurnOffTest());
         addTestCase("OpenAI lowest reasoning efforts", \openAiLowestEffortTest());
         addTestCase("Azure OpenAI lowest reasoning efforts", \azureLowestEffortTest());
+        addTestCase("models that reject a forced tool choice", \forcedToolChoiceTest());
         set_return_value(main());
     }
 
@@ -212,7 +239,8 @@ class LlmReasoningAlwaysOnTest inherits QUnit::Test {
                 hash<LlmProviderInfo> model_info = factory.getModelInfo(model);
                 assertTrue(model_info.reasoning_always_on, i.key + " " + model);
                 # the rest is the provider's information
-                assertEq(info - "reasoning_always_on", model_info - "reasoning_always_on", i.key + " " + model);
+                assertEq(info - ("reasoning_always_on", "rejects_forced_tool_choice"),
+                    model_info - ("reasoning_always_on", "rejects_forced_tool_choice"), i.key + " " + model);
             }
         }
     }
@@ -223,6 +251,29 @@ class LlmReasoningAlwaysOnTest inherits QUnit::Test {
             hash<LlmProviderInfo> info = factory.getInfo();
             foreach string model in (i.value) {
                 assertEq(info, factory.getModelInfo(model), i.key + " " + model);
+            }
+        }
+    }
+
+    forcedToolChoiceTest() {
+        foreach string mode in (keys LlmProviderRegistry::ProviderModuleMap) {
+            assertFalse(LlmProviderRegistry::getFactory(mode).getInfo().rejects_forced_tool_choice,
+                "the provider as a whole: " + mode);
+        }
+        foreach hash<auto> i in (RejectsForcedToolChoice.pairIterator()) {
+            AbstractLlmProviderFactory factory = LlmProviderRegistry::getFactory(i.key);
+            hash<LlmProviderInfo> info = factory.getInfo();
+            foreach string model in (i.value) {
+                hash<LlmProviderInfo> model_info = factory.getModelInfo(model);
+                assertTrue(model_info.rejects_forced_tool_choice, i.key + " " + model);
+                assertEq(info - ("reasoning_always_on", "rejects_forced_tool_choice"),
+                    model_info - ("reasoning_always_on", "rejects_forced_tool_choice"), i.key + " " + model);
+            }
+        }
+        foreach hash<auto> i in (AcceptsForcedToolChoice.pairIterator()) {
+            AbstractLlmProviderFactory factory = LlmProviderRegistry::getFactory(i.key);
+            foreach string model in (i.value) {
+                assertFalse(factory.getModelInfo(model).rejects_forced_tool_choice, i.key + " " + model);
             }
         }
     }

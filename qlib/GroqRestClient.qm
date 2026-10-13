@@ -113,6 +113,9 @@ printf("%Y\n", ans.body);
     - the provider factory reports, with @ref GroqRestClient::GroqLlmProviderFactory::getModelInfo()
       "GroqLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c reasoning_always_on):
       \c openai/gpt-oss-20b and \c openai/gpt-oss-120b
+    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
+      turns reasoning off on the Qwen3 models (reasoning effort \c none) and selects the lowest effort, \c low, of the
+      GPT-OSS models; requests for models whose reasoning controls have not been verified are unchanged
 
     @subsection GroqRestClientv1_0 GroqRestClient v1.0
     - initial release
@@ -421,6 +424,22 @@ public class GroqLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
 
     string getMode() {
         return "groq";
+    }
+    #! Returns the reasoning effort that turns reasoning off for a model, or the model's lowest effort
+    /** Evidence, https://console.groq.com/docs/api-reference: "qwen3 models support \c none to disable
+        reasoning" (\c qwen/qwen3.8-27b and \c qwen/qwen3-32b), and "\c openai/gpt-oss-20b and
+        \c openai/gpt-oss-120b support 'low', 'medium', or 'high'"; other models have not been verified.
+
+        @param model the model ID
+
+        @return the reasoning effort, or @ref nothing for models whose reasoning controls have not been verified,
+        which are sent unchanged
+    */
+    private *string getModelOffReasoningEffort(string model) {
+        if (inlist(model, ("qwen/qwen3.8-27b", "qwen/qwen3-32b"))) {
+            return "none";
+        }
+        return model =~ /^openai\/gpt-oss-(20b|120b)$/ ? "low" : NOTHING;
     }
 }
 

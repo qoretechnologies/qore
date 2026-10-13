@@ -83,6 +83,9 @@ module PerplexityRestClient {
     - the provider factory reports, with @ref PerplexityRestClient::PerplexityLlmProviderFactory::getModelInfo()
       "PerplexityLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
       reasoning_always_on): \c sonar-reasoning-pro and \c sonar-deep-research
+    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
+      selects the lowest reasoning effort, \c low, of \c sonar-deep-research; requests for models whose reasoning
+      controls have not been verified are unchanged
 */
 
 #! the PerplexityRestClient namespace contains all the objects in the PerplexityRestClient module
@@ -483,6 +486,21 @@ public class PerplexityLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider 
     #! Returns the Perplexity-specific chat-completions path
     string getChatCompletionsPath() {
         return "/chat/completions";
+    }
+    #! Returns the reasoning effort that turns reasoning off for a model, or the model's lowest effort
+    /** Evidence:
+        - https://docs.perplexity.ai/docs/legacy/sonar/models/sonar-deep-research: the reasoning effort of
+          \c sonar-deep-research is \c low, \c medium (the default) or \c high, and it cannot be turned off
+        - \c sonar-reasoning-pro always reasons and has no reasoning control, and \c sonar and \c sonar-pro do not
+          reason
+
+        @param model the model ID
+
+        @return the reasoning effort, or @ref nothing for models whose reasoning controls have not been verified,
+        which are sent unchanged
+    */
+    private *string getModelOffReasoningEffort(string model) {
+        return model == "sonar-deep-research" ? "low" : NOTHING;
     }
 }
 
