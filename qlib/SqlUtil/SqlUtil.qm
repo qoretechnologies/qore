@@ -42,7 +42,7 @@
 # enable all warnings
 
 module SqlUtil {
-    version = "3.8.0";
+    version = "3.9.0";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -119,6 +119,10 @@ module SqlUtil {
       bodies
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
+
+    @subsection sqlutilv3_9_0 SqlUtil v3.9.0
+    - Added a separate finite offline-maintenance transaction budget for large schema cutovers,
+      preserving statement limits, stricter session settings and the online maintenance limits.
 
     @subsection sqlutilv3_8_0 SqlUtil v3.8.0
     - Added bounded, read-only partition catalog paging for allocation inventory without recursive
