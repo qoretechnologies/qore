@@ -384,7 +384,8 @@ static void ut_local_discard(UnitTestCounters& c) {
 }
 
 //! Exercise scalar-store admission itself, not just results obtainable by fallback.
-static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_store, bool prepared) {
+static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_store, bool prepared,
+        bool prepared_declaration = false) {
     ExceptionSink xsink;
     struct LocalScope {
         LocalVar var;
@@ -402,9 +403,18 @@ static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_stor
     if (!slot) {
         return;
     }
+    auto store = [&](LocalVar& var, LocalVarValue* storage, QoreValue value) {
+        if (prepared_declaration) {
+            assert(prepared && storage && var.isAOTScalarStoreDeclaration());
+            // Force the declaration-prepared operation even with its runtime
+            // control disabled; fallback-only success does not test live guards.
+            return storage->tryAssignAOTScalarValue(value, direct_store);
+        }
+        return var.tryAssignAOTScalarValue(value, direct_store, prepared ? storage : nullptr);
+    };
     for (QoreValue value : {QoreValue(false), QoreValue(true), QoreValue(int64_t{7}),
             QoreValue(-(int64_t{1} << 46)), QoreValue(2.5), QoreValue(-0.0)}) {
-        UT_ASSERT(c, local.var.tryAssignAOTScalarValue(value, direct_store, prepared ? slot : nullptr),
+        UT_ASSERT(c, store(local.var, slot, value),
             "immediate scalar replacement is handled");
         QoreValue actual = slot->val.getValue();
         UT_ASSERT_EQ(c, value.getType(), actual.getType(), "scalar store preserves the value type");
@@ -423,15 +433,49 @@ static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_stor
         context.num_locals = 1;
         RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
         context.pgm = RuntimeConfigNativeAccess::getProgram(rc);
+        auto getter = prepared_declaration ? qore_rt_get_auto_local_slot_aot_v2
+            : qore_rt_get_auto_local_slot_aot_v1;
         UT_ASSERT(c, context.pgm, "prepared-slot getter has a live Program context");
-        UT_ASSERT(c, qore_rt_get_auto_local_slot_aot_v1(&context, 0, &rc)
+        UT_ASSERT(c, getter(&context, 0, &rc)
             == (std::getenv("QORE_DISABLE_AOT_AUTO_LOCAL_SLOT") ? nullptr : slot),
             "same-Program getter supplies the actual live slot unless disabled");
-        UT_ASSERT(c, !qore_rt_get_auto_local_slot_aot_v1(&context, -1, &rc), "negative slot is rejected");
-        UT_ASSERT(c, !qore_rt_get_auto_local_slot_aot_v1(&context, 1, &rc), "past-end slot is rejected");
-        UT_ASSERT(c, !qore_rt_get_auto_local_slot_aot_v1(&context, 0, nullptr), "absent context is rejected");
+        UT_ASSERT(c, !getter(nullptr, 0, &rc), "absent AOT context is rejected");
+        UT_ASSERT(c, !getter(&context, -1, &rc), "negative slot is rejected");
+        UT_ASSERT(c, !getter(&context, 1, &rc), "past-end slot is rejected");
+        UT_ASSERT(c, !getter(&context, 0, nullptr), "absent context is rejected");
+        if (prepared_declaration) {
+            void* admitted = getter(&context, 0, &rc);
+            qore_rt_assign_auto_local_slot_aot_v2(&context, 0, QoreValue(int64_t{29}).rawBits(),
+                admitted, &xsink);
+            UT_ASSERT_EQ(c, QoreValue(int64_t{29}).rawBits(), slot->val.getValue().rawBits(),
+                "versioned prepared helper publishes to the real slot");
+            qore_rt_assign_auto_local_slot_aot_v2(&context, 0, QoreValue(1.5).rawBits(), nullptr, &xsink);
+            UT_ASSERT_EQ(c, QoreValue(1.5).rawBits(), slot->val.getValue().rawBits(),
+                "null prepared admission uses the checked scalar fallback");
+            ReferenceHolder<QoreStringNode> text(new QoreStringNode("prepared declaration fallback"), &xsink);
+            qore_rt_assign_auto_local_slot_aot_v2(&context, 0, QoreValue(*text).rawBits(), admitted, &xsink);
+            UT_ASSERT_EQ(c, 2, text->reference_count(), "unsupported input gains only the runtime-slot owner");
+            qore_rt_assign_auto_local_slot_aot_v2(&context, 0, QoreValue(2.5).rawBits(), admitted, &xsink);
+            UT_ASSERT_EQ(c, 1, text->reference_count(), "ordinary fallback releases the old node once");
+            {
+                LocalScope readonly("native_prepared_readonly", autoTypeInfo, xsink);
+                readonly.var.setReadOnly();
+                locals[0] = &readonly.var;
+                UT_ASSERT(c, !getter(&context, 0, &rc), "v2 getter rejects read-only declaration");
+                UT_ASSERT(c, qore_rt_get_auto_local_slot_aot_v1(&context, 0, &rc)
+                    == (std::getenv("QORE_DISABLE_AOT_AUTO_LOCAL_SLOT") ? nullptr
+                        : thread_try_find_lvar(&readonly.var)), "v1 getter retains storage-only contract");
+                locals[0] = &local.var;
+            }
+            {
+                LocalScope no_narrow("native_prepared_no_narrow", autoNoNarrowTypeInfo, xsink);
+                locals[0] = &no_narrow.var;
+                UT_ASSERT(c, !getter(&context, 0, &rc), "v2 getter rejects no-narrow declaration");
+                locals[0] = &local.var;
+            }
+        }
         context.pgm = nullptr;
-        UT_ASSERT(c, !qore_rt_get_auto_local_slot_aot_v1(&context, 0, &rc),
+        UT_ASSERT(c, !getter(&context, 0, &rc),
             "a different Program cannot prepare this slot");
 
         // Growing and shrinking separately allocated stack blocks must not move
@@ -457,19 +501,19 @@ static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_stor
             }
             LocalVarValue* inner = thread_try_find_lvar(&local.var);
             UT_ASSERT(c, inner && inner != slot, "recursive binding has distinct storage");
-            UT_ASSERT(c, local.var.tryAssignAOTScalarValue(QoreValue(int64_t{42}), direct_store, inner),
+            UT_ASSERT(c, store(local.var, inner, QoreValue(int64_t{42})),
                 "prepared recursive binding is handled");
             UT_ASSERT_EQ(c, outer_bits, slot->val.getValue().rawBits(), "recursive store leaves outer storage unchanged");
         }
         UT_ASSERT(c, thread_try_find_lvar(&local.var) == slot, "outer prepared slot survives block growth and pop");
-        UT_ASSERT(c, local.var.tryAssignAOTScalarValue(QoreValue(3.5), direct_store, slot),
+        UT_ASSERT(c, store(local.var, slot, QoreValue(3.5)),
             "outer prepared slot is usable after recursive return");
         UT_ASSERT(c, slot->val.getValue().rawBits() == QoreValue(3.5).rawBits(),
             "prepared store publishes exact bits after recursive return");
     }
     auto miss = [&](QoreValue value) {
         uint64_t before = slot->val.getValue().rawBits();
-        UT_ASSERT(c, !local.var.tryAssignAOTScalarValue(value, direct_store, prepared ? slot : nullptr),
+        UT_ASSERT(c, !store(local.var, slot, value),
             "unsupported store is not handled");
         UT_ASSERT_EQ(c, before, slot->val.getValue().rawBits(), "a miss preserves the slot");
     };
@@ -507,9 +551,15 @@ static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_stor
     UT_ASSERT(c, !slot->val.assigned, "unassigned storage is not initialized by the replacement path");
     slot->syncValue(QoreValue(1.25), &xsink);
     local.var.setReadOnly();
-    miss(QoreValue(3.5));
+    // Mutating the declaration ends the prepared contract. Legacy entry points
+    // must still check it live; new preparation must reject this declaration.
+    UT_ASSERT(c, !local.var.isAOTScalarStoreDeclaration(), "read-only declaration cannot be prepared");
+    if (!prepared_declaration) {
+        miss(QoreValue(3.5));
+    }
     {
         LocalScope typed("native_scalar_typed_control", floatTypeInfo, xsink);
+        UT_ASSERT(c, !typed.var.isAOTScalarStoreDeclaration(), "typed declaration cannot be prepared");
         UT_ASSERT(c, !typed.var.tryAssignAOTScalarValue(QoreValue(3.5), direct_store,
             prepared ? thread_try_find_lvar(&typed.var) : nullptr),
             "typed declaration keeps ordinary binding");
@@ -529,6 +579,17 @@ static void ut_aot_scalar_local_store(UnitTestCounters& c) {
     ut_aot_scalar_local_store_mode(c, true, false);
     ut_aot_scalar_local_store_mode(c, false, true);
     ut_aot_scalar_local_store_mode(c, true, true);
+    ut_aot_scalar_local_store_mode(c, false, true, true);
+    ut_aot_scalar_local_store_mode(c, true, true, true);
+
+    LocalVar captured("captured", autoTypeInfo), top("top", autoTypeInfo), self("self", autoTypeInfo);
+    captured.setClosureUse();
+    top.setTopLevel();
+    self.setSelf();
+    LocalVar no_narrow("no_narrow", autoNoNarrowTypeInfo), untyped("untyped", nullptr);
+    for (const LocalVar* var : {&captured, &top, &self, &no_narrow, &untyped}) {
+        UT_ASSERT(c, !var->isAOTScalarStoreDeclaration(), "special declaration is not prepared");
+    }
 }
 
 //! Observe publication ordering while a reload releases its previous deferred owner.

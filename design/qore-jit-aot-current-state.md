@@ -215,9 +215,9 @@ the actual runtime slot, so reflection and subsequent reloads see the result.
 Neither side owns a node, so there is no conversion, reference scan, allocation,
 destructor or reentry to perform. Wide boxed integers, escaped floats, enums,
 nodes, weak/opaque values and reference-backed storage retain ordinary
-assignment. Declaration checks remain live per assignment. Without a prepared
-body-slot handle (described below), the helper also performs the ordinary
-thread-local slot lookup on every assignment.
+assignment. Declaration checks remain per assignment unless declaration
+admission is prepared as described below. Without a prepared body-slot handle,
+the helper also performs the ordinary thread-local lookup on every assignment.
 
 `QORE_DISABLE_AOT_DIRECT_SCALAR_STORE=1` restores the prior generic scalar
 storage operation after the same admission guards. The broader
@@ -293,6 +293,49 @@ exercise prepared and looked-up slots with both primitive-store modes.
 `AOTLocalCleanupCancellation.qtest` verifies cancellation during cleanup
 emission rejects the partial LLVM function and permits reuse of the same
 lowerer after clearing cancellation, for both normal and fast entries.
+
+### Prepared auto-store declaration admission in AOT
+
+For an eligible ordinary auto body slot, `getAOTAutoLocalSlot` selects
+`qore_rt_get_auto_local_slot_aot_v2` and matching normal/native-EH v2 assignment
+helpers. The getter first performs the existing storage and same-Program checks,
+then checks `LocalVar::isAOTScalarStoreDeclaration()`: noncaptured, non-self,
+non-top-level, writable, without a no-narrow marker, exact `autoTypeInfo`, no reference
+target and no type-substitution requirement. A miss returns null for v1 handling.
+Only a handle from this v2 getter may be used as a non-null v2 store handle.
+
+The declaration is complete before the admitted body executes. Signature type
+replacement affects excluded parameters, while fallback type retargeting leaves
+untyped auto unchanged. Reference-addressed locals are parser-marked as captured
+before execution and are excluded; AOT reference creation only repeats that mark.
+No value, reference classification or mutable assignment flag is part of this
+cached proof. Storage and declaration admission remain invocation-local, with
+the same post-instantiation ordering, recursive lifetime and cleanup as v1.
+
+The v2 store omits repeated declaration checks but keeps all input and live-slot
+guards in `LocalVarValue::tryAssignAOTScalarValue`. The incoming value must be an
+immediate integer, float or boolean, and storage must be assigned, nonfinalized,
+noncleared, nonstatic, nonfixed and scalar. A populated exception sink cannot
+take the direct path. Successful stores publish the real slot; misses retain
+the same generic eval-weak assignment and ownership/error behavior. No reload,
+reflection, node-release or runtime-context obligation is removed.
+
+`QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION` selects v1 getter/store code at
+compilation. Runtime presence, sampled at first v2 store use, instead restores
+per-store declaration checks with the same prepared storage. The v2 helper
+resolves this choice and the shared scalar/direct-store configuration once into
+one immutable mode; it does not revisit two initialization guards on each store.
+Empty values and `0` count as present. Existing scalar/direct/slot/reload controls
+remain independent. Legacy v1 helpers and serialized IR are unchanged; the new
+symbols/private headers require matching compiler/runtime identities.
+
+Native regression modes directly force the declaration-prepared live-slot
+operation, including when runtime controls disable the helper, so fallback-only
+success cannot hide a guard error. They check exact bits, rejected live states,
+null fallback, node owner counts, declaration rejection and recursive stack
+growth. The auto-slot, scalar-store and reload wrappers exercise compiler/runtime
+controls, matching getter/store versions, normal/EH entries and independent
+reload behavior. This is AOT-specific; no IR/JIT timing benefit is established.
 
 ### Prepared runtime-backed AOT local reloads
 

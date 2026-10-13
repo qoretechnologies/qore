@@ -1720,6 +1720,31 @@ void qore_rt_assign_auto_local_slot_aot_v1(QoreAOTContext* ctx, int32_t idx,
 void qore_rt_assign_auto_local_slot_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx,
     uint64_t value, void* prepared_slot, ExceptionSink* xsink);
 
+//! Resolve ordinary body storage and admit its immutable auto declaration once per invocation.
+/** @param ctx current AOT function context
+    @param idx compiler-proven ordinary auto body-local slot, excluding parameters and private IR storage
+    @param rc borrowed live same-thread, same-Program invocation context
+    @return borrowed slot with declaration admission, or nullptr for the fully checked fallback
+    @note Only a v2 getter result may be passed as a non-null slot to the v2 store. The declaration
+    is complete before this invocation; values and assignment/ownership flags are never cached.
+    The existing QORE_DISABLE_AOT_AUTO_LOCAL_SLOT control still disables slot preparation.
+*/
+void* qore_rt_get_auto_local_slot_aot_v2(QoreAOTContext* ctx, int32_t idx, RuntimeConfig* rc);
+//! Assign with prepared declaration admission and live input/storage checks.
+/** @param ctx current AOT function context
+    @param idx same local index as the v2 getter
+    @param value borrowed NaN-boxed input
+    @param prepared_slot v2 getter result in this invocation, or nullptr for v1 handling
+    @param xsink exception sink; unsupported replacements retain ordinary assignment and cleanup
+    @note Presence of QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION at first v2 store use selects v1
+    checks with the same prepared storage. Scalar/direct-store controls remain independent.
+*/
+void qore_rt_assign_auto_local_slot_aot_v2(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+//! Native-EH counterpart; throws QoreJITException on a populated exception sink.
+void qore_rt_assign_auto_local_slot_aot_throwing_v2(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+
 //! Checked pinned initializer with an optional prepared slot; v1 ownership and fallback contract.
 //! @param prepared_slot handle from qore_rt_get_class_local_slot_aot_v1 for this ctx/idx/invocation
 int qore_rt_try_assign_pinned_class_local_aot_v2(QoreAOTContext* ctx, int32_t idx,

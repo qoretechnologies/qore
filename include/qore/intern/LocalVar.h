@@ -253,6 +253,45 @@ public:
         block_cleared = false;
     }
 
+    //! Replace an immediate scalar after the caller proves ordinary auto declaration admission.
+    /** @param value borrowed immediate input; all other representations are rejected
+        @param direct_store copy the exact primitive, or use the diagnostic generic scalar store
+        @return true after publication to this slot, false without side effects on a live-state miss
+        @note This does not check declaration metadata. The caller must have admitted a noncaptured,
+        writable, non-substituted ordinary auto local, and must own this slot's invocation lifetime.
+        Assignment, finalization, clearing, storage type and ownership flags remain live checks.
+    */
+    // Keep the live-state operation in its caller: outlining duplicates input
+    // admission in the legacy path and adds a call to the prepared hot path.
+    DLLLOCAL __attribute__((always_inline)) bool tryAssignAOTScalarValue(QoreValue value, bool direct_store) {
+        assert(local_var && !frame_boundary);
+        if ((!value.isInt() && !value.isFloat() && !value.isBool())
+                || finalized || block_cleared || !val.assigned || val.static_assignment || val.fixed_type
+                || (val.type != QV_Int && val.type != QV_Float && val.type != QV_Bool)) {
+            return false;
+        }
+        // Neither the admitted input nor the current storage can own a node.
+        // Preserve every assignment/ownership flag and publish the actual slot.
+        if (direct_store) {
+            if (value.isInt()) {
+                val.v.i = value.getInt();
+                val.type = QV_Int;
+            } else if (value.isFloat()) {
+                val.v.f = value.getDouble();
+                val.type = QV_Float;
+            } else {
+                assert(value.isBool());
+                val.v.b = value.getBool();
+                val.type = QV_Bool;
+            }
+            return true;
+        }
+        AbstractQoreNode* removed = val.assignAssume(value);
+        assert(!removed);
+        (void)removed;
+        return true;
+    }
+
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
         //printd(5, "LocalVarValue::eval() this: %p '%s' type: %d '%s'\n", this, id, val.getType(),
         //    val.getTypeName());
@@ -922,6 +961,18 @@ public:
             : LocalVarLValueLookup::Found;
     }
 
+    //! Declaration-only admission for ordinary AOT scalar replacement.
+    /** @return true for a writable, noncaptured, non-substituted ordinary auto declaration
+        @note These fields are set during parsing or AOT loading before an ordinary body executes.
+        Signature replacement affects parameters, not admitted body locals; fallback type retargeting
+        leaves the untyped auto descriptor unchanged. No runtime input or storage state is examined.
+    */
+    DLLLOCAL bool isAOTScalarStoreDeclaration() const {
+        return !closure_use && !is_self && !is_top_level && !read_only && !no_narrowing
+            && typeInfo == autoTypeInfo && !refTypeInfo
+            && !type_info_needs_substitution && !ref_type_info_needs_substitution;
+    }
+
     //! Replaces an ordinary auto local's scalar without generic lvalue preparation.
     /** Only immediate int/float/bool inputs and already assigned scalar storage
         are admitted. No reference, filter, weak normalization, replaced node,
@@ -938,42 +989,13 @@ public:
     */
     DLLLOCAL bool tryAssignAOTScalarValue(QoreValue value, bool direct_store,
             LocalVarValue* prepared_slot) const {
-        if (closure_use || is_self || is_top_level || read_only || no_narrowing
-                || typeInfo != autoTypeInfo || refTypeInfo
-                || type_info_needs_substitution || ref_type_info_needs_substitution
+        if (!isAOTScalarStoreDeclaration()
                 || (!value.isInt() && !value.isFloat() && !value.isBool())) {
             return false;
         }
         LocalVarValue* slot = prepared_slot ? prepared_slot : get_var();
         assert(!prepared_slot || (prepared_slot->local_var == this && !prepared_slot->frame_boundary));
-        if (!slot || slot->finalized || slot->block_cleared || !slot->val.assigned
-                || slot->val.static_assignment || slot->val.fixed_type
-                || (slot->val.type != QV_Int && slot->val.type != QV_Float && slot->val.type != QV_Bool)) {
-            return false;
-        }
-        // Admission proves an already assigned, non-fixed scalar slot and an
-        // immediate input. Copy the primitive without type conversion, retaining
-        // every ownership/assignment flag and publishing to the actual slot.
-        // Neither side can own a node or participate in object-reference scans.
-        if (direct_store) {
-            if (value.isInt()) {
-                slot->val.v.i = value.getInt();
-                slot->val.type = QV_Int;
-            } else if (value.isFloat()) {
-                slot->val.v.f = value.getDouble();
-                slot->val.type = QV_Float;
-            } else {
-                assert(value.isBool());
-                slot->val.v.b = value.getBool();
-                slot->val.type = QV_Bool;
-            }
-            return true;
-        }
-        // Diagnostic control uses the previous operation after the same guards.
-        AbstractQoreNode* removed = slot->val.assignAssume(value);
-        assert(!removed);
-        (void)removed;
-        return true;
+        return slot && slot->tryAssignAOTScalarValue(value, direct_store);
     }
 
     //! Prepares only fixed declaration metadata for an ordinary AOT class-local initializer.

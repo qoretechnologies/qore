@@ -39,6 +39,7 @@ class ScalarLocalStoreTest inherits QUnit::Test {
         assertEq(expected, run((qore, "--exec-mode=ast", source, "inspect-block")), "AST block locals");
         TmpDir dir("qore-scalar-local-store-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
@@ -49,6 +50,7 @@ class ScalarLocalStoreTest inherits QUnit::Test {
                 foreach string runtime in (("", "QORE_DISABLE_AOT_SCALAR_LOCAL_STORE=1 ",
                         "QORE_DISABLE_AOT_DIRECT_SCALAR_STORE=1 ",
                         "QORE_DISABLE_AOT_AUTO_LOCAL_SLOT=1 ",
+                        "QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION=1 ",
                         "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
                     assertEq(expected, run((executable,), runtime), prefix + level + runtime);
                 }

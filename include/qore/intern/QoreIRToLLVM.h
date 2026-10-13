@@ -1579,7 +1579,7 @@ private:
         llvm::Function* llvm_func);
     llvm::Value* getAOTReloadLocalSlot(const LocalVar* local, llvm::Module& module,
         llvm::Function* llvm_func);
-    enum class AotBodyLocalSlotKind { Class, Auto, Reload };
+    enum class AotBodyLocalSlotKind { Class, Auto, PreparedAuto, Reload };
     // Common emission after eligibility checks; each function invocation owns its handle.
     llvm::Value* getAOTBodyLocalSlot(const LocalVar* local, llvm::Module& module,
         llvm::Function* llvm_func, AotBodyLocalSlotKind kind);

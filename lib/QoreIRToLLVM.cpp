@@ -5690,7 +5690,10 @@ llvm::Value* QoreIRToLLVM::getAOTAutoLocalSlot(const LocalVar* local, llvm::Modu
             || std::getenv("QORE_DISABLE_AOT_AUTO_LOCAL_SLOT")) {
         return nullptr;
     }
-    return getAOTBodyLocalSlot(local, module, llvm_func, AotBodyLocalSlotKind::Auto);
+    bool prepare_declaration = local->isAOTScalarStoreDeclaration()
+        && !std::getenv("QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION");
+    return getAOTBodyLocalSlot(local, module, llvm_func,
+        prepare_declaration ? AotBodyLocalSlotKind::PreparedAuto : AotBodyLocalSlotKind::Auto);
 }
 
 llvm::Value* QoreIRToLLVM::getAOTReloadLocalSlot(const LocalVar* local, llvm::Module& module,
@@ -5732,10 +5735,12 @@ llvm::Value* QoreIRToLLVM::getAOTBodyLocalSlot(const LocalVar* local, llvm::Modu
         eb.SetInsertPoint(acquire->getParent(), std::next(acquire->getIterator()));
     }
     const char* helper = kind == AotBodyLocalSlotKind::Reload ? "qore_rt_get_reload_local_slot_aot_v1"
+        : kind == AotBodyLocalSlotKind::PreparedAuto ? "qore_rt_get_auto_local_slot_aot_v2"
         : kind == AotBodyLocalSlotKind::Auto ? "qore_rt_get_auto_local_slot_aot_v1"
         : "qore_rt_get_class_local_slot_aot_v1";
     const char* name = kind == AotBodyLocalSlotKind::Reload ? "reload_local_slot"
-        : kind == AotBodyLocalSlotKind::Auto ? "auto_local_slot" : "class_local_slot";
+        : (kind == AotBodyLocalSlotKind::Auto || kind == AotBodyLocalSlotKind::PreparedAuto)
+            ? "auto_local_slot" : "class_local_slot";
     auto get_slot = module.getOrInsertFunction(helper,
         llvm::FunctionType::get(ptr_type, {ptr_type, i32_type, ptr_type}, false));
     int32_t index = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(local);
@@ -16757,8 +16762,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::SmallVector<llvm::Value*, 5> assign_args{aot_ctx_arg,
                         llvm::ConstantInt::get(i32_type, slot), boxed};
                     if (auto_slot) {
-                        aot_helper_name = "qore_rt_assign_auto_local_slot_aot_v1";
-                        aot_helper_throwing_name = "qore_rt_assign_auto_local_slot_aot_throwing_v1";
+                        bool prepared_declaration = linst->local->isAOTScalarStoreDeclaration()
+                            && !std::getenv("QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION");
+                        aot_helper_name = prepared_declaration ? "qore_rt_assign_auto_local_slot_aot_v2"
+                            : "qore_rt_assign_auto_local_slot_aot_v1";
+                        aot_helper_throwing_name = prepared_declaration
+                            ? "qore_rt_assign_auto_local_slot_aot_throwing_v2"
+                            : "qore_rt_assign_auto_local_slot_aot_throwing_v1";
                         assign_types.push_back(ptr_type);
                         assign_args.push_back(auto_slot);
                     }

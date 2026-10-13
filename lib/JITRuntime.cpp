@@ -398,6 +398,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_assign_auto_local_slot_aot_v1", reinterpret_cast<void*>(&qore_rt_assign_auto_local_slot_aot_v1) },
     { "qore_rt_assign_auto_local_slot_aot_throwing_v1",
         reinterpret_cast<void*>(&qore_rt_assign_auto_local_slot_aot_throwing_v1) },
+    { "qore_rt_get_auto_local_slot_aot_v2", reinterpret_cast<void*>(&qore_rt_get_auto_local_slot_aot_v2) },
+    { "qore_rt_assign_auto_local_slot_aot_v2", reinterpret_cast<void*>(&qore_rt_assign_auto_local_slot_aot_v2) },
+    { "qore_rt_assign_auto_local_slot_aot_throwing_v2",
+        reinterpret_cast<void*>(&qore_rt_assign_auto_local_slot_aot_throwing_v2) },
     { "qore_rt_try_assign_pinned_class_local_aot_v2",
         reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_v2) },
     { "qore_rt_try_assign_pinned_class_local_aot_throwing_v2",
@@ -12723,22 +12727,28 @@ extern "C" DLLEXPORT void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t 
     qore_rt_assign_local(ctx->locals[idx], val, xsink);
 }
 
+enum class AotScalarStoreMode : uint8_t { Generic, Guarded, Direct };
+
+static inline AotScalarStoreMode qore_rt_aot_scalar_store_mode() {
+    // One immutable configuration and initialization guard for both diagnostic
+    // controls; fallback-heavy assignments do not pay a second acquire load.
+    static const AotScalarStoreMode scalar_store = []() {
+        if (std::getenv("QORE_DISABLE_AOT_SCALAR_LOCAL_STORE")) {
+            return AotScalarStoreMode::Generic;
+        }
+        return std::getenv("QORE_DISABLE_AOT_DIRECT_SCALAR_STORE")
+            ? AotScalarStoreMode::Guarded : AotScalarStoreMode::Direct;
+    }();
+    return scalar_store;
+}
+
 static inline void qore_rt_assign_scalar_local_aot(QoreAOTContext* ctx, int32_t idx,
         uint64_t val, LocalVarValue* prepared_slot, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
-    enum class ScalarStoreMode : uint8_t { Generic, Guarded, Direct };
-    // One immutable configuration and initialization guard for both diagnostic
-    // controls; fallback-heavy assignments do not pay a second acquire load.
-    static const ScalarStoreMode scalar_store = []() {
-        if (std::getenv("QORE_DISABLE_AOT_SCALAR_LOCAL_STORE")) {
-            return ScalarStoreMode::Generic;
-        }
-        return std::getenv("QORE_DISABLE_AOT_DIRECT_SCALAR_STORE")
-            ? ScalarStoreMode::Guarded : ScalarStoreMode::Direct;
-    }();
-    if (scalar_store != ScalarStoreMode::Generic && !*xsink && ctx->locals[idx]
+    AotScalarStoreMode scalar_store = qore_rt_aot_scalar_store_mode();
+    if (scalar_store != AotScalarStoreMode::Generic && !*xsink && ctx->locals[idx]
             && ctx->locals[idx]->tryAssignAOTScalarValue(fromBits(val),
-                scalar_store == ScalarStoreMode::Direct, prepared_slot)) {
+                scalar_store == AotScalarStoreMode::Direct, prepared_slot)) {
         return;
     }
     qore_rt_assign_local_eval_weak(ctx->locals[idx], val, xsink);
@@ -12770,6 +12780,51 @@ extern "C" DLLEXPORT void qore_rt_assign_auto_local_slot_aot_v1(QoreAOTContext* 
 extern "C" DLLEXPORT void qore_rt_assign_auto_local_slot_aot_throwing_v1(QoreAOTContext* ctx,
         int32_t idx, uint64_t value, void* prepared_slot, ExceptionSink* xsink) {
     qore_rt_assign_auto_local_slot_aot_v1(ctx, idx, value, prepared_slot, xsink);
+    if (*xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT void* qore_rt_get_auto_local_slot_aot_v2(QoreAOTContext* ctx,
+        int32_t idx, RuntimeConfig* rc) {
+    void* slot = qore_rt_get_auto_local_slot_aot_v1(ctx, idx, rc);
+    return slot && ctx->locals[idx]->isAOTScalarStoreDeclaration() ? slot : nullptr;
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_auto_local_slot_aot_v2(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, void* prepared_slot, ExceptionSink* xsink) {
+    enum class PreparedStoreMode : uint8_t { Checked, Generic, Guarded, Direct };
+    // Resolve both immutable choices together. The shared scalar configuration
+    // retains its first-use semantics, but its initialization guard is not
+    // revisited on each prepared store.
+    static const PreparedStoreMode scalar_store = []() {
+        if (std::getenv("QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION")) {
+            return PreparedStoreMode::Checked;
+        }
+        AotScalarStoreMode mode = qore_rt_aot_scalar_store_mode();
+        if (mode == AotScalarStoreMode::Generic) {
+            return PreparedStoreMode::Generic;
+        }
+        return mode == AotScalarStoreMode::Direct
+            ? PreparedStoreMode::Direct : PreparedStoreMode::Guarded;
+    }();
+    if (scalar_store == PreparedStoreMode::Checked || !prepared_slot) {
+        qore_rt_assign_auto_local_slot_aot_v1(ctx, idx, value, prepared_slot, xsink);
+        return;
+    }
+    auto* slot = static_cast<LocalVarValue*>(prepared_slot);
+    assert(ctx && idx >= 0 && idx < ctx->num_locals && ctx->locals[idx]);
+    assert(slot->local_var == ctx->locals[idx] && ctx->locals[idx]->isAOTScalarStoreDeclaration());
+    if (scalar_store != PreparedStoreMode::Generic && !*xsink
+            && slot->tryAssignAOTScalarValue(fromBits(value), scalar_store == PreparedStoreMode::Direct)) {
+        return;
+    }
+    qore_rt_assign_local_eval_weak(ctx->locals[idx], value, xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_auto_local_slot_aot_throwing_v2(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, void* prepared_slot, ExceptionSink* xsink) {
+    qore_rt_assign_auto_local_slot_aot_v2(ctx, idx, value, prepared_slot, xsink);
     if (*xsink) {
         throw QoreJITException();
     }

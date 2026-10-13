@@ -11542,3 +11542,230 @@ keeping live slot/input/ownership guards, then remaining dispatch/frame costs.
 Typed container assignment/coercion remains a separate AOT execution priority.
 
 [Verified measurements, qualification and audit](results-aot-prepared-local-reload-macos-arm64.json).
+
+## Prepared AOT auto-store declaration admission (2026-10-12)
+
+Eligible ordinary auto body locals now prepare immutable declaration admission
+once after invocation-local instantiation. The v2 getter checks the complete
+declaration and existing same-Program storage contract. Each store still checks
+the incoming immediate representation, exception sink and live slot flags/type.
+Actual publication, ownership, generic fallback, reflection, reloads and cleanup
+are unchanged. Parameters, captures, self, top-level, read-only, no-narrow,
+substituted and private IR-only declarations remain excluded.
+
+QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION selects v1 getter/store code at compile
+time. Runtime presence at first v2 store use restores per-store declaration
+checks with the same prepared storage. The runtime-off path also includes v2
+delegation, so its time difference is not an isolated predicate cost. Existing
+slot/scalar/direct/reload controls remain independent. Old ABIs remain; new
+symbols and private-header runtime identity require matching compiler/runtime
+artifacts. No new IR/JIT speedup is claimed.
+
+Baseline: merged revision 2c24732a2fbf054b59b66d4ab8d6b0c30844ef2b.
+Final candidate identity: 98b249fa1a57ecac3fbd04e843dcc1d7641708d36f76b4a9573d32a34747d745.
+All six matrices use matching frozen compiler/runtime pairs, identical enabled
+A/A artifacts, ordered environments and argv, equal-length aliases/control
+variables, shuffled serial jobs and every raw window without exclusions.
+No other owned work overlaps timing. Values are medians of process means in
+whole-workload ns/element, not isolated call latency. Positive reduction is less
+time. Range overlap is not equivalence; separation is not a confidence interval
+or causal explanation. All earlier candidate and adverse observations remain.
+
+### Initial outlined candidate
+
+675 windows: nine kernels, five modes, three forks, three warmups and five
+500-ms windows, count 4096, seed 123135. Boxed float improves 3.469-4.030% and
+read-only float 1.932-2.210% with separated baseline ranges. Boxed-int baseline
+ranges overlap. Member updates are 1.958-3.035% slower with separated ranges;
+compile-off is also 1.945% slower. A noisy 50.8-ns boxed-float baseline fork is
+retained. This candidate is superseded, not the qualified source below.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Runtime disabled|!Compile disabled
+|boxed integer method|22.6386|22.3757 / 22.4921|1.161% / 0.647%|23.6810|23.2203
+|boxed float method|29.4036|28.2187 / 28.3837|4.030% / 3.469%|30.2249|29.7579
+|member updates|89.5627|91.3167 / 92.2813|-1.958% / -3.035%|92.7384|91.3046
+|read-only integer member|36.8341|36.8842 / 36.8634|-0.136% / -0.079%|38.0687|37.6161
+|read-only float member|41.4019|40.6022 / 40.4870|1.932% / 2.210%|42.2878|41.6893
+|native integer result|10.2155|10.0667 / 9.9944|1.456% / 2.164%|10.0513|10.0191
+|native float result|11.6178|11.3826 / 11.6156|2.024% / 0.018%|11.5916|11.5009
+|list build|83.0970|81.8821 / 82.3082|1.462% / 0.949%|81.9341|81.7200
+|list mutation|227.8507|228.4579 / 225.8217|-0.267% / 0.890%|227.4906|224.8103
+
+### Inlined live-slot operation
+
+675 windows with the same settings and seed 124136. The live-slot operation is
+forced inline, avoiding a new outlined call and duplicated legacy input checks.
+Boxed float improves 3.782-4.017% and read-only float 2.194-2.538%, separating
+baseline/runtime-off/compile-off. Boxed int improves 2.095-2.960%, but one
+baseline comparison overlaps and A/A separates. Member updates remain
+0.606-2.221% slower, with baseline overlap and A/A separation; compile-off is
+1.841% slower with separated baseline ranges. Native/list controls are mixed.
+This candidate is also superseded; no adverse result is removed.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Runtime disabled|!Compile disabled
+|boxed integer method|22.8659|22.1892 / 22.3867|2.960% / 2.095%|24.1047|23.6824
+|boxed float method|29.4786|28.3638 / 28.2945|3.782% / 4.017%|31.3355|30.8671
+|member updates|91.9969|94.0397 / 92.5542|-2.221% / -0.606%|94.4929|93.6901
+|read-only integer member|37.5693|36.9085 / 36.9008|1.759% / 1.779%|39.4953|39.1385
+|read-only float member|41.9508|41.0304 / 40.8861|2.194% / 2.538%|43.5133|43.5519
+|native integer result|10.4424|10.2520 / 10.2159|1.823% / 2.169%|10.1855|10.2909
+|native float result|11.9645|11.2284 / 11.4927|6.152% / 3.943%|11.5880|11.4324
+|list build|86.1122|85.2397 / 84.8356|1.013% / 1.482%|84.7331|84.0743
+|list mutation|235.5941|236.4484 / 231.5896|-0.363% / 1.700%|231.7947|235.5114
+
+### Final candidate with one configuration guard
+
+675 windows with the same settings and seed 125137. One immutable v2 mode now
+combines the declaration choice with shared scalar-store configuration. ARM64
+disassembly confirms one hot initialization acquire guard rather than two and
+no outlined live-slot operation. This is code-generation evidence, not a causal
+explanation for every workload difference.
+
+Boxed int improves 3.915-3.989% and boxed float 6.027-6.094%; both enabled arms
+separate baseline and both disabled controls, while A/A overlaps. Read-only
+float improves 1.582-1.954% with separated controls. Read-only integer B overlaps
+baseline/compile-off. Member updates are mixed: A is 0.632% slower with separated
+baseline ranges, B is 0.433% faster with overlap, and A/A separates. Native gains
+over baseline overlap off controls and are not assigned to declaration
+preparation. List results are mixed.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Runtime disabled|!Compile disabled
+|boxed integer method|22.7270|21.8204 / 21.8372|3.989% / 3.915%|23.6556|22.8948
+|boxed float method|29.5472|27.7663 / 27.7466|6.027% / 6.094%|30.2504|29.7721
+|member updates|91.0214|91.5965 / 90.6276|-0.632% / 0.433%|92.7038|91.6069
+|read-only integer member|37.0853|36.4091 / 36.7228|1.824% / 0.977%|38.5952|37.9157
+|read-only float member|41.5097|40.8532 / 40.6988|1.582% / 1.954%|43.2496|42.6899
+|native integer result|10.2934|10.0405 / 10.0870|2.457% / 2.006%|10.0298|10.0350
+|native float result|11.7371|11.5269 / 11.4011|1.791% / 2.863%|11.5230|11.5280
+|list build|83.8735|83.9895 / 82.9904|-0.138% / 1.053%|82.8725|83.4320
+|list mutation|228.7792|227.2429 / 229.1727|0.672% / -0.172%|228.6871|229.8663
+
+### Longer confirmation
+
+1000 windows: eight kernels, five modes, five forks, three warmups and five
+750-ms windows, count 4096, seed 126138. Boxed int improves 3.672-4.347%, with
+baseline overlap and separated disabled controls. Boxed float improves
+4.831-5.229%, separating baseline and both controls. Read-only integer and float
+medians improve, but baseline ranges overlap. Member updates are mixed with
+overlapping controls. Native float is 2.141-3.014% slower and list mutation
+0.073-0.843% slower, with overlapping ranges. All A/A ranges overlap. These
+adverse observations remain, even where a later run differs.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Runtime disabled|!Compile disabled
+|boxed integer method|23.4180|22.3999 / 22.5580|4.347% / 3.672%|24.2421|23.7602
+|boxed float method|30.2336|28.6527 / 28.7731|5.229% / 4.831%|31.1717|30.4660
+|member updates|92.4922|92.1826 / 92.6633|0.335% / -0.185%|93.3050|92.8489
+|read-only integer member|38.1499|37.8037 / 37.7590|0.907% / 1.024%|39.3637|38.8932
+|read-only float member|42.8225|42.3831 / 41.9058|1.026% / 2.141%|44.4879|43.9210
+|native float result|11.7039|11.9545 / 12.0566|-2.141% / -3.014%|11.7237|11.9826
+|list build|83.9879|83.9136 / 83.1427|0.088% / 1.006%|83.4535|83.1918
+|list mutation|230.7250|232.6710 / 230.8933|-0.843% / -0.073%|232.6980|230.6190
+
+### Short invocations
+
+600 windows: the same eight kernels/five modes, count 1, three forks, three
+warmups and five 500-ms windows, seed 127139. Every enabled-versus-baseline
+range overlaps; median reductions range from -1.109% to +0.504%. There is no
+demonstrated short-invocation benefit or equivalence. List-build A/A ranges
+separate. List-mutation B is 0.539% slower than compile-off with separated
+ranges. These are whole short invocations, not isolated entry costs. No Java
+timing is taken from this matrix.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Runtime disabled|!Compile disabled
+|boxed integer method|2349.2260|2362.8649 / 2375.2766|-0.581% / -1.109%|2358.5666|2385.4337
+|boxed float method|2338.8864|2355.9658 / 2355.7395|-0.730% / -0.721%|2383.2501|2358.2393
+|member updates|3315.4127|3298.6999 / 3314.5129|0.504% / 0.027%|3322.2809|3311.0778
+|read-only integer member|2381.7854|2384.9242 / 2395.7303|-0.132% / -0.585%|2403.9834|2390.1707
+|read-only float member|2408.8145|2429.5820 / 2428.2835|-0.862% / -0.808%|2409.7005|2443.2485
+|native float result|2324.7542|2333.6278 / 2324.1414|-0.382% / 0.026%|2330.2989|2336.7264
+|list build|2683.7475|2693.9884 / 2675.1959|-0.382% / 0.319%|2692.0809|2675.2776
+|list mutation|3063.3125|3077.1410 / 3073.1913|-0.451% / -0.322%|3078.3519|3056.7299
+
+### Fresh matched Java comparison
+
+825 windows: eleven kernels, baseline, enabled A/A, same-binary runtime-off and
+Java JIT, three forks, three warmups and five 500-ms windows, count 4096, seed
+128140. Temurin 25.0.2/JMH 1.37 generated target dontinline hints are checked;
+all modes pass 555 references and Qore library selection is verified. This is
+not a comparison with freely inlined Java or equivalent runtime contracts.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Runtime disabled|!Java JIT|!Enabled / Java
+|boxed integer method|24.1726|22.7810 / 23.0812|5.757% / 4.515%|24.7268|2.6769|8.51 / 8.62x
+|boxed float method|30.8080|29.1086 / 29.2264|5.516% / 5.134%|31.9583|2.6590|10.95 / 10.99x
+|member updates|95.5266|95.4253 / 95.9939|0.106% / -0.489%|96.8382|1.9236|49.61 / 49.90x
+|read-only integer member|38.9441|39.1586 / 38.9957|-0.551% / -0.133%|40.5873|2.6702|14.67 / 14.60x
+|read-only float member|44.1623|43.2180 / 42.9583|2.138% / 2.726%|45.1103|2.6338|16.41 / 16.31x
+|native integer result|10.6901|10.6436 / 10.5789|0.435% / 1.040%|10.4913|3.2018|3.32 / 3.30x
+|native float result|12.1090|12.0704 / 12.1599|0.319% / -0.420%|12.1279|3.6302|3.32 / 3.35x
+|indirect integer result|7.1756|7.2115 / 7.1913|-0.499% / -0.219%|7.1660|1.9536|3.69 / 3.68x
+|indirect float result|9.1406|9.2378 / 9.1353|-1.063% / 0.059%|9.2005|2.8987|3.19 / 3.15x
+|list build|89.3348|87.7347 / 88.6416|1.791% / 0.776%|89.6179|2.6995|32.50 / 32.84x
+|list mutation|242.8602|244.4069 / 244.6832|-0.637% / -0.751%|241.9948|4.2476|57.54 / 57.61x
+
+Both boxed-integer arms improve 4.515-5.757% and boxed-float arms 5.134-5.516%,
+with separated baseline and runtime-off ranges. Boxed-int A/A also separates
+by 1.317%; retain both arms. Read-only integer is 0.133-0.551% slower and float
+2.138-2.726% faster, with baseline overlap; both off comparisons separate.
+Member updates are mixed with baseline overlap and A/A separation. Native
+integer improves 0.435-1.040%, native float is mixed, and their ranges overlap.
+
+Indirect integer is 0.219-0.499% slower with overlap. Indirect-float A is 1.063%
+slower with separated baseline ranges; B is 0.059% faster with overlap, and A/A
+separates. List build improves 0.776-1.791% with overlap. List mutation is
+0.637-0.751% slower: A separates baseline and runtime-off, B overlaps both.
+These results do not erase the earlier native-float/member-update adverse
+observations or establish a regression-free result.
+
+Only this matched matrix supplies the new Java ratios: native/indirect workloads
+remain about 3.2-3.7x Java, boxed integer 8.5-8.6x, boxed float 11x, read-only
+members 14.6-16.4x, updates 49.6-49.9x, list build 32.5-32.8x and mutation 57.5-57.6x.
+Java parity remains unachieved.
+Verification: 021ee09ee8106a21489401731b29050cf444a5ab835fe753ffc7f5aeb9c6e270.
+
+### Qualification, profiles and retention
+
+Release: 114 files, 417 cases / 36057 assertions, 15 standalones, nine skips.
+Debug: 114 files, 424 cases / 36156 assertions, 15 standalones, eight skips.
+Both pass seven exception/stack fixtures and IR/AOT grids; the restored grid
+also passes 555 references per Java-interpreted/Java-JIT mode. Focused native
+checks pass 642/642, the harness passes 17 tests, and eight restored-release
+smokes pass. All 57 owned release qmods are restored and unrelated aliases are
+unchanged. Linux-only RSS and release debug-only checks are explicit skips;
+the native wrapper skips release and runs in debug. This is selected coverage,
+not the full repository, sanitizer, leak or cross-platform qualification.
+
+The changed wrappers contain 557 auto-slot, 153 scalar-store and 2810 reload
+assertions. Native matrices directly force looked-up, storage-prepared and
+declaration-prepared scalar operations under both store modes, including live
+guard misses, exact bits, ownership, recursion, block growth and declaration
+rejection. Normal/EH, O0/O3, split, no-debug and independent compiler/runtime
+controls remain covered. Five focused debug configurations and four additional
+combined-control configurations each pass 642 native checks. Existing incomplete
+source-specialized block reflection maps remain documented, not repaired here.
+
+One preserved setup failure preceded the inline candidate's restored-module
+check: its harness incorrectly required all old aliases to exist, although
+runtime-identity regeneration had removed 54 stale owned aliases. It stopped
+before building or mutating links. The corrected preflight permits missing
+owned generated aliases but rejects foreign files/targets, then restores and
+verifies the 57-module dependency closure. The failure is retained in evidence.
+
+Eleven serial diagnostic profiles confirm v2 stores execute. Enabled boxed
+integer/float samples show prepared reload families at 19.98/15.51%, declaration-
+prepared stores at 6.85/7.81%, and typed dispatch at 36.00/29.46%. Native float's
+typed-dispatch family is 67.52%; member updates retain generic reload work.
+List mutation retains generic assignment, coercion, lvalue cleanup and ownership
+in before/enabled/compile-off profiles. Only complete main-thread trees are
+counted; these inclusive families overlap and must not be added. Instrumented
+times are excluded. Profile similarity does not explain away measured adverse
+differences or prove their cause.
+
+Retention: keep the final candidate's repeated boxed-call gains after selected
+qualification and the complete 62-check audit, retaining all 4450 windows,
+superseded candidates, short-invocation results and adverse controls. No universal
+speedup or Java parity is claimed. Next investigate explicit pure-call completion
+proofs only together with non-reentrant caller cleanup, then remaining live
+dispatch/frame costs. Container assignment/coercion is a separate execution
+priority; successful native dispatch alone does not authorize removing reloads.
+
+[Verified samples, qualification and audit](results-aot-auto-declaration-macos-arm64.json).

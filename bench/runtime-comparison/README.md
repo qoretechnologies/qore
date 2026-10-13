@@ -1225,8 +1225,9 @@ without conversion and copied directly into the runtime slot; assignment and
 ownership flags are unchanged. The broader scalar-local control takes precedence.
 Both controls use one immutable, thread-safe first-use configuration; presence
 (even an empty value or `0`) disables the selected shortcut. Set them before
-process startup. Declaration checks remain live. Ordinary lookup is retained
-unless an invocation-local auto slot is prepared as described below.
+process startup. Declaration checks remain per-store unless the invocation
+prepares declaration admission as described below. Ordinary lookup is retained
+unless an invocation-local auto slot is prepared.
 The private-header change alters the AOT runtime identity, so compare matching,
 separately compiled before/after artifacts; candidate A/A and runtime on/off
 controls can use an identical executable. This does not change IR/JIT local
@@ -1258,6 +1259,34 @@ See [prepared auto-slot measurements and compile-time controls](RESULTS.md#prepa
 Boxed-call gains repeat, but list-construction and native-float adverse results
 remain explicit; this is not a universal speedup or a Java-parity claim.
 
+`QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION=1` independently disables preparation
+of immutable auto-store declaration admission. At compilation it selects the
+v1 storage-only getter and checked store. At first v2 store use, runtime presence
+instead selects those same per-store declaration checks with the identical
+prepared storage. Empty values and `0` also disable admission preparation.
+
+The default v2 getter checks the complete declaration after local instantiation
+and the existing same-Program storage check. Only ordinary writable, noncaptured,
+non-substituted `auto` body locals qualify; parameters, self, top-level, read-only,
+no-narrow and private IR-only locals remain excluded. These declaration facts
+are complete before the body executes. The compiler passes that invocation's
+borrowed handle to matching v2 stores; it never caches the value or its owner.
+
+Every store still checks the incoming immediate representation and the live
+assigned/finalized/cleared/static/fixed/storage-type state. Misses retain ordinary
+assignment, ownership and cleanup. Actual runtime-slot publication, reflection,
+reloads and exception handling are unchanged. A null handle uses v1 handling.
+Slot, scalar-store, direct-store and reload controls remain independent; v1
+helper contracts remain available. New helper symbols and runtime identity
+require matching, separately compiled before/after artifacts. This changes AOT
+lowering and its store helpers; no IR/JIT speedup or Java parity is claimed.
+
+See [declaration-preparation measurements and matched Java comparison](RESULTS.md#prepared-aot-auto-store-declaration-admission-2026-10-12),
+[all six matrices](results-aot-auto-declaration-macos-arm64.json), and the
+[62-check audit](FOLLOWUP-AUDIT.md#prepared-aot-auto-store-declaration-admission-audit-2026-10-12).
+Boxed-call gains repeat; short-invocation results and adverse native, indirect,
+member-update and list controls remain explicit.
+
 `QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD=1` independently disables prepared
 body-local access for stale AOT cache reloads. During compilation it omits the
 reload-slot getter and prepared-reload helper. At runtime, presence sampled on
@@ -1283,7 +1312,7 @@ helpers and the runtime identity require matching, separately compiled
 before/after artifacts. This is AOT-specific code generation; an IR/JIT speedup
 has not been measured for this change.
 
-See [prepared-reload measurements and current Java comparison](RESULTS.md#prepared-runtime-backed-aot-local-reloads-2026-10-12)
+See [prepared-reload measurements and matched Java comparison](RESULTS.md#prepared-runtime-backed-aot-local-reloads-2026-10-12)
 and [verified evidence/audit](results-aot-prepared-local-reload-macos-arm64.json).
 
 See [AOT scalar-store measurements](RESULTS.md#aot-scalar-local-replacement-2026-10-11) and [verified evidence/audit](results-aot-scalar-local-store-macos-arm64.json).
