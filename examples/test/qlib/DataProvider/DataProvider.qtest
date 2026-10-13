@@ -5367,7 +5367,15 @@ public class DataProviderTest inherits QUnit::Test {
             # Qore reads a database null)
             assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb.acceptsValue({"r": 1, "b": 2, "g": 3}));
             assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb.acceptsValue({"r": 1, "b": 2, "g": 3, "a": NOTHING}));
+            # a literal hash<string, *int>, which can hold NULL, and an untyped hash
             assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb.acceptsValue({"r": 1, "b": 2, "g": 3, "a": NULL}));
+            {
+                hash<auto> null_a = {};
+                null_a += {"r": 1, "b": 2, "g": 3};
+                null_a.a = NULL;
+                assertEq(Type::NullType, null_a.a.type());
+                assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb.acceptsValue(null_a));
+            }
             # an opacity outside 0 - 1 is rejected, not clamped
             foreach auto a in ((-0.1, 1.5, 255, -1, 2)) {
                 assertThrows("RUNTIME-TYPE-ERROR", "requires a value of at (least 0|most 1)", \rgb.acceptsValue(),
