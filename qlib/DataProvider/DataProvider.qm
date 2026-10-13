@@ -1476,8 +1476,9 @@ fetch
       - a result of any type, such as from \c ternary or \c coalesce, is accepted everywhere
     - the \c a member of an RGB color (@ref DataProvider::RgbColorDataType "RgbColorDataType") is its opacity, as
       every user interface stores it: a number from \c 0 (transparent) to \c 1 (opaque), which is \c 1 when it is
-      missing; an opacity outside of this range is rejected, and the opacity is returned as a \c float.  It was
-      described as a transparency from \c 0 to \c 255 with a default of \c 0, which no user of the type followed
+      missing or null (\c NOTHING or \c NULL); an opacity outside of this range is rejected, and the opacity is
+      returned as a \c float.  It was described as a transparency from \c 0 to \c 255 with a default of \c 0,
+      which no user of the type followed
 
       the DPQL argument type warning \c DPQL-W004 uses the same rules, and is also given for \c !; added
       @ref DataProvider::AbstractDataProvider::isConditionType() "AbstractDataProvider::isConditionType()",

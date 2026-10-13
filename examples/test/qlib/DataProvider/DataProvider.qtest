@@ -5363,8 +5363,11 @@ public class DataProviderTest inherits QUnit::Test {
                 assertEq({"r": 1, "b": 2, "g": 3, "a": float(a)}, rv, sprintf("a: %y", a));
                 assertEq(Type::Float, rv.a.type(), sprintf("a: %y", a));
             }
-            # a missing opacity is opaque
+            # a missing opacity is opaque, also when it is null (NOTHING, as Qore reads JSON null, or NULL, as
+            # Qore reads a database null)
             assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb.acceptsValue({"r": 1, "b": 2, "g": 3}));
+            assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb.acceptsValue({"r": 1, "b": 2, "g": 3, "a": NOTHING}));
+            assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb.acceptsValue({"r": 1, "b": 2, "g": 3, "a": NULL}));
             # an opacity outside 0 - 1 is rejected, not clamped
             foreach auto a in ((-0.1, 1.5, 255, -1, 2)) {
                 assertThrows("RUNTIME-TYPE-ERROR", "requires a value of at (least 0|most 1)", \rgb.acceptsValue(),
@@ -5394,6 +5397,8 @@ public class DataProviderTest inherits QUnit::Test {
             RgbColorOrNothingDataType rgb_or_nothing();
             assertNothing(rgb_or_nothing.acceptsValue());
             assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb_or_nothing.acceptsValue({"r": 1, "b": 2, "g": 3}));
+            assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb_or_nothing.acceptsValue({"r": 1, "b": 2, "g": 3,
+                "a": NULL}));
             assertThrows("RUNTIME-TYPE-ERROR", \rgb_or_nothing.acceptsValue(), {"r": 1, "b": 2, "g": 3, "a": 255});
         }
 
