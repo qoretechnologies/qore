@@ -1390,6 +1390,22 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_9 DataProvider v3.9
+    - an expression has one type wherever it is used: DPQL validation, expression verification
+      (@ref DataProvider::AbstractDataProvider::verifyExpression() "AbstractDataProvider::verifyExpression()") and
+      other users of expression types work out the type of an expression with the new
+      @ref DataProvider::ExpressionTypes "ExpressionTypes" class, which gives the type that evaluating the
+      expression gives: \c 1 \c + \c 2.5 is a \c float, any number with an arbitrary-precision number is a
+      \c number, \c abs(\@qty) has the type of the field \c qty, and a field of a field (\c \@customer.name) has
+      its own type; arithmetic that cannot combine its operands (a hash plus an integer) has no type, is a
+      \c DPQL-E050 error, and still evaluates to %Qore's result
+    - expression verification checks literal values and template references against the types of their
+      arguments too, as DPQL validation does (\c DPQL-W004)
+    - the arguments of the math functions and of the arithmetic operators that take numbers
+      (@ref DataProvider::DataProviderSignatureNumberType "DataProviderSignatureNumberType") take an integer, a
+      float or a number, as documented, and are reported (\c DPQL-W004) and refused when an expression is verified
+      otherwise; the arguments that take a string or binary data
+      (@ref DataProvider::DataProviderSignatureDataType "DataProviderSignatureDataType") take only those; the
+      values are not converted
     - the messages about conditions and expressions are written in plain language: the errors of expression
       verification, the DPQL diagnostics \c DPQL-E040, \c DPQL-E042, \c DPQL-E043, \c DPQL-W004, \c DPQL-W006 and
       \c DPQL-E100, and the descriptions of the condition operators and of the filter options; the codes and

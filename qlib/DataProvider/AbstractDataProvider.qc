@@ -758,18 +758,24 @@ public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalFl
 };
 
 #! Data provider signature number type (accepts int, float, or number)
-/** @since DataProvider 3.3
+/** The argument's value is not converted: an expression gets the integer, float or number that it was given
+
+    @since DataProvider 3.3
+    @since %DataProvider 3.9 the type is @ref QoreNumericDataType instead of \c any, so an argument that is not a
+    number is reported (\c DPQL-W004) and refused when the expression is verified
 */
 public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureNumberType = <DataProviderSignatureTypeInfo>{
-    "type": AbstractDataProviderTypeMap."any",
+    "type": new QoreNumericDataType(),
     "type_code": ST_Any,
 };
 
 #! Data provider signature data type (string or binary)
 /** @since DataProvider 3.3
+    @since %DataProvider 3.9 the type is \c data instead of \c any, so an argument that is neither a string nor
+    binary data is reported (\c DPQL-W004) and refused when the expression is verified
 */
 public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureDataType = <DataProviderSignatureTypeInfo>{
-    "type": AbstractDataProviderTypeMap."any",
+    "type": AbstractDataProviderTypeMap."data",
     "type_code": ST_Any,
 };
 
@@ -6445,8 +6451,11 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
     #! processes an expression in a certain context
     /** Each argument of the expression and of every nested expression is verified against the type of its
-        argument position: a nested expression by its return type and a field reference by the type of the field
-        in \a fields, if known; see @ref AbstractDataProvider::isArgTypeCompatible() for the rules.  A nested
+        argument position, and the expression against \a expected_type, by the type that the expression type rules
+        give (@ref ExpressionTypes::getType(), the rules of DPQL validation): a nested expression, a field
+        reference (with the type of the field in \a fields, if known), a template reference and a literal value;
+        see @ref AbstractDataProvider::isArgTypeCompatible() for the rules.  An argument whose type is only known
+        when it is evaluated is not verified.  A nested
         expression that the provider does not have is verified for generic evaluation, as it can be evaluated on the
         client by providers that support client-side filtering.
 
@@ -6461,16 +6470,18 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @throw DATA-PROVIDER-EXPRESSION-ERROR the expression has an error; argument mismatch, type error, etc
 
         @since DataProvider 3.9 the nested expressions and field references in the arguments are verified against
-        the type of their argument position, and the \a fields parameter was added
+        the type of their argument position, and the \a fields parameter was added; the types are those of the
+        expression type rules (@ref ExpressionTypes), so literal values and template references are verified too
     */
     static verifyExpression(int role, *hash<string, hash<DataProviderExpressionInfo>> expmap, int caps,
             AbstractDataProviderType expected_type, hash<DataProviderExpression> exp,
             *hash<string, AbstractDataField> fields) {
         hash<DataProviderExpressionInfo> expinfo = AbstractDataProvider::verifyExpressionTree(role, expmap, caps, exp,
             fields);
-        if (!AbstractDataProvider::isArgTypeCompatible(expected_type, expinfo.return_type)) {
+        AbstractDataProviderType type = ExpressionTypes::getType(exp, fields, expmap) ?? expinfo.return_type;
+        if (!AbstractDataProvider::isArgTypeCompatible(expected_type, type)) {
             # the message is a sentence of its own here
-            string msg = AbstractDataProvider::getTypeMismatchMessage(expected_type, expinfo.return_type,
+            string msg = AbstractDataProvider::getTypeMismatchMessage(expected_type, type,
                 sprintf("expression %y", expinfo.name));
             throw "DATA-PROVIDER-EXPRESSION-ERROR", msg[0].upr() + msg.substr(1);
         }
@@ -6490,27 +6501,36 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             string arg_desc;
             if (arg instanceof hash<DataProviderExpression>) {
                 hash<DataProviderExpression> nested = cast<hash<DataProviderExpression>>(arg);
-                *hash<DataProviderExpressionInfo> nested_info;
                 {
                     on_error rethrow $1.err, sprintf("%s (in an argument of expression %y)", $1.desc, exp.exp);
                     if (expmap{nested.exp} || expmap{OperatorAliasMap{nested.exp}}) {
-                        nested_info = AbstractDataProvider::verifyExpressionTree(role, expmap, caps, nested, fields);
+                        AbstractDataProvider::verifyExpressionTree(role, expmap, caps, nested, fields);
                     } else {
-                        nested_info = AbstractDataProvider::verifyGenericExpressionTree(nested, fields);
+                        AbstractDataProvider::verifyGenericExpressionTree(nested, fields);
                     }
                 }
-                arg_type = nested_info.return_type;
                 arg_desc = sprintf("expression %y", nested.exp);
-            } else if (arg instanceof hash<DataProviderFieldReference>) {
-                arg_type = AbstractDataProvider::getFieldReferenceType(cast<hash<DataProviderFieldReference>>(arg),
-                    fields);
-                arg_desc = sprintf("field %y", arg.field);
+            } else {
+                arg_desc = AbstractDataProvider::describeExpressionArg(arg);
             }
+            # the type of the argument by the expression type rules, the same as in DPQL validation
+            arg_type = ExpressionTypes::getType(arg, fields, expmap);
             if (arg_type) {
                 AbstractDataProvider::checkArgType(expinfo, $#, arg_type, arg_desc);
             }
         }
         return expinfo;
+    }
+
+    #! Describes an argument of an expression that is not an expression, for an error message
+    private static string describeExpressionArg(auto arg) {
+        if (arg instanceof hash<DataProviderFieldReference>) {
+            return sprintf("field %y", arg.field);
+        }
+        if (arg instanceof hash<DataProviderTemplateReference>) {
+            return sprintf("template value \"$%s:%s\"", arg.tmpl_context, arg.tmpl_value);
+        }
+        return sprintf("value %y", arg);
     }
 
     #! Returns True if a value of the given type can be used as a condition
@@ -6685,19 +6705,17 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
             *AbstractDataProviderType arg_type;
             string arg_desc;
             if (arg instanceof hash<DataProviderExpression>) {
-                *hash<DataProviderExpressionInfo> nested_info;
                 {
                     on_error rethrow $1.err, sprintf("%s (in an argument of expression %y)", $1.desc, exp.exp);
-                    nested_info = AbstractDataProvider::verifyGenericExpressionTree(
-                        cast<hash<DataProviderExpression>>(arg), fields);
+                    AbstractDataProvider::verifyGenericExpressionTree(cast<hash<DataProviderExpression>>(arg),
+                        fields);
                 }
-                arg_type = nested_info.return_type;
                 arg_desc = sprintf("expression %y", arg.exp);
-            } else if (arg instanceof hash<DataProviderFieldReference>) {
-                arg_type = AbstractDataProvider::getFieldReferenceType(cast<hash<DataProviderFieldReference>>(arg),
-                    fields);
-                arg_desc = sprintf("field %y", arg.field);
+            } else {
+                arg_desc = AbstractDataProvider::describeExpressionArg(arg);
             }
+            # the type of the argument by the expression type rules, the same as in DPQL validation
+            arg_type = ExpressionTypes::getType(arg, fields);
             # an expression without an argument signature is not checked
             if (arg_type && info.args) {
                 AbstractDataProvider::checkArgType(info, $#, arg_type, arg_desc);

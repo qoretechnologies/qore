@@ -1,0 +1,427 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class ExpressionTypesTest
+
+#! The type rules of expressions: one set of rules for DPQL validation, expression verification and evaluation
+/** qoretechnologies/qorus#713: every user of expression types works out the type of an expression with
+    ExpressionTypes, and the type it gives is the type of the value that evaluating the expression gives.
+*/
+class ExpressionTypesTest inherits QUnit::Test {
+    private {
+        #! A sample value of each kind, with the name of the type that it has
+        const Samples = {
+            "int": 7,
+            "float": 2.5,
+            "number": 2.5n,
+            "string": "s",
+            "date": 2026-01-01,
+            "bool": True,
+            "binary": <0102>,
+            "hash": {"a": 1},
+            "list": (1, 2),
+        };
+
+        #! Qore value type names by the type names of expressions
+        const ValueTypeNames = {
+            "int": "integer",
+            "float": "float",
+            "number": "number",
+            "string": "string",
+            "date": "date",
+            "bool": "bool",
+            "binary": "binary",
+            "hash": "hash",
+            "list": "list",
+        };
+    }
+
+    constructor() : Test("ExpressionTypes", "1.0", \ARGV) {
+        addTestCase("literal, field and template types", \valueTypeTest());
+        addTestCase("arithmetic types are the types of the values that evaluation gives", \arithmeticTest());
+        addTestCase("arithmetic that cannot combine its operands", \arithmeticMismatchTest());
+        addTestCase("operators and functions", \expressionTest());
+        addTestCase("keys and indexes", \accessorTest());
+        addTestCase("expression definitions", \expressionInfoTest());
+        addTestCase("operand kinds", \kindTest());
+        addTestCase("the number and data argument types", \signatureTypeTest());
+        addTestCase("validation and verification use the same types", \verificationTest());
+        set_return_value(main());
+    }
+
+    valueTypeTest() {
+        foreach hash<auto> i in (Samples.pairIterator()) {
+            assertEq(i.key, ExpressionTypes::getKind(ExpressionTypes::getType(i.value)), i.key);
+        }
+        assertEq("hash<auto>", ExpressionTypes::getType({"a": 1}).getName());
+        assertEq("list<auto>", ExpressionTypes::getType((1,)).getName());
+        assertEq("nothing", ExpressionTypes::getType(NOTHING).getName());
+        assertEq("nothing", ExpressionTypes::getType(NULL).getName());
+        assertNothing(ExpressionTypes::getType(new Mutex()), "an object has no expression type");
+
+        hash<string, AbstractDataField> fields = getFields();
+        assertEq("*int", ExpressionTypes::getType(<DataProviderFieldReference>{"field": "qty"}, fields).getName());
+        assertEq("string", ExpressionTypes::getType(<DataProviderFieldReference>{"field": "customer.name"},
+            fields).getName(), "a field of a field");
+        assertNothing(ExpressionTypes::getType(<DataProviderFieldReference>{"field": "nosuch"}, fields));
+        assertNothing(ExpressionTypes::getType(<DataProviderFieldReference>{"field": "qty"}),
+            "a field without the fields of the record");
+        assertNothing(ExpressionTypes::getType(<DataProviderFieldReference>{"field": "anything"}, fields),
+            "a field that can hold any value");
+        # no template type callback is registered here
+        assertNothing(ExpressionTypes::getType(<DataProviderTemplateReference>{"tmpl_context": "local",
+            "tmpl_value": "x"}));
+    }
+
+    arithmeticTest() {
+        int checked = 0;
+        foreach string op in (keys ExpressionTypes::ArithmeticAccepts) {
+            foreach hash<auto> left in (Samples.pairIterator()) {
+                foreach hash<auto> right in (Samples.pairIterator()) {
+                    hash<DataProviderExpression> exp = <DataProviderExpression>{
+                        "exp": op,
+                        "args": (left.value, right.value),
+                    };
+                    string desc = sprintf("%s %s %s", left.key, op, right.key);
+                    *AbstractDataProviderType type = ExpressionTypes::getType(exp);
+                    *hash<ExpressionArithmeticMismatch> mismatch = ExpressionTypes::checkArithmetic(exp);
+                    if (!type) {
+                        assertTrue(exists mismatch, desc + ": no type only where the operands cannot be combined");
+                        continue;
+                    }
+                    assertNothing(mismatch, desc);
+                    auto value;
+                    try {
+                        value = AbstractDataProvider::evalGenericExpressionValue({}, exp, NOTHING);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # division by zero is not a type question
+                        assertEq("DIVISION-BY-ZERO", ex.err, desc);
+                        continue;
+                    }
+                    assertEq(ValueTypeNames{ExpressionTypes::getKind(type)}, value.type(), desc);
+                    ++checked;
+                }
+            }
+        }
+        # every combination with a type was evaluated
+        assertGt(50, checked);
+
+        # the issue's examples
+        assertEq("float", ExpressionTypes::getType(DataProvider::parseDpqlExpression("1 + 2.5")).getName());
+        assertEq("number", ExpressionTypes::getType(<DataProviderExpression>{"exp": "+", "args": (1, 2.5n)})
+            .getName());
+        assertEq("int", ExpressionTypes::getType(DataProvider::parseDpqlExpression("7 / 2")).getName());
+        assertEq("int", ExpressionTypes::getType(DataProvider::parseDpqlExpression("7.5 % 2")).getName(),
+            "the remainder is an integer");
+        assertEq("string", ExpressionTypes::getType(DataProvider::parseDpqlExpression("\"a\" + 1 + 2.5"))
+            .getName(), "a string joined with numbers, from left to right");
+        assertEq("int", ExpressionTypes::getType(<DataProviderExpression>{"exp": "PLUS", "args": (1, 2)})
+            .getName(), "an operator alias");
+
+        hash<string, AbstractDataField> fields = getFields();
+        assertEq("int", ExpressionTypes::getType(DataProvider::parseDpqlExpression("@qty + 1"), fields).getName(),
+            "an optional integer field");
+        assertEq("number", ExpressionTypes::getType(DataProvider::parseDpqlExpression("@qty * @price"), fields)
+            .getName());
+        assertNothing(ExpressionTypes::getType(DataProvider::parseDpqlExpression("@anything + 1"), fields),
+            "an operand whose type is only known when it is evaluated");
+        assertEq("date", ExpressionTypes::getType(<DataProviderExpression>{"exp": "-", "args": (
+            <DataProviderFieldReference>{"field": "when"}, 1D)}, fields).getName());
+        assertEq("hash", ExpressionTypes::getKind(ExpressionTypes::getType(
+            DataProvider::parseDpqlExpression("@create - \"a\""), fields)), "keys removed from a hash");
+        assertEq("list", ExpressionTypes::getKind(ExpressionTypes::getType(
+            <DataProviderExpression>{"exp": "+", "args": (<DataProviderFieldReference>{"field": "create"},
+            (1,))}, fields)), "a hash prepended to a list");
+    }
+
+    arithmeticMismatchTest() {
+        hash<string, AbstractDataField> fields = getFields();
+        # a hash plus an integer: an error in the editor, and Qore's result when it is evaluated
+        hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression("@create + 1");
+        assertNothing(ExpressionTypes::getType(exp, fields));
+        *hash<ExpressionArithmeticMismatch> mismatch = ExpressionTypes::checkArithmetic(exp, fields);
+        assertEq("+", mismatch.op);
+        assertEq(<DataProviderFieldReference>{"field": "create"}, mismatch.left);
+        assertEq("hash", mismatch.left_kind);
+        assertFalse(mismatch.left_combined);
+        assertEq(1, mismatch.right);
+        assertEq("int", mismatch.right_kind);
+        assertEq(1, AbstractDataProvider::evalGenericExpressionValue({"create": {"a": 1}}, exp, NOTHING),
+            "evaluation keeps Qore's result");
+        assertEq(1, AbstractDataProvider::evalGenericExpressionValue({"create": {"a": 1}},
+            <DataProviderExpression>{"exp": "+", "args": ({"a": 1}, 1)}, NOTHING));
+
+        # the operands are combined from left to right
+        mismatch = ExpressionTypes::checkArithmetic(<DataProviderExpression>{"exp": "+", "args": (1, 2,
+            <DataProviderFieldReference>{"field": "create"})}, fields);
+        assertTrue(mismatch.left_combined, "the left operand is what the first two give");
+        assertEq("int", mismatch.left_kind);
+        assertEq("hash", mismatch.right_kind);
+
+        # nested arithmetic that cannot be combined is reported where it is, not again by what contains it
+        exp = DataProvider::parseDpqlExpression("(@create + 1) * 2");
+        assertNothing(ExpressionTypes::checkArithmetic(exp, fields));
+        assertNothing(ExpressionTypes::getType(exp, fields), "no type from operands that cannot be combined");
+        assertEq("+", ExpressionTypes::checkArithmetic(exp.args[0], fields).op);
+
+        # an operand whose kind is not known cannot be checked
+        assertNothing(ExpressionTypes::checkArithmetic(DataProvider::parseDpqlExpression("@anything + 1"), fields));
+        assertNothing(ExpressionTypes::checkArithmetic(DataProvider::parseDpqlExpression("@nosuch + 1"), fields));
+
+        # a boolean is combined only with a string
+        assertNothing(ExpressionTypes::getType(DataProvider::parseDpqlExpression("True + True")));
+        assertEq("string", ExpressionTypes::getType(DataProvider::parseDpqlExpression("True + \"x\"")).getName());
+
+        # a single operand is not checked
+        assertNothing(ExpressionTypes::checkArithmetic(<DataProviderExpression>{"exp": "+", "args": (1,)}));
+        assertNothing(ExpressionTypes::getType(<DataProviderExpression>{"exp": "+", "args": (1,)}));
+    }
+
+    expressionTest() {
+        hash<string, AbstractDataField> fields = getFields();
+        foreach string text in ("@qty > 1", "@qty == 1 && @name == \"x\"", "!(@qty == 1)", "@name =~ /x/",
+                "@qty in (1, 2)", "@qty between 1 and 2", "@name != \"x\" || @qty < 2") {
+            assertEq("bool", ExpressionTypes::getType(DataProvider::parseDpqlExpression(text), fields).getName(),
+                text);
+        }
+        # the type of the first argument
+        assertEq("*int", ExpressionTypes::getType(DataProvider::parseDpqlExpression("abs(@qty)"), fields)
+            .getName());
+        assertEq("float", ExpressionTypes::getType(DataProvider::parseDpqlExpression("round(2.5)")).getName());
+        assertEq("int", ExpressionTypes::getType(DataProvider::parseDpqlExpression("abs(1 + 2)")).getName(),
+            "the type of nested arithmetic");
+        assertNothing(ExpressionTypes::getType(DataProvider::parseDpqlExpression("abs(@anything)"), fields));
+        # a declared type
+        assertEq("string", ExpressionTypes::getType(DataProvider::parseDpqlExpression("lwr(@name)"), fields)
+            .getName());
+        assertEq("int", ExpressionTypes::getType(DataProvider::parseDpqlExpression("size(@name)"), fields)
+            .getName());
+        # declared to give any value
+        assertNothing(ExpressionTypes::getType(DataProvider::parseDpqlExpression("coalesce(@qty, 1)"), fields));
+        assertNothing(ExpressionTypes::getType(<DataProviderExpression>{"exp": "nosuch", "args": ()}),
+            "an unknown expression");
+        assertEq("int", ExpressionTypes::getType(<DataProviderExpression>{"exp": "value", "args": (1,)})
+            .getName());
+        assertNothing(ExpressionTypes::getType(<DataProviderExpression>{"exp": "value", "args": ()}));
+
+        # the first priority type that an argument has
+        hash<string, hash<DataProviderExpressionInfo>> expmap = {
+            "pick": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "pick",
+                "display_name": "pick",
+                "short_desc": "test",
+                "desc": "test",
+                "symbol": "pick()",
+                "args": (DataProviderSignatureAnyType,),
+                "varargs": True,
+                "return_type": AbstractDataProviderTypeMap."any",
+                "return_type_arg_priority": ("number", "float", "int"),
+            },
+        };
+        assertEq("float", ExpressionTypes::getType(<DataProviderExpression>{"exp": "pick", "args": (1, 2.5)},
+            NOTHING, expmap).getName());
+        assertEq("int", ExpressionTypes::getType(<DataProviderExpression>{"exp": "pick", "args": (1, 2)},
+            NOTHING, expmap).getName());
+        assertNothing(ExpressionTypes::getType(<DataProviderExpression>{"exp": "pick", "args": (1,
+            <DataProviderFieldReference>{"field": "anything"})}, fields, expmap),
+            "an argument whose type is only known when it is evaluated");
+        assertNothing(ExpressionTypes::getType(<DataProviderExpression>{"exp": "pick", "args": ("a",)},
+            NOTHING, expmap), "no priority type: the declared type, any value");
+    }
+
+    accessorTest() {
+        hash<string, AbstractDataField> fields = getFields();
+        assertEq("string", ExpressionTypes::getType(DataProvider::parseDpqlExpression("@customer{name}"), fields)
+            .getName());
+        assertNothing(ExpressionTypes::getType(DataProvider::parseDpqlExpression("@customer{nosuch}"), fields));
+        assertNothing(ExpressionTypes::getType(DataProvider::parseDpqlExpression("@create{a}"), fields),
+            "a hash whose fields are not described");
+        assertEq("int", ExpressionTypes::getType(DataProvider::parseDpqlExpression("@ids[0]"), fields).getName());
+        assertNothing(ExpressionTypes::getType(DataProvider::parseDpqlExpression("@tags[0]"), fields),
+            "a list whose elements can be any value");
+        assertNothing(ExpressionTypes::getType(DataProvider::parseDpqlExpression("@name[0]"), fields),
+            "an index of a string");
+    }
+
+    expressionInfoTest() {
+        assertEq("abs", ExpressionTypes::getExpressionInfo("abs").name);
+        assertEq("+", ExpressionTypes::getExpressionInfo("PLUS").name, "an operator alias");
+        assertNothing(ExpressionTypes::getExpressionInfo("nosuch"));
+        hash<string, hash<DataProviderExpressionInfo>> expmap = {
+            "abs": DataProviderGenericExpressions."lwr",
+        };
+        assertEq("lwr", ExpressionTypes::getExpressionInfo("abs", expmap).name, "the given definitions first");
+        assertEq("round", ExpressionTypes::getExpressionInfo("round", expmap).name, "then the generic ones");
+    }
+
+    kindTest() {
+        foreach hash<auto> i in ({
+            "int": "int",
+            "*int": "int",
+            "softint": "int",
+            "float": "float",
+            "number": "number",
+            "*softnumber": "number",
+            "string": "string",
+            "date": "date",
+            "bool": "bool",
+            "binary": "binary",
+            "hash": "hash",
+            "list": "list",
+            "softlist": "list",
+        }.pairIterator()) {
+            assertEq(i.value, ExpressionTypes::getKind(AbstractDataProviderTypeMap{i.key}), i.key);
+        }
+        assertNothing(ExpressionTypes::getKind(AbstractDataProviderTypeMap."data"), "a string or binary data");
+        assertNothing(ExpressionTypes::getKind(AbstractDataProviderTypeMap."auto"));
+        assertNothing(ExpressionTypes::getKind());
+        assertEq("numeric", ExpressionTypes::getKind(new NumericChoiceType()), "more than one kind of number");
+
+        # numeric results
+        assertEq("int", ExpressionTypes::getArithmeticResultKind("+", "int", "int"));
+        assertEq("float", ExpressionTypes::getArithmeticResultKind("-", "int", "float"));
+        assertEq("number", ExpressionTypes::getArithmeticResultKind("*", "float", "number"));
+        assertEq("number", ExpressionTypes::getArithmeticResultKind("/", "numeric", "number"));
+        assertEq("numeric", ExpressionTypes::getArithmeticResultKind("+", "numeric", "float"));
+        assertEq("int", ExpressionTypes::getArithmeticResultKind("mod", "numeric", "float"));
+        assertNothing(ExpressionTypes::getArithmeticResultKind("mod", "string", "int"));
+        assertNothing(ExpressionTypes::getKindType("numeric"), "more than one type");
+        assertEq("float", ExpressionTypes::getKindType("float").getName());
+
+        hash<string, AbstractDataField> fields = {
+            "n": new QoreDataField("n", NOTHING, new NumericChoiceType()),
+        };
+        assertEq("numeric", ExpressionTypes::getOperandKind(<DataProviderFieldReference>{"field": "n"}, fields));
+        assertNothing(ExpressionTypes::getType(DataProvider::parseDpqlExpression("@n + 1"), fields),
+            "the result can be more than one kind of number");
+        assertEq("number", ExpressionTypes::getType(<DataProviderExpression>{"exp": "+", "args": (
+            <DataProviderFieldReference>{"field": "n"}, 1n)}, fields).getName());
+        assertEq("int", ExpressionTypes::getOperandKind(DataProvider::parseDpqlExpression("1 + 2")));
+        assertNothing(ExpressionTypes::getOperandKind(DataProvider::parseDpqlExpression("{} + 2")));
+    }
+
+    signatureTypeTest() {
+        AbstractDataProviderType number = DataProviderSignatureNumberType.type;
+        assertEq("number", number.getName());
+        foreach string name in ("int", "*int", "softint", "float", "number", "softnumber", "auto") {
+            assertTrue(AbstractDataProvider::isArgTypeCompatible(number, AbstractDataProviderTypeMap{name}), name);
+        }
+        foreach string name in ("string", "date", "bool", "hash", "list", "data", "binary") {
+            assertFalse(AbstractDataProvider::isArgTypeCompatible(number, AbstractDataProviderTypeMap{name}), name);
+        }
+        # the value is not converted
+        assertEq(Type::Int, number.acceptsValue(1).type());
+        assertEq(Type::Float, number.acceptsValue(1.5).type());
+        assertEq(Type::Number, number.acceptsValue(1.5n).type());
+        assertThrows("RUNTIME-TYPE-ERROR", \number.acceptsValue(), ({"a": 1},));
+
+        AbstractDataProviderType data = DataProviderSignatureDataType.type;
+        assertEq("data", data.getName());
+        assertTrue(AbstractDataProvider::isArgTypeCompatible(data, AbstractDataProviderTypeMap."string"));
+        assertTrue(AbstractDataProvider::isArgTypeCompatible(data, AbstractDataProviderTypeMap."binary"));
+        assertFalse(AbstractDataProvider::isArgTypeCompatible(data, AbstractDataProviderTypeMap."int"));
+
+        # DPQL validation reports the arguments
+        hash<string, AbstractDataField> fields = getFields();
+        assertEq(("DPQL-W004",), (map $1.code, DataProvider::validateDpqlExpression("abs(\"x\")", fields)));
+        assertEq(("DPQL-W004",), (map $1.code, DataProvider::validateDpqlExpression("abs(@name)", fields)));
+        assertEq((), DataProvider::validateDpqlExpression("abs(@qty) + round(@price)", fields));
+        assertEq(("DPQL-W004",), (map $1.code, DataProvider::validateDpqlExpression("toHex(1)", fields)));
+        assertEq((), DataProvider::validateDpqlExpression("toHex(@name)", fields));
+
+        # evaluation is unchanged: an integer stays an integer
+        assertEq(2, AbstractDataProvider::evalGenericExpressionValue({},
+            DataProvider::parseDpqlExpression("abs(-2)"), NOTHING));
+    }
+
+    verificationTest() {
+        hash<string, AbstractDataField> fields = getFields();
+        code verify = sub (string text) {
+            AbstractDataProvider::verifyExpression(ER_All, DataProviderGenericExpressions, 0xffffffff,
+                AbstractDataProviderTypeMap."auto", DataProvider::parseDpqlExpression(text), fields);
+        };
+        # what validation warns about (DPQL-W004), verification refuses, for every kind of argument
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "Value 1 of \"abs\"", verify, "abs(\"x\")");
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "field \"name\"", verify, "abs(@name)");
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "expression \"lwr\"", verify, "abs(lwr(@name))");
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "expression \"\\+\"", verify, "abs(@name + \"x\")",
+            "the type of nested arithmetic");
+        verify("abs(@qty + 1)");
+        verify("abs(@qty * @price)");
+        verify("lwr(@name + 1)");
+        # arithmetic that cannot combine its operands keeps Qore's result: it is not refused
+        verify("@create + 1");
+        verify("abs(@create + 1)");
+        # an argument whose type is only known when it is evaluated is not verified
+        verify("abs(@anything)");
+        verify("abs(coalesce(@qty, 1))");
+
+        # a condition is verified by the type that the rules give
+        code verify_condition = sub (string text) {
+            AbstractDataProvider::verifyExpression(ER_All, DataProviderGenericExpressions, 0xffffffff,
+                AbstractDataProviderTypeMap."bool", DataProvider::parseDpqlExpression(text), fields);
+        };
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "must evaluate to true or false", verify_condition,
+            "@name + \"x\"");
+        verify_condition("@qty + 1");
+        verify_condition("@qty > 1");
+    }
+
+    private hash<string, AbstractDataField> getFields() {
+        HashDataType customer("customer");
+        customer.addField(new QoreDataField("name", NOTHING, AbstractDataProviderTypeMap."string"));
+        return {
+            "qty": new QoreDataField("qty", NOTHING, AbstractDataProviderTypeMap."*int"),
+            "price": new QoreDataField("price", NOTHING, AbstractDataProviderTypeMap."number"),
+            "name": new QoreDataField("name", NOTHING, AbstractDataProviderTypeMap."string"),
+            "when": new QoreDataField("when", NOTHING, AbstractDataProviderTypeMap."date"),
+            "create": new QoreDataField("create", NOTHING, AbstractDataProviderTypeMap."hash"),
+            "tags": new QoreDataField("tags", NOTHING, AbstractDataProviderTypeMap."softlist"),
+            "ids": new QoreDataField("ids", NOTHING, new ListDataType(AbstractDataProviderTypeMap."int")),
+            "anything": new QoreDataField("anything", NOTHING, AbstractDataProviderTypeMap."auto"),
+            "customer": new QoreDataField("customer", NOTHING, customer),
+        };
+    }
+}
+
+#! A type that holds an integer or a float
+class NumericChoiceType inherits QoreDataType {
+    constructor() : QoreDataType(IntType) {
+    }
+
+    string getName() {
+        return "int-or-float";
+    }
+
+    hash<string, bool> getReturnTypeHash(*bool simple) {
+        return {"int": True, "float": True};
+    }
+}
