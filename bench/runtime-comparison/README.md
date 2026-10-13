@@ -1303,7 +1303,7 @@ self, captures, top-level and IR-only storage are excluded; existing native,
 weak-assigned and reload-exempt exclusions still apply. Null handles retain the
 ordinary fallback. The handle caches storage, not its value or ownership.
 
-The prepared helper still evaluates the live slot and its references. It
+The v1 prepared helper evaluates the live slot and its references. It
 snapshots the old owners before evaluation, publishes the new cache and owner
 chain before releasing the old deferred value, and publishes the completed
 epoch last, including when cleanup raises an exception. It does not remove
@@ -1314,6 +1314,28 @@ has not been measured for this change.
 
 See [prepared-reload measurements and matched Java comparison](RESULTS.md#prepared-runtime-backed-aot-local-reloads-2026-10-12)
 and [verified evidence/audit](results-aot-prepared-local-reload-macos-arm64.json).
+
+`QORE_DISABLE_AOT_SCALAR_LOCAL_RELOAD=1` independently disables exact live scalar
+reuse in prepared AOT reloads. At compilation it selects the existing v1 reload
+helper; runtime presence at first stale v2 use instead delegates to v1 in the
+identical executable. Empty values and `0` also disable reuse. Runtime-off
+includes that delegation cost; compile separate matching artifacts to compare
+the complete compiler/runtime change.
+
+By default, a stale prepared reload can retain the exact cached int/float/bool
+bits only when they match the actual assigned, nonfinalized, noncleared slot and
+both cleanup trackers contain only NOTHING or immediate scalars. Float matching
+is bitwise, and float admission excludes opaque-reference and inline-string
+prefixes. Tracker rotation and completed-epoch publication remain ordered.
+Any mismatch, owning cleanup, unsupported representation or populated exception
+sink retains v1 evaluation and cleanup. No epoch invalidation, reflective check,
+destructor, logical frame or cancellation point is removed. This is an AOT
+code-generation path; no IR/JIT benefit is implied.
+
+See [exact live scalar reload measurements](RESULTS.md#exact-live-scalar-reuse-in-aot-reloads-2026-10-13)
+and [verified evidence/audit](results-aot-scalar-local-reload-macos-arm64.json).
+The measured reload-heavy gains have an explicit native-integer regression;
+this is not a universal speedup.
 
 See [AOT scalar-store measurements](RESULTS.md#aot-scalar-local-replacement-2026-10-11) and [verified evidence/audit](results-aot-scalar-local-store-macos-arm64.json).
 

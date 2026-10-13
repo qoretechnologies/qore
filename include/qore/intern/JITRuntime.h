@@ -1648,6 +1648,22 @@ void qore_rt_reload_prepared_local_if_stale_aot_v1(void* prepared_slot, uint64_t
         uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
         ExceptionSink* xsink);
 
+//! Prepared reload with exact live-scalar reuse and the complete v1 fallback.
+/** @param prepared_slot same invocation-local non-null storage contract as v1
+    @param cache borrowed boxed value, compared to live primitive storage before reuse
+    @param tracker owning current reload tracker
+    @param deferred owning previous reload tracker
+    @param valid_epoch caller's last completed reload epoch
+    @param epoch caller's current invalidation epoch
+    @param xsink exception sink; populated sinks retain ordinary v1 handling
+    @note Only identical immediate int/float/bool values with non-owning scalar/NOTHING cleanup
+    slots bypass evaluation. All epoch invalidation and cleanup ordering remain unchanged.
+    QORE_DISABLE_AOT_SCALAR_LOCAL_RELOAD presence at first use selects the v1 operation.
+*/
+void qore_rt_reload_prepared_local_if_stale_aot_v2(void* prepared_slot, uint64_t* cache,
+        uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
+        ExceptionSink* xsink);
+
 //! Assign to a local variable via AOT context slot
 void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 void qore_rt_assign_local_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);

@@ -679,7 +679,7 @@ static void ut_aot_prepared_local_reload(UnitTestCounters& c) {
     }
     // Force the non-null helper itself even when testing the getter's disabled
     // control: matching results from the generic fallback alone are insufficient.
-    for (bool prepared : {false, true}) {
+    for (int prepared : {0, 1, 2}) {
         for (bool fail : {false, true}) {
             slot->syncValue(QoreValue(int64_t{27}), &xsink);
             ReferenceHolder<QoreStringNode> old(new QoreStringNode("old reload tracker"), &xsink);
@@ -690,7 +690,10 @@ static void ut_aot_prepared_local_reload(UnitTestCounters& c) {
             deferred = QoreValue(owner.release()).rawBits();
             uint64_t before_deferred = deferred;
             auto reload = [&](uint64_t epoch) {
-                if (prepared) {
+                if (prepared == 2) {
+                    qore_rt_reload_prepared_local_if_stale_aot_v2(slot, &cache, &tracker,
+                        &deferred, &valid_epoch, epoch, &xsink);
+                } else if (prepared == 1) {
                     qore_rt_reload_prepared_local_if_stale_aot_v1(slot, &cache, &tracker,
                         &deferred, &valid_epoch, epoch, &xsink);
                 } else {
@@ -733,6 +736,92 @@ static void ut_aot_prepared_local_reload(UnitTestCounters& c) {
             qore_rt_decref(tracker, &xsink);
             qore_rt_decref(deferred, &xsink);
         }
+    }
+    // Force the live-scalar operation independently of its diagnostic switch:
+    // generic fallback success alone does not establish fast-path correctness.
+    for (QoreValue value : {QoreValue(false), QoreValue(true), QoreValue(int64_t{27}),
+            QoreValue(QoreValue::InlineIntMin), QoreValue(QoreValue::InlineIntMax),
+            QoreValue(2.5), QoreValue(-0.0), QoreValue(std::numeric_limits<double>::quiet_NaN())}) {
+        slot->syncValue(value, &xsink);
+        uint64_t cache = value.rawBits(), tracker = QoreValue(false).rawBits();
+        uint64_t deferred = QoreValue(int64_t{17}).rawBits(), valid_epoch = 0;
+        uint64_t old_tracker = tracker;
+        UT_ASSERT(c, slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 1),
+            "identical live primitive and non-owning cleanup admit scalar reload");
+        UT_ASSERT_EQ(c, value.rawBits(), cache, "scalar reload preserves exact cached bits");
+        UT_ASSERT_EQ(c, value.rawBits(), tracker, "scalar reload publishes the current tracker");
+        UT_ASSERT_EQ(c, old_tracker, deferred, "scalar reload rotates the previous tracker");
+        UT_ASSERT_EQ(c, 1, valid_epoch, "scalar reload publishes completed epoch");
+        slot->syncValue(QoreValue(int64_t{51}), &xsink);
+        UT_ASSERT(c, !slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 2),
+            "live replacement is not hidden by cached scalar bits");
+        UT_ASSERT_EQ(c, value.rawBits(), cache, "rejected scalar reload leaves cache unchanged");
+        UT_ASSERT_EQ(c, value.rawBits(), tracker, "rejected scalar reload leaves tracker unchanged");
+        UT_ASSERT_EQ(c, old_tracker, deferred, "rejected scalar reload leaves deferred unchanged");
+        UT_ASSERT_EQ(c, 1, valid_epoch, "rejected scalar reload leaves epoch unchanged");
+        qore_rt_reload_prepared_local_if_stale_aot_v2(slot, &cache, &tracker, &deferred, &valid_epoch, 2, &xsink);
+        UT_ASSERT_EQ(c, QoreValue(int64_t{51}).rawBits(), cache, "v2 fallback observes changed live storage");
+    }
+    {
+        slot->syncValue(QoreValue(-0.0), &xsink);
+        uint64_t cache = QoreValue(0.0).rawBits(), tracker = 0, deferred = 0, valid_epoch = 0;
+        UT_ASSERT(c, !slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 1),
+            "different signed-zero bits do not match");
+        qore_rt_reload_prepared_local_if_stale_aot_v2(slot, &cache, &tracker, &deferred, &valid_epoch, 1, &xsink);
+        UT_ASSERT_EQ(c, QoreValue(-0.0).rawBits(), cache, "v2 fallback preserves negative zero");
+        for (int flag : {0, 1, 2}) {
+            slot->finalized = flag == 0;
+            slot->block_cleared = flag == 1;
+            slot->val.assigned = flag != 2;
+            UT_ASSERT(c, !slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 2),
+                "finalized, cleared or unassigned storage rejects scalar reuse");
+            UT_ASSERT_EQ(c, 1, valid_epoch, "rejected live state leaves epoch unchanged");
+        }
+        slot->finalized = false;
+        slot->block_cleared = false;
+        slot->val.assigned = true;
+        ReferenceHolder<QoreStringNode> owner(new QoreStringNode("scalar reload ownership control"), &xsink);
+        for (bool old_tracker : {false, true}) {
+            uint64_t& owned = old_tracker ? tracker : deferred;
+            owned = QoreValue(owner->refSelf()).rawBits();
+            UT_ASSERT(c, !slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 2),
+                "potentially owning cleanup requires the complete reload protocol");
+            UT_ASSERT_EQ(c, 2, owner->reference_count(), "rejected scalar reload does not release an owner");
+            qore_rt_decref(owned, &xsink);
+            owned = 0;
+        }
+        ReferenceHolder<QoreHashNode> opaque_owner(new QoreHashNode(autoTypeInfo), &xsink);
+        deferred = QoreValue::makeOpaqueHash(*opaque_owner).rawBits();
+        UT_ASSERT(c, !slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 2),
+            "opaque cleanup is owning even though its tag lies below the float boundary");
+        UT_ASSERT_EQ(c, 2, opaque_owner->reference_count(), "opaque owner survives rejected scalar reload");
+        qore_rt_decref(deferred, &xsink);
+        deferred = 0;
+        UT_ASSERT_EQ(c, 1, opaque_owner->reference_count(), "opaque cleanup releases exactly its own reference");
+    }
+    for (bool floating : {false, true}) {
+        uint64_t escaped_bits = QoreValue::RAW_DOUBLE_TAG_COLLISION_FIRST;
+        double escaped;
+        memcpy(&escaped, &escaped_bits, sizeof(escaped));
+        ValueHolder value(floating ? QoreValue(escaped) : QoreValue(std::numeric_limits<int64_t>::max()), &xsink);
+        slot->syncValue(value->refSelf(), &xsink);
+        uint64_t cache = value->rawBits(), tracker = 0, deferred = 0, valid_epoch = 0;
+        UT_ASSERT(c, !slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 1),
+            "wide and escaped numeric boxes retain ordinary owning reloads");
+        qore_rt_reload_prepared_local_if_stale_aot_v2(slot, &cache, &tracker, &deferred, &valid_epoch, 1, &xsink);
+        QoreSimpleValue raw;
+        raw.setRawBits(cache);
+        QoreValue reloaded(raw);
+        UT_ASSERT(c, reloaded.isPointer(), "wide numeric reload publishes an owned box");
+        if (floating) {
+            double actual = reloaded.getAsFloat();
+            UT_ASSERT(c, !memcmp(&actual, &escaped, sizeof(actual)), "escaped float reload preserves exact bits");
+        } else {
+            UT_ASSERT_EQ(c, std::numeric_limits<int64_t>::max(), reloaded.getAsBigInt(),
+                "wide integer reload preserves all bits");
+        }
+        qore_rt_decref(tracker, &xsink);
+        qore_rt_decref(deferred, &xsink);
     }
     UT_ASSERT(c, !xsink, "prepared reload native checks leave no exception");
 }

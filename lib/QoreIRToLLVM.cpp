@@ -5380,7 +5380,10 @@ void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
             prepared_continue = llvm::BasicBlock::Create(ctx, "aot_prepared_reload_continue", llvm_func);
             builder->CreateCondBr(builder->CreateIsNotNull(prepared), reload, fallback);
             builder->SetInsertPoint(reload);
-            auto prepared_helper = module.getOrInsertFunction("qore_rt_reload_prepared_local_if_stale_aot_v1",
+            const char* reload_helper = std::getenv("QORE_DISABLE_AOT_SCALAR_LOCAL_RELOAD")
+                ? "qore_rt_reload_prepared_local_if_stale_aot_v1"
+                : "qore_rt_reload_prepared_local_if_stale_aot_v2";
+            auto prepared_helper = module.getOrInsertFunction(reload_helper,
                 llvm::FunctionType::get(void_type,
                     {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i64_type, ptr_type}, false));
             builder->CreateCall(prepared_helper,

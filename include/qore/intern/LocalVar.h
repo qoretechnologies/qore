@@ -292,6 +292,70 @@ public:
         return true;
     }
 
+    //! Refresh a scalar cache only when its representation still matches the live slot exactly.
+    /** @param cache borrowed boxed cache, checked against the current primitive storage
+        @param tracker current reload owner; must contain only NOTHING or an immediate scalar
+        @param deferred previous reload owner; must contain only NOTHING or an immediate scalar
+        @param valid_epoch completed reload epoch, published after the tracker rotation
+        @param epoch caller's current invalidation epoch
+        @return true after the ordinary reload state transition, false without changing any state
+        @note This never assumes the callee or caller cleanup is pure. It reads the actual slot and
+        admits only exact immediate int/float/bool representations. References, nodes, mismatches,
+        cleared storage and any potentially owning cleanup retain ordinary evaluation/destruction.
+    */
+    DLLLOCAL __attribute__((always_inline)) bool tryReloadAOTScalarValue(uint64_t* cache,
+            uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch) const {
+        assert(local_var && !frame_boundary && cache && tracker && deferred && valid_epoch);
+        if (finalized || block_cleared || !val.assigned) {
+            return false;
+        }
+        QoreSimpleValue raw;
+        raw.setRawBits(*cache);
+        QoreValue cached(raw);
+        switch (val.type) {
+            case QV_Int:
+                if (!cached.isInt() || cached.getInt() != val.v.i) {
+                    return false;
+                }
+                break;
+            case QV_Float: {
+                if (!cached.isFloat()) {
+                    return false;
+                }
+                double value = cached.getDouble();
+                // Bit equality preserves signed zero and NaN payloads without
+                // allocating the wide/tag-colliding representations.
+                if (memcmp(&value, &val.v.f, sizeof(value))) {
+                    return false;
+                }
+                break;
+            }
+            case QV_Bool:
+                if (!cached.isBool() || cached.getBool() != val.v.b) {
+                    return false;
+                }
+                break;
+            default:
+                return false;
+        }
+        auto immediate = [](uint64_t bits) {
+            QoreSimpleValue raw;
+            raw.setRawBits(bits);
+            QoreValue value(raw);
+            return !bits || value.isInt() || value.isFloat() || value.isBool();
+        };
+        uint64_t old_tracker = *tracker;
+        if (!immediate(old_tracker) || !immediate(*deferred)) {
+            return false;
+        }
+        // Evaluation would return these exact bits without ownership. Both old
+        // owners are also non-owning, so publication/rotation cannot reenter.
+        *tracker = cached.rawBits();
+        *deferred = old_tracker;
+        *valid_epoch = epoch;
+        return true;
+    }
+
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
         //printd(5, "LocalVarValue::eval() this: %p '%s' type: %d '%s'\n", this, id, val.getType(),
         //    val.getTypeName());

@@ -356,8 +356,9 @@ retained beyond invocation cleanup. Recursive calls and block clearing do not
 invalidate the containing invocation's ordinary slot address.
 
 After the existing freshness and class-parameter mutation guards, a non-null
-handle selects `qore_rt_reload_prepared_local_if_stale_aot_v1`; a null handle
-selects the existing reload helper. The prepared helper takes seven arguments:
+handle selects the prepared reload protocol; a null handle selects the existing
+reload helper. The original `qore_rt_reload_prepared_local_if_stale_aot_v1`
+helper takes seven arguments:
 slot, cache, current owner, deferred owner, valid-epoch address, current epoch
 and exception sink. It still invokes `LocalVarValue::eval` and the ordinary
 loaded-reference handling. Only the `LocalVar`/TLS/stack lookup is omitted.
@@ -382,6 +383,50 @@ store controls, reflection, recursion and cleanup. Debug native checks force
 both looked-up and non-null prepared reloads, checking fresh epochs, exact node
 owner counts, deferred destruction/reentry, cleanup exceptions, block clearing
 and reassignment. They also check getter rejection and typed read-only storage.
+
+### Exact live scalar reuse in prepared AOT reloads
+
+The default prepared reload selects the additive
+`qore_rt_reload_prepared_local_if_stale_aot_v2` helper with the same seven-argument
+signature and invocation-local storage contract. Equal epochs remain a no-op.
+For a stale cache and an empty exception sink, it can reuse the cached bits only
+after checking the actual live slot in `LocalVarValue::tryReloadAOTScalarValue`.
+
+The slot must be assigned, nonfinalized and noncleared, with immediate integer,
+float or boolean storage matching the cache. Integers and booleans must match
+their primitive values; floats must match their decoded bits, preserving signed
+zero and NaN payloads. Wide integers, tag-colliding doubles, nodes, references,
+weak wrappers, enums and other storage retain ordinary evaluation. The check
+does not allocate or embed the C++ storage layout into LLVM code.
+
+Both cleanup slots must also be positively identified as NOTHING or immediate
+integer/float/boolean values. The float predicate excludes inline-string and
+opaque-reference prefixes; a pointer-tag-only test is insufficient. On success,
+the exact cache stays unchanged, its bits become the current tracker, the old
+tracker becomes deferred, and the completed epoch is published last. No owner
+can be destroyed or user code reentered on this admitted path. A miss changes
+no state and uses v1, including its evaluation, ownership and cleanup ordering.
+A populated sink also uses v1.
+
+This optimization does not infer purity from a successful native call. Every
+existing invalidation, reflective write check and deferred cleanup remains.
+Prepared-slot acquisition, recursive lifetime, block clearing, cancellation,
+logical frames and cross-Program fallback are unchanged.
+
+`QORE_DISABLE_AOT_SCALAR_LOCAL_RELOAD` selects v1 during compilation. Runtime
+presence at first stale v2 use instead delegates to v1 in the same executable;
+empty values and `0` also disable reuse. Runtime-off therefore includes the
+v2-to-v1 wrapper cost. This control is independent of prepared-slot acquisition,
+the inline epoch guard and assignment controls. The new symbol/private header
+requires matching compiler/runtime identities; legacy v1 is unchanged. The
+compiler selects v2 only in AOT mode, not the IR interpreter or JIT reload path.
+
+Native tests force exact scalar reuse separately from the diagnostic switch
+and check bit preservation, tracker rotation, changed live values, signed-zero
+mismatch, cleared/finalized/unassigned state, owning and opaque cleanup values,
+wide numbers and escaped doubles. Reentrant and throwing deferred destruction
+is checked through generic, v1 and v2 reloads. The AOT wrapper retains O0/O3,
+normal/EH, no-debug, split-compilation and independent compile/runtime controls.
 
 ### Checked AOT class-local initialization
 

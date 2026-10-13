@@ -384,6 +384,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_reload_local_if_stale_aot", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_aot) },
     { "qore_rt_get_reload_local_slot_aot_v1", reinterpret_cast<void*>(&qore_rt_get_reload_local_slot_aot_v1) },
     { "qore_rt_reload_prepared_local_if_stale_aot_v1", reinterpret_cast<void*>(&qore_rt_reload_prepared_local_if_stale_aot_v1) },
+    { "qore_rt_reload_prepared_local_if_stale_aot_v2", reinterpret_cast<void*>(&qore_rt_reload_prepared_local_if_stale_aot_v2) },
     { "qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot) },
     { "qore_rt_assign_class_local_result_aot_v1",
         reinterpret_cast<void*>(&qore_rt_assign_class_local_result_aot_v1) },
@@ -2067,6 +2068,22 @@ extern "C" DLLEXPORT void qore_rt_reload_prepared_local_if_stale_aot_v1(void* pr
             QoreValue result = slot->eval(needs_deref, xsink);
             return toBits(qore_rt_deref_loaded_var_value(result, needs_deref, xsink));
         });
+}
+
+extern "C" DLLEXPORT void qore_rt_reload_prepared_local_if_stale_aot_v2(void* prepared_slot,
+        uint64_t* cache, uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch,
+        uint64_t epoch, ExceptionSink* xsink) {
+    auto* slot = static_cast<LocalVarValue*>(prepared_slot);
+    assert(slot && slot->local_var && !slot->frame_boundary && valid_epoch && xsink);
+    if (*valid_epoch == epoch) {
+        return;
+    }
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_SCALAR_LOCAL_RELOAD");
+    if (enabled && !*xsink && slot->tryReloadAOTScalarValue(cache, tracker, deferred, valid_epoch, epoch)) {
+        return;
+    }
+    qore_rt_reload_prepared_local_if_stale_aot_v1(prepared_slot, cache, tracker, deferred,
+        valid_epoch, epoch, xsink);
 }
 
 static inline uint64_t qore_rt_eval_reference_node(AbstractQoreNode* node, ExceptionSink* xsink) {
