@@ -435,14 +435,17 @@ class StatefulEncodingCharacterTest inherits QUnit::Test {
         }
     }
 
-    #! returns the number of bytes of the first n characters of text in the given encoding
+    #! returns the number of bytes of the first n characters of the given text in the given encoding
     /** The bytes are found by converting longer and longer prefixes of the text, so the offset does not depend on the
-        readers tested
+        readers tested.  A prefix only counts if it converts to the first n characters of the text: Apple's libiconv
+        converts the bytes of a character cut off at the end of its input after complete characters to other
+        characters (UTF-7 "Gr+APwA" gives "GrüA") instead of failing.
     */
-    private static int charOffset(binary b, string enc, int n) {
+    private static int charOffset(binary b, string enc, int n, string text) {
+        string want = text.substr(0, n);
         for (int l = 1; l <= b.size(); ++l) {
             try {
-                if (convert_encoding(binary_to_string(b.substr(0, l), enc), "UTF-8").length() >= n) {
+                if (convert_encoding(binary_to_string(b.substr(0, l), enc), "UTF-8") == want) {
                     return l;
                 }
             } catch (hash<ExceptionInfo> ex) {
@@ -531,7 +534,7 @@ class StatefulEncodingCharacterTest inherits QUnit::Test {
 
             # no bytes are read after the characters returned
             for (int n = 1; n <= data.length(); ++n) {
-                int offset = charOffset(b, enc, n);
+                int offset = charOffset(b, enc, n, data);
                 BinaryInputStream is(b);
                 StreamReader sr(is, enc);
                 assertEq(data.substr(0, n), utf8(sr.readString(n)), sprintf("%s: StreamReader::readString(%d)", enc,
@@ -607,7 +610,7 @@ class StatefulEncodingCharacterTest inherits QUnit::Test {
         }
         binary b = binary(convert_encoding("ab 日本", enc));
         # the data ends after the first byte of "本"
-        binary cut = b.substr(0, charOffset(b, enc, 5) - 1);
+        binary cut = b.substr(0, charOffset(b, enc, 5, "ab 日本") - 1);
         assertThrows("STREAM-ENCODING-ERROR", "incomplete character", sub () {
             new StreamReader(new BinaryInputStream(cut), enc).readString(10);
         });
