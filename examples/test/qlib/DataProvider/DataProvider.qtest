@@ -5357,10 +5357,44 @@ public class DataProviderTest inherits QUnit::Test {
             RgbColorDataType rgb();
             assertEq("rgbcolor", rgb.getName());
             assertEq({"qore.external_name": "rgbcolor"}, rgb.getTags());
-            hash<auto> h = {"r": 1, "b": 2, "g": 3, "a": 4};
-            assertEq(h, rgb.acceptsValue(h));
+            # the opacity is a number from 0 (transparent) to 1 (opaque); the integers 0 and 1 are accepted too
+            foreach auto a in ((0, 0.5, 1, 0.0, 1.0, 0.25)) {
+                hash<auto> rv = rgb.acceptsValue({"r": 1, "b": 2, "g": 3, "a": a});
+                assertEq({"r": 1, "b": 2, "g": 3, "a": float(a)}, rv, sprintf("a: %y", a));
+                assertEq(Type::Float, rv.a.type(), sprintf("a: %y", a));
+            }
+            # a missing opacity is opaque
+            assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb.acceptsValue({"r": 1, "b": 2, "g": 3}));
+            # an opacity outside 0 - 1 is rejected, not clamped
+            foreach auto a in ((-0.1, 1.5, 255, -1, 2)) {
+                assertThrows("RUNTIME-TYPE-ERROR", "requires a value of at (least 0|most 1)", \rgb.acceptsValue(),
+                    {"r": 1, "b": 2, "g": 3, "a": a}, sprintf("a: %y", a));
+            }
+            # the color components are integers from 0 - 255
+            assertEq({"r": 0, "b": 255, "g": 128, "a": 0.5}, rgb.acceptsValue({"r": 0, "b": 255, "g": 128, "a": 0.5}));
+            hash<auto> h = {"r": 1, "b": 2, "g": 3, "a": 1};
             h.x = 3;
             assertThrows("RUNTIME-TYPE-ERROR", \rgb.acceptsValue(), h);
+
+            # the opacity field describes its range and default
+            AbstractDataField a = rgb.getFields().a;
+            hash<auto> a_info = a.getInfo();
+            assertEq("Opacity", a_info.display_name);
+            assertEq("Opacity, from 0 (transparent) to 1 (opaque)", a_info.short_desc);
+            assertEq("Opacity, from `0` (transparent) to `1` (opaque)", a_info.desc);
+            assertEq(1.0, a.getDefaultValue());
+            assertEq("float", a.getType().getBaseTypeName());
+            assertEq(<DataTypeConstraintInfo>{"minimum": 0, "maximum": 1}, a.getType().getConstraints());
+            # a type restored from its description enforces the range
+            AbstractDataProviderType restored = AbstractDataProviderType::get(rgb.getFields().a.getType().getInfo());
+            assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), 1.5);
+            assertEq(0.5, restored.acceptsValue(0.5));
+
+            # the "or nothing" type follows the same rules
+            RgbColorOrNothingDataType rgb_or_nothing();
+            assertNothing(rgb_or_nothing.acceptsValue());
+            assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb_or_nothing.acceptsValue({"r": 1, "b": 2, "g": 3}));
+            assertThrows("RUNTIME-TYPE-ERROR", \rgb_or_nothing.acceptsValue(), {"r": 1, "b": 2, "g": 3, "a": 255});
         }
 
         {

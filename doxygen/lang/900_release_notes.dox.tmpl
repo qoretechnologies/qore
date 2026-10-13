@@ -513,6 +513,14 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par The Opacity of an RGB Color Is a Number From 0 to 1
+    The \c a member of the \c rgbcolor data provider type
+    (@ref DataProvider::RgbColorDataType "RgbColorDataType") is the color's opacity, as every user interface stores
+    it: a number from \c 0 (transparent) to \c 1 (opaque), which is \c 1 when it is missing.  It was described as
+    a transparency from \c 0 to \c 255 with a default of \c 0, and was converted to an integer.  A value outside of
+    \c 0 to \c 1, such as \c 255, is now rejected with a \c RUNTIME-TYPE-ERROR exception, and the opacity is
+    returned as a \c float.
+
     @par Text in the Other Byte Order Than Its UTF-16 or UTF-32 Encoding Is Refused
     @parblock
     @ref Qore::StreamReader "StreamReader", @ref Qore::BufferedStreamReader "BufferedStreamReader", and
