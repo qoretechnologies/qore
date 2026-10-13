@@ -11966,3 +11966,216 @@ Full pure-call cleanup proofs and container assignment/coercion remain further
 priorities; a successful native dispatch does not prove cleanup is non-reentrant.
 
 [Verified samples, qualification and audit](results-aot-scalar-local-reload-macos-arm64.json).
+
+
+## AOT integer-first inline-float cleanup
+
+AOT-first follow-up to `5593a0db7`, measured against merged baseline
+`ea36807378d0ab75c695a4689474ef9374239e9d` on macOS arm64. The late LLVM
+cleanup pass now recognizes inline floating-point values in its existing
+native-callback/method callers, keeping the int48 tag exit first. The new test
+is exactly the union of NOTHING/int48/bool and `QoreValue::isFloat()`.
+Short-string and opaque-reference families, heap numbers and plugin tags retain
+the helper. Cleanup stays at its original point; no ownership, caller epoch,
+context, cancellation, dispatch or frame contract is weakened. The pass is
+called by AOT lowering only; no IR/JIT improvement is claimed.
+
+`QORE_DISABLE_LLVM_FLOAT_DECREF_GUARD=1` during compilation selects the old
+predicate on the candidate runtime. It is independent of the all-scalar and
+method-selection controls and adds no runtime flag test. Presence, including
+`0`, disables the float extension. Old AOT artifacts and the runtime ABI are
+unchanged. The `scalar-cleanup-float-guards` diagnostic counts expanded guards,
+not observed float executions.
+
+### Screening, rejected predecessor and confirmation
+
+The predecessor combined predicate improved boxed floats by about 11% but
+regressed integer member workloads by 3-5% in 660 windows. Its frozen sources,
+artifacts and raw data remain separate; it was not committed. Restoring an
+early integer exit produced the current candidate. Actual integer-member
+caller disassembly has 24 integer-first sequences, versus zero in baseline and
+compile-disabled artifacts. This establishes the lowering, not timing causality.
+
+Current-candidate initial screening retained 660 windows (three forks), followed
+by 1100 confirmation windows (five forks). Both use eleven kernels, before,
+identical enabled A/A and separately compiled old-predicate controls, count
+4096, three warmups and five 500-ms windows. The initial matrix improved boxed
+floats 10.4-11.0%, float member reads 8.6-9.3%, and indirect integers 3.0-3.6%,
+with separated before/disabled fork ranges. Confirmation follows in ns/element:
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Compile disabled
+|boxed integer method|18.7301|18.8562 / 18.9769|-0.674% / -1.318%|18.8678
+|boxed float method|24.5062|21.8642 / 21.8855|10.781% / 10.694%|24.3845
+|member updates|86.5733|87.1130 / 86.4017|-0.623% / 0.198%|86.2718
+|read-only integer member|32.9340|32.7813 / 32.8285|0.464% / 0.320%|32.7256
+|read-only float member|37.0865|33.7784 / 33.8270|8.920% / 8.789%|37.2659
+|native integer result|10.3021|10.1370 / 10.3060|1.602% / -0.038%|10.1594
+|native float result|11.3607|11.1883 / 11.3570|1.518% / 0.033%|11.3963
+|indirect integer result|6.8085|6.6464 / 6.6136|2.381% / 2.863%|6.9651
+|indirect float result|8.7491|8.6690 / 8.7701|0.916% / -0.240%|8.7887
+|list build|83.4612|83.0129 / 82.6324|0.537% / 0.993%|83.6191
+|list mutation|229.2144|231.4225 / 229.1306|-0.963% / 0.037%|228.8866
+
+Confirmation repeats the three main improvements, with separated before/off
+ranges in both enabled arms. It does not prove universal improvement: boxed
+integer medians are 0.7-1.3% slower with overlapping ranges. Integer member
+updates are mixed, with overlapping ranges. The initial native-integer
+1.3-1.5% slowdown and list-mutation 1.5-2.2% slowdown are not consistent in the
+confirmation; all original samples remain. This does not resolve the older
+committed native-integer regression. Confirmation includes a 10.09-ns
+indirect-float fork mean without exclusion. Fork-range separation is not a
+confidence interval, and overlap is not equivalence.
+
+### Short invocations and artifact cost
+
+660 further windows use count 1, eleven kernels, the same four modes and three
+forks. Values below are ns per whole invocation, including outer-call/harness
+work; they are not isolated call-entry latency. No Java timing in this matrix.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Compile disabled
+|boxed integer method|2294.1634|2312.4205 / 2309.3729|-0.796% / -0.663%|2321.8989
+|boxed float method|2282.0750|2307.3819 / 2281.1877|-1.109% / 0.039%|2294.8521
+|member updates|3246.1704|3254.2223 / 3252.2729|-0.248% / -0.188%|3252.7681
+|read-only integer member|2316.1854|2327.9138 / 2314.6898|-0.506% / 0.065%|2327.9326
+|read-only float member|2270.6608|2252.1967 / 2239.2880|0.813% / 1.382%|2264.5474
+|native integer result|2260.9285|2272.6866 / 2254.5807|-0.520% / 0.281%|2255.6704
+|native float result|2264.8974|2265.6774 / 2275.7101|-0.034% / -0.477%|2261.8699
+|indirect integer result|2144.7613|2128.0459 / 2104.9981|0.779% / 1.854%|2109.3459
+|indirect float result|2113.8621|2105.2491 / 2130.0719|0.407% / -0.767%|2111.2029
+|list build|2613.7612|2648.9709 / 2658.0600|-1.347% / -1.695%|2610.2241
+|list mutation|3013.1369|3016.4978 / 3017.1725|-0.112% / -0.134%|2985.4836
+
+Every before/enabled fork-range pair overlaps; no broad short-invocation
+benefit or equivalence is established. List build medians are 1.35-1.69% slower
+than baseline and 1.48-1.83% slower than compile-off; enabled-B separates the
+off range. Indirect-float enabled-B is 0.89% slower than off with separated
+ranges. List mutation is about 0.1% slower than baseline. These adverse results
+remain part of retention, not discarded as setup noise.
+
+The short benchmark executable grows from 394938 to 405626 bytes (2.71%);
+the fresh-Java matrix grows from 394938 to 405610 bytes (2.70%). Compile-off is
+394938 bytes in both. These are whole-file sizes, including non-code sections,
+not isolated text size. Single observed compilation durations are approximately
+0.74/0.53/0.74 seconds (before/enabled/off) and 0.75/0.54/0.76 seconds in the
+Java matrix. These are recorded costs, not a controlled compiler-throughput
+claim or proof that the added pass work is free.
+
+### Fresh matched Java comparison
+
+825 windows: eleven kernels, five interleaved modes, three forks, three warmups
+and five 500-ms windows, count 4096, order seed 135179. Temurin 25.0.2 and pinned
+JMH 1.37 use verified generated target DONT_INLINE hints. All five modes pass
+555 references; Qore library selection, Java tools/classes/JARs, actual fork
+settings and every raw window are independently checked. There is no mixing
+with historical Java times. Values are whole-workload ns/element, not isolated
+call latency or equivalent ownership/synchronization contracts.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Compile disabled|!Java JIT|!Enabled / Java
+|boxed integer method|18.7294|18.9290 / 18.8619|-1.066% / -0.707%|18.9148|2.5209|7.51 / 7.48x
+|boxed float method|24.6736|21.7822 / 22.1013|11.719% / 10.425%|24.5684|2.5394|8.58 / 8.70x
+|member updates|85.9132|87.4657 / 87.1920|-1.807% / -1.488%|87.3850|1.8513|47.25 / 47.10x
+|read-only integer member|32.8933|32.6975 / 32.5953|0.595% / 0.906%|32.8288|2.5341|12.90 / 12.86x
+|read-only float member|37.3161|33.7610 / 33.8704|9.527% / 9.234%|37.1843|2.4930|13.54 / 13.59x
+|native integer result|10.1773|10.1761 / 10.2007|0.011% / -0.230%|10.2607|3.0532|3.33 / 3.34x
+|native float result|11.2989|11.3811 / 11.3497|-0.727% / -0.450%|11.4278|3.4658|3.28 / 3.27x
+|indirect integer result|6.8178|6.5797 / 6.6564|3.491% / 2.367%|6.8228|1.8742|3.51 / 3.55x
+|indirect float result|8.7312|8.6581 / 8.6644|0.837% / 0.766%|8.7921|2.6374|3.28 / 3.29x
+|list build|83.4682|84.5082 / 82.6898|-1.246% / 0.933%|83.9871|2.5089|33.68 / 32.96x
+|list mutation|230.2578|232.0820 / 229.9972|-0.792% / 0.113%|231.1607|4.0748|56.95 / 56.44x
+
+Boxed floats improve 10.4-11.7%, read-only float members 9.2-9.5%, and indirect
+integers 2.4-3.5%; both enabled arms separate before and compile-off ranges.
+Boxed-float A/A medians differ 1.46% with separated ranges; both arms remain in
+the report. Indirect floats improve 0.77-0.84% with separated ranges in this
+matrix, but earlier matrices were mixed, so no repeatable broad float-callback
+gain is asserted.
+
+Integer member updates regress 1.49-1.81% against baseline with separated
+ranges; enabled/off ranges overlap. The compile-disabled observation does not
+establish a cause or dismiss the regression. Boxed integers are 0.7-1.1% slower
+with overlapping baseline ranges. Native integer/float results and list
+controls are mixed or slightly adverse; list-build A/A differs 2.15% with
+overlapping ranges. All data and comparisons remain.
+
+Only this matched matrix supplies the new Java ratios: native integer/float
+about 3.3x, indirect integer 3.51-3.55x, indirect float 3.28-3.29x, boxed integer
+7.48-7.51x, boxed float 8.58-8.70x, read-only integer 12.86-12.90x, read-only
+float 13.54-13.59x, updates 47.10-47.25x, list build 32.96-33.68x and mutation
+56.44-56.95x. Java parity remains unachieved.
+
+### Qualification, review and retention
+
+Release passes 114 files, 417 cases / 36725 assertions, 15 standalones and nine
+explicit skips. Debug passes 114 files, 424 cases / 36824 assertions, 15
+standalones and eight skips. Both pass seven exception/stack fixtures and
+IR/AOT reference grids. All 795 focused debug native checks and 17 harness
+tests pass; restored IR/AOT/Java-interpreted/Java-JIT grids each pass 555
+references. Nine restored-release smokes pass. All 61 owned qmod aliases point
+to the matching release build; unrelated aliases are unchanged. Independent
+verification reconstructs all 262 qualification child records. This is selected
+coverage, not full repository, sanitizer, leak or cross-platform qualification;
+Linux-only RSS and release debug-hook skips remain explicit.
+
+The scalar-assignment fixture covers AST/IR/JIT/tiered, AOT O0/O3, normal/EH and
+independent controls, including signed zero, infinities, NaNs, tag-colliding
+heap doubles and sole opaque ownership/destruction. A separate actual-QoreValue
+predicate check covers all 65536 upper-16-bit tags with nine payloads each
+(589824 representations), not an exhaustive 64-bit sweep. Generated owning
+fallbacks and ordinary cleanup/exception ordering remain intact.
+
+An initial qualification-driver preflight compared a legacy list to a target
+map and failed before any build/test/link change; it was corrected and retained.
+The first independent verifier assumed generated Makefile2 byte stability.
+Recorded builds reconfigured CMake; verification instead reconstructs the exact
+unchanged 61-target dependency closure and target map, retaining pre/post graph
+hashes and snapshots without claiming byte identity. A malformed unrun Java
+driver was caught in review and corrected before compilation/timing. No runtime
+failure or timing sample was replaced to hide these bookkeeping issues.
+
+All 3245 current-candidate windows are independently replayed; the predecessor
+660 windows remain separately archived. Performance data binds the unchanged
+three implementation/test sources and frozen binaries. README/RESULTS and this
+publication are documentation-only additions after qualification; the original
+broad source manifest is not relabeled as their validation. The 62-item
+audit-changes review records 17 Pass, 45 N/A and no remaining failures; strict
+table checks are recorded separately. No new module, DataProvider, QPP, JNI or
+public runtime ABI is introduced, and no optimization release note is added.
+
+Retention: keep the repeated roughly 11% boxed-float and 9% float-member gains,
+plus the repeated indirect-integer improvement, with integer regressions,
+short-invocation costs and code growth explicit. This is not a universal or
+regression-free improvement, nor evidence of Java parity. Next investigate
+complete pure-call completion together with non-reentrant caller cleanup, and
+invocation-prepared live dispatch/body proofs. Native success alone is not
+purity; earlier generic effects, receiver/result destruction and deferred
+cleanup must keep caller invalidation unless separately proven safe. Member
+locking/storage and container coercion/ownership remain larger gaps.
+
+Audit summary (the linked evidence reports each of the 62 items individually):
+
+|!Check|!Status|!Finding
+|Module docs and release notes|N/A|No new module; no optimization release note
+|CMake and QMOD registration|N/A|No module registration change
+|Module structure and QPP namespace|N/A|No module or QPP class change
+|New-file copyright|Pass|2026 MIT evidence; existing fixtures retain their headers
+|Test structure and dependencies|Pass|Modern, executable, local module path first; shipped dependencies only
+|Sandboxed I/O|N/A|No new filesystem or network operation
+|Cooperative cancellation|Pass|Existing 100/10 compiler checks and runtime checkpoints preserved
+|Blocking operations|N/A|No new blocking runtime work
+|DataProvider action registration|N/A|No action changes
+|DataProvider types and allowed values|N/A|No data type changes
+|App registration and descriptions|N/A|No app or description schema changes
+|Factory and record-provider registration|N/A|No provider changes
+|JNI dependencies and install rules|N/A|No JNI change; JMH is cached benchmark tooling
+|Workarounds and stubs|Pass|Complete predicate; old-predicate control is exact
+|Exception safety|Pass|LLVM ownership and owned-value cleanup remain intact
+|Thread safety|Pass|Pass-local compiler state; runtime publication unchanged
+|Type safety|Pass|Typed callbacks and fixed-width unsigned tag predicates
+|Performance|Pass|Measured targeted gains with regressions and code growth explicit
+|Error handling|Pass|Existing cancellation, exception and module-verification failures propagate
+|Documentation|Pass|Compiler control, ownership contract, costs and limits documented
+|QPP flags|N/A|No QPP method change
+|Formats, bounds and credentials|Pass|Fixed formats; no unsafe buffers or published credentials
+|Correctness|Pass|Predicate proof, selected release/debug tests and all raw measurements replayed
+
+[Verified samples, qualification and all audit items](results-aot-inline-float-cleanup-macos-arm64.json).

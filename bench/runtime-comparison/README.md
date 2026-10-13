@@ -913,8 +913,9 @@ Nonmatching and heap-encoded values still use the original coercion path;
 typed callable declarations alone are not accepted as proof of actual results.
 
 `QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD=1` at compilation disables the late
-LLVM cleanup guards for immediate int48, bool and NOTHING values in AOT functions
-containing typed native callback or unary-integer native method calls. Other
+LLVM cleanup guards for immediate int48, bool, NOTHING and inline floating-point
+values in AOT functions containing typed native callback or unary integer/float
+native method calls. Other
 functions are unchanged: broad guard insertion regressed direct-call and
 dispatch-control loops. The enabled
 pass runs after the normal optimizer and only simplifies locally afterward;
@@ -929,7 +930,25 @@ for this pass. Existing callback-selected functions remain eligible, including
 functions with both call kinds. It is a compile-only control, requiring separately
 compiled artifacts. No method dispatch/admission or result-coercion guard changes.
 Owned fallback values are still released at the original point; only exact
-NOTHING, int48 and bool representations skip the runtime cleanup call.
+NOTHING, int48, bool and inline-float representations skip the runtime cleanup call.
+
+`QORE_DISABLE_LLVM_FLOAT_DECREF_GUARD=1` at compilation selects the original
+NOTHING/int48/bool predicate while retaining the same callback/method caller
+selection. Like the other compiler controls here, presence selects the disabled
+path, including a value of `0`. Recompile AOT artifacts to compare it; there is
+no new runtime flag check. The enabled predicate keeps the integer tag exit
+first, then recognizes the exact union of the original allowlist and
+`QoreValue::isFloat()`. The short-string and opaque-reference tag families,
+heap-encoded doubles/integers and plugin representations keep the existing
+helper call. This is not a general non-pointer cleanup exemption. Cleanup order,
+caller invalidation and cancellation checkpoints are unchanged.
+`QORE_IR_OPT_STATS=1` also reports `scalar-cleanup-float-guards`; this counts
+inserted guards using the expanded predicate, not floating-point executions.
+The pass is AOT-only; no IR/JIT speedup is implied. The all-scalar control above
+disables the entire pass, and the independent method control still leaves
+callback-selected functions eligible. Retain short-invocation, code-size and
+adverse-workload comparisons as well as the long-loop float gains; see
+[the measured tradeoffs](RESULTS.md#aot-integer-first-inline-float-cleanup).
 
 `QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG=1` at compilation selects legacy TLS
 polling for generated JIT/AOT loops. The enabled path acquires a nullable,

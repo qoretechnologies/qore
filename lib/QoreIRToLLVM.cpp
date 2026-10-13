@@ -1402,7 +1402,7 @@ size_t QoreIRToLLVM::pruneNoopDecrefs(llvm::Module& module) {
 // Run after the main optimization pipeline: otherwise inlining and loop unrolling duplicate
 // the guards throughout cold fallback/cleanup paths and cause disproportionate code growth.
 static bool qore_ir_guard_scalar_decrefs(llvm::Function* function, std::string& error,
-        size_t& guards) {
+        size_t& guards, bool include_float) {
     std::vector<llvm::CallInst*> calls;
     bool has_native_scalar_call = false;
     size_t checked = 0;
@@ -1447,10 +1447,43 @@ static bool qore_ir_guard_scalar_decrefs(llvm::Function* function, std::string& 
         guard.SetCurrentDebugLocation(call->getDebugLoc());
         llvm::Value* value = call->getArgOperand(0);
         llvm::Type* type = value->getType();
-        llvm::Value* tag = guard.CreateAnd(value, llvm::ConstantInt::get(type, TAG_MASK));
-        llvm::Value* trivial = guard.CreateOr(
-            guard.CreateICmpEQ(value, llvm::ConstantInt::get(type, VAL_NOTHING)),
-            guard.CreateICmpEQ(tag, llvm::ConstantInt::get(type, TAG_INT48)));
+        if (include_float) {
+            // Keep the original single-tag integer exit before the broader float test.
+            // Merged cleanup slots commonly hold INT48 values; evaluating the float
+            // family exclusions first lengthens that otherwise cheap path.
+            llvm::Value* tag = guard.CreateAnd(value, llvm::ConstantInt::get(type, TAG_MASK));
+            llvm::Value* is_int = guard.CreateICmpEQ(tag, llvm::ConstantInt::get(type, TAG_INT48));
+            if (auto* constant = llvm::dyn_cast<llvm::ConstantInt>(is_int)) {
+                if (constant->isOne()) {
+                    call->eraseFromParent();
+                    continue;
+                }
+            } else {
+                llvm::Instruction* rest = llvm::SplitBlockAndInsertIfThen(
+                    guard.CreateNot(is_int, "needs_noninteger_cleanup"), call, false);
+                call->moveBefore(*rest->getParent(), rest->getIterator());
+                guard.SetInsertPoint(call);
+            }
+        }
+        llvm::Value* trivial;
+        if (include_float) {
+            // NOTHING, INT48 and inline doubles occupy the range below TAG_POINTER,
+            // except the short-string and opaque-reference families. This is the union
+            // of the old scalar test and QoreValue::isFloat(), not a general !isPointer
+            // test: heap-encoded doubles, opaque owners and plugin tags still call out.
+            llvm::Value* below_pointer = guard.CreateICmpULT(value,
+                llvm::ConstantInt::get(type, TAG_POINTER));
+            llvm::Value* tag12 = guard.CreateLShr(value, llvm::ConstantInt::get(type, 52));
+            llvm::Value* family_offset = guard.CreateSub(tag12, llvm::ConstantInt::get(type, 0xFFC));
+            llvm::Value* outside_families = guard.CreateICmpUGE(family_offset,
+                llvm::ConstantInt::get(type, 2));
+            trivial = guard.CreateAnd(below_pointer, outside_families);
+        } else {
+            llvm::Value* tag = guard.CreateAnd(value, llvm::ConstantInt::get(type, TAG_MASK));
+            trivial = guard.CreateOr(
+                guard.CreateICmpEQ(value, llvm::ConstantInt::get(type, VAL_NOTHING)),
+                guard.CreateICmpEQ(tag, llvm::ConstantInt::get(type, TAG_INT48)));
+        }
         trivial = guard.CreateOr(trivial, guard.CreateOr(
             guard.CreateICmpEQ(value, llvm::ConstantInt::get(type, VAL_FALSE)),
             guard.CreateICmpEQ(value, llvm::ConstantInt::get(type, VAL_TRUE))));
@@ -1475,6 +1508,7 @@ bool QoreIRToLLVM::guardScalarDecrefs(llvm::Module& module, std::string& error) 
         return true;
     }
     size_t guards = 0, checked = 0;
+    const bool include_float = !std::getenv("QORE_DISABLE_LLVM_FLOAT_DECREF_GUARD");
     std::vector<llvm::Function*> changed;
     for (llvm::Function& function : module) {
         if (++checked % 100 == 0 && qore_check_cancel(nullptr, "LLVM scalar cleanup functions")) {
@@ -1485,7 +1519,7 @@ bool QoreIRToLLVM::guardScalarDecrefs(llvm::Module& module, std::string& error) 
             continue;
         }
         size_t before = guards;
-        if (!qore_ir_guard_scalar_decrefs(&function, error, guards)) {
+        if (!qore_ir_guard_scalar_decrefs(&function, error, guards, include_float)) {
             return false;
         }
         if (guards != before) {
@@ -1518,6 +1552,7 @@ bool QoreIRToLLVM::guardScalarDecrefs(llvm::Module& module, std::string& error) 
     }
     if (std::getenv("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-LLVM: scalar-cleanup-guards=%zu\n", guards);
+        fprintf(stderr, "IR-OPT-LLVM: scalar-cleanup-float-guards=%zu\n", include_float ? guards : 0);
     }
     llvm::raw_string_ostream diagnostic(error);
     return !llvm::verifyModule(module, &diagnostic);

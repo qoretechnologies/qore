@@ -2,6 +2,7 @@
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 %modern
+%allow-opaque-references
 
 sub expect(auto expected, auto actual) {
     if (expected !== actual) {
@@ -17,10 +18,31 @@ softfloat sub storeSoftFloat(auto source) { softfloat value = source; return val
 softbool sub storeSoftBool(auto source) { softbool value = source; return value; }
 timeout sub storeTimeout(auto source) { timeout value = source; return value; }
 int sub typedIdentity(int value) { return value; }
+float sub typedFloatIdentity(float value) { return value; }
 
 thread_local int destroyed = 0;
 class Owned {
     destructor() { ++destroyed; }
+}
+
+sub soleOpaqueCleanup(code<int(int)> fn) {
+    *Owned value @= new Owned();
+    expect(10, fn(10));
+}
+
+sub mixedFloatCleanup(list<float> input, code<float(float)> fn) {
+    foreach float source in (input) {
+        auto value = fn(source);
+        if (source.nanp()) {
+            expect(True, value.nanp());
+        } else {
+            expect(source, value);
+            # Numeric equality alone does not distinguish signed zero.
+            if (source == 0.0) {
+                expect(sprintf("%g", source), sprintf("%g", value));
+            }
+        }
+    }
 }
 
 # Reuse each cleanup slot across immediate, allocated, converted, and rejected
@@ -82,5 +104,12 @@ for (int round = 0; round < 100; ++round) {
         True, False, NOTHING, "short", "a long string requiring node ownership", new Owned(), 8),
         \typedIdentity());
     expect((round + 1) * 4, destroyed);
+}
+for (int round = 0; round < 100; ++round) {
+    int before = destroyed;
+    soleOpaqueCleanup(\typedIdentity());
+    expect(before + 1, destroyed);
+    mixedFloatCleanup((0.0, -0.0, 1.25, -1.0e308, -1.5e307, -3.0e307, -6.0e307,
+        1.0e308, @inf@, -@inf@, @nan@, -@nan@), \typedFloatIdentity());
 }
 printf("native-scalar-assignment: ok\n");

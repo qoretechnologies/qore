@@ -33,6 +33,7 @@ class IRNativeScalarAssignmentTest inherits QUnit::Test {
         string source = get_script_dir() + "/IRNativeScalarAssignment.qr";
         string expected = "native-scalar-assignment: ok\n";
         foreach string prefix in (("", "QORE_DISABLE_NATIVE_SCALAR_ASSIGN_GUARD=1 ",
+                "QORE_DISABLE_LLVM_FLOAT_DECREF_GUARD=1 ",
                 "QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD=1 ")) {
             foreach string mode in (("ast", "ir", "jit", "tiered")) {
                 assertEq(expected, run((qore, "--exec-mode=" + mode, source), prefix), mode);
@@ -40,6 +41,7 @@ class IRNativeScalarAssignmentTest inherits QUnit::Test {
         }
         TmpDir dir("qore-native-scalar-assignment-");
         foreach string prefix in (("", "QORE_DISABLE_NATIVE_SCALAR_ASSIGN_GUARD=1 ",
+                "QORE_DISABLE_LLVM_FLOAT_DECREF_GUARD=1 ",
                 "QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD=1 ", "QORE_AOT_EH=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
@@ -53,6 +55,9 @@ class IRNativeScalarAssignmentTest inherits QUnit::Test {
                 if (!prefix.startsWith("QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD")) {
                     assertRegex("scalar-cleanup-guards=[1-9][0-9]*", generated,
                         "callback caller receives nonempty cleanup guards");
+                    assertRegex("scalar-cleanup-float-guards="
+                        + (prefix.startsWith("QORE_DISABLE_LLVM_FLOAT_DECREF_GUARD") ? "0" : "[1-9][0-9]*"),
+                        generated, "inline-float cleanup guard selection");
                 }
                 assertEq(expected, run((executable,)), "AOT " + level);
             }
