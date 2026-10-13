@@ -1,0 +1,288 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires json
+
+%exec-class LlmReasoningOffTest
+
+#! Captures the requests and answers each with a response in the shape of its API
+class LlmReasoningOffHandler inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> requests = ();
+    }
+
+    private {
+        Mutex m();
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> parsed = body.val() ? parse_json(body.typeCode() == NT_BINARY ? body.toString() : body) : {};
+        {
+            AutoLock al(m);
+            push requests, {"path": cx.raw_path, "body": parsed};
+        }
+        string path = cx.raw_path;
+        path =~ s/\?.*$//;
+        hash<auto> rv;
+        if (path =~ /chat\/completions$/) {
+            rv = {
+                "id": "chatcmpl-test",
+                "object": "chat.completion",
+                "model": parsed.model ?? "test",
+                "choices": ({"index": 0, "message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"},),
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            };
+        } else if (path =~ /\/messages$/) {
+            rv = {
+                "id": "msg-test",
+                "type": "message",
+                "model": parsed.model ?? "test",
+                "role": "assistant",
+                "content": ({"type": "text", "text": "ok"},),
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            };
+        } else if (path =~ /\/converse$/) {
+            rv = {
+                "output": {"message": {"role": "assistant", "content": ({"text": "ok"},)}},
+                "stopReason": "end_turn",
+                "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+            };
+        } else if (path =~ /\/chat$/) {
+            rv = {
+                "id": "cohere-test",
+                "finish_reason": "COMPLETE",
+                "message": {"role": "assistant", "content": ({"type": "text", "text": "ok"},)},
+                "usage": {"tokens": {"input_tokens": 1, "output_tokens": 1}},
+            };
+        } else {
+            return makeResponse(404, "{\"error\": \"not found\"}", {"Content-Type": MimeTypeJson});
+        }
+        return makeResponse(200, make_json(rv), {"Content-Type": MimeTypeJson});
+    }
+
+    hash<auto> takeLastBody() {
+        AutoLock al(m);
+        if (requests.size() != 1) {
+            throw "TEST-ERROR", sprintf("expected one request, got %d: %y", requests.size(), requests);
+        }
+        hash<auto> rv = requests[0].body;
+        requests = ();
+        return rv;
+    }
+}
+
+#! A reasoning budget of zero or disable_reasoning turns reasoning off where the model can, and selects the lowest
+#! reasoning setting where it cannot
+class LlmReasoningOffTest inherits QUnit::Test {
+    public {
+        #! the request members that carry reasoning controls
+        const ReasoningKeys = ("reasoning_effort", "thinking", "output_config", "reasoning", "chat_template_kwargs",
+            "additionalModelRequestFields");
+
+        const Budget0 = {"reasoning_token_budget": 0};
+        const Off = {"disable_reasoning": True};
+        const Adaptive = {"thinking": {"type": "adaptive"}, "output_config": {"effort": "low"}};
+
+        #! mode -> list of [model, request options, expected reasoning controls]
+        const Cases = {
+            "http": (
+                ("gpt-5.5", Budget0, {"reasoning_effort": "none"}),
+                ("gpt-5.5", Off, {"reasoning_effort": "none"}),
+                # an effort wins over a budget, and disable_reasoning wins over an effort
+                ("gpt-5.5", Budget0 + {"reasoning_effort": "high"}, {"reasoning_effort": "high"}),
+                ("gpt-5.5", Off + {"reasoning_effort": "high"}, {"reasoning_effort": "none"}),
+                # other budgets are not mapped
+                ("gpt-5.5", {"reasoning_token_budget": 1024}, {}),
+                ("gpt-6-luna", Budget0, {"reasoning_effort": "none"}),
+                ("gpt-5.1-codex", Budget0, {"reasoning_effort": "none"}),
+                ("gpt-5.4-mini", Off, {"reasoning_effort": "none"}),
+                # models that cannot turn reasoning off get their lowest effort
+                ("gpt-5-mini", Budget0, {"reasoning_effort": "minimal"}),
+                ("gpt-5-pro", Off, {"reasoning_effort": "high"}),
+                ("gpt-5.5-pro", Budget0, {"reasoning_effort": "medium"}),
+                ("o4-mini", Budget0, {"reasoning_effort": "low"}),
+                ("gpt-6-astra", Off, {"reasoning_effort": "low"}),
+                # not reasoning models, or not verified: unchanged
+                ("gpt-4.1-mini", Budget0, {}),
+                ("custom-model", Off + {"reasoning_effort": "low"}, {"reasoning_effort": "low"}),
+                ("custom-model", Budget0, {}),
+            ),
+            "azure-openai": (
+                ("gpt-5.5", Budget0, {"reasoning_effort": "none"}),
+                # Azure documents none for the GPT-6 models
+                ("gpt-6-astra", Budget0, {"reasoning_effort": "none"}),
+                ("gpt-5-nano", Off, {"reasoning_effort": "minimal"}),
+                ("o3", Budget0, {"reasoning_effort": "low"}),
+                ("my-chat-deployment", Budget0, {}),
+            ),
+            "anthropic": (
+                ("claude-opus-5", Budget0, {"thinking": {"type": "disabled"}}),
+                ("claude-haiku-5-5", Budget0, {"thinking": {"type": "disabled"}}),
+                ("claude-opus-4-8", Budget0, {"thinking": {"type": "disabled"}}),
+                ("claude-sonnet-4-5-20250929", Budget0, {"thinking": {"type": "disabled"}}),
+                ("claude-opus-5-5", Budget0, Adaptive),
+                ("claude-fable-5", Off, Adaptive),
+                ("claude-sonnet-5-5", Budget0, {"thinking": {"type": "between_tools"}}),
+                ("claude-opus-5", Budget0 + {"reasoning_effort": "high"},
+                    {"thinking": {"type": "adaptive"}, "output_config": {"effort": "high"}}),
+                # not verified: a budget is not mapped, and disable_reasoning keeps sending thinking disabled
+                ("claude-3-haiku-20240307", Budget0, {}),
+                ("claude-3-haiku-20240307", Off, {"thinking": {"type": "disabled"}}),
+            ),
+            "deepseek": (
+                ("deepseek-v4-flash", Budget0, {"thinking": {"type": "disabled"}}),
+                ("deepseek-v4-pro", Off, {"thinking": {"type": "disabled"}}),
+                ("deepseek-chat", Budget0, {}),
+            ),
+            "mistral": (
+                ("mistral-medium-3-5", Budget0, {"reasoning_effort": "none"}),
+                ("magistral-small-latest", Off, {"reasoning_effort": "none"}),
+                # always reasons, with no reasoning control
+                ("magistral-medium-2509", Budget0, {}),
+                # not a reasoning model
+                ("mistral-large-2512", Budget0, {}),
+                ("custom-model", Budget0, {}),
+            ),
+            "grok": (
+                ("grok-4.3", Budget0, {"reasoning_effort": "none"}),
+                ("grok-4.7", Off, {"reasoning_effort": "low"}),
+                ("grok-4.20-0309-non-reasoning", Budget0, {}),
+                ("grok-3-mini", Budget0, {}),
+            ),
+            "perplexity": (
+                ("sonar-deep-research", Budget0, {"reasoning_effort": "low"}),
+                ("sonar-reasoning-pro", Budget0, {}),
+                ("sonar", Budget0, {}),
+            ),
+            "groq": (
+                ("qwen/qwen3.8-27b", Budget0, {"reasoning_effort": "none"}),
+                ("openai/gpt-oss-120b", Off, {"reasoning_effort": "low"}),
+                ("llama-3.3-70b-versatile", Budget0, {}),
+            ),
+            "together": (
+                ("openai/gpt-oss-120b", Budget0, {"reasoning_effort": "low"}),
+                ("zai-org/GLM-5.2", Budget0, {"reasoning": {"enabled": False}}),
+                ("moonshotai/Kimi-K3", Off + {"reasoning_effort": "high"}, {"reasoning": {"enabled": False}}),
+                ("deepseek-ai/DeepSeek-R1", Budget0, {}),
+            ),
+            "fireworks": (
+                ("accounts/fireworks/models/gpt-oss-20b", Budget0, {"reasoning_effort": "low"}),
+                ("accounts/fireworks/models/minimax-m2", Off, {"reasoning_effort": "low"}),
+                ("accounts/fireworks/models/glm-4p7", Budget0, {"reasoning_effort": "none"}),
+                ("accounts/fireworks/models/deepseek-r1", Budget0, {}),
+            ),
+            "ollama": (
+                ("gpt-oss:20b", Budget0, {"reasoning_effort": "low"}),
+                ("qwen3:8b", Budget0, {}),
+            ),
+            "sglang": (
+                ("Qwen/Qwen3-8B", Budget0, {"chat_template_kwargs": {"enable_thinking": False}}),
+                ("deepseek-ai/DeepSeek-V3.2", Off, {"chat_template_kwargs": {"thinking": False}}),
+                ("deepseek-ai/DeepSeek-R1", Budget0, {}),
+                ("openai/gpt-oss-120b", Budget0, {}),
+            ),
+            "cohere": (
+                ("command-a-reasoning-08-2025", Budget0, {"thinking": {"type": "disabled"}}),
+                ("command-a-03-2025", Budget0, {}),
+            ),
+            "bedrock": (
+                ("us.anthropic.claude-opus-5", Budget0,
+                    {"additionalModelRequestFields": {"thinking": {"type": "disabled"}}}),
+                ("anthropic.claude-opus-4-6-v1", Off,
+                    {"additionalModelRequestFields": {"thinking": {"type": "disabled"}}}),
+                ("us.anthropic.claude-opus-5-5", Off, {"additionalModelRequestFields": Adaptive}),
+                ("global.anthropic.claude-sonnet-5-5", Budget0,
+                    {"additionalModelRequestFields": {"thinking": {"type": "between_tools"}}}),
+                ("us.deepseek.r1-v1:0", Budget0, {}),
+                ("amazon.nova-2-lite-v1:0", Budget0, {}),
+                ("anthropic.claude-3-haiku-20240307-v1:0", Off, {}),
+            ),
+        };
+    }
+
+    private {
+        HttpServer server;
+        LlmReasoningOffHandler handler();
+        string url;
+    }
+
+    constructor() : QUnit::Test("LlmReasoningOff", "1.0", \ARGV) {
+        addTestCase("every provider has cases", \coverageTest());
+        foreach string mode in (keys Cases) {
+            addTestCase(mode, \providerTest(), (mode,));
+        }
+        addTestCase("a provider's own reasoning controls win", \bodyOptionsTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("llm", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        url = "http://127.0.0.1:" + port;
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    coverageTest() {
+        # Gemini and Vertex AI are covered by GeminiGenerationConfig.qtest
+        assertEq(sort(keys (LlmProviderRegistry::ProviderModuleMap - ("gemini", "vertex-ai"))), sort(keys Cases));
+    }
+
+    providerTest(string mode) {
+        foreach list<auto> c in (Cases{mode}) {
+            string model = c[0];
+            hash<auto> body = send(mode, model, c[1]);
+            assertEq(c[2], body{ReasoningKeys} - (select keys body{ReasoningKeys}, !exists body{$1}),
+                sprintf("%s %s %y", mode, model, c[1]));
+        }
+    }
+
+    # reasoning controls in body_options are sent as given
+    bodyOptionsTest() {
+        hash<auto> body = send("http", "gpt-5.5", Budget0 + {"body_options": {"reasoning_effort": "medium"}});
+        assertEq("medium", body.reasoning_effort);
+        body = send("anthropic", "claude-opus-5", Budget0 + {"body_options": {"thinking": {"type": "adaptive"}}});
+        assertEq({"type": "adaptive"}, body.thinking);
+    }
+
+    private hash<auto> send(string mode, string model, hash<auto> options) {
+        hash<LlmRequestOptions> opts = cast<hash<LlmRequestOptions>>(options);
+        hash<LlmBackendConfig> config = <LlmBackendConfig>{
+            "mode": mode,
+            "url": url,
+            "model": model,
+            "api_key": "test-key",
+            "max_retries": 0,
+        };
+        switch (mode) {
+            case "azure-openai":
+                config.provider_options = {"azure_deployment": model};
+                break;
+            case "bedrock":
+                config.provider_options = {"aws_region": "us-east-1", "aws_keyid": "AKIDTEST",
+                    "aws_secret": "test-secret"};
+                break;
+        }
+        LlmBackend llm(config);
+        llm.chat((<ChatMessage>{"role": "user", "content": "hi"},), NOTHING, opts);
+        return handler.takeLastBody();
+    }
+}

@@ -110,6 +110,9 @@ printf("%Y\n", ans.body);
     - Support forced tools in non-thinking mode and strict tool schemas through the beta endpoint.
     - Adapt requested output schemas to JSON mode with schema instructions and validate strict output locally.
     - Preserve explicit user IDs for cache and scheduling isolation.
+    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
+      turns thinking off (\c thinking \c {"type": "disabled"}) on the DeepSeek V4 models; requests for models whose
+      reasoning controls have not been verified are unchanged
 
     @subsection DeepSeekRestClientv1_1 DeepSeekRestClient v1.1
     - Fixed automatic connection URLs, associated connections with the DeepSeek app, and enabled explicit JSON encoding.
@@ -582,6 +585,21 @@ public class DeepSeekLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
         return wire;
     }
 
+    #! Returns the reasoning effort that turns reasoning off for a model, or the model's lowest effort
+    /** The models of @ref DeepSeekRestClientBase::getModelReasoningEfforts() accept \c none, which is sent as
+        \c thinking \c {"type": "disabled"} (https://api-docs.deepseek.com/guides/thinking_mode:
+        \c {"thinking": {"type": "enabled/disabled"}}); other models, including the discontinued \c deepseek-chat and
+        \c deepseek-reasoner names, have not been verified.
+
+        @param model the model ID
+
+        @return the reasoning effort, or @ref nothing for models whose reasoning controls have not been verified,
+        which are sent unchanged
+    */
+    private *string getModelOffReasoningEffort(string model) {
+        *list<string> efforts = DeepSeekRestClientBase::getModelReasoningEfforts(model);
+        return efforts && inlist("none", efforts) ? "none" : NOTHING;
+    }
 }
 
 #! Namespace-local helper: returns config with the default DeepSeek URL applied

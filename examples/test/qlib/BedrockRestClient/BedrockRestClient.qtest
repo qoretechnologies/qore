@@ -45,6 +45,8 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
                 "totalTokens": 17,
             },
         };
+        # an error response for /model/.../converse, when set
+        *hash<auto> converse_error;
         # default canned response for /model/.../invoke (Titan embed)
         hash<auto> embed_response = {
             "embedding": (0.1, 0.2, 0.3, 0.4),
@@ -68,6 +70,9 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
         }
         # Route by path
         if (last_path =~ /\/converse$/) {
+            if (converse_error) {
+                return makeResponse({"Content-Type": MimeTypeJson}, 400, make_json(converse_error));
+            }
             return makeResponse({"Content-Type": MimeTypeJson}, 200,
                 make_json(converse_response));
         }
@@ -161,6 +166,8 @@ public class BedrockTest inherits QUnit::Test {
         addTestCase("SigV4 authorization header is signed", \sigV4Test());
         addTestCase("missing region throws at construction", \missingRegionTest());
         addTestCase("Titan embedder round-trip",          \titanEmbedderTest());
+        addTestCase("Claude models that reject a temperature", \claudeTemperatureTest());
+        addTestCase("a request error carries the message of the model", \errorMessageTest());
         addTestCase("Bedrock connection metadata and provider", \connectionTest());
         addTestCase("Bedrock connection authenticated ping", \connectionPingTest());
 
@@ -554,10 +561,44 @@ public class BedrockTest inherits QUnit::Test {
             });
     }
 
-    private BedrockRestClient::BedrockLlmProvider newProvider() {
+    # Claude Opus 4.7 and later reject a temperature with HTTP 400 ("`temperature` is deprecated for this model")
+    private claudeTemperatureTest() {
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        foreach string model in (("us.anthropic.claude-opus-5", "anthropic.claude-opus-5-5",
+                "global.anthropic.claude-sonnet-5-5", "us.anthropic.claude-sonnet-5", "anthropic.claude-haiku-5-5",
+                "anthropic.claude-opus-4-8", "us.anthropic.claude-opus-4-7", "anthropic.claude-fable-5-1",
+                "anthropic.claude-mythos-5")) {
+            newProvider(model).chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "ping"},));
+            assertFalse(handler.last_body.inferenceConfig.hasKey("temperature"), model);
+            assertEq(4096, handler.last_body.inferenceConfig.maxTokens, model);
+        }
+        # earlier models accept a temperature
+        foreach string model in (("anthropic.claude-3-5-sonnet-20240620-v1:0", "us.anthropic.claude-opus-4-6-v1",
+                "anthropic.claude-sonnet-4-6", "amazon.nova-2-lite-v1:0")) {
+            newProvider(model).chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "ping"},));
+            # 0.0 is sent as the JSON number 0
+            assertEq(0, handler.last_body.inferenceConfig.temperature, model);
+        }
+    }
+
+    private errorMessageTest() {
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        handler.converse_error = {"message": "The model returned the following errors: `temperature` is deprecated "
+            "for this model."};
+        on_exit remove handler.converse_error;
+        assertThrows("LLM-ERROR", "HTTP 400.*`temperature` is deprecated for this model", sub () {
+            newProvider().chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "ping"},));
+        });
+    }
+
+    private BedrockRestClient::BedrockLlmProvider newProvider(string model = "anthropic.claude-3-5-sonnet-20240620-v1:0") {
         return new BedrockRestClient::BedrockLlmProvider(
             <QoreLlmUtils::LlmBackendConfig>{
-                "model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+                "model": model,
                 "url": "http://localhost:" + bedrock_port,
                 "provider_options": {
                     "aws_region": "us-east-1",

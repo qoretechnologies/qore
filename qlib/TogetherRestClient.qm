@@ -97,6 +97,9 @@ printf("%Y\n", ans.body);
     - the provider factory reports, with @ref TogetherRestClient::TogetherLlmProviderFactory::getModelInfo()
       "TogetherLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
       reasoning_always_on): \c openai/gpt-oss-20b and \c openai/gpt-oss-120b
+    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
+      turns reasoning off on the hybrid models (\c reasoning \c {"enabled": false}) and selects the lowest effort, \c
+      low, of the GPT-OSS models; requests for models whose reasoning controls have not been verified are unchanged
 
     @subsection TogetherRestClientv1_0 TogetherRestClient v1.0
     - initial release
@@ -339,6 +342,29 @@ public class TogetherLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
 
     string getMode() {
         return "together";
+    }
+    #! Turns reasoning off for the model of a request, or selects its lowest reasoning setting
+    /** Evidence, https://docs.together.ai/docs/inference/chat/reasoning: the hybrid models "support both
+        reasoning and non-reasoning modes via \c reasoning={"enabled": True/False}": \c MiniMaxAI/MiniMax-M3,
+        \c deepseek-ai/DeepSeek-V4-Pro-0813, \c zai-org/GLM-5.2, \c moonshotai/Kimi-K3, \c Qwen/Qwen3.6-Plus and
+        \c Qwen/Qwen3.5-9B; GPT-OSS has the reasoning efforts \c low, \c medium and \c high.  The models that are
+        available only for dedicated inference have not been verified.
+
+        @param body the request body, which has a \c model
+
+        @return the request body; a request for a model whose reasoning controls have not been verified is returned
+        unchanged
+    */
+    private hash<auto> applyReasoningOff(hash<auto> body) {
+        string model = body.model;
+        if (inlist(model, ("MiniMaxAI/MiniMax-M3", "deepseek-ai/DeepSeek-V4-Pro-0813", "zai-org/GLM-5.2",
+                "moonshotai/Kimi-K3", "Qwen/Qwen3.6-Plus", "Qwen/Qwen3.5-9B"))) {
+            remove body.reasoning_effort;
+            body.reasoning = {"enabled": False};
+        } else if (model =~ /^openai\/gpt-oss-(20b|120b)$/) {
+            body.reasoning_effort = "low";
+        }
+        return body;
     }
 }
 

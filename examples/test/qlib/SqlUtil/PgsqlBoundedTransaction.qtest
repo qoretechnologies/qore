@@ -26,6 +26,8 @@ class BoundedTransactionTest inherits QUnit::Test {
         addTestCase("maintenance settings do not leak to the next pooled borrower", \maintenancePool());
         addTestCase("maintenance setup rejection rolls back partial transaction settings", \maintenanceFailure());
         addTestCase("maintenance setup and writes preserve the caller mutation declaration", \maintenanceDeclaration());
+        addTestCase("offline maintenance has a separate finite budget and preserves stricter limits", \offline());
+        addTestCase("offline maintenance can complete beyond the online transaction ceiling", \offlineLong());
         set_return_value(main());
     }
 
@@ -98,6 +100,10 @@ class BoundedTransactionTest inherits QUnit::Test {
                 f.table.beginBoundedMaintenanceTransaction(50, 100, 500);
             });
             assertFalse(f.ds.currentThreadInTransaction());
+            assertThrows("TRANSACTION-LIMIT-NOT-SUPPORTED", sub() {
+                f.table.beginBoundedOfflineMaintenanceTransaction(50, 100, 900000);
+            });
+            assertFalse(f.ds.currentThreadInTransaction());
             return;
         }
         foreach list<int> limits in (((0, 100, 500), (101, 100, 500), (50, 501, 500), (50, 100, 60001))) {
@@ -120,6 +126,80 @@ class BoundedTransactionTest inherits QUnit::Test {
         assertThrows("AUTOCOMMIT-ERROR", sub() { f.table.beginBoundedMaintenanceTransaction(50, 100, 500); });
         assertTrue(f.ds.getAutoCommit());
         f.ds.setAutoCommit(False);
+    }
+
+    private offline() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        foreach list<int> limits in (((0, 100, 900000), (101, 100, 900000), (50, 501, 500),
+                (50, 60001, 900000), (50, 100, 900001))) {
+            assertThrows("OPTION-ERROR", sub() {
+                f.table.beginBoundedOfflineMaintenanceTransaction(limits[0], limits[1], limits[2]);
+            });
+            assertFalse(f.ds.currentThreadInTransaction());
+        }
+        f.ds.beginTransaction();
+        assertThrows("TRANSACTION-ERROR", sub() {
+            f.table.beginBoundedOfflineMaintenanceTransaction(100, 1000, 900000);
+        });
+        assertTrue(f.ds.currentThreadInTransaction());
+        f.ds.rollback();
+        f.ds.setAutoCommit(True);
+        assertThrows("AUTOCOMMIT-ERROR", sub() {
+            f.table.beginBoundedOfflineMaintenanceTransaction(100, 1000, 900000);
+        });
+        f.ds.setAutoCommit(False);
+        f.ds.execRaw("set lock_timeout = '50ms'");
+        f.ds.execRaw("set statement_timeout = '150ms'");
+        f.ds.execRaw("set transaction_timeout = '500ms'");
+        f.ds.commit();
+        hash<string, int> original = readSettings(f.ds);
+        f.ds.commit();
+        hash<string, int> limits = f.table.beginBoundedOfflineMaintenanceTransaction(100, 1000, 900000);
+        assertEq(50, limits.lock_timeout_ms);
+        assertEq(150, limits.statement_timeout_ms);
+        assertTrue(limits.transaction_timeout_ms > 0 && limits.transaction_timeout_ms <= 500);
+        assertEq("read committed", readModes(f.ds).isolation);
+        assertEq("off", readModes(f.ds).row_security);
+        f.table.update({"value": 17}, {"id": 1});
+        f.ds.rollback();
+        assertEq(original, readSettings(f.ds));
+        f.ds.commit();
+        f.table.beginBoundedOfflineMaintenanceTransaction(100, 1000, 900000);
+        f.table.update({"value": 18}, {"id": 1});
+        *hash<ExceptionInfo> failure;
+        int completed;
+        try {
+            for (int i = 0; i < 20; ++i) {
+                f.ds.execRaw("select 1 from pg_sleep(0.05)");
+                ++completed;
+            }
+            f.ds.commit();
+        } catch (hash<ExceptionInfo> ex) { failure = ex; }
+        assertTrue(completed > 0 && completed < 20);
+        assertEq("DBI:PGSQL:CONNECTION-ERROR", failure.err);
+        f.ds.rollback();
+        Datasource observer = connection();
+        AbstractTable observed = AbstractTable::getTable(observer, f.name);
+        assertEq(0, observed.selectRow().value.toInt(), "offline timeout rolls back all preceding writes");
+        observer.commit();
+    }
+
+    private offlineLong() {
+        hash<auto> f = fixture();
+        on_exit cleanup(f);
+        hash<string, int> original = readSettings(f.ds);
+        f.ds.commit();
+        hash<string, int> limits = f.table.beginBoundedOfflineMaintenanceTransaction(100, 10000, 900000);
+        assertTrue(limits.transaction_timeout_ms > 60000 && limits.transaction_timeout_ms <= 900000);
+        assertEq(limits, readSettings(f.ds));
+        f.table.update({"value": 19}, {"id": 1});
+        # Real elapsed time crosses the unchanged online ceiling using individually short statements.
+        for (int i = 0; i < 13; ++i) { f.ds.execRaw("select 1 from pg_sleep(5)"); }
+        f.ds.commit();
+        assertEq(original, readSettings(f.ds));
+        assertEq(19, f.table.selectRow().value.toInt());
+        f.ds.commit();
     }
 
     private settings() {

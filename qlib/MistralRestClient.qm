@@ -89,6 +89,9 @@ printf("%Y\n", ans.body);
     - the provider factory reports, with @ref MistralRestClient::MistralLlmProviderFactory::getModelInfo()
       "MistralLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
       reasoning_always_on): the dated Magistral models
+    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
+      turns reasoning off with the reasoning effort \c none on the reasoning models that accept it; requests for models
+      whose reasoning controls have not been verified are unchanged
 
     @subsection MistralRestClientv1_1 MistralRestClient v1.1
     - support reasoning responses and streams, preserving reasoning across tool and conversation turns
@@ -438,6 +441,23 @@ public class MistralLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
             body.top_p = 1.0;
         }
         return body;
+    }
+    #! Returns the reasoning effort that turns reasoning off for a model, or the model's lowest effort
+    /** The reasoning models of @ref MistralRestClientBase::getModelReasoningEfforts() accept the reasoning effort
+        \c "none" (verified against the reasoning API on 2026-10-07; https://docs.mistral.ai/capabilities/reasoning/:
+        "The model thinks minimally and the thinking chunk is omitted from the response").  The dated Magistral
+        models always reason and have no reasoning control ("Native reasoning models always generate thinking traces
+        without any extra parameters", https://docs.mistral.ai/resources/deprecated/native-reasoning), and other
+        models have not been verified.
+
+        @param model the model ID
+
+        @return the reasoning effort, or @ref nothing for models whose reasoning controls have not been verified,
+        which are sent unchanged
+    */
+    private *string getModelOffReasoningEffort(string model) {
+        *list<string> efforts = MistralRestClientBase::getModelReasoningEfforts(model);
+        return efforts && inlist("none", efforts) ? "none" : NOTHING;
     }
 }
 

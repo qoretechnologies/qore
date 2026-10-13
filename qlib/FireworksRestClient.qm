@@ -102,6 +102,9 @@ printf("%Y\n", ans.body);
     - the provider factory reports, with @ref FireworksRestClient::FireworksLlmProviderFactory::getModelInfo()
       "FireworksLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
       reasoning_always_on): the GPT-OSS models and MiniMax M2
+    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
+      turns reasoning off on GLM 4.7 (reasoning effort \c none) and selects the lowest effort, \c low, of the GPT-OSS
+      models and MiniMax M2; requests for models whose reasoning controls have not been verified are unchanged
 
     @subsection FireworksRestClientv1_0 FireworksRestClient v1.0
     - initial release
@@ -331,6 +334,24 @@ public class FireworksLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
 
     string getMode() {
         return "fireworks";
+    }
+    #! Returns the reasoning effort that turns reasoning off for a model, or the model's lowest effort
+    /** Evidence, https://docs.fireworks.ai/api-reference/post-chatcompletions: GPT-OSS 120B and 20B accept
+        "only 'low', 'medium', or 'high'"; "MiniMax M2: Reasoning is required (always on) ... Accepts only string
+        reasoning_effort: 'low', 'medium', or 'high'"; GLM 4.7 (\c glm-4p7): "Use 'none' or false to disable".
+        The model IDs of the other models that the page describes, and the "Thinking-only models" that reject
+        \c none, have not been verified.
+
+        @param model the model ID
+
+        @return the reasoning effort, or @ref nothing for models whose reasoning controls have not been verified,
+        which are sent unchanged
+    */
+    private *string getModelOffReasoningEffort(string model) {
+        if (model =~ /^accounts\/fireworks\/models\/(gpt-oss-(20b|120b)|minimax-m2)$/) {
+            return "low";
+        }
+        return model == "accounts/fireworks/models/glm-4p7" ? "none" : NOTHING;
     }
 }
 

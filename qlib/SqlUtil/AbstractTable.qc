@@ -777,11 +777,43 @@ table.commit();
         return beginBoundedTransactionIntern(lock_timeout_ms, statement_timeout_ms, transaction_timeout_ms, True);
     }
 
+    #! Begins offline maintenance with a separate finite transaction budget
+    /** Establishes the same fresh snapshots, complete-row visibility and transaction-local settings as
+        @ref beginBoundedMaintenanceTransaction(). Only the total transaction budget is extended;
+        individual statements and lock waits remain limited to at most 60000 milliseconds.
+
+        @param lock_timeout_ms maximum database lock wait, in milliseconds
+        @param statement_timeout_ms maximum database statement duration, in milliseconds
+        @param transaction_timeout_ms maximum database transaction duration, in milliseconds
+        @return effective limits with the same keys as @ref beginBoundedTransaction()
+        @throw OPTION-ERROR unless 1 <= lock <= statement <= 60000 and statement <= transaction <= 900000
+        @throw TRANSACTION-ERROR if a transaction already exists
+        @throw AUTOCOMMIT-ERROR if the datasource has autocommit enabled
+        @throw TRANSACTION-LIMIT-NOT-SUPPORTED if bounded maintenance is unavailable
+        @throw TRANSACTION-LIMIT-EXCEEDED if the budget expires during setup
+        @throw DBI-ERROR if transaction setup fails
+        @note The caller must exclude writers and competing maintenance for the entire offline operation,
+            including recovery, and provision storage before starting. This API neither enforces that
+            exclusion nor grants admission. Stricter session limits remain effective. All native deadline,
+            commit/WAL and complete-transaction recovery caveats of @ref beginBoundedTransaction() apply.
+        @par Example
+        An offline schema upgrade validates indexed ranges under one exclusive table lock before
+        committing a column replacement, with a 30-second statement and 15-minute transaction budget.
+        @since SqlUtil 3.9.0
+    */
+    hash<string, int> beginBoundedOfflineMaintenanceTransaction(int lock_timeout_ms, int statement_timeout_ms,
+            int transaction_timeout_ms) {
+        return beginBoundedTransactionIntern(lock_timeout_ms, statement_timeout_ms, transaction_timeout_ms,
+            True, 900000);
+    }
+
     private hash<string, int> beginBoundedTransactionIntern(int lock_timeout_ms, int statement_timeout_ms,
-            int transaction_timeout_ms, bool maintenance) {
+            int transaction_timeout_ms, bool maintenance, int maximum_transaction_ms = 60000) {
         if (lock_timeout_ms < 1 || statement_timeout_ms < lock_timeout_ms
-                || transaction_timeout_ms < statement_timeout_ms || transaction_timeout_ms > 60000) {
-            throw "OPTION-ERROR", "transaction limits require 1 <= lock <= statement <= transaction <= 60000 ms";
+                || statement_timeout_ms > 60000 || transaction_timeout_ms < statement_timeout_ms
+                || transaction_timeout_ms > maximum_transaction_ms) {
+            throw "OPTION-ERROR", sprintf("transaction limits require 1 <= lock <= statement <= 60000 and "
+                "statement <= transaction <= %d ms", maximum_transaction_ms);
         }
         if (ds.currentThreadInTransaction()) {
             throw "TRANSACTION-ERROR", "bounded transaction requires an idle datasource";

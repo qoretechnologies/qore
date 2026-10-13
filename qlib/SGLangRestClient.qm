@@ -110,6 +110,9 @@ printf("%Y\n", ans.body);
     - the provider factory reports, with @ref SGLangRestClient::SGLangLlmProviderFactory::getModelInfo()
       "SGLangLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
       reasoning_always_on): DeepSeek-R1, the Qwen3 thinking models and the GPT-OSS models
+    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
+      turns thinking off on the hybrid Qwen3 and DeepSeek-V3.1/V3.2 models (\c chat_template_kwargs); requests for
+      models whose reasoning controls have not been verified are unchanged
 */
 
 #! the SGLangRestClient namespace contains all the objects in the SGLangRestClient module
@@ -415,6 +418,37 @@ public class SGLangLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
 
     string getMode() {
         return "sglang";
+    }
+    #! Turns reasoning off for the model of a request, or selects its lowest reasoning setting
+    /** Models are recognized when the served model name is the Hugging Face model ID.  Evidence,
+        https://docs.sglang.ai/advanced_features/separate_reasoning.html: standard Qwen3 "supports enable_thinking in
+        chat templates", and DeepSeek-V3.1/V3.2 is a "Hybrid model supporting both thinking and non-thinking modes,
+        use the deepseek-v3 parser and thinking parameter (NOTE: not enable_thinking)"; both are sent in
+        \c chat_template_kwargs.  The models that always think (Qwen3 thinking models, DeepSeek-R1) and GPT-OSS have
+        no reasoning setting that the page documents, and other models have not been verified.
+
+        @param body the request body, which has a \c model
+
+        @return the request body; a request for a model whose reasoning controls have not been verified is returned
+        unchanged
+    */
+    private hash<auto> applyReasoningOff(hash<auto> body) {
+        string model = body.model;
+        string key;
+        if (model =~ /(^|\/)qwen3-[0-9.]+b(-a[0-9.]+b)?$/i) {
+            key = "enable_thinking";
+        } else if (model =~ /(^|\/)deepseek-v3\.[12](-[a-z]+)?$/i) {
+            key = "thinking";
+        } else {
+            return body;
+        }
+        hash<auto> kwargs = {};
+        if (body.chat_template_kwargs.typeCode() == NT_HASH) {
+            kwargs += body.chat_template_kwargs;
+        }
+        kwargs{key} = False;
+        body.chat_template_kwargs = kwargs;
+        return body;
     }
 }
 

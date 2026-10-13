@@ -124,6 +124,9 @@ stream.close();
     - the provider factory reports, with @ref GrokRestClient::GrokLlmProviderFactory::getModelInfo()
       "GrokLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c reasoning_always_on):
       Grok 4.5, 4.6 and 4.7
+    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
+      turns reasoning off on Grok 4.3 (reasoning effort \c none) and selects the lowest effort, \c low, of Grok 4.5, 4.6
+      and 4.7; requests for models whose reasoning controls have not been verified are unchanged
 */
 
 %requires json
@@ -554,6 +557,29 @@ public class GrokLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
 
     string getMode() {
         return "grok";
+    }
+    #! Returns the reasoning effort that turns reasoning off for a model, or the model's lowest effort
+    /** Evidence:
+        - https://docs.x.ai/developers/models/grok-4.3.md: "Reasoning efforts (supported): \c none, \c low,
+          \c medium, \c high, \c xhigh"
+        - https://docs.x.ai/docs/guides/reasoning: \c grok-4.7, \c grok-4.6 and \c grok-4.5: "Reasoning cannot be
+          disabled", and their lowest effort is \c low
+        - \c grok-4.20-0309-non-reasoning does not reason; \c grok-4.20-0309-reasoning, \c grok-build-0.1 and
+          \c grok-3-mini have not been verified
+
+        @param model the model ID
+
+        @return the reasoning effort, or @ref nothing for models whose reasoning controls have not been verified,
+        which are sent unchanged
+    */
+    private *string getModelOffReasoningEffort(string model) {
+        if (model =~ /^grok-4\.3(-latest)?$/) {
+            return "none";
+        }
+        if (model =~ /^grok-4\.[567](-latest)?$/) {
+            return "low";
+        }
+        return NOTHING;
     }
 }
 

@@ -92,6 +92,12 @@ module QoreLlmTypes {
       @ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on" for a model that
       cannot turn hidden reasoning off; the LLM providers set it for the model families that are verified to always
       reason, and their documentation gives the evidence for each family
+    - @ref QoreLlmUtils::LlmProviderInfo::rejects_forced_tool_choice "LlmProviderInfo::rejects_forced_tool_choice"
+      for a model that rejects a forced tool choice
+    - a @ref QoreLlmUtils::LlmRequestOptions::reasoning_token_budget "reasoning_token_budget" of zero, like
+      @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning", asks every provider to turn
+      reasoning off where the model can, and to select the model's lowest reasoning setting where it cannot
+      (@ref QoreLlmUtils::AbstractLlmProvider::getRequestReasoningOff() "AbstractLlmProvider::getRequestReasoningOff()")
 */
 
 #! Provider-neutral LLM types and abstract classes (shared with QoreLlmUtils)
@@ -127,7 +133,8 @@ public hashdecl LlmBackendConfig {
     *int max_output_tokens;
     #! Optional hidden-reasoning / thinking token budget
     /** Providers that support a numeric hidden-reasoning budget map this to
-        their native field.  Providers without such a control ignore it.
+        their native field.  Providers without such a control ignore it, except for zero: a budget of zero without a
+        @ref reasoning_effort asks to turn reasoning off, like @ref disable_reasoning.
 
         @note Newer model families have removed numeric reasoning budgets in
         favor of a qualitative effort level; see @ref reasoning_effort.  On
@@ -154,10 +161,12 @@ public hashdecl LlmBackendConfig {
         that must carry the visible response.  Set this to @ref True to ask
         the provider to turn reasoning off.
 
-        Providers that cannot disable reasoning ignore this field, except that a provider may select the least
-        reasoning that a model allows when the model cannot turn reasoning off (see
-        @ref LlmProviderInfo::reasoning_always_on); the Anthropic provider does so for the Claude models that reject
-        \c thinking \c {"type": "disabled"}.  Leaving it unset sends no reasoning control at all, so the model's own
+        Every provider turns reasoning off where the model can (for example the reasoning effort \c none on OpenAI,
+        \c thinking \c {"type": "disabled"} on Anthropic), and selects the model's lowest reasoning setting where it
+        cannot (see @ref LlmProviderInfo::reasoning_always_on).  This option wins over @ref reasoning_effort, and a
+        @ref reasoning_token_budget of zero without a reasoning effort has the same meaning.  For models whose
+        reasoning controls have not been verified, providers keep sending what they sent before; each provider
+        module documents its models.  Leaving it unset sends no reasoning control at all, so the model's own
         default applies. */
     *bool disable_reasoning;
     #! Sampling temperature; default 0.0 (deterministic)
@@ -738,6 +747,17 @@ public hashdecl LlmProviderInfo {
         @since QoreLlmTypes 1.0
     */
     bool reasoning_always_on = False;
+    #! True when the model rejects a forced tool choice
+    /** A request that forces the model to call a tool (\c tool_choice \c "required", or a named function) fails:
+        a caller that needs a tool call from such a model has to let it choose (\c tool_choice \c "auto"), say in
+        the prompt which tool to call, and handle a response without a tool call.
+
+        This is a property of a model, which @ref AbstractLlmProviderFactory::getModelInfo() reports; the information
+        of the provider as a whole (@ref AbstractLlmProviderFactory::getInfo()) leaves it @ref False.
+
+        @since QoreLlmTypes 1.0
+    */
+    bool rejects_forced_tool_choice = False;
     #! True when callers should avoid sending large unused tool catalogues
     /** Some providers use constrained decoding over the full tool/function
         declaration set; for those providers, a large stable catalogue can be
@@ -821,7 +841,8 @@ public class AbstractLlmProviderFactory {
 
     #! Returns information about the provider for a given model
     /** Some capabilities depend on the model that calls are made with, such as
-        @ref LlmProviderInfo::reasoning_always_on; concrete factories override this method to set them.  The default
+        @ref LlmProviderInfo::reasoning_always_on and @ref LlmProviderInfo::rejects_forced_tool_choice; concrete
+        factories override this method to set them.  The default
         implementation returns @ref getInfo(), the information of the provider as a whole.
 
         @param model the model ID or resource name that calls are made with
@@ -1162,6 +1183,32 @@ public class AbstractLlmProvider {
         return exists opts.disable_reasoning
             ? opts.disable_reasoning
             : config_h.disable_reasoning;
+    }
+
+    #! Resolves whether the caller asks to turn hidden reasoning off for a single call
+    /** The caller asks to turn reasoning off with @ref LlmRequestOptions::disable_reasoning, which wins over a
+        @ref LlmRequestOptions::reasoning_effort "reasoning_effort", or with a
+        @ref LlmRequestOptions::reasoning_token_budget "reasoning_token_budget" of zero and no reasoning effort.
+
+        Providers turn reasoning off where the model can, and select the model's lowest reasoning setting where it
+        cannot (@ref LlmProviderInfo::reasoning_always_on); for models whose reasoning controls have not been
+        verified, they keep sending what they sent before.
+
+        @param opts optional per-call request overrides
+
+        @return @ref True if the caller asks to turn reasoning off
+
+        @since QoreLlmTypes 1.0
+    */
+    bool getRequestReasoningOff(*hash<LlmRequestOptions> opts) {
+        if (getRequestDisableReasoning(opts)) {
+            return True;
+        }
+        if (getRequestReasoningEffort(opts).val()) {
+            return False;
+        }
+        *int budget = getRequestReasoningTokenBudget(opts);
+        return exists budget && budget == 0;
     }
 
     #! Resolves the sampling temperature for a single call

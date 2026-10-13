@@ -134,6 +134,16 @@ hash<ChatResponse> r = p.chat((
       "BedrockLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off
       (\c reasoning_always_on): DeepSeek-R1, the GPT-OSS models, Claude Fable 5 and 5.1, Claude Mythos 5, 5.1 and
       Preview, Claude Opus 5.5 and Claude Sonnet 5.5
+    - a reasoning token budget of zero or
+      @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns thinking off on the Claude
+      4.5 and later models in \c additionalModelRequestFields, and selects the least thinking of the Claude models
+      that cannot turn it off; requests for other models are unchanged
+    - the provider factory reports which Claude models reject a forced tool choice
+      (\c rejects_forced_tool_choice): Claude Opus 5.5, Claude Sonnet 5.5, Claude Fable 5.1 and Claude Mythos 5.1
+    - no temperature is sent to the Claude models that reject it (Claude Opus 4.7 and later, Claude Sonnet 5 and
+      later, Claude Haiku 5.5, Claude Fable and Claude Mythos), whose requests failed with HTTP 400
+    - a request error includes the message of the error response, such as the reason that the model rejected the
+      request
 
     @subsection bedrockrestclient_v1_0 BedrockRestClient v1.0
     - initial release
@@ -657,7 +667,7 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         try {
             stream = rest_client.openConverseStream(getBedrockModelId(opts), body);
         } catch (hash<ExceptionInfo> ex) {
-            throw "LLM-ERROR", "Bedrock ConverseStream failed: " + ex.desc, ex;
+            throw "LLM-ERROR", "Bedrock ConverseStream failed: " + ex.desc + getErrorMessageSuffix(ex), ex;
         }
         on_exit stream.close();
         # a cancellation closes the connection of the request at once, also while its response is awaited
@@ -801,6 +811,63 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     }
 
     #! Returns the configured (or default) Bedrock model ID
+    #! True for the Claude models that reject a temperature
+    /** Evidence, measured on Bedrock on 2026-10-13: Claude Opus 4.7, Opus 4.8, Opus 5, Opus 5.5, Sonnet 5, Sonnet 5.5
+        and Haiku 5.5 answer a request with a temperature with HTTP 400 ("`temperature` is deprecated for this
+        model"), while Claude Opus 4.6 and Sonnet 4.6 accept it; Claude Fable and Mythos models do not accept sampling
+        parameters either (https://platform.claude.com/docs/en/about-claude/models/migration-guide).
+
+        @param model_id the model ID or inference profile ID
+    */
+    static bool rejectsTemperature(string model_id) {
+        string id = model_id.lwr();
+        return id =~ /^([a-z-]+\.)?anthropic\.claude-(opus-4-[78]|(opus|sonnet|haiku)-5|fable|mythos)([-.]|$)/;
+    }
+
+    #! Returns the model request fields that turn thinking off for a Claude model, or select its least thinking
+    /** Claude models take their thinking controls in \c additionalModelRequestFields
+        (https://docs.aws.amazon.com/bedrock/latest/userguide/claude-messages-adaptive-thinking.html: "When using the
+        Converse API, pass the thinking and effort parameters inside \c additionalModelRequestFields").
+
+        Evidence, measured on Bedrock on 2026-10-13 with the inference profiles \c us.anthropic.claude-opus-5,
+        \c us.anthropic.claude-opus-5-5 and \c us.anthropic.claude-sonnet-5-5:
+        - Claude Opus 5 answers with no thinking with \c thinking \c {"type": "disabled"}, and thinks with no
+          \c thinking field
+        - Claude Opus 5.5 rejects \c "disabled" (HTTP 400: "Use "thinking.type.adaptive" and "output_config.effort"
+          to control thinking") and accepts adaptive thinking with the effort \c low
+        - Claude Sonnet 5.5 rejects \c "disabled" (HTTP 400: "To turn thinking off on this model, send "thinking":
+          {"type": "between_tools"} instead of {"type": "disabled"}") and accepts \c "between_tools"
+
+        The other Claude models follow https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting:
+        Claude Fable 5 and 5.1, Claude Mythos 5 and 5.1 and Claude Mythos Preview cannot turn thinking off, and Claude
+        Sonnet 5, Claude Haiku 5.5 and the Claude 4.5 and later models accept \c "disabled".  Earlier Claude models
+        and the other model families have not been verified: DeepSeek-R1 always reasons and has no reasoning
+        control, and Amazon Nova 2 does not reason unless \c reasoningConfig enables it.
+
+        @param model_id the model ID or inference profile ID
+
+        @return the \c additionalModelRequestFields, or @ref nothing for models whose thinking controls have not
+        been verified
+    */
+    static *hash<auto> getClaudeReasoningOffFields(string model_id) {
+        string id = model_id.lwr();
+        if (id !~ /^([a-z-]+\.)?anthropic\.claude-/) {
+            return NOTHING;
+        }
+        id = regex_subst(id, "^([a-z-]+\\.)?anthropic\\.", "");
+        id = regex_subst(id, "-v[0-9]+(:[0-9]+)?$", "");
+        if (id =~ /^claude-((fable|mythos)-5(-1)?|mythos-preview|opus-5-5)(-[0-9]{8})?$/) {
+            return {"thinking": {"type": "adaptive"}, "output_config": {"effort": "low"}};
+        }
+        if (id =~ /^claude-sonnet-5-5(-[0-9]{8})?$/) {
+            return {"thinking": {"type": "between_tools"}};
+        }
+        if (id =~ /^claude-(opus-5|sonnet-5|haiku-5-5|opus-4-[5-8]|sonnet-4-[56]|haiku-4-5)(-[0-9]{8})?$/) {
+            return {"thinking": {"type": "disabled"}};
+        }
+        return NOTHING;
+    }
+
     string getBedrockModelId(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
         return getRequestModel(opts);
     }
@@ -890,12 +957,16 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             };
         }
 
+        # auto!: the configuration takes values of different types
+        hash<auto!> inference_config = {
+            "maxTokens": getRequestMaxOutputTokens(opts),
+        };
+        if (!rejectsTemperature(getBedrockModelId(opts))) {
+            inference_config.temperature = getRequestTemperature(opts);
+        }
         hash<auto!> body = {
             "messages": wire_messages,
-            "inferenceConfig": {
-                "maxTokens": getRequestMaxOutputTokens(opts),
-                "temperature": getRequestTemperature(opts),
-            },
+            "inferenceConfig": inference_config,
         };
         if (system_blocks) {
             body.system = system_blocks;
@@ -916,6 +987,13 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 };
             }
             body.toolConfig = {"tools": tool_specs};
+        }
+
+        if (getRequestReasoningOff(opts)) {
+            *hash<auto> fields = getClaudeReasoningOffFields(getBedrockModelId(opts));
+            if (fields) {
+                body.additionalModelRequestFields = fields;
+            }
         }
 
         if (output_schema) {
@@ -949,9 +1027,24 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 rethrow;
             }
             throw "LLM-ERROR",
-                sprintf("Bedrock Converse request to %y failed: %s",
-                    path, ex.desc), ex;
+                sprintf("Bedrock Converse request to %y failed: %s%s",
+                    path, ex.desc, getErrorMessageSuffix(ex)), ex;
         }
+    }
+
+    #! Returns the message of a Bedrock error response, to append to an error description
+    /** Bedrock answers a request that it rejects with a JSON body with a \c message, such as
+        \c "The model returned the following errors: `temperature` is deprecated for this model."
+
+        @param ex the exception of the request
+
+        @return \c ": " and the message, or an empty string if the exception has no response message
+    */
+    static string getErrorMessageSuffix(hash<ExceptionInfo> ex) {
+        auto message = ex.arg.typeCode() == NT_HASH && ex.arg.body.typeCode() == NT_HASH
+            ? (ex.arg.body.message ?? ex.arg.body.Message)
+            : NOTHING;
+        return message.typeCode() == NT_STRING && message.val() ? ": " + message : "";
     }
 
     #! Parses a Bedrock Converse response into the provider-neutral shape
@@ -1165,6 +1258,12 @@ public class BedrockLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvide
           (https://docs.aws.amazon.com/nova/latest/nova2-userguide/extended-thinking.html), and Claude Opus 5 and
           Claude Sonnet 5 accept \c thinking \c {"type": "disabled"}
 
+        Claude Opus 5.5, Claude Sonnet 5.5, Claude Fable 5.1 and Claude Mythos 5.1 reject a forced tool choice
+        (@ref QoreLlmUtils::LlmProviderInfo::rejects_forced_tool_choice "LlmProviderInfo::rejects_forced_tool_choice"):
+        https://platform.claude.com/docs/en/build-with-claude/thinking: they "reject forced tool use on every request
+        with a 400 error"; measured on Bedrock on 2026-10-13, Claude Opus 5.5 and Claude Sonnet 5.5 answer a forced
+        tool choice with HTTP 400 ("tool_choice: type "tool" and "any" are not supported for this model").
+
         @param model the model ID or inference profile ID that calls are made with
 
         @note This provider does not map reasoning options: a call uses the model's default reasoning, and Claude
@@ -1179,6 +1278,8 @@ public class BedrockLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvide
         info.reasoning_always_on = id =~ /^([a-z-]+\.)?deepseek\.r1-v1:0$/
             || id =~ /^([a-z-]+\.)?openai\.gpt-oss-(20b|120b)-1:0$/
             || id =~ /^([a-z-]+\.)?anthropic\.claude-((fable|mythos)-5(-1)?|mythos-preview|opus-5-5|sonnet-5-5)(-[0-9]{8})?(-v[0-9]+(:[0-9]+)?)?$/;
+        info.rejects_forced_tool_choice
+            = id =~ /^([a-z-]+\.)?anthropic\.claude-(opus-5-5|sonnet-5-5|fable-5-1|mythos-5-1)(-[0-9]{8})?(-v[0-9]+(:[0-9]+)?)?$/;
         return info;
     }
 }
