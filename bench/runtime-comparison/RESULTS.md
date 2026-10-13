@@ -12179,3 +12179,230 @@ Audit summary (the linked evidence reports each of the 62 items individually):
 |Correctness|Pass|Predicate proof, selected release/debug tests and all raw measurements replayed
 
 [Verified samples, qualification and all audit items](results-aot-inline-float-cleanup-macos-arm64.json).
+
+
+## AOT scalar reference-resolution guard
+
+Measured against `8bf4c74756f399b0bf107d7be68f1252ae085ec5` on macOS arm64.
+An independent late AOT pass skips `qore_rt_deref_if_reference` when its value
+is not a pointer. Its predicate exactly matches `QoreValue::isPointer()`,
+including the entire opaque family. The helper is an identity operation for
+all other representations, with no exception-sink or reference-count effects.
+This is not a non-pointer cleanup exemption: enums and plugin representations
+can still own payloads. Pointer/reference evaluation, release order, caller
+invalidation, RuntimeConfig/TLS, frames, cancellation and runtime ABIs do not
+change. No IR/JIT speedup is claimed.
+
+The pass selects native scalar callback/unary-method callers, independently of
+cleanup controls. It runs after the main optimizer and scalar-cleanup pass,
+then uses local InstCombine/SimplifyCFG passes and verifies the module.
+Constant non-pointer calls disappear; dynamic loads branch to the existing
+helper only for ordinary/opaque pointers. `QORE_DISABLE_LLVM_SCALAR_REFERENCE_GUARD`
+at compilation disables it, including a value of `0`. There is no runtime flag
+check. `scalar-reference-guards` and `scalar-reference-removed` count compile-time
+sites, not execution frequency.
+
+A fresh pre-change diagnostic profile identified reference resolution at
+4.84-8.20% of boxed-call inclusive samples. Those overlapping profile families
+motivate the experiment; they are not causal speedup estimates. Actual timed
+integer and float fast callers each retain two helper sites, now with ordinary
+and opaque tag guards and result PHIs; before and compile-off have no such
+guards. No ownership or caller-completion proof is inferred from native success.
+
+### Initial screen and five-fork confirmation
+
+The initial 660-window matrix improved boxed floats 3.36-3.60%, integer member
+reads 2.76-2.93%, and float member reads 2.73-3.53% against baseline. Boxed integer
+medians improved 1.52-3.77%, but enabled A includes a 41.56-ns fork mean and
+its baseline range overlaps. Member updates improved 1.82-1.86%; compile-off
+includes a 108.8-ns fork mean. Indirect integer B is 1.56% slower than compile-off
+with separated ranges. Every original window remains.
+
+Confirmation retains 1100 windows: eleven kernels, five forks per mode, before,
+identical enabled A/A and separately compiled disabled controls, count 4096,
+three warmups and five 500-ms windows. Values are whole-workload ns/element:
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Compile disabled
+|boxed integer method|20.2061|19.1118 / 19.1871|5.416% / 5.043%|20.3993
+|boxed float method|23.2145|22.2663 / 22.1821|4.084% / 4.447%|23.1016
+|member updates|91.5857|90.8797 / 90.2846|0.771% / 1.421%|91.8080
+|read-only integer member|34.3875|33.5594 / 33.6230|2.408% / 2.223%|34.3885
+|read-only float member|35.3535|34.6096 / 34.2316|2.104% / 3.173%|35.6704
+|native integer result|10.9319|10.8067 / 10.8640|1.145% / 0.621%|10.7447
+|native float result|11.8291|11.7033 / 11.8309|1.064% / -0.015%|11.9311
+|indirect integer result|7.0170|6.9824 / 6.9793|0.494% / 0.538%|6.9367
+|indirect float result|9.1640|9.2276 / 9.1238|-0.694% / 0.439%|9.0758
+|list build|88.6944|88.7879 / 87.9713|-0.105% / 0.815%|88.5983
+|list mutation|243.5331|243.3809 / 243.2022|0.062% / 0.136%|246.0505
+
+Boxed integer medians improve 5.04-5.42%, boxed floats 4.08-4.45%, integer
+member reads 2.22-2.41%, and float reads 2.10-3.17%. Range separation is mixed:
+both boxed-integer enabled arms separate compile-off, but only A separates
+baseline. For boxed floats only B separates baseline; both overlap compile-off.
+Native/indirect/list controls remain mixed. Indirect float A is 1.67% slower
+than compile-off with separated ranges, including a retained 10.119-ns fork.
+Fork ranges are not confidence intervals, and overlap is not equivalence.
+
+### Pointer-heavy controls
+
+A separate Qore-only supplement retains 360 windows across six workloads,
+before/enabled A/A/compile-off, three forks, count 4096 and the same window
+settings. All four AOT modes and AST pass 90 independent arithmetic/length
+references. Values below are whole-workload ns/element, not helper latency:
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Compile disabled
+|heap_string|152.5915|152.2061 / 153.9547|0.253% / -0.893%|155.1001
+|short_string|152.4612|153.4605 / 153.4905|-0.655% / -0.675%|153.2699
+|list|154.8396|153.6864 / 154.8443|0.745% / -0.003%|154.3784
+|hash|162.4828|160.9020 / 161.6255|0.973% / 0.528%|162.3286
+|opaque_list|229.9581|228.8129 / 229.6447|0.498% / 0.136%|231.0133
+|raw_reference|174.8234|174.7230 / 175.0213|0.057% / -0.113%|175.9652
+
+All baseline/enabled ranges overlap. Short strings are 0.66-0.68% slower than
+baseline; heap-string B is 0.89% slower while A is 0.25% faster. These adverse
+results remain; no equivalence or universal pointer benefit is asserted.
+The opaque-local workload uses the dedicated weak loader and is untransformed,
+so it does not measure the cost of passing opaque bits through this guard.
+The raw-reference workload begins with an iterator reference, but runtime
+reloads may evaluate it before the guarded helper; no claim is made that
+NT_REFERENCE reaches every measured helper call. Ordinary-pointer fallback
+and actual generated guards are separately inspected.
+
+### Short invocations and code cost
+
+660 windows use count 1, three forks and the same four Qore modes. These are
+ns per whole invocation, including outer dispatch and harness work, not
+isolated entry latency:
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Compile disabled
+|boxed integer method|2413.7625|2411.9844 / 2413.8538|0.074% / -0.004%|2417.3999
+|boxed float method|2419.5489|2410.8196 / 2400.8067|0.361% / 0.775%|2414.5238
+|member updates|3378.1164|3356.2051 / 3380.7221|0.649% / -0.077%|3356.9807
+|read-only integer member|2440.0587|2446.9714 / 2440.0422|-0.283% / 0.001%|2436.5643
+|read-only float member|2471.3018|2465.1542 / 2467.2247|0.249% / 0.165%|2459.1694
+|native integer result|2373.9928|2362.0568 / 2384.1737|0.503% / -0.429%|2342.0518
+|native float result|2389.3228|2373.2495 / 2370.3979|0.673% / 0.792%|2339.9472
+|indirect integer result|2207.7226|2217.9907 / 2205.1864|-0.465% / 0.115%|2217.8443
+|indirect float result|2237.7239|2230.3940 / 2249.6631|0.328% / -0.534%|2204.1816
+|list build|2800.3952|2764.6854 / 2756.1105|1.275% / 1.581%|2750.7257
+|list mutation|3175.1140|3150.0758 / 3164.5376|0.789% / 0.333%|3160.3522
+
+No clear short-call gain is established. Boxed integer changes are about
+0.00-0.07%, boxed float reductions 0.36-0.77%, with overlapping ranges.
+Member-update B is 0.71% slower than compile-off with separated ranges.
+Native/indirect enabled arms reach 2.06% slower than compile-off with overlap.
+List build improves 1.27-1.58% against baseline with separated ranges but is
+0.20-0.51% slower than compile-off with overlap; that is not attributed to this
+pass. No sample or adverse result is excluded.
+
+Whole executable sizes match within each matrix (405690 bytes in confirmation,
+405658 in the short matrix, 405642 in the fresh Java matrix). Padding hides
+text growth: confirmation native text increases from 257856 to 258512 bytes,
+656 bytes or 0.25%. Each inspected boxed fast caller adds 15 ARM64 instructions
+(60 bytes). Single confirmation compilation observations are 1.134/1.137/1.093
+seconds for before/enabled/off; short observations are 1.154/1.170/1.126 seconds.
+They include full diagnostic LLVM dumps, not a controlled compiler-throughput
+measurement. Initial compilation durations were not recorded or fabricated.
+
+### Fresh matched Java comparison
+
+825 interleaved windows, eleven workloads, five modes, three forks, count 4096,
+three warmups, five 500-ms windows, seed 135229. Temurin 25.0.2 and pinned
+JMH 1.37 use 18 verified generated target DONT_INLINE hints. All five modes
+pass 555 references; actual Qore library selection, Java tools/classes/JARs,
+fork settings and raw windows are independently checked. These are matched
+whole-workload ns/element, not isolated call latency or equivalent runtime
+contracts. Historical Java timings are not mixed into these ratios.
+
+|!Workload|!Before|!Enabled A / B|!Reduction A / B|!Compile disabled|!Java JIT|!Enabled / Java
+|boxed integer method|19.5298|18.3615 / 18.4691|5.982% / 5.431%|19.6397|2.5992|7.06 / 7.11x
+|boxed float method|22.6343|22.0298 / 21.8065|2.671% / 3.657%|22.6490|2.6164|8.42 / 8.33x
+|member updates|89.8817|88.3455 / 88.1299|1.709% / 1.949%|89.5680|1.8888|46.77 / 46.66x
+|read-only integer member|33.7344|32.3787 / 32.6015|4.019% / 3.358%|33.4843|2.5806|12.55 / 12.63x
+|read-only float member|34.3567|33.7563 / 34.0965|1.747% / 0.757%|34.9778|2.5499|13.24 / 13.37x
+|native integer result|10.3518|10.4116 / 10.4433|-0.578% / -0.884%|10.4896|3.1297|3.33 / 3.34x
+|native float result|11.5221|11.6089 / 11.6483|-0.753% / -1.095%|11.5021|3.5476|3.27 / 3.28x
+|indirect integer result|6.8908|6.9001 / 6.8171|-0.135% / 1.070%|6.9591|1.9344|3.57 / 3.52x
+|indirect float result|8.9689|8.9650 / 8.8696|0.044% / 1.108%|8.8072|2.8174|3.18 / 3.15x
+|list build|85.7899|84.9843 / 86.4795|0.939% / -0.804%|85.3776|2.6051|32.62 / 33.20x
+|list mutation|243.0698|239.9631 / 238.8705|1.278% / 1.728%|236.8958|4.1817|57.38 / 57.12x
+
+Boxed integer calls improve 5.43-5.98%, boxed floats 2.67-3.66%, and integer
+member reads 3.36-4.02%; both enabled arms separate baseline and compile-off.
+Float reads improve 0.76-1.75% against baseline (only B separates) and
+2.52-3.49% against compile-off (both separate). Member updates improve
+1.71-1.95% against baseline, with overlapping ranges.
+
+Native integer results are 0.58-0.88% slower and native floats 0.75-1.10%
+slower than baseline, with overlapping ranges. Indirect float A is 1.79% slower
+than compile-off with separated ranges; B is 0.71% slower with overlap.
+List-build B is 0.80% slower than baseline and 1.29% slower than off; its A/A
+medians differ 1.76% with overlap. List mutation improves against baseline
+but is 0.83-1.29% slower than off, with overlap. A native-integer B fork at
+11.68 ns remains. These controls do not establish broad native/indirect/list
+gains, dismiss regressions, or resolve the older committed native-integer loss.
+
+Native/indirect workloads remain about 3.15-3.57x Java; boxed methods 7.06-8.42x;
+member reads 12.55-13.37x; updates 46.66-46.77x; lists 32.62-57.38x. Java parity
+is unachieved. This small boxed-load optimization does not complete the larger
+callee/caller effect proof or eliminate dispatch, frame and container costs.
+
+### Qualification, audit and retention
+
+Release passes 114 selected files, 417 cases / 36897 assertions, 15 standalone
+fixtures and nine explicit skips. Debug passes 114 files, 424 cases / 36996
+assertions, 15 standalones and eight skips. Both pass seven exception/stack
+fixtures, native-unit checks and IR/AOT reference grids. All 795 focused debug
+native checks, 17 benchmark-harness tests, four-mode 555-reference grids and
+ten restored-release smokes pass. All 61 owned qmod aliases are restored to
+matching release artifacts; unrelated aliases are unchanged. Independent
+verification reconstructs 263 qualification child records. This is selected
+macOS coverage, not full-repository, sanitizer, leak or cross-platform coverage;
+Linux RSS and release-only debug-hook skips remain explicit.
+
+The expanded value-tag fixture covers AST/IR/JIT/tiered and AOT O0/O3,
+normal/EH/no-debug/split builds, independent compile/runtime controls, refs,
+enums, inline/heap values, opaque/weak values and destruction. Existing raw-local
+IR/tiered limitations remain explicit; supported modes exercise that form.
+A separate actual-QoreValue/helper check covers 589824 tag/payload combinations
+(all 65536 upper tags times nine payloads); fabricated pointers are never
+read or released. This is not an exhaustive 64-bit sweep.
+
+Preflight failures remain archived: the first initial verifier had an escaped
+regex mismatch; pointer preparation initially assumed all entries were private
+fast entries instead of admitting normal entries. Inspection also superseded
+an initial opaque-parameter hypothesis: the dedicated weak loader explains the
+untransformed opaque control. These were not runtime or timing failures.
+The short-preparation tool response was truncated; saved artifacts and completed
+jobs were independently checked after confirming no process remained, without
+restarting preparation or inventing an exit code. A reporting query assumed
+optional initial compile-cost fields and was corrected without rerunning data.
+
+All 3605 candidate windows are retained and independently verified. Frozen
+sources/binaries and qualification remain unchanged; this README/RESULTS and
+publication are documentation-only additions checked separately. The full
+62-item audit-changes review is recorded with each item in the linked evidence.
+
+|!Audit group|!Status|!Evidence
+|Module docs, registration, layout and QPP namespace|N/A|No new module or QPP class; no optimization release note
+|New-file copyright and tests|Pass|2026 MIT evidence; modern executable fixtures; shipped module dependencies
+|Filesystem and network sandbox hooks|N/A|No added filesystem/network operation in production code
+|Cooperative cancellation|Pass|New function/instruction scans every 100 iterations; guard/simplification work every 10
+|DataProvider actions, types, descriptions and factories|N/A|No DataProvider implementation changes
+|JNI JAR/install rules and QPP flags|N/A|No JNI/module installation or QPP changes
+|Workarounds, types, errors and threading|Pass|Complete pass; typed callbacks; verifier/cancellation failures propagate; compilation-local state
+|Exception safety and ownership|Pass|LLVM nodes remain module-owned; exact non-pointer identity bypass; original pointer helper/order retained
+|Performance|Pass|All 3605 windows, adverse controls, short-call limits and text growth retained
+|Documentation|Pass|Internal method contract, independent compiler controls, results and strict Qore table checks
+|Fixed formats and sensitive data handling|Pass|Fixed diagnostics; no new raw buffer or credential; allowlisted environment evidence
+|Correctness|Pass|Tag/helper predicate checks; selected release/debug, EH, ownership and observable-context tests
+
+Retention accepts the repeated boxed/member loop gains with the small adverse
+controls, short-call limits and code growth explicit; it is not universal or
+regression-free improvement. Continue toward a complete successful-pure-callee
+witness plus CFG-based caller/cleanup effect proof before eliding invalidation:
+even non-final decrements can enter DGC. Invocation-prepared live dispatch/body
+proofs and member/container storage, locking, coercion and ownership remain
+separate unfinished targets. No goal-completion or Java-parity claim is made.
+
+[Verified samples, qualification and all audit items](results-aot-scalar-reference-guard-macos-arm64.json).

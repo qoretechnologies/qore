@@ -1558,6 +1558,128 @@ bool QoreIRToLLVM::guardScalarDecrefs(llvm::Module& module, std::string& error) 
     return !llvm::verifyModule(module, &diagnostic);
 }
 
+bool QoreIRToLLVM::guardScalarReferenceLoads(llvm::Module& module, std::string& error) {
+    if (std::getenv("QORE_DISABLE_LLVM_SCALAR_REFERENCE_GUARD")) {
+        return true;
+    }
+    size_t guards = 0, removed = 0, checked = 0;
+    std::vector<llvm::Function*> changed;
+    for (llvm::Function& function : module) {
+        if (++checked % 100 == 0 && qore_check_cancel(nullptr, "LLVM scalar reference functions")) {
+            error = "cancelled during LLVM scalar reference function analysis";
+            return false;
+        }
+        if (function.isDeclaration()) {
+            continue;
+        }
+        std::vector<llvm::CallInst*> calls;
+        bool has_native_scalar_call = false;
+        for (llvm::BasicBlock& block : function) {
+            for (llvm::Instruction& inst : block) {
+                if (++checked % 100 == 0 && qore_check_cancel(nullptr, "LLVM scalar reference analysis")) {
+                    error = "cancelled during LLVM scalar reference analysis";
+                    return false;
+                }
+                auto* call = llvm::dyn_cast<llvm::CallInst>(&inst);
+                if (!call || !call->getCalledFunction() || call->isMustTailCall()) {
+                    continue;
+                }
+                llvm::StringRef name = call->getCalledFunction()->getName();
+                if (name.starts_with("qore_rt_try_funcref_")
+                        || name == "qore_rt_try_method_int_unary_v1"
+                        || name == "qore_rt_try_method_float_unary_v1"
+                        || name == "qore_rt_try_method_int_unary_v2"
+                        || name == "qore_rt_try_method_float_unary_v2") {
+                    has_native_scalar_call = true;
+                }
+                if (name == "qore_rt_deref_if_reference") {
+                    calls.push_back(call);
+                }
+            }
+        }
+        // These callers repeatedly load boxed locals around scalar continuations. Apply
+        // the guard late so the main inliner/unroller does not multiply fallback code.
+        // Selection is independent of the scalar-cleanup optimization and its controls.
+        if (!has_native_scalar_call) {
+            continue;
+        }
+        size_t before = guards + removed;
+        for (auto it = calls.rbegin(); it != calls.rend(); ++it) {
+            if (++checked % 10 == 0 && qore_check_cancel(nullptr, "LLVM scalar reference guards")) {
+                error = "cancelled during LLVM scalar reference guards";
+                return false;
+            }
+            llvm::CallInst* call = *it;
+            llvm::IRBuilder<> guard(call);
+            guard.SetCurrentDebugLocation(call->getDebugLoc());
+            llvm::Value* value = call->getArgOperand(0);
+            llvm::Type* type = value->getType();
+            // Exact QoreValue::isPointer() predicate, including the entire opaque
+            // family. qore_rt_deref_if_reference returns every other representation
+            // unchanged, without touching the exception sink or reference counts.
+            // This is NOT a cleanup predicate: non-pointers may still own payloads.
+            llvm::Value* tag = guard.CreateAnd(value, llvm::ConstantInt::get(type, TAG_MASK));
+            llvm::Value* ordinary = guard.CreateICmpEQ(tag, llvm::ConstantInt::get(type, TAG_POINTER));
+            llvm::Value* opaque = guard.CreateICmpEQ(
+                guard.CreateLShr(value, llvm::ConstantInt::get(type, 52)),
+                llvm::ConstantInt::get(type, 0xFFD));
+            llvm::Value* needs_helper = guard.CreateOr(ordinary, opaque, "needs_reference_resolution");
+            if (auto* constant = llvm::dyn_cast<llvm::ConstantInt>(needs_helper)) {
+                if (constant->isZero()) {
+                    call->replaceAllUsesWith(value);
+                    call->eraseFromParent();
+                    ++removed;
+                }
+                continue;
+            }
+            llvm::Instruction* then_term = llvm::SplitBlockAndInsertIfThen(needs_helper, call, false);
+            llvm::BasicBlock* merge = call->getParent();
+            llvm::BasicBlock* then_block = then_term->getParent();
+            llvm::BasicBlock* head = then_block->getSinglePredecessor();
+            call->moveBefore(*then_block, then_term->getIterator());
+            llvm::IRBuilder<> result_builder(&*merge->begin());
+            result_builder.SetCurrentDebugLocation(call->getDebugLoc());
+            llvm::PHINode* result = result_builder.CreatePHI(type, 2, "scalar_reference_value");
+            call->replaceAllUsesWith(result);
+            result->addIncoming(value, head);
+            result->addIncoming(call, then_block);
+            ++guards;
+        }
+        if (guards + removed != before) {
+            changed.push_back(&function);
+        }
+    }
+    // Fresh analyses after the CFG edits; no inlining or loop expansion here.
+    llvm::LoopAnalysisManager lam;
+    llvm::FunctionAnalysisManager fam;
+    llvm::CGSCCAnalysisManager cgam;
+    llvm::ModuleAnalysisManager mam;
+    llvm::PassBuilder pb;
+    pb.registerModuleAnalyses(mam);
+    pb.registerCGSCCAnalyses(cgam);
+    pb.registerFunctionAnalyses(fam);
+    pb.registerLoopAnalyses(lam);
+    pb.crossRegisterProxies(lam, fam, cgam, mam);
+    llvm::FunctionPassManager passes;
+    passes.addPass(llvm::InstCombinePass());
+    passes.addPass(llvm::SimplifyCFGPass());
+    passes.addPass(llvm::InstCombinePass());
+    checked = 0;
+    for (llvm::Function* function : changed) {
+        if (++checked % 10 == 0 && qore_check_cancel(nullptr, "LLVM scalar reference simplification")) {
+            error = "cancelled during LLVM scalar reference simplification";
+            return false;
+        }
+        passes.run(*function, fam);
+    }
+    if (std::getenv("QORE_IR_OPT_STATS")) {
+        fprintf(stderr, "IR-OPT-LLVM: scalar-reference-guards=%zu\n", guards);
+        fprintf(stderr, "IR-OPT-LLVM: scalar-reference-removed=%zu\n", removed);
+    }
+    llvm::raw_string_ostream diagnostic(error);
+    return !llvm::verifyModule(module, &diagnostic);
+}
+
 static bool qore_ir_generic_fast_entry_matches(
         const BatchCalleeInfo& info, const QoreValue& expr) {
     if (!info.generic_specialized_fast_entry

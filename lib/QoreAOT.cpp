@@ -23639,6 +23639,10 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         delete tm;
         return false;
     }
+    if (!QoreIRToLLVM::guardScalarReferenceLoads(module, error)) {
+        delete tm;
+        return false;
+    }
     size_t pruned_calls = QoreIRToLLVM::pruneNoopDecrefs(module);
     if (pruned_calls && getenv("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-AOT-LLVM: pruned-noop-decrefs=%zu\n",

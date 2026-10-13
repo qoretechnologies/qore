@@ -16,6 +16,21 @@ auto sub readUntyped(auto value) {
     for (int i = 0; i < 4; ++i) { result = value; }
     return result;
 }
+int sub referenceLoadIdentity(int value) { return value; }
+auto sub readWithScalarCall(auto value, code<int(int)> fn) {
+    auto result = value;
+    for (int i = 0; i < 4; ++i) {
+        expect(i, fn(i));
+        expect(value, result);
+        result = value;
+    }
+    return result;
+}
+auto sub readIteratorWithScalarCall(ListIterator<auto> iterator, code<int(int)> fn) {
+    auto value = iterator.getValue();
+    expect(7, fn(7));
+    return value;
+}
 auto sub readIteratorLocal(ListIterator<auto> iterator) {
     auto value = iterator.getValue();
     return value;
@@ -24,7 +39,9 @@ auto sub readIterator(ListIterator<auto> iterator) {
     # The baseline IR-only local store above raises LVALUE-ERROR for a raw
     # reference; AST/JIT/AOT explicitly exercise that local form with this flag.
     if (ARGV[0] == "raw-local") {
-        return readIteratorLocal(iterator);
+        auto result = readIteratorLocal(iterator);
+        expect(result, readIteratorWithScalarCall(iterator, \referenceLoadIdentity()));
+        return result;
     }
     return readUntyped(iterator.getValue());
 }
@@ -52,6 +69,8 @@ for (int round = 0; round < 12; ++round) {
         (1, 2), {"key": "value"}, \readUntyped());
     foreach auto value in (values) {
         expect(value, readUntyped(value));
+        expect(value, readWithScalarCall(value, \referenceLoadIdentity()));
+        expect(value, readWithScalarCall(\value, \referenceLoadIdentity()));
         expect(value.fullType(), readUntyped(value).fullType());
         expect(value, readUntyped(\value));
     }
@@ -61,6 +80,7 @@ for (int round = 0; round < 12; ++round) {
         expect(True, result.isEnum());
         expect(value.fullType(), result.fullType());
         expect(value, result);
+        expect(value, readWithScalarCall(value, \referenceLoadIdentity()));
         expect(True, readUntyped(\value).isEnum());
     }
     foreach float value in ((0.0, -0.0, @inf@, -@inf@, @nan@, -@nan@)) {
@@ -101,6 +121,7 @@ for (int round = 0; round < 12; ++round) {
             expect(strong, readUntyped(strong));
             expect(strong, readUntyped(weak));
             expect(strong, readUntyped(opaque));
+            expect(strong, readWithScalarCall(opaque, \referenceLoadIdentity()));
             expect(30 + i, callUntyped(opaque, i));
         }
         strong = NOTHING;
@@ -110,6 +131,7 @@ for (int round = 0; round < 12; ++round) {
         expect(before + 1, destroyed);
         # Deleted weak targets retain their distinct deleted-object value tag.
         expect(weak, readUntyped(weak));
+        expect(weak, readWithScalarCall(weak, \referenceLoadIdentity()));
     }
     expect(before + 1, destroyed);
     before = destroyed;
@@ -118,6 +140,8 @@ for (int round = 0; round < 12; ++round) {
         auto opaque_hash @= {"value": new LoadTarget(50)};
         expect(41, callUntyped(readUntyped(opaque_list)[0], 1));
         expect(51, callUntyped(readUntyped(opaque_hash).value, 1));
+        expect(41, callUntyped(readWithScalarCall(opaque_list, \referenceLoadIdentity())[0], 1));
+        expect(51, callUntyped(readWithScalarCall(opaque_hash, \referenceLoadIdentity()).value, 1));
     }
     expect(before + 2, destroyed);
 }

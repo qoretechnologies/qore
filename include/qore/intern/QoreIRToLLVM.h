@@ -79,6 +79,13 @@ public:
     //! @return false on cancellation or invalid generated IR; error receives the diagnostic
     static bool guardScalarDecrefs(llvm::Module& module, std::string& error);
 
+    //! Bypass reference resolution for non-pointer loads in AOT native scalar callers.
+    //! @param module lowered module with finalized debug information
+    //! @param error receives a cancellation or LLVM-verification diagnostic on failure
+    //! @return false on cancellation or invalid generated IR; error receives the diagnostic
+    //! @note Pointer and opaque representations retain the original helper and evaluation order.
+    static bool guardScalarReferenceLoads(llvm::Module& module, std::string& error);
+
     //! Enable AOT mode with the given slot map.
     //! When set, process-specific opcodes emit _aot helper calls with slot indices
     //! instead of inttoptr patterns with embedded pointers.

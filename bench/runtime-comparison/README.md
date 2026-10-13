@@ -950,6 +950,24 @@ callback-selected functions eligible. Retain short-invocation, code-size and
 adverse-workload comparisons as well as the long-loop float gains; see
 [the measured tradeoffs](RESULTS.md#aot-integer-first-inline-float-cleanup).
 
+`QORE_DISABLE_LLVM_SCALAR_REFERENCE_GUARD=1` at compilation disables an independent
+late AOT pass that bypasses `qore_rt_deref_if_reference` for non-pointer values in
+native scalar callback/unary-method callers. Presence, including `0`, disables
+the pass; recompile to compare it. There is no new runtime switch or ABI.
+The predicate exactly matches `QoreValue::isPointer()`: the ordinary pointer
+tag and the entire opaque tag family retain the original helper. Every other
+representation is returned unchanged by that helper, so its call can be skipped.
+This is not an ownership exemption: non-pointer enums, short strings and plugin
+representations may still require cleanup. Reference evaluation, ownership,
+caller invalidation, context and cancellation behavior remain unchanged.
+The pass runs after the main optimizer and scalar-cleanup pass, then simplifies
+only changed functions. Scalar/method/float cleanup controls do not disable it.
+`QORE_IR_OPT_STATS=1` reports `scalar-reference-guards` and
+`scalar-reference-removed` (compile-time sites, not execution counts).
+No IR/JIT improvement is claimed. See the measured long-loop benefits,
+short-invocation limits, pointer controls and code growth in
+[the scalar reference guard results](RESULTS.md#aot-scalar-reference-resolution-guard).
+
 `QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG=1` at compilation selects legacy TLS
 polling for generated JIT/AOT loops. The enabled path acquires a nullable,
 borrowed live `RuntimeConfig*` once per invocation and passes it to
