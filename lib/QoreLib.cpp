@@ -3495,11 +3495,246 @@ int q_check_char_read_encoding(const QoreEncoding* enc, ExceptionSink* xsink) {
     if (!qore_encoding_private::isStateful(enc)) {
         return 0;
     }
-    xsink->raiseException("UNSUPPORTED-ENCODING", "cannot read characters one at a time or a number of characters of "
-        "text in the stateful encoding \"%s\", as the bytes of a character depend on the shift state left by the "
-        "characters before it; read the text in lines, read all of it, or read bytes and convert them",
-        enc->getCode());
+    xsink->raiseException("UNSUPPORTED-ENCODING", "cannot read a number of characters of text in the stateful "
+        "encoding \"%s\" without keeping the shift state between reads, as the bytes of a character depend on the "
+        "shift state left by the characters before it", enc->getCode());
     return -1;
+}
+
+// returns the byte length of the UTF-8 character starting with the given byte
+static size_t q_utf8_char_len(unsigned char c) {
+    if (c < 0x80) {
+        return 1;
+    }
+    if ((c & 0xe0) == 0xc0) {
+        return 2;
+    }
+    if ((c & 0xf0) == 0xe0) {
+        return 3;
+    }
+    return 4;
+}
+
+// returns the number of characters in the given UTF-8 text from iconv
+static size_t q_utf8_char_count(const std::string& utf8) {
+    size_t count = 0;
+    for (size_t i = 0; i < utf8.size(); i += q_utf8_char_len(static_cast<unsigned char>(utf8[i]))) {
+        ++count;
+    }
+    return count;
+}
+
+// returns the byte length of the first n characters of the given UTF-8 text from iconv
+static size_t q_utf8_prefix_len(const std::string& utf8, size_t n) {
+    size_t i = 0;
+    while (n-- && i < utf8.size()) {
+        i += q_utf8_char_len(static_cast<unsigned char>(utf8[i]));
+    }
+    return QORE_MIN(i, utf8.size());
+}
+
+int QoreStatefulTextDecoder::open(const QoreEncoding* enc, ExceptionSink* xsink) {
+    assert(qore_encoding_private::isStateful(enc));
+    if (cd && cd_enc == enc) {
+        return 0;
+    }
+    // text in another encoding starts in the initial shift state
+    reset();
+    std::unique_ptr<IconvHelper> c(new IconvHelper(QCS_UTF8, enc, xsink));
+    if (*xsink) {
+        return -1;
+    }
+    cd = std::move(c);
+    cd_enc = enc;
+    return 0;
+}
+
+int QoreStatefulTextDecoder::decode(const char* buf, size_t len, std::string& out, ExceptionSink* xsink) {
+    pending.append(buf, len);
+    char* in = &pending[0];
+    size_t in_left = pending.size();
+    while (in_left) {
+        char obuf[1024];
+        char* op = obuf;
+        size_t out_left = sizeof(obuf);
+        size_t rc = cd->iconv(&in, &in_left, &op, &out_left, xsink);
+        int err = errno;
+        out.append(obuf, op - obuf);
+        if (rc != static_cast<size_t>(-1)) {
+            continue;
+        }
+        if (err == E2BIG) {
+            continue;
+        }
+        if (err == EINVAL) {
+            // the start of a character or shift sequence: its other bytes are decoded with it at the next read
+            break;
+        }
+        if (err != ECANCELED) {
+            xsink->raiseException("STREAM-ENCODING-ERROR", "invalid byte sequence read according to the input "
+                "encoding: '%s'", cd_enc->getCode());
+        }
+        assert(*xsink);
+        return -1;
+    }
+    pending.erase(0, pending.size() - in_left);
+    return 0;
+}
+
+int QoreStatefulTextDecoder::checkEnd(const QoreEncoding* enc, ExceptionSink* xsink) {
+    if (pending.empty()) {
+        return 0;
+    }
+    xsink->raiseException("STREAM-ENCODING-ERROR", "the end of the data was reached after " QSD " byte%s of an "
+        "incomplete character or shift sequence according to the input encoding: '%s'", pending.size(),
+        pending.size() == 1 ? "" : "s", enc->getCode());
+    pending.clear();
+    return -1;
+}
+
+int QoreStatefulTextDecoder::nextChar(const QoreEncoding* enc, std::string& c, f_read_t& my_read,
+        ExceptionSink* xsink) {
+    c.clear();
+    if (ahead.empty()) {
+        // bytes are read one at a time so that no bytes after the character are read
+        while (ahead.empty()) {
+            char b;
+            qore_offset_t rc = my_read(&b, 1, xsink);
+            if (*xsink) {
+                return -1;
+            }
+            if (!rc) {
+                return checkEnd(enc, xsink) ? -1 : 0;
+            }
+            if (decode(&b, 1, ahead, xsink)) {
+                return -1;
+            }
+        }
+    }
+    size_t len = q_utf8_prefix_len(ahead, 1);
+    c.assign(ahead, 0, len);
+    ahead.erase(0, len);
+    return 1;
+}
+
+QoreStringNode* QoreStatefulTextDecoder::encode(const std::string& utf8, const QoreEncoding* enc,
+        ExceptionSink* xsink) {
+    // the text is converted from the initial shift state, and the conversion ends in the initial shift state
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(utf8.data(), utf8.size(), QCS_UTF8));
+    return str->convertEncoding(enc, xsink);
+}
+
+QoreStringNode* QoreStatefulTextDecoder::readChars(const QoreEncoding* enc, int64 size, f_read_t my_read,
+        ExceptionSink* xsink) {
+    if (!size || open(enc, xsink)) {
+        return nullptr;
+    }
+    const size_t want = size < 0 ? SIZE_MAX : static_cast<size_t>(size);
+    std::string utf8;
+    // characters decoded ahead are returned first
+    size_t count = q_utf8_char_count(ahead);
+    if (count >= want) {
+        size_t len = q_utf8_prefix_len(ahead, want);
+        utf8.assign(ahead, 0, len);
+        ahead.erase(0, len);
+        return encode(utf8, enc, xsink);
+    }
+    utf8.swap(ahead);
+
+    char buf[DefaultStreamReaderHelperBufferSize];
+    for (size_t i = 1; count < want; ++i) {
+        // all of the text of a stream can be read, so the read can be cancelled
+        if (!(i % 100) && qore_check_cancel(xsink, "stateful text read")) {
+            return nullptr;
+        }
+        // every character has at least one byte, so no more bytes are read than characters are missing; the bytes
+        // of the characters after the ones returned are not read
+        size_t bs = QORE_MIN(want - count, sizeof(buf));
+        qore_offset_t rc = my_read(buf, bs, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (!rc) {
+            if (checkEnd(enc, xsink)) {
+                return nullptr;
+            }
+            break;
+        }
+        std::string out;
+        if (decode(buf, rc, out, xsink)) {
+            return nullptr;
+        }
+        size_t n = q_utf8_char_count(out);
+        if (count + n > want) {
+            // a decoder that gives more characters than bytes: the rest is kept for the next read
+            size_t len = q_utf8_prefix_len(out, want - count);
+            ahead.assign(out, len, std::string::npos);
+            out.resize(len);
+            n = want - count;
+        }
+        utf8.append(out);
+        count += n;
+    }
+
+    return utf8.empty() ? nullptr : encode(utf8, enc, xsink);
+}
+
+QoreStringNode* QoreStatefulTextDecoder::readLine(const QoreEncoding* enc, const std::string& eol, bool trim,
+        bool cr_lookahead, f_read_t my_read, ExceptionSink* xsink) {
+    if (open(enc, xsink)) {
+        return nullptr;
+    }
+    std::string line;
+    std::string c;
+    for (size_t i = 1; true; ++i) {
+        // a line can be arbitrarily long, so the read can be cancelled
+        if (!(i % 100) && qore_check_cancel(xsink, "stateful text line read")) {
+            return nullptr;
+        }
+        int rc = nextChar(enc, c, my_read, xsink);
+        if (rc < 0) {
+            return nullptr;
+        }
+        if (!rc) {
+            break;
+        }
+        line.append(c);
+        size_t eol_len = 0;
+        if (!eol.empty()) {
+            // UTF-8 text ends with the marker at a character boundary
+            if (line.size() < eol.size() || line.compare(line.size() - eol.size(), eol.size(), eol)) {
+                continue;
+            }
+            eol_len = eol.size();
+        } else if (c == "\n") {
+            eol_len = 1;
+        } else if (c == "\r") {
+            eol_len = 1;
+            if (cr_lookahead) {
+                std::string next;
+                rc = nextChar(enc, next, my_read, xsink);
+                if (rc < 0) {
+                    return nullptr;
+                }
+                if (rc) {
+                    if (next == "\n") {
+                        line.append(next);
+                        eol_len = 2;
+                    } else {
+                        // the character is the start of the next line
+                        ahead.insert(0, next);
+                    }
+                }
+            }
+        } else {
+            continue;
+        }
+        if (trim) {
+            line.resize(line.size() - eol_len);
+        }
+        return encode(line, enc, xsink);
+    }
+    return line.empty() ? nullptr : encode(line, enc, xsink);
 }
 
 QoreStringNode* q_read_string(ExceptionSink* xsink, int64 size, const QoreEncoding* enc, f_read_t my_read) {

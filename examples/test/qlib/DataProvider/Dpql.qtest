@@ -6174,8 +6174,8 @@ public class DpqlTest inherits QUnit::Test {
             hash<DpqlParseResult> result = parser.parseWithInfo('index(@name, 0)');
             assertTrue(result.success, "function call should parse");
             *AbstractDataProviderType rtype = parser.inferExpressionReturnType(result.expression);
-            # index() is declared to return any value
-            assertEq("auto", rtype.getName(), "function return type is the declared return type");
+            # index() of a string gives any value: its type is known only when it is evaluated
+            assertNothing(rtype, "a function declared to give any value has no type before it is evaluated");
         }
 
         # Value expression return type

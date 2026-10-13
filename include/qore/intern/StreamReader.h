@@ -71,6 +71,8 @@ public:
 
     DLLLOCAL void setEncoding(const QoreEncoding* n_enc) {
         enc = n_enc;
+        // text in the new encoding starts in the initial shift state
+        decoder.reset();
         // text in the new encoding is checked at the next read of text
         byte_order_checked = false;
         std::string().swap(sample);
@@ -123,8 +125,11 @@ public:
         if (checkByteOrderBefore(xsink)) {
             return nullptr;
         }
-        QoreStringNode* str = q_read_string(xsink, size, enc, std::bind(&StreamReader::readData, this, _3, _1, _2,
-            false));
+        // characters of text in a stateful encoding are read in the shift state left by the text read before them
+        if (useDecoder(size > 0)) {
+            return decoder.readChars(enc, size, getReadFunc(), xsink);
+        }
+        QoreStringNode* str = q_read_string(xsink, size, enc, getReadFunc());
         // the byte order of a byte order mark read in a generic encoding (ex: "UTF-16") applies to the rest of the
         // stream, as in readLineEol(); the string has the encoding of the byte order found
         if (str && str->getEncoding() != enc) {
@@ -177,8 +182,39 @@ public:
     }
 
 private:
+    //! returns true if text is read with the decoder
+    /** @param char_read true for a read of a number of characters, which needs the decoder in a stateful encoding;
+        other reads of text need it once the decoder has been used, as the text continues in its shift state
+    */
+    DLLLOCAL bool useDecoder(bool char_read) const {
+        return qore_encoding_private::isStateful(enc) && (char_read || decoder.active());
+    }
+
+    //! returns a function object that reads bytes from the stream
+    DLLLOCAL f_read_t getReadFunc() {
+        return std::bind(&StreamReader::readData, this, _3, _1, _2, false);
+    }
+
+    //! reads a line with the decoder
+    /** @param eol the end-of-line marker in any encoding, or nullptr for any of \c "\n", \c "\r", or \c "\r\n"
+    */
+    DLLLOCAL QoreStringNode* readDecoderLine(const QoreString* eol, bool trim, ExceptionSink* xsink) {
+        std::string eol_utf8;
+        if (eol) {
+            TempEncodingHelper teol(eol, QCS_UTF8, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            eol_utf8.assign(teol->c_str(), teol->size());
+        }
+        return decoder.readLine(enc, eol_utf8, trim, true, getReadFunc(), xsink);
+    }
+
     //! Reads one line ending with the given end-of-line marker; the byte order of the text is checked by the caller
     DLLLOCAL QoreStringNode* readLineEolIntern(const QoreString* eol, bool trim, ExceptionSink* xsink) {
+        if (useDecoder(false)) {
+            return readDecoderLine(eol, trim, xsink);
+        }
         // the byte order of a stream in the generic UTF-16 encoding (or a Unicode encoding created on the fly with
         // a byte order mark, ex: "UTF-32") is given by a byte order mark at its start; it must be known before the
         // end-of-line marker is converted to the encoding of the stream
@@ -325,6 +361,9 @@ public:
 private:
     //! Reads one line ending with any end-of-line marker; the byte order of the text is checked by the caller
     DLLLOCAL QoreStringNode* readLineIntern(bool trim, ExceptionSink* xsink) {
+        if (useDecoder(false)) {
+            return readDecoderLine(nullptr, trim, xsink);
+        }
         SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
 
         while (true) {
@@ -512,6 +551,9 @@ protected:
 
     //! true once the byte order of text in the current encoding has been checked
     bool byte_order_checked = false;
+
+    //! keeps the shift state of text in a stateful encoding between reads of characters
+    QoreStatefulTextDecoder decoder;
 
     //! Makes the next bytes of the stream available without reading them, for the byte order check
     /** The unbuffered reader reads no bytes beyond the text it returns (the stream can be read directly between reads

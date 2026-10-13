@@ -41,6 +41,8 @@ class StatefulEncodingCharacterTest inherits QUnit::Test {
         addTestCase("formatting and replacement", \testFormatting());
         addTestCase("encoding text for HTML and URLs", \testEncodingFunctions());
         addTestCase("reading text from streams and files", \testReading());
+        addTestCase("reading characters across shift sequences", \testCharacterReads());
+        addTestCase("reading invalid and truncated text by its characters", \testInvalidCharacterReads());
         addTestCase("scanning", \testScanner());
         addTestCase("encodings that are not ASCII-compatible", \testNonAsciiCompatible());
         set_return_value(main());
@@ -399,10 +401,9 @@ class StatefulEncodingCharacterTest inherits QUnit::Test {
             }
             assertEq(data, utf8(new StreamReader(new BinaryInputStream(binary(s)), enc).readString(-1)),
                 enc + ": StreamReader::readString(-1)");
-            # a number of characters cannot be read without the shift state
-            assertThrows("UNSUPPORTED-ENCODING", sub () {
-                new StreamReader(new BinaryInputStream(binary(s)), enc).readString(3);
-            }, NOTHING, enc + ": StreamReader::readString(3)");
+            # a number of characters is read with the shift state
+            assertEq(data.substr(0, 3), utf8(new StreamReader(new BinaryInputStream(binary(s)), enc).readString(3)),
+                enc + ": StreamReader::readString(3)");
             # files
             string path = dir + DirSep + "text-" + enc;
             {
@@ -421,10 +422,8 @@ class StatefulEncodingCharacterTest inherits QUnit::Test {
                 assertEq(lines, got, enc + ": ReadOnlyFile::readLine()");
             }
             assertEq(data, utf8(new ReadOnlyFile(path, enc).read(-1)), enc + ": ReadOnlyFile::read(-1)");
-            assertThrows("UNSUPPORTED-ENCODING", sub () { new ReadOnlyFile(path, enc).read(3); }, NOTHING,
-                enc + ": ReadOnlyFile::read(3)");
-            assertThrows("UNSUPPORTED-ENCODING", sub () { new ReadOnlyFile(path, enc).getchar(); }, NOTHING,
-                enc + ": ReadOnlyFile::getchar()");
+            assertEq(data.substr(0, 3), utf8(new ReadOnlyFile(path, enc).read(3)), enc + ": ReadOnlyFile::read(3)");
+            assertEq(data.substr(0, 1), utf8(new ReadOnlyFile(path, enc).getchar()), enc + ": ReadOnlyFile::getchar()");
             assertEq(lines, (map utf8($1), new FileLineIterator(path, enc)), enc + ": FileLineIterator");
             assertEq(lines, (map utf8($1), new DataLineIterator(s)), enc + ": DataLineIterator");
             # a quoted field that continues on the next line
@@ -433,6 +432,226 @@ class StatefulEncodingCharacterTest inherits QUnit::Test {
             assertTrue(dli.next());
             assertEq(("a", i.value + "\n2", "b"), (map utf8($1), dli.getSplitLine(",", "\"")),
                 enc + ": quoted field on two lines");
+        }
+    }
+
+    #! returns the number of bytes of the first n characters of text in the given encoding
+    /** The bytes are found by converting longer and longer prefixes of the text, so the offset does not depend on the
+        readers tested
+    */
+    private static int charOffset(binary b, string enc, int n) {
+        for (int l = 1; l <= b.size(); ++l) {
+            try {
+                if (convert_encoding(binary_to_string(b.substr(0, l), enc), "UTF-8").length() >= n) {
+                    return l;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # a character or a shift sequence cut off at the end of the prefix
+            }
+        }
+        return b.size();
+    }
+
+    #! returns the text in pieces of the given number of characters
+    private static list<string> pieces(string text, int n) {
+        list<string> rv = ();
+        for (int o = 0; o < text.length(); o += n) {
+            rv += text.substr(o, n);
+        }
+        return rv;
+    }
+
+    #! checks a string read in a stateful encoding and returns its text in UTF-8
+    /** Every string read is valid on its own: it starts and ends in the initial shift state
+    */
+    private string checkRead(string s, string enc, string label) {
+        assertEq(enc, s.encoding(), label + ": encoding");
+        string text = utf8(s);
+        assertEq(binary(convert_encoding(text, enc)), binary(s), label + ": the string is valid on its own");
+        return text;
+    }
+
+    #! characters read a number at a time continue in the shift state of the characters read before them
+    testCharacterReads() {
+        string dir = tmp_location() + DirSep + "stateful-chars-" + getpid();
+        mkdir(dir);
+        on_exit remove_tree(dir);
+        foreach hash<auto> i in (getEncodings().pairIterator()) {
+            string enc = i.key;
+            string v = i.value;
+            # lines that end in a line feed, a carriage return with a line feed, and a carriage return
+            string data = v + "\n2: " + v.substr(3) + "\r\nend\r" + v + "\n";
+            if (!representable(data, enc)) {
+                continue;
+            }
+            binary b = binary(convert_encoding(data, enc));
+            string path = dir + DirSep + "chars-" + enc;
+            {
+                File f(enc);
+                f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+                f.write(data);
+            }
+            assertEq(b, ReadOnlyFile::readBinaryFile(path), enc + ": file data");
+
+            # every number of characters at a time, so that reads end in all of the shifted runs
+            for (int n = 1; n <= 5; ++n) {
+                list<string> expected = pieces(data, n);
+                list<string> got = ();
+                *string s;
+                StreamReader sr(new BinaryInputStream(b), enc);
+                while (exists (s = sr.readString(n))) {
+                    got += checkRead(s, enc, sprintf("%s: StreamReader::readString(%d)", enc, n));
+                }
+                assertEq(expected, got, sprintf("%s: StreamReader::readString(%d)", enc, n));
+
+                # a buffer smaller than a shift sequence
+                got = ();
+                BufferedStreamReader bsr(new BinaryInputStream(b), enc, 2);
+                while (exists (s = bsr.readString(n))) {
+                    got += checkRead(s, enc, sprintf("%s: BufferedStreamReader::readString(%d)", enc, n));
+                }
+                assertEq(expected, got, sprintf("%s: BufferedStreamReader::readString(%d)", enc, n));
+
+                got = ();
+                ReadOnlyFile f(path, enc);
+                while (exists (s = f.read(n))) {
+                    got += checkRead(s, enc, sprintf("%s: ReadOnlyFile::read(%d)", enc, n));
+                }
+                assertEq(expected, got, sprintf("%s: ReadOnlyFile::read(%d)", enc, n));
+            }
+            {
+                list<string> got = ();
+                *string s;
+                ReadOnlyFile f(path, enc);
+                while (exists (s = f.getchar())) {
+                    got += checkRead(s, enc, enc + ": ReadOnlyFile::getchar()");
+                }
+                assertEq(pieces(data, 1), got, enc + ": ReadOnlyFile::getchar()");
+            }
+
+            # no bytes are read after the characters returned
+            for (int n = 1; n <= data.length(); ++n) {
+                int offset = charOffset(b, enc, n);
+                BinaryInputStream is(b);
+                StreamReader sr(is, enc);
+                assertEq(data.substr(0, n), utf8(sr.readString(n)), sprintf("%s: StreamReader::readString(%d)", enc,
+                    n));
+                assertEq(b.size() - offset, (is.read(b.size() + 1) ?? binary()).size(),
+                    sprintf("%s: bytes left in the stream after %d character(s)", enc, n));
+                ReadOnlyFile f(path, enc);
+                assertEq(data.substr(0, n), utf8(f.read(n)), sprintf("%s: ReadOnlyFile::read(%d)", enc, n));
+                assertEq(offset, f.getPos(), sprintf("%s: file position after %d character(s)", enc, n));
+            }
+
+            # lines and all of the text after characters are read in the same shift state
+            list<string> vlines = (v.substr(4) + "\n", "2", ":", " " + v.substr(3) + "\r\n", "end\r",
+                v.substr(0, 2), v.substr(2));
+            {
+                ReadOnlyFile f(path, enc);
+                assertEq(v.substr(0, 4), checkRead(f.read(4), enc, enc + ": read(4)"), enc + ": read(4)");
+                assertEq(vlines[0], checkRead(f.readLine(True), enc, enc + ": readLine()"),
+                    enc + ": readLine() after read()");
+                assertEq(vlines[1], checkRead(f.getchar(), enc, enc + ": getchar()"), enc + ": getchar()");
+                assertEq(vlines[2], checkRead(f.readLine(True, ":"), enc, enc + ": readLine(marker)"),
+                    enc + ": readLine() with a marker after getchar()");
+                assertEq(vlines[3], checkRead(f.readLine(True), enc, enc + ": readLine() CR LF"),
+                    enc + ": readLine() ending in CR LF");
+                assertEq(vlines[4], checkRead(f.readLine(True), enc, enc + ": readLine() CR"),
+                    enc + ": readLine() ending in CR");
+                # the character read after the carriage return is returned next
+                assertEq(vlines[5], checkRead(f.read(2), enc, enc + ": read(2) after CR"),
+                    enc + ": read(2) after a line ending in CR");
+                assertEq(vlines[6], checkRead(f.readLine(False), enc, enc + ": readLine(False)"),
+                    enc + ": readLine() without the end of line");
+                assertEq(NOTHING, f.read(-1), enc + ": read(-1) at the end of the file");
+                assertEq(NOTHING, f.readLine(), enc + ": readLine() at the end of the file");
+                assertEq(NOTHING, f.getchar(), enc + ": getchar() at the end of the file");
+
+                # a new position is read from the initial shift state
+                f.setPos(0);
+                assertEq(v.substr(0, 4), utf8(f.read(4)), enc + ": read(4) after setPos(0)");
+                assertEq(data.substr(4), utf8(f.read(-1)), enc + ": read(-1) after read(4)");
+                f.setPos(0);
+                assertEq(v, utf8(f.readLine(False)), enc + ": readLine() after setPos(0)");
+            }
+            {
+                StreamReader sr(new BinaryInputStream(b), enc);
+                assertEq(v.substr(0, 4), checkRead(sr.readString(4), enc, enc + ": readString(4)"),
+                    enc + ": StreamReader::readString(4)");
+                assertEq(v.substr(4), checkRead(sr.readLine(), enc, enc + ": readLine()"),
+                    enc + ": StreamReader::readLine() after readString()");
+                assertEq("2", utf8(sr.readString(1)), enc + ": StreamReader::readString(1)");
+                assertEq(":", checkRead(sr.readLine(":", False), enc, enc + ": readLine(marker)"),
+                    enc + ": StreamReader::readLine() with a marker");
+                assertEq(data.substr(v.length() + 3), checkRead(sr.readString(-1), enc, enc + ": readString(-1)"),
+                    enc + ": StreamReader::readString(-1) after readString()");
+                assertEq(NOTHING, sr.readString(-1), enc + ": StreamReader::readString(-1) at the end");
+                assertEq(NOTHING, sr.readString(1), enc + ": StreamReader::readString(1) at the end");
+                assertEq(NOTHING, sr.readLine(), enc + ": StreamReader::readLine() at the end");
+            }
+            {
+                # the line end is "\n" by default for a stateful encoding
+                StreamReader sr(new BinaryInputStream(b), enc);
+                assertEq(v.substr(0, 1), utf8(sr.readString(1)), enc + ": StreamReader::readString(1)");
+                assertEq(v.substr(1) + "\n", utf8(sr.readLine(NOTHING, False)), enc + ": readLine(trim = False)");
+                assertEq("2: " + v.substr(3) + "\r", utf8(sr.readLine()), enc + ": readLine() of a CR LF line");
+            }
+        }
+    }
+
+    #! text that cannot be decoded is an error, and a character cut off by the end of the data is not returned
+    testInvalidCharacterReads() {
+        string enc = "ISO-2022-JP";
+        if (!representable("ab 日本", enc)) {
+            testSkip(enc + " is not supported here");
+        }
+        binary b = binary(convert_encoding("ab 日本", enc));
+        # the data ends after the first byte of "本"
+        binary cut = b.substr(0, charOffset(b, enc, 5) - 1);
+        assertThrows("STREAM-ENCODING-ERROR", "incomplete character", sub () {
+            new StreamReader(new BinaryInputStream(cut), enc).readString(10);
+        });
+        {
+            StreamReader sr(new BinaryInputStream(cut), enc);
+            assertEq("ab 日", utf8(sr.readString(4)), "the complete characters before the cut");
+            assertThrows("STREAM-ENCODING-ERROR", "incomplete character", \sr.readString(), 1);
+        }
+        {
+            StreamReader sr(new BinaryInputStream(cut), enc);
+            assertEq("ab", utf8(sr.readString(2)));
+            assertThrows("STREAM-ENCODING-ERROR", "incomplete character", \sr.readLine());
+        }
+        string path = tmp_location() + DirSep + sprintf("stateful-cut-%d", getpid());
+        on_exit unlink(path);
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(cut);
+        }
+        {
+            ReadOnlyFile f(path, enc);
+            assertEq(("a", "b", " ", "日"), (map utf8(f.getchar()), xrange(4)));
+            assertThrows("STREAM-ENCODING-ERROR", "incomplete character", \f.getchar());
+        }
+        assertThrows("STREAM-ENCODING-ERROR", "incomplete character", sub () {
+            new ReadOnlyFile(path, enc).read(10);
+        });
+
+        # a byte that is not a character in ISO-2022-JP
+        binary bad = b + <ff> + binary(convert_encoding("x", enc));
+        # the text in UTF-8, if the platform's iconv accepts the byte
+        *string text;
+        try {
+            text = convert_encoding(binary_to_string(bad, enc), "UTF-8");
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        if (!exists text) {
+            assertThrows("STREAM-ENCODING-ERROR", "invalid byte sequence", sub () {
+                new StreamReader(new BinaryInputStream(bad), enc).readString(10);
+            });
+            StreamReader sr(new BinaryInputStream(bad), enc);
+            assertEq("ab 日本", utf8(sr.readString(5)), "the characters before the invalid byte");
+            assertThrows("STREAM-ENCODING-ERROR", "invalid byte sequence", \sr.readString(), 1);
         }
     }
 

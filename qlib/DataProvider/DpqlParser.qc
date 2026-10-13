@@ -55,40 +55,6 @@ const hash<auto> DpqlPrefixOperatorSpecs = {
     DP_OP_TAKEUNTIL: {"min": 2, "max": 2},
 };
 
-#! The arithmetic operators whose operand types DPQL validation checks, with what each one accepts
-/** Arithmetic in DPQL is %Qore arithmetic, which combines any two values: an operand that the operator cannot use
-    is converted silently (a hash plus an integer is the integer), so validation reports the combinations that do
-    not give a meaningful result
-*/
-const hash<string, string> DpqlArithmeticAccepts = {
-    DP_OP_PLUS: "it adds numbers, or a number and a date; joins a string with a string, number, date or boolean; "
-        "appends to a list; and merges two hashes or two binary values",
-    DP_OP_MINUS: "it subtracts numbers, or a date or number from a date; and removes keys (a string or a list of "
-        "strings) from a hash",
-    DP_OP_MULT: "it multiplies numbers",
-    DP_OP_DIV: "it divides numbers",
-    DP_OP_MOD: "it gives the remainder of the division of numbers",
-};
-
-#! The kinds of scalar value that \c + joins with a string
-const hash<string, bool> DpqlStringJoinKinds = {
-    "string": True,
-    "numeric": True,
-    "date": True,
-    "bool": True,
-};
-
-#! How a diagnostic names a kind of operand value
-const hash<string, string> DpqlOperandKindLabels = {
-    "numeric": "a number",
-    "string": "a string",
-    "date": "a date",
-    "bool": "a boolean",
-    "binary": "a binary value",
-    "hash": "a hash",
-    "list": "a list",
-};
-
 #! The result of comparing a value with itself, by comparison operator
 const hash<string, bool> DpqlSelfComparisonResults = {
     DP_SEARCH_OP_EQ: True,
@@ -669,7 +635,7 @@ public class DpqlParser {
         }
 
         # Arithmetic operand types: an operand that the operator cannot use would be converted silently
-        if (DpqlArithmeticAccepts{exp.exp}) {
+        if (ExpressionTypes::ArithmeticAccepts{exp.exp}) {
             checkArithmeticOperands(exp, \diags);
         }
 
@@ -2060,154 +2026,35 @@ public class DpqlParser {
     #! Reports arithmetic operands that the operator cannot combine
     /** Each operand whose kind of value is known (from a literal, a field's type, or nested arithmetic) is checked
         against the operator, from left to right, as the operator combines them; see
-        @ref getArithmeticResultKind().
+        @ref ExpressionTypes::checkArithmetic().
 
         @param exp an arithmetic expression
         @param diags the diagnostics to add a \c DPQL-E050 error to
     */
     private checkArithmeticOperands(hash<DataProviderExpression> exp, reference<list<hash<DpqlDiagnostic>>> diags) {
-        if (exp.args.size() < 2) {
+        *hash<ExpressionArithmeticMismatch> mismatch = ExpressionTypes::checkArithmetic(exp, fields, expressions);
+        if (!mismatch) {
             return;
         }
-        *string left = getArithmeticOperandKind(exp.args[0]);
-        string left_desc = DpqlParser::describeOperand(exp.args[0], left);
-        for (int i = 1; i < exp.args.size(); ++i) {
-            *string right = getArithmeticOperandKind(exp.args[i]);
-            if (!left || !right) {
-                # an operand whose kind is not known cannot be checked, nor can what the operator gives with it
-                left = NOTHING;
-                continue;
-            }
-            *string result = DpqlParser::getArithmeticResultKind(exp.exp, left, right);
-            if (!result) {
-                diags += <DpqlDiagnostic>{
-                    "severity": "error",
-                    "message": sprintf("Operator '%s' cannot be applied to %s and %s: %s", getOpSymbol(exp.exp),
-                        left_desc, DpqlParser::describeOperand(exp.args[i], right), DpqlArithmeticAccepts{exp.exp}),
-                    "code": "DPQL-E050",
-                    "line": 1,
-                    "column": 1,
-                    "end_line": 1,
-                    "end_column": 1,
-                };
-                return;
-            }
-            left = result;
-            left_desc = DpqlOperandKindLabels{result};
-        }
-    }
-
-    #! Returns the kind of value of an arithmetic operand, or NOTHING if it is not known
-    private *string getArithmeticOperandKind(auto arg) {
-        # nested arithmetic gives the kind that its operands give
-        if (arg instanceof hash<DataProviderExpression> && DpqlArithmeticAccepts{arg.exp}) {
-            if (arg.args.size() < 2) {
-                return;
-            }
-            *string kind = getArithmeticOperandKind(arg.args[0]);
-            for (int i = 1; i < arg.args.size() && kind; ++i) {
-                *string right = getArithmeticOperandKind(arg.args[i]);
-                kind = right ? DpqlParser::getArithmeticResultKind(arg.exp, kind, right) : NOTHING;
-            }
-            return kind;
-        }
-        return DpqlParser::getOperandKind(inferArgType(arg));
-    }
-
-    #! Returns the kind of value of a type: one of the keys of DpqlOperandKindLabels, or NOTHING
-    /** @return NOTHING if the type holds values of more than one kind (ex: \c data is a string or a binary value)
-        or of another kind (ex: any value)
-    */
-    private static *string getOperandKind(*AbstractDataProviderType type) {
-        if (!type) {
-            return;
-        }
-        *string rv;
-        foreach string name in (keys type.getReturnTypeHash()) {
-            *string kind;
-            switch (name) {
-                case "int":
-                case "integer":
-                case "float":
-                case "number":
-                    kind = "numeric";
-                    break;
-                case "string":
-                case "date":
-                case "bool":
-                case "binary":
-                    kind = name;
-                    break;
-                case "nothing":
-                case "null":
-                    # an optional value
-                    continue;
-                default:
-                    if (name =~ /^(soft)?list\b/) {
-                        kind = "list";
-                    } else if (name =~ /^hash\b/) {
-                        kind = "hash";
-                    }
-                    break;
-            }
-            if (!kind || (rv && rv != kind)) {
-                return;
-            }
-            rv = kind;
-        }
-        return rv;
-    }
-
-    #! Returns the kind of value that an arithmetic operator gives for two kinds of operand
-    /** @param op the operator
-        @param left the kind of the left operand
-        @param right the kind of the right operand
-
-        @return the kind of the result, or NOTHING if the operator cannot combine the operands: %Qore would convert
-        one of them silently (ex: a hash plus an integer is the integer)
-    */
-    private static *string getArithmeticResultKind(string op, string left, string right) {
-        switch (op) {
-            case DP_OP_PLUS:
-                # appends to or prepends to a list
-                if (left == "list" || right == "list") {
-                    return "list";
-                }
-                if (left == "numeric" && right == "numeric") {
-                    return "numeric";
-                }
-                if (left == "string" || right == "string") {
-                    return DpqlStringJoinKinds{left == "string" ? right : left} ? "string" : NOTHING;
-                }
-                if ((left == "date" && (right == "date" || right == "numeric"))
-                        || (left == "numeric" && right == "date")) {
-                    return "date";
-                }
-                if (left == right && (left == "hash" || left == "binary")) {
-                    return left;
-                }
-                return;
-
-            case DP_OP_MINUS:
-                if (left == "numeric" && right == "numeric") {
-                    return "numeric";
-                }
-                if (left == "date" && (right == "date" || right == "numeric")) {
-                    return "date";
-                }
-                # removes keys from a hash
-                if (left == "hash" && (right == "string" || right == "list")) {
-                    return "hash";
-                }
-                return;
-        }
-        # multiplication, division and remainder
-        return left == "numeric" && right == "numeric" ? "numeric" : NOTHING;
+        diags += <DpqlDiagnostic>{
+            "severity": "error",
+            "message": sprintf("Operator '%s' cannot be applied to %s and %s: %s", getOpSymbol(mismatch.op),
+                mismatch.left_combined
+                    ? ExpressionTypes::OperandKindLabels{mismatch.left_kind}
+                    : DpqlParser::describeOperand(mismatch.left, mismatch.left_kind),
+                DpqlParser::describeOperand(mismatch.right, mismatch.right_kind),
+                ExpressionTypes::ArithmeticAccepts{mismatch.op}),
+            "code": "DPQL-E050",
+            "line": 1,
+            "column": 1,
+            "end_line": 1,
+            "end_column": 1,
+        };
     }
 
     #! Describes an arithmetic operand in a diagnostic
-    private static string describeOperand(auto arg, *string kind) {
-        string label = kind ? DpqlOperandKindLabels{kind} : "a value";
+    private static string describeOperand(auto arg, string kind) {
+        string label = ExpressionTypes::OperandKindLabels{kind};
         if (arg instanceof hash<DataProviderFieldReference>) {
             return sprintf("'@%s' (%s)", arg.field, label);
         }
@@ -2215,90 +2062,26 @@ public class DpqlParser {
     }
 
     #! Infers the type of a parsed argument
-    /** @return the inferred type, or NOTHING if the type cannot be determined
+    /** @return the type (@ref ExpressionTypes::getType()), or NOTHING if the type is only known when the argument
+        is evaluated
 
         @since DataProvider 3.4
     */
     private *AbstractDataProviderType inferArgType(auto arg) {
-        # Literal values: determine type from Qore type code
-        switch (arg.typeCode()) {
-            case NT_STRING:
-                return AbstractDataProviderType::get(StringType);
-            case NT_INT:
-                return AbstractDataProviderType::get(IntType);
-            case NT_FLOAT:
-                return AbstractDataProviderType::get(FloatType);
-            case NT_BOOLEAN:
-                return AbstractDataProviderType::get(BoolType);
-            case NT_NUMBER:
-                return AbstractDataProviderType::get(NumberType);
-            case NT_DATE:
-                return AbstractDataProviderType::get(DateType);
-            case NT_BINARY:
-                return AbstractDataProviderType::get(BinaryType);
-            case NT_LIST:
-                return AbstractDataProviderType::get(SoftListType);
-            case NT_NULL:
-            case NT_NOTHING:
-                return AbstractDataProviderType::get(NothingType);
-        }
-
-        # Hash types: field references and expressions
-        if (arg instanceof hash<DataProviderFieldReference>) {
-            # Look up the field type from the fields map; NOTHING if the field is unknown
-            return AbstractDataProvider::getFieldReferenceType(arg, fields);
-        }
-
-        if (arg instanceof hash<DataProviderExpression>) {
-            return inferExpressionReturnType(arg);
-        }
-
-        return NOTHING;
+        return ExpressionTypes::getType(arg, fields, expressions);
     }
 
     #! Infers the return type of a parsed expression node
-    /** Resolves the return type by looking up the expression in the expression map.
-        For comparison and logical operators, returns bool. For nested expressions,
-        recurses into the inner expression.
-
-        @param exp the parsed expression node
-        @return the inferred return type, or NOTHING if it cannot be determined
+    /** @param exp the parsed expression node
+        @return the type (@ref ExpressionTypes::getType()), or NOTHING if the type is only known when the expression
+        is evaluated
 
         @since DataProvider 3.4
+        @since %DataProvider 3.9 the type is given by the expression type rules (@ref ExpressionTypes), so for
+        example \c 1 \c + \c 2.5 gives \c float, and \c abs(\@qty) gives the type of the field \c qty
     */
     *AbstractDataProviderType inferExpressionReturnType(hash<DataProviderExpression> exp) {
-        # Handle structural expression types before expression map lookup
-        switch (exp.exp) {
-            case DP_EXPR_VALUE:
-                # Value wrapper — return type of the wrapped value
-                if (exp.args.size() > 0) {
-                    return inferArgType(exp.args[0]);
-                }
-                return NOTHING;
-
-            case DP_SEARCH_OP_EQ:
-            case DP_SEARCH_OP_NE:
-            case DP_SEARCH_OP_LT:
-            case DP_SEARCH_OP_LE:
-            case DP_SEARCH_OP_GT:
-            case DP_SEARCH_OP_GE:
-            case DP_SEARCH_OP_IN:
-            case DP_SEARCH_OP_BETWEEN:
-            case DP_SEARCH_OP_REGEX:
-            case DP_OP_REGEX_MATCH:
-            case DP_OP_REGEX_NMATCH:
-            case DP_SEARCH_OP_NOT:
-            case DP_OP_AND:
-            case DP_OP_OR:
-                return AbstractDataProviderType::get(BoolType);
-        }
-
-        # Known expression in the map — use its return_type
-        if (expressions{exp.exp}) {
-            return expressions{exp.exp}.return_type;
-        }
-
-        return NOTHING;
+        return ExpressionTypes::getType(exp, fields, expressions);
     }
 
     #! Parses an argument list, also collecting the start token of each argument

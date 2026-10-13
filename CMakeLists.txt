@@ -2747,8 +2747,9 @@ target_include_directories(qore-hash-key-cancel-test PRIVATE
 target_link_libraries(qore-hash-key-cancel-test PRIVATE libqore)
 add_executable(qore-stream-peek-test examples/test/qore/streams/stream_peek.cpp)
 target_include_directories(qore-stream-peek-test PRIVATE
-    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR})
-target_link_libraries(qore-stream-peek-test PRIVATE libqore)
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
+# the readers keep an IconvHelper for text in stateful encodings, which is inline
+target_link_libraries(qore-stream-peek-test PRIVATE libqore ${ICONV_LIBRARY})
 add_executable(qore-utf8-validation-test examples/test/qore/strings/utf8_validation.cpp)
 target_include_directories(qore-utf8-validation-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
