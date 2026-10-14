@@ -12870,3 +12870,97 @@ across callbacks or concurrent class mutation. Preserve live locked storage and
 exact-once continuation. Require before/after and same-build controls, short-call
 and metadata-churn measurements, then broader debug/Java validation and audit
 before retaining a replacement.
+
+## Rejected admitted effect-member descriptor ABI (2026-10-14)
+
+The follow-up descriptor prototype is also not retained. It attached a lazy
+immutable operation plan to an already-admitted method PIC entry and passed a
+two-pointer invocation view as the third argument of an additive seven-argument
+v2 effectful companion. The compiler supplied names and update directions for
+at most 21 operations. One generation check per invocation replaced the previous
+per-update declaration lookup/cache scan. Plans retained metadata only, never
+mutable storage, values or receiver ownership. The original v1 companion and
+exact-once continuation remained the fallback, including allocation failure and
+the 64-plan retirement cap. Class/member/context changes and AOT context
+destruction invalidated plans; this was not synchronization for racing class
+mutation. Object locks, live storage lookup, deletion, representation and
+overflow checks remained.
+
+The frozen baseline was `a5e9d7ebe9cba9b703f5390af24eb28e3f915f4b`, whose runtime
+is unchanged from merged `b2c7f9143b`. The first screen covered eleven workloads,
+with three forks, three warmups, three 300 ms samples and duplicate baseline and
+candidate configurations. A focused confirmation selected four workloads from
+that screen before timing: effectful calls, integer callbacks, native integer
+results and integer member reads. It used five forks, three warmups, three
+400 ms samples, duplicate baseline/candidate configurations, and same-runtime
+compile-off and same-executable runtime-off controls. Both matrices used count
+4096, separately compiled matching `qcc -O3` artifacts, verified loaded libraries
+and all 555 reference outputs per configuration. Runtime aliases/environment
+sizes were matched, and jobs ran serially in predeclared randomized order. All
+756 windows and successful preparation/timing/verifier terminal exits remain.
+
+Values are whole-workload ns/element, not isolated call latency. The ranges
+contain the two A/A medians, not confidence intervals; percentage ranges cover
+all combinations of before/after medians within each matrix.
+
+|!Matrix and workload|!Before A/A|!Candidate A/A|!Change versus before
+|Initial: effectful integer member|90.139-91.687|87.163-87.930|2.45-4.93% faster
+|Initial: integer callback|6.973-7.047|7.524-7.595|6.77-8.93% slower
+|Initial: native integer result|10.751-10.795|10.889-11.095|0.87-3.20% slower
+|Initial: integer member read|31.652-32.246|32.151-32.672|0.30% faster to 3.22% slower
+|Confirmation: effectful integer member|90.815-90.919|87.380-87.537|3.61-3.89% faster
+|Confirmation: integer callback|6.986-7.035|7.501-7.511|6.63-7.52% slower
+|Confirmation: native integer result|10.746-10.768|10.830-10.853|0.58-1.00% slower
+|Confirmation: integer member read|31.912-31.943|32.453-32.773|1.59-2.70% slower
+
+|!Confirmation control|!Runtime off|!Compile off
+|Effectful integer member|90.870|90.755
+|Integer callback|7.524|7.122
+|Native integer result|11.045|10.953
+|Integer member read|32.755|32.365
+
+Runtime-off returns effectful calls to baseline-like timing, supporting a real
+target-path gain. It leaves callbacks slow, while compile-off recovers most of
+their loss using the same runtime library. Disassembly of the frozen baseline,
+enabled and compile-off executables found identical normalized instruction
+sequences in the callback v2/v3 bodies and ordinary/fast callers, at different
+addresses. Address/branch/literal relocations were normalized explicitly; raw
+assembly and the normalization script are preserved. This supports a layout
+sensitivity hypothesis, not a proven hardware-counter explanation or permission
+to disregard the regression. The additional ABI/allocation/invalidation machinery
+is rejected for a small target gain with a larger callback loss. All eleven
+initial workloads, noisy samples and adverse controls remain in the dataset.
+
+The candidate passed 13 release files, 25 cases and 12156 QUnit assertions plus
+IR/AOT reference grids. C++ probes counted actual v2 hits and exercised partial
+continuation, forced stack overflow, cache retirement during reentry, malformed
+binding, native member invalidation and the retirement cap. Qore fixtures covered
+inherited internal shadowing and removed/recreated storage, alongside existing
+thread/debugger/cancellation checks. One initial harness failure inspected the
+lazy plan before its first admitted call after PIC repopulation; the test setup
+was fixed and the entire screen rerun before timing. No debug, sanitizer,
+cross-platform, short-invocation, timed metadata-churn or fresh Java qualification
+was pursued after rejection. No new IR/JIT speedup or Java ratio is claimed.
+
+All 14 experimental runtime/test files were restored. The original release core
+and 62 matching AOT modules were rebuilt; five original test files passed
+14 cases and 6009 assertions, and both reference grids passed. Source hashes,
+runtime identity and absence of the new helper symbols were verified. The
+[dataset](results-aot-effect-descriptor-rejected-macos-arm64.json) contains the
+complete prototype, raw measurements, identities, controls, assembly, validation,
+restoration and all audit items. The archive is not production approval.
+
+|!Audit scope|!Pass|!N/A|!Fail
+|Retained documentation and research data; all 62 checklist items recorded in the dataset|7|55|0
+
+Next calibrate emitted-code layout sensitivity on the restored baseline using a
+predeclared deterministic set of function-order/layout variants, preserving and
+checking function instructions and outputs. Identical-binary A/A repetitions do
+not sample binary layout. Small future improvements should use symmetric
+baseline/candidate layout ensembles, retaining every variant rather than choosing
+favorable addresses. Profile the current hot caller/runtime/companion boundary
+before choosing the next structural optimization; prior prepared-entry alignment
+and scalar-cleanup approaches must not simply be repeated. Preserve frame
+pointers and unwind tables: the source documents actual external Abseil/V8
+unwinder crashes without the AOT frame chain. Broader qualification and fresh
+matched Java timing follow only after a repeatable, regression-safe AOT gain.

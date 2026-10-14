@@ -2149,3 +2149,48 @@ the metadata-generation and lifetime proof across the non-reentrant prefix
 must be established first. Keep live locking, storage lookup and exact-once
 continuation. Require same-build controls and short-call/metadata-churn checks
 as well as frozen before/after measurements before retaining a replacement.
+
+### Admitted effect-member descriptor experiment (2026-10-14)
+
+The proposed versioned companion was implemented and rejected after 756 AOT
+measurement windows. An admitted method PIC entry owned a lazy immutable plan
+for at most 21 compiler-described operations. A v2 companion received that plan
+explicitly, replacing per-update declaration lookup with one generation check
+per invocation. The original v1 companion/continuation remained the fallback.
+Plans retained no receiver owner, mutable value or storage address; live locking,
+deletion, representation/overflow and exact-once continuation stayed intact.
+Native member/context changes and class/AOT-context lifetime invalidated metadata;
+64 retained plans bounded allocation. This did not enable racing class mutation.
+
+The eleven-workload screen and four-workload focused confirmation both showed a
+small target gain with a larger integer-callback loss. Confirmation improved
+effectful calls from 90.815-90.919 to 87.380-87.537 ns/element (3.61-3.89%), but
+callbacks regressed from 6.986-7.035 to 7.501-7.511 (6.63-7.52%). Native integer
+results and integer member reads also regressed 0.58-1.00% and 1.59-2.70%.
+These are whole-workload figures and A/A median ranges, not isolated call latency
+or confidence intervals. No fresh Java comparison or IR/JIT speed claim is made.
+
+Same-executable runtime-off returned effectful calls to baseline-like timing but
+left callbacks slow. Compile-off recovered most callback loss with the same
+runtime. Frozen callback v2/v3 bodies and ordinary/fast callers have identical
+normalized instruction sequences at different addresses. This supports a layout
+sensitivity hypothesis without establishing the exact microarchitectural cause.
+The regression is not discarded; no runtime change from this prototype remains.
+
+The candidate passed 13 release files, 25 cases and 12156 QUnit assertions, with
+actual v2-hit/continuation/invalidation/cap probes and both reference grids. After
+restoration, the original core and 62 AOT modules were rebuilt; five original
+files passed 14 cases/6009 assertions and both reference grids. Broader debug,
+sanitizer, platform, short-call/churn timing and Java qualification were not
+pursued after rejection. The complete implementation, measurements, controls,
+assembly, validation/restoration and audit are in
+`bench/runtime-comparison/results-aot-effect-descriptor-rejected-macos-arm64.json`.
+
+Next measure emitted-code layout sensitivity on the restored baseline with a
+predeclared set of deterministic layout variants and identical-instruction/output
+checks. Same-binary A/A runs do not sample this dimension. Future small gains
+need symmetric baseline/candidate ensembles without selecting favorable padding
+or addresses. Profile the hot caller/runtime/companion boundary before choosing
+the next structural change; retain stack/frame-reader/Program guards, ownership
+and cleanup ordering. Do not remove frame pointers or unwind tables: the AOT
+compiler documents real external Abseil/V8 unwinder failures without them.
