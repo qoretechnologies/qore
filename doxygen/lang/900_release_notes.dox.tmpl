@@ -4303,6 +4303,11 @@ while (*binary chunk = input.read(65536)) {
         supported by @ref filelocationhandlerintro "FileLocationHandler", to files with progress reporting,
         classified errors, time limits, \c .part files, and cancellation; it is the engine of \c qget
 
+    - @ref valuemaskintro "ValueMask" module
+      - new module for reading and writing dates, times and numbers as text with masks such as \c DD.MM.YYYY,
+        \c hh:mm \c AM, \c #.##0,00 or \c €#,##0.00, with one grammar for both directions, for checking text
+        with regular expressions or wildcards, and for the spreadsheet display formats of the masks
+
     - @ref vertexaidataproviderintro "VertexAiDataProvider" module
       - new module providing a data provider API for Google Vertex AI
 

@@ -1,0 +1,737 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ValueMask
+
+%exec-class ValueMaskTest
+
+#! Tests of the ValueMask module
+/** The reading cases are those of Qorus' SheetContractFormat (qoretechnologies/qorus#646), whose grammar the module
+    implements: both implement one grammar, so what a sheet contract accepts is what runs.  The writing cases check
+    the text written and that it is read back as the same value with the same mask.
+*/
+class ValueMaskTest inherits QUnit::Test {
+    constructor() : Test("ValueMaskTest", "1.0", \ARGV) {
+        addTestCase("reads padded and unpadded day-first dates", \dayFirst());
+        addTestCase("reads month-first, abbreviated months, two-digit years and times", \otherDates());
+        addTestCase("reads nothing that is not a date in the mask", \notDates());
+        addTestCase("reports what is wrong with a mask and where", \maskIssues());
+        addTestCase("matches the whole value with a regular expression", \regexPatterns());
+        addTestCase("reports a pattern that is not valid", \patternIssues());
+        addTestCase("accepts the number masks of the spec and refuses others", \numberMasks());
+        addTestCase("reads the legacy number format names as masks", \numberAliases());
+        addTestCase("reads numbers only with separators where the mask puts them", \numbers());
+        addTestCase("matches globs on the whole value", \globs());
+        addTestCase("lists the common formats, all valid", \presets());
+        addTestCase("reads 12-hour clocks, fractions of seconds and UTC offsets", \times());
+        addTestCase("reads times of a time column", \timeColumns());
+        addTestCase("reports mask issues in the spec's order", \issueOrder());
+        addTestCase("reads text without an offset in the time zone", \timeZones());
+        addTestCase("reads every value with the mask compiled once", \compiledOnce());
+        addTestCase("amounts and rates: currencies, percentages and negative amounts", \amounts());
+        addTestCase("the kind of a mask", \maskKinds());
+        addTestCase("writes dates and times", \formatDates());
+        addTestCase("writes dates in a time zone", \formatTimeZones());
+        addTestCase("refuses a date that a mask cannot write", \formatDateErrors());
+        addTestCase("writes numbers", \formatNumbers());
+        addTestCase("writes amounts and rates", \formatAmounts());
+        addTestCase("refuses a number that a mask cannot write", \formatNumberErrors());
+        addTestCase("reads a date written with a mask as the same date", \dateRoundTrip());
+        addTestCase("reads a number written with a mask as the same number", \numberRoundTrip());
+        addTestCase("gives the spreadsheet display format of a mask", \spreadsheetFormats());
+        addTestCase("refuses a mask without a spreadsheet display format with the reason", \spreadsheetRefusals());
+        set_return_value(main());
+    }
+
+    private *string readDate(string value, string mask) {
+        *date d = ValueMask::parseDate(value, mask);
+        if (!d) {
+            return;
+        }
+        return d.format("HH:mm:SS") == "00:00:00" ? d.format("YYYY-MM-DD") : d.format("YYYY-MM-DD HH:mm:SS");
+    }
+
+    dayFirst() {
+        assertEq("2026-11-02", readDate("02.11.2026", "DD.MM.YYYY"));
+        assertEq("2026-11-02", readDate("2.11.2026", "DD.MM.YYYY"));
+        assertEq("2026-11-02", readDate(" 2.11.2026 ", "D.M.YYYY"));
+    }
+
+    otherDates() {
+        assertEq("2026-11-16", readDate("11/16/2026", "MM/DD/YYYY"));
+        assertEq("2026-11-16", readDate("16-nov-26", "DD-Mon-YY"));
+        assertEq("2026-11-02 14:05:09", readDate("2026-11-02T14:05:09", "YYYY-MM-DDTHH:mm:SS"));
+        assertEq("2026-11-02 14:05:00", readDate("2026-11-02 14:05", "YYYY-MM-DD HH:mm"));
+        assertEq("2026-11-02", readDate("20261102", "YYYYMMDD"));
+    }
+
+    notDates() {
+        assertNothing(readDate("31.02.2026", "DD.MM.YYYY"));
+        assertNothing(readDate("13.13.2026", "DD.MM.YYYY"));
+        assertNothing(readDate("TBD", "DD.MM.YYYY"));
+        assertNothing(readDate("02/11/2026", "DD.MM.YYYY"));
+        assertNothing(readDate("16-Foo-26", "DD-Mon-YY"));
+        assertNothing(readDate("02.11.2026", "DD.MM.YYYX"));
+    }
+
+    maskIssues() {
+        assertNothing(ValueMask::maskIssue("DD.MM.YYYY"));
+        assertNothing(ValueMask::maskIssue("D. Mon YYYY"));
+        assertEq({"code": "unknown_letters", "position": 7, "text": "JJJJ"},
+            ValueMask::maskIssue("DD.MM.JJJJ"));
+        assertEq({"code": "unknown_letters", "position": 9, "text": "YX"},
+            ValueMask::maskIssue("DD.MM.YYYX"));
+        assertEq({"code": "repeated_field", "position": 4, "text": "DD"},
+            ValueMask::maskIssue("DD.DD.YYYY"));
+        assertEq({"code": "missing_day", "position": 8, "text": "MM/YYYY"},
+            ValueMask::maskIssue("MM/YYYY"));
+        assertEq({"code": "missing_year", "position": 6, "text": "DD.MM"},
+            ValueMask::maskIssue("DD.MM"));
+        assertEq({"code": "empty", "position": 1, "text": ""}, ValueMask::maskIssue(""));
+        assertEq("missing_year", ValueMask::maskIssue("0").code, "\"0\" is a mask, not an empty one");
+        assertEq("too_long", ValueMask::maskIssue(strmul("D", 41)).code);
+    }
+
+    regexPatterns() {
+        assertTrue(ValueMask::matchesPattern("PC-7710", "PC-[0-9]{4}"));
+        assertFalse(ValueMask::matchesPattern("xPC-7710", "PC-[0-9]{4}"));
+        assertFalse(ValueMask::matchesPattern("PC-77100", "PC-[0-9]{4}"));
+        assertTrue(ValueMask::matchesPattern("a", "a|b"), "an alternative matches as a whole");
+    }
+
+    patternIssues() {
+        assertNothing(ValueMask::patternIssue("PC-[0-9]{4}"));
+        assertEq("invalid", ValueMask::patternIssue("PC-[0-9").code);
+        assertEq("too_long", ValueMask::patternIssue(strmul("x", 501)).code);
+        assertFalse(ValueMask::matchesPattern("PC-7", "PC-[0-9"));
+    }
+
+    numberMasks() {
+        foreach string m in (("#,##0.#", "#.##0,#", "# ##0,#", "#'##0.#", "0.#", "0,#", "#,##0.00", "0")) {
+            assertNothing(ValueMask::numberMaskIssue(m), m);
+        }
+        assertEq({"code": "invalid", "position": 6}, ValueMask::numberMaskIssue("#,##0,#"));
+        assertEq({"code": "invalid", "position": 2}, ValueMask::numberMaskIssue("##0.0"));
+        assertEq({"code": "invalid", "position": 4}, ValueMask::numberMaskIssue("#,#0.0"));
+        assertEq({"code": "invalid", "position": 4}, ValueMask::numberMaskIssue("0.#0"));
+        assertEq({"code": "invalid", "position": 3}, ValueMask::numberMaskIssue("0."));
+        assertEq({"code": "invalid", "position": 1}, ValueMask::numberMaskIssue("x"));
+        assertEq({"code": "empty", "position": 1}, ValueMask::numberMaskIssue(""));
+    }
+
+    numberAliases() {
+        assertEq("#.##0,#", ValueMask::normalizeNumberFormat("decimal_comma"));
+        assertEq("#,##0.#", ValueMask::normalizeNumberFormat("decimal_point"));
+        assertEq(1234.56n, ValueMask::parseNumber("1.234,56", "decimal_comma"));
+    }
+
+    numbers() {
+        assertEq(1234.56n, ValueMask::parseNumber("1,234.56", "#,##0.#"));
+        assertEq(1234.56n, ValueMask::parseNumber("1234.56", "#,##0.#"));
+        assertEq(-1234n, ValueMask::parseNumber("-1,234", "#,##0.#"));
+        assertNothing(ValueMask::parseNumber("1.234,56", "#,##0.#"), "not 1.23456");
+        assertNothing(ValueMask::parseNumber("12,34", "#,##0.#"));
+        assertEq(1234.5n, ValueMask::parseNumber("1 234,5", "# ##0,#"));
+        assertEq(1234.5n, ValueMask::parseNumber("1 234,5", "# ##0,#"), "a no-break space");
+        assertEq(1234.5n, ValueMask::parseNumber("1'234.5", "#'##0.#"));
+        assertEq(1234.5n, ValueMask::parseNumber("1’234.5", "#'##0.#"),
+            "a typographic apostrophe");
+        assertNothing(ValueMask::parseNumber("1234.5", "#,##0.00"));
+        assertEq(1234.5n, ValueMask::parseNumber("1234.50", "#,##0.00"));
+        assertNothing(ValueMask::parseNumber("1234.5", "0"));
+        assertEq(1234n, ValueMask::parseNumber("1234", "0"));
+        assertNothing(ValueMask::parseNumber("1234", "0.#0"), "not a valid mask");
+    }
+
+    globs() {
+        assertTrue(ValueMask::matchesPattern("PC-7710", "PC-????", "glob"));
+        assertFalse(ValueMask::matchesPattern("PC-771", "PC-????", "glob"));
+        assertTrue(ValueMask::matchesPattern("INV-2026-01", "INV-*", "glob"));
+        assertTrue(ValueMask::matchesPattern("x.pdf", "*.pdf", "glob"));
+        assertFalse(ValueMask::matchesPattern("xpdf", "*.pdf", "glob"));
+        assertTrue(ValueMask::matchesPattern("Abc", "[A-Z]*", "glob"));
+        assertFalse(ValueMask::matchesPattern("abc", "[!a-z]*", "glob"));
+        assertEq({"code": "invalid", "detail": "[ at 1"}, ValueMask::patternIssue("[A-Z*", "glob"));
+        assertEq("a\\+b\\(c\\)", ValueMask::globToRegex("a+b(c)"));
+    }
+
+    presets() {
+        foreach string m in (ValueMask::DateFormats) {
+            assertNothing(ValueMask::maskIssue(m), m);
+        }
+        foreach string m in (ValueMask::NumberFormats) {
+            assertNothing(ValueMask::numberMaskIssue(m), m);
+        }
+        foreach hash<auto> i in (ValueMask::PatternExamples.pairIterator()) {
+            foreach hash<auto> example in (i.value) {
+                assertNothing(ValueMask::patternIssue(example.pattern, i.key), example.pattern);
+            }
+        }
+        assertTrue(ValueMask::matchesPattern("a.b@example.com",
+            ValueMask::PatternExamples.regex[3].pattern), "the e-mail example");
+        assertTrue(ValueMask::matchesPattern("12345-6789",
+            ValueMask::PatternExamples.regex[2].pattern), "the ZIP example");
+    }
+
+    private *string ts(*date d) {
+        return d ? d.format("YYYY-MM-DD HH:mm:SS.xx Z") : NOTHING;
+    }
+
+    times() {
+        assertEq("2026-11-16 14:30:00.000000 +00:00", ts(ValueMask::parseDate("11/16/2026 02:30 PM",
+            "MM/DD/YYYY hh:mm AM", "UTC")));
+        assertEq("2026-11-16 00:05:00.000000 +00:00", ts(ValueMask::parseDate("11/16/2026 12:05 am",
+            "MM/DD/YYYY hh:mm AM", "UTC")), "12 AM is midnight");
+        assertEq("2026-11-16 12:05:00.000000 +00:00", ts(ValueMask::parseDate("11/16/2026 12:05 pm",
+            "MM/DD/YYYY hh:mm AM", "UTC")), "12 PM is noon");
+        assertNothing(ValueMask::parseDate("11/16/2026 13:05 PM", "MM/DD/YYYY hh:mm AM", "UTC"));
+        assertNothing(ValueMask::parseDate("11/16/2026 02:05 a.m.", "MM/DD/YYYY hh:mm AM", "UTC"));
+        assertEq("2026-11-02 14:05:09.500000 +00:00", ts(ValueMask::parseDate("2026-11-02 14:05:09.5",
+            "YYYY-MM-DD HH:mm:SS.sss", "UTC")), "a fraction: 5 is half a second");
+        assertEq("2026-11-02 14:05:09.123456 +00:00", ts(ValueMask::parseDate(
+            "2026-11-02 14:05:09.123456", "YYYY-MM-DD HH:mm:SS.sss", "UTC")));
+        assertEq("2026-11-02 14:05:09.000000 +05:30", ts(ValueMask::parseDate(
+            "2026-11-02T14:05:09+05:30", "YYYY-MM-DDTHH:mm:SSZZ", "UTC")), "the value's offset wins");
+        assertEq("2026-11-02 14:05:09.000000 -08:00", ts(ValueMask::parseDate(
+            "2026-11-02T14:05:09-0800", "YYYY-MM-DDTHH:mm:SSZZ", "UTC")));
+        assertEq("2026-11-02 14:05:09.000000 +02:00", ts(ValueMask::parseDate(
+            "2026-11-02T14:05:09+02", "YYYY-MM-DDTHH:mm:SSZZ", "UTC")));
+        assertEq("2026-11-02 14:05:09.000000 +00:00", ts(ValueMask::parseDate(
+            "2026-11-02T14:05:09Z", "YYYY-MM-DDTHH:mm:SSZZ", "Europe/Prague")), "Z is UTC");
+        assertNothing(ValueMask::parseDate("2026-11-02T14:05:09+25:00", "YYYY-MM-DDTHH:mm:SSZZ"));
+    }
+
+    timeColumns() {
+        assertEq("1970-01-01 14:30:00.000000 +00:00", ts(ValueMask::parseDate("14:30", "HH:mm",
+            "UTC", "time")));
+        assertEq("1970-01-01 09:05:00.000000 +00:00", ts(ValueMask::parseDate("9:05", "H:mm",
+            "UTC", "time")));
+        assertEq("1970-01-01 21:15:00.000000 +00:00", ts(ValueMask::parseDate("09:15 PM",
+            "hh:mm AM", "UTC", "time")));
+        assertEq("1970-01-01 14:30:05.123000 +00:00", ts(ValueMask::parseDate("14:30:05.123",
+            "HH:mm:SS.sss", "UTC", "time")));
+        assertNothing(ValueMask::parseDate("24:00", "HH:mm", "UTC", "time"));
+        foreach string m in (ValueMask::TimeFormats) {
+            assertNothing(ValueMask::maskIssue(m, "time"), m);
+        }
+    }
+
+    issueOrder() {
+        # time masks
+        assertEq({"code": "date_in_time", "position": 14, "text": "YYYY-MM-DD HH"},
+            ValueMask::maskIssue("YYYY-MM-DD HH", "time"));
+        assertEq({"code": "missing_hour", "position": 3, "text": "mm"},
+            ValueMask::maskIssue("mm", "time"));
+        assertEq({"code": "missing_minute", "position": 3, "text": "HH"},
+            ValueMask::maskIssue("HH", "time"));
+        # a 12-hour clock needs AM, and AM a 12-hour clock
+        assertEq({"code": "clock_mismatch", "position": 6, "text": "hh:mm"},
+            ValueMask::maskIssue("hh:mm", "time"));
+        assertEq({"code": "clock_mismatch", "position": 9, "text": "HH:mm AM"},
+            ValueMask::maskIssue("HH:mm AM", "time"));
+        assertEq("clock_mismatch", ValueMask::maskIssue("DD.MM.YYYY AM").code);
+        # a fraction needs seconds
+        assertEq({"code": "missing_second", "position": 10, "text": "HH:mm.sss"},
+            ValueMask::maskIssue("HH:mm.sss", "time"));
+        # the earlier issue wins: a missing day before a clock mismatch
+        assertEq("missing_day", ValueMask::maskIssue("MM.YYYY hh").code);
+        # tokenizing issues at the token
+        assertEq({"code": "repeated_field", "position": 4, "text": "hh"},
+            ValueMask::maskIssue("HH:hh", "time"));
+        assertEq({"code": "unknown_letters", "position": 9, "text": "Z"},
+            ValueMask::maskIssue("HH:mm:SSZ", "time"), "a single Z is not a token or a literal");
+        assertEq({"code": "repeated_field", "position": 9, "text": "ZZ"},
+            ValueMask::maskIssue("HH:mmZZ ZZ", "time"));
+    }
+
+    timeZones() {
+        # without an offset the value is wall-clock time in the zone
+        assertEq("2026-11-02 14:05:00.000000 +01:00", ts(ValueMask::parseDate("02.11.2026 14:05",
+            "DD.MM.YYYY HH:mm", "Europe/Berlin")));
+        assertEq("2026-07-02 14:05:00.000000 +02:00", ts(ValueMask::parseDate("02.07.2026 14:05",
+            "DD.MM.YYYY HH:mm", "Europe/Berlin")), "summer time");
+        assertEq("2026-11-02 14:05:00.000000 -05:00", ts(ValueMask::parseDate("11/02/2026 02:05 PM",
+            "MM/DD/YYYY hh:mm AM", "America/New_York")));
+        assertNothing(ValueMask::timezoneIssue("Europe/Berlin"));
+        assertNothing(ValueMask::timezoneIssue("UTC"));
+        assertEq("invalid", ValueMask::timezoneIssue("Mars/Base").code);
+        assertEq("invalid", ValueMask::timezoneIssue("../../etc/passwd").code, "a region name only");
+        assertEq("invalid", ValueMask::timezoneIssue("").code);
+        assertThrows("FILE-OPEN2-ERROR", \ValueMask::parseDate(), ("02.11.2026", "DD.MM.YYYY",
+            "Mars/Base"));
+    }
+
+    #! a mask or pattern is compiled once and kept: every value reads the same, and one that is not valid
+    #! stays not valid
+    compiledOnce() {
+        for (int i = 0; i < 3; ++i) {
+            assertEq(2026-11-02, ValueMask::parseDate("2.11.2026", "D.M.YYYY"), "date " + i);
+            assertNothing(ValueMask::parseDate("2026-11-02", "D.M.YYYY"), "not a date " + i);
+            assertNothing(ValueMask::parseDate("2.11.2026", "D.M.JJJJ"), "invalid mask " + i);
+            assertEq(1234.5n, ValueMask::parseNumber("1.234,5", "#.##0,#"), "number " + i);
+            assertEq(1234.5n, ValueMask::parseNumber("1 234,5", "# ##0,#"), "group " + i);
+            assertNothing(ValueMask::parseNumber("1,234.5", "#.##0,#"), "not a number " + i);
+            assertNothing(ValueMask::parseNumber("1", "x"), "invalid number mask " + i);
+            assertTrue(ValueMask::matchesPattern("PC-7710", "PC-[0-9]{4}"), "regex " + i);
+            assertTrue(ValueMask::matchesPattern("PC-7710", "PC-????", "glob"), "glob " + i);
+            assertFalse(ValueMask::matchesPattern("PC-7710", "PC-????"), "the same text as regex " + i);
+            assertFalse(ValueMask::matchesPattern("(", "("), "invalid regex " + i);
+            assertFalse(ValueMask::matchesPattern("[a", "[a", "glob"), "invalid glob " + i);
+        }
+        # concurrent readers share the compiled masks
+        list<hash<auto>> results = ();
+        Mutex m();
+        Counter c();
+        for (int t = 0; t < 8; ++t) {
+            c.inc();
+            background sub () {
+                on_exit c.dec();
+                hash<auto> r = {
+                    "date": ValueMask::parseDate("9.1.2026", "D.M.YYYY"),
+                    "number": ValueMask::parseNumber("12.345,67", "#.##0,0#"),
+                    "pattern": ValueMask::matchesPattern("A-1", "A-[0-9]"),
+                };
+                m.lock();
+                on_exit m.unlock();
+                results += r;
+            }();
+        }
+        c.waitForZero();
+        assertEq(8, results.size());
+        foreach hash<auto> r in (results) {
+            assertEq({"date": 2026-01-09, "number": 12345.67n, "pattern": True}, r);
+        }
+    }
+
+    amounts() {
+        code n = auto sub (string value, string mask) { return ValueMask::parseNumber(value, mask); };
+        # the masks
+        foreach string m in (ValueMask::AmountFormats + ("€ #,##0.00", "#,##0.00€", "CHF 0.00",
+                "(€#,##0.00)", "(#,##0.00 EUR)", "#.##0,00 €-", "0%", "(0.0%)", "£0", "¥#,##0")) {
+            assertNothing(ValueMask::numberMaskIssue(m), m);
+        }
+        assertEq({"group": ",", "decimal": ".", "min_decimals": 2, "more_decimals": False, "suffix": "€"},
+            ValueMask::parseNumberMask("#,##0.00 €"));
+        assertEq({"group": NOTHING, "decimal": ".", "min_decimals": 0, "more_decimals": True, "percent": True,
+            "negative": "parentheses"}, ValueMask::parseNumberMask("(0.#%)"));
+        assertEq("trailing_minus", ValueMask::parseNumberMask("#.##0,00-").negative);
+        assertEq("EUR", ValueMask::parseNumberMask("EUR #,##0.00").prefix);
+        # what does not fit, and where
+        assertEq({"code": "invalid", "position": 1}, ValueMask::numberMaskIssue("Eur 0.00"),
+            "a code is upper case");
+        assertEq({"code": "invalid", "position": 1}, ValueMask::numberMaskIssue("EURO 0.00"));
+        assertEq({"code": "invalid", "position": 1}, ValueMask::numberMaskIssue(" €0.00"));
+        assertEq({"code": "invalid", "position": 6}, ValueMask::numberMaskIssue("€0.00€"),
+            "one currency");
+        assertEq({"code": "invalid", "position": 5}, ValueMask::numberMaskIssue("0.00 x"));
+        assertEq({"code": "invalid", "position": 5}, ValueMask::numberMaskIssue("0.00% "));
+        assertEq({"code": "invalid", "position": 6}, ValueMask::numberMaskIssue("(0.00"));
+        assertEq({"code": "invalid", "position": 2}, ValueMask::numberMaskIssue("()"));
+        assertEq({"code": "invalid", "position": 1}, ValueMask::numberMaskIssue("-"));
+        assertEq({"code": "invalid", "position": 1}, ValueMask::numberMaskIssue("%"));
+
+        # currencies: before or after, with or without a space, or not written; a code without case
+        assertEq(1234.5n, n("1,234.50 €", "#,##0.00 €"));
+        assertEq(1234.5n, n("1,234.50€", "#,##0.00 €"));
+        assertEq(1234.5n, n("1,234.50", "#,##0.00 €"), "without the currency");
+        assertEq(1234.5n, n("€ 1,234.50", "€#,##0.00"));
+        assertEq(-1234.5n, n("-€1,234.50", "€#,##0.00"), "the sign before the currency");
+        assertEq(-1234.5n, n("€-1,234.50", "€#,##0.00"), "or after it");
+        assertEq(1234.5n, n("1.234,50 eur", "#.##0,00 EUR"));
+        assertNothing(n("1,234.50 $", "#,##0.00 €"), "another currency");
+        assertNothing(n("$1,234.50", "€#,##0.00"));
+        assertNothing(n("1.234,50 €", "#,##0.00 €"), "the number still in the mask");
+        assertNothing(n("€", "€#,##0.00"));
+        # percentages are their fractions
+        assertEq(0.125n, n("12.5%", "0.#%"));
+        assertEq(0.125n, n("12,5 %", "0,# %"));
+        assertEq(0.125n, n("12,5", "0,# %"), "without the sign");
+        assertEq(-0.05n, n("-5%", "0%"));
+        assertNothing(n("12.5", "0%"), "a whole percentage");
+        # negative amounts: in parentheses, or with a trailing minus
+        assertEq(-1234n, n("(1,234.00)", "(#,##0.00)"));
+        assertEq(-1234n, n("( 1,234.00 )", "(#,##0.00)"));
+        assertEq(1234n, n("1,234.00", "(#,##0.00)"));
+        assertEq(-1234n, n("-1,234.00", "(#,##0.00)"));
+        assertEq(-1234n, n("(€1,234.00)", "(€#,##0.00)"));
+        assertNothing(n("-(1,234.00)", "(#,##0.00)"), "negative once");
+        assertNothing(n("(1,234.00", "(#,##0.00)"));
+        assertEq(-1234.56n, n("1.234,56-", "#.##0,00-"));
+        assertEq(-1234.56n, n("1.234,56 -", "#.##0,00-"));
+        assertEq(1234.56n, n("1.234,56", "#.##0,00-"));
+        assertEq(-1234.56n, n("-1.234,56", "#.##0,00-"));
+        assertNothing(n("-1.234,56-", "#.##0,00-"), "negative once");
+        assertEq(-12.5n, n("12,50 €-", "#.##0,00 €-"));
+        assertNothing(n("(1,234.00)", "#,##0.00"), "parentheses only with a mask that has them");
+        assertNothing(n("1,234.00-", "#,##0.00"));
+        # a minus sign and a plus sign
+        assertEq(-5n, n("−5", "0"));
+        assertEq(5n, n("+5", "0"));
+        assertNothing(n("+-5", "0"));
+        assertNothing(n("--5", "0"));
+        # the masks are offered with their parts
+        assertEq(9, ValueMask::AmountFormats.size());
+    }
+
+    maskKinds() {
+        assertEq("number", ValueMask::maskKind("#,##0.00"));
+        assertEq("number", ValueMask::maskKind("0"));
+        assertEq("number", ValueMask::maskKind("(€#,##0.00)"));
+        assertEq("date", ValueMask::maskKind("DD.MM.YYYY"));
+        assertEq("date", ValueMask::maskKind("YYYY-MM-DDTHH:mm:SSZZ"));
+        assertEq("time", ValueMask::maskKind("HH:mm"));
+        assertEq("time", ValueMask::maskKind("hh:mm AM"));
+        assertNothing(ValueMask::maskKind("DD.MM"));
+        assertNothing(ValueMask::maskKind("x"));
+        assertNothing(ValueMask::maskKind(""));
+
+        # an issue as text
+        assertEq("invalid date mask \"DD.MM.JJJJ\": unknown letters \"JJJJ\" (at position 7)",
+            ValueMask::maskIssueText("DD.MM.JJJJ"));
+        assertEq("invalid time mask \"HH\": the mask has no minutes (at position 3)",
+            ValueMask::maskIssueText("HH", "time"));
+        assertEq("invalid number mask \"0.\": the mask does not fit the number mask grammar (at position 3)",
+            ValueMask::maskIssueText("0.", "number"));
+        assertNothing(ValueMask::maskIssueText("DD.MM.YYYY"));
+        assertNothing(ValueMask::maskIssueText("HH:mm", "time"));
+        assertNothing(ValueMask::maskIssueText("#,##0.00", "number"));
+    }
+
+    formatDates() {
+        date d = 2026-03-04T07:08:09.123456Z;
+        assertEq("04.03.2026", ValueMask::formatDate(d, "DD.MM.YYYY", "UTC"));
+        assertEq("4.3.2026", ValueMask::formatDate(d, "D.M.YYYY", "UTC"));
+        assertEq("03/04/26", ValueMask::formatDate(d, "MM/DD/YY", "UTC"));
+        assertEq("04-Mar-2026", ValueMask::formatDate(d, "DD-Mon-YYYY", "UTC"));
+        assertEq("04 MAR 2026", ValueMask::formatDate(d, "DD MON YYYY", "UTC"));
+        assertEq("20260304", ValueMask::formatDate(d, "YYYYMMDD", "UTC"));
+        assertEq("2026-03-04T07:08:09", ValueMask::formatDate(d, "YYYY-MM-DDTHH:mm:SS", "UTC"));
+        assertEq("2026-03-04 7:08", ValueMask::formatDate(d, "YYYY-MM-DD H:mm", "UTC"));
+        # milliseconds; further microseconds are not written
+        assertEq("07:08:09.123", ValueMask::formatDate(d, "HH:mm:SS.sss", "UTC", "time"));
+        assertEq("07:08:09.005", ValueMask::formatDate(2026-03-04T07:08:09.005999Z, "HH:mm:SS.sss", "UTC", "time"));
+        # a 12-hour clock: midnight is 12 AM, noon 12 PM
+        assertEq("03/04/2026 07:08 AM", ValueMask::formatDate(d, "MM/DD/YYYY hh:mm AM", "UTC"));
+        assertEq("7:08 PM", ValueMask::formatDate(2026-03-04T19:08:00Z, "h:mm AM", "UTC", "time"));
+        assertEq("12:05 AM", ValueMask::formatDate(2026-03-04T00:05:00Z, "hh:mm AM", "UTC", "time"));
+        assertEq("12:05 PM", ValueMask::formatDate(2026-03-04T12:05:00Z, "hh:mm AM", "UTC", "time"));
+        # the offset of the value
+        assertEq("2026-03-04T07:08:09+00:00", ValueMask::formatDate(d, "YYYY-MM-DDTHH:mm:SSZZ"));
+        assertEq("2026-03-04T12:38:09+05:30", ValueMask::formatDate(2026-03-04T12:38:09+05:30,
+            "YYYY-MM-DDTHH:mm:SSZZ"));
+        assertEq("2026-03-04T02:38:09-10:00", ValueMask::formatDate(2026-03-04T02:38:09-10:00,
+            "YYYY-MM-DDTHH:mm:SSZZ"));
+        # every month
+        foreach int month in (1..12) {
+            assertEq(ValueMask::MonthAbbreviations[month - 1], ValueMask::formatDate(
+                date(sprintf("2026-%02d-01T00:00:00Z", month)), "Mon DD YYYY", "UTC").substr(0, 3));
+        }
+    }
+
+    formatTimeZones() {
+        # the wall-clock time in the zone, in summer and in winter
+        assertEq("02.11.2026 15:05", ValueMask::formatDate(2026-11-02T14:05:00Z, "DD.MM.YYYY HH:mm", "Europe/Berlin"));
+        assertEq("02.07.2026 16:05", ValueMask::formatDate(2026-07-02T14:05:00Z, "DD.MM.YYYY HH:mm", "Europe/Berlin"));
+        assertEq("11/02/2026 09:05 AM", ValueMask::formatDate(2026-11-02T14:05:00Z, "MM/DD/YYYY hh:mm AM",
+            "America/New_York"));
+        # the day can change
+        assertEq("2026-11-03", ValueMask::formatDate(2026-11-02T23:30:00Z, "YYYY-MM-DD", "Europe/Berlin"));
+        # with an offset, the value is written in the zone with the zone's offset
+        assertEq("2026-11-02T15:05:00+01:00", ValueMask::formatDate(2026-11-02T14:05:00Z, "YYYY-MM-DDTHH:mm:SSZZ",
+            "Europe/Berlin"));
+        # a time zone object, also one with a UTC offset only, for writing and reading
+        assertEq("02.11.2026 15:05", ValueMask::formatDate(2026-11-02T14:05:00Z, "DD.MM.YYYY HH:mm",
+            new TimeZone("Europe/Berlin")));
+        assertEq("02.11.2026 17:35", ValueMask::formatDate(2026-11-02T14:05:00Z, "DD.MM.YYYY HH:mm",
+            new TimeZone(12600)));
+        assertEq(2026-11-02T14:05:00Z, ValueMask::parseDate("02.11.2026 17:35", "DD.MM.YYYY HH:mm",
+            new TimeZone(12600)));
+        assertEq(1970-01-01T14:05:00Z, ValueMask::parseDate("17:35", "HH:mm", new TimeZone(12600), "time"));
+        # without a zone: the current time zone, in which a value without an offset is read
+        TimeZone current = TimeZone::get();
+        date d = 2026-11-02T14:05:00Z;
+        assertEq(current.date(d).format("DD.MM.YYYY HH:mm"), ValueMask::formatDate(d, "DD.MM.YYYY HH:mm"));
+    }
+
+    formatDateErrors() {
+        assertThrows("VALUE-MASK-VALUE-ERROR", "YY is read as a year from 2000 to 2099", \ValueMask::formatDate(),
+            (1999-12-31T00:00:00Z, "DD.MM.YY", "UTC"));
+        assertThrows("VALUE-MASK-VALUE-ERROR", "YY", \ValueMask::formatDate(), (2100-01-01T00:00:00Z, "DD.MM.YY",
+            "UTC"));
+        assertEq("31.12.99", ValueMask::formatDate(2099-12-31T00:00:00Z, "DD.MM.YY", "UTC"));
+        assertEq("01.01.00", ValueMask::formatDate(2000-01-01T00:00:00Z, "DD.MM.YY", "UTC"));
+        assertThrows("VALUE-MASK-VALUE-ERROR", "YYYY writes years from 0 to 9999", \ValueMask::formatDate(),
+            (9999-12-31T00:00:00Z + 1D, "DD.MM.YYYY", "UTC"));
+        # a mask that is not valid
+        assertThrows("VALUE-MASK-ERROR",
+            "invalid date mask \"DD.MM.JJJJ\": unknown letters \"JJJJ\" \\(at position 7\\)",
+            \ValueMask::formatDate(), (2026-01-01, "DD.MM.JJJJ"));
+        assertThrows("VALUE-MASK-ERROR", "the mask has no year", \ValueMask::formatDate(), (2026-01-01, "DD.MM"));
+        assertThrows("VALUE-MASK-ERROR", "invalid time mask", \ValueMask::formatDate(), (2026-01-01, "DD.MM.YYYY",
+            NOTHING, "time"));
+        # a time zone that does not exist
+        assertThrows("FILE-OPEN2-ERROR", \ValueMask::formatDate(), (2026-01-01, "DD.MM.YYYY", "Mars/Base"));
+    }
+
+    formatNumbers() {
+        # grouping
+        assertEq("1,234,567.5", ValueMask::formatNumber(1234567.5n, "#,##0.#"));
+        assertEq("1.234.567,5", ValueMask::formatNumber(1234567.5n, "#.##0,#"));
+        assertEq("1 234 567,5", ValueMask::formatNumber(1234567.5n, "# ##0,#"));
+        assertEq("1'234'567.5", ValueMask::formatNumber(1234567.5n, "#'##0.#"));
+        assertEq("1234567.5", ValueMask::formatNumber(1234567.5n, "0.#"));
+        assertEq("1234567,5", ValueMask::formatNumber(1234567.5n, "0,#"));
+        assertEq("123", ValueMask::formatNumber(123, "#,##0"));
+        assertEq("0", ValueMask::formatNumber(0, "#,##0"));
+        assertEq("999,999", ValueMask::formatNumber(999999, "#,##0"));
+        # exactly as many decimals as the 0s, rounded half away from zero
+        assertEq("1,234.50", ValueMask::formatNumber(1234.5n, "#,##0.00"));
+        assertEq("0.13", ValueMask::formatNumber(0.125n, "0.00"));
+        assertEq("-0.13", ValueMask::formatNumber(-0.125n, "0.00"));
+        assertEq("3", ValueMask::formatNumber(2.5n, "0"));
+        assertEq("-3", ValueMask::formatNumber(-2.5n, "0"));
+        assertEq("2", ValueMask::formatNumber(2.4999n, "0"));
+        assertEq("1,000.00", ValueMask::formatNumber(999.995n, "#,##0.00"));
+        assertEq("10", ValueMask::formatNumber(9.5n, "0"));
+        # at least the 0s, and the value's further decimals with a final #
+        assertEq("1.5", ValueMask::formatNumber(1.5n, "0.0#"));
+        assertEq("1.50", ValueMask::formatNumber(1.5n, "0.00#"));
+        assertEq("1.23456789", ValueMask::formatNumber(1.23456789n, "0.00#"));
+        assertEq("12", ValueMask::formatNumber(12n, "0.#"));
+        assertEq("12", ValueMask::formatNumber(12.000n, "0.#"));
+        assertEq("0.000000123", ValueMask::formatNumber(1.23e-7n, "0.#"));
+        # no negative zero
+        assertEq("0", ValueMask::formatNumber(-0.4n, "0"));
+        assertEq("0.00", ValueMask::formatNumber(-0.001n, "0.00"));
+        assertEq("-0.001", ValueMask::formatNumber(-0.001n, "0.#"));
+        # integers, floats as their shortest text, and large numbers
+        assertEq("-1,234", ValueMask::formatNumber(-1234, "#,##0"));
+        assertEq("0.1", ValueMask::formatNumber(0.1, "0.#"));
+        assertEq("0.30", ValueMask::formatNumber(0.1 + 0.2, "0.00"));
+        assertEq("2.68", ValueMask::formatNumber(2.675, "0.00"));
+        assertEq("100,000,000,000,000,000,000", ValueMask::formatNumber(1e20, "#,##0"));
+        assertEq("123,456,789,012,345,678,901,234.5", ValueMask::formatNumber(123456789012345678901234.5n, "#,##0.#"));
+        assertEq("9,223,372,036,854,775,807", ValueMask::formatNumber(9223372036854775807, "#,##0"));
+        assertEq("-9223372036854775808", ValueMask::formatNumber(-9223372036854775807 - 1, "0"));
+        # the legacy names
+        assertEq("1.234,5", ValueMask::formatNumber(1234.5n, "decimal_comma"));
+        assertEq("1,234.5", ValueMask::formatNumber(1234.5n, "decimal_point"));
+    }
+
+    formatAmounts() {
+        # currencies as written in the mask
+        assertEq("1,234.50 €", ValueMask::formatNumber(1234.5n, "#,##0.00 €"));
+        assertEq("1.234,50 €", ValueMask::formatNumber(1234.5n, "#.##0,00 €"));
+        assertEq("€1,234.50", ValueMask::formatNumber(1234.5n, "€#,##0.00"));
+        assertEq("€ 1,234.50", ValueMask::formatNumber(1234.5n, "€ #,##0.00"));
+        assertEq("1,234.50€", ValueMask::formatNumber(1234.5n, "#,##0.00€"));
+        assertEq("$1,234.50", ValueMask::formatNumber(1234.5n, "$#,##0.00"));
+        assertEq("1,234.50 EUR", ValueMask::formatNumber(1234.5n, "#,##0.00 EUR"));
+        assertEq("CHF 0.50", ValueMask::formatNumber(0.5n, "CHF 0.00"));
+        # a negative amount: the sign before the currency
+        assertEq("-€1,234.50", ValueMask::formatNumber(-1234.5n, "€#,##0.00"));
+        assertEq("-1.234,50 €", ValueMask::formatNumber(-1234.5n, "#.##0,00 €"));
+        # percentages: the value times 100
+        assertEq("12.5%", ValueMask::formatNumber(0.125n, "0.#%"));
+        assertEq("12,5 %", ValueMask::formatNumber(0.125n, "0,# %"));
+        assertEq("5%", ValueMask::formatNumber(0.05n, "0%"));
+        assertEq("-5%", ValueMask::formatNumber(-0.05n, "0%"));
+        assertEq("12.35%", ValueMask::formatNumber(0.12345n, "0.00%"));
+        assertEq("1,250%", ValueMask::formatNumber(12.5n, "#,##0%"));
+        assertEq("0.5%", ValueMask::formatNumber(0.005, "0.#%"));
+        # negative amounts in parentheses or with a trailing minus
+        assertEq("(1,234.00)", ValueMask::formatNumber(-1234n, "(#,##0.00)"));
+        assertEq("1,234.00", ValueMask::formatNumber(1234n, "(#,##0.00)"));
+        assertEq("(€1,234.00)", ValueMask::formatNumber(-1234n, "(€#,##0.00)"));
+        assertEq("(5.0%)", ValueMask::formatNumber(-0.05n, "(0.0%)"));
+        assertEq("1.234,56-", ValueMask::formatNumber(-1234.56n, "#.##0,00-"));
+        assertEq("1.234,56", ValueMask::formatNumber(1234.56n, "#.##0,00-"));
+        assertEq("12,50 €-", ValueMask::formatNumber(-12.5n, "#.##0,00 €-"));
+        assertEq("0,00", ValueMask::formatNumber(-0.001n, "#.##0,00-"), "no negative zero");
+    }
+
+    formatNumberErrors() {
+        assertThrows("VALUE-MASK-ERROR", "invalid number mask \"#,##0,#\"", \ValueMask::formatNumber(), (1, "#,##0,#"));
+        assertThrows("VALUE-MASK-ERROR", "invalid number mask \"\": the mask is empty",
+            \ValueMask::formatNumber(), (1n, ""));
+        assertThrows("VALUE-MASK-ERROR", \ValueMask::formatNumber(), (1.0, "DD.MM.YYYY"));
+        assertThrows("VALUE-MASK-VALUE-ERROR", "not a finite number", \ValueMask::formatNumber(), (@nan@, "0.#"));
+        assertThrows("VALUE-MASK-VALUE-ERROR", "not a finite number", \ValueMask::formatNumber(), (@inf@, "0.#"));
+        assertThrows("VALUE-MASK-VALUE-ERROR", "not a finite number", \ValueMask::formatNumber(), (@nan@n, "0.#"));
+    }
+
+    #! returns a date with the fields of a mask: the date's fields that the mask does not have are 0 or the start
+    private date maskDate(hash<auto> fields, string kind, string timezone) {
+        string iso = sprintf("%s-%s-%sT%s:%s:%s.%s",
+            kind == "time" ? "1970" : "2026",
+            kind == "time" ? "01" : "11",
+            kind == "time" ? "01" : "02",
+            fields.hour ? "15" : "00",
+            fields.minute ? "07" : "00",
+            fields.second ? "09" : "00",
+            fields.fraction ? "123000" : "000000");
+        if (fields.offset) {
+            return date(iso + "+05:30");
+        }
+        return ValueMask::timeZone(timezone).date(iso);
+    }
+
+    dateRoundTrip() {
+        list<string> extra = ("D.M.YYYY", "DD-Mon-YY", "DD MON YYYY", "YYYYMMDD", "YYYY-MM-DD HH:mm:SS.sss",
+            "MM/DD/YYYY h:mm AM", "D.M.YYYY H:mm", "YYYY-MM-DDTHH:mmZZ");
+        foreach string zone in (("UTC", "Europe/Berlin", "America/New_York", "Asia/Kolkata")) {
+            foreach string mask in (ValueMask::DateFormats + extra) {
+                date v = maskDate(ValueMask::parseMask(mask).fields, "date", zone);
+                string text = ValueMask::formatDate(v, mask, zone);
+                assertEq(v, ValueMask::parseDate(text, mask, zone), sprintf("%s %s: %y", zone, mask, text));
+            }
+            foreach string mask in (ValueMask::TimeFormats + ("h:mm AM", "HH:mm:SSZZ")) {
+                date v = maskDate(ValueMask::parseMask(mask, "time").fields, "time", zone);
+                string text = ValueMask::formatDate(v, mask, zone, "time");
+                assertEq(v, ValueMask::parseDate(text, mask, zone, "time"), sprintf("%s %s: %y", zone, mask,
+                    text));
+            }
+        }
+        # in the morning and in the afternoon on a 12-hour clock, and every month name
+        foreach date v in ((2026-01-05T00:05:00Z, 2026-05-05T11:59:00Z, 2026-08-05T12:00:00Z,
+                2026-12-05T23:59:00Z)) {
+            foreach string mask in (("MM/DD/YYYY hh:mm AM", "DD-Mon-YYYY h:mm AM", "DD MON YYYY HH:mm")) {
+                string text = ValueMask::formatDate(v, mask, "UTC");
+                assertEq(v, ValueMask::parseDate(text, mask, "UTC"), sprintf("%s: %y", mask, text));
+            }
+        }
+    }
+
+    numberRoundTrip() {
+        # values that each mask writes exactly
+        list<number> any = (0n, 1n, -1n, 7n, 1234n, -1234n, 1234567.891n, -0.5n, 0.125n, 123456789012.3456789n);
+        list<number> two = (0n, 1n, -1n, 1234.5n, -1234.56n, 0.01n, 999999.99n);
+        list<number> whole = (0n, 1n, -1n, 1234n, -1234567n);
+        hash<string, list<number>> values = {
+            "#,##0.#": any, "#.##0,#": any, "# ##0,#": any, "#'##0.#": any, "0.#": any, "0,#": any,
+            "#,##0.00": two, "#.##0,00": two, "0.00#": any, "0": whole, "#,##0": whole, "# ##0": whole,
+            "#,##0.00 €": two, "#.##0,00 €": two, "€#,##0.00": two, "€ #,##0.00": two, "$#,##0.00": two,
+            "#,##0.00 EUR": two, "EUR #,##0.00": two, "(#,##0.00)": two, "#.##0,00-": two, "(€#,##0.00)": two,
+            "#.##0,00 €-": two,
+            "0.#%": (0n, 0.125n, -0.05n, 1n, 12.3456n), "0,# %": (0n, 0.125n, -0.05n), "0%": (0n, 0.05n, -0.12n),
+            "(0.0%)": (0n, 0.125n, -0.125n),
+        };
+        foreach hash<auto> i in (values.pairIterator()) {
+            foreach number v in (i.value) {
+                string text = ValueMask::formatNumber(v, i.key);
+                assertEq(v, ValueMask::parseNumber(text, i.key), sprintf("%s: %y", i.key, text));
+            }
+        }
+        # every common mask has values
+        foreach string mask in (ValueMask::NumberFormats + ValueMask::AmountFormats) {
+            assertTrue(values.hasKey(mask), mask);
+        }
+        # integers and floats
+        assertEq(-1234n, ValueMask::parseNumber(ValueMask::formatNumber(-1234, "#,##0"), "#,##0"));
+        assertEq(0.1n, ValueMask::parseNumber(ValueMask::formatNumber(0.1, "0.#"), "0.#"));
+    }
+
+    spreadsheetFormats() {
+        hash<string, string> dates = {
+            "DD.MM.YYYY": "dd\\.mm\\.yyyy",
+            "DD/MM/YYYY": "dd/mm/yyyy",
+            "MM/DD/YYYY": "mm/dd/yyyy",
+            "YYYY-MM-DD": "yyyy-mm-dd",
+            "DD-MM-YYYY": "dd-mm-yyyy",
+            "DD.MM.YY": "dd\\.mm\\.yy",
+            "MM/DD/YY": "mm/dd/yy",
+            "DD-Mon-YYYY": "dd-mmm-yyyy",
+            "DD Mon YYYY": "dd mmm yyyy",
+            "DD.MM.YYYY HH:mm": "dd\\.mm\\.yyyy hh:mm",
+            "YYYY-MM-DD HH:mm": "yyyy-mm-dd hh:mm",
+            "YYYY-MM-DDTHH:mm:SS": "yyyy-mm-dd\\Thh:mm:ss",
+            "MM/DD/YYYY hh:mm AM": "mm/dd/yyyy hh:mm AM/PM",
+            "D.M.YYYY": "d\\.m\\.yyyy",
+            "YYYYMMDD": "yyyymmdd",
+            "D.M.YYYY H:mm:SS": "d\\.m\\.yyyy h:mm:ss",
+        };
+        foreach hash<auto> i in (dates.pairIterator()) {
+            assertEq(i.value, ValueMask::toSpreadsheetFormat(i.key), i.key);
+            assertEq(i.value, ValueMask::toSpreadsheetFormat(i.key, "date"), i.key);
+            assertNothing(ValueMask::spreadsheetFormatIssue(i.key), i.key);
+        }
+        hash<string, string> times = {
+            "HH:mm": "hh:mm",
+            "HH:mm:SS": "hh:mm:ss",
+            "H:mm": "h:mm",
+            "hh:mm AM": "hh:mm AM/PM",
+            "HH:mm:SS.sss": "hh:mm:ss.000",
+            "mm:SS HH": "mm:ss hh",
+        };
+        foreach hash<auto> i in (times.pairIterator()) {
+            assertEq(i.value, ValueMask::toSpreadsheetFormat(i.key), i.key);
+            assertEq(i.value, ValueMask::toSpreadsheetFormat(i.key, "time"), i.key);
+        }
+        # the separators only switch grouping and decimals: a spreadsheet shows them in the viewer's language
+        hash<string, string> numbers = {
+            "#,##0.#": "#,##0.##########",
+            "#.##0,#": "#,##0.##########",
+            "# ##0,#": "#,##0.##########",
+            "#'##0.#": "#,##0.##########",
+            "0.#": "0.##########",
+            "0,#": "0.##########",
+            "#,##0.00": "#,##0.00",
+            "#.##0,00": "#,##0.00",
+            "0.00#": "0.00########",
+            "0": "0",
+            "#,##0": "#,##0",
+            "0.000000000000": "0.000000000000",
+            "#,##0.00 €": "#,##0.00\" €\"",
+            "#.##0,00 €": "#,##0.00\" €\"",
+            "€#,##0.00": "\"€\"#,##0.00",
+            "$#,##0.00": "\"$\"#,##0.00",
+            "#,##0.00 EUR": "#,##0.00\" EUR\"",
+            "0.#%": "0.##########%",
+            "0,# %": "0.##########\" \"%",
+            "0%": "0%",
+            "(#,##0.00)": "#,##0.00;(#,##0.00)",
+            "#.##0,00-": "#,##0.00;#,##0.00-",
+            "(€#,##0.00)": "\"€\"#,##0.00;(\"€\"#,##0.00)",
+            "#.##0,00 €-": "#,##0.00\" €\";#,##0.00\" €\"-",
+            "decimal_comma": "#,##0.##########",
+        };
+        foreach hash<auto> i in (numbers.pairIterator()) {
+            assertEq(i.value, ValueMask::toSpreadsheetFormat(i.key), i.key);
+            assertEq(i.value, ValueMask::toSpreadsheetFormat(i.key, "number"), i.key);
+        }
+        # every common mask has a display format except the one with an offset
+        foreach string mask in (ValueMask::DateFormats + ValueMask::TimeFormats + ValueMask::NumberFormats
+                + ValueMask::AmountFormats) {
+            if (mask =~ /ZZ/) {
+                continue;
+            }
+            assertNothing(ValueMask::spreadsheetFormatIssue(mask), mask);
+        }
+    }
+
+    spreadsheetRefusals() {
+        hash<string, string> refused = {
+            "YYYY-MM-DDTHH:mm:SSZZ": "a spreadsheet cell holds no UTC offset \\(ZZ\\)",
+            "DD MON YYYY": "a spreadsheet has no upper-case month name \\(use Mon\\)",
+            "HH:mm:SS,sss": "a fraction of a second only directly after the seconds and a decimal point",
+            "mm HH": "shows mm as a minute only directly after an hour or before the seconds",
+            "YYYY-DD HH MM": "shows MM directly after an hour or before the seconds as a minute",
+            "YYYY-DD MM:SS HH": "shows MM directly after an hour or before the seconds as a minute",
+            "DD.MM.JJJJ": "is not a valid date, time or number mask: unknown letters",
+            "0.#0": "is not a valid date, time or number mask",
+        };
+        foreach hash<auto> i in (refused.pairIterator()) {
+            assertRegex(i.value, ValueMask::spreadsheetFormatIssue(i.key), i.key);
+            assertThrows("VALUE-MASK-ERROR", i.value, \ValueMask::toSpreadsheetFormat(), i.key, i.key);
+        }
+        # the given kind
+        assertRegex("invalid number mask \"DD.MM.YYYY\"", ValueMask::spreadsheetFormatIssue("DD.MM.YYYY", "number"));
+        assertRegex("invalid time mask \"DD.MM.YYYY\"", ValueMask::spreadsheetFormatIssue("DD.MM.YYYY", "time"));
+        assertRegex("unknown mask kind \"text\"", ValueMask::spreadsheetFormatIssue("DD.MM.YYYY", "text"));
+    }
+}
