@@ -345,13 +345,15 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             # The poll operation pushes raw output hashes to the channel.
             # Extract body data and detect end_stream/error for the caller.
             if (rv.typeCode() == NT_HASH) {
-                if (rv.error) {
+                # ChannelAction::executeError() pushes {err, desc} for an error that ends the stream, including a
+                # cancellation; the H2 and H3 stream handles report it the same way
+                if (rv.err) {
                     {
                         AutoLock al(lock);
-                        error_info = rv.error;
+                        error_info = rv;
                         state = HttpClientStreamState::Error;
                     }
-                    return {"error": rv.error};
+                    return {"error": rv};
                 }
                 # State transitions (monotonically forward)
                 {

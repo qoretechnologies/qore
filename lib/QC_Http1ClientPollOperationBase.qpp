@@ -642,6 +642,8 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchReqState(ExceptionSink* xsin
             return handleRecvChunkSize(xsink);
         case ReqState::RECV_CHUNK_DATA:
             return handleRecvChunkData(xsink);
+        case ReqState::RECV_CHUNK_DATA_END:
+            return handleRecvChunkDataEnd(xsink);
         case ReqState::RECV_CHUNK_CRLF:
             return handleRecvChunkCrlf(xsink);
         case ReqState::RECV_BODY_CLOSE:
@@ -1701,12 +1703,11 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         } else if (response_content_length > 0) {
             releaseCurrentOp(xsink);
             if (streaming_active_io) {
-                // Read in chunks for incremental delivery
+                // the body is delivered as it is received
                 streaming_body_remaining = response_content_length;
-                ssize_t read_size = streaming_body_remaining < (int64_t)STREAMING_CHUNK_SIZE
-                    ? (ssize_t)streaming_body_remaining : (ssize_t)STREAMING_CHUNK_SIZE;
-                sock_obj->ref();
-                current_op = new SocketRecvPollOperation(xsink, read_size, sock_obj, false);
+                if (startStreamingBodyRecv(streaming_body_remaining, xsink)) {
+                    return nullptr;
+                }
             } else {
                 // the body is read whole, so its declared size is checked before any of it is allocated
                 if (checkResponseBodySize(response_content_length, "declared by Content-Length", xsink)) {
@@ -1715,13 +1716,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                 sock_obj->ref();
                 current_op = new SocketRecvPollOperation(xsink, (ssize_t)response_content_length,
                     sock_obj, false);
+                if (*xsink) {
+                    current_op->deref(xsink);
+                    current_op = nullptr;
+                    return nullptr;
+                }
+                current_op->setSelf(*self);
             }
-            if (*xsink) {
-                current_op->deref(xsink);
-                current_op = nullptr;
-                return nullptr;
-            }
-            current_op->setSelf(*self);
             req_state = ReqState::RECV_BODY_LENGTH;
             return handleRecvBodyLength(xsink);
         } else if (response_content_length == 0) {
@@ -1816,27 +1817,24 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvBodyLength(ExceptionSink* 
     if (current_op->goalReached()) {
         ValueHolder data_val(current_op->getOutput(), xsink);
         if (streaming_active_io) {
-            // Dispatch chunk and check for more
+            // Dispatch the data received and check for more
             const BinaryNode* data = data_val->getType() == NT_BINARY
                 ? data_val->get<const BinaryNode>() : nullptr;
-            if (data) {
-                dispatchStreamingData(data, xsink);
-                streaming_body_remaining -= data->size();
+            // a receive that ends without data means that the peer closed the connection
+            if (!data || !data->size()) {
+                setBodyClosedError(response_content_length - streaming_body_remaining, response_content_length,
+                    "the response body", xsink);
+                return nullptr;
             }
+            dispatchStreamingData(data, xsink);
+            streaming_body_remaining -= data->size();
             if (streaming_body_remaining <= 0) {
                 return dispatchStreamingEnd(xsink);
             }
-            ssize_t read_size = streaming_body_remaining < (int64_t)STREAMING_CHUNK_SIZE
-                ? (ssize_t)streaming_body_remaining : (ssize_t)STREAMING_CHUNK_SIZE;
             releaseCurrentOp(xsink);
-            sock_obj->ref();
-            current_op = new SocketRecvPollOperation(xsink, read_size, sock_obj, false);
-            if (*xsink) {
-                current_op->deref(xsink);
-                current_op = nullptr;
+            if (startStreamingBodyRecv(streaming_body_remaining, xsink)) {
                 return nullptr;
             }
-            current_op->setSelf(*self);
             return handleRecvBodyLength(xsink);
         }
 
@@ -1957,6 +1955,20 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkSize(ExceptionSink* x
             return handleRecvChunkCrlf(xsink);
         }
 
+        streaming_chunk_pieces = streaming_active_io && streamingActionTakesPieces();
+        if (streaming_chunk_pieces) {
+            // the data of the chunk is delivered as it is received, followed by its CRLF
+            streaming_chunk_size = chunk_size;
+            streaming_chunk_remaining = chunk_size;
+            streaming_chunk_data.clear();
+            releaseCurrentOp(xsink);
+            if (startStreamingBodyRecv(streaming_chunk_remaining, xsink)) {
+                return nullptr;
+            }
+            req_state = ReqState::RECV_CHUNK_DATA;
+            return handleRecvChunkData(xsink);
+        }
+
         // a chunk of a body that is read whole is checked before it is allocated
         if (!streaming_active_io && checkResponseBodySize((response_body ? (int64_t)response_body->size() : 0)
                 + chunk_size, "received with chunked transfer encoding", xsink)) {
@@ -2002,46 +2014,165 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkData(ExceptionSink* x
         return poll_info;
     }
 
-    if (current_op->goalReached()) {
-        ValueHolder data_val(current_op->getOutput(), xsink);
-        if (data_val->getType() == NT_BINARY) {
-            const BinaryNode* data = data_val->get<const BinaryNode>();
-            // Remove trailing CRLF (last 2 bytes)
-            if (data->size() > 2) {
-                SimpleRefHolder<BinaryNode> chunk(new BinaryNode());
-                chunk->append(data->getPtr(), data->size() - 2);
-                {
-                    ReferenceHolder<HttpClientEventSink> sink(getReferencedEventSink(), xsink);
-                    if (sink) {
-                        sink->chunkedDataRead(chunk->getPtr(), chunk->size());
-                        sink->chunkedDataReceived(chunk->size(), data->size());
-                    }
-                }
-                if (streaming_active_io) {
-                    dispatchStreamingData(*chunk, xsink);
-                } else if (response_body) {
-                    response_body->append(*chunk);
-                }
+    if (!current_op->goalReached()) {
+        setError("HTTP1-RECV-ERROR", "chunk data read failed", xsink);
+        return nullptr;
+    }
+
+    ValueHolder data_val(current_op->getOutput(), xsink);
+    const BinaryNode* data = data_val->getType() == NT_BINARY ? data_val->get<const BinaryNode>() : nullptr;
+
+    if (streaming_chunk_pieces) {
+        // a receive that ends without data means that the peer closed the connection
+        if (!data || !data->size()) {
+            setBodyClosedError(streaming_chunk_size - streaming_chunk_remaining, streaming_chunk_size,
+                "a chunk of the response body", xsink);
+            return nullptr;
+        }
+        streaming_chunk_remaining -= data->size();
+        {
+            ReferenceHolder<HttpClientEventSink> sink(getReferencedEventSink(), xsink);
+            if (sink && sink->dataEnabled()) {
+                streaming_chunk_data.append(reinterpret_cast<const char*>(data->getPtr()), data->size());
             }
         }
-
-        // Read next chunk size
+        dispatchStreamingData(data, xsink);
         releaseCurrentOp(xsink);
+        if (streaming_chunk_remaining > 0) {
+            if (startStreamingBodyRecv(streaming_chunk_remaining, xsink)) {
+                return nullptr;
+            }
+            return handleRecvChunkData(xsink);
+        }
+        // the CRLF that ends the data of the chunk
         sock_obj->ref();
-        SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-        current_op = new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true);
+        current_op = new SocketRecvPollOperation(xsink, 2, sock_obj, false);
         if (*xsink) {
             current_op->deref(xsink);
             current_op = nullptr;
             return nullptr;
         }
         current_op->setSelf(*self);
-        req_state = ReqState::RECV_CHUNK_SIZE;
-        return handleRecvChunkSize(xsink);
+        req_state = ReqState::RECV_CHUNK_DATA_END;
+        return handleRecvChunkDataEnd(xsink);
     }
 
-    setError("HTTP1-RECV-ERROR", "chunk data read failed", xsink);
-    return nullptr;
+    // the data of the chunk is followed by CRLF
+    if (!data || data->size() < 2 || memcmp(reinterpret_cast<const char*>(data->getPtr()) + data->size() - 2,
+            "\r\n", 2)) {
+        setError("HTTP1-RECV-ERROR", "invalid chunked response body: the data of a chunk is not followed by CRLF",
+            xsink);
+        return nullptr;
+    }
+    if (data->size() > 2) {
+        SimpleRefHolder<BinaryNode> chunk(new BinaryNode());
+        chunk->append(data->getPtr(), data->size() - 2);
+        {
+            ReferenceHolder<HttpClientEventSink> sink(getReferencedEventSink(), xsink);
+            if (sink) {
+                sink->chunkedDataRead(chunk->getPtr(), chunk->size());
+                sink->chunkedDataReceived(chunk->size(), data->size());
+            }
+        }
+        if (streaming_active_io) {
+            dispatchStreamingData(*chunk, xsink);
+        } else if (response_body) {
+            response_body->append(*chunk);
+        }
+    }
+
+    return readNextChunkSize(xsink);
+}
+
+bool Http1ClientPollOperationPriv::streamingActionTakesPieces() const {
+    AutoLocker al(stream_lock);
+    ChannelAction* action = dynamic_cast<ChannelAction*>(stream_action);
+    return action && action->isByteStream();
+}
+
+QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkDataEnd(ExceptionSink* xsink) {
+    if (!current_op) {
+        setError("HTTP1-RECV-ERROR", "chunk data read not initialized", xsink);
+        return nullptr;
+    }
+
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+        QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+        setError(*err_str ? err_str->c_str() : "HTTP1-RECV-ERROR",
+            *desc_str ? desc_str->c_str() : "chunk data read failed", xsink);
+        poll_xsink.clear();
+        return nullptr;
+    }
+
+    if (poll_info) {
+        return poll_info;
+    }
+
+    if (!current_op->goalReached()) {
+        setError("HTTP1-RECV-ERROR", "chunk data read failed", xsink);
+        return nullptr;
+    }
+
+    ValueHolder data_val(current_op->getOutput(), xsink);
+    const BinaryNode* data = data_val->getType() == NT_BINARY ? data_val->get<const BinaryNode>() : nullptr;
+    if (!data || data->size() != 2 || memcmp(data->getPtr(), "\r\n", 2)) {
+        setError("HTTP1-RECV-ERROR", "invalid chunked response body: the data of a chunk is not followed by CRLF",
+            xsink);
+        return nullptr;
+    }
+
+    // the chunk events report the whole chunk
+    {
+        ReferenceHolder<HttpClientEventSink> sink(getReferencedEventSink(), xsink);
+        if (sink) {
+            sink->chunkedDataRead(streaming_chunk_data.data(), streaming_chunk_data.size());
+            sink->chunkedDataReceived((size_t)streaming_chunk_size, (size_t)streaming_chunk_size + 2);
+        }
+    }
+    streaming_chunk_data.clear();
+
+    return readNextChunkSize(xsink);
+}
+
+QoreHashNode* Http1ClientPollOperationPriv::readNextChunkSize(ExceptionSink* xsink) {
+    releaseCurrentOp(xsink);
+    sock_obj->ref();
+    SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
+    current_op = new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true);
+    if (*xsink) {
+        current_op->deref(xsink);
+        current_op = nullptr;
+        return nullptr;
+    }
+    current_op->setSelf(*self);
+    req_state = ReqState::RECV_CHUNK_SIZE;
+    return handleRecvChunkSize(xsink);
+}
+
+int Http1ClientPollOperationPriv::startStreamingBodyRecv(int64_t remaining, ExceptionSink* xsink) {
+    assert(remaining > 0);
+    assert(!current_op);
+    ssize_t read_size = remaining < (int64_t)STREAMING_CHUNK_SIZE ? (ssize_t)remaining
+        : (ssize_t)STREAMING_CHUNK_SIZE;
+    sock_obj->ref();
+    current_op = new SocketRecvSomePollOperation(xsink, read_size, sock_obj, false);
+    if (*xsink) {
+        current_op->deref(xsink);
+        current_op = nullptr;
+        return -1;
+    }
+    current_op->setSelf(*self);
+    return 0;
+}
+
+void Http1ClientPollOperationPriv::setBodyClosedError(int64_t received, int64_t size, const char* what,
+        ExceptionSink* xsink) {
+    QoreStringMaker desc("peer closed the connection after %lld of %lld bytes of %s were received",
+        (long long)received, (long long)size, what);
+    setError("SOCKET-CLOSED", desc.c_str(), xsink);
 }
 
 QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkCrlf(ExceptionSink* xsink) {
@@ -2482,6 +2613,10 @@ void Http1ClientPollOperationPriv::resetResponseState(ExceptionSink* xsink) {
     connection_close = false;
     streaming_active_io = false;
     streaming_body_remaining = 0;
+    streaming_chunk_pieces = false;
+    streaming_chunk_size = 0;
+    streaming_chunk_remaining = 0;
+    streaming_chunk_data.clear();
 }
 
 QoreValue Http1ClientPollOperationPriv::convertBodyEncoding(ExceptionSink* xsink) {
@@ -3454,6 +3589,8 @@ int Http1ClientPollOperationBase::submitRequestStreaming(string method, string p
 
     // Create ChannelAction - priv takes ownership
     ChannelAction* action = new ChannelAction(ch, notifier_ptr, notifier_obj_ptr);
+    // the reader of the channel takes the body as a byte stream, as from an HTTP/2 or HTTP/3 stream
+    action->setByteStream();
     if (sse_install_eligible) {
         action->setSseInstallEligible();
     }

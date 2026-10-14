@@ -19,7 +19,11 @@
     raise an \c ENCODING-CONVERSION-ERROR exception with the byte offset in the input of the first such character,
     with every \c iconv library, also with the ones that would replace the character with an approximation or a
     placeholder.  Text in a stateful encoding that ends in the middle of a character or shift sequence raises the
-    same error.
+    same error, with one known exception: with glibc, \c "UTF-7" text that ends inside a character of a base64 run
+    is converted without an error, as glibc keeps the bits of the incomplete character in its conversion state
+    instead of reporting them; the incomplete character is dropped, and the characters before it are converted
+    correctly (ex: the \c "UTF-7" text \c "+ZeVn" converts to \c "日" (U+65E5), and the bits of the incomplete
+    second character are dropped).
 
     %Qore supports character encodings that are backwards compatible with 7-bit \c ASCII. This includes all \c ISO-8859-* character encodings, \c UTF-8, \c KOIR-8, \c KOIU-8, and \c KOI7, among others (see the table below: @ref known_encodings "Known Character Encodings").
 

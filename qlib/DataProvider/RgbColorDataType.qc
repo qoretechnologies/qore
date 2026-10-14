@@ -26,14 +26,23 @@
 public namespace DataProvider {
 #! RGB color data type
 /** A color with integer red, green and blue components from \c 0 to \c 255, and an opacity \c a from \c 0
-    (transparent) to \c 1 (opaque).  An opacity outside of this range is rejected; the integers \c 0 and \c 1 are
-    accepted as well as numbers in between, and the opacity is returned as a \c float.
+    (transparent) to \c 1 (opaque).  A component outside of its range or that is not an integer is rejected, and so
+    is an opacity outside of its range; no value is changed to fit its range.  The integers \c 0 and \c 1 are
+    accepted for the opacity as well as numbers in between, and the opacity is returned as a \c float.
 
     A missing opacity is opaque (\c 1), and so is a null one: \c NOTHING (as %Qore reads a JSON \c null) and
     \c NULL (as %Qore reads a database null) are both accepted as \c 1.
 */
 public class RgbColorDataTypeBase inherits HashDataType {
     public {
+        #! The type of a color component: an \c int from \c 0 to \c 255; values outside of this range are rejected
+        /** @since DataProvider 3.9
+        */
+        const ComponentType = (new QoreIntDataType()).copyWithConstraints(<DataTypeConstraintInfo>{
+            "minimum": 0,
+            "maximum": 255,
+        });
+
         #! The type of the opacity: a \c float from \c 0 to \c 1; values outside of this range are rejected
         /** @since DataProvider 3.9
         */
@@ -48,19 +57,19 @@ public class RgbColorDataTypeBase inherits HashDataType {
                 "display_name": "Red",
                 "short_desc": "Red color component as an integer from 0 - 255",
                 "desc": "Red color component as an integer from `0` - `255`",
-                "type": QoreUnsignedByteDataType,
+                "type": ComponentType,
             },
             "g": {
                 "display_name": "Green",
                 "short_desc": "Green color component as an integer from 0 - 255",
                 "desc": "Green color component as an integer from `0` - `255`",
-                "type": QoreUnsignedByteDataType,
+                "type": ComponentType,
             },
             "b": {
                 "display_name": "Blue",
                 "short_desc": "Blue color component as an integer from 0 - 255",
                 "desc": "Blue color component as an integer from `0` - `255`",
-                "type": QoreUnsignedByteDataType,
+                "type": ComponentType,
             },
             "a": {
                 "display_name": "Opacity",
@@ -83,8 +92,8 @@ public class RgbColorDataTypeBase inherits HashDataType {
 
         @return the value to be assigned, with the opacity as a \c float
 
-        @throw RUNTIME-TYPE-ERROR the value cannot be assigned to the type, for example because its opacity is
-        outside of \c 0 to \c 1
+        @throw RUNTIME-TYPE-ERROR the value cannot be assigned to the type, for example because a color component
+        is outside of \c 0 to \c 255 or its opacity is outside of \c 0 to \c 1
 
         @since DataProvider 3.9
     */

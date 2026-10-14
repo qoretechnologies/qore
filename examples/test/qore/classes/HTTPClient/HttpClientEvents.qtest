@@ -178,6 +178,8 @@ class HttpClientEventsTest inherits QUnit::Test {
         addTestCase("redirects", \redirectTest());
         addTestCase("poll API", \pollApiTest());
         addTestCase("protocols", \protocolTest());
+        addTestCase("chunks delivered whole", \wholeChunkTest());
+        addTestCase("chunk terminator", \chunkTerminatorTest());
         set_return_value(main());
     }
 
@@ -578,5 +580,61 @@ class HttpClientEventsTest inherits QUnit::Test {
             assertTrue(received[0].headers.hasKey("content-length"), protocol);
             assertEq((ServerBody.size(),), (map $1.len, eventsOfType(ev, EVENT_HTTP_CONTENT_LENGTH)), protocol);
         }
+    }
+    #! A chunk larger than the pieces a body is received in is delivered whole: once to a receive callback, and in
+    #! its chunk events
+    wholeChunkTest() {
+        string chunk = strmul("0123456789", 4000);
+        list<string> sends = (sprintf("%x\r\n%s\r\n0\r\n\r\n", chunk.size(), chunk),);
+        RawHttpPeer raw("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n", sends);
+        on_exit raw.stop();
+        Queue events();
+        HTTPClient hc({"url": raw.getUrl(), "timeout": 30s});
+        hc.setEventQueue(events, NOTHING, True);
+        list<int> data_sizes = ();
+        Queue result();
+        background sub () {
+            try {
+                hc.sendWithRecvCallback(sub (hash<auto> h) {
+                    if (h.hasKey("data")) {
+                        push data_sizes, h.data.size();
+                    }
+                }, NOTHING, "GET", "/chunked", IdentityHeaders);
+                result.push(NOTHING);
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex);
+            }
+        }();
+        assertEq("/chunked", raw.requests.get(30s).path);
+        raw.release.push("send");
+        *hash<ExceptionInfo> err = result.get(30s);
+        assertEq(NOTHING, err.err, sprintf("%s: %s", err.err, err.desc));
+        # the receive callback is called once for the chunk
+        assertEq((chunk.size(),), data_sizes);
+        list<hash<auto>> ev = drainEvents(events);
+        assertEq((chunk.size(), 0), (map $1.size, eventsOfType(ev, EVENT_HTTP_CHUNK_SIZE)));
+        assertEq((chunk.size(),), (map $1.read, eventsOfType(ev, EVENT_HTTP_CHUNKED_DATA_RECEIVED)));
+        assertEq((binary(chunk),), (map $1.data, eventsOfType(ev, EVENT_HTTP_CHUNKED_DATA_READ)));
+    }
+
+    #! The data of a chunk must be followed by CRLF
+    chunkTerminatorTest() {
+        list<string> sends = ("5\r\nearlyXX0\r\n\r\n",);
+        RawHttpPeer raw("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n", sends);
+        on_exit raw.stop();
+        HTTPClient hc({"url": raw.getUrl(), "timeout": 30s});
+        Queue result();
+        background sub () {
+            try {
+                result.push(hc.get("/chunked", IdentityHeaders));
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex);
+            }
+        }();
+        assertEq("/chunked", raw.requests.get(30s).path);
+        raw.release.push("send");
+        auto rv = result.get(30s);
+        assertEq("hash<ExceptionInfo>", rv.fullType(), sprintf("result: %y", rv));
+        assertRegex("not followed by CRLF", rv.desc);
     }
 }
