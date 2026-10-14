@@ -99,6 +99,170 @@ class StreamTestHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! runs code when a stream handle logs that it is cancelling its stream
+/** The stream handle logs this after it has set its state to cancelled and before the cancellation is sent to the
+    connection, which is where the cancellation reaches a reader waiting for data
+*/
+class CancelHookLogger inherits Logger {
+    private {
+        Mutex hook_lock();
+        #! called once, in the thread that cancels the stream handle
+        *code on_cancel;
+    }
+
+    constructor() : Logger("cancel-hook", LoggerLevel::getLevelDebug()) {
+    }
+
+    setOnCancel(code c) {
+        AutoLock al(hook_lock);
+        on_cancel = c;
+    }
+
+    log(int level, string message, ...) {
+        if (message !~ /cancelling stream/) {
+            return;
+        }
+        *code c;
+        {
+            AutoLock al(hook_lock);
+            c = remove on_cancel;
+        }
+        if (c) {
+            c();
+        }
+    }
+}
+
+#! a connection manager whose stream handles run hooks around their reads
+class HookedManager inherits HttpClientConnectionManager {
+    private {
+        Mutex m();
+        #! called once, before a stream handle reads
+        *code before_read;
+        #! called once, when a stream handle returns an error from a read
+        *code after_error;
+    }
+
+    constructor(hash<HttpClientConnectionManagerOptions> opts) : HttpClientConnectionManager(opts) {
+    }
+
+    HttpClientStreamHandle acquireAndStartStreaming(string url, string method, string path, *hash<auto> headers,
+            bool body_streaming = False, *data body) {
+        return new HookedStreamHandle(self, HttpClientConnectionManager::acquireAndStartStreaming(url, method, path,
+            headers, body_streaming, body));
+    }
+
+    setBeforeRead(code c) {
+        AutoLock al(m);
+        before_read = c;
+    }
+
+    setAfterError(code c) {
+        AutoLock al(m);
+        after_error = c;
+    }
+
+    runBeforeRead() {
+        *code c;
+        {
+            AutoLock al(m);
+            c = remove before_read;
+        }
+        if (c) {
+            c();
+        }
+    }
+
+    runAfterError() {
+        *code c;
+        {
+            AutoLock al(m);
+            c = remove after_error;
+        }
+        if (c) {
+            c();
+        }
+    }
+}
+
+#! a stream handle that runs the hooks of its manager around the reads of the stream handle it wraps
+class HookedStreamHandle inherits HttpClientStreamHandle {
+    private {
+        HookedManager mgr;
+        HttpClientStreamHandle sh;
+    }
+
+    constructor(HookedManager mgr, HttpClientStreamHandle sh) : HttpClientStreamHandle(sh.getConnection()) {
+        self.mgr = mgr;
+        self.sh = sh;
+    }
+
+    auto readData(*timeout timeout_ms) {
+        mgr.runBeforeRead();
+        auto rv = sh.readData(timeout_ms);
+        if (rv.typeCode() == NT_HASH && rv.error) {
+            mgr.runAfterError();
+        }
+        return rv;
+    }
+
+    cancel() {
+        sh.cancel();
+    }
+
+    *hash<auto> getResponse() {
+        return sh.getResponse();
+    }
+
+    int getInactiveTime(date since) {
+        return sh.getInactiveTime(since);
+    }
+
+    hash<auto> submitAsyncImpl(string method, string path, *hash<auto> headers, *data body) {
+        throw "UNSUPPORTED", "not used by the test";
+    }
+
+    hash<auto> submitAsyncWithNotifierImpl(string method, string path, *hash<auto> headers, *data body,
+            EventNotifier notifier) {
+        throw "UNSUPPORTED", "not used by the test";
+    }
+}
+
+#! a server that sends the start of a chunked body and then closes the connection
+class TruncatingServer {
+    private {
+        Socket listener();
+        Counter done(1);
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0", True);
+        listener.listen();
+        background serve();
+    }
+
+    destructor() {
+        done.waitForZero();
+    }
+
+    string getUrl() {
+        return sprintf("http://127.0.0.1:%d", listener.getSocketInfo().port);
+    }
+
+    private serve() {
+        on_exit done.dec();
+        # the client connects as soon as the test has started; this only limits a failing test
+        Socket s = listener.accept(30s);
+        string req = "";
+        while (req !~ /\r\n\r\n/) {
+            req += s.recv(-1, 30s);
+        }
+        s.send("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nTransfer-Encoding: chunked\r\n\r\n"
+            "5\r\nearly\r\n");
+        s.close();
+    }
+}
+
 public class HttpClientResponseStreamTest inherits QUnit::Test {
     private {
         HttpServer server;
@@ -113,6 +277,8 @@ public class HttpClientResponseStreamTest inherits QUnit::Test {
         addTestCase("redirects", \redirectTest());
         addTestCase("ranges and status codes", \rangeTest());
         addTestCase("timeouts and cancellation", \timeoutTest());
+        addTestCase("cancellation while a read starts", \cancelRaceTest());
+        addTestCase("errors", \errorTest());
         set_return_value(main());
     }
 
@@ -142,12 +308,16 @@ public class HttpClientResponseStreamTest inherits QUnit::Test {
     }
 
     private HttpClientConnectionManager getManager(string protocol, *hash<auto> opts) {
-        return new HttpClientConnectionManager(cast<hash<HttpClientConnectionManagerOptions>>({
+        return new HttpClientConnectionManager(getManagerOptions(protocol, opts));
+    }
+
+    private hash<HttpClientConnectionManagerOptions> getManagerOptions(string protocol, *hash<auto> opts) {
+        return cast<hash<HttpClientConnectionManagerOptions>>({
             "protocol": protocol,
             "accept_all_certs": True,
             # bodies are tested as sent; the server would otherwise compress them
             "accept_encoding": "",
-        } + opts));
+        } + opts);
     }
 
     #! reads the whole body of the stream
@@ -294,6 +464,96 @@ public class HttpClientResponseStreamTest inherits QUnit::Test {
             # the manager can still be used
             stream = mgr.openStream(i.value + "/file");
             assertEq(StreamTestHandler::Body, readAll(stream), msg);
+        }
+    }
+
+    #! a read that has passed the stream's own cancellation check when the stream is cancelled
+    /** The stream handle sets its state to cancelled before the cancellation reaches its connection; a read in
+        between fails in the stream handle, which must be reported as the cancellation
+    */
+    cancelRaceTest() {
+        foreach hash<auto> i in (urls.pairIterator()) {
+            string msg = i.key;
+            CancelHookLogger logger();
+            HookedManager mgr(getManagerOptions(i.key, {"logger": logger}));
+            on_exit mgr.closeAll();
+            HttpClientResponseStream stream = mgr.openStream(i.value + "/slow");
+            # the server sends the rest of the body when the test is done
+            on_exit handler.slow_release.push(True);
+            assertEq(binary("early"), stream.read(30s), msg);
+
+            # pushed when the stream handle is being cancelled
+            Queue cancelling();
+            # pushed when the read is done
+            Queue read_done();
+            # the stream is cancelled in another thread when the read reaches the stream handle; the read continues
+            # when the stream handle has been set to cancelled
+            mgr.setBeforeRead(sub () {
+                background sub () {
+                    # the read continues in any case once the cancellation is done
+                    on_exit cancelling.push(True);
+                    stream.cancel();
+                }();
+                cancelling.get();
+            });
+            # the cancellation continues when the read is done
+            logger.setOnCancel(sub () {
+                cancelling.push(True);
+                read_done.get();
+            });
+            *hash<ExceptionInfo> err;
+            try {
+                stream.read(30s);
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            read_done.push(True);
+            assertEq("HTTPCLIENT-CANCELLED", err.err, sprintf("%s: %s: %s", msg, err.err, err.desc));
+            # the result does not change
+            assertThrows("HTTPCLIENT-CANCELLED", \stream.read(), NOTHING, msg);
+        }
+    }
+
+    #! errors that end a body
+    errorTest() {
+        # the connection is closed in the middle of the body
+        {
+            TruncatingServer server();
+            HookedManager mgr(getManagerOptions("h1"));
+            on_exit mgr.closeAll();
+            HttpClientResponseStream stream = mgr.openStream(server.getUrl() + "/truncated");
+            assertEq(200, stream.getStatusCode());
+            assertEq(binary("early"), stream.read(30s));
+            # the stream is cancelled after the stream handle has reported the error; the error is reported, as it
+            # ended the stream before the cancellation
+            mgr.setAfterError(sub () {
+                stream.cancel();
+            });
+            *hash<ExceptionInfo> err;
+            try {
+                stream.read(30s);
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            assertEq("HTTPCLIENT-RECEIVE-ERROR", err.err, sprintf("%s: %s", err.err, err.desc));
+            # the cause is the error of the connection
+            assertEq(Type::String, err.arg.err.type());
+            assertFalse(err.arg.err =~ /CANCELLED/, err.arg.err);
+            # the error is raised again; the body is not taken for a complete one
+            assertThrows("HTTPCLIENT-RECEIVE-ERROR", \stream.read(), NOTHING);
+            stream.cancel();
+            assertThrows("HTTPCLIENT-RECEIVE-ERROR", \stream.read(), NOTHING);
+        }
+
+        # an error before any read
+        {
+            TruncatingServer server();
+            HttpClientConnectionManager mgr = getManager("h1");
+            on_exit mgr.closeAll();
+            HttpClientResponseStream stream = mgr.openStream(server.getUrl() + "/truncated");
+            assertEq(binary("early"), stream.read(30s));
+            assertThrows("HTTPCLIENT-RECEIVE-ERROR", \stream.read(), 30s);
+            assertThrows("HTTPCLIENT-RECEIVE-ERROR", \stream.read(), NOTHING);
         }
     }
 }

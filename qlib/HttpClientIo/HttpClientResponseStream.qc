@@ -116,6 +116,8 @@ public class HttpClientResponseStream {
 
         #! True if the stream was cancelled before the end of the body
         bool cancelled = False;
+        #! the error that ended the body, if any; raised again by further reads
+        *hash<auto> receive_error;
 
         #! the decompressor, if the body is decoded
         *HttpBodyDecompressor decoder;
@@ -252,7 +254,8 @@ public class HttpClientResponseStream {
         @return the next chunk of the body, which is never empty, or @ref NOTHING at the end of the body
 
         @throw HTTPCLIENT-TIMEOUT no data was received within the timeout; the stream can still be read
-        @throw HTTPCLIENT-RECEIVE-ERROR the body could not be received completely
+        @throw HTTPCLIENT-RECEIVE-ERROR the body could not be received completely; raised again by further reads; the
+        exception argument is the error that ended the body
         @throw HTTPCLIENT-CANCELLED the stream was cancelled with @ref cancel() before the end of the body
         @throw DECOMPRESSION-ERROR or a codec-specific error if the body cannot be decompressed or was truncated
     */
@@ -269,7 +272,8 @@ public class HttpClientResponseStream {
     #! Stops receiving the body; the rest of the body is discarded
     /** Can be called from any thread, for example to interrupt a thread blocked in @ref read(); unless the end of
         the body was received already, @ref read() then raises \c HTTPCLIENT-CANCELLED, so a cancelled body is never
-        taken for a complete one
+        taken for a complete one.  An error that ended the body before the cancellation reached the connection is
+        raised as \c HTTPCLIENT-RECEIVE-ERROR instead, as it is the reason why the body is incomplete.
     */
     cancel() {
         {
@@ -289,6 +293,7 @@ public class HttpClientResponseStream {
         {
             AutoLock al(m);
             if (done) {
+                checkErrorIntern();
                 checkCancelledIntern();
                 return;
             }
@@ -299,7 +304,32 @@ public class HttpClientResponseStream {
                 return finishIntern();
             }
         }
-        auto d = sh.readData(timeout_ms);
+        auto d;
+        try {
+            d = sh.readData(timeout_ms);
+        } catch (hash<ExceptionInfo> ex) {
+            # cancel() can run after the check above: the stream handle then reports the cancelled stream as closed
+            # until the cancellation reaches it from the connection
+            AutoLock al(m);
+            checkCancelledIntern();
+            rethrow;
+        }
+        if (d.typeCode() == NT_HASH && d.error) {
+            AutoLock al(m);
+            # the connection ends the stream once: with the cancellation, or with an error that came before it,
+            # which is the reason why the body is incomplete even if cancel() was called since
+            if (cancelled && d.error.err =~ /-CANCELLED$/) {
+                checkCancelledIntern();
+            }
+            ended = True;
+            done = True;
+            receive_error = {
+                "desc": sprintf("error receiving the response body from %y: %s: %s", effective_url,
+                    d.error.err ?? "ERROR", d.error.desc ?? "unknown error"),
+                "arg": d.error,
+            };
+            checkErrorIntern();
+        }
         {
             AutoLock al(m);
             checkCancelledIntern();
@@ -309,15 +339,6 @@ public class HttpClientResponseStream {
                 timeout_ms);
         }
         if (d.typeCode() == NT_HASH) {
-            if (d.error) {
-                {
-                    AutoLock al(m);
-                    ended = True;
-                    done = True;
-                }
-                throw "HTTPCLIENT-RECEIVE-ERROR", sprintf("error receiving the response body from %y: %s: %s",
-                    effective_url, d.error.err ?? "ERROR", d.error.desc ?? "unknown error"), d.error;
-            }
             if (d.end_stream) {
                 AutoLock al(m);
                 ended = True;
@@ -337,6 +358,15 @@ public class HttpClientResponseStream {
     private checkCancelledIntern() {
         if (cancelled) {
             throw "HTTPCLIENT-CANCELLED", sprintf("the response body from %y was cancelled", effective_url);
+        }
+    }
+
+    #! Throws the error that ended the body, if any
+    /** @note called with the lock held
+    */
+    private checkErrorIntern() {
+        if (receive_error) {
+            throw "HTTPCLIENT-RECEIVE-ERROR", receive_error.desc, receive_error.arg;
         }
     }
 
