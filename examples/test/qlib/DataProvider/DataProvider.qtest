@@ -5383,6 +5383,31 @@ public class DataProviderTest inherits QUnit::Test {
             }
             # the color components are integers from 0 - 255
             assertEq({"r": 0, "b": 255, "g": 128, "a": 0.5}, rgb.acceptsValue({"r": 0, "b": 255, "g": 128, "a": 0.5}));
+            foreach string c in (("r", "g", "b")) {
+                foreach int v in ((0, 255)) {
+                    hash<auto> color = {"r": 1, "g": 2, "b": 3};
+                    color{c} = v;
+                    assertEq(color + {"a": 1.0}, rgb.acceptsValue(color), sprintf("%s: %y", c, v));
+                }
+                # a component outside of 0 - 255 is rejected, not clamped; so is one that is not an integer
+                foreach auto v in ((256, -1, 1.5, "a")) {
+                    # an untyped hash, as a literal hash of integers only takes integers
+                    hash<auto> color = {};
+                    color += {"r": 1, "g": 2, "b": 3};
+                    color{c} = v;
+                    assertThrows("RUNTIME-TYPE-ERROR", \rgb.acceptsValue(), color, sprintf("%s: %y", c, v));
+                    assertThrows("RUNTIME-TYPE-ERROR", \rgb.acceptsValue(), color + {"a": 0.5}, sprintf("%s: %y", c,
+                        v));
+                }
+                # the field describes its range
+                AbstractDataField f = rgb.getFields(){c};
+                assertEq("int", f.getType().getBaseTypeName(), c);
+                assertEq(<DataTypeConstraintInfo>{"minimum": 0, "maximum": 255}, f.getType().getConstraints(), c);
+                # a type restored from its description enforces the range
+                AbstractDataProviderType restored = AbstractDataProviderType::get(f.getType().getInfo());
+                assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), 256, c);
+                assertEq(255, restored.acceptsValue(255), c);
+            }
             hash<auto> h = {"r": 1, "b": 2, "g": 3, "a": 1};
             h.x = 3;
             assertThrows("RUNTIME-TYPE-ERROR", \rgb.acceptsValue(), h);
@@ -5408,6 +5433,7 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq({"r": 1, "b": 2, "g": 3, "a": 1.0}, rgb_or_nothing.acceptsValue({"r": 1, "b": 2, "g": 3,
                 "a": NULL}));
             assertThrows("RUNTIME-TYPE-ERROR", \rgb_or_nothing.acceptsValue(), {"r": 1, "b": 2, "g": 3, "a": 255});
+            assertThrows("RUNTIME-TYPE-ERROR", \rgb_or_nothing.acceptsValue(), {"r": 256, "b": 2, "g": 3});
         }
 
         {
