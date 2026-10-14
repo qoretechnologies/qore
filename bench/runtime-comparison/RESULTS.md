@@ -12637,3 +12637,71 @@ records remain in the [rejected-experiment dataset](results-aot-register-result-
 The existing output-pointer convention remains the baseline. Next work should
 target the measured dispatch/admission and member-access costs; another
 result-layout variant is not justified by these results alone.
+
+## Rejected AOT receiver-type admission proofs (2026-10-14)
+
+Neither receiver-proof implementation is retained. The frozen baseline was
+`fd6aabe6ce1ac5f26efb417853eb9bdc8b655259`; its production sources match the
+validated restored runtime from the preceding experiment (the intervening commit
+changed documentation/data only). These experiments targeted typed AOT method
+dispatch, not a new IR/JIT optimization or Java comparison.
+
+An exact receiver-class match and an admission-time canonical-type proof can
+avoid loading the ordinary receiver's type through its class/private-data chain.
+The first version stored a boolean in existing PIC-entry padding. The second
+folded that proof into an available alignment bit of the existing scalar
+comparison word. Neither reconstructed or dereferenced a pointer from that word.
+Non-null instantiated types retained their full comparison; unsupported alignment
+and missing/disabled proofs retained the original checks. Program, access, epoch,
+body, debugger, stack and frame contracts were unchanged.
+
+Each version used a frozen baseline, two identical enabled configurations and a
+runtime-disabled proof control. The control was presence-based (including `0`)
+and evaluated at admission, not on each call. Eleven workloads, three forks,
+three warmups and three 300 ms samples at count 4096 produced 396 measured
+windows per version, with independently randomized orders. All 792 windows are
+retained. Runtime paths and control environment entries had matching lengths;
+loaded libraries and 555 reference outputs per configuration were verified.
+
+Values below are whole-workload ns/element, not isolated call latency. Enabled
+ranges show the two A/A medians, not confidence intervals.
+
+|!Version and workload|!Before|!Enabled A/A|!Runtime-off|!Change versus before
+|Boolean: native integer|10.080|10.298-10.511|10.258|2.16-4.28% slower
+|Boolean: boxed floating point|19.212|19.508-19.521|19.467|1.54-1.61% slower
+|Combined key: native integer|10.061|10.072-10.109|10.659|0.11-0.48% slower; effectively flat
+|Combined key: native floating point|11.538|11.291-11.431|11.887|0.93-2.14% faster
+|Combined key: boxed floating point|19.132|19.681-19.801|19.739|2.87-3.50% slower
+|Combined key: effectful integer member|83.899|85.236-85.662|86.036|1.59-2.10% slower
+
+The combined version's boxed-float and effectful-member fork ranges were
+separated from baseline. Its native-integer result overlapped baseline; the
+small native-float improvement did not justify the other regressions. Other
+workloads were mixed or noisy, including one slow effectful-member control fork;
+none was dropped. Comparing only enabled versus runtime-off would misleadingly
+suggest a useful native-integer improvement: the relevant unchanged baseline
+was already as fast as the enabled candidate.
+
+Both versions retained the 240-byte dispatch-entry layout and the native-int
+helper's 320-byte stack frame on macOS arm64. The intended dependent type loads
+were removed from the proved hit, but the complete native-int helper grew from
+477 instructions to 607 (boolean) or 615 (combined key). These code-generation
+observations do not establish the exact cause of every timing movement.
+
+The boolean release screen passed 14 test runs, 26 cases and 12704 QUnit
+assertions; the combined-key screen passed 13 runs, 25 cases and 12036 assertions.
+Both included the C++ receiver/context probes, disabled controls, native/boxed
+calls, member effects, frame readers, cleanup/cancellation and both IR/AOT
+555-check grids. Initial test-development failures incorrectly expected native
+admission for parameterized receivers; the existing exclusion was retained and
+the probes corrected before timing. Debug and foreign-platform qualification
+were not pursued after the negative measurements.
+
+All experimental runtime and test changes were removed. The restored release
+core and 62 matching AOT modules were rebuilt; original method tests passed
+3 files, 9 cases and 4905 assertions, plus both IR/AOT reference grids. Source
+and runtime-identity checks match the pre-experiment baseline. The
+[dataset](results-aot-receiver-proof-rejected-macos-arm64.json) preserves both
+patches, raw timings, reference outputs, assembly, restoration and all audit
+items. Next work should investigate per-call configuration/initialization guards
+and more granular dispatch evidence before another receiver-proof encoding.

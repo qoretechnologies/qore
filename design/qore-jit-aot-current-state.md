@@ -2066,3 +2066,24 @@ The removed implementation and raw measurements are preserved in
 see the corresponding `RESULTS.md` section for controls and limits. Prioritize
 cheaper proven dispatch/admission and member access over another result-layout
 variant without a new mechanism or profile.
+
+### Receiver-type admission proof experiments (2026-10-14)
+
+Two AOT receiver-type proofs were rejected after 792 measured windows against
+the restored `fd6aabe6c` baseline. A boolean proof in PIC padding slowed native
+integer calls by 2-4%. Folding the proof into the existing scalar comparison key
+left native integer calls effectively flat and improved native float by 1-2%,
+but regressed boxed float by about 3% and effectful member calls by about 2%.
+No runtime/test change is retained; these are not new Java or IR/JIT results.
+
+Both versions preserved complete checks for non-null instantiated receiver
+types and all live dispatch/observability guards. Entry layout and native-int
+stack-frame size stayed unchanged, but generated helper bodies grew. Moving a
+fact to admission is therefore not by itself evidence of a faster call path.
+
+Patches, all raw windows, selected release validation and restoration evidence
+are in `bench/runtime-comparison/results-aot-receiver-proof-rejected-macos-arm64.json`.
+The original runtime and matching AOT modules are restored and validated. Next
+investigate per-call configuration/static-initialization guards and more granular
+dispatch costs, preserving cold-call and runtime-control behavior; do not repeat
+receiver-proof/layout variants without new evidence.
