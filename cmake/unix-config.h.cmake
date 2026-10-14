@@ -245,7 +245,6 @@
 #cmakedefine HAVE_STRUCT_STAT_ST_TIMESPEC
 #cmakedefine HAVE_ST_BLOCKS
 #cmakedefine NEED_DLFCN_WRAPPER
-#cmakedefine NEED_ICONV_TRANSLIT
 #cmakedefine QORE_RUNTIME_THREAD_STACK_TRACE
 
 

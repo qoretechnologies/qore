@@ -54,13 +54,10 @@ public:
          validateUtf8(from == QCS_UTF8 && (validate_utf8 || !rejectsMalformedUtf8())),
          validateForm(isUnicodeForm(from) && !rejectsInvalidUnicodeForms()),
          splitFinalDash(qore_encoding_private::get(*from)->utf7_final_dash_literal) {
-#ifdef NEED_ICONV_TRANSLIT
-      QoreString to_code(getIconvTargetCode(to));
-      to_code.concat("//TRANSLIT");
-      c = iconv_open(to_code.getBuffer(), getIconvCode(from));
-#else
+      // conversions are opened without "//TRANSLIT": with it, glibc and GNU libiconv replace a character the target
+      // cannot hold with an approximation and report it only in the count of non-reversible conversions, while
+      // without it they fail with EILSEQ at the character (qoretechnologies/qore#5479)
       c = iconv_open(getIconvTargetCode(to), getIconvCode(from));
-#endif
       if (c == (iconv_t) -1) {
          if (xsink) {
             if (errno == EINVAL) {
@@ -266,8 +263,7 @@ public:
 
    //! Returns true if the platform's iconv rejects malformed UTF-8 input
    /** glibc and GNU libiconv fail with \c EILSEQ on malformed UTF-8 input; some versions of Apple's system libiconv
-       convert some malformed sequences, such as a lead byte followed by an ASCII character, without an error, and
-       glibc with \c "//TRANSLIT" (see \c NEED_ICONV_TRANSLIT) substitutes a character for a value above U+10FFFF.  The
+       convert some malformed sequences, such as a lead byte followed by an ASCII character, without an error.  The
        answer is a property of the library %Qore is linked against, so it is probed once with malformed sequences;
        where any of them is accepted, iconv() validates UTF-8 input itself.
    */
@@ -299,11 +295,58 @@ public:
       return rv;
    }
 
+   //! Returns true if the platform's iconv fails with \c EILSEQ at a character the target encoding cannot hold
+   /** glibc and GNU libiconv do; musl replaces the character with \c "*" and counts it as a non-reversible
+       conversion, and Apple's system libiconv replaces it with an approximation (U+0178 becomes \c "\"Y" in
+       ISO-8859-1) and returns 0.  Where this is false, a conversion that can lose data has to be verified (see
+       qore_string_private::convert_encoding_intern() and EncodingConvertor).
+
+       The answer is a property of the library %Qore is linked against, so it is probed once with the conversion of
+       reportsNonReversibleConversions().
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL static bool rejectsUnrepresentable() {
+      static bool rv = probeUnrepresentableRejection();
+      return rv;
+   }
+
+   //! Returns true if the platform's iconv does not decode stateful text cut off in a character as other characters
+   /** POSIX requires iconv() to fail with \c EINVAL when its input ends with an incomplete character or shift
+       sequence; musl and GNU libiconv do, and glibc does except in UTF-7, where it keeps the bits of a base64 run in
+       its state and returns success for the complete characters.  Apple's system libiconv fails only when the
+       incomplete character is its whole input: after complete characters, it decodes the bytes of the incomplete
+       character as characters of their own and returns success (UTF-7 \c "+ZeVn" gives \c "日n", ISO-2022-JP
+       \c "ESC $ B F | K" gives \c "日K").  Where this is false, text in a stateful encoding is decoded one byte at a
+       time (see Utf8OffsetDecoder), so that iconv's input never ends with a character cut off after complete
+       characters.
+
+       The answer is a property of the library %Qore is linked against, so it is probed once with such input in each
+       stateful encoding that the library supports.
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL static bool reportsTruncatedStatefulInput() {
+      static bool rv = probeTruncatedStatefulInput();
+      return rv;
+   }
+
    void reportIllegalSequence(size_t offset, ExceptionSink *xsink) {
+      reportIllegalSequence(offset, from, to, xsink);
+   }
+
+   //! Raises the error for an illegal character sequence, or a character that cannot be converted, at an offset
+   /** @param offset the byte offset of the sequence in the input
+       @param from the encoding of the input
+       @param to the encoding of the output
+       @param xsink the exception is raised here, if given
+   */
+   DLLLOCAL static void reportIllegalSequence(int64 offset, const QoreEncoding* from, const QoreEncoding* to,
+         ExceptionSink *xsink) {
       if (xsink) {
          xsink->raiseException("ENCODING-CONVERSION-ERROR",
                                "illegal character sequence at byte offset " QLLD " found in input type \"%s\" (while converting to \"%s\")",
-                               (int64)offset, from->getCode(), to->getCode());
+                               offset, from->getCode(), to->getCode());
       }
    }
 
@@ -320,14 +363,8 @@ public:
 private:
    //! Performs the one-time probe described by rejectsMalformedUtf8()
    DLLLOCAL static bool probeMalformedUtf8Rejection() {
-      // the probe opens the conversion as conversions are opened: with "//TRANSLIT", glibc substitutes a character
-      // for a value above U+10FFFF and reports it only in the count of non-reversible conversions, which a stream
-      // conversion does not see, while it fails with EILSEQ without it
-#ifdef NEED_ICONV_TRANSLIT
-      iconv_t cd = iconv_open("UTF-16LE//TRANSLIT", "UTF-8");
-#else
+      // the probe opens the conversion as conversions are opened
       iconv_t cd = iconv_open("UTF-16LE", "UTF-8");
-#endif
       if (cd == (iconv_t)-1) {
          // the probe cannot run; assume the worst and validate UTF-8 input
          return false;
@@ -371,11 +408,7 @@ private:
          {"UTF-16LE", {'\x00', '\xdc', '\x41', '\x00'}},
       };
       for (const auto& sample : samples) {
-#ifdef NEED_ICONV_TRANSLIT
-         iconv_t cd = iconv_open("UTF-8//TRANSLIT", sample.code);
-#else
          iconv_t cd = iconv_open("UTF-8", sample.code);
-#endif
          if (cd == (iconv_t)-1) {
             // the probe cannot run; assume the worst and validate the input
             return false;
@@ -397,15 +430,12 @@ private:
       return true;
    }
 
-   //! Performs the one-time probe described by reportsNonReversibleConversions()
-   DLLLOCAL static bool probeNonReversibleReporting() {
-#ifdef NEED_ICONV_TRANSLIT
-      iconv_t cd = iconv_open("ISO-8859-1//TRANSLIT", "UTF-8");
-#else
+   //! Converts U+0178, which ISO-8859-1 cannot hold, to ISO-8859-1; returns iconv()'s return value and errno
+   /** @return false if the probe cannot run
+   */
+   DLLLOCAL static bool probeUnrepresentable(size_t& rc, int& err) {
       iconv_t cd = iconv_open("ISO-8859-1", "UTF-8");
-#endif
       if (cd == (iconv_t)-1) {
-         // the probe cannot run; assume the worst and verify conversions by round trip
          return false;
       }
       char in[] = "\xc5\xb8";      // U+0178 in UTF-8
@@ -415,10 +445,76 @@ private:
       size_t il = 2;
       size_t ol = sizeof(out);
       errno = 0;
-      size_t rc = iconv_adapter(::iconv, cd, &ib, &il, &ob, &ol);
+      rc = iconv_adapter(::iconv, cd, &ib, &il, &ob, &ol);
+      err = errno;
       iconv_close(cd);
+      return true;
+   }
+
+   //! Performs the one-time probe described by reportsNonReversibleConversions()
+   DLLLOCAL static bool probeNonReversibleReporting() {
+      size_t rc;
+      int err;
+      if (!probeUnrepresentable(rc, err)) {
+         // the probe cannot run; assume the worst and verify conversions by round trip
+         return false;
+      }
       // a failure (EILSEQ) or a non-zero count both mean the loss was reported
       return rc == (size_t)-1 || rc > 0;
+   }
+
+   //! Performs the one-time probe described by rejectsUnrepresentable()
+   DLLLOCAL static bool probeUnrepresentableRejection() {
+      size_t rc;
+      int err;
+      if (!probeUnrepresentable(rc, err)) {
+         // the probe cannot run; assume the worst and verify conversions
+         return false;
+      }
+      return rc == (size_t)-1 && err == EILSEQ;
+   }
+
+   //! Performs the one-time probe described by reportsTruncatedStatefulInput()
+   DLLLOCAL static bool probeTruncatedStatefulInput() {
+      // complete characters followed by the start of a character: UTF-7 "日" and the first base64 character of "本",
+      // ISO-2022-JP "ESC $ B 日" and the first byte of "本", and HZ "~{" "中" and the first byte of "文"; only the
+      // complete character may be decoded
+      static const struct {
+         const char* code;
+         const char* data;
+         const char* utf8;
+      } samples[] = {
+         {"UTF-7", "+ZeVn", "\xe6\x97\xa5"},
+         {"ISO-2022-JP", "\x1b$BF|K", "\xe6\x97\xa5"},
+         {"HZ", "~{VPN", "\xe4\xb8\xad"},
+      };
+      for (const auto& sample : samples) {
+         iconv_t cd = iconv_open("UTF-8", sample.code);
+         if (cd == (iconv_t)-1) {
+            // the library does not support the encoding
+            continue;
+         }
+         char in[16];
+         size_t il = strlen(sample.data);
+         assert(il < sizeof(in));
+         memcpy(in, sample.data, il);
+         char out[32];
+         char* ib = in;
+         char* ob = out;
+         size_t ol = sizeof(out);
+         size_t rc = iconv_adapter(::iconv, cd, &ib, &il, &ob, &ol);
+         int err = errno;
+         iconv_close(cd);
+         if (rc == (size_t)-1 && err != EINVAL) {
+            // the probe gives no answer
+            continue;
+         }
+         size_t expected = strlen(sample.utf8);
+         if (static_cast<size_t>(ob - out) != expected || memcmp(out, sample.utf8, expected)) {
+            return false;
+         }
+      }
+      return true;
    }
 
    //! Returns the encoding name to pass to iconv_open() for the given %Qore encoding

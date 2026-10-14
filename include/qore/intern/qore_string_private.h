@@ -1324,9 +1324,40 @@ public:
     /** @param verify verify the result by converting it back and comparing it with the source,
         when the platform's iconv does not report non-reversible conversions; passed as \c false
         for the reverse conversion itself so that the check cannot recurse
+        @param locate if a character cannot be converted, report the byte offset of the first character of the
+        source that cannot be converted (see find_unconvertible_char()); passed as \c false for the conversions
+        that find it, so that the search cannot recurse
+        @param err_offset if given, the byte offset of the illegal or unconvertible sequence is stored here when the
+        conversion fails because of one, also when no exception is raised because \a xsink is \c nullptr
     */
     DLLLOCAL static int convert_encoding_intern(const char* src, size_t src_len, const QoreEncoding* from,
-            QoreString& targ, const QoreEncoding* nccs, ExceptionSink* xsink, bool verify = true);
+            QoreString& targ, const QoreEncoding* nccs, ExceptionSink* xsink, bool verify = true, bool locate = true,
+            size_t* err_offset = nullptr);
+
+    //! Returns the byte offset of the first character of \a src that a conversion to \a to cannot keep
+    /** The source is decoded one character at a time (see Utf8OffsetDecoder), and each character is converted to
+        the target and back; an invalid or incomplete character, if there is one before the first character that
+        cannot be converted, is reported instead.  Only called when a conversion has failed.
+
+        @param src the source text
+        @param len the byte length of the source text
+        @param from the encoding of the source text
+        @param to the target encoding
+        @param fallback the offset returned if no such character is found
+
+        @return the byte offset of the character
+    */
+    DLLLOCAL static size_t find_unconvertible_char(const char* src, size_t len, const QoreEncoding* from,
+            const QoreEncoding* to, size_t fallback);
+
+    //! Converts text in a stateful encoding by decoding it one byte at a time
+    /** Used where the platform's iconv does not fail with \c EINVAL for stateful text cut off in a character (see
+        IconvHelper::reportsTruncatedStatefulInput()); the text is decoded to UTF-8 with Utf8OffsetDecoder and then
+        converted to the target encoding.  The arguments are as for convert_encoding_intern().
+    */
+    DLLLOCAL static int convert_stateful_intern(const char* src, size_t src_len, const QoreEncoding* from,
+            QoreString& targ, const QoreEncoding* nccs, ExceptionSink* xsink, bool verify, bool locate,
+            size_t* err_offset);
 
     //! Returns true if a conversion from \a from to \a to can lose data and must be verified
     /** Conversions to a Unicode encoding can represent every source character, and an all-ASCII

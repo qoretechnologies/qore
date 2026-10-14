@@ -321,6 +321,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         addTestCase("Responses streamed completion, limits and filters retain usage", \openAiResponsesStreamTest());
         addTestCase("Responses structured output and API isolation", \openAiResponsesCompletionTest());
         addTestCase("Responses failure and incomplete transport never replay", \openAiResponsesFailureTest());
+        addTestCase("Responses stream error events report the provider's error", \openAiResponsesStreamErrorTest());
         addTestCase("Responses text deltas are not duplicated by terminal output", \openAiResponsesTextStreamTest());
         set_return_value(main());
     }
@@ -3247,6 +3248,51 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "provider_options": {"openai_api": "invalid"}});
         assertThrows("LLM-CONFIG-ERROR", sub () { invalid.chatCompletions(responsesRequest()); });
         assertEq(1, gemini_handler.requests.size(), "invalid API mode fails before HTTP");
+    }
+
+    #! raises the error of a Responses stream error event and returns the exception
+    private hash<ExceptionInfo> responsesStreamError(LlmBackend backend, hash<auto> event) {
+        installGeminiHandler({"/v1/responses": {"code": 200, "sse": (
+            {"type": "response.created", "response": {"id": "resp_fixture"}},
+            event,)}});
+        try {
+            backend.chatCompletionsStream(responsesRequest(), sub (hash<auto> chunk) {});
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        throw "TEST-ERROR", sprintf("no exception raised for %y", event);
+    }
+
+    openAiResponsesStreamErrorTest() {
+        LlmBackend backend(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:" + port,
+            "provider_options": {"openai_api": "responses"}});
+        # the service nests the error under "error"
+        hash<auto> event = {"type": "error", "error": {"type": "insufficient_quota", "code": "insufficient_quota",
+            "message": "You have no credits remaining"}};
+        hash<ExceptionInfo> ex = responsesStreamError(backend, event);
+        assertEq("LLM-RESPONSE-ERROR", ex.err);
+        assertEq("Responses stream failed: insufficient_quota: You have no credits remaining", ex.desc);
+        assertEq("insufficient_quota", ex.arg.code, "the code is in the argument");
+        assertEq(event.error, ex.arg.error, "the argument keeps the event");
+        assertEq(1, gemini_handler.requests.size());
+
+        # the type is used if the nested error has no code
+        ex = responsesStreamError(backend, {"type": "error", "error": {"type": "server_error",
+            "message": "The server had an error"}});
+        assertEq("Responses stream failed: server_error: The server had an error", ex.desc);
+        assertEq("server_error", ex.arg.code);
+
+        # a top-level code and message from a compatible server
+        ex = responsesStreamError(backend, {"type": "error", "code": "rate_limit_exceeded",
+            "message": "Rate limit reached"});
+        assertEq("Responses stream failed: rate_limit_exceeded: Rate limit reached", ex.desc);
+        assertEq("rate_limit_exceeded", ex.arg.code);
+
+        # an error event without details
+        ex = responsesStreamError(backend, {"type": "error"});
+        assertEq("LLM-RESPONSE-ERROR", ex.err);
+        assertEq("Responses stream failed", ex.desc);
+        assertFalse(exists ex.arg.code);
     }
 
     openAiResponsesTextStreamTest() {

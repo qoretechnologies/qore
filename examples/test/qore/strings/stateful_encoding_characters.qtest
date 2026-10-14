@@ -29,6 +29,11 @@ class StatefulEncodingCharacterTest inherits QUnit::Test {
     }
 
     constructor() : Test("StatefulEncodingCharacterTest", "1.0", \ARGV) {
+        # the encodings available depend on the iconv library Qore is built with (for example, Apple's libiconv does
+        # not support IBM930 and IBM939); each one is reported, so that the coverage on each platform is visible
+        foreach string enc in (keys Encodings) {
+            addTestCase(sprintf("%s is available", enc), \testAvailable(), (enc,));
+        }
         addTestCase("length and characters", \testCharacters());
         addTestCase("substrings and splicing", \testSubstrings());
         addTestCase("searching", \testSearching());
@@ -48,23 +53,39 @@ class StatefulEncodingCharacterTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    #! returns the reason that iconv cannot convert the text of the given encoding on this platform, if any
+    private static *string getUnavailableReason(string enc) {
+        try {
+            string s = convert_encoding(Encodings{enc}, enc);
+            if (convert_encoding(s, "UTF-8") != Encodings{enc}) {
+                return sprintf("the iconv library does not convert the test text to %s and back unchanged", enc);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("the iconv library cannot convert the test text to %s: %s: %s", enc, ex.err, ex.desc);
+        }
+    }
+
     #! the stateful encodings that iconv supports on this platform, with their text in UTF-8
     private hash<string, string> getEncodings() {
         hash<string, string> rv = {};
         foreach hash<auto> i in (Encodings.pairIterator()) {
-            try {
-                string s = convert_encoding(i.value, i.key);
-                if (convert_encoding(s, "UTF-8") == i.value) {
-                    rv{i.key} = i.value;
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                # not supported here
+            if (!getUnavailableReason(i.key)) {
+                rv{i.key} = i.value;
             }
         }
         if (!rv) {
             testSkip("iconv supports none of the stateful encodings tested on this platform");
         }
         return rv;
+    }
+
+    #! reports whether the given encoding is available on this platform
+    testAvailable(string enc) {
+        *string reason = getUnavailableReason(enc);
+        if (reason) {
+            testSkip(reason);
+        }
+        assertEq(Encodings{enc}, convert_encoding(convert_encoding(Encodings{enc}, enc), "UTF-8"));
     }
 
     #! returns True if the given text can be represented in the given encoding

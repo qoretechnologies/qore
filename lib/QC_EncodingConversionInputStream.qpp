@@ -89,7 +89,9 @@ EncodingConversionInputStream::constructor(Qore::InputStream[InputStream] input_
     }
     @endcode
 
-    @throw ENCODING-CONVERSION-ERROR if an invalid multibyte sequence is encountered in the input
+    @throw ENCODING-CONVERSION-ERROR if an invalid multibyte sequence is encountered in the input, a character that
+    the target encoding cannot hold, or a character or shift sequence cut off by the end of the input; the
+    message gives the byte offset of the first one in the input stream
     @throw INPUT-STREAM-ERROR \a limit is not positive
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
@@ -107,7 +109,9 @@ EncodingConversionInputStream::constructor(Qore::InputStream[InputStream] input_
     int nextByte = latin2Stream.peek();
     @endcode
 
-    @throw ENCODING-CONVERSION-ERROR if an invalid multibyte sequence is encountered in the input
+    @throw ENCODING-CONVERSION-ERROR if an invalid multibyte sequence is encountered in the input, a character that
+    the target encoding cannot hold, or a character or shift sequence cut off by the end of the input; the
+    message gives the byte offset of the first one in the input stream
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
 int EncodingConversionInputStream::peek() {
