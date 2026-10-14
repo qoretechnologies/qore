@@ -84,6 +84,10 @@ module QoreLlmTypes {
 
     @subsection qorellmtypes_1_0 QoreLlmTypes 1.0
     - initial release
+    - @ref QoreLlmUtils::LlmCancellation closes in-flight provider streams without polling, including while
+      awaiting response headers or a complete event; cancelled requests raise \c LLM-CANCELLED
+    - stream delivery checks cancellation before and after every callback, including buffered output, fallback
+      output, and the final event; cancellation never proceeds to another event or returns a successful call
     - @ref QoreLlmUtils::LlmRequestOptions::cached_content "LlmRequestOptions::cached_content" for explicit prompt
       caching and @ref QoreLlmUtils::LlmTokenUsage::reasoning_in_output "LlmTokenUsage::reasoning_in_output",
       which says whether the reasoning tokens are part of the output tokens
@@ -242,13 +246,17 @@ public hashdecl LlmBackendConfig {
     calling @ref cancel(), so a stream blocked waiting for its next event wakes at once instead of waiting for its
     request timeout.
 
+    Stream callbacks may cancel their own request. No subsequent event is delivered, and the call raises
+    \c LLM-CANCELLED even when cancellation occurs in the final callback. A callback exception is propagated
+    according to the provider's error handling; cancellation does not replace that exception.
+
     A token stays cancelled; use a new token for each request that can be cancelled independently.
 
     @par Example
     @code{.py}
 LlmCancellation cancellation();
 # e.g. called from a UI or control thread when the user presses "stop"
-code stop = sub () { cancellation.cancel("stopped by the user"); };
+code<nothing()> stop = sub () { cancellation.cancel("stopped by the user"); };
 try {
     llm.chatStream(messages, sub (hash<ChatStreamEvent> event) {
         print(event.delta ?? "");
@@ -1114,7 +1122,9 @@ public class AbstractLlmProvider {
         When @ref LlmRequestOptions::cancellation is cancelled, implementations
         close the connection of the stream at once, including while its
         response is awaited, and raise \c LLM-CANCELLED; see
-        @ref addRequestCancelHandler() and @ref callCancellable().
+        @ref addRequestCancelHandler() and @ref callCancellable(). Use @ref deliverStreamEvent() for every
+        callback, including buffered output and the final event, so cancellation during delivery is reported
+        before returning success or delivering another event.
 
         @param messages conversation history
         @param callback receives each @ref ChatStreamEvent as it arrives
@@ -1245,6 +1255,30 @@ public class AbstractLlmProvider {
         if (opts.cancellation) {
             opts.cancellation.check();
         }
+    }
+
+    #! Delivers one stream event while honoring request cancellation
+    /** Checks the token before and after the callback. The second check covers cancellation in the final
+        callback, and buffered or fallback output that is not followed by another cancellable transport read.
+
+        @param callback receives the event in the calling thread
+        @param event the event to deliver, including a final event with \c done set
+        @param opts optional per-call request overrides
+
+        @throw LLM-CANCELLED the token was cancelled before delivery or before the callback returned
+        @throw any exception raised by the callback is propagated unchanged
+
+        @par Example
+        @code{.py}
+deliverStreamEvent(callback, <ChatStreamEvent>{"delta": "Invoice processed"}, opts);
+deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
+        @endcode
+    */
+    deliverStreamEvent(code<nothing(hash<ChatStreamEvent>)> callback, hash<ChatStreamEvent> event,
+            *hash<LlmRequestOptions> opts) {
+        checkRequestCancelled(opts);
+        callback(event);
+        checkRequestCancelled(opts);
     }
 
     #! Registers a handler that runs when a call is cancelled

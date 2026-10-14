@@ -4,6 +4,13 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    LLM streaming requests accept a @ref QoreLlmUtils::LlmCancellation "LlmCancellation" token in
+    @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation". Cancelling the token
+    closes an in-flight OpenAI-compatible, Anthropic, Gemini/Vertex AI, or Bedrock stream without polling and
+    raises <tt>LLM-CANCELLED</tt>, including when no complete event has arrived. Cancellation from a stream
+    callback also prevents subsequent buffered or fallback events and is reported even in the final callback.
+    Callback providers check cancellation at event delivery; their caller owns the transport.
+
     Reading datasource configuration or getting or setting connection options now preserves an active
     transaction's thread ownership. These calls can no longer allow another thread to enter the
     transaction before its owner commits or rolls back.

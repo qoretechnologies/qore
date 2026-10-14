@@ -1410,11 +1410,11 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                     || parsed.choices[0].delta.reasoning_content.typeCode() == NT_STRING
                     || parsed.choices[0].finish_reason.val()
                     || parsed.usage.typeCode() == NT_HASH) {
-                callback(<QoreLlmUtils::ChatStreamEvent>{
+                deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{
                     "event": evt.event,
                     "delta": delta,
                     "raw": parsed,
-                });
+                }, opts);
             }
         }
         if (!strict_context.project) {
@@ -1422,7 +1422,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 throw "LLM-ERROR",
                     "streaming chat response ended without a terminal frame";
             }
-            callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+            deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{"done": True}, opts);
             return;
         }
         hash<auto> final_raw = terminal ?? {};
@@ -1460,13 +1460,13 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 delta.tool_calls = calls;
             }
             if (delta) {
-                callback(<QoreLlmUtils::ChatStreamEvent>{
+                deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{
                     "delta": delta.content,
                     "raw": {"id": structured_state.id,
                         "model": structured_state.model,
                         "choices": ({"index": 0, "delta": delta,
                             "finish_reason": NOTHING},)},
-                });
+                }, opts);
             }
         }
         if (stream_usage) {
@@ -1482,9 +1482,9 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         if (final_raw.choices[0].delta) {
             final_raw.choices[0].delta = {};
         }
-        callback(<QoreLlmUtils::ChatStreamEvent>{
+        deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{
             "done": True, "raw": final_raw,
-        });
+        }, opts);
     }
 
     #! Retains opaque Responses reasoning at the existing facade boundary

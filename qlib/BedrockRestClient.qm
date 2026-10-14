@@ -700,13 +700,13 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             if (exists raw.contentBlockDelta.delta.text) {
                 event.delta = raw.contentBlockDelta.delta.text;
             }
-            callback(event);
+            deliverStreamEvent(callback, event, opts);
         }
         if (!stopped) {
             throw "LLM-ERROR", "Bedrock ConverseStream ended without messageStop";
         }
         stream.close();
-        callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+        deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{"done": True}, opts);
     }
 
     #! Updates OpenAI stream state from a native Converse stream event

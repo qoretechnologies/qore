@@ -2,11 +2,11 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires BedrockRestClient
-%requires AwsEventStream
-%requires QoreLlmTypes
-%requires QoreLlmUtils
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/BedrockRestClient.qm
+%requires ../../../../qlib/AwsEventStream.qm
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QoreLlmUtils
 %requires json
 %exec-class BedrockStreamingTest
 
@@ -87,6 +87,7 @@ class BedrockStreamingTest inherits QUnit::Test {
         addTestCase("close wakes a blocked event reader", \cancelTest());
         addTestCase("a request cancellation closes a stream in flight", \requestCancellationTest());
         addTestCase("a cancelled request is never sent", \requestPreCancelledTest());
+        addTestCase("cancellation in the final callback raises LLM-CANCELLED", \cancelFinalEventTest());
         addTestCase("Converse requires messageStop before EOF", \missingStopTest());
         addTestCase("callback failures retain their original exception", \callbackFailureTest());
         addTestCase("service failure after messageStop is not successful completion", \lateFailureTest());
@@ -273,6 +274,22 @@ class BedrockStreamingTest inherits QUnit::Test {
             }, NOTHING, <LlmRequestOptions>{"timeout_ms": 60000, "cancellation": cancellation});
         });
         assertEq(("first",), deltas, "no completion is reported after the cancellation");
+    }
+
+    private cancelFinalEventTest() {
+        BedrockStreamWireFixture server((event("messageStop", {"stopReason": "end_turn"}),));
+        on_exit server.stop();
+        LlmCancellation cancellation();
+        int done = 0;
+        assertThrows("LLM-CANCELLED", "stopped in final callback", sub () {
+            provider(server.port).chatStream(messages(), sub (hash<ChatStreamEvent> event) {
+                if (event.done) {
+                    ++done;
+                    cancellation.cancel("stopped in final callback");
+                }
+            }, NOTHING, <LlmRequestOptions>{"cancellation": cancellation});
+        });
+        assertEq(1, done);
     }
 
     private requestPreCancelledTest() {

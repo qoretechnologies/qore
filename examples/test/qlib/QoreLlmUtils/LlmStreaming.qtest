@@ -300,10 +300,15 @@ public class LlmStreamingTest inherits QUnit::Test {
         addTestCase("DeepSeek: rejected strict output retains billable usage", \deepseekRejectedUsageTest());
         addTestCase("Cancel: a stream in flight is closed at once", \cancelInFlightStreamTest());
         addTestCase("Cancel: a stream awaiting its response is closed at once", \cancelStreamSetupTest());
+        addTestCase("Cancel: silent and partial-event streams close without a callback", \cancelSilentStreamTest());
         addTestCase("Cancel: a cancelled request is never sent", \cancelBeforeDispatchTest());
         addTestCase("Cancel: a retry backoff wait ends at once", \cancelRetryBackoffTest());
         addTestCase("Cancel: a callback stream ends at the next chunk", \cancelCallbackStreamTest());
+        addTestCase("Cancel: callback delivery interrupts its producer immediately", \cancelCallbackDeliveryTest());
         addTestCase("Cancel: completed calls leave no handler on the token", \cancelHandlerCleanupTest());
+        addTestCase("Cancel: final event callbacks cannot report success after cancellation", \cancelFinalEventTest());
+        addTestCase("Cancel: buffered structured output stops before the completion event", \cancelStructuredOutputTest());
+        addTestCase("Cancel: fallback callback output stops before the completion event", \cancelCallbackFallbackTest());
         set_return_value(main());
     }
 
@@ -1374,6 +1379,34 @@ public class LlmStreamingTest inherits QUnit::Test {
         }
     }
 
+    cancelSilentStreamTest() {
+        foreach string mode in (("http", "gemini", "anthropic")) {
+            foreach bool partial in ((False, True)) {
+                string ctx = mode + (partial ? ": partial SSE event" : ": no SSE event");
+                server.script(<FakeReply>{"chunks": partial ? ("data: {\"tool_calls\":[",) : (),
+                    "await_close": True, "report_stream": True});
+                LlmBackend llm = backendFor(mode);
+                CountingCancellation cancellation();
+                Counter canceller(1);
+                # Cancel only once the server has sent its headers and any partial event. No application
+                # callback can signal this cancellation: the reader has not received a complete SSE event.
+                background cancelOnSignal(cancellation, server.stream_results, canceller);
+                on_exit {
+                    server.stream_results.push(False);
+                    canceller.waitForZero();
+                }
+                int events = 0;
+                assertThrows("LLM-CANCELLED", "stopped by the user", sub () {
+                    llm.chatStream(userMessage("hi"), sub (hash<ChatStreamEvent> event) { ++events; },
+                        NOTHING, <LlmRequestOptions>{"cancellation": cancellation, "timeout_ms": 60000});
+                }, NOTHING, ctx);
+                assertEq(0, events, ctx);
+                assertTrue(server.client_closed.get(5s), ctx + ": cancellation closes the connection");
+                assertEq(0, cancellation.getActiveCount(), ctx);
+            }
+        }
+    }
+
     cancelBeforeDispatchTest() {
         LlmCancellation cancellation();
         cancellation.cancel();
@@ -1451,6 +1484,34 @@ public class LlmStreamingTest inherits QUnit::Test {
         assertEq(1, sent, "the cancellation ends the stream callback at its next chunk");
     }
 
+    cancelCallbackDeliveryTest() {
+        foreach bool final_chunk in ((False, True)) {
+            LlmCancellation cancellation();
+            int continued = 0;
+            int delivered = 0;
+            LlmBackend llm(<LlmBackendConfig>{
+                "mode": "callback",
+                "api_callback": hash<auto> sub (string method, string path, hash<auto> body) {
+                    return {};
+                },
+                "api_stream_callback": sub (string method, string path, hash<auto> body,
+                        code<nothing(hash<auto>)> dcb) {
+                    dcb({"choices": ({"delta": {"content": "first"},
+                        "finish_reason": final_chunk ? "stop" : NOTHING},)});
+                    ++continued;
+                },
+            });
+            assertThrows("LLM-CANCELLED", "stopped during delivery", sub () {
+                llm.chatStream(userMessage("hi"), sub (hash<ChatStreamEvent> event) {
+                    ++delivered;
+                    cancellation.cancel("stopped during delivery");
+                }, NOTHING, <LlmRequestOptions>{"cancellation": cancellation});
+            });
+            assertEq(1, delivered);
+            assertEq(0, continued, "the producer does not continue past the cancelled callback");
+        }
+    }
+
     cancelHandlerCleanupTest() {
         CountingCancellation cancellation();
         foreach string mode in (("http", "gemini", "anthropic")) {
@@ -1462,6 +1523,72 @@ public class LlmStreamingTest inherits QUnit::Test {
             assertEq("first", text, mode);
             assertTrue(cancellation.added > 0, mode + ": the stream registered a cancel handler");
             assertEq(0, cancellation.getActiveCount(), mode + ": the handler is removed when the call ends");
+        }
+    }
+
+    cancelFinalEventTest() {
+        foreach string mode in (("http", "gemini", "anthropic")) {
+            server.script(completeReply(mode));
+            LlmBackend llm = backendFor(mode);
+            CountingCancellation cancellation();
+            int done = 0;
+            assertThrows("LLM-CANCELLED", "stopped in final callback", sub () {
+                llm.chatStream(userMessage("hi"), sub (hash<ChatStreamEvent> event) {
+                    if (event.done) {
+                        ++done;
+                        cancellation.cancel("stopped in final callback");
+                    }
+                }, NOTHING, <LlmRequestOptions>{"cancellation": cancellation});
+            }, NOTHING, mode);
+            assertEq(1, done, mode);
+            assertEq(0, cancellation.getActiveCount(), mode + ": cancelled calls remove their handlers");
+        }
+    }
+
+    cancelStructuredOutputTest() {
+        server.script(openAiReply((
+            {"choices": ({"delta": {"content": "{\"answer\":42,\"note\":null}"}},)},
+            {"choices": ({"delta": {}, "finish_reason": "stop"},)},
+        )));
+        LlmBackend llm = openAiBackend();
+        CountingCancellation cancellation();
+        hash<auto> schema = {"type": "object", "additionalProperties": False,
+            "properties": {"answer": {"type": "integer"}, "note": {"type": "string"}},
+            "required": ("answer",)};
+        list<hash<ChatStreamEvent>> events = ();
+        assertThrows("LLM-CANCELLED", "stopped after buffered output", sub () {
+            llm.chatStream(userMessage("answer"), sub (hash<ChatStreamEvent> event) {
+                events += event;
+                cancellation.cancel("stopped after buffered output");
+            }, NOTHING, <LlmRequestOptions>{"cancellation": cancellation, "output_schema": schema});
+        });
+        assertEq(1, events.size(), "no completion follows the cancelled buffered delta");
+        assertFalse(events[0].done);
+        assertEq({"answer": 42}, parse_json(events[0].delta));
+        assertEq(0, cancellation.getActiveCount());
+    }
+
+    cancelCallbackFallbackTest() {
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "callback",
+            "api_callback": hash<auto> sub (string method, string path, hash<auto> body) {
+                return {"choices": ({"message": {"content": "first"}, "finish_reason": "stop"},)};
+            },
+        });
+        foreach bool cancel_final in ((False, True)) {
+            LlmCancellation cancellation();
+            list<hash<ChatStreamEvent>> events = ();
+            assertThrows("LLM-CANCELLED", "stopped in fallback callback", sub () {
+                llm.chatStream(userMessage("hi"), sub (hash<ChatStreamEvent> event) {
+                    events += event;
+                    if (event.done == cancel_final) {
+                        cancellation.cancel("stopped in fallback callback");
+                    }
+                }, NOTHING, <LlmRequestOptions>{"cancellation": cancellation});
+            });
+            assertEq(cancel_final ? 2 : 1, events.size());
+            assertEq("first", events[0].delta);
+            assertEq(cancel_final, events[-1].done);
         }
     }
 

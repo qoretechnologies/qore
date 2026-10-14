@@ -195,10 +195,10 @@ backend.chatStream(history,
             # always sees a coherent sequence.
             hash<ChatResponse> resp = chat(messages, tools, opts);
             if (resp.content.val()) {
-                callback(<ChatStreamEvent>{
+                deliverStreamEvent(callback, <ChatStreamEvent>{
                     "delta": resp.content,
                     "done": False,
-                });
+                }, opts);
             }
             # Synthesize an OpenAI-shaped terminal chunk so callers that
             # accumulate via `event.raw` see a consistent shape.
@@ -236,10 +236,10 @@ backend.chatStream(history,
                 }
                 terminal_raw.choices[0].delta.tool_calls = tool_call_deltas;
             }
-            callback(<ChatStreamEvent>{
+            deliverStreamEvent(callback, <ChatStreamEvent>{
                 "done": True,
                 "raw": terminal_raw,
-            });
+            }, opts);
             return;
         }
 
@@ -260,7 +260,7 @@ backend.chatStream(history,
                         if (event.done) {
                             saw_terminal = True;
                         }
-                        callback(event);
+                        deliverStreamEvent(callback, event, opts);
                     }
                 });
         } catch (hash<ExceptionInfo> ex) {
@@ -278,7 +278,7 @@ backend.chatStream(history,
         # never deadlocks waiting for one.  Skipped when the upstream
         # already emitted a terminal chunk (the common case).
         if (!saw_terminal) {
-            callback(<ChatStreamEvent>{"done": True});
+            deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
         }
     }
 

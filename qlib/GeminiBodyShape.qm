@@ -2638,14 +2638,14 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
                         sprintf("%s streaming response timed out: no event arrived within %d ms",
                             getProviderLabel(), timeout_ms), {"err": "HTTPCLIENT-TIMEOUT"};
                 }
-                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+                deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{"done": True}, opts);
                 return;
             }
             if (!evt.data.val()) {
                 continue;
             }
             if (evt.data == "[DONE]") {
-                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+                deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{"done": True}, opts);
                 return;
             }
             auto parsed;
@@ -2693,7 +2693,7 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             if (delta.val()) {
                 event.delta = delta;
             }
-            callback(event);
+            deliverStreamEvent(callback, event, opts);
             if (done) {
                 return;
             }
