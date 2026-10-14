@@ -2194,3 +2194,38 @@ or addresses. Profile the hot caller/runtime/companion boundary before choosing
 the next structural change; retain stack/frame-reader/Program guards, ownership
 and cleanup ordering. Do not remove frame pointers or unwind tables: the AOT
 compiler documents real external Abseil/V8 unwinder failures without them.
+
+
+### Layout calibration and generated-entry alignment (2026-10-14)
+
+The planned calibration completed: five deterministic function orders plus a
+same-executable A/A configuration, 360 AOT windows on one frozen runtime. All
+mapped pre-link sections match; selected callback/caller instructions match
+after relocation normalization. Integer callback medians span 6.881-6.974
+ns/element, floating callbacks 9.045-9.161, native integer methods 10.469-10.720,
+and effectful calls 88.479-89.828. This set does not reproduce or explain the
+preceding descriptor prototype's 6-8% callback regression. Metadata/allocation
+changes and unsampled placements remain possible contributors, not established
+causes.
+
+A subsequent compiler-only 64-byte alignment prototype for generated scalar
+method-v3/callback-v3 companions was rejected. The frozen baseline, candidate
+enabled and same-runtime compile-off control each used the same five orders;
+540 windows were retained. Median-of-layout-median on/off changes were -0.56%
+for integer callbacks, -0.58% for floating callbacks, -0.15% for native integer
+methods and +0.94% for effectful calls. Paired layouts moved both ways; effectful
+samples were noisy. This is not a validated performance gain. Guards, native
+instructions and ABI remained unchanged; the compiler edit was removed.
+
+Separate profiles still locate most fast-call samples in dispatch/frame work,
+not tiny callee arithmetic. The next structural investigation is an additive
+register-preserving callee convention, starting with generated-assembly evidence
+before expanding runtime ABI/qualification. Preserve compatibility, all live
+guards, diagnostic frame lifetime, unwind tables and frame pointers. Require
+broader before/after controls and a retained AOT gain before fresh matched Java
+timing. These experiments make no IR/JIT speedup or Java-parity claim.
+
+Candidate release checks passed six files/13 cases/3364 assertions and both
+reference grids. The original core and 62 modules were restored and checked;
+full measurements, profiles, setup diagnostics, validation and all audit items
+are in `bench/runtime-comparison/results-aot-layout-calibration-macos-arm64.json`.

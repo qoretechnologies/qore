@@ -12964,3 +12964,112 @@ and scalar-cleanup approaches must not simply be repeated. Preserve frame
 pointers and unwind tables: the source documents actual external Abseil/V8
 unwinder crashes without the AOT frame chain. Broader qualification and fresh
 matched Java timing follow only after a repeatable, regression-safe AOT gain.
+
+
+## Emitted-code layout calibration and rejected native-entry alignment (2026-10-14)
+
+Baseline `08412d9ea`, runtime unchanged from the restored `b2c7f9143` line.
+The calibration completed, but did **not** reproduce the preceding descriptor
+prototype's 6-8% callback loss. The follow-up 64-byte alignment candidate also
+failed to establish a useful speedup and was removed. These experiments add
+900 verified AOT measurement windows, not a retained optimization or Java result.
+
+### Link-only calibration
+
+One frozen compiler/runtime, identical kernel source, and five predeclared
+function orders: default, lexicographic, reverse, Random(487), Random(509).
+A second default configuration runs the same executable as an A/A control.
+Every mapped pre-link section has identical bytes/address/size across the five
+objects, including native text and `__QORE,__pcloc`; full object hashes differ
+because symbol-table order is not fixed. Normal qcc linking still constructs
+the final PC-to-source trailer. Executable path lengths are equal.
+
+Five forks, three warmups and three 400 ms windows per fork, count 4096, seed 7,
+randomized order seed 135523: 360 windows. Each cell below spans the six
+configuration medians of fork means, in whole-workload ns/element.
+
+|!Kernel|!Calibration median range
+|Integer callback|6.881-6.974
+|Floating callback|9.045-9.161
+|Native integer method|10.469-10.720
+|Effectful integer method|88.479-89.828
+
+Selected callback v2/v3 and ordinary/fast caller instructions are identical
+after explicit relocation normalization, at different addresses. This modest
+variation is not evidence that layout caused the earlier descriptor regression:
+that prototype also changed metadata and allocations. The deterministic sample
+does not cover every address/cache/branch-placement dimension. No winning layout
+was selected, and no hardware-counter causality is claimed.
+
+### Generated native-entry alignment candidate
+
+The eight-line compiler change uniformly requested 64-byte alignment for
+generated pure scalar method-v3 and callback-v3 companions, leaving v2 and all
+guards intact. This is distinct from the previously tested C++ dispatch-helper
+alignment. The compile-time off control was
+`QORE_DISABLE_AOT_NATIVE_ENTRY_ALIGNMENT`; no runtime behavior or ABI changed.
+
+The same five orders were applied symmetrically to the frozen baseline,
+candidate enabled, and candidate disabled. Enabled/disabled share one exact
+rebuilt runtime; baseline/candidate runtime paths and executable paths have
+equal lengths. Three forks, three warmups and three 300 ms windows, count 4096,
+seed 7, randomized order seed 135541: 540 windows. All 15 binaries pass 555
+reference outputs and verified loaded-library identity. Every selected enabled
+v3 symbol is 64-byte aligned. Callback v2/v3, method-v3 and ordinary/fast caller
+instructions match after relocation normalization and removal of unreachable
+terminal linker padding; raw disassembly and both analysis attempts are retained.
+
+The first three numeric columns are medians of the five layout medians, not
+isolated call latency, confidence intervals or matched Java ratios. The last
+column retains the range of paired enabled/off changes across layouts; positive
+means slower. Full fork means/ranges and every raw sample are in the dataset.
+
+|!Kernel|!Frozen baseline|!Candidate off|!Candidate on|!Paired on/off change
+|Integer callback|6.915|6.973|6.934|-2.23% to +1.87%
+|Floating callback|9.067|9.098|9.045|-3.87% to +0.85%
+|Native integer method|10.714|10.787|10.770|-1.08% to +1.55%
+|Effectful integer method|91.201|89.637|90.484|-6.85% to +12.55%
+
+The layout-summary changes versus off are -0.56%, -0.58%, -0.15% and +0.94%
+respectively. Signs vary across layouts, and effectful timing is particularly
+noisy; even the off control has a 114.530 ns/element fork mean. Nothing was
+discarded. This screen does not prove a sub-percent speedup or a causal
+regression, and does not justify retaining padding or expanding qualification.
+
+### Profiles, validation and next steps
+
+Four serial diagnostic profiles ran separately from timing on the calibrated
+baseline. Integer callback samples placed 53.86% exclusively in typed dispatch,
+20.77% in its caller, 8.00% in frame unpublication and 6.13% in the tiny callee.
+The floating callback helper had 63.48%; native integer method dispatch had
+58.20%, with 5.90% in frame unpublication and 5.40% in its entry stack check.
+Percentages use the main-thread sample count, not the idle signal thread or
+summed inclusive stacks. Sampling identifies locations, not causal latency.
+Effectful calls remain spread across local-value handling, dispatch, member
+lookup/string comparison and locks. Instrumented durations are not benchmarks.
+
+Candidate release validation passed six files, 13 cases and 3364 assertions,
+including scalar ABI/legacy controls, stack/context restoration, debugger,
+concurrent frame readers and effectful continuations, plus IR/AOT reference
+grids. The compiler change was removed, the original release core and 62 matching
+AOT modules rebuilt, and source/runtime identity checked. Restored validation
+passed 3 files, 7 cases and 2162 assertions plus both reference grids.
+No candidate debug, sanitizer, cross-platform or fresh Java qualification was
+pursued. No production or test changes from this experiment remain.
+
+Next examine an additive register-preserving callee convention at the assembly
+level before adding another dispatch ABI: measure whether it actually removes
+hot helper spills/call traffic without growing the guarded cold path. Only a
+clear structural reduction warrants implementation and release/debug semantic
+tests, then the broader call matrix with symmetric layout controls. Keep old
+entry compatibility, live Program/debugger/body/stack guards, diagnostic frames,
+reader synchronization and unwinding. Do not repeat alignment or cold outlining
+without a distinct mechanism. A retained gain must precede a new matched Java run.
+
+[Complete dataset](results-aot-layout-calibration-macos-arm64.json) preserves
+both matrices, the rejected patch, selected assembly, untimed setup diagnostics,
+profiles, qualification/restoration and the full audit. The archived prototype
+is research evidence, not production approval.
+
+|!Audit scope|!Pass|!N/A|!Fail
+|Retained documentation and research data; all 62 checklist items recorded in the dataset|7|55|0
