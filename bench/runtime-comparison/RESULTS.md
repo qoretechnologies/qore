@@ -12580,3 +12580,60 @@ repeat the previously rejected prepared-body experiment without a new proof or
 measured bottleneck.
 
 [Verified measurements, qualification and every audit item](results-aot-scalar-boundary-reuse-macos-arm64.json).
+
+## Rejected AOT register-result conventions (2026-10-14)
+
+Neither of these experiments is retained. Both used the validated post-merge
+`6b4590ba714a07a4ba361c63640a19a658529858` baseline on macOS arm64. The proposal
+was to replace typed method helper output pointers with a two-word return:
+full-width scalar or owned boxed payload, plus miss/native/ordinary-result kind.
+Admission, Program/access/epoch checks, observable frames and exception handling
+were preserved. Original output-pointer helpers remained available.
+
+The first version combined native-only and matched-boxed dispatch with a policy
+argument. Its native helper frame grew from 320 to 384 bytes and the result still
+spilled during context cleanup. The second separated native-only and matched
+helpers and isolated the eager-context output address. Actual assembly then kept
+pure results in registers; native frames returned to 320 bytes, and matched
+frames used 368 bytes. This removed the intended spill but did not produce a
+worthwhile performance improvement.
+
+Each matrix used 11 workloads, a frozen baseline, enabled A/A, and a candidate
+compiled with the new convention disabled. Three forks, three warmups and three
+300 ms samples at count 4096 yielded 396 measured windows per matrix: all 792
+windows are retained, including noisy forks. Runtime aliases had equal length;
+loaded libraries and 555 references per configuration were checked before
+timing. Values below are whole-workload ns/element, not isolated call latency.
+The two enabled medians are shown as a range, not as a confidence interval.
+
+|!Experiment and workload|!Before|!Enabled A/A|!Compile-off|!Change versus before
+|Unified: native integer|9.868|10.967-11.017|9.814|11.13-11.64% slower
+|Unified: native floating point|11.433|11.901-11.989|11.179|4.09-4.87% slower
+|Unified: boxed integer|15.709|15.950-16.103|15.628|1.53-2.51% slower
+|Split: native integer|10.023|10.928-11.194|9.923|9.03-11.68% slower
+|Split: native floating point|11.401|11.493-11.736|11.763|0.80-2.94% slower
+|Split: boxed integer|15.592|15.727-15.808|16.094|0.86-1.38% slower
+|Split: boxed floating point|19.512|19.441-19.447|19.239|0.33-0.36% lower; overlapping fork ranges
+
+Native integer fork ranges were separated from baseline and compile-off in both
+experiments. Other movements were mixed or overlapped: for example, the split
+floating native compile-off control was also slower. The unified experiment's
+unrelated floating callback regression did not persist in the split experiment.
+Do not credit such movements to a faster method ABI, or infer that register
+returns are inherently slower in other implementations.
+
+The split prototype passed 15 selected release test files, 27 cases and 12278
+assertions, plus both 555-check IR/AOT reference grids. Coverage included native
+and legacy helpers, full-width values, pending exceptions, stack exhaustion,
+member effects, debugger attachment and concurrent frame readers. Minimal C++
+and LLVM code-generation probes agreed on aggregate returns for arm64/x86-64
+Darwin/Linux; x86-64 Windows differed, and Windows targets were excluded. This is cross-target codegen
+evidence, not foreign-platform runtime testing. Debug qualification and a new
+Java comparison were not pursued after the negative performance result.
+
+The experimental runtime, lowering and test changes were removed. Their patches,
+supplemental test source, raw samples, reference outputs, controls and verification
+records remain in the [rejected-experiment dataset](results-aot-register-result-rejected-macos-arm64.json).
+The existing output-pointer convention remains the baseline. Next work should
+target the measured dispatch/admission and member-access costs; another
+result-layout variant is not justified by these results alone.

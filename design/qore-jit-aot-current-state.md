@@ -2050,3 +2050,19 @@ and `qore_ir_mark_in_place_string_appends()`) use `QoreIRLocalBitSet`, a dense
 bit vector, as their lattice element. A hash set copies one node per element on
 every block merge and transfer, which costs `O(blocks x candidate locals)`
 allocations and was the largest remaining cost of lowering a very large body.
+
+### Scalar method register-result experiment (2026-10-14)
+
+The AOT typed method helpers retain their output-pointer convention. Two
+uncommitted register-result prototypes were tested against the post-merge
+`6b4590ba7` baseline and rejected after 792 measured windows. Splitting native-only
+from matched-boxed dispatch restored the native helper's 320-byte frame and kept
+the result in registers through cleanup, but native integer workloads still took
+9-12% longer; boxed workloads showed no useful gain. This was an AOT experiment,
+not an IR/JIT optimization or a fresh Java comparison.
+
+The removed implementation and raw measurements are preserved in
+`bench/runtime-comparison/results-aot-register-result-rejected-macos-arm64.json`;
+see the corresponding `RESULTS.md` section for controls and limits. Prioritize
+cheaper proven dispatch/admission and member access over another result-layout
+variant without a new mechanism or profile.
