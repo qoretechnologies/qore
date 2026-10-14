@@ -256,6 +256,17 @@ public:
         return sse_install_eligible;
     }
 
+    //! Marks this action as delivering a byte stream: the data of a chunked HTTP/1.1 body is delivered as it is
+    //! received instead of one chunk at a time; must be called before the action is submitted
+    DLLLOCAL void setByteStream() {
+        byte_stream = true;
+    }
+
+    //! @return true if the data of a chunked HTTP/1.1 body is delivered as it is received
+    DLLLOCAL bool isByteStream() const {
+        return byte_stream;
+    }
+
 private:
     std::mutex mtx;
     QoreChannel* channel;
@@ -265,6 +276,7 @@ private:
     QoreObject* notifier_obj = nullptr;
     bool completed = false;
     bool sse_install_eligible = false;
+    bool byte_stream = false;
 
     DLLLOCAL void notify() {
         if (notifier) {

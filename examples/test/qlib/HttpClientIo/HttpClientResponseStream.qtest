@@ -228,14 +228,23 @@ class HookedStreamHandle inherits HttpClientStreamHandle {
     }
 }
 
-#! a server that sends the start of a chunked body and then closes the connection
-class TruncatingServer {
+#! a server that serves one connection with a scripted response and then closes it
+class RawServer {
+    public {
+        #! the response header of a chunked body
+        const ChunkedHeader = "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
+            "Transfer-Encoding: chunked\r\n\r\n";
+    }
+
     private {
         Socket listener();
+        #! data to send, or a Queue to wait on before the next step
+        list<auto> steps;
         Counter done(1);
     }
 
-    constructor() {
+    constructor(list<auto> steps) {
+        self.steps = steps;
         listener.bind("127.0.0.1:0", True);
         listener.listen();
         background serve();
@@ -245,20 +254,35 @@ class TruncatingServer {
         done.waitForZero();
     }
 
+    #! returns a response header with a Content-Length
+    static string getLengthHeader(int len) {
+        return sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n",
+            len);
+    }
+
     string getUrl() {
         return sprintf("http://127.0.0.1:%d", listener.getSocketInfo().port);
     }
 
     private serve() {
         on_exit done.dec();
-        # the client connects as soon as the test has started; this only limits a failing test
+        # the client connects as soon as the test has started; the limits only end a failing test
         Socket s = listener.accept(30s);
         string req = "";
         while (req !~ /\r\n\r\n/) {
             req += s.recv(-1, 30s);
         }
-        s.send("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nTransfer-Encoding: chunked\r\n\r\n"
-            "5\r\nearly\r\n");
+        try {
+            foreach auto step in (steps) {
+                if (step instanceof Queue) {
+                    step.get(30s);
+                } else {
+                    s.send(step);
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the client failed; the test reports it with its assertions
+        }
         s.close();
     }
 }
@@ -279,6 +303,10 @@ public class HttpClientResponseStreamTest inherits QUnit::Test {
         addTestCase("timeouts and cancellation", \timeoutTest());
         addTestCase("cancellation while a read starts", \cancelRaceTest());
         addTestCase("errors", \errorTest());
+        addTestCase("body data delivered as it is received", \lengthReceiveTest());
+        addTestCase("chunk data delivered as it is received", \chunkReceiveTest());
+        addTestCase("connection closed in a body", \closedBodyTest());
+        addTestCase("chunk framing", \chunkFramingTest());
         set_return_value(main());
     }
 
@@ -518,7 +546,7 @@ public class HttpClientResponseStreamTest inherits QUnit::Test {
     errorTest() {
         # the connection is closed in the middle of the body
         {
-            TruncatingServer server();
+            RawServer server((RawServer::ChunkedHeader + "5\r\nearly\r\n",));
             HookedManager mgr(getManagerOptions("h1"));
             on_exit mgr.closeAll();
             HttpClientResponseStream stream = mgr.openStream(server.getUrl() + "/truncated");
@@ -547,13 +575,105 @@ public class HttpClientResponseStreamTest inherits QUnit::Test {
 
         # an error before any read
         {
-            TruncatingServer server();
+            RawServer server((RawServer::ChunkedHeader + "5\r\nearly\r\n",));
             HttpClientConnectionManager mgr = getManager("h1");
             on_exit mgr.closeAll();
             HttpClientResponseStream stream = mgr.openStream(server.getUrl() + "/truncated");
             assertEq(binary("early"), stream.read(30s));
             assertThrows("HTTPCLIENT-RECEIVE-ERROR", \stream.read(), 30s);
             assertThrows("HTTPCLIENT-RECEIVE-ERROR", \stream.read(), NOTHING);
+        }
+    }
+    #! HTTP/1.1 body data with a Content-Length is delivered as it is received
+    lengthReceiveTest() {
+        {
+            Queue release();
+            RawServer server((RawServer::getLengthHeader(10), "early", release, "-late"));
+            HttpClientConnectionManager mgr = getManager("h1");
+            on_exit mgr.closeAll();
+            HttpClientResponseStream stream = mgr.openStream(server.getUrl() + "/length");
+            assertEq(binary("early"), stream.read(30s));
+            release.push(True);
+            assertEq(binary("-late"), readAll(stream));
+        }
+    }
+
+    #! HTTP/1.1 chunk data is delivered as it is received
+    chunkReceiveTest() {
+        # the declared size of a chunk is not allocated before its data is received
+        {
+            Queue release();
+            RawServer server((RawServer::ChunkedHeader + "10000000000\r\nearly", release));
+            HttpClientConnectionManager mgr = getManager("h1");
+            on_exit mgr.closeAll();
+            HttpClientResponseStream stream = mgr.openStream(server.getUrl() + "/chunk");
+            on_exit release.push(True);
+            assertEq(binary("early"), stream.read(30s));
+        }
+
+        # a chunk sent in parts
+        {
+            Queue release();
+            RawServer server((RawServer::ChunkedHeader + "a\r\nearly", release, "-late\r\n0\r\n\r\n"));
+            HttpClientConnectionManager mgr = getManager("h1");
+            on_exit mgr.closeAll();
+            HttpClientResponseStream stream = mgr.openStream(server.getUrl() + "/chunk");
+            assertEq(binary("early"), stream.read(30s));
+            release.push(True);
+            assertEq(binary("-late"), readAll(stream));
+        }
+    }
+
+    #! a connection closed in the middle of an HTTP/1.1 body with a Content-Length
+    closedBodyTest() {
+        {
+            RawServer server((RawServer::getLengthHeader(10) + "early",));
+            HttpClientConnectionManager mgr = getManager("h1");
+            on_exit mgr.closeAll();
+            HttpClientResponseStream stream = mgr.openStream(server.getUrl() + "/length");
+            assertEq(binary("early"), stream.read(30s));
+            *hash<ExceptionInfo> err;
+            try {
+                stream.read(30s);
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            assertEq("HTTPCLIENT-RECEIVE-ERROR", err.err, sprintf("%s: %s", err.err, err.desc));
+            assertEq("SOCKET-CLOSED", err.arg.err);
+            assertRegex("after 5 of 10 bytes", err.arg.desc);
+        }
+    }
+
+    #! the data of an HTTP/1.1 chunk must be followed by CRLF
+    chunkFramingTest() {
+        {
+            RawServer server((RawServer::ChunkedHeader + "5\r\nearlyXX0\r\n\r\n",));
+            HttpClientConnectionManager mgr = getManager("h1");
+            on_exit mgr.closeAll();
+            HttpClientResponseStream stream = mgr.openStream(server.getUrl() + "/chunk");
+            assertEq(binary("early"), stream.read(30s));
+            *hash<ExceptionInfo> err;
+            try {
+                stream.read(30s);
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            assertEq("HTTPCLIENT-RECEIVE-ERROR", err.err, sprintf("%s: %s", err.err, err.desc));
+            assertRegex("not followed by CRLF", err.arg.desc);
+        }
+        # also in a body that is received whole
+        {
+            RawServer server((RawServer::ChunkedHeader + "5\r\nearlyXX0\r\n\r\n",));
+            HttpClientConnectionManager mgr = getManager("h1", {"max_request_retries": 0});
+            on_exit mgr.closeAll();
+            *hash<ExceptionInfo> err;
+            try {
+                mgr.request(server.getUrl(), "GET", "/chunk");
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            assertEq(Type::String, err.err.type(), "no error");
+            assertRegex("not followed by CRLF", err.desc);
         }
     }
 }

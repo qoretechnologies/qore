@@ -90,6 +90,7 @@ public:
         RECV_BODY_LENGTH,
         RECV_CHUNK_SIZE,
         RECV_CHUNK_DATA,
+        RECV_CHUNK_DATA_END, //!< the CRLF after the data of a chunk of a streaming body
         RECV_CHUNK_CRLF,
         RECV_BODY_CLOSE,
         AWAIT_SEND,         //!< response complete; a buffered request body is still being sent
@@ -543,6 +544,25 @@ private:
     //! Remaining bytes for streaming body with Content-Length
     int64_t streaming_body_remaining = 0;
 
+    //! True if the data of the chunks of a streaming chunked body is delivered as it is received
+    /** Set for a channel that delivers a byte stream (ChannelAction::isByteStream()); any other action gets each
+        chunk whole, as HTTPClient delivers each chunk of a chunked body whole (ex: to a receive callback, which is
+        documented to be called once for each chunk, and from HTTPClient::readHTTPChunk())
+    */
+    bool streaming_chunk_pieces = false;
+
+    //! The size of the chunk of a streaming chunked body being received
+    int64_t streaming_chunk_size = 0;
+
+    //! Remaining data bytes of the chunk of a streaming chunked body being received
+    int64_t streaming_chunk_remaining = 0;
+
+    //! The data of the chunk of a streaming chunked body being received
+    /** Only kept for the data event of an event queue, which reports the data of a whole chunk; the data itself is
+        delivered as it is received
+    */
+    std::string streaming_chunk_data;
+
     //! Proactive idle timeout (microseconds); -1 = no proactive timeout
     /** Set by setIdleTimeout() after construction from the connection manager.
         When the connection is in ReqState::IDLE with no pending request and
@@ -735,7 +755,29 @@ private:
     DLLLOCAL QoreHashNode* handleRecvBodyLength(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvChunkSize(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvChunkData(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* handleRecvChunkDataEnd(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvChunkCrlf(ExceptionSink* xsink);
+
+    //! Starts receiving the next piece of a streaming body
+    /** A piece is delivered as soon as any of it is received, so a body that arrives slowly is delivered as it
+        arrives, and a piece is never larger than STREAMING_CHUNK_SIZE, whatever the size declared for the body or
+        its chunks
+
+        @param remaining the number of bytes left in the body or in its chunk
+        @param xsink exception sink
+
+        @return 0 for OK, -1 for error (exception raised)
+    */
+    DLLLOCAL int startStreamingBodyRecv(int64_t remaining, ExceptionSink* xsink);
+
+    //! Returns true if the action of the stream takes the data of a chunked body as it is received
+    DLLLOCAL bool streamingActionTakesPieces() const;
+
+    //! Starts receiving the size line of the next chunk of a chunked body
+    DLLLOCAL QoreHashNode* readNextChunkSize(ExceptionSink* xsink);
+
+    //! Raises the error for a connection closed before the end of the body
+    DLLLOCAL void setBodyClosedError(int64_t received, int64_t size, const char* what, ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvBodyClose(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleProtocolSwitched(ExceptionSink* xsink);
 
