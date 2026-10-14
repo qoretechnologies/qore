@@ -513,6 +513,19 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Stream Conversions Raise an Error for a Character the Target Encoding Cannot Hold
+    @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" and
+    @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" raise an \c ENCODING-CONVERSION-ERROR
+    exception for a character that the target encoding cannot hold, as convert_encoding() does, instead of replacing
+    it silently with an approximation (U+0178 became \c "\"Y" or \c "?" in ISO-8859-1) or a placeholder (\c "*" with
+    musl), so a string and a stream conversion of the same text give the same result.  The error gives the byte offset
+    in the input of the first such character, also in convert_encoding(), which gave the offset of the end of the
+    input with glibc and GNU libiconv.  Conversions are no longer opened with \c "//TRANSLIT", and the
+    \c ICONV_TRANSLIT build option has been removed.  With Apple's system \c iconv library, which reports no
+    replacement, stream conversions that can lose a character are verified, and text in a stateful encoding (ex:
+    UTF-7, ISO-2022-JP) that ends in the middle of a character raises the error instead of being converted to other
+    characters (qoretechnologies/qore#5479).
+
     @par The Opacity of an RGB Color Is a Number From 0 to 1
     The \c a member of the \c rgbcolor data provider type
     (@ref DataProvider::RgbColorDataType "RgbColorDataType") is the color's opacity, as every user interface stores

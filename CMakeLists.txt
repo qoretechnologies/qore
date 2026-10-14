@@ -68,10 +68,6 @@ if (APPLE)
     endif()
 endif()
 
-option(ICONV_TRANSLIT
-       "Force //Translit to iconv encoding to do transliteration, if OFF it is tested for"
-       OFF)
-
 option(SINGLE_COMPILATION_UNIT
        "Build libqore as a single compilation unit for faster builds"
        ON)
@@ -1475,7 +1471,6 @@ check_cxx_atomic()
 
 # other checks
 qore_os_checks()
-qore_iconv_translit_check()
 qore_openssl_checks()
 qore_mpfr_checks()
 

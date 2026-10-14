@@ -6,7 +6,20 @@
 
     The %Qore language is character-encoding aware. All strings are assumed to have the default character encoding, unless the program explicitly specified another encoding for certain objects and operations. Every %Qore string has a character encoding ID attached to it, so, when another encoding is required, the %Qore language will attempt to do an encoding translation.
 
-    %Qore uses the operating system's \c iconv library functions to perform any encoding conversions.
+    %Qore uses the operating system's \c iconv library functions to perform any encoding conversions.  The encodings
+    available depend on the \c iconv library %Qore is built with and on how it is installed: for example, Apple's
+    system \c iconv library and GNU libiconv built without its extra encodings do not support the mixed EBCDIC code
+    pages \c "IBM930" and \c "IBM939", musl does not support \c "UTF-7", and glibc supports many encodings only where
+    its \c gconv modules are installed; using an encoding that the library does not support raises an
+    \c ENCODING-CONVERSION-ERROR exception (\c "cannot convert from ... to ...").
+
+    A conversion never replaces a character that the target encoding cannot hold: string conversions
+    (convert_encoding()) and stream conversions (@ref Qore::EncodingConversionInputStream
+    "EncodingConversionInputStream", @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream")
+    raise an \c ENCODING-CONVERSION-ERROR exception with the byte offset in the input of the first such character,
+    with every \c iconv library, also with the ones that would replace the character with an approximation or a
+    placeholder.  Text in a stateful encoding that ends in the middle of a character or shift sequence raises the
+    same error.
 
     %Qore supports character encodings that are backwards compatible with 7-bit \c ASCII. This includes all \c ISO-8859-* character encodings, \c UTF-8, \c KOIR-8, \c KOIU-8, and \c KOI7, among others (see the table below: @ref known_encodings "Known Character Encodings").
 

@@ -34,6 +34,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/IconvHelper.h"
+#include "qore/intern/Utf8OffsetDecoder.h"
 #include "qore/intern/StringReaderHelper.h"
 #include "qore/intern/QoreRegexSubst.h"
 
@@ -907,8 +908,100 @@ bool qore_string_private::conversion_needs_roundtrip_check(const QoreEncoding* f
     return true;
 }
 
+// static function
+size_t qore_string_private::find_unconvertible_char(const char* src, size_t len, const QoreEncoding* from,
+        const QoreEncoding* to, size_t fallback) {
+    Utf8OffsetDecoder decoder(from, nullptr);
+    if (!decoder.isValid()) {
+        return fallback;
+    }
+    std::string utf8;
+    // the byte position in utf8 and the byte offset in the source of each character
+    std::vector<std::pair<size_t, int64>> chars;
+    int rc = decoder.decode(src, len, utf8, [&chars] (size_t pos, int64 offset) {
+        chars.emplace_back(pos, offset);
+    });
+    if (to != QCS_UTF8) {
+        // every ASCII character has its own byte in an ASCII-compatible encoding
+        bool ascii_compat = to->isAsciiCompat();
+        for (size_t i = 0, e = chars.size(); i < e; ++i) {
+            size_t start = chars[i].first;
+            size_t end = i + 1 < e ? chars[i + 1].first : utf8.size();
+            if (ascii_compat && end - start == 1 && !(static_cast<unsigned char>(utf8[start]) & 0x80)) {
+                continue;
+            }
+            QoreString check(to);
+            if (convert_encoding_intern(utf8.data() + start, end - start, QCS_UTF8, check, to, nullptr, true,
+                    false)) {
+                return static_cast<size_t>(chars[i].second);
+            }
+        }
+    }
+    if (rc == -1) {
+        return static_cast<size_t>(decoder.errorOffset());
+    }
+    if (decoder.hasPending()) {
+        return static_cast<size_t>(decoder.pendingOffset());
+    }
+    return fallback;
+}
+
+// static function
+int qore_string_private::convert_stateful_intern(const char* src, size_t src_len, const QoreEncoding* from,
+        QoreString& targ, const QoreEncoding* nccs, ExceptionSink* xsink, bool verify, bool locate,
+        size_t* err_offset) {
+    Utf8OffsetDecoder decoder(from, xsink);
+    if (!decoder.isValid()) {
+        return -1;
+    }
+    std::string utf8;
+    // the byte position in utf8 and the byte offset in the source of each character
+    std::vector<std::pair<size_t, int64>> chars;
+    int rc = decoder.decode(src, src_len, utf8, [&chars] (size_t pos, int64 offset) {
+        chars.emplace_back(pos, offset);
+    }, xsink);
+    if (rc == -2) {
+        // the exception has been raised
+        return -1;
+    }
+    if (rc == -1 || decoder.hasPending()) {
+        size_t offset = static_cast<size_t>(rc == -1 ? decoder.errorOffset() : decoder.pendingOffset());
+        if (err_offset) {
+            *err_offset = offset;
+        }
+        IconvHelper::reportIllegalSequence(offset, from, nccs, xsink);
+        return -1;
+    }
+    if (nccs == QCS_UTF8) {
+        targ.allocate(utf8.size() + 1);
+        memcpy(targ.priv->buf, utf8.data(), utf8.size());
+        targ.priv->len = utf8.size();
+        targ.priv->buf[utf8.size()] = '\0';
+        return 0;
+    }
+    size_t utf8_offset = 0;
+    if (convert_encoding_intern(utf8.data(), utf8.size(), QCS_UTF8, targ, nccs, nullptr, verify, locate,
+            &utf8_offset)) {
+        // the offset of the character in the source: the last character that starts at or before the UTF-8 offset
+        int64 offset = 0;
+        for (const auto& c : chars) {
+            if (c.first > utf8_offset) {
+                break;
+            }
+            offset = c.second;
+        }
+        if (err_offset) {
+            *err_offset = static_cast<size_t>(offset);
+        }
+        IconvHelper::reportIllegalSequence(offset, from, nccs, xsink);
+        return -1;
+    }
+    return 0;
+}
+
 int qore_string_private::convert_encoding_intern(const char* src, size_t src_len, const QoreEncoding* from,
-        QoreString& targ, const QoreEncoding* nccs, ExceptionSink* xsink, bool verify) {
+        QoreString& targ, const QoreEncoding* nccs, ExceptionSink* xsink, bool verify, bool locate,
+        size_t* err_offset) {
     assert(targ.priv->getEncoding() == nccs);
     assert(targ.empty());
 
@@ -917,6 +1010,12 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
     // text in a generic Unicode encoding (ex: "UTF-32") can start with a byte order mark in either byte order, which
     // gives its byte order; iconv converts it with the explicit name of the byte order (see IconvHelper::getIconvCode())
     q_skip_generic_bom(src, src_len, from);
+
+    // where the platform's iconv decodes stateful text cut off in a character as other characters instead of failing,
+    // the text is decoded one byte at a time
+    if (qore_encoding_private::isStateful(from) && !IconvHelper::reportsTruncatedStatefulInput()) {
+        return convert_stateful_intern(src, src_len, from, targ, nccs, xsink, verify, locate, err_offset);
+    }
 
     IconvHelper c(nccs, from, xsink);
     if (xsink && *xsink)
@@ -945,6 +1044,9 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
                     return -1;
                 case EINVAL:
                 case EILSEQ:
+                    if (err_offset) {
+                        *err_offset = ib - src;
+                    }
                     c.reportIllegalSequence(ib - src, xsink);
                     targ.clear();
                     return -1;
@@ -964,8 +1066,13 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
                 }
             }
         } else if (rc > 0) {
-            // issue #2500 non-reversible encoding executed (i.e. source char does not exist in target encoding)
-            c.reportIllegalSequence(ib - src, xsink);
+            // issue #2500 non-reversible encoding executed (i.e. source char does not exist in target encoding); the
+            // count gives no position, so the first character that cannot be converted is found
+            size_t offset = locate ? find_unconvertible_char(src, src_len, from, nccs, ib - src) : ib - src;
+            if (err_offset) {
+                *err_offset = offset;
+            }
+            c.reportIllegalSequence(offset, xsink);
             targ.clear();
             return -1;
         } else {
@@ -1006,11 +1113,17 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
         if (convert_encoding_intern(targ.priv->buf, targ.priv->len, nccs, check, from, nullptr, false)
                 || check.priv->len != src_len
                 || memcmp(check.priv->buf, src, src_len)) {
-            // report the first byte that did not survive the round trip
+            // report the first character that did not survive the round trip
             size_t offset = 0;
             while (offset < src_len && offset < check.priv->len
                     && check.priv->buf[offset] == src[offset]) {
                 ++offset;
+            }
+            if (locate) {
+                offset = find_unconvertible_char(src, src_len, from, nccs, offset);
+            }
+            if (err_offset) {
+                *err_offset = offset;
             }
             c.reportIllegalSequence(offset, xsink);
             targ.clear();

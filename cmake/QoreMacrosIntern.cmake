@@ -712,27 +712,6 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "sparc")
 endif()
 endmacro(qore_cpu_checks)
 
-macro(qore_iconv_translit_check)
-if(ICONV_TRANSLIT)
-   set(NEED_ICONV_TRANSLIT true)
-else()
-   cmake_push_check_state(RESET)
-   set(CMAKE_REQUIRED_INCLUDES ${ICONV_INCLUDE_DIR})
-   set(CMAKE_REQUIRED_LIBRARIES ${ICONV_LIBRARY})
-   check_cxx_source_runs("
-      #include <iconv.h>
-      int main(void){
-      iconv_t cd;
-      cd = iconv_open(\"ISO8859-1//TRANSLIT\",\"ISO8859-1\");
-      if(cd == (iconv_t)-1)
-        return 1;
-      iconv_close(cd);
-      return 0; }
-   " NEED_ICONV_TRANSLIT)
-endif()
-cmake_pop_check_state()
-endmacro(qore_iconv_translit_check)
-
 macro(qore_os_checks)
 if(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
    #set(QORE_CPPFLAGS -D_POSIX_C_SOURCE=199506L -D_XPG4_2 -D_XPG5 -D__EXTENSIONS__)

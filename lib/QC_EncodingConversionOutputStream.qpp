@@ -74,6 +74,8 @@ EncodingConversionOutputStream::constructor(Qore::OutputStream[OutputStream] out
 //! Flushes any buffered (unwritten) bytes, closes the output stream and releases all resources.
 /** Any methods called on a closed output stream will throw an exception.
 
+    @throw ENCODING-CONVERSION-ERROR the data written ends in the middle of a character or shift sequence; the
+    message gives its byte offset in the data written
     @throw OUTPUT-STREAM-CLOSED-ERROR the output stream has already been closed
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
@@ -92,6 +94,8 @@ nothing EncodingConversionOutputStream::close() {
     bos.write(<63>);
     @endcode
 
+    @throw ENCODING-CONVERSION-ERROR an invalid byte sequence was written, or a character that the target encoding
+    cannot hold; the message gives the byte offset of the first one in the data written to the stream
     @throw OUTPUT-STREAM-CLOSED-ERROR the output stream has already been closed
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */

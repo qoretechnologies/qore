@@ -1,0 +1,251 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class EncodingConversionLossTest
+
+#! An input stream that returns its data in blocks of a given size
+class BlockInputStream inherits InputStream {
+    private {
+        binary data;
+        int offset = 0;
+        int block;
+    }
+
+    constructor(binary data, int block) {
+        self.data = data;
+        self.block = block;
+    }
+
+    *binary read(int limit) {
+        int n = min(limit, block, data.size() - offset);
+        if (n <= 0) {
+            return NOTHING;
+        }
+        binary rv = data.substr(offset, n);
+        offset += n;
+        return rv;
+    }
+
+    int peek() {
+        return offset < data.size() ? data[offset] : -1;
+    }
+}
+
+#! Stream conversions raise the error that convert_encoding() raises for a character the target encoding cannot hold,
+#! and stateful text cut off in a character is an error on every platform
+/** qoretechnologies/qore#5479
+*/
+class EncodingConversionLossTest inherits QUnit::Test {
+    public {
+        #! text in stateful encodings
+        const StatefulText = {
+            "ISO-2022-JP": "hello 日本語 world " + strmul("日本語のテキスト ", 700),
+            "UTF-7": "Gr\u{fc}\u{df}e " + strmul("日本 + - ", 900),
+            "HZ": "hello 中文字 " + strmul("中文字 ", 1500),
+        };
+
+        #! stateful text cut off in a character, and the byte offset of the character
+        const TruncatedText = {
+            # UTF-7 "日" and the first base64 character of "本"
+            "UTF-7": {"data": <2b5a65566e>, "offset": 4},
+            # ISO-2022-JP "ESC $ B 日" and the first byte of "本"
+            "ISO-2022-JP": {"data": <1b2442467c4b>, "offset": 5},
+        };
+    }
+
+    constructor() : QUnit::Test("EncodingConversionLoss", "1.0", \ARGV) {
+        addTestCase("string conversion names the first unconvertible character", \stringOffsetTest());
+        addTestCase("output stream conversion", \outputStreamTest());
+        addTestCase("input stream conversion", \inputStreamTest());
+        addTestCase("representable text converts", \representableTest());
+        foreach string enc in (keys StatefulText) {
+            addTestCase(sprintf("%s source text in blocks", enc), \statefulBlocksTest(), (enc,));
+        }
+        foreach string enc in (keys TruncatedText) {
+            addTestCase(sprintf("truncated %s text", enc), \truncatedStatefulTest(), (enc,));
+        }
+        addTestCase("stateful source to a target that cannot hold a character", \statefulLossTest());
+        set_return_value(main());
+    }
+
+    #! returns the error that converting the text through an output stream raises, if any
+    private static *hash<ExceptionInfo> outputStreamError(string text, string to, int block, reference<binary> out) {
+        BinaryOutputStream bos();
+        EncodingConversionOutputStream os(bos, "UTF-8", to);
+        binary src = binary(text);
+        try {
+            for (int i = 0; i < src.size(); i += block) {
+                os.write(src.substr(i, block));
+            }
+            os.close();
+        } catch (hash<ExceptionInfo> ex) {
+            out = bos.getData();
+            return ex;
+        }
+        out = bos.getData();
+    }
+
+    #! returns the error that converting the bytes through an input stream raises, if any
+    private static *hash<ExceptionInfo> inputStreamError(binary src, string from, string to, int block,
+            reference<binary> out) {
+        EncodingConversionInputStream is(new BlockInputStream(src, block), from, to);
+        out = binary();
+        try {
+            *binary b;
+            while (b = is.read(block)) {
+                out += b;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    stringOffsetTest() {
+        assertThrows("ENCODING-CONVERSION-ERROR", "byte offset 1 ", \convert_encoding(), ("a\u{178}b", "ISO-8859-1"));
+        assertThrows("ENCODING-CONVERSION-ERROR", "byte offset 6 ", \convert_encoding(),
+            ("caf\u{e9} \u{178} x", "ISO-8859-1"));
+        # a multi-character approximation ("OE" for the ligature)
+        assertThrows("ENCODING-CONVERSION-ERROR", "byte offset 2 ", \convert_encoding(), ("ab\u{152}", "ISO-8859-1"));
+        assertThrows("ENCODING-CONVERSION-ERROR", "byte offset 3 ", \convert_encoding(), ("caf\u{e9}", "ASCII"));
+    }
+
+    outputStreamTest() {
+        foreach int block in ((1, 2, 3, 7, 4096)) {
+            binary out;
+            *hash<ExceptionInfo> ex = outputStreamError("a\u{178}b", "ISO-8859-1", block, \out);
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err, sprintf("block %d", block));
+            assertRegex("byte offset 1 ", ex.desc, sprintf("block %d", block));
+            # only the characters before it can have been written
+            assertEq(<61>.substr(0, out.size()), out, sprintf("block %d", block));
+        }
+        # the offset is the offset in the whole input, also after the first block of the conversion
+        string long = strmul("a", 5000) + "\u{178}b";
+        foreach int block in ((1, 999, 4096, 10000)) {
+            binary out;
+            *hash<ExceptionInfo> ex = outputStreamError(long, "ISO-8859-1", block, \out);
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err, sprintf("block %d", block));
+            assertRegex("byte offset 5000 ", ex.desc, sprintf("block %d", block));
+        }
+        binary out;
+        *hash<ExceptionInfo> ex = outputStreamError("ab\u{152}", "ISO-8859-1", 4096, \out);
+        assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+        assertRegex("byte offset 2 ", ex.desc);
+        ex = outputStreamError("caf\u{e9}", "ASCII", 4096, \out);
+        assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+        assertRegex("byte offset 3 ", ex.desc);
+    }
+
+    inputStreamTest() {
+        foreach int block in ((1, 2, 3, 7, 4096)) {
+            binary out;
+            *hash<ExceptionInfo> ex = inputStreamError(binary("a\u{178}b"), "UTF-8", "ISO-8859-1", block, \out);
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err, sprintf("block %d", block));
+            assertRegex("byte offset 1 ", ex.desc, sprintf("block %d", block));
+            assertEq(-1, out.toString("ISO-8859-1").find("Y"), sprintf("block %d", block));
+        }
+        binary long = binary(strmul("a", 5000) + "\u{178}b");
+        foreach int block in ((1, 999, 4096, 10000)) {
+            binary out;
+            *hash<ExceptionInfo> ex = inputStreamError(long, "UTF-8", "ISO-8859-1", block, \out);
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err, sprintf("block %d", block));
+            assertRegex("byte offset 5000 ", ex.desc, sprintf("block %d", block));
+        }
+    }
+
+    representableTest() {
+        string text = "h\u{e9}llo caf\u{e9} " + strmul("a\u{ff}", 3000);
+        binary expected = binary(convert_encoding(text, "ISO-8859-1"));
+        foreach int block in ((1, 7, 4096)) {
+            binary out;
+            assertNothing(outputStreamError(text, "ISO-8859-1", block, \out), sprintf("block %d", block));
+            assertEq(expected, out, sprintf("block %d", block));
+            assertNothing(inputStreamError(binary(text), "UTF-8", "ISO-8859-1", block, \out),
+                sprintf("block %d", block));
+            assertEq(expected, out, sprintf("block %d", block));
+        }
+        # targets that hold every character
+        foreach string to in (("UTF-16LE", "UTF-8")) {
+            binary out;
+            assertNothing(outputStreamError("a\u{178}b", to, 2, \out), to);
+            assertEq(binary(convert_encoding("a\u{178}b", to)), out, to);
+        }
+    }
+
+    #! skips the test if the iconv library does not support the encoding
+    private checkAvailable(string enc) {
+        try {
+            convert_encoding("x", enc);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("%s is not available with the iconv library: %s", enc, ex.desc));
+        }
+    }
+
+    statefulBlocksTest(string enc) {
+        checkAvailable(enc);
+        string text = StatefulText{enc};
+        binary src = binary(convert_encoding(text, enc));
+        # every block size cuts characters and shift sequences at a different place
+        foreach int block in ((1, 2, 3, 5, 7, 4093, 4096)) {
+            binary out;
+            assertNothing(inputStreamError(src, enc, "UTF-8", block, \out), sprintf("block %d", block));
+            assertEq(text, out.toString("UTF-8"), sprintf("block %d", block));
+        }
+    }
+
+    truncatedStatefulTest(string enc) {
+        checkAvailable(enc);
+        hash<auto> i = TruncatedText{enc};
+        string s = binary_to_string(i.data, enc);
+        # the bytes of the cut-off character are never decoded as other characters; the cut-off character is an
+        # error, except that glibc keeps the bits of a UTF-7 base64 run in its state and drops a character cut off in
+        # it at the end of the input (qoretechnologies/qore#5479)
+        foreach string to in (("UTF-8", "UTF-16LE")) {
+            try {
+                string converted = convert_encoding(s, to);
+                assertEq("UTF-7", enc, sprintf("%s -> %s: no error", enc, to));
+                assertEq("日", convert_encoding(converted, "UTF-8"), sprintf("%s -> %s", enc, to));
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("ENCODING-CONVERSION-ERROR", ex.err, sprintf("%s -> %s", enc, to));
+                assertRegex(sprintf("byte offset %d ", i.offset), ex.desc, sprintf("%s -> %s", enc, to));
+            }
+        }
+        foreach int block in ((1, 2, 4096)) {
+            binary out;
+            *hash<ExceptionInfo> ex = inputStreamError(i.data, enc, "UTF-8", block, \out);
+            if (ex) {
+                assertEq("ENCODING-CONVERSION-ERROR", ex.err, sprintf("block %d", block));
+                assertRegex(sprintf("byte offset %d ", i.offset), ex.desc, sprintf("block %d", block));
+                # only the characters before it can have been read
+                assertEq(binary("日").substr(0, out.size()), out, sprintf("block %d", block));
+            } else {
+                assertEq("UTF-7", enc, sprintf("block %d: no error", block));
+                assertEq(binary("日"), out, sprintf("block %d", block));
+            }
+        }
+    }
+
+    statefulLossTest() {
+        checkAvailable("ISO-2022-JP");
+        string text = "ab 日本";
+        binary src = binary(convert_encoding(text, "ISO-2022-JP"));
+        # "日" is the first character of the shifted run, which starts with "ESC $ B" after "ab "
+        int offset = 3;
+        assertThrows("ENCODING-CONVERSION-ERROR", sprintf("byte offset %d ", offset), \convert_encoding(),
+            (binary_to_string(src, "ISO-2022-JP"), "ISO-8859-1"));
+        foreach int block in ((1, 2, 4096)) {
+            binary out;
+            *hash<ExceptionInfo> ex = inputStreamError(src, "ISO-2022-JP", "ISO-8859-1", block, \out);
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err, sprintf("block %d", block));
+            assertRegex(sprintf("byte offset %d ", offset), ex.desc, sprintf("block %d", block));
+            # only the characters before it can have been written
+            assertEq(binary("ab ").substr(0, out.size()), out, sprintf("block %d", block));
+        }
+    }
+}
