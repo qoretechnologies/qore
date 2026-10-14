@@ -12786,3 +12786,87 @@ receiver/context key and a lifetime/invalidation proof. Keep object locking,
 deletion checks, reference/enum/overflow fallbacks and exact-once continuation;
 do not cache a raw member pointer across mutations. Another policy-byte encoding
 is not justified by these results alone.
+
+## Rejected AOT effectful-member metadata cache (2026-10-14)
+
+The generic context-cache prototype is not retained. It cached positive member
+declaration/access decisions and storage-class selection for effectful AOT
+updates, avoiding repeated declaration-name comparisons. Four immutable active
+entries were keyed by operation slot, live receiver class, defining context and
+a new member-metadata generation. Retirement was bounded at 64 allocations per
+context; exhaustion or allocation failure used the original update helper.
+Native member additions, hierarchy/context changes and class destruction
+invalidated metadata. The method-dispatch generation alone was insufficient:
+the native `QoreClass::addMember()` API does not advance it.
+
+The cache did not retain a receiver, mutable value or raw member-storage pointer.
+The object write lock, deletion check, live storage lookup, inline-integer and
+overflow checks, and exact-once continuation all remained. A new internal helper
+and AOT lowering passed the context and operation slot explicitly. Compilation
+and runtime presence controls allowed the original path; these controls were
+tested for correctness, not timed in this experiment.
+
+The frozen baseline was merged `b2c7f9143b5e51d4709bca46941a62b054078394` on
+`feature/performance`. Before and candidate builds each had two identical A/A
+configurations, separately compiled with `qcc -O3`, verified loaded libraries,
+equal-length runtime aliases and all 555 reference outputs. Eleven workloads at
+count 4096 ran serially in randomized order with three warmups and three samples
+per process. The initial matrix used three forks and 300 ms samples; confirmation
+used five forks and 400 ms samples, with a different randomized order. All 1056
+measurement windows and successful prepare/timing/verifier exits are preserved.
+
+These are whole-workload ns/element, not isolated call latency. Ranges contain
+the two A/A medians, not confidence intervals; percentage ranges include all
+combinations of before/after medians within the same matrix.
+
+|!Matrix and workload|!Before A/A|!Candidate A/A|!Change versus before
+|Initial: effectful integer member|89.195-89.385|85.581-86.123|3.44-4.26% faster
+|Initial: integer callback|6.926-7.001|7.169-7.172|2.40-3.55% slower
+|Initial: boxed floating point|20.223-20.229|19.509-19.655|2.81-3.56% faster
+|Initial: list construction|88.304-89.095|89.327-89.932|0.26-1.84% slower
+|Confirmation: effectful integer member|90.129-90.374|86.843-86.886|3.60-3.91% faster
+|Confirmation: integer callback|6.948-6.997|7.217-7.233|3.14-4.10% slower
+|Confirmation: boxed floating point|20.261-20.356|19.701-19.719|2.68-3.22% faster
+|Confirmation: list construction|88.394-88.519|89.802-89.930|1.45-1.74% slower
+
+The effectful-call gain repeats, but so do the integer-callback and list-build
+regressions. Given the fast-call objective and the wider metadata/invalidation
+machinery, this version is rejected. Boxed floating calls also improve, but they
+do not execute the new effectful update helper: that improvement must not be
+attributed to cached member lookup. Native integer results are mixed/slightly
+adverse; native floating calls show no useful repeatable gain. List mutation
+changes direction between matrices with wide fork variation. No noisy result
+was discarded. These build-level measurements establish the tradeoff, not the
+specific cause of movement in unrelated workloads.
+
+The candidate passed 13 selected release test files, 25 cases and 12126 QUnit
+assertions, plus both IR/AOT 555-check grids. Added probes exercised inherited
+private:internal shadowing, removed/recreated storage, malformed helper inputs,
+native declaration invalidation, cache exhaustion, overflow, and disabled
+controls. An initial harness compilation failure was corrected by including
+`QoreIR.h` before all successful validation and timing. Debug, sanitizer,
+foreign-platform and fresh Java qualification were not pursued after rejection.
+No new IR/JIT speedup or generated-frame/profile claim is made.
+
+All experimental runtime and test changes were removed. The restored release
+core and 62 matching AOT modules were rebuilt, five original test files passed
+14 cases and 6009 assertions, and both IR/AOT reference grids passed. Original
+source hashes and AOT runtime identity were verified. The
+[dataset](results-aot-member-metadata-rejected-macos-arm64.json) preserves the
+implementation, raw results, identities, validation, restoration and all audit
+items; it does not approve the archived prototype for production.
+
+|!Audit scope|!Pass|!N/A|!Fail
+|Retained documentation and research data; all 62 checklist items recorded in the dataset|7|55|0
+
+The next distinct experiment should pass immutable per-operation metadata from
+an already-admitted method dispatch entry to a versioned effectful companion,
+avoiding the generic cache scan on every update. Source tracing confirms that
+`qore_rt_try_scalar_member_method()` follows complete PIC-key and live
+body/Program/debugger checks; the effectful binder bounds updates at 21. Prove
+which slot/context facts and metadata checks can be reused across that bounded,
+non-reentrant prefix before removing duplicate work. Do not assume this extends
+across callbacks or concurrent class mutation. Preserve live locked storage and
+exact-once continuation. Require before/after and same-build controls, short-call
+and metadata-churn measurements, then broader debug/Java validation and audit
+before retaining a replacement.

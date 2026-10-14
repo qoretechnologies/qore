@@ -2111,5 +2111,41 @@ lookup. Existing exact-class object-member descriptors are a useful precedent,
 but a polymorphic descriptor must prove the live receiver/context and metadata
 lifetime. Mutable member values and raw storage pointers must not be cached;
 retain the lock, deletion check, scalar/fallback checks and exact-once resume
-semantics. This investigation has started with source tracing; no performance
-benefit for that proposal has been measured yet.
+semantics. The follow-up experiment below measures that proposal; no version of
+it is retained.
+
+### Effectful-member metadata cache experiment (2026-10-14)
+
+A bounded positive metadata cache was tested against merged `b2c7f9143b` and
+rejected after 1056 AOT measurement windows. It replaced repeated declaration
+lookup with a four-entry context cache keyed by operation slot, live receiver,
+defining context and a new member generation. Native member additions and class
+destruction required invalidation beyond the method-dispatch epoch. Storage
+remained live and locked; no receiver, mutable value or raw member pointer was
+retained, and overflow/fallback/exact-once behavior remained unchanged.
+
+The longer confirmation improved effectful integer calls from 90.129-90.374 to
+86.843-86.886 ns/element (3.60-3.91%), but integer callbacks regressed from
+6.948-6.997 to 7.217-7.233 (3.14-4.10%). List construction also regressed
+1.45-1.74%; both regressions appeared in the initial matrix. Boxed floating calls
+improved, but do not use the new helper, so that movement cannot be attributed
+to member metadata caching. These are whole-workload measurements with repeated
+baseline/candidate A/A controls, not isolated call latency or a new Java ratio.
+
+The candidate passed 13 release files, 25 cases and 12126 assertions plus both
+reference grids. Its code and tests were removed; the original runtime and 62
+matching AOT modules were rebuilt and validated with five original files,
+14 cases, 6009 assertions and both reference grids. No new debug/sanitizer/Java
+qualification was pursued. The implementation, all raw windows, source and
+artifact identities, validation and audit are preserved in
+`bench/runtime-comparison/results-aot-member-metadata-rejected-macos-arm64.json`.
+
+Next investigate an immutable operation descriptor attached to the admitted
+method-dispatch entry and passed through a versioned effectful companion ABI.
+The current scalar-method wrapper already follows full PIC-key and live
+body/Program/debugger checks; the effectful binder admits at most 21 updates.
+This suggests a way to avoid duplicate per-update cache/slot/context work, but
+the metadata-generation and lifetime proof across the non-reentrant prefix
+must be established first. Keep live locking, storage lookup and exact-once
+continuation. Require same-build controls and short-call/metadata-churn checks
+as well as frozen before/after measurements before retaining a replacement.
