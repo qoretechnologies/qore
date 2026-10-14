@@ -1680,6 +1680,36 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             "_openai_response": response};
     }
 
+    #! Raises the error reported by a Responses stream \c error event
+    /** The service sends the error nested under \c error
+        (\c {"type": "error", "error": {"code": ..., "message": ...}}); a top-level \c code and \c message, as some
+        compatible servers send, are used if there is no nested error.
+
+        @param event the \c error event
+
+        @throw LLM-RESPONSE-ERROR always; the description has the provider's error code and message, and the argument
+        is the event, with the error code (if any) also in its \c code key
+    */
+    private static throwResponsesStreamError(hash<auto> event) {
+        *hash<auto> error = event.error.typeCode() == NT_HASH ? event.error : NOTHING;
+        auto code_val = error.code ?? event.code ?? error.type;
+        auto msg_val = error.message ?? event.message;
+        *string code = exists code_val ? sprintf("%s", code_val) : NOTHING;
+        *string msg = exists msg_val ? sprintf("%s", msg_val) : NOTHING;
+        string desc = "Responses stream failed";
+        if (code.val()) {
+            desc += ": " + code;
+        }
+        if (msg.val()) {
+            desc += ": " + msg;
+        }
+        hash<auto> arg = event;
+        if (code.val()) {
+            arg.code = code;
+        }
+        throw "LLM-RESPONSE-ERROR", desc, arg;
+    }
+
     #! Streams visible text; tool calls become executable only at a terminal response
     private static *hash<auto> responsesStreamToChatChunk(hash<auto> event,
             reference<hash<auto>> state) {
@@ -1694,7 +1724,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 "choices": ({"index": 0, "delta": {"content": event.delta}},)};
         }
         if (event.type == "error") {
-            throw "LLM-RESPONSE-ERROR", event.message ?? "Responses stream failed", event;
+            throwResponsesStreamError(event);
         }
         if (!inlist(event.type, ("response.completed", "response.incomplete", "response.failed"))) {
             return NOTHING;
