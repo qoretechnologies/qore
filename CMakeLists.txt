@@ -3696,6 +3696,7 @@ set(QORE_DOC_EXTRA_MODULES_SqlUtil
 qore_user_module("qlib/SqlUtil" "../../doxygen/SqlUtil-Full.svg")
 set(QORE_DOC_EXTRA_MODULES_ConnectionProvider HttpClientDataProvider)
 qore_user_module("qlib/ConnectionProvider")
+set(QORE_DOC_EXTRA_MODULES_CsvUtil ValueMask)
 qore_user_module("qlib/CsvUtil")
 qore_user_module("qlib/FixedLengthUtil")
 qore_user_module("qlib/Mapper.qm")

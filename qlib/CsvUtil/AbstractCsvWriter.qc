@@ -48,6 +48,7 @@ public namespace CsvUtil {
         |\c "quote"|@ref string_type "string"|the field quote character (default: \c '\"')
         |\c "quote_escape"|@ref string_type "string"|the escape character(s) used for \c "quote" (default: \c '\\')
         |\c "separator"|@ref string_type "string"|the string separating the fields in the file (default: \c ",")
+        |\c "timezone"|@ref string_type "string"|the time zone region (ex: \c "Europe/Prague") whose wall-clock time dates are written in; a field's \c "timezone" attribute overrides it; if not given, dates are written in their own time zone, and dates written with a \c "mask" in the current time zone (@since %CsvUtil 1.12)
         |\c "verify_columns"|\c bool_type "bool"|if @ref True "True" (the default is @ref False "False") then if a line is parsed with a different column count than other lines, a \c CSVFILEWRITER-DATA-ERROR exception is thrown
         |\c "write_headers"|\c bool_type "bool"|set to @ref False "False" to suppress the output of headers; the default is @ref True "True", meaning to output headers if they are present. The value is @ref False "False" for multi-type lines.
 
@@ -84,6 +85,7 @@ public namespace CsvUtil {
                 "quote": C_OPT1|C_OPT2,
                 "quote_escape": C_OPT1|C_OPT2,
                 "separator": C_OPT1|C_OPT2,
+                "timezone": C_OPT1|C_OPT2,
                 "verify_columns": C_OPT1|C_OPT2,
                 "verify-columns": C_OPT1|C_OPT2,
                 "write_headers": C_OPT1|C_OPT2,
@@ -125,6 +127,9 @@ public namespace CsvUtil {
 
             #! a closure/call reference for informational logging when using write(SQLStatement)
             *code<nothing(string, ...)> info_log;
+
+            #! the time zone whose wall-clock time dates are written in, if any
+            *TimeZone timezone;
 
             #! mapping output field by name
             hash m_out_by_name;
@@ -288,6 +293,19 @@ public namespace CsvUtil {
                         headerReorder = parse_boolean(i.value);
                         break;
                     }
+                    case "timezone": {
+                        if (i.value.typeCode() != NT_STRING) {
+                            throw errname, sprintf("expecting a string value to option %y; got %y (type %s) instead",
+                                i.key, i.value, i.value.type());
+                        }
+                        try {
+                            timezone = new TimeZone(i.value);
+                        } catch (hash<ExceptionInfo> ex) {
+                            throw errname, sprintf("invalid time zone %y given for option %y: %s: %s", i.value, i.key,
+                                ex.err, ex.desc);
+                        }
+                        break;
+                    }
                 }
 
             }
@@ -368,11 +386,17 @@ public namespace CsvUtil {
                 #! format date to string by options. Priority: 1) column definition 2) standard format
                 string dateFmt = date_format;
                 *string numFmt = number_format;
+                *TimeZone tz = timezone;
+                *hash<auto> spec;
+                *string column_name;
                 if (m_out_by_idx{type} && j < m_out_by_idx{type}.size()) {
                     # get correct input value
                     i = m_out_by_idx{type}[j];
-                    string column_name = m_out_by_name{type}[j];
-                    hash<auto> spec = m_specs{type}{column_name};
+                    column_name = m_out_by_name{type}[j];
+                    spec = m_specs{type}{column_name};
+                    if (spec.timezone) {
+                        tz = spec.timezone;
+                    }
                     switch (spec.type) {
                         case "bool": {
                             if (values[i].typeCode() != NT_BOOLEAN)
@@ -447,9 +471,34 @@ public namespace CsvUtil {
                     }
                 }
 
+                # a value written with a ValueMask mask
+                if (exists spec.mask && exists values[i]) {
+                    try {
+                        switch (values[i].typeCode()) {
+                            case NT_DATE:
+                                values[i] = tz
+                                    ? ValueMask::formatDate(values[i], spec.mask, tz, spec.mask_kind)
+                                    : ValueMask::formatDate(values[i], spec.mask, NOTHING, spec.mask_kind);
+                                break;
+                            case NT_INT:
+                            case NT_FLOAT:
+                            case NT_NUMBER:
+                                values[i] = ValueMask::formatNumber(values[i], spec.mask);
+                                break;
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err != "VALUE-MASK-VALUE-ERROR") {
+                            rethrow;
+                        }
+                        throw errname, sprintf("Line (%d), Column (%d) %y: %s", lineNo, j, column_name, ex.desc);
+                    }
+                    push rawValues, values[i];
+                    continue;
+                }
+
                 # format date as requested
                 if (values[i].typeCode() == NT_DATE) {
-                    values[i] = format_date(dateFmt, values[i]);
+                    values[i] = format_date(dateFmt, tz ? tz.date(values[i]) : values[i]);
                 }
                 if (numFmt) {
                     switch (values[i].typeCode()) {

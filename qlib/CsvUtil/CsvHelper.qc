@@ -53,7 +53,7 @@ class CsvHelper {
         };
 
         #! supported field description attribute codes
-        const list<string> FieldAttrs = ("type", "format", "timezone", "code", "header");
+        const list<string> FieldAttrs = ("type", "format", "mask", "timezone", "code", "header");
 
         #! flag to convert all header names to lower case
         bool tolwr = False;
@@ -121,6 +121,42 @@ class CsvHelper {
         }
     }
 
+    #! Checks the \c "mask" attribute of a field description
+    /** @param h the field description
+        @param fld_errs the error prefix
+        @param key the field name
+        @param base_type the type of the field without the optional \c "*" prefix
+
+        @return the kind of mask of a date field: \c "date" or \c "time"; nothing for a number field
+
+        @throw errname the field type does not take a mask, the field also has a \c "format" attribute, or the mask
+        is not valid for the field type
+    */
+    private *string checkMask(hash<auto> h, string fld_errs, string key, string base_type) {
+        if (exists h.format) {
+            throw errname, sprintf("%s: field %y has both the \"format\" and the \"mask\" attributes; only one of "
+                "the \"format\" and \"mask\" attributes can be given", fld_errs, key);
+        }
+        if (NumberFormatTypes{base_type}) {
+            if (*string issue = ValueMask::maskIssueText(h.mask, "number")) {
+                throw errname, sprintf("%s: the \"mask\" attribute of field %y: %s", fld_errs, key, issue);
+            }
+            return;
+        }
+        if (base_type != "date") {
+            throw errname, sprintf("%s: field %y is type %y, but the \"mask\" attribute was also given, which is "
+                "only valid for \"date\", \"int\", \"float\", and \"number\" fields", fld_errs, key, h.type);
+        }
+        # a date field's mask is a date mask or a time mask
+        if (ValueMask::maskIssue(h.mask, "time")) {
+            if (*string issue = ValueMask::maskIssueText(h.mask, "date")) {
+                throw errname, sprintf("%s: the \"mask\" attribute of field %y: %s", fld_errs, key, issue);
+            }
+            return "date";
+        }
+        return "time";
+    }
+
     #! validate field type
     private checkType(string fld_errs, string key, string value) {
         if (!Types{value})
@@ -158,7 +194,8 @@ class CsvHelper {
                                     break;
                                 }
                                 case "header":
-                                case "format": {
+                                case "format":
+                                case "mask": {
                                     if (fh.value.typeCode() != NT_STRING)
                                         throw errname, sprintf("%s: field %y \"%s\" attributes expects a string value; got %y instead", fld_errs, hi.key, fh.key, fh.value.type());
                                     h{fh.key} = fh.value;
@@ -215,6 +252,10 @@ class CsvHelper {
                         if (h.timezone && base_type != "date") {
                             throw errname, sprintf("%s: field %y is type %y, but the \"timezone\" attribute was also "
                                 "given, which is only valid for \"date\" fields", fld_errs, hi.key, h.type);
+                        }
+                        # "mask" is a ValueMask mask for dates and numbers
+                        if (exists h.mask) {
+                            h.mask_kind = checkMask(h, fld_errs, hi.key, base_type);
                         }
                         # "format" is a date mask for dates and a number format for numbers
                         if (exists h.format) {

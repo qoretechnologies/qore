@@ -26,6 +26,7 @@
 %requires qore >= 2.0
 
 %requires Util
+%requires ValueMask
 
 %requires(reexport) DataProvider >= 3.9
 %requires(reexport) FileLocationHandler
@@ -371,6 +372,13 @@ while (i.next()) {
     @section csvutil_relnotes Release Notes
 
     @subsection csvutil_v1_12 Version 1.12
+    - the new \c "mask" attribute of a field description reads and writes a \c "date", \c "int", \c "float" or
+      \c "number" field with a mask of the @ref valuemaskintro "ValueMask" module, such as \c "DD.MM.YYYY",
+      \c "hh:mm AM" or \c "#.##0,00 €", in the iterators, the writers and the data providers, so that a file is
+      written exactly as a mask describes and read back with the same mask as the same values
+    - the writers and the write data provider take a \c "timezone" option: dates are written as the wall-clock time
+      in that time zone, and a field's \c "timezone" attribute, which was only used for reading, overrides it for
+      the field
     - the \c "format" attribute of a field description is accepted for \c "int", \c "float" and \c "number" fields
       (also with the \c "*" prefix) by the iterators, the writers and the data providers, as documented: it is a
       number format as for the \c "number_format" option and overrides that option for the field; it was rejected

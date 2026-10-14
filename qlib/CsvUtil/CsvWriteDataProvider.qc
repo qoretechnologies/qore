@@ -107,7 +107,16 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
                         "group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` "
                         "types, a number format string: "
                         "*<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] "
-                        "(e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)"
+                        "(e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n"
+                    "- `mask`: for `date`, `int`, `float`, or `number` types, a mask that the value is written "
+                        "with, such as `DD.MM.YYYY`, `hh:mm AM`, `#.##0,00` or `€#,##0.00`, so that a file is "
+                        "written exactly as the mask describes and read back with the same mask as the same "
+                        "values; cannot be given with `format`; see "
+                        "[ValueMask](https://qoretechnologies.com/manual/qorus/current/qore/modules/ValueMask/html/"
+                        "index.html) for the masks\n"
+                    "- `timezone`: for `date` types only, the time zone region whose wall-clock time the dates of "
+                        "the field are written in; overrides the `timezone` option\n"
+                    "- `header`: the header text of the field, if not the field name"
             },
             "headers": <DataProviderOptionInfo>{
                 "display_name": "Header Names",
@@ -162,6 +171,16 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The string separating fields in the output data (default: `,`)",
                 "default_value": ",",
+            },
+            "timezone": <DataProviderOptionInfo>{
+                "display_name": "Time Zone",
+                "short_desc": "The time zone whose wall-clock time dates are written in",
+                "type": AbstractDataProviderType::get(StringType),
+                "desc": "The time zone region (such as `Europe/Prague` or `America/New_York`) whose wall-clock "
+                    "time dates are written in, so that a reader that reads the file in this time zone reads the "
+                    "same points in time; a field's `timezone` attribute overrides it.  If not given, dates are "
+                    "written in their own time zone, and dates written with a `mask` in the current time zone",
+                "example_value": "Europe/Prague",
             },
             "verify_columns": <DataProviderOptionInfo>{
                 "display_name": "Verify Columns",
