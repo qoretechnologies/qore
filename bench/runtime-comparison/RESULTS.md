@@ -12705,3 +12705,84 @@ and runtime-identity checks match the pre-experiment baseline. The
 patches, raw timings, reference outputs, assembly, restoration and all audit
 items. Next work should investigate per-call configuration/initialization guards
 and more granular dispatch evidence before another receiver-proof encoding.
+
+## Rejected AOT single-load policy cache (2026-10-14)
+
+The policy-cache prototype is not retained. It replaced four function-static
+boolean policy sites in typed method dispatch with a single atomic byte holding
+both initialization state and value. A per-object `std::call_once` performed cold
+initialization at the original first-use point; acquire/release preserved
+publication, independent policies, latching and retry after an exception. No
+policy moved to parse time or admission, and existing environment controls kept
+their presence-based behavior. Call ABI, lowering, dispatch layout, live guards,
+frames and receiver ownership were unchanged.
+
+The frozen baseline was `c6794233ccfc013d74935aeff859ee189092c7ba` on
+`feature/performance`. Both matrices compared two identical baseline
+configurations with two identical candidate configurations, using randomized
+serial execution, equal-length runtime aliases and verified loaded libraries.
+All four configurations passed 555 reference outputs before each matrix. Eleven
+workloads at count 4096 used three warmups and three measurement samples per
+process: the initial matrix had three forks and 300 ms samples (396 windows),
+and confirmation had five forks and 400 ms samples (660 windows).
+
+Values below are whole-workload ns/element, not isolated call latency. Each
+range contains the two A/A medians, not a confidence interval. Compare before
+and after within the same matrix; absolute timings rose between matrices.
+
+|!Matrix and workload|!Before A/A|!Candidate A/A|!Conclusion
+|Initial: native integer|9.964-10.014|10.013-10.015|Effectively unchanged
+|Initial: native floating point|11.283-11.450|10.908-10.985|2.64-4.73% faster
+|Initial: effectful integer member|83.570-84.644|85.856-86.353|1.43-3.33% slower
+|Confirmation: native integer|10.343-10.366|10.274-10.475|Mixed; within fork variation
+|Confirmation: native floating point|11.760-11.852|11.550-11.645|0.97-2.54% faster
+|Confirmation: effectful integer member|87.639-88.207|89.332-89.895|1.28-2.57% slower
+
+Percentage ranges include all combinations of before/after A/A medians. Native
+integer calls showed no repeatable benefit. The floating-point gain did not
+justify effectful calls getting slower in both matrices. Other workloads were
+mixed: an initial integer-callback slowdown did not clearly repeat; confirmation
+list mutation medians were higher, with overlapping fork ranges. No noisy sample
+was dropped, and these movements do not establish the cause of each regression.
+
+Actual arm64 assembly confirmed the intended removal of one policy load on the
+initialized path. Native-only helper frames stayed at 320 bytes, and matched
+helpers stayed at 368 bytes. Complete native-int helper sizes fell from 477 to
+465 instructions (v1) and from 487 to 475 (v2); floating helpers changed from
+444 to 445 and from 460 to 458. These code-generation improvements alone were
+not sufficient evidence to retain the candidate.
+
+The candidate passed 14 selected release test runs, 26 cases and 12026 QUnit
+assertions, plus both IR/AOT reference grids. Its standalone policy helper also
+passed ThreadSanitizer and AddressSanitizer/UndefinedBehaviorSanitizer probes
+for concurrent first use, publication, false/true latching, independent objects
+and exception retry. This was not a sanitized full-runtime build. New debug,
+foreign-platform and Java qualification were not pursued after rejection;
+there is no new IR/JIT timing claim.
+
+The first timing driver's terminal output was lost during context compaction.
+Its complete 132 child exit records and raw outputs were independently replayed;
+the parent exit status remains explicitly unknown. The larger confirmation's
+timing and verification exits were directly observed as successful. All 1056
+measurement windows, both A/A controls, raw outputs, source changes, assembly,
+validation and audit records are preserved in the
+[dataset](results-aot-native-policy-rejected-macos-arm64.json).
+
+The original runtime sources were restored, the release core and 62 matching
+AOT modules rebuilt, and five original test files passed 14 cases and 6009
+assertions plus both reference grids. No policy helper or experimental test
+source remains in the production tree.
+
+|!Audit scope|!Pass|!N/A|!Fail
+|Retained documentation and research data; all 62 checklist items recorded in the dataset|7|55|0
+
+The audit does not approve the archived prototype for production use.
+
+Next work targets effectful member access. Source tracing shows that the
+prehashed update path still resolves declaration/access context before locking
+and looking up storage. Exact-class object summaries already cache immutable
+member metadata; extending that to polymorphic effectful calls requires a live
+receiver/context key and a lifetime/invalidation proof. Keep object locking,
+deletion checks, reference/enum/overflow fallbacks and exact-once continuation;
+do not cache a raw member pointer across mutations. Another policy-byte encoding
+is not justified by these results alone.

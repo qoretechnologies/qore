@@ -2087,3 +2087,29 @@ The original runtime and matching AOT modules are restored and validated. Next
 investigate per-call configuration/static-initialization guards and more granular
 dispatch costs, preserving cold-call and runtime-control behavior; do not repeat
 receiver-proof/layout variants without new evidence.
+
+### Single-load typed-method policy experiment (2026-10-14)
+
+A cached boolean combined with its initialized state in one atomic byte was
+rejected after 1056 AOT measurement windows. It preserved first-use environment
+semantics through per-object cold `std::call_once` initialization and kept all
+live guards. Actual arm64 helpers used fewer policy loads without larger stack
+frames, but native integer calls had no repeatable gain. Confirmation improved
+native floating calls about 1-3% while slowing effectful calls about 1-3%.
+No runtime optimization is retained, and these are not new Java/IR/JIT results.
+
+The original runtime and matching AOT modules were restored and validated.
+`bench/runtime-comparison/results-aot-native-policy-rejected-macos-arm64.json`
+contains both complete matrices, source/assembly, release and standalone
+sanitizer evidence, and the audit. The initial timing parent's terminal status
+was unavailable; all child outputs were independently verified, and the larger
+confirmation completed with observed successful timing/verifier exits.
+
+The next distinct target is effectful member declaration/context lookup. The
+prehashed update helper still performs this lookup before its locked storage
+lookup. Existing exact-class object-member descriptors are a useful precedent,
+but a polymorphic descriptor must prove the live receiver/context and metadata
+lifetime. Mutable member values and raw storage pointers must not be cached;
+retain the lock, deletion check, scalar/fallback checks and exact-once resume
+semantics. This investigation has started with source tracing; no performance
+benefit for that proposal has been measured yet.
