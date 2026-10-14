@@ -337,6 +337,44 @@ growth. The auto-slot, scalar-store and reload wrappers exercise compiler/runtim
 controls, matching getter/store versions, normal/EH entries and independent
 reload behavior. This is AOT-specific; no IR/JIT timing benefit is established.
 
+### Scalar publication across AOT temporary boundaries
+
+An admitted v3 auto-local store reports whether it performed a sink-clean,
+immediate scalar replacement in the exact live slot. It shares v2 assignment
+semantics and returns zero for ordinary lookup, owning inputs or old owners,
+errors, and disabled reporting. Native-EH emission preserves unwinding. This
+point-in-time witness is not a pure-callee guarantee: earlier calls may already
+have changed other locals, and subsequent reference operations may reenter.
+
+Lowering captures the witness and exact boxed bits immediately after assignment,
+before retention, cleanup or exception checking. Each invocation has one token
+identifying the last published cache. At the existing temporary boundary, only
+that cache can keep the next freshness epoch, and only if its old epoch was
+current and its bits still match. Other locals remain stale; the token is reset.
+The original owner rotation and cleanup order are unchanged.
+
+Before LLVM optimization or inlining, `prepareScalarBoundaryReuse` inserts a
+revocation before every unknown call/invoke, external write or fence. Only
+selected compiler intrinsics, ordinary private-alloca stores and non-writing
+instructions preserve the witness. Exact scalar no-op guards can bypass selected
+incref/decref calls; general reference operations are not pure. Forward publication
+reachability intersected with backward boundary liveness limits early guards to
+useful intervals. All remaining effect barriers are retained independently of
+that pruning. Analysis visits instructions/CFG edges with cancellation every 100
+steps, including duplicate worklist pops; guard splitting checks every 10.
+Cancellation or LLVM verification failure prevents object emission.
+
+Compile-time presence of `QORE_DISABLE_AOT_SCALAR_BOUNDARY_REUSE`, including `0`,
+retains v2 stores and omits publication state. Runtime presence, sampled once at
+first v3 use, suppresses reporting without changing assignment. The compile-only
+`QORE_DISABLE_AOT_SCALAR_BOUNDARY_LIVENESS` restores unpruned early guard selection,
+not weaker barriers. Global scalar/float cleanup controls also govern early
+guards; the method-cleanup control governs the existing late caller selection,
+not these independently selected early intervals. Legacy helpers remain available;
+new artifacts require matching compiler/runtime identities. This is AOT-only,
+not an IR/JIT performance claim. See the scalar-boundary benchmark results for
+long-loop gains, short-call limits, pointer controls and code growth.
+
 ### Prepared runtime-backed AOT local reloads
 
 The stale-cache reload path can reuse an invocation-local body-slot address,

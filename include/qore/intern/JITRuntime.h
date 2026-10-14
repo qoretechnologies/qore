@@ -1761,6 +1761,24 @@ void qore_rt_assign_auto_local_slot_aot_v2(QoreAOTContext* ctx, int32_t idx,
 void qore_rt_assign_auto_local_slot_aot_throwing_v2(QoreAOTContext* ctx, int32_t idx,
     uint64_t value, void* prepared_slot, ExceptionSink* xsink);
 
+//! Assign as v2 and report an exact, non-reentrant scalar publication.
+/** @param ctx current AOT function context
+    @param idx same ordinary body-local index as the v2 getter
+    @param value borrowed NaN-boxed input
+    @param prepared_slot v2 getter result in this invocation, or nullptr for ordinary assignment
+    @param xsink exception sink; ordinary fallback and error handling are unchanged
+    @return 1 only after a sink-clean immediate scalar replacement in the admitted live slot;
+    0 after ordinary assignment, failure, or disabled publication reporting
+    @note This is a point-in-time storage witness, not a callee-purity or subsequent-cleanup proof.
+    The caller must invalidate it before any possibly reentrant operation or external write.
+    Presence of QORE_DISABLE_AOT_SCALAR_BOUNDARY_REUSE at first use disables reporting only.
+*/
+int qore_rt_assign_auto_local_slot_aot_v3(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+//! Native-EH counterpart; throws QoreJITException on a populated exception sink.
+int qore_rt_assign_auto_local_slot_aot_throwing_v3(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+
 //! Checked pinned initializer with an optional prepared slot; v1 ownership and fallback contract.
 //! @param prepared_slot handle from qore_rt_get_class_local_slot_aot_v1 for this ctx/idx/invocation
 int qore_rt_try_assign_pinned_class_local_aot_v2(QoreAOTContext* ctx, int32_t idx,

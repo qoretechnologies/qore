@@ -54,9 +54,10 @@ class AutoLocalSlotTest inherits QUnit::Test {
                     assertTrue(!!body, name + " LLVM definition");
                     assertEq(enabled, regex(body[0] ?? "", "call ptr @qore_rt_get_auto_local_slot_aot_" + version),
                         name + " invocation-local slot " + prefix + level);
-                    assertEq(enabled, regex(body[0] ?? "", "(?:call|invoke) void @qore_rt_assign_auto_local_slot_aot"),
+                    assertEq(enabled, regex(body[0] ?? "", "(?:call|invoke) (?:void|i32) @qore_rt_assign_auto_local_slot_aot"),
                         name + " prepared assignment " + prefix + level);
-                    assertEq(enabled, regex(body[0] ?? "", "(?:call|invoke) void @qore_rt_assign_auto_local_slot_aot(?:_throwing)?_" + version),
+                    string store_version = version == "v2" ? "v[23]" : version;
+                    assertEq(enabled, regex(body[0] ?? "", "(?:call|invoke) (?:void|i32) @qore_rt_assign_auto_local_slot_aot(?:_throwing)?_" + store_version),
                         name + " matching declaration admission " + prefix + level);
                     assertFalse(regex(body[0] ?? "", "qore_rt_pop_body_local_aot_v1"),
                         name + " wrapper retains ownership of ordinary body slots");

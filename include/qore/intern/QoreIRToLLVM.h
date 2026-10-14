@@ -86,6 +86,13 @@ public:
     //! @note Pointer and opaque representations retain the original helper and evaluation order.
     static bool guardScalarReferenceLoads(llvm::Module& module, std::string& error);
 
+    //! Complete scalar-publication effect tracking before any LLVM optimization or inlining.
+    //! @param module lowered AOT module with invocation-local publication tokens
+    //! @param error receives cancellation or LLVM-verification diagnostics
+    //! @return false on cancellation or invalid IR; no object may be emitted on failure
+    //! @note Only proved non-owning cleanup paths preserve a token; all unknown calls/writes revoke it.
+    static bool prepareScalarBoundaryReuse(llvm::Module& module, std::string& error);
+
     //! Enable AOT mode with the given slot map.
     //! When set, process-specific opcodes emit _aot helper calls with slot indices
     //! instead of inttoptr patterns with embedded pointers.
@@ -616,6 +623,12 @@ private:
     llvm::AllocaInst* local_reload_epoch = nullptr;
     llvm::MapVector<const void*, llvm::AllocaInst*> local_valid_epochs;
     bool local_reload_boundary_cleanup_pending = false;
+    // A point-in-time scalar-store witness, never a purity flag. The pre-optimization
+    // effect pass revokes it before every potentially reentrant call/external write.
+    // One last-published cache is sufficient; older publications stay conservative.
+    llvm::AllocaInst* scalar_boundary_token = nullptr;
+    llvm::AllocaInst* scalar_boundary_value = nullptr;
+    std::unordered_set<const void*> scalar_boundary_locals;
     // Propagate cancellation from native handler cache emission to lowerFunction().
     bool native_handler_cache_cancelled = false;
     // Cleanup emission is shared by normal and exceptional exits; cancelled

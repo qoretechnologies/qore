@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ScalarBoundaryReuseTest
+
+class ScalarBoundaryReuseTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("AOT scalar publication cleanup boundaries", "1.0", \ARGV) {
+        addTestCase("publication, cleanup effects and control-flow joins", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTScalarBoundaryReuse.qr";
+        string expected = "scalar-boundary-reuse: ok\n";
+        # The baseline IR interpreter does not expose this fixture's caller body
+        # local to set_local_var_value(). Keep the full reflection contract in
+        # the AST/AOT comparison; separate reference checks cover IR execution.
+        assertEq(expected, run((qore, "--exec-mode=ast", source)), "AST reference");
+        TmpDir dir("qore-scalar-boundary-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "QORE_DISABLE_AOT_SCALAR_BOUNDARY_REUSE=0 ",
+                "QORE_DISABLE_AOT_SCALAR_BOUNDARY_LIVENESS=0 ",
+                "QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_IR_BEFORE_OPT=1 QORE_IR_OPT_STATS=1 ");
+                bool enabled = prefix != "QORE_DISABLE_AOT_SCALAR_BOUNDARY_REUSE=0 "
+                    && ENV.QORE_DISABLE_AOT_SCALAR_BOUNDARY_REUSE === NOTHING;
+                assertEq(enabled, regex(ir, "qore.scalar.boundary.publish"), "publication marker " + prefix + level);
+                assertEq(enabled, regex(ir, "scalar_boundary_valid_epoch"), "boundary preservation " + prefix + level);
+                assertEq(enabled, regex(ir, "scalar-boundary-functions=[1-9]"), "effect pass selected callers");
+                bool prune_dead = enabled && prefix != "QORE_DISABLE_AOT_SCALAR_BOUNDARY_LIVENESS=0 "
+                    && ENV.QORE_DISABLE_AOT_SCALAR_BOUNDARY_LIVENESS === NOTHING;
+                assertEq(prune_dead, regex(ir, "dead-cleanup-candidates=[1-9]"),
+                    "only live cleanup intervals receive early guards " + prefix + level);
+                foreach string runtime in (("", "QORE_DISABLE_AOT_SCALAR_BOUNDARY_REUSE=0 ",
+                        "QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION=1 ",
+                        "QORE_DISABLE_AOT_AUTO_LOCAL_SLOT=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_LOCAL_STORE=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+}

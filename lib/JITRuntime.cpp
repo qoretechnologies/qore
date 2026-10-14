@@ -403,6 +403,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_assign_auto_local_slot_aot_v2", reinterpret_cast<void*>(&qore_rt_assign_auto_local_slot_aot_v2) },
     { "qore_rt_assign_auto_local_slot_aot_throwing_v2",
         reinterpret_cast<void*>(&qore_rt_assign_auto_local_slot_aot_throwing_v2) },
+    { "qore_rt_assign_auto_local_slot_aot_v3", reinterpret_cast<void*>(&qore_rt_assign_auto_local_slot_aot_v3) },
+    { "qore_rt_assign_auto_local_slot_aot_throwing_v3",
+        reinterpret_cast<void*>(&qore_rt_assign_auto_local_slot_aot_throwing_v3) },
     { "qore_rt_try_assign_pinned_class_local_aot_v2",
         reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_v2) },
     { "qore_rt_try_assign_pinned_class_local_aot_throwing_v2",
@@ -12808,7 +12811,7 @@ extern "C" DLLEXPORT void* qore_rt_get_auto_local_slot_aot_v2(QoreAOTContext* ct
     return slot && ctx->locals[idx]->isAOTScalarStoreDeclaration() ? slot : nullptr;
 }
 
-extern "C" DLLEXPORT void qore_rt_assign_auto_local_slot_aot_v2(QoreAOTContext* ctx,
+static __attribute__((always_inline)) inline int qore_rt_assign_prepared_auto_local(QoreAOTContext* ctx,
         int32_t idx, uint64_t value, void* prepared_slot, ExceptionSink* xsink) {
     enum class PreparedStoreMode : uint8_t { Checked, Generic, Guarded, Direct };
     // Resolve both immutable choices together. The shared scalar configuration
@@ -12827,16 +12830,22 @@ extern "C" DLLEXPORT void qore_rt_assign_auto_local_slot_aot_v2(QoreAOTContext* 
     }();
     if (scalar_store == PreparedStoreMode::Checked || !prepared_slot) {
         qore_rt_assign_auto_local_slot_aot_v1(ctx, idx, value, prepared_slot, xsink);
-        return;
+        return 0;
     }
     auto* slot = static_cast<LocalVarValue*>(prepared_slot);
     assert(ctx && idx >= 0 && idx < ctx->num_locals && ctx->locals[idx]);
     assert(slot->local_var == ctx->locals[idx] && ctx->locals[idx]->isAOTScalarStoreDeclaration());
     if (scalar_store != PreparedStoreMode::Generic && !*xsink
             && slot->tryAssignAOTScalarValue(fromBits(value), scalar_store == PreparedStoreMode::Direct)) {
-        return;
+        return 1;
     }
     qore_rt_assign_local_eval_weak(ctx->locals[idx], value, xsink);
+    return 0;
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_auto_local_slot_aot_v2(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, void* prepared_slot, ExceptionSink* xsink) {
+    qore_rt_assign_prepared_auto_local(ctx, idx, value, prepared_slot, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_auto_local_slot_aot_throwing_v2(QoreAOTContext* ctx,
@@ -12845,6 +12854,22 @@ extern "C" DLLEXPORT void qore_rt_assign_auto_local_slot_aot_throwing_v2(QoreAOT
     if (*xsink) {
         throw QoreJITException();
     }
+}
+
+extern "C" DLLEXPORT int qore_rt_assign_auto_local_slot_aot_v3(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, void* prepared_slot, ExceptionSink* xsink) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_SCALAR_BOUNDARY_REUSE");
+    int published = qore_rt_assign_prepared_auto_local(ctx, idx, value, prepared_slot, xsink);
+    return enabled ? published : 0;
+}
+
+extern "C" DLLEXPORT int qore_rt_assign_auto_local_slot_aot_throwing_v3(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, void* prepared_slot, ExceptionSink* xsink) {
+    int published = qore_rt_assign_auto_local_slot_aot_v3(ctx, idx, value, prepared_slot, xsink);
+    if (*xsink) {
+        throw QoreJITException();
+    }
+    return published;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTContext* ctx,

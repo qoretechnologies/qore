@@ -47,6 +47,8 @@
 
 #include <qore/QorePluginLLVM.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/Analysis/ValueTracking.h>
+#include <llvm/IR/CFG.h>
 
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
@@ -1401,8 +1403,11 @@ size_t QoreIRToLLVM::pruneNoopDecrefs(llvm::Module& module) {
 // original point, but expose the scalar no-op to LLVM so it can eliminate empty cleanup traffic.
 // Run after the main optimization pipeline: otherwise inlining and loop unrolling duplicate
 // the guards throughout cold fallback/cleanup paths and cause disproportionate code growth.
+// The publication pass may instead supply a selected set before optimization, restricted to
+// live cleanup intervals whose scalar no-op edges can preserve a boundary witness.
 static bool qore_ir_guard_scalar_decrefs(llvm::Function* function, std::string& error,
-        size_t& guards, bool include_float) {
+        size_t& guards, bool include_float,
+        const std::unordered_set<llvm::CallInst*>* selected = nullptr) {
     std::vector<llvm::CallInst*> calls;
     bool has_native_scalar_call = false;
     size_t checked = 0;
@@ -1424,7 +1429,8 @@ static bool qore_ir_guard_scalar_decrefs(llvm::Function* function, std::string& 
                     && !std::getenv("QORE_DISABLE_LLVM_METHOD_DECREF_GUARD")) {
                 has_native_scalar_call = true;
             }
-            if (name == "qore_rt_decref" || name == "qore_rt_decref_nothrow") {
+            if ((name == "qore_rt_decref" || name == "qore_rt_decref_nothrow"
+                    || (selected && name == "qore_rt_incref")) && (!selected || selected->count(call))) {
                 calls.push_back(call);
             }
         }
@@ -1432,7 +1438,7 @@ static bool qore_ir_guard_scalar_decrefs(llvm::Function* function, std::string& 
     // Native scalar callback/method results merge with owned generic fallbacks, leaving
     // cleanup traffic on the common scalar edge. Target those callers: guarding
     // arbitrary functions grew cold cleanup code and regressed direct-call loops.
-    if (!has_native_scalar_call) {
+    if (!has_native_scalar_call && !selected) {
         return true;
     }
     // Reverse order avoids repeatedly moving a long block suffix when it contains many cleanup calls.
@@ -1501,6 +1507,195 @@ static bool qore_ir_guard_scalar_decrefs(llvm::Function* function, std::string& 
         ++guards;
     }
     return true;
+}
+
+// Only compiler intrinsics with no Qore-visible effects and writes to private
+// native allocas preserve a publication. In particular, incref is NOT generally
+// pure: nodes can have custom reference handlers. Scalar guards prove its no-op.
+static bool qore_ir_preserves_scalar_publication(const llvm::Instruction& inst) {
+    if (const auto* call = llvm::dyn_cast<llvm::CallBase>(&inst)) {
+        const auto* function = call->getCalledFunction();
+        if (!function || !function->isIntrinsic()) {
+            return false;
+        }
+        llvm::StringRef name = function->getName();
+        return name.starts_with("llvm.dbg.") || name.starts_with("llvm.lifetime.")
+            || name == "llvm.assume" || name.starts_with("llvm.expect.");
+    }
+    if (const auto* store = llvm::dyn_cast<llvm::StoreInst>(&inst)) {
+        return !store->isAtomic() && !store->isVolatile()
+            && llvm::isa<llvm::AllocaInst>(llvm::getUnderlyingObject(store->getPointerOperand()));
+    }
+    return !inst.mayWriteToMemory() && !llvm::isa<llvm::FenceInst>(inst);
+}
+
+bool QoreIRToLLVM::prepareScalarBoundaryReuse(llvm::Module& module, std::string& error) {
+    size_t checked = 0, guards = 0, barriers = 0, functions = 0, dead_cleanup = 0;
+    const bool prune_dead_cleanup = !std::getenv("QORE_DISABLE_AOT_SCALAR_BOUNDARY_LIVENESS");
+    auto cancelled = [&]() {
+        if (++checked % 100 == 0 && qore_check_cancel(nullptr, "AOT scalar publication effects")) {
+            error = "cancelled during AOT scalar publication effect analysis";
+            return true;
+        }
+        return false;
+    };
+    for (llvm::Function& function : module) {
+        if (cancelled()) {
+            return false;
+        }
+        if (function.isDeclaration()) {
+            continue;
+        }
+        llvm::AllocaInst* token = nullptr;
+        for (llvm::Instruction& inst : function.getEntryBlock()) {
+            if (cancelled()) {
+                return false;
+            }
+            if (inst.getMetadata("qore.scalar.boundary.token")) {
+                token = llvm::dyn_cast<llvm::AllocaInst>(&inst);
+                assert(token && token->getAllocatedType()->isPointerTy());
+                break;
+            }
+        }
+        if (!token) {
+            continue;
+        }
+        ++functions;
+        auto guardable_cleanup = [](llvm::Instruction* inst) {
+            auto* call = llvm::dyn_cast<llvm::CallInst>(inst);
+            llvm::StringRef name = call && call->getCalledFunction() && !call->isMustTailCall()
+                ? call->getCalledFunction()->getName() : llvm::StringRef();
+            return name == "qore_rt_decref" || name == "qore_rt_decref_nothrow"
+                || name == "qore_rt_incref";
+        };
+        // A guard can help only on a path that reaches a boundary's token read
+        // before a reset/publication or an unknown effect. Work backwards from
+        // those reads so error exits and dead publications do not gain guards.
+        // This is an over-approximation: branch predicates need not be proved.
+        std::vector<llvm::Instruction*> live_pending;
+        std::unordered_set<llvm::Instruction*> reaches_boundary;
+        if (prune_dead_cleanup) {
+            for (llvm::BasicBlock& block : function) {
+                for (llvm::Instruction& inst : block) {
+                    if (cancelled()) {
+                        return false;
+                    }
+                    auto* load = llvm::dyn_cast<llvm::LoadInst>(&inst);
+                    if (load && load->getPointerOperand() == token) {
+                        live_pending.push_back(load);
+                    }
+                }
+            }
+            while (!live_pending.empty()) {
+                if (cancelled()) {
+                    return false;
+                }
+                llvm::Instruction* inst = live_pending.back();
+                live_pending.pop_back();
+                while (inst && reaches_boundary.insert(inst).second) {
+                    if (cancelled()) {
+                        return false;
+                    }
+                    auto* store = llvm::dyn_cast<llvm::StoreInst>(inst);
+                    if ((store && store->getPointerOperand() == token)
+                            || (!guardable_cleanup(inst) && !qore_ir_preserves_scalar_publication(*inst))) {
+                        break;
+                    }
+                    llvm::Instruction* previous = inst->getPrevNode();
+                    if (!previous) {
+                        for (llvm::BasicBlock* predecessor : llvm::predecessors(inst->getParent())) {
+                            if (cancelled()) {
+                                return false;
+                            }
+                            live_pending.push_back(predecessor->getTerminator());
+                        }
+                    }
+                    inst = previous;
+                }
+            }
+        }
+        // Early guards are needed only in a publication's live cleanup interval.
+        // Stop at a reset/new publication or an unknown effect. Missed guards
+        // merely revoke reuse; the complete barrier scan below is authoritative.
+        std::vector<llvm::Instruction*> pending;
+        for (llvm::BasicBlock& block : function) {
+            for (llvm::Instruction& inst : block) {
+                if (cancelled()) {
+                    return false;
+                }
+                if (inst.getMetadata("qore.scalar.boundary.publish")) {
+                    assert(inst.getNextNode());
+                    pending.push_back(inst.getNextNode());
+                }
+            }
+        }
+        std::unordered_set<llvm::Instruction*> visited;
+        std::unordered_set<llvm::CallInst*> cleanup;
+        while (!pending.empty()) {
+            if (cancelled()) {
+                return false;
+            }
+            llvm::Instruction* inst = pending.back();
+            pending.pop_back();
+            while (inst && visited.insert(inst).second) {
+                if (cancelled()) {
+                    return false;
+                }
+                if (const auto* store = llvm::dyn_cast<llvm::StoreInst>(inst)) {
+                    if (store->getPointerOperand() == token) {
+                        break;
+                    }
+                }
+                if (guardable_cleanup(inst)) {
+                    if (!prune_dead_cleanup || reaches_boundary.count(inst)) {
+                        cleanup.insert(llvm::cast<llvm::CallInst>(inst));
+                    } else {
+                        ++dead_cleanup;
+                    }
+                } else if (!qore_ir_preserves_scalar_publication(*inst)) {
+                    break;
+                }
+                if (inst->isTerminator()) {
+                    for (llvm::BasicBlock* successor : llvm::successors(inst->getParent())) {
+                        if (cancelled()) {
+                            return false;
+                        }
+                        pending.push_back(&successor->front());
+                    }
+                }
+                inst = inst->getNextNode();
+            }
+        }
+        if (!std::getenv("QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD")
+                && !qore_ir_guard_scalar_decrefs(&function, error, guards,
+                    !std::getenv("QORE_DISABLE_LLVM_FLOAT_DECREF_GUARD"), &cleanup)) {
+            return false;
+        }
+        auto* empty = llvm::ConstantPointerNull::get(
+            llvm::cast<llvm::PointerType>(token->getAllocatedType()));
+        // Insert after guarding, but BEFORE the main optimizer. This keeps the
+        // revocation on exactly the owning cleanup edge and prevents promotion
+        // from incorrectly treating the token as unaffected by runtime calls.
+        for (llvm::BasicBlock& block : function) {
+            for (llvm::Instruction& inst : block) {
+                if (cancelled()) {
+                    return false;
+                }
+                if (!qore_ir_preserves_scalar_publication(inst)) {
+                    llvm::IRBuilder<> revoke(&inst);
+                    revoke.SetCurrentDebugLocation(inst.getDebugLoc());
+                    revoke.CreateStore(empty, token);
+                    ++barriers;
+                }
+            }
+        }
+    }
+    if (std::getenv("QORE_IR_OPT_STATS")) {
+        fprintf(stderr, "IR-OPT-LLVM: scalar-boundary-functions=%zu cleanup-guards=%zu barriers=%zu"
+            " dead-cleanup-candidates=%zu\n", functions, guards, barriers, dead_cleanup);
+    }
+    llvm::raw_string_ostream diagnostic(error);
+    return !llvm::verifyModule(module, &diagnostic);
 }
 
 bool QoreIRToLLVM::guardScalarDecrefs(llvm::Module& module, std::string& error) {
@@ -4518,9 +4713,32 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
         llvm::Value* next_epoch = builder->CreateAdd(epoch,
                 llvm::ConstantInt::get(i64_type, 1), "local_reload_epoch_next");
         builder->CreateStore(next_epoch, local_reload_epoch);
+        llvm::Value* token = scalar_boundary_token
+            ? builder->CreateLoad(ptr_type, scalar_boundary_token) : nullptr;
+        llvm::Value* published = token ? builder->CreateLoad(i64_type, scalar_boundary_value) : nullptr;
+        size_t boundary_locals = 0;
         for (auto& [key, valid_epoch] : local_valid_epochs) {
-            (void)key;
-            builder->CreateStore(epoch, valid_epoch);
+            if (++boundary_locals % 100 == 0
+                    && qore_check_cancel(nullptr, "AOT scalar boundary epochs")) {
+                local_cleanup_cancelled = true;
+                return;
+            }
+            llvm::Value* valid = epoch;
+            if (token && scalar_boundary_locals.count(key)) {
+                llvm::Value* cache = local_allocas.at(key);
+                llvm::Value* fresh = builder->CreateICmpEQ(
+                    builder->CreateLoad(i64_type, valid_epoch), epoch);
+                llvm::Value* unchanged = builder->CreateICmpEQ(
+                    builder->CreateLoad(i64_type, cache), published);
+                llvm::Value* same = builder->CreateICmpEQ(token, cache);
+                llvm::Value* reuse = builder->CreateAnd(same, builder->CreateAnd(fresh, unchanged));
+                valid = builder->CreateSelect(reuse, next_epoch, epoch, "scalar_boundary_valid_epoch");
+            }
+            builder->CreateStore(valid, valid_epoch);
+        }
+        if (token) {
+            builder->CreateStore(llvm::ConstantPointerNull::get(
+                llvm::cast<llvm::PointerType>(ptr_type)), scalar_boundary_token);
         }
     }
 }
@@ -12226,6 +12444,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     local_valid_epochs.clear();
     local_reload_boundary_cleanup_pending = false;
     error_return_block = nullptr;
+    scalar_boundary_token = nullptr;
+    scalar_boundary_value = nullptr;
+    scalar_boundary_locals.clear();
     jit_deopt_block = nullptr;
     current_lowering_block_ = nullptr;
     dbg_last_line_slot = nullptr;
@@ -16862,6 +17083,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             : "qore_rt_assign_local_eval_weak_throwing");
 
                 llvm::Value* stored_result = nullptr;
+                bool scalar_publication = false;
                 llvm::BasicBlock* pinned_store_done = nullptr;
                 if (aot_mode) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
@@ -16929,12 +17151,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         aot_helper_throwing_name = prepared_declaration
                             ? "qore_rt_assign_auto_local_slot_aot_throwing_v2"
                             : "qore_rt_assign_auto_local_slot_aot_throwing_v1";
+                        scalar_publication = prepared_declaration && is_aot_body_local
+                            && local_reload_epoch && !std::getenv("QORE_DISABLE_AOT_SCALAR_BOUNDARY_REUSE");
+                        if (scalar_publication) {
+                            aot_helper_name = "qore_rt_assign_auto_local_slot_aot_v3";
+                            aot_helper_throwing_name = "qore_rt_assign_auto_local_slot_aot_throwing_v3";
+                        }
                         assign_types.push_back(ptr_type);
                         assign_args.push_back(auto_slot);
                     }
                     assign_types.push_back(ptr_type);
                     assign_args.push_back(xsink_arg);
-                    auto aot_ft = llvm::FunctionType::get(return_class_store_result ? i64_type : void_type,
+                    auto aot_ft = llvm::FunctionType::get(return_class_store_result ? i64_type
+                            : scalar_publication ? i32_type : void_type,
                             assign_types, false);
                     auto assign_helper = module.getOrInsertFunction(aot_helper_name, aot_ft);
                     auto assign_helper_throwing = module.getOrInsertFunction(
@@ -16942,6 +17171,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* assigned = emitMaybeInvoke(assign_helper, assign_helper_throwing,
                             assign_args,
                             module, llvm_func, inst);
+                    if (scalar_publication) {
+                        auto* empty = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+                        if (!scalar_boundary_token) {
+                            llvm::IRBuilder<> eb(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+                            scalar_boundary_token = eb.CreateAlloca(ptr_type, nullptr, "scalar_boundary_token");
+                            scalar_boundary_token->setMetadata("qore.scalar.boundary.token",
+                                llvm::MDNode::get(ctx, {}));
+                            scalar_boundary_value = eb.CreateAlloca(i64_type, nullptr, "scalar_boundary_value");
+                            eb.CreateStore(empty, scalar_boundary_token);
+                            eb.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), scalar_boundary_value);
+                        }
+                        // Capture the witness at the actual publication, before retention,
+                        // result cleanup or a deferred owner can reenter. The effect pass
+                        // revokes it on every intervening possibly effectful edge.
+                        builder->CreateStore(boxed, scalar_boundary_value);
+                        auto* publication = builder->CreateStore(builder->CreateSelect(
+                            builder->CreateICmpNE(assigned, llvm::ConstantInt::get(i32_type, 0)),
+                            it->second, empty), scalar_boundary_token);
+                        publication->setMetadata("qore.scalar.boundary.publish", llvm::MDNode::get(ctx, {}));
+                        scalar_boundary_locals.insert(key);
+                    }
                     if (return_class_store_result) {
                         stored_result = assigned;
                     }

@@ -12406,3 +12406,177 @@ proofs and member/container storage, locking, coercion and ownership remain
 separate unfinished targets. No goal-completion or Java-parity claim is made.
 
 [Verified samples, qualification and all audit items](results-aot-scalar-reference-guard-macos-arm64.json).
+
+## AOT scalar publication boundary reuse
+
+Primary target: AOT. Baseline: `a74cc851ee5769267e356feac91d19ef5c3ee90d`
+on `feature/performance`, with matching frozen compiler/runtime pairs on macOS
+arm64. This change preserves one exact scalar local cache across a temporary
+cleanup boundary after a successful prepared store. It does not assume callee
+purity, remove ownership work, or establish an IR/JIT speedup.
+
+### Final matched AOT and Java comparison
+
+The final candidate includes the cancellation fix found during audit. Its fresh
+Java comparison uses Temurin 25.0.2+10, JMH 1.37, verified generated DONT_INLINE
+hints for retained call targets, one thread, three fresh process repetitions,
+three warmups and five 500-ms measurement windows per repetition. Qore uses
+`qcc -O3`; both languages use count 4096 and input seed 7. Randomized order seed
+135401 interleaves baseline, enabled A/A, compile-off and Java. All 825 windows
+are retained. Java allocation data is retained, including about 36.22 B/element
+for list construction and 60.17 for list mutation.
+
+Values below are medians of per-process means, in whole-workload ns/element,
+not isolated entry latency. Enabled ranges span the two A/A medians, not a
+confidence interval. Ratios use Java from this same matched matrix only.
+
+|!Workload|!Baseline AOT|!Enabled AOT A/A|!Java JIT|!Enabled / Java
+|Boxed integer method|18.085|15.734-15.770|2.552|6.17-6.18x
+|Boxed float method|21.341|19.218-19.437|2.554|7.52-7.61x
+|Boxed integer effect/member update|87.982|84.410-84.741|1.882|44.85-45.02x
+|Integer fallback/member read|31.788|29.939-30.178|2.533|11.82-11.91x
+|Float fallback/member read|34.023|31.848-31.868|2.520|12.64-12.65x
+|Native integer method result|10.172|9.861-9.957|3.052|3.23-3.26x
+|Native float method result|11.299|11.430-11.447|3.468|3.30x
+|Indirect integer result|6.714|6.588-6.696|1.878|3.51-3.56x
+|Indirect float result|8.761|8.603-8.700|2.946|2.92-2.95x
+|List construction|82.508|83.581-83.992|2.521|33.15-33.32x
+|List mutation|229.801|226.654-226.688|4.074|55.63-55.64x
+
+Boxed integer time falls 12.80-13.00%, float 8.93-9.95%, and member-read/fallback
+time 5.06-6.39%; both enabled process ranges separate from baseline in each
+case. Effect/member-update time falls 3.68-4.06%, also separated. The reductions
+remain against compile-off: integer 12.47-12.67%, float 11.03-12.03%.
+These are sampled range comparisons, not statistical significance tests.
+
+Native integer improves 2.12-3.06% versus baseline, but its enabled and compile-off
+ranges overlap. Native float is 1.16-1.31% slower than baseline, with overlapping
+ranges and almost identical compile-off timing. List construction is 1.30-1.80%
+slower, with overlapping ranges; list mutation is 1.35-1.37% faster, also overlapping.
+Indirect changes are small and mostly overlapping; the Java indirect-float
+process means themselves span 2.575-3.008 ns/element. Do not attribute every
+baseline difference to the new boundary path or claim a universal improvement.
+
+A separate final-candidate matrix (order seed 135389) retains 990 windows across
+before/A/A/compile-off/runtime-off/liveness-off. Boxed integer is
+17.935 -> 15.809-15.816 ns/element, 11.81-11.85% lower; float is
+21.702 -> 19.274-19.407, 10.57-11.19% lower. Both enabled ranges separate from
+baseline, compile-off and runtime-off. Native float is 1.35-2.07% slower than
+baseline (one enabled range separates); compile-off is also 1.53% slower.
+List construction is mixed with overlapping baseline ranges. These numbers
+are not combined with Java from another matrix.
+
+### Iterations, controls and code cost
+
+The linked evidence retains 6985 windows: initial v1 825, v1 confirmation 1375,
+v1 pointer controls 450, v2 long-loop 990, v2 pointer controls 540, v2 short
+invocations 990, final v3 990, and fresh matched Java 825. Candidate versions
+are distinct from helper ABI version v3. Historical candidates were not committed.
+
+The initial broad cleanup selection improved boxed loops but added unnecessary
+guards to pointer paths. In v1, the list-pointer workload was 2.20-2.36% slower
+than compile-off with both process ranges separated. V2 intersects forward
+publication reachability with backward boundary liveness. Its pointer-list
+enabled medians differ from compile-off by only +0.02-0.47%, with overlapping
+ranges. Other pointer controls remain mixed: raw-reference time is 1.17-1.35%
+slower than unpruned selection (one range separates), but only 0.48-0.66% slower
+than compile-off with overlapping ranges. No general pointer speedup is claimed.
+
+Count-one v2 measurements show no short-call benefit. Boxed integer/float medians
+are about 0.47-0.93% slower with overlapping ranges; native integer is 0.68-0.96%
+slower with both ranges separated. These approximately 2.2-us invocations include
+outer dispatch and harness work, not just the fast call. V3 changes compiler
+cancellation checks only: 163 non-main LLVM definitions compare exactly with v2
+after removing debug annotations. Two launchers differ only in validated metadata
+array lengths. This supports relevance of the v2 controls, but does not turn them
+into final-v3 short/pointer measurements or prove binary-layout equivalence.
+
+The final Java-matrix enabled module has nine publication functions, 54 early
+cleanup guards, 1163 effect barriers and 235 rejected dead-cleanup candidates.
+Unpruned v2 selection inserted 289 early guards. These are compiler site counts,
+not dynamic execution counts. The final boxed integer private caller grows
+from 829 to 913 ARM64 instructions, float from 833 to 917; compile-off returns
+to baseline counts. The executable grows from 405674 to 422186 bytes (4.07%).
+Single preparation compiles took 1.039 s baseline, 1.054 s enabled and 1.074 s
+compile-off; these are observations, not a compile-time performance claim.
+The pruned pointer private caller retained its 895 baseline ARM64 instructions
+in v2, versus 1072 under unpruned selection.
+
+### Runtime contract and qualification
+
+The additive v3 helper shares v2 assignment semantics and reports only exact,
+sink-clean, non-reentrant scalar publication in an admitted live slot. A caller
+captures the witness immediately, before subsequent retention and cleanup.
+Only the matching cache with matching bits and an already-current epoch can
+remain fresh; other locals stay stale. Before any LLVM optimization, unknown
+calls/invokes, external writes and fences revoke the token. Scalar no-op edges
+can bypass reference helpers; generic incref and decref are never assumed pure.
+Original owner rotation, exceptional cleanup, reflection and cancellation remain.
+
+Compile-time `QORE_DISABLE_AOT_SCALAR_BOUNDARY_REUSE=0` removes the new state and
+uses v2 stores. Runtime presence suppresses only witness reporting, sampled once
+at first use. Compile-time `QORE_DISABLE_AOT_SCALAR_BOUNDARY_LIVENESS=0` restores
+broad guard selection without weakening barriers. Global scalar/float cleanup
+controls govern early guards; the method-only cleanup flag still governs the
+independent late selection. Compiler/runtime identities must match.
+
+Release passes 115 selected files, 418 cases / 37109 assertions; debug passes
+115 files, 425 cases / 37208 assertions. Each includes 15 standalone fixtures;
+nine release and eight debug skips remain explicit (Linux RSS checks and the
+release build's unavailable debug hooks). Both pass seven exception/stack fixtures,
+native-unit checks and IR/AOT reference grids. Six focused debug control modes
+each pass 829 native checks. The 17 harness tests, four-mode 555-reference grids
+and 11 restored-release smokes pass. All 62 owned qmod aliases are restored to
+matching release artifacts; unrelated links are unchanged. Independent replay
+checks 266 qualification child records. This is selected macOS coverage, not
+full-repository, cross-platform, sanitizer or leak qualification.
+
+The new regression exercises scalar loops, earlier reflective mutation of a
+different local, reference/destructor reentry, throwing cleanup, branches,
+backedges, zero/single inputs and boxed value families. It compares AST with
+AOT O0/O3, EH, no-debug, split and disabled controls. The baseline IR interpreter
+does not expose this fixture's caller body local to the reflection helper;
+that limitation is explicit rather than described as a passing IR reflection test.
+
+Preserved preflight failures include an inherited runtime-control test expectation,
+an initial LLVM comparator that omitted launcher metadata-length differences,
+and a Java preparation assertion that incorrectly required a v2 store symbol
+in the fully v3-enabled fixture. None supplied retained timing data. Truncated
+tool responses for short preparation and final broad qualification are recorded
+with unknown outer exit codes; independent replay validates child results and
+artifacts without inventing successful terminal observations. The final AOT and
+Java timing drivers and their verifiers have observed successful terminal exits.
+
+### Audit and next work
+
+The audit-changes review covers all 62 checklist items in the linked evidence.
+It found and fixed missing cancellation checks on duplicate worklist pops before
+final qualification and measurement. No production code changed after the freeze;
+design, controls and this results publication are checked as documentation-only
+additions.
+
+|!Audit group|!Status|!Evidence
+|Module registration, layout and QPP namespace|N/A|No new module or QPP class; no optimization release note
+|New files and tests|Pass|2026 MIT headers; modern executable fixtures; delivered QUnit/FsUtil dependencies
+|Filesystem and network operations|N/A|No new production filesystem/network operations
+|Cooperative cancellation|Pass|Instruction, CFG-edge and worklist-pop checks every 100; guard transforms every 10
+|DataProvider and JNI registration|N/A|No action, app, factory, JAR or module-install changes
+|Workarounds, types, errors and threading|Pass|Complete pass; compiler-owned state; immutable helper configuration; error propagation
+|Ownership and exception safety|Pass|Point-in-time witness; full effect barriers; owning and throwing paths retained
+|Performance|Pass|All 6985 windows retained, including adverse controls, short-call limits and code growth
+|Documentation|Pass|Internal contracts, design, independent controls, results and strict table validation
+|QPP flags|N/A|No QPP method changed
+|Bounds, formats and sensitive data|Pass|Existing slot admission; fixed diagnostics; allowlisted environment evidence
+|Correctness|Pass|Selected release/debug, EH, reentry, observable context and reference checks
+
+Retain the repeatable boxed-loop gains with the costs above explicit. Java parity
+is unachieved: native/indirect calls still take roughly 3x Java time; boxed calls
+6-8x; member/container paths much more. Profile the retained AOT build next,
+then target typed dispatch/frame/context overhead and member/container storage
+costs. The prior profile showed negligible TLS sampling, so another broad TLS
+rewrite is not justified by this evidence. Dead publication returns are a
+separate possible code-cost cleanup, not a demonstrated next speedup. Do not
+repeat the previously rejected prepared-body experiment without a new proof or
+measured bottleneck.
+
+[Verified measurements, qualification and every audit item](results-aot-scalar-boundary-reuse-macos-arm64.json).

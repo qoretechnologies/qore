@@ -457,6 +457,40 @@ static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_stor
             UT_ASSERT_EQ(c, 2, text->reference_count(), "unsupported input gains only the runtime-slot owner");
             qore_rt_assign_auto_local_slot_aot_v2(&context, 0, QoreValue(2.5).rawBits(), admitted, &xsink);
             UT_ASSERT_EQ(c, 1, text->reference_count(), "ordinary fallback releases the old node once");
+            bool reports_publication = admitted && !std::getenv("QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION")
+                && !std::getenv("QORE_DISABLE_AOT_SCALAR_LOCAL_STORE")
+                && !std::getenv("QORE_DISABLE_AOT_SCALAR_BOUNDARY_REUSE");
+            for (QoreValue value : {QoreValue(false), QoreValue(true), QoreValue(int64_t{37}),
+                    QoreValue(2.75), QoreValue(-0.0)}) {
+                int published = qore_rt_assign_auto_local_slot_aot_v3(&context, 0,
+                    value.rawBits(), admitted, &xsink);
+                UT_ASSERT_EQ(c, reports_publication ? 1 : 0, published,
+                    "v3 reports only admitted immediate scalar publication");
+                UT_ASSERT_EQ(c, value.rawBits(), slot->val.getValue().rawBits(),
+                    "publication reporting preserves actual runtime storage bits");
+            }
+            UT_ASSERT_EQ(c, 0, qore_rt_assign_auto_local_slot_aot_v3(&context, 0,
+                QoreValue(int64_t{39}).rawBits(), nullptr, &xsink),
+                "ordinary lookup never supplies a prepared publication witness");
+            UT_ASSERT_EQ(c, 0, qore_rt_assign_auto_local_slot_aot_v3(&context, 0,
+                QoreValue(*text).rawBits(), admitted, &xsink), "owning input is never a scalar witness");
+            UT_ASSERT_EQ(c, 2, text->reference_count(), "v3 fallback retains exactly the runtime owner");
+            UT_ASSERT_EQ(c, 0, qore_rt_assign_auto_local_slot_aot_v3(&context, 0,
+                QoreValue(3.25).rawBits(), admitted, &xsink),
+                "releasing a prior owner cannot report non-reentrant publication");
+            UT_ASSERT_EQ(c, 1, text->reference_count(), "v3 ordinary replacement releases the owner once");
+            xsink.raiseException("SCALAR-PUBLICATION-TEST", "pending sink control");
+            UT_ASSERT_EQ(c, 0, qore_rt_assign_auto_local_slot_aot_v3(&context, 0,
+                QoreValue(3.5).rawBits(), admitted, &xsink), "a populated sink cannot publish a witness");
+            bool threw = false;
+            try {
+                qore_rt_assign_auto_local_slot_aot_throwing_v3(&context, 0,
+                    QoreValue(3.75).rawBits(), admitted, &xsink);
+            } catch (const QoreJITException&) {
+                threw = true;
+            }
+            UT_ASSERT(c, threw && xsink, "v3 native EH retains the sink and unwinds");
+            xsink.clear();
             {
                 LocalScope readonly("native_prepared_readonly", autoTypeInfo, xsink);
                 readonly.var.setReadOnly();

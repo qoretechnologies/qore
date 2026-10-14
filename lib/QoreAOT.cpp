@@ -23449,6 +23449,11 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     // Phase 1 instrumentation: Chrome trace for opt + codegen.
     TimeTraceRAII time_trace;
 
+    // Publication tokens must see every effect before inlining or scalar promotion.
+    if (!QoreIRToLLVM::prepareScalarBoundaryReuse(module, error)) {
+        return false;
+    }
+
     std::string triple;
     if (target_triple) {
         triple = target_triple;

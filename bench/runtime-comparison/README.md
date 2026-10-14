@@ -968,6 +968,28 @@ No IR/JIT improvement is claimed. See the measured long-loop benefits,
 short-invocation limits, pointer controls and code growth in
 [the scalar reference guard results](RESULTS.md#aot-scalar-reference-resolution-guard).
 
+`QORE_DISABLE_AOT_SCALAR_BOUNDARY_REUSE=1` at compilation retains v2 prepared
+auto-local stores and omits scalar-publication state. Enabled AOT code can retain
+one exact, still-current local cache at a temporary boundary after an admitted
+scalar store. A pre-optimization effect pass revokes the witness before unknown
+calls, owning cleanup and external writes; this is not a pure-callee assumption.
+Runtime presence at first v3 helper use instead disables witness reporting only,
+with ordinary assignment unchanged. Empty values and `0` also count as present.
+
+`QORE_DISABLE_AOT_SCALAR_BOUNDARY_LIVENESS=1` is compile-only: it restores broad
+early cleanup-guard selection for comparison. The default intersects publication
+reachability with boundary liveness; it does not relax effect barriers.
+`QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD` disables these early scalar no-op guards,
+and `QORE_DISABLE_LLVM_FLOAT_DECREF_GUARD` narrows their predicate. The independent
+method-cleanup control still governs late caller selection, not early intervals
+selected by the boundary pass. `QORE_IR_OPT_STATS=1` reports
+`scalar-boundary-functions`, `cleanup-guards`, `barriers` and
+`dead-cleanup-candidates`; these are compile-time counts, not execution counts.
+Measure separately compiled artifacts for compiler controls and the same artifact
+for runtime-off. Keep matching compiler/runtime pairs, A/A repetitions, pointer
+and short-invocation controls. No IR/JIT gain is claimed. See
+[the scalar-boundary measurements](RESULTS.md#aot-scalar-publication-boundary-reuse).
+
 `QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG=1` at compilation selects legacy TLS
 polling for generated JIT/AOT loops. The enabled path acquires a nullable,
 borrowed live `RuntimeConfig*` once per invocation and passes it to
