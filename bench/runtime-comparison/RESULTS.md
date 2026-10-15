@@ -13777,3 +13777,127 @@ All 62 audit-changes items are individually recorded with evidence in the datase
 |Performance and correctness|Pass|All 3765 windows replayed; release/debug and supplemental tests; adverse controls retained
 |Documentation and credential handling|Pass|Strict Qore tables; explicit limitations; paths/hashes only in archived environments
 |Module, DataProvider, JNI, QPP and sandbox-manager checks|N/A|No applicable registration, dependency, method or production I/O change
+
+
+## Exact-type closure admission trial rejected (2026-10-15)
+
+The standalone signature-query optimization is not retained. Its proof is valid:
+after the existing exact one-parameter `int(int)` checks, the built-in types cannot
+need generic substitution. The trial omitted that redundant query in release,
+kept a debug assertion and supplied `QORE_DISABLE_AOT_CLOSURE_EXACT_TYPE_PROOF`
+as a same-runtime control. Program/debugger/body/map checks, both physical stack
+guards, context handling, capture locks and diagnostic publication were unchanged.
+No ABI, cache, ownership or compiler-lowering change was involved.
+
+The initial closure gains did not become a convincing overall benefit in the
+confirmation: plain/captured closures improved 2.06%/0.81% versus frozen, while
+list mutation cost 1.76%. Confirmation variation was wide, including floating
+callback fork means around 7-40 ns/element. Every observation is retained; no
+outlier removal, causal explanation or statistical-significance claim is made.
+Both trial test edits and the runtime edit are restored exactly to the frozen
+source baseline. The previous, much larger closure-context improvement remains.
+
+The complete 2955-window record, candidate patch, raw outputs, artifact hashes,
+compile-only probe, qualification and full audit are in
+`results-aot-closure-admission-rejected-macos-arm64.json`.
+
+### Qualification and assembly
+
+Candidate release and debug each pass 21 files, 54 cases and 12292 assertions,
+rebuild 64 qmods, and verify both 555-result IR/AOT reference grids. Restored release
+passes the same 21 files/54 cases with 12260 assertions, 64 qmods and both reference
+grids. Active owned module aliases point to the restored release build. Debug
+remains a candidate artifact until the next debug rebuild; it is not the active
+release runtime. No full-suite, sanitizer, cross-platform or non-SCU claim.
+
+The linked closure helper retains its 352-byte frame; instruction count changes
+from 352 to 362, including control-path code. Integer/floating callback helpers
+remain 153 instructions with 80-byte frames. These are literal helper measurements,
+not total-stack savings, byte identity or an explanation of control variation.
+The original debug wrapper tool response was lost during context compaction;
+its waited child exit and completed/restored/source/artifact records were independently
+validated. The archive explicitly distinguishes that recovery from an observed
+original wrapper process terminal.
+
+### Initial broad screen
+
+macOS arm64, count4096/seed7, three warmups, three 300-ms windows, three fresh forks,
+13 workloads, order135839: 585 jobs/1755 windows. Each of five fixed layouts
+(default/sorted/reverse/shuffle487/shuffle509) uses the identical executable/object
+across frozen, candidate enabled and candidate proof-off runtime. The last control
+retains the legacy query. Library paths,
+hashes and all 555 reference outputs are checked. No task build/test/profile or
+evidence analysis overlaps timing. Host frequency/load/thermal state is uncontrolled.
+
+Values are whole-workload ns/element, not isolated call latency. Qore aggregates
+are medians of five layout medians of fork means. Positive changes are slower;
+observed fork ranges are not confidence intervals.
+
+|!Kernel|!Frozen|!Candidate|!Legacy query|!Change vs frozen|!Change vs off
+|indirect_int_result|6.199|6.150|6.197|-0.79%|-0.76%
+|indirect_float_result|7.380|7.201|7.284|-2.42%|-1.14%
+|dynamic_int_result_call|10.317|10.283|10.343|-0.33%|-0.58%
+|boxed_int_method_effect|86.240|85.198|85.002|-1.21%|+0.23%
+|dynamic_float_result_call|11.435|11.333|11.292|-0.89%|+0.37%
+|boxed_int_method_call|15.616|15.494|15.528|-0.78%|-0.22%
+|boxed_float_method_call|19.333|19.107|19.083|-1.17%|+0.13%
+|boxed_int_method_fallback|30.485|29.999|29.763|-1.59%|+0.79%
+|boxed_float_method_fallback|31.225|31.251|31.267|+0.08%|-0.05%
+|closure_call|19.717|19.273|20.066|-2.25%|-3.95%
+|closure_capture|25.614|25.068|25.716|-2.13%|-2.52%
+|list_build|85.125|84.837|84.856|-0.34%|-0.02%
+|list_mutate|230.934|233.847|233.658|+1.26%|+0.08%
+
+Both closure targets initially improve in every layout against both controls.
+List mutation costs 1.26% versus frozen and is selected for confirmation, alongside
+the two targets and both callback controls. All other initial results remain in
+the record; the confirmation is not a fresh full call-family matrix.
+
+### Five-fork confirmation and fresh Java
+
+Five forks, five selected workloads, order135853, otherwise the same count/seed/
+warmups/windows/layouts: 400 jobs/1200 windows. Temurin25.0.2+10/JMH1.37 uses fresh
+JVMs interleaved with Qore, one thread, `-Xms256m -Xmx256m`, GC profiling, verified
+DONT_INLINE target hints and 555 reference checks. Java aggregates are medians
+of five fork means. This candidate was rejected: its numbers are not the final
+installed-runtime results.
+
+|!Kernel|!Frozen|!Candidate|!Legacy query|!Change vs frozen|!Change vs off|!Java|!Candidate/Java
+|indirect_int_result|6.374|6.336|6.355|-0.61%|-0.30%|1.953|3.24x
+|indirect_float_result|7.591|7.544|7.450|-0.61%|+1.26%|2.865|2.63x
+|closure_call|20.592|20.168|20.870|-2.06%|-3.37%|1.740|11.59x
+|closure_capture|26.558|26.343|26.668|-0.81%|-1.22%|1.811|14.55x
+|list_mutate|245.289|249.611|246.968|+1.76%|+1.07%|4.245|58.80x
+
+Plain closure medians improve versus frozen in four layouts, with sorted +0.02%.
+Captured medians improve in four, with shuffle487 +0.53% frozen/+0.61% off.
+All plain closure ranges overlap; captured default has a disjoint improvement
+versus off only. List mutation is worse versus frozen in four layouts, but all
+its ranges overlap. Floating callbacks improve 0.61% versus frozen yet cost 1.26%
+versus same-runtime off; all ranges overlap. This evidence does not establish
+that unrelated controls are unaffected, nor that their costs are causal.
+
+The frozen retained runtime in this fresh comparison measures 20.592/26.558
+ns/element for plain/captured closures versus Java 1.740/1.811 (11.84x/14.67x).
+These matched workload gaps are not general language ratios. No short-invocation
+timing was pursued after rejection; the prepared short driver was not executed.
+
+### Next work and audit
+
+Prioritize eager closure object/class context, then callee-guard and capture
+lookup costs. The complete bounded-body proof must exclude observation/reentry;
+exception materialization, closure-self semantics, reader waits, ownership and
+live debugger/Program/body invalidation remain mandatory. Do not repeat the small
+query-only trial or search layouts for a favorable result. Broader direct/typed/
+nullable/monomorphic measurements and short closure setup remain open.
+Neither Java parity nor a performance ceiling has been reached.
+
+The retained documentation/data-only diff has all 62 audit items individually
+recorded: 7 Pass, 55 N/A, 0 Fail. Every timing window is independently replayed.
+
+|!Check group|!Status|!Evidence
+|Copyright and complete implementation scope|Pass|2026/MIT dataset; no runtime/test trial changes remain
+|Performance and correctness|Pass|All 2955 windows, reference grids, qualification and restoration verified
+|Error handling and evidence provenance|Pass|Settings, argv, hashes and child exits checked; recovered wrapper terminal disclosed
+|Documentation and credentials|Pass|Strict Qore tables; candidate-only results and adverse controls; no credential values
+|Runtime/test/module/DataProvider/JNI/QPP checks|N/A|Retained diff contains documentation and research data only

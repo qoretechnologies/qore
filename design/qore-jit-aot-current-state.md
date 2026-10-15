@@ -2408,3 +2408,35 @@ checks can move off the hot path, then evaluate callee-guard and capture costs.
 Each step requires frozen and same-runtime controls, observability/fallback tests
 and fresh measurements. Closure setup at short counts and the broader call matrix
 remain open. Neither Java parity nor a performance ceiling has been reached.
+
+
+## Exact-type closure admission trial rejected (2026-10-15)
+
+Skipping the generic-substitution query after exact built-in `int(int)` admission
+is semantically valid, but this standalone trial is not retained. Initial plain/
+captured closure gains of 2.25%/2.13% versus frozen reduce to 2.06%/0.81% in the
+five-fork confirmation; list mutation costs 1.26% initially and 1.76% in confirmation.
+Confirmation has wide fork variation, and almost all ranges overlap. No samples
+are discarded and no causal explanation is inferred. All runtime/test edits and
+the trial control flag are removed; the earlier closure-context gains remain.
+
+Fresh comparison of the frozen retained runtime: plain/captured closures
+20.592/26.558 ns/element versus Java 1.740/1.811, or 11.84x/14.67x. These are matched
+whole-workload numbers, not isolated calls or a general Qore/Java ratio. The rejected
+candidate's slightly lower figures do not represent installed performance.
+
+Candidate release/debug each pass 21 files, 54 cases and 12292 assertions; restored
+release passes 21 files, 54 cases and 12260 assertions. Each rebuilds 64 qmods and
+passes both 555-result IR/AOT reference grids.
+Active module aliases point to restored release; debug is rebuilt before further
+debug qualification. All 2955 windows, controls, candidate patch, assembly and the
+full 62-item docs/data audit (7 Pass, 55 N/A, 0 Fail) are in
+`bench/runtime-comparison/results-aot-closure-admission-rejected-macos-arm64.json`.
+Full tables, uncontrolled host variation and terminal-recovery details appear in
+`bench/runtime-comparison/RESULTS.md`. No short-invocation, full-suite, sanitizer or
+cross-platform claim.
+
+Next distinct target: eager closure object/class context, preserving exception
+materialization, closure-self state, per-read capture locks and reader waits.
+Callee guards, capture lookup, setup and the broader call matrix remain open.
+Neither parity nor a performance ceiling has been reached.
