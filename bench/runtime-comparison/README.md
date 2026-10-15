@@ -1403,3 +1403,35 @@ See [direct primitive-store measurements and longer confirmation](RESULTS.md#dir
 [62-check audit](FOLLOWUP-AUDIT.md#direct-aot-primitive-local-replacement-audit-2026-10-12).
 
 See [native scalar-key measurements](RESULTS.md#aot-native-scalar-dispatch-key-2026-10-11) and [verified evidence/audit](results-native-scalar-key-macos-arm64.json).
+
+## Optimized reporting policy and mixed workloads
+
+All headline Java and develop/feature comparisons use an optimized Qore runtime
+(`CMAKE_BUILD_TYPE=Release`, verified actual `-O3 -DNDEBUG` flags), `qcc -O3`
+executables, and warmed Java JIT execution. Debug/sanitizer builds are for
+correctness testing, not comparative timing. Historical `java-int` results are
+interpreter diagnostics, not optimized Java comparisons. Select
+`--modes qore-aot java-jit` for optimized AOT/Java runs with the general runner.
+
+`mixed_workloads.qr` adds four dependency-free synthetic processing workloads:
+CSV filtering/grouping/reporting, object-order processing, a materialized typed
+callback/captured-closure pipeline, and text normalization/frequency indexing.
+Input generation is excluded from timing; processing and result formatting are
+included. These are broader than call microbenchmarks but are not production
+application, I/O, startup or Java mixed-workload comparisons.
+
+```sh
+python3 bench/runtime-comparison/test_mixed_reference.py
+build/qore --exec-mode=ir bench/runtime-comparison/mixed_workloads.qr check
+build/qcc -O3 -o build/mixed-workloads bench/runtime-comparison/mixed_workloads.qr
+build/mixed-workloads check
+build/mixed-workloads callback_pipeline 4096 3 3 300 7
+```
+
+`mixed_reference.validate_checks(output)` validates all 60 check rows against
+an independent Python reference. The archived checkpoint driver independently
+compiles both revisions, verifies loaded libraries and optimized build flags,
+then randomizes revision/layout order across five processes and three layouts.
+See the optimized checkpoint in `RESULTS.md` for complete results, regressions,
+raw evidence, exact revisions and limitations; do not treat a suite average as
+an overall application speedup.

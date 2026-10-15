@@ -2440,3 +2440,29 @@ Next distinct target: eager closure object/class context, preserving exception
 materialization, closure-self state, per-read capture locks and reader waits.
 Callee guards, capture lookup, setup and the broader call matrix remain open.
 Neither parity nor a performance ceiling has been reached.
+
+## Optimized branch-wide checkpoint (2026-10-15)
+
+Fresh, interleaved release/AOT comparison with current develop `347db1015`
+uses identical Apple Clang `-O3 -DNDEBUG`, LLVM 22.1.8 and qcc `-O3` settings.
+Feature `c980bb3bc` improves direct/final kernels 4.56x/4.39x, typed callbacks
+roughly 28–42x, and plain/captured closures 6.77x/6.05x versus develop.
+These are whole-workload gains, not isolated call latency.
+
+Broader synthetic processing is mixed: callback pipeline 3.47x, object orders
+1.112x, text indexing 1.044x; CSV report processing takes 2.96% more time.
+List mutation regresses 15.88%, with all three layout ranges disjoint.
+Temporary hashes are aggregate-flat but one layout regresses 9.53%.
+There is no single general Qore application speedup.
+
+A separate fresh optimized Java checkpoint puts direct/final Qore at
+1.565/1.642 ns per element versus Java 1.022/1.025; plain/captured closures
+remain 12.05x/14.60x Java time. All 37 call/collection rows and all four mixed
+workloads appear in `bench/runtime-comparison/RESULTS.md`. All 7020 timing
+windows, build provenance, raw samples and the complete 62-item audit are in
+`results-aot-optimized-checkpoint-macos-arm64.json` in that directory.
+
+The next priority is the list-mutation regression, then CSV/hash layout
+sensitivity; defer further closure object/class-context work until those are
+understood. No Java parity, performance ceiling, cross-Program, general IR/JIT,
+production-application, startup or I/O speedup is claimed.

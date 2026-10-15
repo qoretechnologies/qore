@@ -13901,3 +13901,179 @@ recorded: 7 Pass, 55 N/A, 0 Fail. Every timing window is independently replayed.
 |Error handling and evidence provenance|Pass|Settings, argv, hashes and child exits checked; recovered wrapper terminal disclosed
 |Documentation and credentials|Pass|Strict Qore tables; candidate-only results and adverse controls; no credential values
 |Runtime/test/module/DataProvider/JNI/QPP checks|N/A|Retained diff contains documentation and research data only
+
+## Optimized branch impact and Java checkpoint (2026-10-15)
+
+This checkpoint answers the branch-wide impact question using **optimized builds only**.
+Develop `347db1015` is built in an isolated detached worktree; feature is `c980bb3bc`
+(runtime source `b23715fda`, followed only by documentation). Runtime flags match
+exactly after normalizing source/build paths: Apple Clang, `-O3 -DNDEBUG`, arm64,
+LLVM 22.1.8, identical SDK/dependencies and SCU configuration; allocation tracking
+is off. Each revision compiles its own AOT executables with `qcc -O3` and loads
+its own hash-verified runtime. No debug/sanitizer/Java-interpreter timings are used.
+
+### Develop versus feature: mixed processing
+
+Five independent processes per revision/layout, three fixed layouts (default,
+reverse, shuffle-487), three warmups and three 300 ms windows, 4096 input records,
+seed 7. Revision/layout order is randomized within workload/fork blocks. Each
+reported time is the median of three layout medians of five process means.
+Inputs are generated outside timing; processing, temporary allocation and result
+formatting are included. These are synthetic CPU-processing workloads, not a
+production-application score, and exclude startup, compilation and external I/O.
+
+|!Workload|!Develop ms / 4096 records|!Feature ms / 4096 records|!Speedup|!Elapsed-time change
+|csv_report|4.543|4.677|0.971x|+2.96%
+|object_orders|8.851|7.960|1.112x|-10.07%
+|callback_pipeline|1.231|0.355|3.469x|-71.18%
+|text_index|7.083|6.785|1.044x|-4.22%
+
+The callback pipeline materializes and filters a list, calls a typed function and
+a captured closure, then reduces results. Object processing allocates orders,
+calls methods and polymorphic discount policies, groups totals and formats a
+report. CSV processing parses a deterministic unquoted numeric CSV, filters and
+groups rows, then formats totals. Text indexing normalizes/tokenizes generated
+text, builds frequency counts and formats a report. This is not `CsvUtil` or
+a full CSV parser benchmark. An independent Python reference checks 60 cases
+including empty/single inputs, multiple sizes and wraparound seeds in both IR
+runtimes and all six mixed AOT executables.
+
+### Develop versus feature: complete microbenchmark matrix
+
+Whole-workload **ns/element**, not isolated call latency. These use the same
+settings/order policy as the mixed workloads. All 37 workloads are retained.
+
+|!Workload|!Develop ns/element|!Feature ns/element|!Speedup|!Elapsed-time change
+|arithmetic|7.052|1.558|4.525x|-77.90%
+|direct_call|7.162|1.571|4.559x|-78.07%
+|method_call|7.175|1.635|4.389x|-77.21%
+|indirect_call|232.062|6.828|33.985x|-97.06%
+|polymorphic_call|315.398|23.651|13.336x|-92.50%
+|polymorphic_expression_call|134.878|10.727|12.573x|-92.05%
+|monomorphic_call|12.128|3.752|3.232x|-69.06%
+|optional_method_call|207.291|10.838|19.127x|-94.77%
+|polymorphic_float_call|336.408|23.270|14.457x|-93.08%
+|polymorphic_float_expression_call|154.551|10.908|14.169x|-92.94%
+|monomorphic_float_call|12.008|3.542|3.390x|-70.50%
+|optional_float_method_call|210.376|10.973|19.172x|-94.78%
+|boxed_float_method_call|249.655|20.144|12.394x|-91.93%
+|dynamic_int_result_call|199.402|10.863|18.357x|-94.55%
+|dynamic_int_result_fallback|458.712|22.108|20.748x|-95.18%
+|boxed_int_method_call|226.539|16.527|13.707x|-92.70%
+|boxed_int_method_fallback|274.767|31.728|8.660x|-88.45%
+|boxed_float_method_fallback|325.497|32.750|9.939x|-89.94%
+|boxed_int_method_effect|379.547|90.318|4.202x|-76.20%
+|dynamic_float_result_call|217.352|11.946|18.195x|-94.50%
+|indirect_wide|278.956|6.800|41.025x|-97.56%
+|indirect_float|235.055|6.778|34.681x|-97.12%
+|indirect_int_result|204.755|6.378|32.103x|-96.89%
+|indirect_float_result|208.464|7.477|27.880x|-96.41%
+|indirect_tagged_float|285.691|6.947|41.123x|-97.57%
+|indirect_branch_float|244.394|6.974|35.044x|-97.15%
+|indirect_affine|233.227|6.915|33.729x|-97.04%
+|indirect_affine_wide|280.445|6.754|41.524x|-97.59%
+|indirect_branch_int|232.653|6.874|33.847x|-97.05%
+|dispatch_control|7.422|1.640|4.527x|-77.91%
+|list_read|8.889|2.815|3.158x|-68.33%
+|list_build|109.836|89.519|1.227x|-18.50%
+|list_mutate|210.522|243.956|0.863x|+15.88%
+|temporary_list|140.423|135.876|1.033x|-3.24%
+|temporary_hash|328.925|329.243|0.999x|+0.10%
+|closure_call|138.436|20.455|6.768x|-85.22%
+|closure_capture|159.861|26.425|6.050x|-83.47%
+
+There is no defensible single overall application speedup: call-heavy kernels
+improve strongly, but collection-heavy work does not uniformly improve. List
+mutation regresses **15.88%** overall; its three layout medians regress
+15.74%, 15.63% and 19.11%, with disjoint observed process-mean ranges in all
+three layouts. CSV processing takes 2.96% more time overall; layout medians
+regress 0.64%, 3.81% and 3.31%, with disjoint ranges in the latter two.
+Temporary hashes are aggregate-flat (+0.10%), but shuffle-487 regresses
+9.53% with disjoint ranges, unlike default (-0.91%) and reverse (+1.31%).
+These adverse results are retained; no causal explanation or confidence
+interval is inferred from the ranges.
+
+### Current retained AOT versus Java
+
+This is a **separate** fresh checkpoint using the identical feature runtime,
+five Qore layouts (default/sorted/reverse/shuffle-487/shuffle-509), five
+processes, three warmups and three 300 ms windows, count 4096 and seed 7.
+Java is release Temurin 25.0.2+10, JMH 1.37, warmed default HotSpot JIT,
+not `-Xint`. Qore is the median of five layout medians; Java is the median
+of five process means. Do not mix this epoch with the develop comparison
+to calculate further ratios. Java dynamic/callback targets have verified
+`DONT_INLINE` hints; direct/final targets allow inlining. Compiler choices,
+ownership and allocation semantics differ; this is not uniform no-inline
+call latency or proof of best possible Java throughput.
+
+|!Workload|!Qore AOT ns/element|!Java JIT ns/element|!Qore / Java time
+|arithmetic|1.569|1.030|1.524x
+|direct_call|1.565|1.022|1.531x
+|method_call|1.642|1.025|1.602x
+|indirect_call|6.860|1.720|3.989x
+|polymorphic_call|23.707|2.655|8.930x
+|polymorphic_expression_call|10.857|2.656|4.088x
+|monomorphic_call|3.770|1.730|2.180x
+|optional_method_call|10.892|1.730|6.298x
+|polymorphic_float_call|23.099|2.657|8.693x
+|polymorphic_float_expression_call|10.878|2.668|4.077x
+|monomorphic_float_call|3.542|1.721|2.059x
+|optional_float_method_call|11.123|1.722|6.459x
+|boxed_float_method_call|20.303|2.684|7.564x
+|dynamic_int_result_call|10.873|3.182|3.417x
+|dynamic_int_result_fallback|22.145|2.986|7.417x
+|boxed_int_method_call|16.607|2.642|6.287x
+|boxed_int_method_fallback|31.668|2.654|11.933x
+|boxed_float_method_fallback|32.785|2.668|12.286x
+|boxed_int_method_effect|90.217|1.917|47.061x
+|dynamic_float_result_call|11.940|3.395|3.517x
+|indirect_wide|6.831|1.734|3.938x
+|indirect_float|6.713|1.703|3.941x
+|indirect_int_result|6.369|1.942|3.279x
+|indirect_float_result|7.483|2.824|2.650x
+|indirect_tagged_float|6.921|1.697|4.078x
+|indirect_branch_float|6.825|1.709|3.993x
+|indirect_affine|6.870|1.700|4.042x
+|indirect_affine_wide|6.875|1.693|4.062x
+|indirect_branch_int|6.881|1.733|3.970x
+|dispatch_control|1.644|1.026|1.603x
+|list_read|2.809|0.294|9.560x
+|list_build|89.379|3.272|27.314x
+|list_mutate|243.625|4.242|57.438x
+|temporary_list|135.255|1.255|107.741x
+|temporary_hash|336.616|16.400|20.525x
+|closure_call|20.611|1.711|12.048x
+|closure_capture|26.644|1.825|14.597x
+
+Direct/final Qore results are close to its arithmetic control, so their full
+gap is not attributable to call overhead alone. Same-program typed callbacks,
+closures, boxed/member calls and collection operations still have substantial
+gaps. No cross-Program or new IR/JIT performance numbers are claimed.
+
+### Evidence, limitations and next work
+
+All 1230 develop/feature jobs (3690 windows) and 1110 Java-checkpoint jobs
+(3330 windows) are retained in
+`results-aot-optimized-checkpoint-macos-arm64.json`, including raw outputs,
+settings, executable/runtime/source hashes, loader checks, references, build
+flags, drivers and terminal records. No task-owned build, test, profile or
+analysis workload overlapped timing. Host frequency, thermals and other system
+activity were not controlled. No samples/layouts were selected or discarded.
+The current runtime retains its prior release qualification (21 files, 54
+cases, 12260 assertions and 64 qmods); this checkpoint adds reference checks,
+not a new full-suite/debug/sanitizer/cross-platform qualification.
+
+First diagnose the consistent list-mutation regression, then CSV/hash layout
+sensitivity. Resume deferred closure object/class-context work after these
+are understood. Neither Java parity nor a performance ceiling is established.
+The dataset records every item of the required 62-check audit.
+
+|!Check group|!Status|!Evidence
+|Benchmark implementation and input handling|Pass|Typed callbacks; in-memory workloads; 10 invalid-argument checks
+|Correctness and measurement provenance|Pass|All 7020 windows replayed; independent reference grids; 8 new and 17 existing runner tests
+|Performance reporting|Pass|Optimized flags and loaded libraries verified; gains, regressions and scope limits retained
+|Documentation and credentials|Pass|Strict Qore tables; 2026/MIT files; no connection-string values recorded
+|C++/QPP/module/DataProvider/JNI-specific checks|N/A|No such source or registration changes
+
+Full audit: 12 Pass, 50 N/A, 0 Fail. This commit changes benchmark code and
+reporting only; it does not introduce another runtime optimization.
