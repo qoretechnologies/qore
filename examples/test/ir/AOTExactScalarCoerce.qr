@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+sub expect(auto expected, auto actual) {
+    if (expected.fullType() != actual.fullType()
+            || sprintf("%y", expected) != sprintf("%y", actual)
+            || (expected.fullType() == "float" && sprintf("%g", expected) != sprintf("%g", actual))) {
+        throw "EXACT-COERCE-TEST", sprintf("expected %y (%s), got %y (%s)",
+            expected, expected.fullType(), actual, actual.fullType());
+    }
+}
+
+# Ordinary runtime-backed parameters deliberately remain visible. The lvalue
+# operation also prevents native scalar parameter classification in AOT.
+int sub assignInt(int value, auto input) {
+    list<int> marker = (0,);
+    marker[0] += 1;
+    value = input;
+    expect(value, get_local_vars(0).value.value);
+    return value;
+}
+float sub assignFloat(float value, auto input) {
+    list<int> marker = (0,);
+    marker[0] += 1;
+    value = input;
+    expect(value, get_local_vars(0).value.value);
+    return value;
+}
+bool sub assignBool(bool value, auto input) {
+    list<int> marker = (0,);
+    marker[0] += 1;
+    value = input;
+    expect(value, get_local_vars(0).value.value);
+    return value;
+}
+int sub assignSoft(softint value, auto input) {
+    value = input;
+    return value;
+}
+*int sub assignOptional(*int value, auto input) {
+    value = input;
+    return value;
+}
+enum ExactCoerceEnum : int { Value = 7 }
+
+for (int round = 0; round < 4; ++round) {
+    foreach int input in ((0, 1, -1, 140737488355327, -140737488355328,
+            140737488355328, -140737488355329, 9223372036854775807, -9223372036854775807)) {
+        expect(input, call_function("assignInt", 3, input));
+        expect(float(input), call_function("assignFloat", 1.25, input));
+    }
+    foreach float input in ((1.25, -1.25, 0.0, -0.0, -3.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
+        expect(input, call_function("assignFloat", 2.5, input));
+    }
+    expect(False, call_function("assignBool", True, False));
+    expect(True, call_function("assignBool", False, True));
+    expect(21, call_function("assignSoft", 0, "21"));
+    expect(NOTHING, call_function("assignOptional", 1, NOTHING));
+    expect(7, call_function("assignInt", 0, ExactCoerceEnum::Value));
+    foreach string name in (("assignInt", "assignFloat", "assignBool")) {
+        auto initial = name == "assignInt" ? 0 : name == "assignFloat" ? 0.0 : False;
+        foreach auto input in (("not a scalar", NOTHING, (1, 2), {"value": 3})) {
+            bool failed = False;
+            try { call_function(name, initial, input); }
+            catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "RUNTIME-TYPE-ERROR") { rethrow; }
+                failed = True;
+            }
+            if (!failed) { throw "EXACT-COERCE-TEST", name + " accepted an invalid value"; }
+        }
+    }
+}
+printf("exact-scalar-coerce: ok\n");

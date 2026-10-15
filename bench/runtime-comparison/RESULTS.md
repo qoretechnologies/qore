@@ -14077,3 +14077,134 @@ The dataset records every item of the required 62-check audit.
 
 Full audit: 12 Pass, 50 N/A, 0 Fail. This commit changes benchmark code and
 reporting only; it does not introduce another runtime optimization.
+
+## List-mutation attribution and exact scalar coercion (2026-10-15)
+
+The list-mutation regression is reduced, not resolved. A runtime-only guarded
+coercion shortcut reduces its feature-branch time by 4.62%, from 245.123 to
+233.802 ns/element. Current develop is 210.224 ns in the same session, so the
+remaining regression is 11.22%. No Java parity or performance ceiling is claimed.
+
+### Compiler/runtime crossover
+
+The frozen optimized artifacts from the preceding checkpoint were reused:
+Apple Clang release `-O3 -DNDEBUG`, LLVM 22.1.8 and qcc `-O3`, arm64 macOS.
+Develop is `347db1015`; the feature source checkpoint is `d32f73f90` (runtime
+unchanged from the preceding checkpoint). Develop's three AOT executables pass
+all 555 reference checks unchanged on the feature runtime. Loaded-library
+checks confirm the intended runtime, without an identity or ABI override.
+This is compatibility evidence for these artifacts, not a general guarantee.
+
+The diagnostic crossover used default/reverse/shuffle-487 layouts, five forks,
+three warmups and three measured 300 ms windows, count 4096 and seed 7, with
+randomized interleaved blocks (order seed 135941). Each table entry is the median
+of three layout medians; each layout median uses five fork means. All 90 jobs /
+270 windows are retained.
+
+|!Workload|!Develop executable + develop runtime, ns/element|!Develop executable + feature runtime|!Feature executable + feature runtime
+|list_mutate|207.321|168.489|245.164
+|list_build|109.753|86.989|89.636
+
+On unchanged develop code, the feature runtime reduces mutation time by 18.73%.
+On that same feature runtime, feature-generated mutation code takes 45.51% more
+time than develop-generated code. The generated code, rather than a slower
+mutation runtime, is therefore the regression target. The list-build control
+shows a much smaller generated-code penalty (3.04%).
+
+Assembly inspection finds 390 versus 778 instructions in the complete linked
+mutation functions, including cold cleanup. The feature code includes ordinary
+scalar-parameter coercion/publication and additional cache/reload work. Generic
+lvalue operations conservatively make ordinary parameters runtime-backed because
+reference evaluation and destructors can reflect into the frame. The old code's
+faster execution is not proof that restoring its visibility assumptions is safe.
+Untimed sampling also identifies generic assignment, lvalue handling and
+reference cleanup as remaining costs. Instrumented durations are excluded from
+the timing datasets; samples do not assign causal latency percentages to helpers.
+
+### Retained first optimization
+
+`qore_rt_coerce_value_aot()` now accepts an already-immediate int/float/bool
+unchanged when its live lvalue declaration is the exact canonical built-in type
+and no exception is pending. It publishes the same cleanup bits as the ordinary
+helper. Wide integers, tag-colliding floats, enums, soft/optional/generic types,
+references, nodes and conversions retain the full helper. Runtime assignment,
+parameter visibility, reloads, ownership, cancellation and exception paths are
+unchanged. `QORE_DISABLE_AOT_EXACT_SCALAR_COERCE=1` disables the shortcut.
+
+This is an AOT runtime change: no compiler/ABI change or new helper symbol.
+Already-built, compatible AOT executables benefit. It does not change the
+ordinary IR/JIT coercion helper and is not a general IR/JIT speedup claim.
+
+A separate fresh session compares the frozen feature runtime, candidate runtime,
+same candidate binary with the shortcut disabled, and frozen develop. The three
+feature modes use byte-identical executables for each layout; develop uses its
+own optimized executable. Settings match the crossover except order seed 135967
+and seven workloads. All 420 jobs / 1260 windows are retained. Do not combine
+medians from the two sessions into additional ratios.
+
+|!Workload|!Feature before, ns/element|!Candidate|!Candidate disabled|!Develop|!Candidate time change vs before
+|list_mutate|245.123|233.802|250.741|210.224|-4.62%
+|list_build|90.489|89.724|89.360|110.578|-0.85%
+|temporary_list|135.406|132.780|133.452|141.197|-1.94%
+|temporary_hash|330.209|330.614|329.794|333.414|+0.12%
+|boxed_int_method_effect|90.574|91.262|90.538|382.876|+0.76%
+|indirect_call|6.980|6.888|6.995|230.932|-1.32%
+|closure_call|20.558|20.676|20.682|138.739|+0.57%
+
+The mutation benefit is 6.76% versus the same-binary disabled control. Its
+per-layout before/after results are below; brackets show the observed range
+of five fork means, not a confidence interval.
+
+|!Layout|!Before median [range], ns/element|!Candidate median [range]|!Time change
+|default|246.717 [244.945, 256.085]|233.802 [231.986, 244.480]|-5.23%
+|reverse|245.084 [242.386, 250.982]|233.460 [230.016, 238.395]|-4.74%
+|shuffle-487|245.123 [243.969, 253.207]|239.261 [231.418, 247.290]|-2.39%
+
+All three mutation medians improve, with disjoint observed ranges in two layouts;
+the shuffled ranges overlap. All three still trail develop. Other workload
+movements are mixed and are not attributed to coercion without supporting
+evidence. In particular, the default closure layout regresses 1.73% with disjoint
+observed ranges (20.339 [19.716, 20.538] to 20.691 [20.606, 21.447]); its other two
+layouts overlap. The boxed-effect aggregate rises 0.76%. These controls prevent
+a general non-regression or broad application-speedup claim. Runtime rebuilding
+changes layout as well as behavior, which is why the disabled control is kept.
+
+### Qualification, audit and next steps
+
+Release and rebuilt debug each pass 17 selected files: 61 QUnit cases / 8581
+assertions, plus four silent standalone fixtures included in the 17-file total.
+Both builds pass 555 reference checks per IR/AOT mode. The new fixture exercises
+immediate/wide numbers, signed zero, infinities/NaNs, enums, soft/optional types,
+invalid inputs and reflected parameter publication. It runs AST/IR/JIT/tiered
+and stripped AOT at O0/O3, with EH, split compilation, no-debug and shortcut-off
+variants. O0 and debug builds are correctness tests only; all reported timings
+use optimized release builds. The 64 owned qmod aliases are restored to release.
+
+Three qualification-wrapper attempts initially required QUnit summaries from
+successful silent standalone fixtures. Their child exits and original drivers
+are retained. The final release qualification explicitly handles those fixtures
+and reuses only source/hash/argv/environment-verified successful child results;
+debug qualification runs fresh. No failed runtime test or timing sample is hidden.
+
+`results-aot-list-mutation-coerce-macos-arm64.json` contains all 1530 timing
+windows, references, loader checks, settings, hashes, profiles/assembly, original
+and corrected drivers, qualification logs, terminal records and the full audit.
+No task-owned build/test/profile/analysis workload overlapped timing. Host
+frequency, thermals and unrelated activity were not controlled. No full-suite,
+sanitizer, cross-platform, isolated-call-latency, startup or production-application
+claim. Java was not rerun; the previous optimized Java checkpoint remains separate.
+
+Next: reduce ordinary typed-parameter publication/reload cost using live scalar
+state guards or an equally strong no-reentry proof. Do not restore the unsafe
+old IR-only exemption. Then investigate mixed CSV/hash layout sensitivity and
+resume closure object/class-context deferral with closure-self handling, capture
+locks, reader lifetime and cold exception materialization preserved.
+
+|!Audit group|!Status|!Evidence
+|Runtime correctness, exception/ownership and thread safety|Pass|Exact non-owning representation guard; unchanged publication and fallback; release/debug tests
+|Cancellation and filesystem/network checks|Pass|No new loop, blocking operation or production I/O; existing cancellation unchanged
+|Tests, performance evidence and reporting|Pass|All 1530 windows replayed; controls and residual regressions retained; optimized provenance verified
+|Documentation, input handling and credentials|Pass|Strict Qore tables; fixed formats; sanitized benchmark/test environments
+|Module/QPP/DataProvider/JNI-specific checks|N/A|No such additions or changes
+
+Full audit: 21 Pass, 41 N/A, 0 Fail, with all 62 individual items in the dataset.

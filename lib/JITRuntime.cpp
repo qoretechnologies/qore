@@ -13260,6 +13260,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_aot(QoreAOTContext* ctx, int3
         uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     assert(ctx && local_idx >= 0 && local_idx < ctx->num_locals);
     const QoreTypeInfo* ti = ctx->locals[local_idx]->getTypeInfoForLValue();
+    static const bool exact_scalar = !std::getenv("QORE_DISABLE_AOT_EXACT_SCALAR_COERCE");
+    QoreValue input = fromBits(value);
+    if (exact_scalar && (!xsink || !*xsink)
+            && ((ti == bigIntTypeInfo && input.isInt())
+                || (ti == floatTypeInfo && input.isFloat())
+                || (ti == boolTypeInfo && input.isBool()))) {
+        // Canonical built-in declarations accept these immediate representations
+        // unchanged. No substitution, weak reference, filter or node ownership
+        // is involved. Preserve the ordinary helper's cleanup publication;
+        // wide/tagged scalars, enums and every other declaration retain coercion.
+        if (cleanup_ptr) {
+            *cleanup_ptr = value;
+        }
+        return value;
+    }
     return qore_rt_coerce_value(ti, value, cleanup_ptr, xsink);
 }
 

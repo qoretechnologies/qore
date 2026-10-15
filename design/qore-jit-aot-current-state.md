@@ -2466,3 +2466,41 @@ The next priority is the list-mutation regression, then CSV/hash layout
 sensitivity; defer further closure object/class-context work until those are
 understood. No Java parity, performance ceiling, cross-Program, general IR/JIT,
 production-application, startup or I/O speedup is claimed.
+
+## List mutation: attributed regression and first recovery (2026-10-15)
+
+Optimized compiler/runtime crossover isolates generated-code cost: develop's
+mutation executable takes 207.321 ns/element on develop and 168.489 ns on the
+feature runtime; feature-generated code on that runtime takes 245.164 ns.
+Ordinary scalar parameters become runtime-backed in generic lvalue-mutating
+functions. Generic coercion/publication, reloads and reference cleanup therefore
+remain important targets. The old faster code is not a safe visibility proof.
+
+The first retained recovery is a runtime-only exact scalar coercion shortcut.
+`qore_rt_coerce_value_aot()` checks the live canonical declaration and immediate
+int/float/bool representation, retaining identical cleanup publication and full
+fallback for every other case. It does not remove runtime stores, reloads,
+reflection, ownership or cancellation checks and adds no ABI/helper symbol.
+Compatible existing AOT executables benefit; ordinary IR/JIT helpers are unchanged.
+`QORE_DISABLE_AOT_EXACT_SCALAR_COERCE=1` retains the generic path for comparison.
+
+In a fresh interleaved release/qcc-O3 session, mutation improves from 245.123 to
+233.802 ns/element (-4.62%, -6.76% versus same-binary disabled), but remains 11.22%
+slower than develop's 210.224 ns. All three layout medians improve; one range
+overlaps. Controls are mixed: boxed-effect +0.76%, closure +0.57% aggregate and
+default-layout closure +1.73% with disjoint observed ranges. This is a narrow
+retention, not a general non-regression or resolved list-mutation claim.
+
+Selected release/debug each pass 17 files, 61 QUnit cases / 8581 assertions plus
+four silent fixtures within the file total, 64 qmods, and 555 reference checks
+per IR/AOT mode. Release aliases are restored. All 1530 windows, diagnostic
+sampling/assembly, wrapper-output-parser failures, raw evidence, corrected drivers
+and all 62 audit items (21 Pass, 41 N/A) are in
+`bench/runtime-comparison/results-aot-list-mutation-coerce-macos-arm64.json`.
+Full tables and limitations are in `bench/runtime-comparison/RESULTS.md`.
+Debug/O0 runs are correctness checks, never performance data; Java was not rerun.
+
+Next: optimize typed-parameter publication/reload with live-state guards or a
+sound no-reentry proof, then CSV/hash layout sensitivity, then closure object/class
+context. Preserve eager closure-self state, capture locks, reader waits and cold
+exception materialization. Java parity and a performance ceiling remain open.
