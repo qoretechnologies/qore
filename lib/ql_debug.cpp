@@ -36,6 +36,7 @@
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
@@ -6094,6 +6095,16 @@ static QoreValue f_dbg_get_live_bigint_count(const QoreListNode* params, Runtime
     return q_get_live_bigint_count();
 }
 
+//! returns the size of the innermost running IR-interpreter frame's temp cleanup vector on the current thread
+/** A break or continue that leaves a temp scope without draining it used to leave a sentinel on this vector every
+    time it executed, so the vector grew without bound in a long-running loop and every later cleanup scan got
+    slower; a test reads this inside such a loop to verify the vector no longer grows.  Returns 0 outside the IR
+    interpreter (for example under \c --exec-mode=ast or in JIT/AOT native code, which have no such vector).
+*/
+static QoreValue f_dbg_get_ir_cleanup_entries(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return q_get_ir_innermost_cleanup_entries();
+}
+
 //! returns the number of recursive sets that scans in the current thread have created
 /** A scan that finds the recursive sets it would compute already in place creates none and leaves them alone,
     so tests use this to verify that a scan of an unchanged graph does not replace a set with an identical one.
@@ -6767,6 +6778,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_region_walk_count", f_dbg_get_region_walk_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_bigint_count", f_dbg_get_live_bigint_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_ir_cleanup_entries", f_dbg_get_ir_cleanup_entries, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_rset_create_count", f_dbg_get_rset_create_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);

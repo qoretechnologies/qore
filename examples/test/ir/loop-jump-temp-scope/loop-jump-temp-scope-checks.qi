@@ -1,0 +1,112 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Shared checks for the loop-jump temp-scope regression (a break or continue that leaves one or more open
+# statement temp scopes).  Run in the test program itself and in a worker in each execution mode.
+#
+# Two things are asserted, both deterministically and without timing:
+#
+#  - the IR interpreter's temp cleanup vector does not grow across the iterations of a loop whose body ends in a
+#    break or continue that leaves an open temp scope.  Before the fix each such jump left the scope's PushTempMark
+#    sentinel on the vector every time it ran, so the vector grew by one (or more) per iteration and every later
+#    cleanup scan got slower, degrading a long-running loop without bound.  dbg_get_ir_cleanup_entries() reports the
+#    vector size; it is 0 outside the IR interpreter (ast and native code have no such vector), so the check reads
+#    as "no growth" there too.
+#
+#  - a temporary held across the jump (a switch value, an enclosing statement's temp) is not kept alive past the
+#    function: after the function that runs the loop returns, every object it created has been destroyed.  Before
+#    the fix the last such temp of each loop lingered until the frame exited.
+
+const LoopJumpIters = 200;
+const LoopJumpSampleLow = 20;
+const LoopJumpSampleHigh = LoopJumpIters - 20;
+
+our int ljts_created = 0;
+our int ljts_destroyed = 0;
+
+class LjtsCounted {
+    constructor() { ++ljts_created; }
+    destructor() { ++ljts_destroyed; }
+    string get() { return "x"; }
+}
+
+LjtsCounted sub ljts_make() {
+    return new LjtsCounted();
+}
+
+#! the size of the IR cleanup vector, or 0 outside the IR interpreter
+int sub ljts_cleanup_entries() {
+    return dbg_get_ir_cleanup_entries();
+}
+
+#! growth of the cleanup vector across an indexed for loop whose body ends in "continue" with a method call in the
+#! condition (the reported case: the continue statement's own temp scope is left undrained)
+int sub ljts_if_continue_growth() {
+    string s = "line";
+    int lo = 0;
+    int hi = 0;
+    for (int i = 0; i < LoopJumpIters; ++i) {
+        if (s.find("og") < 0) {
+            if (i == LoopJumpSampleLow) { lo = ljts_cleanup_entries(); }
+            if (i == LoopJumpSampleHigh) { hi = ljts_cleanup_entries(); }
+            continue;
+        }
+    }
+    return hi - lo;
+}
+
+#! growth across a loop that "continue"s out of a switch whose value is a live temporary (the switch value's scope
+#! is left undrained as well as the continue's own)
+int sub ljts_switch_continue_growth() {
+    string s = "line";
+    int lo = 0;
+    int hi = 0;
+    for (int i = 0; i < LoopJumpIters; ++i) {
+        switch (s + "x") {
+            default:
+                if (i == LoopJumpSampleLow) { lo = ljts_cleanup_entries(); }
+                if (i == LoopJumpSampleHigh) { hi = ljts_cleanup_entries(); }
+                continue;
+        }
+    }
+    return hi - lo;
+}
+
+#! growth across a loop that "break"s out of an inner loop nested in a switch over a live temporary
+int sub ljts_break_growth() {
+    string s = "line";
+    int lo = 0;
+    int hi = 0;
+    for (int i = 0; i < LoopJumpIters; ++i) {
+        switch (s + "x") {
+            default:
+                for (int j = 0; j < 1; ++j) {
+                    if (i == LoopJumpSampleLow) { lo = ljts_cleanup_entries(); }
+                    if (i == LoopJumpSampleHigh) { hi = ljts_cleanup_entries(); }
+                    break;
+                }
+        }
+    }
+    return hi - lo;
+}
+
+#! runs a loop that continues out of a switch over a counted object; returns the objects still alive right after
+#! the loop (in the same frame): the fix destroys each switch value when the continue leaves its scope
+int sub ljts_switch_continue_pending() {
+    for (int i = 0; i < LoopJumpIters; ++i) {
+        switch (ljts_make()) {
+            default:
+                continue;
+        }
+    }
+    return ljts_created - ljts_destroyed;
+}
+
+#! returns the growth checks as a hash
+hash<string, int> sub ljts_growth_results() {
+    return {
+        "if-continue-growth": ljts_if_continue_growth(),
+        "switch-continue-growth": ljts_switch_continue_growth(),
+        "break-growth": ljts_break_growth(),
+    };
+}

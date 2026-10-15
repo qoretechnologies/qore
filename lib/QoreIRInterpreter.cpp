@@ -80,7 +80,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 407,
+static_assert(QORE_IR_MAX_OPCODE == 408,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -1069,6 +1069,16 @@ struct IRCallFramePool {
 };
 
 static thread_local IRCallFramePool tl_frame_pool;
+
+// Points at the innermost running execute() frame's temp cleanup vector on this thread (null when no IR frame is
+// running).  Set and restored by execute() around its dispatch loop; a builtin called from IR code (such as the
+// debug introspection below) runs without its own IR frame, so it still sees the caller's vector.  Used only by
+// q_get_ir_innermost_cleanup_entries() for the loop-jump temp-scope regression test.
+static thread_local const IRCleanupSlots* tls_innermost_ir_cleanup = nullptr;
+
+int64 q_get_ir_innermost_cleanup_entries() {
+    return tls_innermost_ir_cleanup ? static_cast<int64>(tls_innermost_ir_cleanup->size()) : 0;
+}
 
 // Lightweight wrapper around a std::vector<QoreValue> that provides operator[]
 // and size(), allowing it to be used as a drop-in replacement for
@@ -5559,6 +5569,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
     IRValueSlots values{frame.values};
     auto& cleanup = frame.cleanup;
+    // Publish this frame's cleanup vector as the innermost one for debug introspection, and restore the caller's
+    // on any exit path (a nested IR call overwrites it and restores ours on return).
+    struct CleanupTlsGuard {
+        const IRCleanupSlots* prev;
+        ~CleanupTlsGuard() { tls_innermost_ir_cleanup = prev; }
+    } cleanup_tls_guard{tls_innermost_ir_cleanup};
+    tls_innermost_ir_cleanup = &cleanup;
     auto& locals_slot_cache = frame.locals_slot_cache;
     auto& locals_lvar_cache = frame.locals_lvar_cache;
     auto& instantiated_locals = frame.instantiated_locals;
@@ -11881,6 +11898,19 @@ load_local_done:
                 // without tying lifetime to source lines, because a single
                 // expression can span multiple lines.
                 ephemeral_weak_ref_slots.clear();
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::UnwindTemps: {
+                // A break or continue leaves this temp scope: release its temps and remove its runtime mark.
+                // Unlike DiscardTemps this runs on the jump's path only; the scope stays open in the IR for the
+                // code laid out after the jump, which closes it with its own DiscardTemps on the fall-through
+                // path.  At runtime only one of the two paths executes, so draining and removing the sentinel
+                // here is correct and, crucially, stops the mark from accumulating on the cleanup vector every
+                // time the branch is taken.  See design/ir-loop-jump-temp-scope.md.  no_throw=false so a temp
+                // destructor exception propagates; fallback_to_nearest=false and keep_mark=false so only this
+                // exact scope is drained and its mark removed.
+                cleanupToTempScope(inst->temp_scope_id, false, false, false);
                 ++ip;
                 break;
             }

@@ -1531,6 +1531,25 @@ QoreIRInstruction* QoreIRBuilder::createPushTempMark(const QoreProgramLocation* 
     return inst;
 }
 
+void QoreIRBuilder::createUnwindTemps(size_t from_depth, size_t to_depth, const QoreProgramLocation* loc) {
+    assert(from_depth <= temp_scope_id_stack.size());
+    assert(to_depth <= from_depth);
+    if (from_depth > temp_scope_id_stack.size()) {
+        from_depth = temp_scope_id_stack.size();
+    }
+    for (size_t depth = from_depth; depth > to_depth; --depth) {
+        auto inst = append<QoreIRInstruction>(QoreIROpcode::UnwindTemps);
+        inst->loc = loc;
+        inst->temp_scope_id = temp_scope_id_stack[depth - 1];
+        // the scope released just before this one on the same jump: every scope above from_depth was
+        inst->unwind_inner_temp_scope_id = depth < temp_scope_id_stack.size() ? temp_scope_id_stack[depth] : 0;
+    }
+}
+
+size_t QoreIRBuilder::getTempScopeDepth() const {
+    return temp_scope_id_stack.size();
+}
+
 void QoreIRBuilder::setExceptionTempScopeId(uint32_t id) {
     exception_temp_scope_id = id;
 }

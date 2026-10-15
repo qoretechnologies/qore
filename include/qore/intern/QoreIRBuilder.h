@@ -312,6 +312,20 @@ public:
         @return the DiscardTempsKeep instruction; its result owns a reference to \a value
      */
     QoreIRInstruction* createDiscardTempsKeep(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+    //! Emit UnwindTemps for the open temp scopes from \a from_depth down to \a to_depth, innermost first.
+    /** A `break` or `continue` leaves these scopes on its own path only: their temps are released, but the scopes
+        stay open for the code lowered after the jump, which still closes them with DiscardTemps.  Every scope
+        above \a from_depth must have been released by an earlier call for the same jump.  See
+        design/ir-loop-jump-temp-scope.md.
+
+        @param from_depth the number of open scopes before the call; the innermost one released is the scope at
+        depth \a from_depth - 1
+        @param to_depth the number of open scopes that stay open on the jump's path
+        @param loc optional source location for diagnostics
+     */
+    void createUnwindTemps(size_t from_depth, size_t to_depth, const QoreProgramLocation* loc = nullptr);
+    //! Return the number of temp scopes open at the current lowering position.
+    size_t getTempScopeDepth() const;
     //! Set the statement temp scope that caught invoke exceptions must unwind.
     void setExceptionTempScopeId(uint32_t id);
     //! Return the statement temp scope currently assigned to invoke instructions.

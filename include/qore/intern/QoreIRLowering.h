@@ -517,9 +517,15 @@ private:
      *  @param error output string for error messages
      *  @param is_error true if exiting due to an exception
      *  @param flags combination of CleanupFlags
+     *  @param unwind_temp_depth for a break or continue, the number of temp scopes open where its target was
+     *  pushed: the temp scopes above it are released, each before the cleanup of the block that encloses it (see
+     *  design/ir-loop-jump-temp-scope.md); SIZE_MAX releases none
+     *  @param unwind_loc the location of the break or continue
      *  @return false if lowering failed
      */
-    bool emitBlockCleanups(size_t target_depth, std::string& error, bool is_error = false, unsigned flags = CF_NONE);
+    bool emitBlockCleanups(size_t target_depth, std::string& error, bool is_error = false, unsigned flags = CF_NONE,
+        size_t unwind_temp_depth = SIZE_MAX, const QoreProgramLocation* unwind_loc = nullptr);
+
 
     //! Determine if a handler should execute for a given exit type
     /** Handlers are filtered by type:
@@ -591,6 +597,7 @@ private:
         QoreValue var_expr;                        //!< loop variable expression for RefForeachRecord
         QoreIRValue context_state;                 //!< Context* handle for Context entries
         LocalVar* catch_var = nullptr;             //!< single local for CatchVar entries (try-catch exception param)
+        size_t temp_scope_depth = 0;               //!< temp scopes open when the entry was pushed
     };
     //! Unified cleanup stack tracking scope exits, block-scoped locals, and ref foreach state
     /** Entries are pushed in nesting order. Reverse iteration gives correct cleanup ordering.
@@ -641,8 +648,13 @@ private:
         int catch_cleanup_depth = 0;   //!< catch_cleanup_depth when this flow target was created
         size_t cleanup_stack_depth = 0;  //!< cleanup_stack depth when this flow target was created
         QoreIRValue old_implicit_element;  //!< saved $# value for foreach loops (for break/continue cleanup)
+        size_t temp_scope_depth = 0;     //!< temp scopes open when this flow target was created
     };
     std::vector<FlowTarget> flow_stack;
+    //! Push a block cleanup entry, recording the number of temp scopes open where it is pushed
+    void pushBlockCleanup(BlockCleanupEntry entry);
+    //! Push a break / continue target, recording the number of temp scopes open where it is pushed
+    void pushFlowTarget(FlowTarget target);
     std::vector<QoreIRBasicBlock*> exception_stack;
     //! Scope stack depth at each exception handler's entry point.
     //! Parallel to exception_stack — records scope_stack.size() when each handler was pushed.

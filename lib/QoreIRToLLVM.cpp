@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 407,
+static_assert(QORE_IR_MAX_OPCODE == 408,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -30089,6 +30089,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::DiscardTemps: {
             emitDiscardTemps(module, inst->temp_scope_id);
+            return true;
+        }
+        case QoreIROpcode::UnwindTemps: {
+            // UnwindTemps releases, on a break/continue path, the temps of a scope that the jump leaves before
+            // the scope's own DiscardTemps is reached.  It exists to stop the IR interpreter's runtime cleanup
+            // vector from growing on every such jump (see QoreIRInterpreter.cpp and
+            // design/ir-loop-jump-temp-scope.md).  Native code has no such runtime structure: a scope temp lives
+            // in a reused alloca released at the next overwrite or at frame exit, so the growth the interpreter
+            // suffered never occurred here and there is nothing to free on this path that is not already freed.
+            // Emitting a decref here would have to pair with the same scope's DiscardTemps on the fall-through
+            // path, whose basic block the emitter may visit in either order, so it is deliberately a no-op; the
+            // mark stays for that DiscardTemps to match.  The only observable difference from AST mode is that a
+            // temp held across the jump is destroyed one iteration late rather than at scope end; it is bounded
+            // (never accumulates) and matches the pre-existing compiled-tier behavior.
             return true;
         }
         case QoreIROpcode::DiscardTempsKeep: {

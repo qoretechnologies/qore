@@ -25,6 +25,13 @@
     previously use zero after an earlier temporary value had been released.
     Recompile existing AOT artifacts to apply the compiler fix.
 
+    A loop whose body ends in a @ref break "break" or @ref continue "continue" no longer slows down the longer a
+    program runs. Optimized (non-compiled) execution kept per-statement cleanup state for each such jump without
+    releasing it, so a long-running loop — for example one that skips most iterations with a @ref continue
+    "continue" — grew steadily slower in proportion to the number of jumps already executed. The cleanup state is
+    now released when the jump is taken, so the loop runs at a constant speed, and a temporary value held across
+    the jump is released when the jump leaves its scope rather than when the enclosing function returns.
+
     AOT-compiled modules record the AOT runtime identity of the %Qore library that compiled them, and a module
     compiled by a library with a different generated-code contract is refused when it is loaded, with an error that
     names the module and both identities and asks for the module to be rebuilt, instead of loading and failing later

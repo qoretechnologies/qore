@@ -477,6 +477,15 @@ static bool statementMayCreateNodeTemp(const AbstractStatement* stmt) {
             || dynamic_cast<const DoWhileStatement*>(stmt)) {
         return false;
     }
+    // break and continue create no temps and branch out of the block instead of running to its end, so the
+    // DiscardTemps that would normally close their statement bracket is never reached on their path.  Bracketing
+    // them would push a PushTempMark that the branch leaves behind every time it executes: in the IR interpreter
+    // the sentinel accumulates on the runtime cleanup vector and makes every later cleanup scan slower, so a loop
+    // that takes such a branch repeatedly degrades without bound (a method call in the condition creates the
+    // per-statement mark that exposes it).  Not bracketing them is correct because they create nothing to release.
+    if (dynamic_cast<const BreakStatement*>(stmt) || dynamic_cast<const ContinueStatement*>(stmt)) {
+        return false;
+    }
     return true;
 }
 
@@ -1761,7 +1770,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        pushFlowTarget({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
         // Active enclosing-loop exit for debugger DebugFlowBreak resolution (see while case).
         QoreIRBasicBlock* prev_loop_exit = current_loop_exit;
         current_loop_exit = exit_block;
@@ -1895,7 +1904,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Fused path: int comparisons don't create node temps, no cleanup needed.
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        pushFlowTarget({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
         // Mark this loop's exit as the active enclosing-loop exit for blocks lowered in
         // the body (body_block itself was created before this point, so stamp it too).
         QoreIRBasicBlock* prev_loop_exit = current_loop_exit;
@@ -2032,7 +2041,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, iter_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        pushFlowTarget({exit_block, iter_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
         // Active enclosing-loop exit for debugger DebugFlowBreak resolution (see while case).
         QoreIRBasicBlock* prev_loop_exit = current_loop_exit;
         current_loop_exit = exit_block;
@@ -2136,7 +2145,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             ref_foreach_entry.type = BlockCleanupEntry::RefForeach;
             ref_foreach_entry.ref_foreach_state = state;
             ref_foreach_entry.loc = stmt->loc;
-            cleanup_stack.push_back(ref_foreach_entry);
+            pushBlockCleanup(ref_foreach_entry);
 
             // Set up try scope for exception safety
             uint32_t try_scope_id = ++scope_counter;
@@ -2151,7 +2160,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 // enclosing-block handlers (see identical guard in the
                 // TryStatement lowering path).
                 scope_entry.handler_start = block_handlers.size();
-                cleanup_stack.push_back(scope_entry);
+                pushBlockCleanup(scope_entry);
             }
             builder.createScopeEnter(try_scope_id);
 
@@ -2221,7 +2230,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             record_entry.old_implicit_element = old_element;
             record_entry.var_expr = var_expr;
             record_entry.loc = stmt->loc;
-            cleanup_stack.push_back(record_entry);
+            pushBlockCleanup(record_entry);
 
             // Set up flow target: break → break_handler, continue → latch
             // old_implicit_element is INVALID — the break_handler block handles $# pop
@@ -2231,7 +2240,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             ft.is_switch = false;
             ft.catch_cleanup_depth = catch_cleanup_depth;
             ft.cleanup_stack_depth = cleanup_stack.size();
-            flow_stack.push_back(ft);
+            pushFlowTarget(ft);
 
             // Lower the loop body
             StatementBlock* body = foreach_stmt->getCode();
@@ -2506,7 +2515,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         elem_entry.type = BlockCleanupEntry::ForeachElement;
         elem_entry.old_implicit_element = old_element;
         elem_entry.loc = stmt->loc;
-        cleanup_stack.push_back(elem_entry);
+        pushBlockCleanup(elem_entry);
 
         // Lower the loop body with proper break/continue targets
         // break → exit_block (break handler pops $# via old_implicit_element)
@@ -2518,7 +2527,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         ft.catch_cleanup_depth = catch_cleanup_depth;
         ft.cleanup_stack_depth = cleanup_stack.size();
         ft.old_implicit_element = old_element;
-        flow_stack.push_back(ft);
+        pushFlowTarget(ft);
         StatementBlock* body = foreach_stmt->getCode();
         VirtualImplicitContext saved_implicit = virtual_implicit;
         virtual_implicit.arg0 = QoreIRValue();
@@ -2823,7 +2832,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         context_entry.type = BlockCleanupEntry::Context;
         context_entry.context_state = state;
         context_entry.loc = stmt->loc;
-        cleanup_stack.push_back(context_entry);
+        pushBlockCleanup(context_entry);
 
         // Set up try scope so exceptions from the body still run ContextDestroy.
         uint32_t try_scope_id = ++scope_counter;
@@ -2833,7 +2842,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             scope_entry.type = BlockCleanupEntry::Scope;
             scope_entry.scope_id = try_scope_id;
             scope_entry.handler_start = block_handlers.size();
-            cleanup_stack.push_back(scope_entry);
+            pushBlockCleanup(scope_entry);
         }
         builder.createScopeEnter(try_scope_id);
 
@@ -2874,7 +2883,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         ft.is_switch = false;
         ft.catch_cleanup_depth = catch_cleanup_depth;
         ft.cleanup_stack_depth = cleanup_stack.size();
-        flow_stack.push_back(ft);
+        pushFlowTarget(ft);
 
         ++loop_depth;
         if (!lowerStatementBlock(code, error)) {
@@ -2959,12 +2968,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     if (auto* break_stmt = dynamic_cast<const BreakStatement*>(stmt)) {
         QoreIRBasicBlock* target = nullptr;
         size_t target_cleanup_depth = 0;
+        size_t target_temp_depth = 0;
         int target_catch_depth = 0;
         QoreIRValue old_elem;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->break_target) {
                 target = it->break_target;
                 target_cleanup_depth = it->cleanup_stack_depth;
+                target_temp_depth = it->temp_scope_depth;
                 target_catch_depth = it->catch_cleanup_depth;
                 old_elem = it->old_implicit_element;
                 break;
@@ -2975,8 +2986,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             return false;
         }
         // Emit interleaved ScopeExit and UninstantiateLocal for blocks entered
-        // since the loop started (matches AST mode's destruction ordering)
-        if (!emitBlockCleanups(target_cleanup_depth, error, false)) {
+        // since the loop started (matches AST mode's destruction ordering),
+        // releasing the temp scopes left on the way
+        if (!emitBlockCleanups(target_cleanup_depth, error, false, CF_NONE, target_temp_depth, stmt->loc)) {
             return false;
         }
         // Emit CatchCleanup for catch scopes entered since the loop started
@@ -2996,11 +3008,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     if (auto* cont_stmt = dynamic_cast<const ContinueStatement*>(stmt)) {
         QoreIRBasicBlock* target = nullptr;
         size_t target_cleanup_depth = 0;
+        size_t target_temp_depth = 0;
         int target_catch_depth = 0;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->continue_target) {
                 target = it->continue_target;
                 target_cleanup_depth = it->cleanup_stack_depth;
+                target_temp_depth = it->temp_scope_depth;
                 target_catch_depth = it->catch_cleanup_depth;
                 break;
             }
@@ -3010,8 +3024,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             return false;
         }
         // Emit interleaved ScopeExit and UninstantiateLocal for blocks entered
-        // since the loop started (matches AST mode's destruction ordering)
-        if (!emitBlockCleanups(target_cleanup_depth, error, false)) {
+        // since the loop started (matches AST mode's destruction ordering),
+        // releasing the temp scopes left on the way
+        if (!emitBlockCleanups(target_cleanup_depth, error, false, CF_NONE, target_temp_depth, stmt->loc)) {
             return false;
         }
         // Emit CatchCleanup for catch scopes entered since the loop started
@@ -3118,7 +3133,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchInt(switch_val, default_block_for_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            flow_stack.push_back({end_block, nullptr, true, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+            pushFlowTarget({end_block, nullptr, true, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -3233,7 +3248,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchString(switch_val, default_block_for_str_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            flow_stack.push_back({end_block, nullptr, true, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+            pushFlowTarget({end_block, nullptr, true, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -3353,7 +3368,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createBranch(end_block);
         }
 
-        flow_stack.push_back({end_block, nullptr, true, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        pushFlowTarget({end_block, nullptr, true, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
         for (size_t i = 0; i < cases.size(); ++i) {
             builder.setBlock(cases[i].block);
             if (cases[i].node->code) {
@@ -3412,7 +3427,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // try scope does NOT re-inline handlers belonging to ENCLOSING
             // blocks (which would fire them twice).
             scope_entry.handler_start = block_handlers.size();
-            cleanup_stack.push_back(scope_entry);
+            pushBlockCleanup(scope_entry);
         }
         builder.createScopeEnter(try_scope_id);
 
@@ -3462,7 +3477,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             catch_var_entry.type = BlockCleanupEntry::CatchVar;
             catch_var_entry.catch_var = catch_var;
             catch_var_entry.loc = stmt->loc;
-            cleanup_stack.push_back(catch_var_entry);
+            pushBlockCleanup(catch_var_entry);
         }
         ++catch_cleanup_depth;
         if (try_stmt->getCatchBlock() && !lowerStatementBlock(try_stmt->getCatchBlock(), error)) {
@@ -3618,7 +3633,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         lvars_entry.type = BlockCleanupEntry::Lvars;
         lvars_entry.lvars = lvars;
         lvars_entry.loc = block->loc;
-        cleanup_stack.push_back(lvars_entry);
+        pushBlockCleanup(lvars_entry);
 
         // Emit InstantiateLocal for each closure-use variable at block entry.
         // This ensures the variable is on the cvstack before any code in the
@@ -3644,7 +3659,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             scope_entry.type = BlockCleanupEntry::Scope;
             scope_entry.scope_id = scope_id;
             scope_entry.handler_start = block_handler_start;  // Record handler start for inline lowering
-            cleanup_stack.push_back(scope_entry);
+            pushBlockCleanup(scope_entry);
         }
         // Phase 2a: Emit ScopeEnter so scope_stack has watermark for exception-path handler execution
         builder.createScopeEnter(scope_id);
@@ -3923,7 +3938,18 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     return true;
 }
 
-bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, bool is_error, unsigned flags) {
+void QoreIRLowering::pushBlockCleanup(BlockCleanupEntry entry) {
+    entry.temp_scope_depth = builder.getTempScopeDepth();
+    cleanup_stack.push_back(entry);
+}
+
+void QoreIRLowering::pushFlowTarget(FlowTarget target) {
+    target.temp_scope_depth = builder.getTempScopeDepth();
+    flow_stack.push_back(target);
+}
+
+bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, bool is_error, unsigned flags,
+        size_t unwind_temp_depth, const QoreProgramLocation* unwind_loc) {
     // Emit interleaved cleanup instructions from innermost to outermost block until
     // we reach the target depth.  Handles: ScopeExit (on_exit handlers), Lvars
     // (block-scoped locals), RefForeachRecord (pop $#, load var, record), and
@@ -3951,11 +3977,24 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
             break;  // only the innermost barrier matters
         }
     }
+    // A break or continue also leaves the temp scopes of the statements it is nested in: each one's temps are
+    // released before the cleanup of the block that encloses the statement, as in the AST, where the statement
+    // returns before its block ends.  Inlined handler bodies close the temp scopes that they open, so the depth
+    // is the same after each entry.  See design/ir-loop-jump-temp-scope.md.
+    assert(unwind_temp_depth == SIZE_MAX || unwind_temp_depth <= builder.getTempScopeDepth());
+    size_t unwound_temp_depth = builder.getTempScopeDepth();
     for (size_t i = cleanup_stack.size(); i > target_depth; --i) {
         // Copy by value: lowerHandlersAtExit() can trigger cleanup_stack reallocation
         // (when inlining handler bodies that push to cleanup_stack), which would
         // invalidate a reference into the vector.
         const BlockCleanupEntry entry = cleanup_stack[i - 1];
+        if (unwind_temp_depth != SIZE_MAX) {
+            size_t entry_temp_depth = std::max(entry.temp_scope_depth, unwind_temp_depth);
+            if (entry_temp_depth < unwound_temp_depth) {
+                builder.createUnwindTemps(unwound_temp_depth, entry_temp_depth, unwind_loc);
+                unwound_temp_depth = entry_temp_depth;
+            }
+        }
         switch (entry.type) {
             case BlockCleanupEntry::Scope: {
                 if ((i - 1) == protected_scope_index) {
@@ -4056,6 +4095,9 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 // so we should never visit one here.  Guard anyway.
                 break;
         }
+    }
+    if (unwind_temp_depth != SIZE_MAX && unwind_temp_depth < unwound_temp_depth) {
+        builder.createUnwindTemps(unwound_temp_depth, unwind_temp_depth, unwind_loc);
     }
     return true;
 }
@@ -4731,7 +4773,7 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
             barrier.type = BlockCleanupEntry::HandlerBarrier;
             barrier.handler_start = barrier_depth;
             barrier.loc = handler.code ? handler.code->loc : nullptr;
-            cleanup_stack.push_back(barrier);
+            pushBlockCleanup(barrier);
         }
 
         // Lower the handler code block inline using the current parse context
@@ -18721,7 +18763,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     ft.catch_cleanup_depth = catch_cleanup_depth;
     ft.cleanup_stack_depth = cleanup_stack.size();
     ft.old_implicit_element = old_element;
-    flow_stack.push_back(ft);
+    pushFlowTarget(ft);
     StatementBlock* body = foreach_stmt->getCode();
     if (body) {
         ++loop_depth;

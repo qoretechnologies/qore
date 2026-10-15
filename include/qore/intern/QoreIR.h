@@ -786,7 +786,17 @@ enum class QoreIROpcode : uint16_t {
     //! value evaluates copy-on-write, or before a foreach body runs.  See design/lvalue-loads-in-ir.md.
     DiscardTempsKeep = 407,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (408, 409, ...)
+    //! Release the temps of a temp scope that a `break` or `continue` leaves.
+    //!
+    //! No operands, no result.  `temp_scope_id` names the scope's `PushTempMark`.  The jump leaves the scope on
+    //! this path only, so unlike `DiscardTemps` the scope stays open for the code laid out after this
+    //! instruction.  The lowering emits one for each scope that the jump leaves, innermost first and interleaved
+    //! with the cleanup of the blocks that it leaves; `unwind_inner_temp_scope_id` names the scope released just
+    //! before (0: none), which bounds what native code releases here.  The IR interpreter drains the cleanup
+    //! vector back to (and including) the mark.  See design/ir-loop-jump-temp-scope.md.
+    UnwindTemps = 408,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (409, 410, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -795,8 +805,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::DiscardTempsKeep);
-static_assert(QORE_IR_MAX_OPCODE == 407, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::UnwindTemps);
+static_assert(QORE_IR_MAX_OPCODE == 408, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -1031,6 +1041,10 @@ public:
     // of the (possibly reordered) basic-block layout produced by short-circuit
     // operators.  Transient — used only during IR->LLVM lowering, not serialized.
     uint32_t temp_scope_id = 0;
+    // UnwindTemps only: the temp scope that the same jump released just before this one (0 = none).  Native code
+    // releases the slots registered from this scope's mark up to that scope's mark.  Transient, like
+    // temp_scope_id; see design/ir-loop-jump-temp-scope.md.
+    uint32_t unwind_inner_temp_scope_id = 0;
 };
 
 struct QoreIRPluginOperationRef {
