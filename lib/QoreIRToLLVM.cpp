@@ -17117,6 +17117,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
                 llvm::Value* stored_result = nullptr;
                 bool scalar_publication = false;
+                bool exact_scalar_reload = false;
+                llvm::Value* exact_scalar_published = nullptr;
                 llvm::BasicBlock* pinned_store_done = nullptr;
                 if (aot_mode) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
@@ -17178,6 +17180,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         // the live declaration, representation and actual slot state.
                         aot_helper_name = "qore_rt_assign_exact_scalar_local_aot_v1";
                         aot_helper_throwing_name = "qore_rt_assign_exact_scalar_local_aot_throwing_v1";
+                        exact_scalar_reload = !is_aot_body_local && canReloadLocalFromRuntime(key, false)
+                            && !std::getenv("QORE_DISABLE_AOT_EXACT_SCALAR_STORE_RELOAD");
+                        if (exact_scalar_reload) {
+                            aot_helper_name = "qore_rt_assign_exact_scalar_local_aot_v2";
+                            aot_helper_throwing_name = "qore_rt_assign_exact_scalar_local_aot_throwing_v2";
+                        }
                     }
                     llvm::Value* auto_slot = !return_class_store_result && !use_no_coerce
                         ? getAOTAutoLocalSlot(linst->local, module, llvm_func) : nullptr;
@@ -17204,7 +17212,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     assign_types.push_back(ptr_type);
                     assign_args.push_back(xsink_arg);
                     auto aot_ft = llvm::FunctionType::get(return_class_store_result ? i64_type
-                            : scalar_publication ? i32_type : void_type,
+                            : (scalar_publication || exact_scalar_reload) ? i32_type : void_type,
                             assign_types, false);
                     auto assign_helper = module.getOrInsertFunction(aot_helper_name, aot_ft);
                     auto assign_helper_throwing = module.getOrInsertFunction(
@@ -17236,6 +17244,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (return_class_store_result) {
                         stored_result = assigned;
                     }
+                    if (exact_scalar_reload) {
+                        exact_scalar_published = assigned;
+                    }
                 } else {
                     auto jit_ft = llvm::FunctionType::get(void_type,
                             {ptr_type, i64_type, ptr_type}, false);
@@ -17261,7 +17272,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // runtime slot stores the same bits already in the alloca.  Keep
                 // the cache correct by retaining those bits directly instead of
                 // emitting a qore_rt_load_local_aot() round trip.
-                if (stored_result) {
+                if (exact_scalar_published) {
+                    auto* published = llvm::BasicBlock::Create(ctx, "exact_scalar_published", llvm_func);
+                    auto* reload = llvm::BasicBlock::Create(ctx, "exact_scalar_reload", llvm_func);
+                    auto* done = llvm::BasicBlock::Create(ctx, "exact_scalar_reload_done", llvm_func);
+                    builder->CreateCondBr(builder->CreateICmpNE(exact_scalar_published,
+                        llvm::ConstantInt::get(i32_type, 0)), published, reload);
+                    builder->SetInsertPoint(published);
+                    // Only the exception check intervenes since publication. The
+                    // helper proved the real slot holds these non-owning bits.
+                    // Reuse the value, but keep ordinary tracker rotation, deferred
+                    // cleanup and epoch publication (including cleanup reentry).
+                    reloadLocalFromRuntime(key, module, llvm_func, false, boxed);
+                    builder->CreateBr(done);
+                    builder->SetInsertPoint(reload);
+                    reloadLocalFromRuntime(key, module, llvm_func, false);
+                    builder->CreateBr(done);
+                    builder->SetInsertPoint(done);
+                } else if (stored_result) {
                     reloadLocalFromRuntime(key, module, llvm_func, false, stored_result);
                 } else if (QoreTypeInfo::isReference(linst->local->getTypeInfo())) {
                     // Reference locals write through to another variable; any local

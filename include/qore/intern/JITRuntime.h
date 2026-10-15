@@ -1912,6 +1912,16 @@ void qore_rt_assign_exact_scalar_local_aot_v1(QoreAOTContext* ctx, int32_t idx, 
 //! Native-EH counterpart; throws QoreJITException when the sink is populated.
 void qore_rt_assign_exact_scalar_local_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx, uint64_t val,
     ExceptionSink* xsink);
+//! Publish as v1 and report whether the actual slot contains the exact immediate input bits.
+/** @return 1 only after non-reentrant exact scalar publication, 0 for ordinary fallback or disabled reporting
+    @note A positive result permits reuse only before any subsequent reentrant operation.
+    Cache ownership rotation, deferred cleanup and later invalidation must remain unchanged.
+*/
+int qore_rt_assign_exact_scalar_local_aot_v2(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    ExceptionSink* xsink);
+//! Native-EH counterpart with the same publication result.
+int qore_rt_assign_exact_scalar_local_aot_throwing_v2(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    ExceptionSink* xsink);
 void qore_rt_assign_local_no_coerce_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val,
         ExceptionSink* xsink);
 

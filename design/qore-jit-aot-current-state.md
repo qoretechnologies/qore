@@ -2551,3 +2551,49 @@ No Java rerun, isolated-latency, full-suite, sanitizer, cross-platform or genera
 IR/JIT performance claim. Continue with typed-parameter reload/ownership costs,
 CSV/hash sensitivity, then closure object/class-context deferral. Java parity and
 a justified performance ceiling are still open.
+
+## Immediate scalar reload avoidance by publication witness (2026-10-15)
+
+New `qore_rt_assign_exact_scalar_local_aot_v2()` and native-EH helpers return one
+only after exact non-reentrant immediate scalar publication to the live runtime
+slot. Ordinary runtime-backed parameters then reuse the same bits in the existing
+reload state transition. Failed admission uses ordinary assignment and reload.
+Only a direct exception check intervenes; tracker rotation, deferred cleanup,
+epoch publication, operand cleanup and all later reloads are unchanged. There is
+no cached binding or relaxation of reflection, captures, references or weak values.
+New AOT artifacts require matching additive helpers; old artifacts, v1/general
+helpers, RuntimeConfig/serialized layouts and ordinary IR/JIT remain unchanged.
+
+`QORE_DISABLE_AOT_EXACT_SCALAR_STORE_RELOAD=1` at runtime keeps fast publication
+but suppresses its witness, enabling an identical-binary reload control. At
+compilation it selects v1 and ordinary reload. Older store/lowering controls remain.
+
+The optimized three-fork screen gains 6.01% on mutation. Independent five-fork,
+three-layout confirmation reduces mutation from 202.764 to 193.163 ns/element
+(-4.74%, -4.10% versus same-binary disabled, -2.94% versus develop 199.012).
+All mutation layout medians improve, with two disjoint before/after ranges.
+The prior mutation regression is not observed versus develop in this run.
+
+This is a narrow retention: temporary hash +1.40%, boxed-effect +1.04%, closure
++0.47%, CSV +0.37%, and text +0.81% remain. Default-layout closure is +5.08% with
+disjoint ranges, also present with lowering disabled; its cause is not isolated
+to reload removal. Both closure caller/body retain their instruction counts.
+Mutation grows four instructions but skips an actual load and retains its frame.
+Mixed versus develop: CSV +2.50%, orders -10.37%, pipeline -71.43%, text -2.48%.
+No whole-application or universal non-regression claim follows.
+
+Release/debug each pass 17 files / 61 cases / 8713 assertions, 64 qmods and
+555 reference checks per IR/AOT mode. Native debug passes 986/986 in three modes;
+wide-to-immediate replacement, ownership fallback, pending exception/EH, reflection,
+reentry and recursive binding are covered. Exactly 64 release aliases restored.
+All 3015 windows, both epochs and controls, raw output, qualification, disassembly,
+drivers and 62 audit items are in
+`bench/runtime-comparison/results-aot-exact-scalar-witness-macos-arm64.json`.
+Full tables and limitations are in `bench/runtime-comparison/RESULTS.md`.
+
+Continue by profiling remaining mutation/CSV/hash costs, then consider prepared
+scalar parameter slots only with same-invocation binding/frame-lifetime proof;
+later resume closure object/class-context work with eager closure-self, capture
+locks, reader lifetime, physical stack guards and cold materialization preserved.
+No Java rerun, full-suite, sanitizer, cross-platform, general IR/JIT or startup
+claim. Java parity and a justified ceiling are still open.

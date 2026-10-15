@@ -683,10 +683,21 @@ static void ut_aot_exact_scalar_local_store(UnitTestCounters& c) {
         // The exported wrapper must preserve publication and pending-exception behavior.
         qore_rt_assign_exact_scalar_local_aot_v1(&context, 0, next.rawBits(), &xsink);
         UT_ASSERT_EQ(c, next.rawBits(), slot->val.getValue().rawBits(), "AOT wrapper publishes the actual slot");
+        int expected_publication = !std::getenv("QORE_DISABLE_AOT_EXACT_SCALAR_STORE")
+            && !std::getenv("QORE_DISABLE_AOT_EXACT_SCALAR_STORE_RELOAD");
+        UT_ASSERT_EQ(c, expected_publication,
+            qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, first.rawBits(), &xsink),
+            "v2 reports only enabled exact scalar publication");
+        UT_ASSERT_EQ(c, first.rawBits(), slot->val.getValue().rawBits(), "v2 publication preserves exact bits");
+        UT_ASSERT_EQ(c, expected_publication,
+            qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, next.rawBits(), &xsink),
+            "v2 replacement reports the same live admission");
         xsink.raiseException("EXACT-SCALAR-STORE-TEST", "pending sink control");
         qore_rt_assign_exact_scalar_local_aot_v1(&context, 0, first.rawBits(), &xsink);
         UT_ASSERT(c, xsink, "typed store preserves a pending exception");
         UT_ASSERT_EQ(c, next.rawBits(), slot->val.getValue().rawBits(), "pending exception prevents publication");
+        UT_ASSERT_EQ(c, 0, qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, first.rawBits(), &xsink),
+            "pending exception cannot report publication");
         bool threw = false;
         try {
             qore_rt_assign_exact_scalar_local_aot_throwing_v1(&context, 0, first.rawBits(), &xsink);
@@ -694,7 +705,24 @@ static void ut_aot_exact_scalar_local_store(UnitTestCounters& c) {
             threw = true;
         }
         UT_ASSERT(c, threw && xsink, "typed store native EH retains the sink and unwinds");
+        threw = false;
+        try {
+            qore_rt_assign_exact_scalar_local_aot_throwing_v2(&context, 0, first.rawBits(), &xsink);
+        } catch (const QoreJITException&) {
+            threw = true;
+        }
+        UT_ASSERT(c, threw && xsink, "publication-result native EH retains the sink and unwinds");
+        UT_ASSERT_EQ(c, next.rawBits(), slot->val.getValue().rawBits(), "neither pending path changes the slot");
         xsink.clear();
+        if (ti == bigIntTypeInfo) {
+            UT_ASSERT_EQ(c, 0, qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, wide_int->rawBits(), &xsink),
+                "wide scalar input retains ordinary reload");
+            UT_ASSERT_EQ(c, INT64_MAX, slot->val.v.i, "fallback stores the full integer");
+            UT_ASSERT_EQ(c, 1, wide_int->getInternalNode()->reference_count(), "fallback retains input ownership");
+            UT_ASSERT_EQ(c, expected_publication,
+                qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, next.rawBits(), &xsink),
+                "replacing wide primitive storage can report exact immediate publication");
+        }
         local.var.setReadOnly();
         miss(first);
     }
@@ -722,6 +750,12 @@ static void ut_aot_exact_scalar_local_store(UnitTestCounters& c) {
         UT_ASSERT_EQ(c, 2, text->reference_count(), "mismatched declaration retains ordinary ownership fallback");
         qore_rt_assign_exact_scalar_local_aot_v1(&context, 0, QoreValue(int64_t{9}).rawBits(), &xsink);
         UT_ASSERT_EQ(c, 1, text->reference_count(), "ordinary fallback releases the old node once");
+        UT_ASSERT_EQ(c, 0, qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, QoreValue(*text).rawBits(), &xsink),
+            "owning fallback does not report exact scalar publication");
+        UT_ASSERT_EQ(c, 2, text->reference_count(), "v2 fallback retains the actual slot owner");
+        UT_ASSERT_EQ(c, 0, qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, QoreValue(int64_t{13}).rawBits(), &xsink),
+            "non-exact declaration cannot report publication even for immediate input");
+        UT_ASSERT_EQ(c, 1, text->reference_count(), "v2 fallback releases the old owner once");
     }
     UT_ASSERT(c, !xsink, "exact typed scalar tests raise no exception");
 }

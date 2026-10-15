@@ -423,6 +423,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_assign_exact_scalar_local_aot_v1) },
     { "qore_rt_assign_exact_scalar_local_aot_throwing_v1",
         reinterpret_cast<void*>(&qore_rt_assign_exact_scalar_local_aot_throwing_v1) },
+    { "qore_rt_assign_exact_scalar_local_aot_v2",
+        reinterpret_cast<void*>(&qore_rt_assign_exact_scalar_local_aot_v2) },
+    { "qore_rt_assign_exact_scalar_local_aot_throwing_v2",
+        reinterpret_cast<void*>(&qore_rt_assign_exact_scalar_local_aot_throwing_v2) },
     { "qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing) },
     { "qore_rt_assign_local_no_coerce_aot_throwing",
         reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot_throwing) },
@@ -22532,4 +22536,31 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_exact_scalar_
     if (xsink && *xsink) {
         throw QoreJITException();
     }
+}
+
+extern "C" DLLEXPORT int qore_rt_assign_exact_scalar_local_aot_v2(QoreAOTContext* ctx,
+        int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    enum class Mode : uint8_t { Generic, StoreOnly, Publish };
+    static const Mode mode = []() {
+        if (std::getenv("QORE_DISABLE_AOT_EXACT_SCALAR_STORE")) {
+            return Mode::Generic;
+        }
+        return std::getenv("QORE_DISABLE_AOT_EXACT_SCALAR_STORE_RELOAD") ? Mode::StoreOnly : Mode::Publish;
+    }();
+    LocalVar* var = ctx->locals[idx];
+    if (mode != Mode::Generic && var && !*xsink && var->tryAssignAOTExactScalarValue(fromBits(val))) {
+        return mode == Mode::Publish ? 1 : 0;
+    }
+    qore_rt_assign_local_no_coerce_eval_weak(var, val, xsink);
+    return 0;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) int qore_rt_assign_exact_scalar_local_aot_throwing_v2(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    int published = qore_rt_assign_exact_scalar_local_aot_v2(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return published;
 }

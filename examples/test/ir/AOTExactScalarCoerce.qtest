@@ -39,6 +39,7 @@ class ExactScalarCoerceTest inherits QUnit::Test {
         TmpDir dir("qore-exact-scalar-coerce-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
                 "QORE_DISABLE_AOT_EXACT_SCALAR_STORE_LOWERING=1 ",
+                "QORE_DISABLE_AOT_EXACT_SCALAR_STORE_RELOAD=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
@@ -48,14 +49,18 @@ class ExactScalarCoerceTest inherits QUnit::Test {
                     "fixture exercises the guarded AOT helper");
                 assertRegex("(?:call|invoke) void @qore_rt_assign_local_no_coerce_eval_weak_aot", ir,
                     "non-exact declarations retain the general helper");
-                string selected = "(?:call|invoke) void @qore_rt_assign_exact_scalar_local_aot(?:_throwing)?_v1";
+                string selected = "(?:call|invoke) (?:void|i32) @qore_rt_assign_exact_scalar_local_aot(?:_throwing)?_v[12]";
                 if (prefix.startsWith("QORE_DISABLE_AOT_EXACT_SCALAR_STORE_LOWERING")) {
                     assertFalse(regex(ir, selected), "disabled lowering retains general publication");
                 } else {
                     assertRegex(selected, ir, "exact declarations select guarded scalar publication");
                 }
+                string witness = "(?:call|invoke) i32 @qore_rt_assign_exact_scalar_local_aot(?:_throwing)?_v2";
+                bool report = !prefix.startsWith("QORE_DISABLE_AOT_EXACT_SCALAR_STORE_");
+                assertEq(report, regex(ir, witness), "only enabled parameter lowering requests a publication result");
                 foreach string runtime in (("", "QORE_DISABLE_AOT_EXACT_SCALAR_COERCE=1 ",
                         "QORE_DISABLE_AOT_EXACT_SCALAR_STORE=1 ",
+                        "QORE_DISABLE_AOT_EXACT_SCALAR_STORE_RELOAD=1 ",
                         "QORE_DISABLE_AOT_EXACT_SCALAR_COERCE=1 QORE_DISABLE_AOT_EXACT_SCALAR_STORE=1 ")) {
                     assertEq(expected, run((executable,), runtime), prefix + level + runtime);
                 }

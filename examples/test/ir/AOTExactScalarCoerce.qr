@@ -74,8 +74,19 @@ int sub recursiveStore(int value, int depth) {
     expect(depth + 101, get_local_vars(0).value.value);
     return value;
 }
+int sub assignWideThenImmediate(int value, auto input) {
+    list<int> marker = (0,);
+    marker[0] += 1;
+    value = input;
+    expect(input, get_local_vars(0).value.value);
+    value = 17;
+    expect(17, get_local_vars(0).value.value);
+    return value;
+}
 
 for (int round = 0; round < 4; ++round) {
+    expect(17, call_function("assignWideThenImmediate", 0, 9223372036854775807));
+    expect(17, call_function("assignWideThenImmediate", 0, -9223372036854775807));
     expect(23, call_function("assignCaptured", 0, 23));
     int target = 0;
     assignReference(\target, 29);

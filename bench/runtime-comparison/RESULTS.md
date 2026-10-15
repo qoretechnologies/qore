@@ -14329,3 +14329,121 @@ storage guard or a valid publication witness, then continue CSV/hash investigati
 and closure object/class-context work. Preserve reflective mutation, eager
 closure-self state, capture locks, reader lifetime, stack guards and cold exception
 materialization throughout.
+
+## Exact scalar publication witness (2026-10-15)
+
+The additive `qore_rt_assign_exact_scalar_local_aot_v2()` and native-EH companion
+return a success flag only after the existing live declaration/storage guard
+publishes an immediate scalar without reentry. For ordinary runtime-backed
+parameters, the compiler can then reuse the input bits instead of immediately
+evaluating the same slot again. Only the direct exception check intervenes.
+Every failed guard retains ordinary assignment and reload. Body-local retention,
+private/native/fast-entry storage, captures and references are not broadened.
+
+This does not elide tracker rotation, deferred ownership cleanup, cache epoch
+publication, consumed-operand cleanup, later invalidation or later reloads.
+Signed zero and representable NaN payloads are preserved by the existing
+bit-copy float encoding; owning/tag-colliding floats and wide integers fall back.
+No slot binding is cached. Existing v1/general helpers, RuntimeConfig layout,
+serialized descriptors, old AOT artifacts and ordinary IR/JIT remain unchanged.
+New AOT artifacts require matching additive runtime symbols.
+
+`QORE_DISABLE_AOT_EXACT_SCALAR_STORE_RELOAD=1` at runtime retains the exact fast
+store but returns zero, forcing the old reload in the identical executable.
+At compilation it selects v1 and the ordinary reload. The older store/lowering
+disable controls still work and are covered by tests.
+
+### Optimized screen and confirmation
+
+Both runs use release `-O3 -DNDEBUG` runtimes and qcc `-O3`, count 4096, seed 7,
+three 300 ms warmups and three 300 ms measured windows, and the fixed
+default/reverse/shuffle-487 layouts. Before uses the retained d09-source
+compiler/runtime artifacts from the preceding trial, not a newly rebuilt HEAD
+executable. Develop uses its frozen optimized `347db1015` pair. Candidate and
+runtime-disabled share each executable; lowering-disabled is separately compiled.
+All configurations pass 555 micro or 60 mixed reference checks per artifact.
+
+The four-workload screen uses three forks and order seed 136049: mutation
+204.023 to 191.770 ns/element (-6.01%, -4.14% versus runtime-disabled), list
+building -0.83%, closure +0.13%, pipeline -1.03%. All 540 windows are retained.
+The broader confirmation uses five forks, order seed 136067, seven micro and four
+mixed workloads: 825 jobs / 2475 windows, all retained. Blocks and configuration
+order are randomized and interleaved. No task-owned build/test/profile/analysis
+work overlaps either timing phase. The two epochs are not pooled.
+
+|!Workload|!Before|!Candidate|!Runtime disabled|!Lowering disabled|!Develop|!Change vs before|!Change vs develop
+|List mutation|202.764|193.163|201.418|203.150|199.012|-4.74%|-2.94%
+|List building|85.390|84.245|84.457|84.785|104.030|-1.34%|-19.02%
+|Temporary list|129.186|127.424|126.681|128.656|136.642|-1.36%|-6.75%
+|Temporary hash|313.414|317.802|317.831|318.007|312.172|+1.40%|+1.80%
+|Boxed integer method with effects|85.816|86.706|87.288|87.599|355.071|+1.04%|-75.58%
+|Indirect call workload|6.546|6.530|6.590|6.581|220.204|-0.24%|-97.03%
+|Plain closure workload|19.623|19.716|19.591|19.436|131.851|+0.47%|-85.05%
+|CSV-style report|1059.892|1063.778|1069.271|1061.263|1037.865|+0.37%|+2.50%
+|Object orders|1777.901|1766.603|1769.520|1764.116|1971.018|-0.64%|-10.37%
+|Callback pipeline|82.248|81.872|81.380|81.679|286.615|-0.46%|-71.43%
+|Text index|1576.257|1589.093|1581.119|1590.571|1629.523|+0.81%|-2.48%
+
+First seven rows are whole-workload ns/element, not isolated call latency; last
+four are ns/input record for synthetic in-memory workloads. Aggregates are medians
+of three layout medians, each summarizing five process means. Observed ranges
+below are not confidence intervals.
+
+|!Mutation layout|!Before median [min, max]|!Candidate median [min, max]|!Change
+|Default|212.406 [200.696, 215.312]|193.955 [188.146, 195.386]|-8.69%
+|Reverse|201.538 [200.039, 229.488]|193.163 [191.714, 195.664]|-4.16%
+|Shuffle-487|202.764 [198.526, 216.828]|191.054 [189.551, 202.468]|-5.77%
+
+Mutation improves in every layout, with disjoint before/after and
+candidate/runtime-disabled ranges in two of three layouts. Aggregate saving
+versus identical-binary runtime-disabled is 4.10%. The prior mutation regression
+is no longer observed against develop in this confirmation, but this is not a
+general parity or non-regression claim.
+
+In particular, default-layout closure rises from 19.310 [19.015, 19.546] to
+20.291 [20.198, 20.866], +5.08%, with disjoint ranges. The same slowdown is present
+with runtime-disabled (20.197) and lowering-disabled (20.523); reverse and shuffled
+candidate medians improve. Therefore the trial does not isolate this adverse
+movement to reload removal. It remains an adverse before/after observation, not
+discarded as noise. The default closure caller and scalar body retain their
+713/33 instruction counts across all three compiled variants; equal counts are
+not proof of equal performance. Mutation grows 778 to 782 whole-function
+instructions and retains its 320-byte frame while conditionally skipping the
+load. No favorable alignment was selected after timing.
+
+All other adverse before/after ranges overlap. Temporary hash +1.40%, boxed-effect
++1.04%, CSV +0.37%, and text +0.81% are still reported. Temporary-list +0.59%,
+closure +0.64%, pipeline +0.60%, and text +0.50% versus runtime-disabled also
+remain visible. Improvements in unaffected controls are not attributed to the
+witness. Host frequency, thermals and unrelated activity were not controlled.
+
+### Qualification and audit
+
+Release/debug each pass 17 selected files / 61 QUnit cases / 8713 assertions,
+including four silent successful fixtures in the file count, 64 qmods and 555
+reference checks per IR/AOT mode. Native debug tests pass 986/986 in enabled,
+store-disabled and reload-disabled modes. Coverage includes exact bits, wide to
+immediate replacement, owning fallback refcounts, pending exceptions/native EH,
+reflection, recursive bindings, captures, references and reentrant parameter
+mutation. The fixture exercises AST/IR/JIT/tiered plus stripped AOT O0/O3, native
+EH, split/no-debug and compile/runtime controls. O0/debug are correctness only.
+Exactly 64 owned release aliases are restored and unrelated links unchanged.
+
+`results-aot-exact-scalar-witness-macos-arm64.json` records all 3015 windows,
+raw outputs, artifact/provenance checks, both trials, qualification, disassembly,
+drivers and all 62 individual audit-changes items. There is no new Java run,
+full-suite, sanitizer, cross-platform, startup or general IR/JIT performance
+claim. Java parity and a performance ceiling remain unestablished.
+
+|!Audit group|!Status|!Evidence
+|Compiler/runtime correctness, exceptions and ownership|Pass|Non-reentrant exact publication witness; full fallback and unchanged tracker/deferred cleanup; selected release/debug tests
+|Thread safety and cancellation|Pass|Live same-thread binding lookup; immutable configuration; no new production loop or blocking operation
+|Performance and evidence|Pass|All 3015 windows replayed; both controls; adverse layout and aggregate observations reported
+|Documentation, input handling and credentials|Pass|Strict Qore tables; bounded internal arguments; sanitized child environments
+|Module/QPP/DataProvider/JNI-specific checks|N/A|No such additions or changes
+
+Next: profile remaining mutation and mixed CSV/hash costs, then evaluate
+invocation-scoped scalar parameter slot preparation only with a binding/lifetime
+proof. Resume closure object/class-context deferral while retaining eager
+closure-self, capture locks, reader lifetime, stack guards and cold exception
+materialization. This checkpoint is not a claim that performance is maximized.
