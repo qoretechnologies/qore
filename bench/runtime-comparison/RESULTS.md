@@ -13462,3 +13462,140 @@ runtime-only controls, source/artifact identities, tests and assembly evidence.
 
 |!Audit scope|!Pass|!N/A|!Fail
 |Retained runtime, compiler, tests, documentation and evidence; every checklist item recorded individually|21|41|0
+
+
+## Persistent native-method frames rejected (2026-10-15)
+
+Rejected invocation-owned persistent frames for native integer/floating method
+calls. The native integer workload improves 2.84% against frozen baseline and
+3.16% against the same runtime with reuse disabled, but one of five layouts is
+adverse. Native floating and boxed integer calls do not improve in aggregate;
+boxed floating gains only 0.84%. Uncaptured closures cost 2.55% versus frozen.
+This is insufficient benefit for retaining the new ABI, storage and cleanup.
+All runtime/compiler/test changes are removed; the retained integer and floating
+callback optimizations are unchanged.
+
+[Complete evidence](results-aot-method-frame-reuse-rejected-macos-arm64.json)
+preserves the rejected patch and two new fixtures, all 585 jobs/1755 measured
+windows, both compile-only probes, four qualification failures, candidate and
+restored-release results, source/artifact identities, raw reference outputs,
+the decision and the individual 62-item audit.
+
+### Mechanism, proof and qualification
+
+Unlike the earlier caller-storage experiment, this prototype initialized its
+private diagnostic object once and reused it across calls. Each admitted pure
+scalar method borrowed the current receiver/PIC only until frame removal and
+reader completion, then cleared both target pointers. No target owner or cached
+callee context was retained between calls. Both physical stack guards,
+full live dispatch/Program/debugger/body/readiness checks and per-call stack
+publication/removal remained. Ordinary matched, effect/member and forwarding
+paths kept their existing behavior.
+
+Additive method-v3/v4 helpers used a 256-byte aligned slot with a native result
+union, avoiding a ninth integer ABI argument. Loop sites shared an 832-byte
+budget with existing callback frames; all exits released inactive storage.
+Scalar cleanup/reference passes recognized the new helpers. The experimental
+compile-off control was `QORE_DISABLE_AOT_METHOD_FRAME_REUSE`.
+
+The first compile-only shape inlined the old diagnostic fallback and retained
+320-416-byte helper frames with 869-928 static instructions. A cold noinline
+delegate reduced the actual candidate helpers to 112/128 bytes for typed
+integer/floating calls and 160 bytes for matched calls, versus 320/368 bytes
+for legacy helpers. Static counts were 473/459 and 491/466, versus 477/444 and
+487/460 respectively. The caller adds 256 bytes: these are helper sizes, not
+total-stack savings or proof of execution gains. Neither probe object was
+linked or executed; only the qualified production-shaped prototype was timed.
+
+Candidate release passed 16 files, 35 cases and 13029 assertions, all 64 owned
+qmods, and both 555-result IR/AOT grids. Tests covered new scratch budgets,
+typed/boxed integer/floating results, receiver replacement/deletion, foreign
+Programs/threads, debugger transitions, concurrent stack readers, pending sinks,
+forced overflow, context restoration and caught-exception/early-exit cleanup.
+
+Initial failures remain in the evidence: a result-address GEP emitted after a
+terminator; two composed boxed-result helper-name regexes; a repeated enum-key
+fixture whose second run no longer had a cold cache; and one member-reader
+helper-name regex. The GEP insertion was fixed; both ABIs now tested the same
+genuine cold-to-warm transition, without weakening its miss/empty-slot checks;
+structural assertions accepted old/new helpers. Full selected qualification
+then passed. An earlier AST preflight also corrected a hand-written expected
+sum from 15 to 14 before candidate compilation or timing.
+
+### Measured outcome
+
+macOS arm64; frozen `7f1b3e21c` source with its explicitly documented qualified
+floating-frame runtime, candidate enabled, and same-runtime compiler-off.
+All default/sorted/reverse/shuffle487/shuffle509 layouts were retained. Three
+fresh processes per combination, three warmups and three 300-ms measured
+windows, count4096/seed7, randomized order135773. No task build/test/profile or
+evidence computation overlapped timing. All 15 executable/object pairs and
+actual runtime-library paths were hashed; every executable passed 555 outputs.
+
+Values are whole-workload ns/element, not isolated call latency. Each aggregate
+is the median of five layout medians of three fork means. Positive changes are
+slower; ranges are descriptive, not statistical confidence intervals.
+
+|!Kernel|!Frozen|!Candidate|!Same-runtime off|!Change vs frozen|!Change vs off
+|indirect_int_result|6.066|6.026|6.135|-0.66%|-1.78%
+|indirect_float_result|7.383|7.208|7.136|-2.37%|+1.00%
+|dynamic_int_result_call|10.138|9.850|10.172|-2.84%|-3.16%
+|boxed_int_method_effect|84.953|85.757|85.818|+0.95%|-0.07%
+|dynamic_float_result_call|11.373|11.467|11.281|+0.83%|+1.64%
+|boxed_int_method_call|15.582|15.586|15.532|+0.02%|+0.35%
+|boxed_float_method_call|18.930|18.770|18.913|-0.84%|-0.75%
+|boxed_int_method_fallback|30.079|30.044|29.574|-0.12%|+1.59%
+|boxed_float_method_fallback|31.364|31.003|30.940|-1.15%|+0.20%
+|closure_call|25.320|25.966|25.694|+2.55%|+1.06%
+|closure_capture|31.295|31.258|31.280|-0.12%|-0.07%
+|list_build|83.290|84.190|84.683|+1.08%|-0.58%
+|list_mutate|231.091|229.569|230.530|-0.66%|-0.42%
+
+Native integer on/off improves 1.42-5.22% in four layouts with disjoint observed
+fork ranges, but shuffle509 is 3.89% slower (1.29% versus frozen), with overlap.
+Native floating on/off is adverse in four layouts; all ranges overlap. Boxed
+integer shuffle487 costs 3.54% off with disjoint ranges. Boxed floating improves
+0.64-3.06% off in four layouts, while reverse costs 0.51%; only default has
+disjoint on/off ranges.
+
+Uncaptured closure layout effects are mixed: reverse costs 5.77% frozen/4.46%
+off with disjoint ranges, while shuffle509 improves 4.07% frozen. Effectful
+methods cost 0.52-1.35% frozen in all layouts, with overlap. List-build default
+costs 2.32% frozen with disjoint ranges. All noisy/adverse samples remain; no
+causal code-layout explanation or runtime-only isolation is asserted.
+
+No additional debug, short-invocation, Java or runtime-only confirmation was
+run for this rejected candidate. Do not combine its Qore-only numbers with
+earlier Java measurements. Sharing one method slot across call sites was
+considered but deferred: every measured target caller and fast wrapper already
+has exactly one slot, so it would not address these results. Any future shared
+design must also prevent method allocations from displacing callback frames
+under the common budget and test mixed-site workloads.
+
+After removal, all production/test sources match frozen HEAD exactly. Restored
+release passed 15 files, 34 cases and 12069 assertions, all
+64 qmods/aliases and both 555-result grids. Executable `__TEXT,__text` bytes and
+all 33347 text-symbol addresses match the frozen library exactly; whole-file
+hashes differ because builds embed different Git revisions. Non-code sections
+are not claimed identical. There is no restored-runtime retiming claim.
+
+Next: separately prove and measure deferred scalar-closure context/marker
+setup, then compiler-visible admission and the broader direct/typed/nullable/
+monomorphic milestone. Closures still use fuller context setup despite bounded
+native bodies. Preserve capture reads, lexical object/class context, both entry
+guards, debugger/fallback behavior and frame readers. No Java parity or
+performance-ceiling claim; no full-suite, sanitizer or cross-platform claim.
+
+The audit covers the retained docs/data only; the rejected prototype is not
+approved production code. All 62 individual checks and evidence are recorded
+in the linked dataset: 7 Pass, 55 N/A, 0 Fail.
+
+|!Audit check|!Status|!Evidence
+|New-file copyright|Pass|2026 copyright and MIT license on research JSON
+|Completeness|Pass|All prototype source and test changes restored
+|Performance|Pass|1755 windows replayed; adverse layouts retained; prototype rejected
+|Error handling|Pass|Jobs, settings, hashes, reference outputs and terminals verified
+|Documentation|Pass|Strict Qore tables; retained/rejected results distinguished
+|Credential handling|Pass|Allowlisted runtime paths and environment hashes only
+|Correctness|Pass|Candidate/restored qualification and exact restored executable text verified
+|Remaining 55 checks|N/A|Docs/data-only final diff; each item individually explained in dataset

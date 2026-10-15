@@ -2338,3 +2338,35 @@ nor a performance ceiling has been reached.
 The full 62-item audit records 21 Pass, 41 N/A and 0 Fail; every measurement
 window is independently replayed. The audit retains the regression caveats,
 not a claim that all call paths improve.
+
+
+## Persistent native-method frame trial rejected (2026-10-15)
+
+The method-frame prototype is removed. Persistent initialized storage reduced
+helper frames, but the complete 1755-window screen did not show a worthwhile
+broad benefit: native integer 10.138 -> 9.850 ns/element (-2.84% frozen/-3.16% off),
+native floating +0.83% frozen/+1.64% off, boxed integer essentially flat, boxed
+floating -0.84% frozen/-0.75% off. One native-integer layout regressed 3.89% off;
+uncaptured closure aggregate cost 2.55% frozen, with mixed layout results. These are whole
+workloads, not isolated calls or a fresh Java comparison.
+
+No method-v3/v4 helper, method scratch, reuse flag or test adaptation remains.
+Existing integer/floating callback gains are retained. Candidate release passed
+16 files/35 cases/13029 assertions; restored release passed 15 files/34 cases/12069 assertions;
+both rebuilt 64 qmods and verified both 555-result reference grids. Restored executable text
+and text-symbol addresses match frozen baseline; full binaries embed different
+Git revisions. Candidate debug/short/Java confirmation was not pursued after
+the inadequate screen. No full-suite/sanitizer/cross-platform claim.
+
+The rejected patch, fixtures, probes, failures, raw windows and full 62-item audit are
+in `bench/runtime-comparison/results-aot-method-frame-reuse-rejected-macos-arm64.json`.
+The table and per-layout caveats are in `bench/runtime-comparison/RESULTS.md`.
+Sharing one method slot is deferred: measured target callers already had one;
+mixed-budget callback priority still needs proof. Next distinct target is
+deferred scalar-closure context/marker setup, retaining explicit capture reads,
+lexical context, stack guards, debugger/fallback and reader semantics. Broader
+direct/typed/nullable/monomorphic measurements remain pending. Neither parity
+nor a performance ceiling has been reached.
+
+The final docs/data-only audit records 7 Pass, 55 N/A and 0 Fail across all
+62 checks, with every measured window independently replayed.
