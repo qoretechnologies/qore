@@ -35,8 +35,21 @@ LjtsCounted sub ljts_make() {
 }
 
 #! the size of the IR cleanup vector, or 0 outside the IR interpreter
+/** dbg_get_ir_cleanup_entries() is registered only in a \c DEBUG build of the library (like the other
+    dbg_get_*() counters), which the Linux CI builds are but a non-debug build such as the macOS CI build is not.
+    It is resolved dynamically so a build without it parses, and its absence reads as "no vector" (0): the growth
+    checks then pass trivially there while still running wherever the counter exists, which includes every
+    execution mode on glibc and musl.
+*/
 int sub ljts_cleanup_entries() {
-    return dbg_get_ir_cleanup_entries();
+    try {
+        return call_function("dbg_get_ir_cleanup_entries");
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err == "NO-FUNCTION") {
+            return 0;
+        }
+        rethrow;
+    }
 }
 
 #! growth of the cleanup vector across an indexed for loop whose body ends in "continue" with a method call in the
