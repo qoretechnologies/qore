@@ -38,34 +38,60 @@ class LoopJumpTempScopeTest inherits QUnit::Test {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
-        addTestCase("checks in this program", \testInProgram());
-        addTestCase("each execution mode", \testExecModes());
+        addTestCase("cleanup vector does not grow in this program", \testGrowthInProgram());
+        addTestCase("cleanup vector does not grow in each mode", \testGrowthExecModes());
+        addTestCase("no temp held past the frame in this program", \testNoLeakInProgram());
+        addTestCase("no temp held past the frame in each mode", \testNoLeakExecModes());
 
         set_return_value(main());
     }
 
+    #! the growth checks read the IR cleanup-vector size, which only a library-debug build exposes
+    /** dbg_get_ir_cleanup_entries() is registered only when the library is built with debugging (as the Linux CI
+        builds are, covering every execution mode on glibc and musl); a non-debug build such as the macOS CI build
+        does not have it, so these cases skip there - the no-leak cases below still run and cover that build.
+    */
+    private checkGrowthAvailable() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the IR cleanup-vector size (dbg_get_ir_cleanup_entries()) is only in library-debug builds");
+        }
+    }
+
     #! the cleanup vector must not grow across the loop, in whatever mode this test program itself runs
-    testInProgram() {
+    testGrowthInProgram() {
+        checkGrowthAvailable();
         hash<string, int> growth = ljts_growth_results();
         foreach hash<auto> i in (growth.pairIterator()) {
             assertEq(0, i.value, "in-program: " + i.key);
         }
-        # a held temp is released when the jump leaves its scope: in the IR interpreter and AST nothing lingers
-        # right after the loop (native code may hold the last one until the next overwrite)
-        assertTrue(ljts_switch_continue_pending() <= 1, "in-program: pending bounded");
-        # ljts_switch_continue_pending ran in its own frame above; nothing it created is still alive now
-        assertEq(ljts_created, ljts_destroyed, "in-program: no permanent leak");
     }
 
-    #! the growth checks hold in every execution mode, and no mode keeps a temp alive past the frame
-    testExecModes() {
+    #! the cleanup vector must not grow in any execution mode
+    testGrowthExecModes() {
+        checkGrowthAvailable();
         foreach string mode in (ExecModes) {
             hash<string, int> results = runWorker(mode);
             assertEq(0, results."if-continue-growth", mode + ": if-continue growth");
             assertEq(0, results."switch-continue-growth", mode + ": switch-continue growth");
             assertEq(0, results."break-growth", mode + ": break growth");
+        }
+    }
+
+    #! a temp held across the jump is released when the jump leaves its scope, not kept past the frame (every build)
+    testNoLeakInProgram() {
+        # in the IR interpreter and AST nothing lingers right after the loop (native code may hold the last one
+        # until the next overwrite)
+        assertTrue(ljts_switch_continue_pending() <= 1, "in-program: pending bounded");
+        # ljts_switch_continue_pending ran in its own frame above; nothing it created is still alive now
+        assertEq(ljts_created, ljts_destroyed, "in-program: no permanent leak");
+    }
+
+    #! no execution mode keeps a temp alive past the frame that ran the loop
+    testNoLeakExecModes() {
+        foreach string mode in (ExecModes) {
+            hash<string, int> results = runWorker(mode);
             # native code may hold the last switch value in its slot until the next overwrite, so allow one here;
-            # the permanent check below is what holds in every mode
+            # the permanent check is what holds in every mode
             assertTrue(results."switch-continue-pending" <= 1, mode + ": switch-continue pending bounded");
             assertEq(0, results."permanent-leak", mode + ": no permanent leak");
         }
