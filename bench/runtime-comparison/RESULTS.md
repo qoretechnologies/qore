@@ -13209,3 +13209,119 @@ source/artifact identities, qualification, profiles and assembly probes.
 
 |!Audit scope|!Pass|!N/A|!Fail
 |Retained runtime, compiler, tests, documentation and evidence; all 62 checks recorded in the dataset|21|41|0
+
+
+## Rejected warm callback stack-guard reuse (2026-10-14)
+
+Baseline `d6f134b74`, after retained frame reuse and the merge of
+`origin/develop` at `347db1015`. Reject this candidate: its integer callback
+workload improves from5.930 to5.810ns/element (-2.03%), or -3.09% against
+same-runtime v4, but integer member reads regress+2.95% against the frozen
+baseline. The same-runtime disabled control also regresses, so merely disabling
+new lowering does not restore the old runtime's non-target performance.
+
+The candidate added v5dispatch only for existing reusable integer callback
+sites. Supported warm calls delegated their redundant entry check to the
+immediately following callee-v3 physical-stack guard; cold construction and
+unsupported views retained full checks. Pending exceptions, live Program,
+debugger, body/readiness/binding checks and per-call reader synchronization
+remained. A first assembly-only shape increased the80-byte helper frame to96;
+outlining cold check+construction together reduced it to64. This justified a
+trial, not a performance claim. No frame-pointer/unwind data was removed.
+
+The first540-window screen showed -2.12% versus frozen baseline and -2.21%
+versus same-runtime off. A675-window short screen showed on/off changes of
+-0.82%/-0.30%/-1.24% for callback counts1/17/1024 and -0.16%/-0.08% for
+uncaptured/captured closures. Count1 does not exercise the warm path; small
+control changes are not claimed as causal gains. Every noisy window is retained.
+
+### Fresh matched Java confirmation
+
+The final3120-window matrix has five forks, three warmups, three300ms windows,
+count4096/seed7 and randomized order seed135667. All15 Qore configurations
+(frozen v4, v5on, same-runtime v4off across default/sorted/reverse/shuffle487/
+shuffle509 layouts) are interleaved with fresh Temurin25.0.2+10/JMH1.37 JVMs.
+Target DONT_INLINE hints, artifacts, actual dylib paths and555 reference outputs
+per configuration are verified. Qore values are the median of five layout
+medians of fork means; Java is the median of five fork means. Units are
+whole-workload ns/element, not isolated call latency.
+
+The retained-v4 column, not the rejected candidate, describes production code.
+The historical `*_method_fallback` workloads are scalar member reads, not
+necessarily generic fallback. Earlier results remain historical measurements;
+do not infer a speedup by comparing different runs' absolute times.
+
+|!Workload|!Frozen retained v4|!Rejected v5|!Same-runtime v4off|!Java|!Retained v4/Java
+|Integer callback|5.930|5.810|5.995|1.879|3.16x
+|Floating callback|8.735|8.765|8.865|2.910|3.00x
+|Native integer method|10.007|10.092|10.030|3.068|3.26x
+|Effectful integer method|85.646|85.947|85.466|1.849|46.32x
+|Native floating method|11.493|11.539|11.584|3.337|3.44x
+|Boxed integer method|15.861|15.645|15.602|2.520|6.29x
+|Boxed floating method|19.074|19.142|19.183|2.544|7.50x
+|Integer member read|30.151|31.041|30.960|2.542|11.86x
+|Floating member read|31.378|31.820|31.994|2.518|12.46x
+|List build|84.290|84.479|84.872|2.603|32.38x
+|List mutation|233.144|234.028|234.309|4.006|58.20x
+|Uncaptured closure|26.248|25.357|25.216|1.675|15.67x
+|Captured closure|31.417|30.600|30.547|1.736|18.10x
+
+Target v5/v4off layout medians improve -0.79% to-4.88%, but allfive fork ranges
+overlap. Integer member-read v5/frozen medians regress in allfive layouts
+(+2.28% to+3.60%); floating member reads also regress in allfive (+0.58% to+3.28%).
+No statistical-significance or universal non-regression claim is made.
+
+### Identical-executable runtime control and decision
+
+To distinguish generated-call changes from runtime-wide changes, run each of
+the five frozen-v4 executables against both verified libraries, without
+recompiling it. Five forks, three warmups, three300ms windows, count4096/seed7,
+randomized paired-block seed135683 yield450 additional windows. All10 runtime/
+layout combinations pass555 references and actual-library checks first.
+
+|!Workload|!Frozen runtime|!Candidate runtime|!Change
+|Integer callback (v4 in both arms)|5.990|6.028|+0.63%
+|Integer member read|29.942|30.506|+1.88%
+|Floating member read|31.348|31.823|+1.51%
+
+Integer member-read layout medians regress+1.26% to+3.29%; floating reads
++0.21% to+2.44%. This confirms an adverse runtime-wide effect with identical
+executables. Added code shifts downstream runtime symbols, but this experiment
+does not establish alignment/code layout as the specific cause. The modest
+target gain does not justify retaining this variant. All8owned source/test
+changes were reverted; no v5symbol or warm-guard control remains in production.
+
+Candidate release/debug each pass13files29cases7670assertions and IR/AOT555-
+output grids, including v3/v4/v5 warm/cold overflow, padded callers, pending
+sinks, main/foreign threads, foreign Programs, debugger/readiness, reader and
+cleanup controls. Debug restores64owned release qmod aliases. After rejection,
+the restored release and64qmods are rebuilt and pass13files29cases7322assertions
+plus both reference grids. A premature restoration driver, started after a
+patch-format rejection, was explicitly stopped and is not counted as a pass.
+These are selected macOS arm64 checks, not full-suite or sanitizer coverage.
+
+The restored library's complete file hash differs from the frozen library
+(including its embedded Git revision), but its13,781,812executable code bytes
+and all33,343text-symbol rows match exactly. This identity check is archived;
+it is not a claim that non-code sections are byte-identical.
+
+All4785 timing windows, source/artifact identities, raw JMH data, qualification,
+rejected patch, probes and individual audit results are preserved in
+`results-aot-warm-guard-macos-arm64.json`. The audit covers the final research/
+documentation diff, not approval to ship the removed prototype.
+
+The final docs/data-only audit records every skill item individually:
+
+|!Audit scope|!Status|!Evidence
+|All62items|7Pass,55N/A,0Fail|Individual checks in the dataset
+|Measurement replay|Pass|4785raw windows, all predeclared jobs and summaries
+|Restoration|Pass|Baseline source/code identity, selected release tests and64qmods
+|Documentation|Pass|Strict Qore tables; retained/rejected distinction and caveats
+
+Next: investigate persistent floating-callback contexts separately from this
+guard experiment, preserving physical guards and observable stack/context
+semantics. Prior profiles show a288-byte floating dispatch frame and about65%
+exclusive main-thread samples there. Persistent storage is a distinct mechanism
+from previously rejected automatic-frame marker deferral. Native-method frames
+and compiler-visible invariant admission remain further candidates. Neither
+Java parity nor a performance ceiling has been established.

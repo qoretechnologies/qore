@@ -2265,3 +2265,31 @@ overflow materialization, reader lifetimes and legacy entries. Larger member
 and list gaps require targeted lookup/lvalue/reference/synchronization work.
 See the reusable-frame section of `bench/runtime-comparison/RESULTS.md` and
 `results-aot-frame-reuse-macos-arm64.json` for controls, caveats and full audit.
+
+
+## Warm callback guard experiment rejected (2026-10-14)
+
+The additive v5 warm stack-guard trial is removed. Its smaller64-byte dispatch
+frame improved the final integer callback workload -2.03% against frozen v4
+(-3.09% against same-runtime v4off), but member-read regressions were repeatable.
+Identical frozen-v4 executables against both runtime libraries show+1.88%
+integer and+1.51% floating member-read costs. This isolates an adverse runtime-
+wide effect, not its exact cause. No v5ABI/control or relaxed entry guard remains.
+
+The fresh matched matrix measures retained v4 at5.930ns/element and Java at
+1.879ns/element for the integer callback workload (3.16x). The rejected5.810ns
+candidate is not production performance. These are whole-workload numbers;
+they do not generalize to direct/static calls or establish a performance ceiling.
+
+Candidate release/debug and restored-release qualification, all4785windows,
+raw Java/control measurements, probes and the removed patch are recorded in
+`bench/runtime-comparison/results-aot-warm-guard-macos-arm64.json`; the narrative
+and full13-workload table are in `bench/runtime-comparison/RESULTS.md`.
+
+Next proof/measurement targets are persistent floating callback frames (retain
+physical guards, full overflow/context materialization and reader handshake),
+then native-method frame reuse and compiler-visible invariant admission. Do not
+infer that floating marker deferral alone helps: earlier automatic-frame trials
+were negative. Any persistent design must cover floating edge values, generic
+fallback, foreign Program/debugger changes, stack readers, cold/short invocations
+and same-runtime controls before being retained.
