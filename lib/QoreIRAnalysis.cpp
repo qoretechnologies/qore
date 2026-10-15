@@ -5510,7 +5510,8 @@ static bool qore_ir_loop_temp_scopes_are_closed(const QoreIRNaturalLoop& loop,
             if (qore_ir_analysis_cancelled(check_count, "IR loop temp scope analysis")) {
                 return false;
             }
-            if ((inst->opcode == QoreIROpcode::DiscardTemps || inst->opcode == QoreIROpcode::DiscardTempsKeep)
+            if ((inst->opcode == QoreIROpcode::DiscardTemps || inst->opcode == QoreIROpcode::DiscardTempsKeep
+                        || inst->opcode == QoreIROpcode::UnwindTemps)
                     && (!inst->temp_scope_id || !marks.count(inst->temp_scope_id))) {
                 return false;
             }
@@ -5723,7 +5724,8 @@ static size_t qore_ir_eliminate_common_pure_calls(QoreIRFunction& func, size_t& 
                     continue;
                 }
             }
-            if (inst->opcode == QoreIROpcode::DiscardTemps || inst->opcode == QoreIROpcode::DiscardTempsKeep) {
+            if (inst->opcode == QoreIROpcode::DiscardTemps || inst->opcode == QoreIROpcode::DiscardTempsKeep
+                    || inst->opcode == QoreIROpcode::UnwindTemps) {
                 // an owned call result is released here, so a call before this point must not be
                 // reused after it
                 available.clear();
@@ -6258,7 +6260,8 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
                 return {};
             }
 
-            if (inst.opcode == QoreIROpcode::DiscardTemps || inst.opcode == QoreIROpcode::DiscardTempsKeep) {
+            if (inst.opcode == QoreIROpcode::DiscardTemps || inst.opcode == QoreIROpcode::DiscardTempsKeep
+                    || inst.opcode == QoreIROpcode::UnwindTemps) {
                 scoped_expressions.clear();
                 scoped_loads.clear();
             }
@@ -11312,7 +11315,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             }
             const QoreIRInstruction* instruction = instructions[offset].get();
             if (instruction->opcode == QoreIROpcode::DiscardTemps
-                    || instruction->opcode == QoreIROpcode::DiscardTempsKeep) {
+                    || instruction->opcode == QoreIROpcode::DiscardTempsKeep
+                    || instruction->opcode == QoreIROpcode::UnwindTemps) {
                 discarded = true;
             }
         }

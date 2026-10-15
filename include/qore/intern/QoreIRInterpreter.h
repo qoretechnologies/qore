@@ -102,6 +102,12 @@ public:
     DLLLOCAL static void dumpLastSilentFail(const char* tag);
 };
 
+//! Returns the number of entries on the innermost running IR-interpreter frame's temp cleanup vector on this
+//! thread, or 0 when no IR frame is running.  Debug-only introspection (dbg_get_ir_cleanup_entries()): a break or
+//! continue that left a temp scope without draining it used to leave a sentinel on this vector every time it ran,
+//! so a test reads this inside a loop to prove the vector no longer grows.  See design/ir-loop-jump-temp-scope.md.
+DLLLOCAL int64 q_get_ir_innermost_cleanup_entries();
+
 //! Compound +=/-= helpers — shared between IR interpreter and JIT runtime
 DLLLOCAL QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
 DLLLOCAL QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
