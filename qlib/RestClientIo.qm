@@ -389,7 +389,7 @@ public namespace RestClientIo {
                     return int(min(seconds, 9223372036854775n)) * 1000;
                 }
                 try {
-                    return max(0, (date(header) - now_us()).durationMilliseconds());
+                    return max(0, (date(header) - retryWallClock()).durationMilliseconds());
                 } catch () {
                     return NOTHING;
                 }
@@ -400,6 +400,14 @@ public namespace RestClientIo {
         #! Monotonic clock and interruptible delay are overridable for deterministic policy tests
         private int retryNow() {
             return clock_get_monotonic_us();
+        }
+
+        #! The current time, against which an HTTP-date \c Retry-After is converted to a delay
+        /** An HTTP date is absolute, so it is compared with the wall clock rather than the monotonic clock of
+            retryNow(); overridable like retryNow() for deterministic policy tests
+        */
+        private date retryWallClock() {
+            return now_us();
         }
 
         private int retryJitter(int limit_ms) {

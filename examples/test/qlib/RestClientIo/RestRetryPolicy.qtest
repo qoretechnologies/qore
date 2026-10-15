@@ -8,6 +8,9 @@
 %requires ../../../../qlib/QUnit.qm
 %exec-class RestRetryPolicyTest
 
+#! the wall clock of ControlledRetryPolicy: a whole second, so an HTTP date a few seconds later is exact
+const ControlledWallClock = 2026-10-16T12:00:00Z;
+
 class ControlledRetryPolicy inherits RestRetryPolicy {
     public {
         int ticks = 0;
@@ -18,6 +21,9 @@ class ControlledRetryPolicy inherits RestRetryPolicy {
     }
     private int retryNow() {
         return ticks;
+    }
+    private date retryWallClock() {
+        return ControlledWallClock;
     }
     private retryWait(int delay_ms) {
         push delays, delay_ms;
@@ -155,13 +161,23 @@ class RestRetryPolicyTest inherits QUnit::Test {
     }
 
     testRetryAfter() {
-        foreach string header in (("2", " 2 ", (gmtime() + 2s).format("Dy, DD Mon YYYY HH:mm:SS") + " GMT")) {
+        # the HTTP date is converted against the policy's wall clock, so every form gives exactly two seconds
+        foreach string header in (("2", " 2 ",
+                (ControlledWallClock + 2s).format("Dy, DD Mon YYYY HH:mm:SS") + " GMT")) {
             ControlledRetryPolicy policy(<RestRetryOptions>{"max_retries": 1, "retry_max_delay": 1ms});
             failure(policy, hash<auto> sub (int timeout_ms) {
                 throw "REST-RESPONSE-ERROR", "busy", {"status_code": 429, "headers": {"Retry-After": header}};
             });
-            assertEq(1, policy.delays.size());
-            assertTrue(policy.delays[0] > 1000 && policy.delays[0] <= 2000);
+            assertEq((2000,), policy.delays, "Retry-After " + header);
+        }
+        # an HTTP date in the past means retry at once
+        {
+            ControlledRetryPolicy policy(<RestRetryOptions>{"max_retries": 1, "retry_max_delay": 1ms});
+            string header = (ControlledWallClock - 5s).format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+            failure(policy, hash<auto> sub (int timeout_ms) {
+                throw "REST-RESPONSE-ERROR", "busy", {"status_code": 429, "headers": {"Retry-After": header}};
+            });
+            assertEq((0,), policy.delays, "Retry-After " + header);
         }
         ControlledRetryPolicy policy();
         failure(policy, hash<auto> sub (int timeout_ms) {
