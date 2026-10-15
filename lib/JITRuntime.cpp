@@ -425,6 +425,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_assign_exact_scalar_local_aot_throwing_v1) },
     { "qore_rt_assign_exact_scalar_local_aot_v2",
         reinterpret_cast<void*>(&qore_rt_assign_exact_scalar_local_aot_v2) },
+    { "qore_rt_pseudo_string_split_aot_v1",
+        reinterpret_cast<void*>(&qore_rt_pseudo_string_split_aot_v1) },
     { "qore_rt_assign_exact_scalar_local_aot_throwing_v2",
         reinterpret_cast<void*>(&qore_rt_assign_exact_scalar_local_aot_throwing_v2) },
     { "qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing) },

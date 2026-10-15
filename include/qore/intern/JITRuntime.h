@@ -2429,6 +2429,14 @@ uint64_t qore_rt_dot_eval_pseudo_method_direct_aot(QoreAOTContext* ctx, int32_t 
 uint64_t qore_rt_dot_eval_pseudo_method_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
     uint64_t base_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
+//! AOT-only canonical <string>::split(string) call with compile-proven false defaults.
+/** Borrows both strings. The caller clears temporary argument slots after the call; fallback
+    consumes those slots before reentry, as the ordinary pseudo-method helper does.
+    Preserves the builtin frame, physical stack check, runtime flags, and code context.
+*/
+uint64_t qore_rt_pseudo_string_split_aot_v1(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, uint64_t separator_bits, uint64_t** arg_cleanups, ExceptionSink* xsink);
+
 //! AOT guarded fast path for no-arg <list>::empty() and <list>::val() pseudo-methods.
 uint64_t qore_rt_pseudo_list_bool_guarded_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
     int32_t invert_empty, ExceptionSink* xsink);

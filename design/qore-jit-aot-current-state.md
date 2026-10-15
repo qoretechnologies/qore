@@ -2597,3 +2597,40 @@ later resume closure object/class-context work with eager closure-self, capture
 locks, reader lifetime, physical stack guards and cold materialization preserved.
 No Java rerun, full-suite, sanitizer, cross-platform, general IR/JIT or startup
 claim. Java parity and a justified ceiling are still open.
+
+### Compile-selected canonical string split
+
+The AOT compiler now admits only assigned string operands for the immutable
+public builtin `<string>::split(string, bool = False, bool = False)` with one
+supplied argument, no generic instantiation and no source/namespace Program.
+`qore_rt_pseudo_string_split_aot_v1` avoids generic argument-list/default
+preparation and inline-string materialization. It reuses the existing split and
+encoding implementation, preserving the builtin frame, physical stack check,
+return type, flags, code context and normal result/local cleanup. Type/enum misses
+and the `QORE_DISABLE_AOT_STRING_SPLIT` runtime control enter ordinary consuming
+dispatch; the same control at compile time retains ordinary lowering. No IR/JIT,
+RuntimeConfig layout or serialized-layout change is introduced.
+
+The helper is compiled separately from the SCU. The initial SCU prototype
+regressed closure calls 5.19% despite no closure source change; isolation restored
+the earlier closure helper instruction shape and confirmation closure time is
++0.34%. No alignment tuning was used and causation is not reduced to instruction
+count alone.
+
+Optimized confirmation (three layouts, five forks, 2475 windows): CSV processing
+1136.115 -> 969.456 ns/input record, -14.67% before/after, -15.35% versus the
+identical-binary disabled control, -12.81% versus optimized develop 347db1015.
+All CSV layout ranges improve without overlap. Retain the caveats: temporary
+lists +0.84% overall, shuffle layout +3.05% with disjoint ranges; temporary hashes
++0.45%; text indexing +0.14%. No universal non-regression or text-index gain.
+
+Release/Debug each pass seven selected files, 7010 QUnit assertions and 555
+reference checks per IR/AOT mode; native checks pass 1028/1028 in both control
+modes. The pre-existing AST embedded-NUL/empty-separator hang remains outside
+this optimization. All three trials, raw evidence and the full audit are in
+`bench/runtime-comparison/results-aot-string-split-macos-arm64.json`; tables and
+limitations are in `bench/runtime-comparison/RESULTS.md`.
+
+Continue with remaining generic pseudo calls and container allocation costs,
+then closure-context work under the existing lifetime/stack/capture constraints.
+There is no new Java comparison or evidence that performance is maximized.

@@ -1777,6 +1777,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreLib.cpp
     lib/qore_git_revision.cpp
     lib/qore_aot_runtime_identity.cpp
+    lib/QoreAOTStringRuntime.cpp
     lib/QoreTimeZoneManager.cpp
     lib/QoreString.cpp
     lib/QoreObject.cpp
@@ -2520,8 +2521,10 @@ if (SINGLE_COMPILATION_UNIT)
     #   <link.h> that define ELF macros conflicting with LLVM headers in the SCU
     # - qore_git_revision.cpp: so git hash changes only recompile this tiny file
     # - qore_aot_runtime_identity.cpp: so AOT runtime identity changes only recompile this tiny file
+    # - QoreAOTStringRuntime.cpp: isolate specialized builtin calls from whole-SCU optimization
     # - AllocTracking.cpp: defines global malloc/free symbols
-    set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp)
+    set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp
+        lib/QoreAOTStringRuntime.cpp)
     if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
         list(APPEND LIBQORE_EXTRA_SRC lib/AllocTracking.cpp)
     endif ()
@@ -3000,7 +3003,10 @@ set(_qcc_format_sources
 #                      now lives in QoreIRAnalysis.cpp -- if the compiler ever
 #                      calls into the interpreter again, this decision changes.
 #   QoreIRPrinter      diagnostic IR dumps to stderr behind a debug flag.
+#   QoreAOTStringRuntime executes already-selected builtin helpers; it does not
+#                      emit objects or reconstruct their serialized contents.
 set(_qcc_format_excluded_sources
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTStringRuntime.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRInterpreter.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPrinter.h
     ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp

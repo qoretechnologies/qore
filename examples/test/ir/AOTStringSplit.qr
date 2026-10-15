@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+sub emit(string name, auto value) {
+    printf("%s:%y\n", name, value);
+}
+list<string> sub selected(string value, string separator) {
+    return value.split(separator);
+}
+list<string> sub selectedInvoke(string value, string separator) {
+    try {
+        return value.split(separator);
+    } catch (hash<ExceptionInfo> ex) {
+        emit("error", (ex.err, ex.callstack[0].function));
+        return ("caught",);
+    }
+}
+list<string> sub named(string value, string separator) {
+    return value.split(separator: separator);
+}
+auto sub dynamicSplit(auto value, auto separator) {
+    return value.split(separator);
+}
+sub clear(reference<string> value) { remove value; }
+string sub clearAndReturn(reference<string> value) {
+    remove value;
+    return ",";
+}
+class SplitOverride {
+    public list<string> split(string separator) { return ("override", separator); }
+}
+class SplitContext {
+    private { string value = "context"; }
+    private string read() { return value; }
+    public string check() {
+        string text = "a,b";
+        string separator = ",";
+        emit("method", text.split(separator));
+        emit("method-error", selectedInvoke(convert_encoding(text, "ASCII"), "日"));
+        return read();
+    }
+}
+
+foreach string value in (("", ",", "a,b", "a,,b,", "longer,heap,string,", "日,本語,é")) {
+    emit("direct", selected(value, ","));
+    emit("invoke", selectedInvoke(value, ","));
+    emit("named", named(value, ","));
+    emit("empty-separator", selected(value, ""));
+}
+emit("embedded-null", selected("a\0b,c", ","));
+emit("long-separator", selected("leftabcdefghrightabcdefgh", "abcdefgh"));
+foreach string encoding in (("UTF-8", "UTF-16LE", "UTF-16BE", "ISO-2022-JP")) {
+    string value = convert_encoding("日,本語,", encoding);
+    foreach string separator in ((",", convert_encoding(",", encoding))) {
+        list<string> result = selected(value, separator);
+        emit(encoding, map convert_encoding($1, "UTF-8"), result);
+        emit("result-encoding", map $1.encoding(), result);
+    }
+}
+emit("encoding-error", selectedInvoke(convert_encoding("a,b", "ASCII"), "日"));
+emit("stateful-error", selectedInvoke(binary_to_string(<1b2442467c4b>, "ISO-2022-JP"), ","));
+emit("after-error", selected("a,b", ","));
+
+string flags = "a,,b,";
+emit("with-separator", flags.split(",", True));
+emit("keep-trailing", flags.split(",", False, True));
+emit("quote", "a,\"b,c\",".split(",", "\""));
+*string optional = "a,b";
+emit("optional", optional.split(","));
+optional = NOTHING;
+try { emit("optional-nothing", optional.split(",")); }
+catch (hash<ExceptionInfo> ex) { emit("optional-nothing-error", ex.err); }
+string missing;
+try { emit("missing", missing.split(",")); }
+catch (hash<ExceptionInfo> ex) { emit("missing-error", ex.err); }
+string removed = "a,b";
+clear(\removed);
+try { emit("removed", removed.split(",")); }
+catch (hash<ExceptionInfo> ex) { emit("removed-error", ex.err); }
+string missing_separator;
+try { emit("missing-separator", flags.split(missing_separator)); }
+catch (hash<ExceptionInfo> ex) { emit("missing-separator-error", ex.err); }
+string reentry = "a,b";
+try { emit("reentry", reentry.split(clearAndReturn(\reentry))); }
+catch (hash<ExceptionInfo> ex) { emit("reentry-error", ex.err); }
+emit("reentry-after", reentry);
+emit("temporary", ("abc" + ",def").split(sprintf("%s", ",")));
+emit("dynamic", dynamicSplit("a,b", ","));
+SplitOverride override();
+emit("override", dynamicSplit(override, ","));
+hash<auto> callable = {"split": list<string> sub(string separator) { return ("hash", separator); }};
+emit("hash-callref", dynamicSplit(callable, ","));
+SplitContext checker();
+emit("context-after", checker.check());

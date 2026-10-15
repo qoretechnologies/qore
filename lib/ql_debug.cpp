@@ -760,6 +760,113 @@ static void ut_aot_exact_scalar_local_store(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "exact typed scalar tests raise no exception");
 }
 
+static void ut_aot_string_split(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreClass* cls = nullptr;
+    const QoreMethod* method = pseudo_classes_find_method(NT_STRING, "split", cls);
+    UT_ASSERT(c, method && cls, "canonical string split method exists");
+    if (!method || !cls) {
+        return;
+    }
+    const QoreFunction* function = qore_method_private::get(*method)->getFunction();
+    const AbstractQoreFunctionVariant* variant = function->runtimeFindExactVariant(&xsink,
+        type_vec_t{stringTypeInfo, boolTypeInfo, boolTypeInfo}, nullptr);
+    UT_ASSERT(c, variant && !xsink, "canonical split overload resolves exactly");
+    if (!variant || xsink) {
+        xsink.clear();
+        return;
+    }
+    QoreAOTContext ctx;
+    ctx.num_exprs = 1;
+    ctx.allocate();
+    ctx.exprs[0] = QoreValue().rawBits();
+    ctx.call_targets[0].method = method;
+    ctx.call_targets[0].qc = cls;
+    ctx.call_targets[0].variant = variant;
+    ctx.call_targets[0].is_pseudo = true;
+    RuntimeConfig& rc = rc_get_current_ref();
+    const auto* stack = get_runtime_stack_location();
+    const auto* location = get_runtime_location();
+    const auto* return_type = getReturnTypeInfo();
+    auto flags = rc.getRuntimeFlags();
+    QoreObject* object;
+    const qore_class_private* class_ctx;
+    runtime_get_object_and_class(object, class_ctx);
+    QoreObject* rc_object = rc.getObject();
+    const auto* rc_class = rc.getClass();
+    auto restored = [&]() {
+        QoreObject* now_object;
+        const qore_class_private* now_class;
+        runtime_get_object_and_class(now_object, now_class);
+        UT_ASSERT(c, stack == get_runtime_stack_location(), "split restores the published stack");
+        UT_ASSERT(c, location == get_runtime_location(), "split restores the runtime location");
+        UT_ASSERT(c, return_type == getReturnTypeInfo(), "split restores the return type");
+        UT_ASSERT_EQ(c, flags, rc.getRuntimeFlags(), "split restores RuntimeConfig flags");
+        UT_ASSERT(c, object == now_object && class_ctx == now_class, "split restores live object/class context");
+        UT_ASSERT(c, rc_object == rc.getObject() && rc_class == rc.getClass(),
+            "split restores RuntimeConfig object/class context");
+    };
+    auto call = [&](QoreValue base, QoreValue separator) {
+        uint64_t bits = qore_rt_pseudo_string_split_aot_v1(&ctx, 0, base.rawBits(),
+            separator.rawBits(), nullptr, &xsink);
+        QoreValue value;
+        std::memcpy(&value, &bits, sizeof(value));
+        return value;
+    };
+    {
+        ValueHolder result(call(QoreValue::makeShortString("a,b", 3),
+            QoreValue::makeShortString(",", 1)), &xsink);
+        UT_ASSERT(c, !xsink && result->getType() == NT_LIST, "inline split returns a list");
+        if (result->getType() == NT_LIST) {
+            const auto* list = result->get<const QoreListNode>();
+            UT_ASSERT_EQ(c, 2, list->size(), "inline split has two fields");
+            UT_ASSERT(c, QoreStringDataHelper(list->retrieveEntry(0)) == "a"
+                && QoreStringDataHelper(list->retrieveEntry(1)) == "b", "inline split preserves fields");
+        }
+        restored();
+    }
+    {
+        ReferenceHolder<QoreStringNode> base(new QoreStringNode("leftabcdefghright"), &xsink);
+        ReferenceHolder<QoreStringNode> separator(new QoreStringNode("abcdefgh"), &xsink);
+        ValueHolder result(call(QoreValue(*base), QoreValue(*separator)), &xsink);
+        UT_ASSERT(c, !xsink && result->getType() == NT_LIST, "heap split succeeds");
+        UT_ASSERT_EQ(c, 1, base->reference_count(), "split borrows the heap receiver");
+        UT_ASSERT_EQ(c, 1, separator->reference_count(), "split borrows the heap separator");
+        restored();
+    }
+    {
+        ReferenceHolder<QoreStringNode> ascii(new QoreStringNode("a,b", QCS_USASCII), &xsink);
+        ValueHolder result(call(QoreValue(*ascii), QoreValue::makeShortString("日", 3)), &xsink);
+        UT_ASSERT(c, xsink && result->isNothing(), "conversion failure returns no owned result");
+        UT_ASSERT(c, QoreStringDataHelper(xsink.getExceptionErr()) == "ENCODING-CONVERSION-ERROR",
+            "split preserves the conversion error");
+        restored();
+        xsink.clear();
+    }
+    xsink.raiseException("SPLIT-PENDING-TEST", "pending exception control");
+    {
+        ValueHolder result(call(QoreValue::makeShortString("a,b", 3),
+            QoreValue::makeShortString(",", 1)), &xsink);
+        UT_ASSERT(c, result->isNothing()
+            && QoreStringDataHelper(xsink.getExceptionErr()) == "SPLIT-PENDING-TEST",
+            "split preserves a pending sink without returning a result");
+        restored();
+    }
+    xsink.clear();
+#ifdef QORE_MANAGE_STACK
+    {
+        QoreElidedStackHelper limit(SIZE_MAX);
+        ValueHolder result(call(QoreValue::makeShortString("a,b", 3),
+            QoreValue::makeShortString(",", 1)), &xsink);
+        UT_ASSERT(c, result->isNothing()
+            && QoreStringDataHelper(xsink.getExceptionErr()) == "STACK-LIMIT-EXCEEDED",
+            "split retains the physical stack-limit check");
+        restored();
+    }
+    xsink.clear();
+#endif
+}
+
 static void ut_aot_scalar_local_store(UnitTestCounters& c) {
     ut_aot_exact_scalar_local_store(c);
     // Exercise direct/generic storage and prepared/looked-up slots against the
@@ -6584,6 +6691,7 @@ static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* x
 
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
+    ut_aot_string_split(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
     ut_aot_prepared_local_reload(c);
@@ -6602,6 +6710,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
 
 static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
+    ut_aot_string_split(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
     ut_aot_prepared_local_reload(c);

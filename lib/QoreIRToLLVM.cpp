@@ -11284,6 +11284,38 @@ static const QoreTypeParamInstantiation* qore_ir_get_explicit_dot_eval_type_inst
     return call ? call->getExplicitTypeParamInstantiation() : nullptr;
 }
 
+//! Admit only the immutable builtin overload whose omitted defaults are immediate false values.
+template <typename Instruction>
+static bool qore_ir_is_aot_string_split(const Instruction& inst, int nargs) {
+    if (!inst.pseudo || !inst.pseudo_base_known_assigned_string
+            || !inst.pseudo_arg0_known_assigned_string || nargs != 1
+            || !inst.method || !inst.variant || inst.variant->isUser()
+            || inst.qc != qore_pseudo_get_class(NT_STRING)
+            || inst.method->getClass() != inst.qc || strcmp(inst.method->getName(), "split")
+            || qore_ir_get_explicit_dot_eval_type_instantiation(inst.expr)
+            || std::getenv("QORE_DISABLE_AOT_STRING_SPLIT")) {
+        return false;
+    }
+    const auto* variant = dynamic_cast<const BuiltinNormalMethodVariantBase*>(inst.variant);
+    const auto* cls = qore_class_private::get(*inst.qc);
+    if (!variant || variant->method() != inst.method || variant->getAccess() != Public
+            || variant->getFunctionality() != QDOM_DEFAULT
+            || variant->getFlags() != (QCF_RET_VALUE_ONLY | QCF_NAMED_ARGS)
+            || cls->spgm || cls->ns) {
+        return false;
+    }
+    const auto* sig = variant->getSignature();
+    if (!sig || sig->numParams() != 3 || sig->hasVarargs() || sig->needsTypeParameterSubstitution()) {
+        return false;
+    }
+    const auto& types = sig->getTypeList();
+    const auto& defaults = sig->getDefaultArgList();
+    return types.size() == 3 && types[0] == stringTypeInfo
+        && types[1] == boolTypeInfo && types[2] == boolTypeInfo
+        && defaults.size() == 3 && defaults[1].isBool() && !defaults[1].getAsBool()
+        && defaults[2].isBool() && !defaults[2].getAsBool();
+}
+
 static bool canEmitAotInvokeExprFallback(const QoreIRInstruction* inst) {
     if (inst->opcode == QoreIROpcode::Invoke) {
         return true;
@@ -23793,8 +23825,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && direct_inst->pseudo_arg0_known_assigned_int
                 && (nargs == 1 || (nargs == 2 && direct_inst->pseudo_arg1_known_assigned_int))
                 && qore_ir_is_string_pseudo_substr(direct_inst->intrinsic);
+            bool string_split_fast_path = aot_mode && qore_ir_is_aot_string_split(*direct_inst, nargs);
             bool string_arg_fast_path = string_predicate_id >= 0 || string_find_fast_path
-                || string_substr_fast_path;
+                || string_substr_fast_path || string_split_fast_path;
             llvm::BasicBlock* guarded_string_fast_end = nullptr;
             llvm::BasicBlock* guarded_string_merge = nullptr;
             bool guarded_string_result_needs_cleanup = false;
@@ -24004,6 +24037,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_may_throw = true;
                 call_may_modify_runtime_locals = false;
                 result_needs_cleanup = false;
+            } else if (string_split_fast_path) {
+                auto* arg_val = getVal(inst->operands[1].id, error);
+                if (!arg_val) { return false; }
+                QoreValue expr_val = direct_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_split_aot_v1",
+                    llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, i64_type, i64_type, ptr_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper,
+                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), base_boxed,
+                     boxValue(arg_val, inst->operands[1].id), arg_cleanups, xsink_arg});
+                clear_fast_path_arg_cleanups();
+                // Keep normal exception handling, result ownership and runtime-local reloads:
+                // the disabled/type-miss control can enter ordinary method dispatch.
             } else if (string_predicate_id >= 0) {
                 auto* arg_val = getVal(inst->operands[1].id, error);
                 if (!arg_val) { return false; }
@@ -24704,8 +24753,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && invoke_inst->pseudo_arg0_known_assigned_int
                 && (nargs == 1 || (nargs == 2 && invoke_inst->pseudo_arg1_known_assigned_int))
                 && qore_ir_is_string_pseudo_substr(invoke_inst->intrinsic);
+            bool string_split_fast_path = aot_mode && qore_ir_is_aot_string_split(*invoke_inst, nargs);
             bool string_arg_fast_path = string_predicate_id >= 0 || string_find_fast_path
-                || string_substr_fast_path;
+                || string_substr_fast_path || string_split_fast_path;
             llvm::BasicBlock* guarded_string_fast_end = nullptr;
             llvm::BasicBlock* guarded_string_merge = nullptr;
             bool guarded_string_result_needs_cleanup = false;
@@ -24813,7 +24863,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 }
             };
-            if (string_predicate_id >= 0) {
+            if (string_split_fast_path) {
+                auto* arg_val = getVal(inst->operands[1].id, error);
+                if (!arg_val) { return false; }
+                QoreValue expr_val = invoke_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_split_aot_v1",
+                    llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, i64_type, i64_type, ptr_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper,
+                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), base_boxed,
+                     boxValue(arg_val, inst->operands[1].id), arg_cleanups, xsink_arg});
+                clear_fast_path_arg_cleanups();
+            } else if (string_predicate_id >= 0) {
                 auto* arg_val = getVal(inst->operands[1].id, error);
                 if (!arg_val) { return false; }
                 llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[1].id);

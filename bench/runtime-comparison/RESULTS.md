@@ -14447,3 +14447,86 @@ invocation-scoped scalar parameter slot preparation only with a binding/lifetime
 proof. Resume closure object/class-context deferral while retaining eager
 closure-self, capture locks, reader lifetime, stack guards and cold exception
 materialization. This checkpoint is not a claim that performance is maximized.
+
+### Compile-selected AOT string split (2026-10-15)
+
+Retain a narrow fast call for the canonical `<string>::split(string)` overload.
+The compiler proves the assigned string operands, immutable builtin target and
+two immediate false defaults. The runtime borrows the strings and calls the
+existing split/encoding implementation without allocating an argument list or
+running generic argument/default preparation. It retains the builtin stack frame,
+physical stack check, return type, runtime flags, code context, exception/result
+cleanup and ordinary runtime-local reloads. Unsupported calls retain normal
+dispatch. `QORE_DISABLE_AOT_STRING_SPLIT=1` disables lowering or, for an already
+compiled executable, selects its original consuming-dispatch fallback.
+
+These are optimized Release `-O3 -DNDEBUG` runtime / `qcc -O3` pairs. Before is
+the retained c534-source checkpoint; develop is optimized `347db1015`. Each
+confirmation value is the median of three fixed-layout medians, each with five
+fork means (three warmups and three 300 ms measured windows per fork, count 4096,
+seed 7). Five configurations are randomized in interleaved blocks. No owned
+build/test/profile work overlapped timing. Units describe whole workloads, not
+isolated call latency. Negative changes mean less time.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Runtime-disabled ns/item|!Lowering-disabled ns/item|!Develop ns/item|!Before change|!Develop change
+|list_mutate|203.567|201.304|202.581|203.409|209.153|-1.11%|-3.75%
+|list_build|89.344|89.911|90.617|90.419|109.942|+0.63%|-18.22%
+|temporary_list|134.485|135.616|134.982|135.255|142.054|+0.84%|-4.53%
+|temporary_hash|336.728|338.228|333.437|334.341|333.120|+0.45%|+1.53%
+|boxed_int_method_effect|91.999|90.303|90.342|90.050|382.879|-1.84%|-76.41%
+|indirect_call|6.833|6.732|6.839|6.834|232.707|-1.48%|-97.11%
+|closure_call|20.460|20.529|20.483|20.541|138.577|+0.34%|-85.19%
+|csv_report|1136.115|969.456|1145.189|1134.456|1111.877|-14.67%|-12.81%
+|object_orders|1951.198|1924.104|1919.785|1913.205|2157.555|-1.39%|-10.82%
+|callback_pipeline|86.840|86.871|86.585|86.820|301.646|+0.04%|-71.20%
+|text_index|1681.052|1683.340|1680.764|1681.723|1732.408|+0.14%|-2.83%
+
+CSV improves 15.35% against the identical executable's disabled control. All three
+CSV before/after fork ranges are disjoint and faster. The isolated screen showed
+-13.48%; confirmation shows -14.67%. Text indexing has no demonstrated benefit.
+Do not attribute movements in workloads that do not execute the helper to split
+call elision.
+
+The first, single-compilation-unit prototype improved CSV 15.82% but regressed
+aggregate closure calls 5.19%, including with lowering disabled. Disassembly
+showed an unchanged closure helper source producing 352 rather than 350
+instructions, with the same 352-byte stack frame. Moving the split implementation
+to its own compilation unit restored the 350-instruction shape; the isolated
+screen and confirmation closure changes are +0.35% and +0.34%. This is evidence
+for isolating the implementation, not proof that two instructions explain the
+entire initial slowdown; no alignment search was used.
+
+Adverse results remain: temporary-list confirmation is +0.84% overall, with the
+shuffle layout 134.059 [133.184,134.397] -> 138.141 [136.425,138.302] ns/item
+(+3.05%, disjoint ranges). The same layout's runtime-disabled median is 134.982;
+lowering-disabled is 136.722. The difference is not isolated to a split mechanism.
+All other adverse before/after layout ranges overlap. Observed ranges are not
+confidence intervals; host frequency, thermals and unrelated activity were not
+controlled. There is no universal non-regression claim.
+
+Release and Debug each passed seven selected files, 11 QUnit cases and 7010
+assertions (one silent fixture is included in the file count), 64 qmods and 555
+benchmark reference checks in each IR/AOT mode. Native checks passed 1028/1028
+with the helper enabled and disabled, including heap ownership, pending sinks,
+encoding failure, stack overflow and restoration of stack/location/return type,
+flags and live/snapshot object/class context. The Qore fixture covers named and
+optional operands, overrides/callrefs, reference mutation, UTF-8/UTF-16/stateful
+encodings and both normal/exception-edge AOT lowering at O0/O3, native EH,
+source stripping, split compilation and no-debug-info settings. Exactly 64 owned
+Release aliases were restored after Debug qualification.
+
+The AST reference exposed a pre-existing hang for an embedded-NUL receiver with
+an empty separator. That combination is excluded and remains unresolved; other
+NUL and empty-separator cases remain covered. No split algorithm was changed.
+
+All 3555 windows, three trials (including the rejected prototype), raw outputs,
+artifact/source digests, drivers, failed preparation history, qualification and
+the 62-item audit are in `results-aot-string-split-macos-arm64.json`.
+The audit records 21 Pass, 41 N/A, 0 Fail. No new module, QPP class, DataProvider,
+public method API, production I/O or cancellation loop was added.
+
+Next: inspect remaining generic pseudo calls in text indexing/CSV and allocation
+costs in temporary containers; extend compile-time proofs only where semantics
+and measured benefit justify them. This is newly compiled AOT work, not a general
+IR/JIT improvement. No fresh Java, full-suite, sanitizer, cross-platform or
+startup result is claimed. Java parity and a performance ceiling remain open.
