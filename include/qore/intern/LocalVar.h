@@ -292,6 +292,29 @@ public:
         return true;
     }
 
+    //! Publish an exact scalar to already assigned fixed primitive storage.
+    /** The caller must first admit the live ordinary exact-scalar declaration.
+        A miss leaves all state unchanged; no owning value can be replaced here.
+        @param value borrowed pre-coerced immediate scalar
+        @return true after publication, false without side effects for ordinary fallback
+    */
+    DLLLOCAL bool tryAssignAOTExactScalarValue(QoreValue value) {
+        assert(local_var && !frame_boundary);
+        if (finalized || block_cleared || !val.assigned || val.static_assignment || !val.fixed_type) {
+            return false;
+        }
+        if (val.type == QV_Int && value.isInt()) {
+            val.v.i = value.getInt();
+        } else if (val.type == QV_Float && value.isFloat()) {
+            val.v.f = value.getDouble();
+        } else if (val.type == QV_Bool && value.isBool()) {
+            val.v.b = value.getBool();
+        } else {
+            return false;
+        }
+        return true;
+    }
+
     //! Refresh a scalar cache only when its representation still matches the live slot exactly.
     /** @param cache borrowed boxed cache, checked against the current primitive storage
         @param tracker current reload owner; must contain only NOTHING or an immediate scalar
@@ -1060,6 +1083,34 @@ public:
         LocalVarValue* slot = prepared_slot ? prepared_slot : get_var();
         assert(!prepared_slot || (prepared_slot->local_var == this && !prepared_slot->frame_boundary));
         return slot && slot->tryAssignAOTScalarValue(value, direct_store);
+    }
+
+    //! Compile-time selection for ordinary exact-scalar publication; runtime admission repeats this check.
+    /** @return true for a writable, uncaptured, nonsubstituted canonical scalar declaration
+        @note This selects a helper, not permission to omit live storage or representation checks.
+    */
+    DLLLOCAL bool isAOTExactScalarStoreDeclaration() const {
+        return !closure_use && !is_self && !is_top_level && !read_only && !no_narrowing && !refTypeInfo
+            && !type_info_needs_substitution && !ref_type_info_needs_substitution
+            && (typeInfo == bigIntTypeInfo || typeInfo == floatTypeInfo || typeInfo == boolTypeInfo);
+    }
+
+    //! Replace an exact scalar without generic lvalue preparation, retaining runtime visibility.
+    /** Live declaration and storage checks exclude references, captures, filters,
+        substituted types, weak values and owning storage. The current thread's
+        actual slot is looked up on every call; no parameter binding is cached.
+        @param value borrowed pre-coerced immediate scalar
+        @return true after publication, false without side effects for ordinary fallback
+    */
+    DLLLOCAL bool tryAssignAOTExactScalarValue(QoreValue value) const {
+        if (!isAOTExactScalarStoreDeclaration()
+                || !((typeInfo == bigIntTypeInfo && value.isInt())
+                    || (typeInfo == floatTypeInfo && value.isFloat())
+                    || (typeInfo == boolTypeInfo && value.isBool()))) {
+            return false;
+        }
+        LocalVarValue* slot = get_var();
+        return slot && slot->tryAssignAOTExactScalarValue(value);
     }
 
     //! Prepares only fixed declaration metadata for an ordinary AOT class-local initializer.

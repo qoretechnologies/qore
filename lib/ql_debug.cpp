@@ -606,7 +606,128 @@ static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_stor
     UT_ASSERT(c, !xsink, "scalar-store admission tests raise no exception");
 }
 
+//! Prove exact typed publication is exercised and every live-state miss is inert.
+static void ut_aot_exact_scalar_local_store(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    struct LocalScope {
+        LocalVar var;
+        ExceptionSink& xsink;
+        LocalScope(const QoreTypeInfo* ti, QoreValue value, ExceptionSink& sink)
+            : var("native_exact_scalar", ti), xsink(sink) {
+            var.instantiate(value);
+        }
+        ~LocalScope() { var.uninstantiate(&xsink); }
+    };
+    struct BorrowedLocalContext : QoreAOTContext {
+        ~BorrowedLocalContext() { locals = nullptr; }
+    } context;
+    LocalVar* locals[1];
+    context.locals = locals;
+    context.num_locals = 1;
+    for (const QoreTypeInfo* ti : {bigIntTypeInfo, floatTypeInfo, boolTypeInfo}) {
+        QoreValue first = ti == bigIntTypeInfo ? QoreValue(int64_t{7})
+            : ti == floatTypeInfo ? QoreValue(1.25) : QoreValue(false);
+        QoreValue next = ti == bigIntTypeInfo ? QoreValue(-(int64_t{1} << 46))
+            : ti == floatTypeInfo ? QoreValue(-0.0) : QoreValue(true);
+        LocalScope local(ti, first, xsink);
+        locals[0] = &local.var;
+        LocalVarValue* slot = thread_try_find_lvar(&local.var);
+        UT_ASSERT(c, local.var.isAOTExactScalarStoreDeclaration(), "exact scalar declaration selects typed helper");
+        UT_ASSERT(c, slot && slot->val.fixed_type, "exact scalar has fixed runtime storage");
+        if (!slot) {
+            continue;
+        }
+        UT_ASSERT(c, local.var.tryAssignAOTExactScalarValue(next), "exact typed store is handled");
+        UT_ASSERT_EQ(c, next.rawBits(), slot->val.getValue().rawBits(), "typed store preserves exact bits");
+        UT_ASSERT(c, slot->val.fixed_type && slot->val.assigned && !slot->val.static_assignment,
+            "typed store preserves storage flags");
+        auto miss = [&](QoreValue input) {
+            ValueHolder before(slot->val.getValue(), &xsink);
+            UT_ASSERT(c, !local.var.tryAssignAOTExactScalarValue(input), "unsupported typed store is rejected");
+            ValueHolder after(slot->val.getValue(), &xsink);
+            UT_ASSERT_EQ(c, before->rawBits(), after->rawBits(), "typed store miss leaves storage unchanged");
+        };
+        for (QoreValue input : {QoreValue(), QoreValue::makeNull(), QoreValue::makeChar('x'),
+                QoreValue::makeShortString("inline", 6)}) {
+            miss(input);
+        }
+        miss(ti == bigIntTypeInfo ? QoreValue(2.5) : QoreValue(int64_t{11}));
+        ValueHolder wide_int(QoreValue(INT64_MAX), &xsink);
+        ValueHolder wide_float(QoreValue(-3.0e307), &xsink);
+        UT_ASSERT(c, wide_int->isPointer() && wide_float->isPointer(), "wide typed inputs require ownership");
+        miss(*wide_int);
+        miss(*wide_float);
+        slot->finalized = true;
+        miss(first);
+        slot->finalized = false;
+        slot->block_cleared = true;
+        miss(first);
+        slot->block_cleared = false;
+        slot->val.static_assignment = true;
+        miss(first);
+        slot->val.static_assignment = false;
+        slot->val.fixed_type = false;
+        miss(first);
+        slot->val.fixed_type = true;
+        // A declaration alone is not a proof of the live storage representation.
+        valtype_t saved_type = slot->val.type;
+        slot->val.type = QV_Node;
+        slot->val.v.n = nullptr;
+        miss(first);
+        slot->val.type = saved_type;
+        slot->syncValue(first, &xsink);
+        slot->val.removeValue(true).discard(&xsink);
+        miss(next);
+        UT_ASSERT(c, !slot->val.assigned, "replacement never initializes an unassigned typed slot");
+        slot->syncValue(first, &xsink);
+        // The exported wrapper must preserve publication and pending-exception behavior.
+        qore_rt_assign_exact_scalar_local_aot_v1(&context, 0, next.rawBits(), &xsink);
+        UT_ASSERT_EQ(c, next.rawBits(), slot->val.getValue().rawBits(), "AOT wrapper publishes the actual slot");
+        xsink.raiseException("EXACT-SCALAR-STORE-TEST", "pending sink control");
+        qore_rt_assign_exact_scalar_local_aot_v1(&context, 0, first.rawBits(), &xsink);
+        UT_ASSERT(c, xsink, "typed store preserves a pending exception");
+        UT_ASSERT_EQ(c, next.rawBits(), slot->val.getValue().rawBits(), "pending exception prevents publication");
+        bool threw = false;
+        try {
+            qore_rt_assign_exact_scalar_local_aot_throwing_v1(&context, 0, first.rawBits(), &xsink);
+        } catch (const QoreJITException&) {
+            threw = true;
+        }
+        UT_ASSERT(c, threw && xsink, "typed store native EH retains the sink and unwinds");
+        xsink.clear();
+        local.var.setReadOnly();
+        miss(first);
+    }
+    for (const QoreTypeInfo* ti : {autoTypeInfo, softBigIntTypeInfo, bigIntOrNothingTypeInfo}) {
+        LocalScope local(ti, QoreValue(int64_t{7}), xsink);
+        UT_ASSERT(c, !local.var.isAOTExactScalarStoreDeclaration(), "non-exact declarations keep the general helper");
+        UT_ASSERT(c, !local.var.tryAssignAOTExactScalarValue(QoreValue(int64_t{9})),
+            "auto, coercing and optional declarations retain ordinary assignment");
+    }
+    LocalVar captured("captured", bigIntTypeInfo), top("top", bigIntTypeInfo), self("self", bigIntTypeInfo);
+    captured.setClosureUse();
+    top.setTopLevel();
+    self.setSelf();
+    LocalVar no_narrow("no_narrow", bigIntTypeInfo), missing("missing", bigIntTypeInfo);
+    no_narrow.setNoNarrowing();
+    for (const LocalVar* var : {&captured, &top, &self, &no_narrow, &missing}) {
+        UT_ASSERT(c, !var->tryAssignAOTExactScalarValue(QoreValue(int64_t{9})),
+            "special declarations and uninstantiated locals retain ordinary fallback");
+    }
+    {
+        LocalScope local(autoTypeInfo, QoreValue(int64_t{7}), xsink);
+        locals[0] = &local.var;
+        ReferenceHolder<QoreStringNode> text(new QoreStringNode("typed helper fallback owner"), &xsink);
+        qore_rt_assign_exact_scalar_local_aot_v1(&context, 0, QoreValue(*text).rawBits(), &xsink);
+        UT_ASSERT_EQ(c, 2, text->reference_count(), "mismatched declaration retains ordinary ownership fallback");
+        qore_rt_assign_exact_scalar_local_aot_v1(&context, 0, QoreValue(int64_t{9}).rawBits(), &xsink);
+        UT_ASSERT_EQ(c, 1, text->reference_count(), "ordinary fallback releases the old node once");
+    }
+    UT_ASSERT(c, !xsink, "exact typed scalar tests raise no exception");
+}
+
 static void ut_aot_scalar_local_store(UnitTestCounters& c) {
+    ut_aot_exact_scalar_local_store(c);
     // Exercise direct/generic storage and prepared/looked-up slots against the
     // same live-slot admission, bit-preservation and ownership assertions.
     ut_aot_scalar_local_store_mode(c, false, false);

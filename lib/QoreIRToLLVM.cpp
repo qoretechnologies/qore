@@ -17170,6 +17170,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (return_class_store_result) {
                         aot_helper_name = "qore_rt_assign_class_local_result_aot_v1";
                         aot_helper_throwing_name = "qore_rt_assign_class_local_result_aot_throwing_v1";
+                    } else if (use_no_coerce && linst->mode == AssignmentMode::Normal
+                            && linst->local->isAOTExactScalarStoreDeclaration()
+                            && !std::getenv("QORE_DISABLE_AOT_EXACT_SCALAR_STORE_LOWERING")) {
+                        // Declaration selection belongs at compile time so unrelated
+                        // stores pay no scalar guard cost. The helper still checks
+                        // the live declaration, representation and actual slot state.
+                        aot_helper_name = "qore_rt_assign_exact_scalar_local_aot_v1";
+                        aot_helper_throwing_name = "qore_rt_assign_exact_scalar_local_aot_throwing_v1";
                     }
                     llvm::Value* auto_slot = !return_class_store_result && !use_no_coerce
                         ? getAOTAutoLocalSlot(linst->local, module, llvm_func) : nullptr;

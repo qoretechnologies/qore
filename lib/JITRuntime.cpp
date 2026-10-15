@@ -419,6 +419,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_try_assign_pinned_class_local_aot_throwing_v3) },
     { "qore_rt_clear_class_local_slot_aot_v1", reinterpret_cast<void*>(&qore_rt_clear_class_local_slot_aot_v1) },
     { "qore_rt_assign_local_no_coerce_aot", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot) },
+    { "qore_rt_assign_exact_scalar_local_aot_v1",
+        reinterpret_cast<void*>(&qore_rt_assign_exact_scalar_local_aot_v1) },
+    { "qore_rt_assign_exact_scalar_local_aot_throwing_v1",
+        reinterpret_cast<void*>(&qore_rt_assign_exact_scalar_local_aot_throwing_v1) },
     { "qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing) },
     { "qore_rt_assign_local_no_coerce_aot_throwing",
         reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot_throwing) },
@@ -22508,4 +22512,24 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_mod_any_throwing
         throw QoreJITException();
     }
     return result;
+}
+
+// Additive helpers leave general assignment entries and their non-scalar hot paths unchanged.
+extern "C" DLLEXPORT void qore_rt_assign_exact_scalar_local_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_EXACT_SCALAR_STORE");
+    LocalVar* var = ctx->locals[idx];
+    if (enabled && var && !*xsink && var->tryAssignAOTExactScalarValue(fromBits(val))) {
+        return;
+    }
+    qore_rt_assign_local_no_coerce_eval_weak(var, val, xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_exact_scalar_local_aot_throwing_v1(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_assign_exact_scalar_local_aot_v1(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
 }

@@ -46,7 +46,42 @@ int sub assignSoft(softint value, auto input) {
 }
 enum ExactCoerceEnum : int { Value = 7 }
 
+int sub assignCaptured(int value, int input) {
+    code<int()> read = int sub() { return value; };
+    value = input;
+    expect(input, read());
+    return value;
+}
+sub assignReference(reference<int> value, int input) {
+    value = input;
+}
+sub mutateTypedParameter() {
+    expect(19, get_local_vars(1).value.value);
+    set_local_var_value(1, "value", 37);
+}
+int sub assignThenReenter(int value) {
+    list<int> marker = (0,);
+    marker[0] += 1;
+    value = 19;
+    call_function("mutateTypedParameter");
+    return value;
+}
+int sub recursiveStore(int value, int depth) {
+    list<int> marker = (0,);
+    marker[0] += 1;
+    value = depth + 101;
+    if (depth) { expect(depth + 100, call_function("recursiveStore", 0, depth - 1)); }
+    expect(depth + 101, get_local_vars(0).value.value);
+    return value;
+}
+
 for (int round = 0; round < 4; ++round) {
+    expect(23, call_function("assignCaptured", 0, 23));
+    int target = 0;
+    assignReference(\target, 29);
+    expect(29, target);
+    expect(37, call_function("assignThenReenter", 0));
+    expect(105, call_function("recursiveStore", 0, 4));
     foreach int input in ((0, 1, -1, 140737488355327, -140737488355328,
             140737488355328, -140737488355329, 9223372036854775807, -9223372036854775807)) {
         expect(input, call_function("assignInt", 3, input));

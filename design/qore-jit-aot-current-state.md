@@ -2504,3 +2504,50 @@ Next: optimize typed-parameter publication/reload with live-state guards or a
 sound no-reentry proof, then CSV/hash layout sensitivity, then closure object/class
 context. Preserve eager closure-self state, capture locks, reader waits and cold
 exception materialization. Java parity and a performance ceiling remain open.
+
+## Compiler-selected exact scalar publication (2026-10-15)
+
+Ordinary exact `int`/`float`/`bool` declarations now select the additive
+`qore_rt_assign_exact_scalar_local_aot_v1()` helper (and native-EH counterpart)
+for pre-coerced normal AOT assignments. Selection is compile-time work; the helper
+still repeats live declaration checks and admits only matching immediate values
+into already-assigned fixed primitive storage. It rejects captured, special,
+read-only, no-narrow, reference and substituted declarations; finalized, cleared,
+unassigned or static storage; wide/owning representations and mismatches. Every
+miss retains ordinary weak normalization, lvalue preparation and assignment.
+The actual runtime slot remains authoritative and visible. No binding is cached.
+
+New AOT artifacts require the matching additive helper symbols. Existing general
+helpers, serialized descriptors, RuntimeConfig layout and ordinary IR/JIT are
+unchanged. Compile control `QORE_DISABLE_AOT_EXACT_SCALAR_STORE_LOWERING=1` selects
+old helpers; runtime control `QORE_DISABLE_AOT_EXACT_SCALAR_STORE=1` delegates new
+calls to the old path. General list/hash stores pay no new scalar entry check.
+
+Two preceding runtime-only wrappers are rejected and fully recorded: they gained
+about 8% on mutation but regressed list building 4.02%/2.15%, pipeline 2.14%/2.72%,
+and, for the second version, closure 3.07%. Compiler selection restores the old
+general helper's seven-instruction tail path and avoids those broad checks.
+
+In the final optimized five-configuration, three-layout/five-fork trial, mutation
+falls from 221.731 to 206.127 ns/element (-7.04%, -8.55% against runtime-disabled).
+All three before/after ranges are disjoint. Mutation remains 3.17% slower than
+develop's 199.802 ns. List building +0.98% and pipeline +1.21% remain reported,
+with overlapping before/after ranges; this is not a universal non-regression
+claim. Closure is -0.60% before/after. Mixed feature-versus-develop results are
+CSV +0.35%, object orders -10.59%, pipeline -71.14%, and text index -3.80%.
+
+Final release/debug each pass 17 selected files / 61 cases / 8653 assertions,
+64 qmods and 555 references per IR/AOT mode. Native debug checks pass 960/960 in
+enabled/disabled modes, including admission misses, exact bits, pending exceptions,
+native EH and node ownership fallback. Reflection, recursive bindings, captures,
+references and reentry are tested; exactly 64 release aliases are restored.
+
+All 6435 windows across three separate epochs, rejected variants, the corrected
+early debug declaration failure, provenance clarification, raw evidence and all
+62 audit items are in
+`bench/runtime-comparison/results-aot-exact-scalar-store-macos-arm64.json`.
+Full tables and limitations are in `bench/runtime-comparison/RESULTS.md`.
+No Java rerun, isolated-latency, full-suite, sanitizer, cross-platform or general
+IR/JIT performance claim. Continue with typed-parameter reload/ownership costs,
+CSV/hash sensitivity, then closure object/class-context deferral. Java parity and
+a justified performance ceiling are still open.

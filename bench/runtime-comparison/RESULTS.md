@@ -14208,3 +14208,124 @@ locks, reader lifetime and cold exception materialization preserved.
 |Module/QPP/DataProvider/JNI-specific checks|N/A|No such additions or changes
 
 Full audit: 21 Pass, 41 N/A, 0 Fail, with all 62 individual items in the dataset.
+
+## Exact typed publication: compiler-selected recovery (2026-10-15)
+
+Retained after three iterations: select a dedicated AOT publication helper at
+compile time for ordinary canonical `int`, `float`, and `bool` declarations.
+The runtime repeats declaration admission, checks immediate input and matching
+already-assigned fixed storage, and updates the actual runtime slot. Captures,
+references, substituted types, read-only/special declarations, cleared/finalized
+or unassigned slots, wide/tag-colliding values, and mismatches retain ordinary
+assignment. No reflected value, reload, cancellation check, ownership operation,
+or frame is omitted on an unsupported path.
+
+The additive `qore_rt_assign_exact_scalar_local_aot_v1()` and native-EH companion
+require newly compiled AOT code and a matching runtime. Existing general helpers,
+ordinary IR/JIT, serialized descriptors and RuntimeConfig layout are unchanged.
+`QORE_DISABLE_AOT_EXACT_SCALAR_STORE_LOWERING=1` selects old helpers at compilation;
+`QORE_DISABLE_AOT_EXACT_SCALAR_STORE=1` disables runtime admission in new artifacts.
+
+### Rejected predecessors and controls
+
+The first runtime-only guard was added to the general helper. It reduced mutation
+time by 8.03%, but increased list building by 4.02%, temporary lists by 3.02%, and
+the mixed callback pipeline by 2.14%. List-building before/after ranges were
+disjoint in all three layouts. It is not retained.
+
+The second version screened immediate values at the general entry and outlined
+scalar admission. Assembly confirmed a stack-frame-free non-scalar tail path,
+but the entry still imposed type checks on every list publication. Mutation
+improved 7.88%; list building regressed 2.15%, closure 3.07%, and pipeline 2.72%.
+This version is also not retained. Its release qualification passed; no debug
+rerun or commit was made for it.
+
+The retained version moves helper selection to the compiler and appends the new
+runtime helpers after existing definitions. The original general helper is again
+its seven-instruction tail call, with no scalar guard or configuration lookup.
+This is a different mechanism, not a search over favorable code alignments.
+
+### Final optimized comparison
+
+Runtime builds use release `-O3 -DNDEBUG`; all measured AOT executables use qcc
+`-O3`. Before is the frozen parent-checkpoint executable on the `fa3c2f04f` runtime;
+the preceding coercion-only commit did not change its code generator. Candidate
+and runtime-disabled use identical newly compiled executables. Lowering-disabled
+uses the new compiler/runtime but selects the old helper. Develop is the frozen
+optimized `347db1015` executable/runtime pair. No ABI override is used.
+
+Each trial uses count 4096, seed 7, three 300 ms warmups and three 300 ms measured
+windows, five fresh processes per layout, and default/reverse/shuffle-487 layouts.
+Final order seed is 136027. Blocks and configuration order are randomized and
+interleaved. No task-owned build/test/profile/analysis workload overlaps timing.
+Aggregates are medians of three layout medians; each layout median summarizes
+five process means. Observed process ranges are not confidence intervals.
+
+|!Workload|!Before|!Candidate|!Runtime disabled|!Lowering disabled|!Develop|!Change vs before|!Change vs develop
+|List mutation|221.731|206.127|225.386|221.352|199.802|-7.04%|+3.17%
+|List building|85.027|85.856|85.937|85.309|103.995|+0.98%|-17.44%
+|Temporary list|128.932|127.735|128.761|128.352|135.889|-0.93%|-6.00%
+|Temporary hash|315.145|315.744|316.519|317.284|316.278|+0.19%|-0.17%
+|Boxed integer method with effects|86.119|86.474|86.066|85.667|358.502|+0.41%|-75.88%
+|Indirect call workload|6.601|6.545|6.474|6.536|220.115|-0.85%|-97.03%
+|Plain closure workload|19.676|19.559|19.626|19.566|132.387|-0.60%|-85.23%
+|CSV-style report|1075.220|1060.056|1053.432|1061.461|1056.385|-1.41%|+0.35%
+|Object orders|1752.519|1756.488|1770.750|1770.719|1964.558|+0.23%|-10.59%
+|Callback pipeline|81.728|82.721|82.700|82.340|286.585|+1.21%|-71.14%
+|Text index|1574.383|1568.397|1563.108|1563.901|1630.433|-0.38%|-3.80%
+
+The first seven rows are whole-workload ns/element, not isolated call latency.
+The last four are ns/input record for synthetic in-memory mixed workloads; input
+generation, compilation and process startup are outside the timed region.
+These are not production-application or I/O/parser throughput claims.
+
+|!Mutation layout|!Before median [min, max]|!Candidate median [min, max]|!Change
+|Default|223.301 [222.005, 227.656]|204.039 [202.315, 215.893]|-8.63%
+|Reverse|221.731 [219.423, 234.826]|206.127 [199.716, 212.552]|-7.04%
+|Shuffle-487|219.833 [217.713, 225.308]|207.859 [200.798, 214.089]|-5.45%
+
+Mutation improves in every layout with disjoint before/after ranges, and is
+8.55% faster than the same-binary runtime-disabled control in aggregate. It still
+trails develop by 3.17%; the regression is reduced, not resolved. All adverse
+before/after ranges in the final trial overlap, but this does not prove universal
+non-regression. List building +0.98%, pipeline +1.21%, and indirect-call +1.09%
+against its runtime-disabled control remain visible. CSV's -1.41% before/after
+aggregate is not attributed to scalar publication: both disable controls perform
+similarly. Host thermals, frequency and unrelated activity were not controlled.
+
+### Qualification, evidence and audit
+
+Final release/debug each pass 17 selected files, 61 QUnit cases / 8653 assertions,
+plus four successful silent fixtures within the file count; 64 qmods and 555
+reference checks per IR/AOT mode also pass. Debug native admission, exact-bit,
+state-miss, exception/native-EH and ownership checks pass 960/960 with the helper
+enabled and disabled. The expanded Qore fixture checks reflection, reentrant
+parameter writes, recursive binding, capture/reference fallback, wide numbers,
+and invalid inputs across AST/IR/JIT/tiered and stripped AOT O0/O3, native EH,
+split, no-debug-info, lowering-off and runtime-off variants. Debug/O0 results are
+correctness evidence only. Exactly 64 owned release qmod aliases are restored.
+
+An initial debug build found a missing C++ declaration in the first prototype's
+native test. It was corrected and release/debug rerun. Before final timing, a
+baseline-provenance label was clarified and preparation regenerated; no measured
+window was discarded. Both histories are preserved.
+
+`results-aot-exact-scalar-store-macos-arm64.json` contains all 6435 windows across
+three separate epochs, full trial/configuration records, raw output, selected
+qualification evidence, disassembly, drivers, and every audit-changes item.
+Do not combine medians across epochs into a speedup. There is no new Java run,
+full-repository suite, sanitizer, cross-platform, startup, or IR/JIT performance
+claim. Java parity and a performance ceiling remain open.
+
+|!Audit group|!Status|!Evidence
+|Runtime and compiler correctness, exceptions and ownership|Pass|Live declaration/storage guards; unchanged generic helper; lowering selection and native-EH/fallback tests
+|Thread safety and cancellation|Pass|Same-thread live lookup, no cached binding; immutable configuration; no new production loop or blocking operation
+|Tests and optimized performance evidence|Pass|All 6435 windows replayed; rejected candidates and residual regressions retained; final release/debug and reference checks
+|Documentation, input handling and credentials|Pass|Strict Qore tables; fixed formats and bounded internal indices; DB connection environment removed from all children
+|Module/QPP/DataProvider/JNI-specific checks|N/A|No such additions or changes
+
+Next: reduce remaining typed-parameter reload/ownership bookkeeping using a live
+storage guard or a valid publication witness, then continue CSV/hash investigation
+and closure object/class-context work. Preserve reflective mutation, eager
+closure-self state, capture locks, reader lifetime, stack guards and cold exception
+materialization throughout.

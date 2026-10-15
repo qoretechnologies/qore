@@ -1899,6 +1899,19 @@ void qore_rt_clear_class_local_slot_aot_v1(QoreAOTContext* ctx, int32_t idx,
 //! Assign to a local variable via AOT context slot without type coercion.
 //! Used when coercion has already been applied.
 void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+
+//! Publish a pre-coerced exact scalar with live declaration/storage guards and ordinary fallback.
+/** @param ctx current AOT context
+    @param idx ordinary exact-scalar declaration selected by the compiler
+    @param val borrowed pre-coerced value; wide, mismatched and owning values use ordinary assignment
+    @param xsink receives exceptions; an already populated sink prevents publication
+    @note The actual runtime slot remains visible. No slot lifetime or parameter binding is cached.
+*/
+void qore_rt_assign_exact_scalar_local_aot_v1(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    ExceptionSink* xsink);
+//! Native-EH counterpart; throws QoreJITException when the sink is populated.
+void qore_rt_assign_exact_scalar_local_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    ExceptionSink* xsink);
 void qore_rt_assign_local_no_coerce_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val,
         ExceptionSink* xsink);
 
