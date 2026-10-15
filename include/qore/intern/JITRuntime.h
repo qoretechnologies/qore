@@ -74,7 +74,7 @@ struct QorePreparedFunctionRefV3 {
 };
 static_assert(offsetof(QorePreparedFunctionRefV3, owner) == 0);
 
-//! Caller-owned scratch for one reusable, non-reentrant integer callback site.
+//! Caller-owned scratch for one reusable, non-reentrant integer or floating callback site.
 /** Native v4 ABI: exactly 208 bytes, aligned to 16, with a null-initialized
     pointer in the first word. The remaining bytes are runtime-private storage.
     Only one invocation/thread may use a slot. Cleanup destroys the inactive
