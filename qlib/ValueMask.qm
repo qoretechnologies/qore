@@ -1,0 +1,1603 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ValueMask.qm module for reading and writing dates, times and numbers as text with masks
+
+/*  ValueMask.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+
+%modern
+
+module ValueMask {
+    version = "1.0";
+    desc = "user module for reading and writing dates, times and numbers as text with masks";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage ValueMask Module
+
+    @tableofcontents
+
+    @section valuemaskintro Introduction to the ValueMask Module
+
+    The %ValueMask module reads and writes dates, times and numbers as text with masks such as \c DD.MM.YYYY,
+    \c hh:mm \c AM, \c #.##0,00 or \c €#,##0.00, as business files write them, and checks text with patterns
+    (regular expressions or wildcards).  One grammar describes both directions, so a value written with a mask is
+    read back with the same mask as the same value, and a mask also gives the display format of a spreadsheet
+    cell (see @ref valuemaskspreadsheets).
+
+    All APIs are static methods of the @ref ValueMask::ValueMask "ValueMask" class:
+    - reading: @ref ValueMask::ValueMask::parseDate() "parseDate()",
+      @ref ValueMask::ValueMask::parseNumber() "parseNumber()" and
+      @ref ValueMask::ValueMask::matchesPattern() "matchesPattern()"
+    - writing: @ref ValueMask::ValueMask::formatDate() "formatDate()" and
+      @ref ValueMask::ValueMask::formatNumber() "formatNumber()"
+    - spreadsheets: @ref ValueMask::ValueMask::toSpreadsheetFormat() "toSpreadsheetFormat()" and
+      @ref ValueMask::ValueMask::spreadsheetFormatIssue() "spreadsheetFormatIssue()"
+    - checking masks and patterns: @ref ValueMask::ValueMask::maskIssue() "maskIssue()",
+      @ref ValueMask::ValueMask::numberMaskIssue() "numberMaskIssue()",
+      @ref ValueMask::ValueMask::patternIssue() "patternIssue()",
+      @ref ValueMask::ValueMask::timezoneIssue() "timezoneIssue()",
+      @ref ValueMask::ValueMask::maskIssueText() "maskIssueText()" and
+      @ref ValueMask::ValueMask::maskKind() "maskKind()"
+
+    @par Example:
+    @code{.py}
+%requires ValueMask
+
+# "02.11.2026"
+string text = ValueMask::formatDate(2026-11-02T14:05:00, "DD.MM.YYYY", "Europe/Prague");
+# 2026-11-02T00:00:00+01:00
+date d = ValueMask::parseDate(text, "DD.MM.YYYY", "Europe/Prague");
+# "-1.234,50 €"
+string amount = ValueMask::formatNumber(-1234.5n, "#.##0,00 €");
+# -1234.5n
+number n = ValueMask::parseNumber(amount, "#.##0,00 €");
+# "dd\.mm\.yyyy" (a display format code for Excel and OpenDocument spreadsheets)
+string code = ValueMask::toSpreadsheetFormat("DD.MM.YYYY");
+    @endcode
+
+    @section valuemaskdates Date and Time Masks
+
+    A date or time is read and written with these parts:
+    |!Part|!Reading|!Writing
+    |\c YYYY|a four-digit year|the year in four digits (a year after 9999 or before year 0 cannot be written)
+    |\c YY|a two-digit year in this century (20YY)|the last two digits of a year from 2000 to 2099; another \
+        year cannot be written, as it would be read as a different year
+    |\c MM, \c M|the month in one or two digits|\c MM: two digits, \c M: no leading zero
+    |\c Mon, \c MON|an English month abbreviation (Jan to Dec) in any letter case|\c Mon: \c Jan, \c MON: \c JAN
+    |\c DD, \c D|the day in one or two digits|\c DD: two digits, \c D: no leading zero
+    |\c HH, \c H|the hour (0 - 23) in one or two digits|\c HH: two digits, \c H: no leading zero
+    |\c hh, \c h|the hour on a 12-hour clock (1 - 12) with \c AM|\c hh: two digits, \c h: no leading zero
+    |\c mm|the minutes in two digits|the minutes in two digits
+    |\c SS|the seconds in two digits|the seconds in two digits
+    |\c sss|a fraction of a second after \c SS in one to six digits|milliseconds in three digits; any further \
+        microseconds are not written
+    |\c ZZ|a UTC offset: \c Z, \c +HH:MM, \c +HHMM or \c +HH; a value with an offset keeps it|the offset of \
+        the value as \c +HH:MM
+    |\c AM|\c AM or \c PM in any letter case (12 AM is midnight)|\c AM or \c PM
+
+    Every other character, which must not be a letter except \c T, appears in the value as written.
+
+    A date mask has a year, a month and a day; a time mask (\c kind \c "time") an hour and a minute and no date;
+    each field appears at most once.  A 12-hour hour (\c hh or \c h) needs \c AM, and \c AM a 12-hour hour; \c sss
+    needs \c SS.
+
+    A date without an offset is read in the given time zone, or in the current time zone if none is given; a
+    date is written as the wall-clock time of the value in the given time zone, or in the current time zone if
+    none is given, and so it is read back as the same point in time.  With \c ZZ, a value is written with its own
+    offset, or converted to the given time zone first when one is given.  A time (\c kind \c "time") is read on
+    1970-01-01.
+
+    This is not Qore's positional date mask (see @ref date_mask): that one reads exactly two characters for \c DD,
+    misreading 2.11.2026, and passes over a letter it does not know, so a mistyped mask would read wrong dates
+    instead of failing.
+
+    @section valuemasknumbers Number Masks
+
+    A number is read and written with a number mask:
+
+    @verbatim
+mask     := integer [ decimal fraction ]
+integer  := "0" | "#" group "##0"
+group    := , . space '
+decimal  := . ,          (not the group separator)
+fraction := "0"* "#"?    (at least one character)
+    @endverbatim
+
+    - \c #,##0 groups digits by three with the separator; a value may also be read without grouping (a space
+      also matches a no-break space, an apostrophe also a typographic one); \c 0 does not group
+    - after the decimal mark, n \c 0 are at least n decimals and a final \c # allows any further decimals;
+      without a fraction the number is whole
+    - reading: a leading \c - (or \c + or the minus sign \c −) is always allowed; a value with fewer decimals
+      than the \c 0s, or with more and no final \c #, is not a number in the mask
+    - writing: without a final \c #, the value is rounded half away from zero to exactly the number of \c 0s;
+      with it, the value's own decimals are written, at least as many as the \c 0s, without trailing zeros
+      after them; without a fraction, the value is rounded to a whole number
+
+    Around the number a mask can have, as business files write amounts and rates:
+
+    @verbatim
+mask     := "(" inner ")" | inner [ "-" ]
+inner    := [ currency ] number [ "%" | currency ]
+currency := a currency symbol (such as € $ £ ¥) or a 3-letter upper-case code (EUR)
+    @endverbatim
+
+    - a currency before or after the number (\c €#,##0.00, \c #.##0,00 \c €, \c #,##0.00 \c EUR), with or
+      without a space; a value may also be read without it, and a code is compared without case; a value is
+      written with the currency as it appears in the mask
+    - \c % after the number: a percentage, read as its fraction (\c 12,5 \c % is \c 0.125, as a spreadsheet's
+      percent cell holds it); a value may also be read without the sign; a value is written multiplied by 100
+    - \c (...) around it: a value in parentheses is negative, as accounting writes it (\c (1,234.00))
+    - a final \c -: a value with a trailing minus is negative, as SAP writes it (\c 1.234,56-)
+
+    A value is negative at most once: \c -(5) is not a number.  So 1.234,56 is not a number with the mask
+    \c #,##0.#, instead of being read as 1.23456.  The names \c decimal_point and \c decimal_comma are the masks
+    \c #,##0.# and \c #.##0,#.
+
+    @section valuemaskpatterns Text Patterns
+
+    A text pattern is a regular expression (\c regex, the default) or wildcards (\c glob: \c * any characters,
+    \c ? one character, \c [abc] or \c [a-z] one of them, \c [!abc] none of them) that the whole value must
+    match.
+
+    @section valuemaskspreadsheets Masks as Spreadsheet Display Formats
+
+    @ref ValueMask::ValueMask::toSpreadsheetFormat() "toSpreadsheetFormat()" returns the display format code of a
+    mask, as Excel and LibreOffice write them, so that a spreadsheet cell keeps its real date or number and is
+    shown as the mask describes:
+    - date and time parts: \c YYYY \c yyyy, \c YY \c yy, \c MM \c mm, \c M \c m, \c Mon \c mmm, \c DD \c dd,
+      \c D \c d, \c HH and \c hh \c hh, \c H and \c h \c h, \c mm \c mm, \c SS \c ss, \c SS.sss \c ss.000 and
+      \c AM \c AM/PM; other characters are written as text
+    - numbers: \c #,##0 for a grouped number and \c 0 for one without grouping, with \c . and the \c 0s of the
+      mask; a final \c # shows up to 10 decimals in all; a currency is written as text; \c % is a percentage;
+      \c (...) and a final \c - give a second section for negative values (ex: \c #,##0.00;(#,##0.00))
+
+    A spreadsheet shows a cell differently from text in these ways:
+    - the group separator and decimal mark are shown as the language of whoever opens the file uses them, in
+      Excel and in LibreOffice; the mask's separators only say whether digits are grouped and how many decimals
+      are shown, so \c #.##0,00 and \c #,##0.00 give the same code (a CSV file writes them exactly as the mask)
+    - \c Mon shows the month name in the language of whoever opens the file, as the cell holds a real date
+    - a final \c # shows at most 10 decimals, and a whole number is shown with the decimal mark after it
+      (\c 12.)
+    - these masks have no display format and are refused with the reason: \c ZZ (a cell holds no UTC offset),
+      \c MON (there is no upper-case month name), \c sss not directly after \c SS and a decimal point, a minute
+      that is not directly after an hour or before the seconds and a numeric month that is (a spreadsheet would
+      take one for the other)
+
+    @section valuemask_relnotes Release Notes
+
+    @subsection valuemask_v1_0 ValueMask v1.0
+    - initial release: the masks and patterns of the sheet contracts of Qorus design mode, for reading and
+      writing values and for spreadsheet display formats
+*/
+
+#! The ValueMask namespace contains all public definitions of the ValueMask module
+public namespace ValueMask {
+#! Reads and writes dates, times and numbers as text with masks; see @ref valuemaskintro
+/** All methods are static; masks are parsed once and kept, so every value of a column is read or written with the
+    same parsed mask
+*/
+public class ValueMask {
+    public {
+        #! The mask tokens, in the order they are tried: a longer token before its prefix
+        const DateTokens = ("YYYY", "YY", "Mon", "MON", "MM", "M", "DD", "D", "HH", "H", "hh", "h", "mm", "SS",
+            "sss", "ZZ", "AM");
+
+        #! The field each token sets; each field appears at most once in a mask
+        const TokenFields = {
+            "YYYY": "year", "YY": "year",
+            "Mon": "month", "MON": "month", "MM": "month", "M": "month",
+            "DD": "day", "D": "day",
+            "HH": "hour", "H": "hour", "hh": "hour", "h": "hour",
+            "mm": "minute",
+            "SS": "second",
+            "sss": "fraction",
+            "ZZ": "offset",
+            "AM": "meridiem",
+        };
+
+        #! The value each token reads
+        const TokenRegex = {
+            "YYYY": "([0-9]{4})", "YY": "([0-9]{2})",
+            "Mon": "([A-Za-z]{3})", "MON": "([A-Za-z]{3})",
+            "MM": "([0-9]{1,2})", "M": "([0-9]{1,2})",
+            "DD": "([0-9]{1,2})", "D": "([0-9]{1,2})",
+            "HH": "([0-9]{1,2})", "H": "([0-9]{1,2})",
+            "hh": "([0-9]{1,2})", "h": "([0-9]{1,2})",
+            "mm": "([0-9]{2})",
+            "SS": "([0-9]{2})",
+            "sss": "([0-9]{1,6})",
+            "ZZ": "(Z|[+-][0-9]{2}(?::?[0-9]{2})?)",
+            "AM": "([AaPp][Mm])",
+        };
+
+        #! The kinds of mask: a date column's or a time column's
+        const MaskKinds = ("date", "time");
+
+        #! English month abbreviations
+        const Months = {
+            "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+            "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+        };
+
+        #! English month abbreviations as written, by month number - 1
+        const MonthAbbreviations = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov",
+            "Dec");
+
+        #! The common date masks, offered to choose from
+        const DateFormats = ("DD.MM.YYYY", "DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD-MM-YYYY", "DD.MM.YY",
+            "MM/DD/YY", "DD-Mon-YYYY", "DD Mon YYYY", "DD.MM.YYYY HH:mm", "YYYY-MM-DD HH:mm",
+            "YYYY-MM-DDTHH:mm:SS", "MM/DD/YYYY hh:mm AM", "YYYY-MM-DDTHH:mm:SSZZ");
+
+        #! The common time masks, offered to choose from
+        const TimeFormats = ("HH:mm", "HH:mm:SS", "H:mm", "hh:mm AM", "HH:mm:SS.sss");
+
+        #! The common number masks, offered to choose from
+        const NumberFormats = ("#,##0.#", "#.##0,#", "# ##0,#", "#'##0.#", "0.#", "0,#");
+
+        #! Common masks of amounts and rates: currencies, percentages and negative amounts, offered to choose from
+        const AmountFormats = ("#,##0.00 €", "#.##0,00 €", "€#,##0.00", "$#,##0.00", "#,##0.00 EUR", "0.#%",
+            "0,# %", "(#,##0.00)", "#.##0,00-");
+
+        #! The names of number formats, as masks
+        const NumberFormatAliases = {
+            "decimal_point": "#,##0.#",
+            "decimal_comma": "#.##0,#",
+        };
+
+        #! The parts of each kind of format, offered with what each means; @c key names the description
+        /** Time masks share the date masks' parts and descriptions. */
+        const FormatParts = {
+            "date": (
+                {"part": "YYYY", "key": "date_year4"},
+                {"part": "YY", "key": "date_year2"},
+                {"part": "MM", "key": "date_month2"},
+                {"part": "M", "key": "date_month1"},
+                {"part": "Mon", "key": "date_month_abbr"},
+                {"part": "DD", "key": "date_day2"},
+                {"part": "D", "key": "date_day1"},
+                {"part": "HH", "key": "date_hour24_2"},
+                {"part": "H", "key": "date_hour24_1"},
+                {"part": "hh", "key": "date_hour12_2"},
+                {"part": "h", "key": "date_hour12_1"},
+                {"part": "mm", "key": "date_minute"},
+                {"part": "SS", "key": "date_second"},
+                {"part": "sss", "key": "date_fraction"},
+                {"part": "AM", "key": "date_meridiem"},
+                {"part": "ZZ", "key": "date_offset"},
+                {"part": "T", "key": "date_t"},
+            ),
+            "time": (
+                {"part": "HH", "key": "date_hour24_2"},
+                {"part": "H", "key": "date_hour24_1"},
+                {"part": "hh", "key": "date_hour12_2"},
+                {"part": "h", "key": "date_hour12_1"},
+                {"part": "mm", "key": "date_minute"},
+                {"part": "SS", "key": "date_second"},
+                {"part": "sss", "key": "date_fraction"},
+                {"part": "AM", "key": "date_meridiem"},
+                {"part": "ZZ", "key": "date_offset"},
+            ),
+            "number": (
+                {"part": "#,##0", "key": "number_group_comma"},
+                {"part": "# ##0", "key": "number_group_space"},
+                {"part": "#.##0", "key": "number_group_dot"},
+                {"part": "#'##0", "key": "number_group_apostrophe"},
+                {"part": "0", "key": "number_no_group"},
+                {"part": ".0", "key": "number_point_required"},
+                {"part": ",0", "key": "number_comma_required"},
+                {"part": ".#", "key": "number_point_more"},
+                {"part": ",#", "key": "number_comma_more"},
+                {"part": "€", "key": "number_currency_symbol"},
+                {"part": "EUR", "key": "number_currency_code"},
+                {"part": "%", "key": "number_percent"},
+                {"part": "(...)", "key": "number_parentheses"},
+                {"part": "-", "key": "number_trailing_minus"},
+            ),
+            "regex": (
+                {"part": "[0-9]", "key": "regex_digit"},
+                {"part": "[A-Z]", "key": "regex_upper"},
+                {"part": "[a-z]", "key": "regex_lower"},
+                {"part": "[^...]", "key": "regex_not_in"},
+                {"part": ".", "key": "regex_any_char"},
+                {"part": "*", "key": "regex_zero_or_more"},
+                {"part": "+", "key": "regex_one_or_more"},
+                {"part": "?", "key": "regex_optional"},
+                {"part": "{n}", "key": "regex_exactly_n"},
+                {"part": "{n,m}", "key": "regex_n_to_m"},
+                {"part": "(a|b)", "key": "regex_alternative"},
+                {"part": "\\.", "key": "regex_literal_dot"},
+                {"part": "\\s", "key": "regex_whitespace"},
+            ),
+            "glob": (
+                {"part": "*", "key": "glob_any_run"},
+                {"part": "?", "key": "glob_one_char"},
+                {"part": "[abc]", "key": "glob_one_of"},
+                {"part": "[a-z]", "key": "glob_range"},
+                {"part": "[!abc]", "key": "glob_none_of"},
+            ),
+        };
+
+        #! The kinds of text pattern
+        const PatternKinds = ("regex", "glob");
+
+        #! Examples of text patterns, by kind; @c key names the localized description
+        const PatternExamples = {
+            "regex": (
+                {"pattern": "PC-[0-9]{4}", "key": "regex_product_code"},
+                {"pattern": "[A-Z]{2}[0-9]{6}", "key": "regex_letters_digits"},
+                {"pattern": "[0-9]{5}(-[0-9]{4})?", "key": "regex_us_zip"},
+                {"pattern": "[^@\\s]+@[^@\\s]+\\.[a-z]{2,}", "key": "regex_email"},
+            ),
+            "glob": (
+                {"pattern": "PC-????", "key": "glob_four_after_prefix"},
+                {"pattern": "INV-*", "key": "glob_starts_with"},
+                {"pattern": "*.pdf", "key": "glob_pdf_file"},
+                {"pattern": "[A-Z]*", "key": "glob_starts_capital"},
+            ),
+        };
+
+        #! The group separators of a number mask
+        const GroupSeparators = (",", ".", " ", "'");
+
+        #! The decimal marks of a number mask
+        const DecimalMarks = (".", ",");
+
+        #! The longest pattern a column can have
+        const MaxPatternLength = 500;
+
+        #! The longest date mask
+        const MaxMaskLength = 40;
+
+        #! The most decimals a spreadsheet display format shows for a mask with a final @c #
+        const SpreadsheetMaxDecimals = 10;
+
+        #! The characters that a spreadsheet display format shows as themselves, besides a space and any non-ASCII
+        #! character
+        const SpreadsheetPlainChars = "$-+/():!^&'~{}<>=";
+    }
+
+    private {
+        #! The time zones read, by region; access protected with zone_lock
+        static hash<string, TimeZone> zones;
+
+        #! Protects zones
+        static Mutex zone_lock();
+
+        #! The masks read, by kind and mask; access protected with mask_lock
+        static hash<string, hash<auto>> masks;
+
+        #! Protects masks
+        static Mutex mask_lock();
+
+        #! The hour tokens
+        const HourTokens = {"HH": True, "H": True, "hh": True, "h": True};
+
+        #! The numeric month tokens
+        const NumericMonthTokens = {"MM": True, "M": True};
+    }
+
+    #! Parses a date or time mask
+    /** @param mask the mask
+        @param kind @c date (a date column's mask) or @c time (a time column's)
+
+        @return @c parts (each @c {token} or @c {literal}), @c fields and @c regex, or @c issue: @c code, the
+        1-based @c position and the @c text concerned; the first issue that applies, in this order:
+        - @c empty, @c too_long; while reading the mask left to right @c unknown_letters (the run of
+          letters), @c repeated_field (the token)
+        - a date mask: @c missing_year, @c missing_month, @c missing_day; a time mask: @c date_in_time
+          (a year, month or day), @c missing_hour, @c missing_minute
+        - @c clock_mismatch: @c hh or @c h without @c AM, @c AM without @c hh or @c h, or @c HH or @c H
+          with @c AM
+        - @c missing_second: @c sss without @c SS
+    */
+    static hash<auto> parseMask(string mask, string kind = "date") {
+        # not val(): "0" is a (wrong) mask, not an empty one
+        if (mask == "") {
+            return {"issue": {"code": "empty", "position": 1, "text": ""}};
+        }
+        if (mask.length() > MaxMaskLength) {
+            return {"issue": {"code": "too_long", "position": MaxMaskLength + 1, "text": mask}};
+        }
+        list<hash<auto>> parts = ();
+        hash<string, string> fields = {};
+        string regex = "^";
+        int i = 0;
+        int n = mask.length();
+        while (i < n) {
+            string c = mask.substr(i, 1);
+            if (!isLetter(c)) {
+                push parts, {"literal": c};
+                regex += quote(c);
+                ++i;
+                continue;
+            }
+            *string token;
+            foreach string t in (DateTokens) {
+                if (mask.substr(i, t.length()) == t) {
+                    token = t;
+                    break;
+                }
+            }
+            if (!token) {
+                if (c == "T") {
+                    push parts, {"literal": c};
+                    regex += "T";
+                    ++i;
+                    continue;
+                }
+                # the run of letters that is not a token
+                string run = "";
+                for (int j = i; j < n && isLetter(mask.substr(j, 1)); ++j) {
+                    run += mask.substr(j, 1);
+                }
+                return {"issue": {"code": "unknown_letters", "position": i + 1, "text": run}};
+            }
+            string field = TokenFields{token};
+            if (fields{field}) {
+                return {"issue": {"code": "repeated_field", "position": i + 1, "text": token}};
+            }
+            fields{field} = token;
+            push parts, {"token": token};
+            regex += TokenRegex{token};
+            i += token.length();
+        }
+        *hash<auto> issue;
+        if (kind == "time") {
+            if (fields.year || fields.month || fields.day) {
+                issue = {"code": "date_in_time"};
+            } else if (!fields.hour) {
+                issue = {"code": "missing_hour"};
+            } else if (!fields.minute) {
+                issue = {"code": "missing_minute"};
+            }
+        } else {
+            foreach string field in (("year", "month", "day")) {
+                if (!fields{field}) {
+                    issue = {"code": "missing_" + field};
+                    break;
+                }
+            }
+        }
+        if (!issue) {
+            bool twelve = inlist(fields.hour, ("hh", "h"));
+            if (twelve != exists fields.meridiem) {
+                issue = {"code": "clock_mismatch"};
+            } else if (fields.fraction && !fields.second) {
+                issue = {"code": "missing_second"};
+            }
+        }
+        if (issue) {
+            return {"issue": issue + {"position": n + 1, "text": mask}};
+        }
+        return {"parts": parts, "fields": fields, "regex": regex + "$"};
+    }
+
+    #! Returns the issue with a date or time mask, or nothing if it is valid
+    /** @param mask the mask
+        @param kind @c date or @c time
+
+        @return the issue as described for @ref parseMask(), or nothing if the mask is valid
+    */
+    static *hash<auto> maskIssue(string mask, string kind = "date") {
+        return parseMask(mask, kind).issue;
+    }
+
+    #! Returns why a mask is not a valid mask of a kind as text, or nothing if it is valid
+    /** @par Example:
+        @code{.py}
+# "invalid date mask \"DD.MM.JJJJ\": unknown letters \"JJJJ\" (at position 7)"
+*string error = ValueMask::maskIssueText("DD.MM.JJJJ");
+        @endcode
+
+        @param mask the mask
+        @param kind @c date, @c time or @c number
+
+        @return the description of the first issue with the mask, or nothing if the mask is valid
+    */
+    static *string maskIssueText(string mask, string kind = "date") {
+        *hash<auto> issue = kind == "number" ? numberMaskIssue(mask) : maskIssue(mask, kind);
+        if (issue) {
+            return sprintf("invalid %s mask %y: %s", kind, mask, issueText(issue));
+        }
+    }
+
+    #! Returns the kind of a mask: @c number, @c date or @c time, or nothing if it is not a valid mask
+    /** @param mask the mask
+
+        @return @c number for a valid number mask, @c date for a valid date mask, @c time for a valid time mask, or
+        nothing if the mask is none of them
+    */
+    static *string maskKind(string mask) {
+        if (!numberMaskIssue(mask)) {
+            return "number";
+        }
+        foreach string kind in (MaskKinds) {
+            if (!maskIssue(mask, kind)) {
+                return kind;
+            }
+        }
+    }
+
+    #! Returns the issue with a time zone region, or nothing if it is a valid IANA region
+    /** @return @c code @c invalid and the @c detail */
+    static *hash<auto> timezoneIssue(string region) {
+        # a region name only: the name is a path under the zone directory
+        if (region !~ /^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+)*$/ || region =~ /\.\./
+                || region.length() > 64) {
+            return {"code": "invalid", "detail": "not an IANA region name"};
+        }
+        try {
+            timeZone(region);
+        } catch (hash<ExceptionInfo> ex) {
+            return {"code": "invalid", "detail": ex.desc};
+        }
+    }
+
+    #! The time zone of a region; zones are read once and kept
+    /** @throw the error of an unknown region */
+    static TimeZone timeZone(string region) {
+        zone_lock.lock();
+        on_exit zone_lock.unlock();
+        if (*TimeZone tz = zones{region}) {
+            return tz;
+        }
+        TimeZone tz(region);
+        # a bounded cache: the zones in use are few
+        if (zones.size() >= 100) {
+            zones = {};
+        }
+        return zones{region} = tz;
+    }
+
+    #! Reads a date or time written as text with a mask
+    /** @param value the text
+        @param mask the mask
+        @param timezone the region a value without an offset is in; the current time zone if none
+        @param kind @c date or @c time: a time is read on 1970-01-01
+
+        @return the date, or nothing if the text is not a date or time in the mask or the mask is not valid
+
+        @throw TIMEZONE-ERROR (or the zone's own error) the time zone region does not exist
+    */
+    static *date parseDate(string value, string mask, *string timezone, string kind = "date") {
+        return parseDateIntern(value, mask, timezone ? timeZone(timezone) : NOTHING, kind);
+    }
+
+    #! Reads a date or time written as text with a mask in the given time zone
+    /** @param value the text
+        @param mask the mask
+        @param zone the time zone a value without an offset is in
+        @param kind @c date or @c time: a time is read on 1970-01-01
+
+        @return the date, or nothing if the text is not a date or time in the mask or the mask is not valid
+    */
+    static *date parseDate(string value, string mask, TimeZone zone, string kind = "date") {
+        return parseDateIntern(value, mask, zone, kind);
+    }
+
+    #! Reads a date or time written as text with a mask
+    private static *date parseDateIntern(string value, string mask, *TimeZone zone, string kind) {
+        hash<auto> parsed = readMask(kind, mask);
+        if (parsed.issue) {
+            return;
+        }
+        *list<*string> values = parsed.matcher.extractGroups(trim(value));
+        if (!values) {
+            return;
+        }
+        hash<string, int> v = {"year": 1970, "month": 1, "day": 1, "hour": 0, "minute": 0, "second": 0,
+            "us": 0};
+        *string offset;
+        *string meridiem;
+        int k = 0;
+        foreach hash<auto> part in (parsed.parts) {
+            if (!part.token) {
+                continue;
+            }
+            string text = values[k++];
+            switch (part.token) {
+                case "YYYY":
+                    v.year = text.toInt();
+                    break;
+                case "YY":
+                    v.year = 2000 + text.toInt();
+                    break;
+                case "Mon":
+                case "MON": {
+                    *int month = Months{text.lwr()};
+                    if (!month) {
+                        return;
+                    }
+                    v.month = month;
+                    break;
+                }
+                case "hh":
+                case "h":
+                    v.hour = text.toInt();
+                    if (v.hour < 1 || v.hour > 12) {
+                        return;
+                    }
+                    break;
+                case "AM":
+                    meridiem = text.upr();
+                    break;
+                case "sss":
+                    # a fraction of a second: 5 is .5 s, 123456 is microseconds
+                    v.us = (text + "000000").substr(0, 6).toInt();
+                    break;
+                case "ZZ":
+                    offset = text;
+                    break;
+                default:
+                    v{TokenFields{part.token}} = text.toInt();
+                    break;
+            }
+        }
+        if (meridiem) {
+            # 12 AM is midnight, 12 PM noon
+            v.hour = (v.hour % 12) + (meridiem == "PM" ? 12 : 0);
+        }
+        if (v.month < 1 || v.month > 12 || v.day < 1 || v.day > 31 || v.hour > 23 || v.minute > 59
+                || v.second > 59) {
+            return;
+        }
+        string iso = sprintf("%04d-%02d-%02dT%02d:%02d:%02d.%06d", v.year, v.month, v.day, v.hour, v.minute,
+            v.second, v.us);
+        if (offset) {
+            *string offset_text = offsetText(offset);
+            if (!offset_text) {
+                return;
+            }
+            iso += offset_text;
+        }
+        try {
+            if (offset || !zone) {
+                return date(iso);
+            }
+            return zone.date(iso);
+        } catch (hash<ExceptionInfo> ex) {
+            # a day the month does not have, such as 31.02.: not a date
+            if (ex.err != "INVALID-DATE") {
+                rethrow;
+            }
+        }
+    }
+
+    #! Writes a date or time as text with a mask
+    /** @par Example:
+        @code{.py}
+# "11/02/2026 02:05 PM"
+string text = ValueMask::formatDate(2026-11-02T14:05:00-05:00, "MM/DD/YYYY hh:mm AM", "America/New_York");
+        @endcode
+
+        @param value the date or time
+        @param mask the mask; see @ref valuemaskdates
+        @param timezone the region whose wall-clock time is written; the current time zone if none; with a mask
+        with @c ZZ and no time zone, the value is written with its own offset
+        @param kind @c date or @c time
+
+        @return the text
+
+        @throw VALUE-MASK-ERROR the mask is not a valid mask of the kind
+        @throw VALUE-MASK-VALUE-ERROR the value cannot be written with the mask, such as a year after 2099 with
+        @c YY
+        @throw TIMEZONE-ERROR (or the zone's own error) the time zone region does not exist
+    */
+    static string formatDate(date value, string mask, *string timezone, string kind = "date") {
+        return formatDateIntern(value, mask, timezone ? timeZone(timezone) : NOTHING, kind);
+    }
+
+    #! Writes a date or time as text with a mask in the given time zone
+    /** @param value the date or time
+        @param mask the mask; see @ref valuemaskdates
+        @param zone the time zone whose wall-clock time is written
+        @param kind @c date or @c time
+
+        @return the text
+
+        @throw VALUE-MASK-ERROR the mask is not a valid mask of the kind
+        @throw VALUE-MASK-VALUE-ERROR the value cannot be written with the mask, such as a year after 2099 with
+        @c YY
+    */
+    static string formatDate(date value, string mask, TimeZone zone, string kind = "date") {
+        return formatDateIntern(value, mask, zone, kind);
+    }
+
+    #! Writes a date or time as text with a mask
+    private static string formatDateIntern(date value, string mask, *TimeZone zone, string kind) {
+        hash<auto> m = readMask(kind, mask);
+        if (m.issue) {
+            throw "VALUE-MASK-ERROR", sprintf("invalid %s mask %y: %s", kind, mask, issueText(m.issue));
+        }
+        date d;
+        if (zone) {
+            d = zone.date(value);
+        } else if (m.fields.offset) {
+            d = value;
+        } else {
+            d = TimeZone::get().date(value);
+        }
+        hash<DateTimeInfo> info = date_info(d);
+        string rv = "";
+        foreach hash<auto> part in (m.parts) {
+            if (exists part.literal) {
+                rv += part.literal;
+                continue;
+            }
+            switch (part.token) {
+                case "YYYY":
+                    if (info.year < 0 || info.year > 9999) {
+                        throw "VALUE-MASK-VALUE-ERROR", sprintf("the year of %y cannot be written with %y: YYYY "
+                            "writes years from 0 to 9999", value, mask);
+                    }
+                    rv += sprintf("%04d", info.year);
+                    break;
+                case "YY":
+                    if (info.year < 2000 || info.year > 2099) {
+                        throw "VALUE-MASK-VALUE-ERROR", sprintf("the year of %y cannot be written with %y: YY is "
+                            "read as a year from 2000 to 2099", value, mask);
+                    }
+                    rv += sprintf("%02d", info.year - 2000);
+                    break;
+                case "MM":
+                    rv += sprintf("%02d", info.month);
+                    break;
+                case "M":
+                    rv += info.month.toString();
+                    break;
+                case "Mon":
+                    rv += MonthAbbreviations[info.month - 1];
+                    break;
+                case "MON":
+                    rv += MonthAbbreviations[info.month - 1].upr();
+                    break;
+                case "DD":
+                    rv += sprintf("%02d", info.day);
+                    break;
+                case "D":
+                    rv += info.day.toString();
+                    break;
+                case "HH":
+                    rv += sprintf("%02d", info.hour);
+                    break;
+                case "H":
+                    rv += info.hour.toString();
+                    break;
+                case "hh":
+                    rv += sprintf("%02d", (info.hour % 12) ?: 12);
+                    break;
+                case "h":
+                    rv += ((info.hour % 12) ?: 12).toString();
+                    break;
+                case "mm":
+                    rv += sprintf("%02d", info.minute);
+                    break;
+                case "SS":
+                    rv += sprintf("%02d", info.second);
+                    break;
+                case "sss":
+                    rv += sprintf("%03d", info.microsecond / 1000);
+                    break;
+                case "AM":
+                    rv += info.hour < 12 ? "AM" : "PM";
+                    break;
+                case "ZZ": {
+                    int secs = info.utc_secs_east;
+                    string sign = secs < 0 ? "-" : "+";
+                    secs = abs(secs);
+                    rv += sprintf("%s%02d:%02d", sign, secs / 3600, (secs % 3600) / 60);
+                    break;
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! A UTC offset as +HH:MM, or nothing if it is not one
+    private static *string offsetText(string offset) {
+        if (offset == "Z") {
+            return "+00:00";
+        }
+        *list<*string> p = (offset =~ x/^([+-])([0-9]{2}):?([0-9]{2})?$/);
+        if (!p) {
+            return;
+        }
+        int hours = p[1].toInt();
+        int minutes = (p[2] ?? "0").toInt();
+        if (hours > 23 || minutes > 59) {
+            return;
+        }
+        return sprintf("%s%02d:%02d", p[0], hours, minutes);
+    }
+
+    #! Returns the issue with a text pattern, or nothing if it is valid
+    /** @param pattern the pattern
+        @param kind @c regex or @c glob
+
+        @return @c code (@c too_long or @c invalid) and the engine's @c detail
+    */
+    static *hash<auto> patternIssue(string pattern, string kind = "regex") {
+        if (pattern.length() > MaxPatternLength) {
+            return {"code": "too_long", "detail": sprintf("%d > %d", pattern.length(), MaxPatternLength)};
+        }
+        auto source = kind == "glob" ? globToRegex(pattern) : pattern;
+        if (source.typeCode() == NT_HASH) {
+            return {"code": "invalid", "detail": sprintf("[ at %d", source.issue.position)};
+        }
+        try {
+            # compiles the expression
+            regexMatches("", source);
+        } catch (hash<ExceptionInfo> ex) {
+            return {"code": "invalid", "detail": ex.desc};
+        }
+    }
+
+    #! True if the whole text matches the pattern; False when the pattern is not valid
+    /** @param value the text
+        @param pattern the pattern
+        @param kind @c regex or @c glob
+    */
+    static bool matchesPattern(string value, string pattern, string kind = "regex") {
+        *Regex matcher = readMask("pattern_" + kind, pattern).matcher;
+        return matcher ? matcher.match(value) : False;
+    }
+
+    #! A glob as a regular expression, or @c issue with the 1-based @c position of an unclosed @c [
+    /** @c * any run of characters, @c ? one character, @c [abc] / @c [a-z] one of them, @c [!abc] none of
+        them; every other character is literal. */
+    static auto globToRegex(string glob) {
+        string rv = "";
+        int n = glob.length();
+        for (int i = 0; i < n; ++i) {
+            string c = glob.substr(i, 1);
+            if (c == "*") {
+                rv += ".*";
+            } else if (c == "?") {
+                rv += ".";
+            } else if (c == "[") {
+                *int end = glob.find("]", i + 2);
+                if (end < 0) {
+                    return {"issue": {"position": i + 1}};
+                }
+                string body = glob.substr(i + 1, end - i - 1);
+                bool negate = body.substr(0, 1) == "!";
+                if (negate) {
+                    body = body.substr(1);
+                }
+                body =~ s/([\\\]^])/\\$1/g;
+                rv += "[" + (negate ? "^" : "") + body + "]";
+                i = end;
+            } else {
+                # "-" stays literal outside a class
+                rv += c =~ /[\\^$.|?*+()\[\]{}\/]/ ? "\\" + c : c;
+            }
+        }
+        return rv;
+    }
+
+    #! A number format as a mask: the names @c decimal_point and @c decimal_comma become their masks
+    static *string normalizeNumberFormat(*string format) {
+        return exists format && format != "" ? (NumberFormatAliases{format} ?? format) : NOTHING;
+    }
+
+    #! Parses a number mask
+    /** @return @c group (if it groups), @c decimal (if it has decimals), @c min_decimals and
+        @c more_decimals; @c prefix or @c suffix (a currency before or after the number), @c percent (a
+        percentage) and @c negative (@c parentheses or @c trailing_minus) when the mask has them; or @c issue:
+        @c code (@c empty or @c invalid) and the 1-based @c position of the first character that does not fit
+    */
+    static hash<auto> parseNumberMask(*string format) {
+        string mask = normalizeNumberFormat(format) ?? "";
+        # not val(): the mask "0" is a mask
+        if (mask == "") {
+            return {"issue": {"code": "empty", "position": 1}};
+        }
+        int n = mask.length();
+        # the part between start and end is the number with its currency and percent sign
+        int start = 0;
+        int end = n;
+        hash<auto> rv = {};
+        if (mask[0] == "(") {
+            # no closing parenthesis: the character missing after the end; nothing inside: the parenthesis
+            if (mask[n - 1] != ")") {
+                return {"issue": {"code": "invalid", "position": n + 1}};
+            }
+            if (n < 3) {
+                return {"issue": {"code": "invalid", "position": n}};
+            }
+            rv.negative = "parentheses";
+            start = 1;
+            end = n - 1;
+        } else if (n > 1 && mask[n - 1] == "-") {
+            rv.negative = "trailing_minus";
+            end = n - 1;
+        }
+        # a currency before the number, with or without a space
+        int i = start;
+        while (i < end && mask[i] != "#" && mask[i] != "0") {
+            ++i;
+        }
+        if (i > start) {
+            string prefix = trim(mask.substr(start, i - start));
+            if (!isCurrency(prefix) || mask.substr(start, i - start) =~ /^\s/) {
+                return {"issue": {"code": "invalid", "position": start + 1}};
+            }
+            rv.prefix = prefix;
+        }
+        # the number ends at its last 0 or #
+        int num_end = end;
+        while (num_end > i && mask[num_end - 1] != "0" && mask[num_end - 1] != "#") {
+            --num_end;
+        }
+        if (num_end < end) {
+            string rest = mask.substr(num_end, end - num_end);
+            string after = trim(rest);
+            if (rest =~ /\s$/ || (after != "%" && !isCurrency(after))) {
+                # not a percent sign or currency: where the number itself stops fitting, as without them
+                hash<auto> whole = parseNumberCore(mask.substr(i, end - i), i);
+                return whole.issue ? whole : {"issue": {"code": "invalid", "position": num_end + 1}};
+            }
+            if (after == "%") {
+                rv.percent = True;
+            } else if (rv.prefix) {
+                # one currency
+                return {"issue": {"code": "invalid", "position": num_end + 1}};
+            } else {
+                rv.suffix = after;
+            }
+        }
+        hash<auto> core = parseNumberCore(mask.substr(i, num_end - i), i);
+        return core.issue ? core : core + rv;
+    }
+
+    #! True if a mask's affix is a currency: one currency symbol, or a 3-letter upper-case code
+    static bool isCurrency(string text) {
+        return text =~ /^(\p{Sc}|[A-Z]{3})$/u;
+    }
+
+    #! Parses the number of a number mask: grouping, decimal mark and decimals
+    /** @param mask the number, without currency, percent sign or negative marks
+        @param offset the number's 0-based position in the whole mask, for the issue's position
+    */
+    private static hash<auto> parseNumberCore(string mask, int offset) {
+        int n = mask.length();
+        if (!n) {
+            return {"issue": {"code": "invalid", "position": offset + 1}};
+        }
+        int i;
+        *string group;
+        string first = mask.substr(0, 1);
+        if (first == "0") {
+            i = 1;
+        } else if (first == "#") {
+            if (!inlist(mask.substr(1, 1), GroupSeparators)) {
+                return {"issue": {"code": "invalid", "position": offset + 2}};
+            }
+            group = mask.substr(1, 1);
+            for (int k = 0; k < 3; ++k) {
+                if (mask.substr(2 + k, 1) != "##0".substr(k, 1)) {
+                    return {"issue": {"code": "invalid", "position": offset + 3 + k}};
+                }
+            }
+            i = 5;
+        } else {
+            return {"issue": {"code": "invalid", "position": offset + 1}};
+        }
+        if (i == n) {
+            return {"group": group, "min_decimals": 0, "more_decimals": False};
+        }
+        string decimal = mask.substr(i, 1);
+        if (!inlist(decimal, DecimalMarks) || decimal == group) {
+            return {"issue": {"code": "invalid", "position": offset + i + 1}};
+        }
+        ++i;
+        int min_decimals = 0;
+        while (mask.substr(i, 1) == "0") {
+            ++min_decimals;
+            ++i;
+        }
+        bool more_decimals = False;
+        if (mask.substr(i, 1) == "#") {
+            more_decimals = True;
+            ++i;
+        }
+        if ((!min_decimals && !more_decimals) || i != n) {
+            return {"issue": {"code": "invalid", "position": offset + i + 1}};
+        }
+        return {"group": group, "decimal": decimal, "min_decimals": min_decimals,
+            "more_decimals": more_decimals};
+    }
+
+    #! Returns the issue with a number mask, or nothing if it is valid
+    /** @return the issue as described for @ref parseNumberMask(), or nothing if the mask is valid */
+    static *hash<auto> numberMaskIssue(*string format) {
+        return parseNumberMask(format).issue;
+    }
+
+    #! Reads a number written as text with a mask
+    /** @return the number, or nothing if the text is not a number in the mask or the mask is not valid */
+    static *number parseNumber(string value, *string format) {
+        hash<auto> m = readMask("number", format ?? "");
+        if (m.issue) {
+            return;
+        }
+        string s = trim(value);
+        # the minus sign is a minus
+        s =~ s/\x{2212}/-/g;
+        bool negative = False;
+        if (m.negative == "parentheses" && s =~ /^\(.*\)$/) {
+            negative = True;
+            s = trim(s.substr(1, s.length() - 2));
+        } else if (m.negative == "trailing_minus" && s.length() > 1 && s[s.length() - 1] == "-") {
+            negative = True;
+            s = trim(s.substr(0, s.length() - 1));
+        }
+        # a sign before or after the currency
+        *string sign;
+        if (s =~ /^[-+]/) {
+            sign = s[0];
+            s = trim(s.substr(1));
+        }
+        if (m.prefix && startsWithCurrency(s, m.prefix)) {
+            s = trim(s.substr(m.prefix.length()));
+            if (!exists sign && s =~ /^[-+]/) {
+                sign = s[0];
+                s = trim(s.substr(1));
+            }
+        }
+        if (m.suffix && endsWithCurrency(s, m.suffix)) {
+            s = trim(s.substr(0, s.length() - m.suffix.length()));
+        }
+        if (m.percent && s =~ /%$/) {
+            s = trim(s.substr(0, s.length() - 1));
+        }
+        if (!m.matcher.match(s)) {
+            return;
+        }
+        # negative once
+        if (sign == "-") {
+            if (negative) {
+                return;
+            }
+            negative = True;
+        }
+        if (m.group) {
+            s = m.group_remover.subst(s);
+        }
+        if (m.decimal == ",") {
+            s =~ s/,/./;
+        }
+        # a percentage is its fraction: the decimal point two places to the left, exactly as written
+        if (m.percent) {
+            s = hundredth(s);
+        }
+        return number((negative ? "-" : "") + s);
+    }
+
+    #! Writes a number as text with a mask
+    /** @par Example:
+        @code{.py}
+# "(1,234.50)"
+string text = ValueMask::formatNumber(-1234.5n, "(#,##0.00)");
+        @endcode
+
+        @param value the number
+        @param mask the mask; see @ref valuemasknumbers
+
+        @return the text
+
+        @throw VALUE-MASK-ERROR the mask is not a valid number mask
+        @throw VALUE-MASK-VALUE-ERROR the value is not a finite number
+    */
+    static string formatNumber(number value, string mask) {
+        string text = value.toString();
+        if (text !~ /^[-+]?[0-9.]+(e[-+]?[0-9]+)?$/i) {
+            throw "VALUE-MASK-VALUE-ERROR", sprintf("%y cannot be written with %y: it is not a finite number",
+                value, mask);
+        }
+        return formatDecimal(text, mask);
+    }
+
+    #! Writes a number as text with a mask
+    /** @param value the number
+        @param mask the mask; see @ref valuemasknumbers
+
+        @return the text
+
+        @throw VALUE-MASK-ERROR the mask is not a valid number mask
+    */
+    static string formatNumber(int value, string mask) {
+        return formatDecimal(value.toString(), mask);
+    }
+
+    #! Writes a number as text with a mask
+    /** The number is written as its shortest decimal text, so \c 0.1 is written as \c 0.1, as it is shown
+
+        @param value the number
+        @param mask the mask; see @ref valuemasknumbers
+
+        @return the text
+
+        @throw VALUE-MASK-ERROR the mask is not a valid number mask
+        @throw VALUE-MASK-VALUE-ERROR the value is not a finite number
+    */
+    static string formatNumber(float value, string mask) {
+        string text = value.toString();
+        if (text !~ /^[-+]?[0-9.]+(e[-+]?[0-9]+)?$/i) {
+            throw "VALUE-MASK-VALUE-ERROR", sprintf("%y cannot be written with %y: it is not a finite number",
+                value, mask);
+        }
+        return formatDecimal(text, mask);
+    }
+
+    #! Returns the display format code of a mask for a spreadsheet cell
+    /** The code is written as Excel and LibreOffice write them; see @ref valuemaskspreadsheets
+
+        @par Example:
+        @code{.py}
+# "#,##0.00;(#,##0.00)"
+string code = ValueMask::toSpreadsheetFormat("(#,##0.00)");
+        @endcode
+
+        @param mask the mask
+        @param kind @c number, @c date or @c time; if not given, the kind of the mask (see @ref maskKind())
+
+        @return the display format code
+
+        @throw VALUE-MASK-ERROR the mask is not a valid mask of the kind, or it has no spreadsheet display format;
+        the description gives the reason
+    */
+    static string toSpreadsheetFormat(string mask, *string kind) {
+        hash<auto> rv = spreadsheetFormat(mask, kind);
+        if (rv.issue) {
+            throw "VALUE-MASK-ERROR", rv.issue;
+        }
+        return rv.code;
+    }
+
+    #! Returns why a mask has no spreadsheet display format, or nothing if it has one
+    /** @param mask the mask
+        @param kind @c number, @c date or @c time; if not given, the kind of the mask (see @ref maskKind())
+
+        @return the reason, or nothing if @ref toSpreadsheetFormat() returns a display format code for the mask
+    */
+    static *string spreadsheetFormatIssue(string mask, *string kind) {
+        return spreadsheetFormat(mask, kind).issue;
+    }
+
+    #! Returns the display format code of a mask in @c code, or the reason it has none in @c issue
+    private static hash<auto> spreadsheetFormat(string mask, *string kind) {
+        if (!kind) {
+            kind = maskKind(mask);
+            if (!kind) {
+                return {"issue": sprintf("%y is not a valid date, time or number mask: %s", mask,
+                    issueText(parseMask(mask).issue))};
+            }
+        }
+        if (kind == "number") {
+            return spreadsheetNumberFormat(mask);
+        }
+        if (!inlist(kind, MaskKinds)) {
+            return {"issue": sprintf("unknown mask kind %y; expecting one of: %y", kind, ("number",) + MaskKinds)};
+        }
+        return spreadsheetDateFormat(mask, kind);
+    }
+
+    #! Returns the display format code of a number mask in @c code, or the reason it has none in @c issue
+    private static hash<auto> spreadsheetNumberFormat(string mask) {
+        hash<auto> m = parseNumberMask(mask);
+        if (m.issue) {
+            return {"issue": sprintf("invalid number mask %y: %s", mask, issueText(m.issue))};
+        }
+        hash<string, string> affixes = numberAffixes(mask);
+        string code = m.group ? "#,##0" : "0";
+        if (m.decimal) {
+            code += "." + strmul("0", m.min_decimals);
+            if (m.more_decimals && m.min_decimals < SpreadsheetMaxDecimals) {
+                code += strmul("#", SpreadsheetMaxDecimals - m.min_decimals);
+            }
+        }
+        string prefix = affixes.prefix ? spreadsheetText(affixes.prefix) : "";
+        string suffix = "";
+        if (m.percent) {
+            # the spaces before the percent sign as text; the sign itself makes the value a percentage
+            string spaces = affixes.suffix.substr(0, affixes.suffix.length() - 1);
+            suffix = (spaces ? spreadsheetText(spaces) : "") + "%";
+        } else if (affixes.suffix) {
+            suffix = spreadsheetText(affixes.suffix);
+        }
+        string section = prefix + code + suffix;
+        switch (m.negative) {
+            case "parentheses":
+                return {"code": section + ";(" + section + ")"};
+            case "trailing_minus":
+                return {"code": section + ";" + section + "-"};
+        }
+        return {"code": section};
+    }
+
+    #! Returns the display format code of a date or time mask in @c code, or the reason it has none in @c issue
+    private static hash<auto> spreadsheetDateFormat(string mask, string kind) {
+        hash<auto> m = parseMask(mask, kind);
+        if (m.issue) {
+            return {"issue": sprintf("invalid %s mask %y: %s", kind, mask, issueText(m.issue))};
+        }
+        list<hash<auto>> parts = m.parts;
+        # the tokens in order, to check what a spreadsheet takes for a minute and what for a month
+        list<string> tokens = map $1.token, parts, $1.token;
+        foreach string token in (tokens) {
+            int i = $#;
+            *string prev = i ? tokens[i - 1] : NOTHING;
+            *string next = tokens[i + 1];
+            if (token == "mm" && !HourTokens{prev} && next != "SS") {
+                return {"issue": sprintf("%y has no spreadsheet display format: a spreadsheet shows mm as a minute "
+                    "only directly after an hour or before the seconds, and as a month otherwise", mask)};
+            }
+            if (NumericMonthTokens{token} && (HourTokens{prev} || next == "SS")) {
+                return {"issue": sprintf("%y has no spreadsheet display format: a spreadsheet shows %s directly "
+                    "after an hour or before the seconds as a minute", mask, token)};
+            }
+        }
+        string code = "";
+        int n = parts.size();
+        for (int i = 0; i < n; ++i) {
+            hash<auto> part = parts[i];
+            if (exists part.literal) {
+                # the decimal point of a fraction of a second is the code's own
+                if (part.literal == "." && parts[i + 1].token == "sss" && i && parts[i - 1].token == "SS") {
+                    code += ".";
+                } else {
+                    code += spreadsheetChar(part.literal);
+                }
+                continue;
+            }
+            switch (part.token) {
+                case "YYYY": code += "yyyy"; break;
+                case "YY": code += "yy"; break;
+                case "MM": code += "mm"; break;
+                case "M": code += "m"; break;
+                case "Mon": code += "mmm"; break;
+                case "DD": code += "dd"; break;
+                case "D": code += "d"; break;
+                case "HH":
+                case "hh": code += "hh"; break;
+                case "H":
+                case "h": code += "h"; break;
+                case "mm": code += "mm"; break;
+                case "SS": code += "ss"; break;
+                case "AM": code += "AM/PM"; break;
+                case "sss":
+                    if (i < 2 || parts[i - 1].literal != "." || parts[i - 2].token != "SS") {
+                        return {"issue": sprintf("%y has no spreadsheet display format: a spreadsheet shows a "
+                            "fraction of a second only directly after the seconds and a decimal point (SS.sss)",
+                            mask)};
+                    }
+                    code += "000";
+                    break;
+                case "MON":
+                    return {"issue": sprintf("%y has no spreadsheet display format: a spreadsheet has no upper-case "
+                        "month name (use Mon)", mask)};
+                case "ZZ":
+                    return {"issue": sprintf("%y has no spreadsheet display format: a spreadsheet cell holds no "
+                        "UTC offset (ZZ)", mask)};
+            }
+        }
+        return {"code": code};
+    }
+
+    #! Returns text for a spreadsheet display format code: in double quotes
+    private static string spreadsheetText(string text) {
+        return "\"" + text + "\"";
+    }
+
+    #! Returns a character for a spreadsheet display format code: as itself if it is shown as itself, otherwise
+    #! escaped with a backslash
+    private static string spreadsheetChar(string c) {
+        if (c == " " || SpreadsheetPlainChars.find(c) >= 0 || c.size() > 1) {
+            return c;
+        }
+        return "\\" + c;
+    }
+
+    #! Returns the currency or percent sign before (@c prefix) and after (@c suffix) the number of a valid number
+    #! mask as written, with any spaces between them and the number
+    private static hash<string, string> numberAffixes(string format) {
+        string mask = normalizeNumberFormat(format) ?? "";
+        int n = mask.length();
+        int start = 0;
+        int end = n;
+        if (mask[0] == "(") {
+            start = 1;
+            end = n - 1;
+        } else if (n > 1 && mask[n - 1] == "-") {
+            end = n - 1;
+        }
+        int i = start;
+        while (i < end && mask[i] != "#" && mask[i] != "0") {
+            ++i;
+        }
+        int num_end = end;
+        while (num_end > i && mask[num_end - 1] != "0" && mask[num_end - 1] != "#") {
+            --num_end;
+        }
+        return {
+            "prefix": mask.substr(start, i - start),
+            "suffix": mask.substr(num_end, end - num_end),
+        };
+    }
+
+    #! Writes a number given as decimal text with a mask
+    /** @param text the number as decimal text, optionally with an exponent
+        @param format the mask
+
+        @throw VALUE-MASK-ERROR the mask is not a valid number mask
+    */
+    private static string formatDecimal(string text, string format) {
+        hash<auto> m = readMask("number", format);
+        if (m.issue) {
+            throw "VALUE-MASK-ERROR", sprintf("invalid number mask %y: %s", format, issueText(m.issue));
+        }
+        (bool negative, string whole, string fraction) = splitDecimal(text);
+        # a percentage is written as the value times 100: the decimal point two places to the right
+        if (m.percent) {
+            fraction += "00";
+            whole += fraction.substr(0, 2);
+            fraction = fraction.substr(2);
+        }
+        int decimals;
+        if (!m.decimal) {
+            decimals = 0;
+        } else if (!m.more_decimals) {
+            decimals = m.min_decimals;
+        } else {
+            # the value's own decimals without trailing zeros, at least the mask's
+            fraction =~ s/0+$//;
+            decimals = max(m.min_decimals, fraction.length());
+        }
+        (whole, fraction) = roundDecimal(whole, fraction, decimals);
+        whole =~ s/^0+//;
+        if (whole == "") {
+            whole = "0";
+        }
+        # no negative zero
+        if (negative && whole =~ /^0$/ && fraction !~ /[1-9]/) {
+            negative = False;
+        }
+        if (m.group) {
+            whole = groupDigits(whole, m.group);
+        }
+        hash<string, string> affixes = numberAffixes(format);
+        string rv = affixes.prefix + whole + (decimals ? m.decimal + fraction : "") + affixes.suffix;
+        if (negative) {
+            switch (m.negative) {
+                case "parentheses":
+                    return "(" + rv + ")";
+                case "trailing_minus":
+                    return rv + "-";
+            }
+            return "-" + rv;
+        }
+        return rv;
+    }
+
+    #! Splits a number written as decimal text, optionally with an exponent, into its sign, whole digits and
+    #! decimal digits
+    private static list<auto> splitDecimal(string text) {
+        (*string sign, *string whole, *string fraction, *string exponent) =
+            (text =~ x/^([-+]?)([0-9]*)(?:\.([0-9]*))?(?:[eE]([-+]?[0-9]+))?$/);
+        whole = whole ?? "";
+        fraction = fraction ?? "";
+        if (exponent) {
+            int e = exponent.toInt();
+            string digits = whole + fraction;
+            int point = whole.length() + e;
+            if (point <= 0) {
+                whole = "";
+                fraction = strmul("0", -point) + digits;
+            } else if (point >= digits.length()) {
+                whole = digits + strmul("0", point - digits.length());
+                fraction = "";
+            } else {
+                whole = digits.substr(0, point);
+                fraction = digits.substr(point);
+            }
+        }
+        return (sign == "-", whole, fraction);
+    }
+
+    #! Rounds whole and decimal digits half away from zero to the given number of decimals
+    /** @return the whole digits and exactly @a decimals decimal digits */
+    private static list<string> roundDecimal(string whole, string fraction, int decimals) {
+        if (fraction.length() <= decimals) {
+            return (whole, fraction + strmul("0", decimals - fraction.length()));
+        }
+        bool up = fraction.substr(decimals, 1).toInt() >= 5;
+        string digits = whole + fraction.substr(0, decimals);
+        if (up) {
+            # add one to the last digit, carrying
+            list<string> d = digits.split("");
+            int i = d.size() - 1;
+            while (i >= 0) {
+                if (d[i] == "9") {
+                    d[i] = "0";
+                    --i;
+                    continue;
+                }
+                d[i] = (d[i].toInt() + 1).toString();
+                break;
+            }
+            digits = (i < 0 ? "1" : "") + d.join("");
+        }
+        int n = digits.length();
+        return (digits.substr(0, n - decimals), decimals ? digits.substr(n - decimals) : "");
+    }
+
+    #! Groups whole digits by three with the separator
+    private static string groupDigits(string whole, string group) {
+        string rv = "";
+        int n = whole.length();
+        for (int i = 0; i < n; ++i) {
+            if (i && !((n - i) % 3)) {
+                rv += group;
+            }
+            rv += whole.substr(i, 1);
+        }
+        return rv;
+    }
+
+    #! Returns a mask or pattern issue as text
+    private static string issueText(hash<auto> issue) {
+        string what;
+        switch (issue.code) {
+            case "empty": what = "the mask is empty"; break;
+            case "too_long": what = sprintf("the mask is longer than %d characters", MaxMaskLength); break;
+            case "unknown_letters": what = sprintf("unknown letters %y", issue.text); break;
+            case "repeated_field": what = sprintf("%y repeats a field that the mask already has", issue.text);
+                break;
+            case "missing_year": what = "the mask has no year"; break;
+            case "missing_month": what = "the mask has no month"; break;
+            case "missing_day": what = "the mask has no day"; break;
+            case "date_in_time": what = "a time mask has no year, month or day"; break;
+            case "missing_hour": what = "the mask has no hour"; break;
+            case "missing_minute": what = "the mask has no minutes"; break;
+            case "clock_mismatch": what = "a 12-hour hour (hh or h) needs AM, and AM a 12-hour hour"; break;
+            case "missing_second": what = "a fraction of a second (sss) needs the seconds (SS)"; break;
+            case "invalid": what = "the mask does not fit the number mask grammar"; break;
+            default: what = issue.code; break;
+        }
+        return exists issue.position ? sprintf("%s (at position %d)", what, issue.position) : what;
+    }
+
+    #! A plain decimal number's text divided by 100, by moving its decimal point: 12.5 is 0.125, 5 is 0.05
+    private static string hundredth(string s) {
+        (*string whole, *string fraction) = (s =~ x/^([0-9]*)(?:\.([0-9]*))?$/);
+        whole = whole ?? "";
+        while (whole.length() < 3) {
+            whole = "0" + whole;
+        }
+        int n = whole.length();
+        return whole.substr(0, n - 2) + "." + whole.substr(n - 2) + (fraction ?? "");
+    }
+
+    private static bool startsWithCurrency(string s, string currency) {
+        return s.length() >= currency.length() && s.substr(0, currency.length()).upr() == currency.upr();
+    }
+
+    private static bool endsWithCurrency(string s, string currency) {
+        int n = currency.length();
+        return s.length() >= n && s.substr(s.length() - n).upr() == currency.upr();
+    }
+
+    #! A mask as the readers and writers use it: parsed once and kept, as every value of a column has the same mask
+    /** @param kind @c date or @c time (@ref parseMask()), @c number (@ref parseNumberMask()), or
+        @c pattern_regex or @c pattern_glob for a text pattern (@ref patternIssue())
+        @param mask the mask or pattern
+
+        @return the parsed mask with the compiled @c matcher a whole value matches (and, for a number mask
+        with a group separator, the @c group_remover that takes the separators out), or its @c issue
+    */
+    private static hash<auto> readMask(string kind, string mask) {
+        string key = kind + ":" + mask;
+        {
+            mask_lock.lock();
+            on_exit mask_lock.unlock();
+            if (*hash<auto> rv = masks{key}) {
+                return rv;
+            }
+        }
+        hash<auto> rv;
+        if (kind == "number") {
+            rv = parseNumberMask(mask);
+            if (!rv.issue) {
+                rv.matcher = new Regex("^(?:" + numberRegex(rv) + ")$", RE_Unicode);
+                if (rv.group) {
+                    rv.group_remover = new RegexSubst(groupClass(rv.group), "", RE_Global | RE_Unicode);
+                }
+            }
+        } else if (kind =~ /^pattern_/) {
+            # a text pattern: a value matches it as a whole; nothing to match with when it is not valid
+            string pattern_kind = kind.substr(8);
+            if (*hash<auto> issue = patternIssue(mask, pattern_kind)) {
+                rv = {"issue": issue};
+            } else {
+                rv = {"matcher": new Regex("^(?:" + (pattern_kind == "glob" ? globToRegex(mask) : mask) + ")$",
+                    RE_Unicode)};
+            }
+        } else {
+            rv = parseMask(mask, kind);
+            if (!rv.issue) {
+                rv.matcher = new Regex(rv.regex);
+            }
+        }
+        mask_lock.lock();
+        on_exit mask_lock.unlock();
+        # a bounded cache: the masks in use are few
+        if (masks.size() >= 1000) {
+            masks = {};
+        }
+        return masks{key} = rv;
+    }
+
+    #! The expression a number written in the mask matches
+    private static string numberRegex(hash<auto> m) {
+        string integer = m.group
+            ? sprintf("([0-9]+|[0-9]{1,3}(%s[0-9]{3})+)", groupClass(m.group))
+            : "[0-9]+";
+        string fraction = "";
+        if (m.decimal) {
+            string mark = quote(m.decimal);
+            fraction = m.min_decimals
+                ? sprintf("%s[0-9]{%d,%s}", mark, m.min_decimals, m.more_decimals ? "" : m.min_decimals.toString())
+                : sprintf("(%s[0-9]+)?", mark);
+        }
+        # the sign, currency and percent sign are taken off before the number is matched
+        return integer + fraction;
+    }
+
+    #! A group separator as a class: a space is also a no-break space, an apostrophe also a typographic one
+    private static string groupClass(string group) {
+        switch (group) {
+            case " ":
+                return "[ \\x{00a0}\\x{202f}]";
+            case "'":
+                return "['\\x{2019}]";
+        }
+        return quote(group);
+    }
+
+    #! True if the whole value matches the expression
+    private static bool regexMatches(string value, string expression) {
+        return regex(value, "^(?:" + expression + ")$", RE_Unicode);
+    }
+
+    private static bool isLetter(string c) {
+        return c.upr() != c.lwr();
+    }
+
+    private static string quote(string c) {
+        return c =~ /[\\^$.|?*+()\[\]{}\/-]/ ? "\\" + c : (c == " " ? "\\s" : c);
+    }
+}
+}

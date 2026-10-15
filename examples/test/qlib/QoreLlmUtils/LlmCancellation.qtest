@@ -7,8 +7,8 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QoreLlmTypes
-%requires QUnit
+%requires ../../../../qlib/QoreLlmTypes.qm
+%requires ../../../../qlib/QUnit.qm
 
 %exec-class LlmCancellationTest
 
@@ -48,6 +48,10 @@ public class LlmCancellationTest inherits QUnit::Test {
         addTestCase("check raises LLM-CANCELLED", \checkTest());
         addTestCase("provider helpers without a token", \noTokenHelpersTest());
         addTestCase("callCancellable reports an interrupted step as cancelled", \callCancellableTest());
+        addTestCase("event delivery works with and without a token", \deliverEventTest());
+        addTestCase("event delivery rejects a previously cancelled token", \deliverPreCancelledTest());
+        addTestCase("event delivery reports cancellation from the callback", \deliverCallbackCancellationTest());
+        addTestCase("event delivery preserves callback errors", \deliverCallbackErrorTest());
         addTestCase("withRetry does not call a cancelled request", \withRetryPreCancelTest());
         addTestCase("withRetry ends its backoff wait on cancel", \withRetryBackoffTest());
         addTestCase("withRetry still retries without a cancellation", \withRetryRetriesTest());
@@ -191,6 +195,66 @@ public class LlmCancellationTest inherits QUnit::Test {
             other.cancel();
             return 1;
         }, <LlmRequestOptions>{"cancellation": other}));
+    }
+
+    deliverEventTest() {
+        TestProvider provider();
+        LlmCancellation cancellation();
+        foreach *hash<LlmRequestOptions> opts in ((NOTHING, <LlmRequestOptions>{},
+                <LlmRequestOptions>{"cancellation": cancellation})) {
+            list<hash<ChatStreamEvent>> events = ();
+            code<nothing(hash<ChatStreamEvent>)> callback = sub (hash<ChatStreamEvent> event) {
+                events += event;
+            };
+            provider.deliverStreamEvent(callback, <ChatStreamEvent>{"delta": "first"}, opts);
+            provider.deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
+            assertEq((<ChatStreamEvent>{"delta": "first"}, <ChatStreamEvent>{"done": True}), events);
+        }
+    }
+
+    deliverPreCancelledTest() {
+        TestProvider provider();
+        LlmCancellation cancellation();
+        cancellation.cancel("already stopped");
+        int calls = 0;
+        foreach bool done in ((False, True)) {
+            assertThrows("LLM-CANCELLED", "already stopped", sub () {
+                provider.deliverStreamEvent(sub (hash<ChatStreamEvent> event) { ++calls; },
+                    <ChatStreamEvent>{"done": done}, <LlmRequestOptions>{"cancellation": cancellation});
+            });
+        }
+        assertEq(0, calls);
+    }
+
+    deliverCallbackCancellationTest() {
+        TestProvider provider();
+        foreach bool done in ((False, True)) {
+            LlmCancellation cancellation();
+            int calls = 0;
+            assertThrows("LLM-CANCELLED", "callback stopped", sub () {
+                provider.deliverStreamEvent(sub (hash<ChatStreamEvent> event) {
+                    ++calls;
+                    cancellation.cancel("callback stopped");
+                }, <ChatStreamEvent>{"done": done}, <LlmRequestOptions>{"cancellation": cancellation});
+            });
+            assertEq(1, calls);
+        }
+    }
+
+    deliverCallbackErrorTest() {
+        TestProvider provider();
+        foreach bool cancel in ((False, True)) {
+            LlmCancellation cancellation();
+            assertThrows("CALLBACK-ERROR", "caller failure", sub () {
+                provider.deliverStreamEvent(sub (hash<ChatStreamEvent> event) {
+                    if (cancel) {
+                        cancellation.cancel();
+                    }
+                    throw "CALLBACK-ERROR", "caller failure";
+                }, <ChatStreamEvent>{"done": True}, <LlmRequestOptions>{"cancellation": cancellation});
+            });
+            assertEq(cancel, cancellation.isCancelled());
+        }
     }
 
     withRetryPreCancelTest() {

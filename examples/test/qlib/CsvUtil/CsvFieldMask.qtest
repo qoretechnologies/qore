@@ -1,0 +1,231 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The "mask" attribute of a field description reads and writes a "date", "int", "float" or "number" field with a
+# mask of the ValueMask module (DD.MM.YYYY, #.##0,00 €), so that a file is written exactly as a mask describes and
+# read back with the same mask as the same values.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires CsvUtil
+%requires ValueMask
+
+%exec-class CsvFieldMaskTest
+
+public class CsvFieldMaskTest inherits QUnit::Test {
+    public {
+        #! the fields of the test data, with masks
+        const Fields = {
+            "date": {"type": "date", "mask": "DD.MM.YYYY"},
+            "time": {"type": "date", "mask": "hh:mm AM"},
+            "when": {"type": "*date", "mask": "YYYY-MM-DDTHH:mm:SSZZ"},
+            "amount": {"type": "number", "mask": "#.##0,00 €"},
+            "rate": {"type": "float", "mask": "0,# %"},
+            "count": {"type": "int", "mask": "# ##0"},
+            "balance": {"type": "*number", "mask": "(#,##0.00)"},
+            "note": "string",
+        };
+
+        #! the text of the test data, with the masks of Fields and the time zone Europe/Berlin
+        const Data = "date;time;when;amount;rate;count;balance;note\n"
+            "02.11.2026;03:05 PM;2026-11-02T09:35:09+01:00;1.234,50 €;12,5 %;1 234 567;(1,234.00);x\n"
+            "29.02.2028;12:00 AM;;-0,99 €;0 %;-7;0.50;y\n";
+
+        #! the records of the test data
+        const Records = (
+            {
+                "date": 2026-11-02T00:00:00+01:00,
+                "time": 1970-01-01T15:05:00+01:00,
+                "when": 2026-11-02T09:35:09+01:00,
+                "amount": 1234.5n,
+                "rate": 0.125,
+                "count": 1234567,
+                "balance": -1234n,
+                "note": "x",
+            },
+            {
+                "date": 2028-02-29T00:00:00+01:00,
+                "time": 1970-01-01T00:00:00+01:00,
+                "when": NOTHING,
+                "amount": -0.99n,
+                "rate": 0.0,
+                "count": -7,
+                "balance": 0.5n,
+                "note": "y",
+            },
+        );
+    }
+
+    constructor() : Test("CsvFieldMaskTest", "1.0") {
+        addTestCase("reading with masks", \readTest());
+        addTestCase("writing with masks", \writeTest());
+        addTestCase("round trips", \roundTripTest());
+        addTestCase("time zones", \timeZoneTest());
+        addTestCase("values that do not fit a mask", \invalidValueTest());
+        addTestCase("invalid masks", \invalidMaskTest());
+        addTestCase("data providers", \dataProviderTest());
+        set_return_value(main());
+    }
+
+    readTest() {
+        hash<auto> opts = {"separator": ";", "header_names": True, "fields": Fields, "timezone": "Europe/Berlin"};
+        assertEq(Records, read(new CsvDataIterator(Data, opts)), "CsvDataIterator");
+        assertEq(Records, read(new CsvIterator(new StringInputStream(Data), NOTHING, opts)), "CsvIterator");
+        # the multi-type constructor with a spec
+        assertEq(Records, read(new CsvDataIterator(Data, {CSV_TYPE_SINGLE: Fields}, {"separator": ";",
+            "header_lines": 1, "timezone": "Europe/Berlin"})), "spec");
+        # a field's time zone
+        hash<auto> fields = Fields + {"date": Fields.date + {"timezone": "UTC"}};
+        list<hash<auto>> recs = read(new CsvDataIterator(Data, opts + {"fields": fields}));
+        assertEq(2026-11-02T00:00:00Z, recs[0].date);
+        assertEq(1970-01-01T15:05:00+01:00, recs[0].time);
+    }
+
+    writeTest() {
+        assertEq(Data, write(Records));
+        # without the header
+        assertEq(Data.substr(Data.find("\n") + 1), write(Records, {"write_headers": False}));
+    }
+
+    roundTripTest() {
+        list<hash<auto>> recs = read(new CsvDataIterator(write(Records), {"separator": ";", "header_names": True,
+            "fields": Fields, "timezone": "Europe/Berlin"}));
+        assertEq(Records, recs);
+        # every common mask
+        foreach string mask in (ValueMask::DateFormats) {
+            hash<auto> fields = {"v": {"type": "date", "mask": mask}};
+            date v = mask =~ /ZZ/ ? 2026-11-02T14:05:09+05:30 : ValueMask::parseDate(ValueMask::formatDate(
+                2026-11-02T14:05:09Z, mask, "Europe/Berlin"), mask, "Europe/Berlin");
+            string text = writeOne(fields, {"v": v});
+            assertEq(({"v": v},), read(new CsvDataIterator(text, {"separator": ";", "header_names": True,
+                "fields": fields, "timezone": "Europe/Berlin"})), mask);
+        }
+        foreach string mask in (ValueMask::NumberFormats + ValueMask::AmountFormats) {
+            hash<auto> fields = {"v": {"type": "number", "mask": mask}};
+            number v = mask =~ /%/ ? -0.125n : (mask =~ /#$/ ? -1234.567n : -1234.56n);
+            string text = writeOne(fields, {"v": v});
+            assertEq(({"v": v},), read(new CsvDataIterator(text, {"separator": ";", "header_names": True,
+                "fields": fields})), mask);
+        }
+    }
+
+    timeZoneTest() {
+        # the writer's time zone gives the wall-clock time written
+        hash<auto> fields = {"d": {"type": "date", "mask": "DD.MM.YYYY HH:mm"}};
+        assertEq("d\n02.11.2026 15:05\n", writeOne(fields, {"d": 2026-11-02T14:05:00Z}, {"timezone": "Europe/Berlin",
+            "separator": ","}));
+        assertEq("d\n02.11.2026 09:05\n", writeOne(fields, {"d": 2026-11-02T14:05:00Z},
+            {"timezone": "America/New_York", "separator": ","}));
+        # a field's time zone overrides it
+        fields.d.timezone = "UTC";
+        assertEq("d\n02.11.2026 14:05\n", writeOne(fields, {"d": 2026-11-02T14:05:00Z}, {"timezone": "Europe/Berlin",
+            "separator": ","}));
+        # it also applies to dates written with a format
+        assertEq("d\n2026-11-02 15:05\n", writeOne({"d": {"type": "date", "format": "YYYY-MM-DD HH:mm"}},
+            {"d": 2026-11-02T14:05:00Z}, {"timezone": "Europe/Berlin", "separator": ","}));
+        assertThrows("CSVSTRINGWRITER-ERROR", "Mars/Base", sub () {
+            new CsvStringWriter({"timezone": "Mars/Base"});
+        });
+    }
+
+    invalidValueTest() {
+        # a date the mask cannot write: the line and the column
+        assertThrows("CSVSTRINGWRITER-ERROR",
+            "Line \\(1\\), Column \\(0\\) \"d\": the year of .* cannot be written with "
+            "\"DD.MM.YY\"", \writeOne(), ({"d": {"type": "date", "mask": "DD.MM.YY"}}, {"d": 1999-01-01T00:00:00Z}));
+        # a value of another type
+        assertThrows("CSVSTRINGWRITER-ERROR", "does not contain a date", \writeOne(),
+            ({"d": {"type": "date", "mask": "DD.MM.YYYY"}}, {"d": "x"}));
+        # text that does not fit a mask is not a value
+        foreach hash<auto> i in ({
+                "02/11/2026": {"type": "date", "mask": "DD.MM.YYYY"},
+                "13:05 PM": {"type": "date", "mask": "hh:mm AM"},
+                "1,234.50": {"type": "number", "mask": "#.##0,00"},
+                "1.5": {"type": "int", "mask": "0.#"},
+                "12.5": {"type": "float", "mask": "0%"},
+                "x": {"type": "*number", "mask": "0"},
+            }.pairIterator()) {
+            assertThrows("FIELD-VALUE-ERROR", "does not fit the mask", \read(), (new CsvDataIterator("v\n" + i.key
+                + "\n", {"header_names": True, "fields": {"v": i.value}}),), i.key);
+        }
+        # an int with a mask with decimals: only whole values
+        assertEq(({"v": 1234},), read(new CsvDataIterator("v\n1.234,00\n", {"header_names": True, "separator": ";",
+            "fields": {"v": {"type": "int", "mask": "#.##0,00"}}})));
+        assertThrows("FIELD-VALUE-ERROR", "as a whole number", \read(), (new CsvDataIterator("v\n1.234,50\n",
+            {"header_names": True, "separator": ";", "fields": {"v": {"type": "int", "mask": "#.##0,00"}}}),));
+    }
+
+    invalidMaskTest() {
+        foreach hash<auto> i in ({
+                "invalid date mask \"DD.MM.JJJJ\"": {"type": "date", "mask": "DD.MM.JJJJ"},
+                "invalid number mask \"#,##0,#\"": {"type": "number", "mask": "#,##0,#"},
+                "invalid number mask \"DD.MM.YYYY\"": {"type": "int", "mask": "DD.MM.YYYY"},
+                "invalid date mask \"0.00\"": {"type": "date", "mask": "0.00"},
+                "only valid for \"date\", \"int\", \"float\", and \"number\" fields": {"type": "string",
+                    "mask": "0"},
+                "only one of the \"format\" and \"mask\" attributes": {"type": "date", "mask": "DD.MM.YYYY",
+                    "format": "DD.MM.YYYY"},
+                "expects a string value": {"type": "date", "mask": 1},
+            }.pairIterator()) {
+            assertThrows("CSVSTRINGWRITER-ERROR", i.key, sub () {
+                new CsvStringWriter({"fields": {"v": i.value}});
+            }, NOTHING, i.key);
+            assertThrows("ABSTRACTCSVITERATOR-ERROR", i.key, sub () {
+                new CsvDataIterator("v\n1\n", {"header_names": True, "fields": {"v": i.value}});
+            }, NOTHING, i.key);
+        }
+    }
+
+    dataProviderTest() {
+        # writing and reading with masks through the data providers
+        hash<auto> fields = {
+            "date": {"type": "date", "mask": "DD.MM.YYYY"},
+            "amount": {"type": "number", "mask": "#.##0,00 €"},
+        };
+        StringOutputStream out();
+        CsvWriteDataProvider w({"stream": out, "fields": fields, "separator": ";", "timezone": "Europe/Berlin"});
+        w.createRecord({"date": 2026-11-02T00:00:00+01:00, "amount": 1234.5n});
+        delete w;
+        string text = out.getData();
+        assertEq("date;amount\n02.11.2026;1.234,50 €\n", text);
+        CsvReadDataProvider r({"data": text, "fields": fields, "separator": ";", "header_names": True,
+            "timezone": "Europe/Berlin"});
+        list<hash<auto>> recs = ();
+        AbstractDataProviderRecordIterator i = r.searchRecords();
+        while (i.next()) {
+            recs += i.getValue();
+        }
+        assertEq(({"date": 2026-11-02T00:00:00+01:00, "amount": 1234.5n},), recs);
+        # the options are documented
+        assertTrue(CsvWriteDataProvider::ConstructorOptions.timezone.desc =~ /wall-clock time/);
+        assertTrue(CsvWriteDataProvider::ConstructorOptions.fields.desc =~ /`mask`/);
+        assertTrue(CsvReadDataProvider::ConstructorOptions.fields.desc =~ /`mask`/);
+    }
+
+    private list<hash<auto>> read(AbstractCsvIterator i) {
+        list<hash<auto>> rv = ();
+        while (i.next()) {
+            rv += i.getValue();
+        }
+        return rv;
+    }
+
+    private string write(list<hash<auto>> recs, *hash<auto> opts) {
+        CsvStringWriter w({"fields": Fields, "separator": ";", "timezone": "Europe/Berlin"} + opts);
+        foreach hash<auto> rec in (recs) {
+            w.writeLine(rec);
+        }
+        return w.getContent();
+    }
+
+    private string writeOne(hash<auto> fields, hash<auto> rec, *hash<auto> opts) {
+        CsvStringWriter w({"fields": fields, "separator": ";"} + opts);
+        w.writeLine(rec);
+        return w.getContent();
+    }
+}

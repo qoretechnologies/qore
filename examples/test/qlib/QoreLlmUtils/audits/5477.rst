@@ -1,0 +1,153 @@
+Issue 5477: streaming cancellation audit
+========================================
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Applied /home/david/.codex/skills/audit-changes/SKILL.md on 2026-10-14 before committing.
+
+Scope and root cause
+--------------------
+
+The existing event-driven LlmCancellation implementation already closes in-flight
+HTTP streams. Its cancellation checks were attached to transport reads, however,
+so buffered structured output and callback fallback output could deliver a
+completion after cancellation. Providers could also return success when the final
+callback cancelled the token. The new regression cases reproduced these failures
+before the implementation changed.
+
+AbstractLlmProvider::deliverStreamEvent() checks cancellation before and after
+each callback. OpenAI-compatible, Anthropic, Gemini/Vertex AI, Bedrock, and callback
+providers use it for every event, including synthetic and terminal events. No
+polling, new blocking operation, or transport workaround is introduced. Callback
+exceptions retain the existing provider error handling. The original transport
+cancel handlers and scope cleanup remain in place.
+
+Changed files comprise six Qore module sources, three executable tests, global
+release notes, and this audit. No C++, QPP, new module, or DataProvider action
+registration changes are included.
+
+Audit results
+-------------
+
+.. list-table:: All audit-changes checks
+   :header-rows: 1
+   :widths: 30 10 60
+
+   * - Check
+     - Status
+     - Evidence
+   * - Module index (120_modules.dox.tmpl)
+     - N/A
+     - No new module.
+   * - Release notes (900_release_notes.dox.tmpl)
+     - Pass
+     - Global and QoreLlmTypes 1.0 release notes describe cancellation and callback delivery.
+   * - CMake module calls, QMOD list, installation
+     - N/A
+     - Existing modules and targets; no new installed files.
+   * - Introduction sections and module layout
+     - Pass
+     - Existing lowercase intro sections and single-file/split layouts retained; no duplicate module.
+   * - Modern directives, separated sources, deprecated includes
+     - Pass
+     - Module entry points use %modern; no directives outside documentation examples in the changed .qc; no include added.
+   * - Copyright
+     - Pass
+     - Changed module/test sources and this audit identify 2026.
+   * - New QPP class namespace paths
+     - N/A
+     - No QPP changes.
+   * - Test directives and executable permissions
+     - Pass
+     - All three tests use %modern, prepend local qlib, require in-repo modules by relative path, and retain mode 100755.
+   * - External test dependencies
+     - Pass
+     - json is bundled in this repository; other test requirements are local modules. No new external dependency.
+   * - C++ filesystem/network sandbox checks and QoreSandboxManagerHelper
+     - N/A
+     - No C++ changes.
+   * - Qore filesystem/network operations
+     - Pass
+     - No new production I/O. Integration cases use existing loopback socket fixtures and provider transports.
+   * - Cancellation loops, qore_check_cancel, frequency, blocking operations
+     - N/A
+     - No C++ loops or cancellation APIs changed; no production loop or blocking operation added.
+   * - DP action display_name, short_desc, desc, options, output_type
+     - N/A
+     - No DataProvider actions changed.
+   * - DP API support, find options, scheme/path/cls, single-key slices
+     - N/A
+     - No DataProvider request/search/action implementation changed.
+   * - DP typed data classes, Fields visibility, fields, examples
+     - N/A
+     - No DataProvider input/output types changed.
+   * - DP AllowedValueInfo and sensitive fields
+     - N/A
+     - No DataProvider options or secrets changed.
+   * - DP AppGroup, logos, descriptions, display names
+     - N/A
+     - No app registration changes.
+   * - DP short descriptions, markdown, business language, sections
+     - N/A
+     - No DataProvider description changes.
+   * - FactoryMap registration and getRecordTypeImpl signature
+     - N/A
+     - No factory or record-type implementation changes.
+   * - Dependency JAR tracking and installation
+     - N/A
+     - No JNI dependencies or build registration changes.
+   * - Workarounds, TODOs, FIXMEs, stubs
+     - Pass
+     - Fixes missing delivery checks at their shared boundary; no polling or exception suppression.
+   * - Exception safety
+     - Pass
+     - No new resource ownership; callback errors propagate; existing on_exit handlers cancel readers and remove token handlers.
+   * - Thread safety
+     - Pass
+     - Helper has no mutable shared state and uses existing mutex-protected token checks; no lock spans a user callback.
+   * - Type safety
+     - Pass
+     - Typed callback code<nothing(hash<ChatStreamEvent>)>, typed event/options hashes, and typed regression callbacks.
+   * - Performance
+     - Pass
+     - Constant work per event; two token checks, no new buffering or allocations of closures, and no quadratic processing.
+   * - Error handling
+     - Pass
+     - Pre-cancelled delivery never invokes the callback; callback cancellation raises LLM-CANCELLED; callback errors retain their identity.
+   * - Documentation and examples
+     - Pass
+     - Helper has parameter/exception documentation and an invoice-output example; token docs describe final-callback cancellation.
+   * - QPP CONSTANT / RET_VALUE_ONLY flags
+     - N/A
+     - No QPP changes.
+   * - Security
+     - Pass
+     - No new credentials, formats, indexing of untrusted buffers, or production I/O.
+   * - Correctness
+     - Pass
+     - Reproduced pre-fix failures; tests cover silent/partial-event streams, buffered/fallback/final delivery, cleanup, errors, and normal completion.
+
+Validation
+----------
+
+* Rebuilt QoreLlmTypes-qmod, OpenAiRestClient-qmod, AnthropicRestClient-qmod,
+  GeminiBodyShape-qmod, BedrockRestClient-qmod, and QoreLlmUtils-qmod in the
+  existing Release build before final testing. The installed qore is /usr/bin/qore;
+  CMAKE_INSTALL_PREFIX is /usr.
+* All final test commands use build/qore --enable-debug with LD_LIBRARY_PATH=build
+  and QORE_MODULE_DIR=build/modules/reflection:qlib.
+* LlmCancellation.qtest: 16 cases / 59 assertions.
+* LlmStreaming.qtest: 44 cases / 360 assertions.
+* BedrockStreaming.qtest: 14 cases / 36 assertions.
+* Those three suites pass in AST, IR (with fallback warnings enabled), JIT, and
+  default tiered execution: 1,820 assertions across the four modes.
+* Twelve related suites pass: the other QoreLlmUtils tests, BedrockRestClient,
+  BedrockBidirectional, GeminiGenerationConfig, GeminiToolSchema, and VertexAiRestClient:
+  2,297 assertions. Live cloud integration tests were disabled; the optional
+  Vertex AI live case reports its expected skip.
+* Final validation totals 4,117 passing assertions, with no test failures or warnings.
+* Strict Qdx extraction of QoreLlmTypes, strict QPP release-note validation, and
+  git diff --check pass.
+* Valgrind is N/A because no C++ code changed.
+
+All applicable audit checks pass.

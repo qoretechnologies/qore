@@ -98,7 +98,8 @@ public namespace CsvUtil {
         |!Key|!Value Description
         |\c "type"|one of the @ref abstractcsviterator_option_field_types "option type values" giving the field type
         |\c "format"|when used with \c "date", this is a @ref date_mask "date/time format mask" for parsing dates, when used with \c "int", \c "float", or \c "number" types, this is a number format as in @ref Qore::format_number() "format_number()"
-        |\c "timezone"|used only with the \c "date" type; this value is passed to @ref Qore::TimeZone::constructor() and the resulting timezone is used to parse the date (this value overrides any default time zone for the object; use only in the rare case that date/time values from different time zones are present in different columns of the same file)
+        |\c "mask"|a mask of the @ref valuemaskintro "ValueMask" module for a \c "date", \c "int", \c "float", or \c "number" field, such as \c "DD.MM.YYYY", \c "hh:mm AM" or \c "#.##0,00 €" (see @ref valuemaskdates and @ref valuemasknumbers); the iterators read values with it and the writers write them with it, so text written with a mask is read back with the same mask as the same values; a \c "date" field's mask is a date mask or a time mask, and an \c "int" field only takes whole values; cannot be given with \c "format"; for dates the field's or the object's \c "timezone" is the time zone of a value without an offset, which a writer writes as the wall-clock time in that time zone (@since %CsvUtil 1.12)
+        |\c "timezone"|used only with the \c "date" type; this value is passed to @ref Qore::TimeZone::constructor() and the resulting timezone is used to parse the date (this value overrides any default time zone for the object; use only in the rare case that date/time values from different time zones are present in different columns of the same file); for a writer, a date is written as the wall-clock time in this time zone
         |\c "code"|this is a @ref closure "closure" or @ref call_reference "call reference" that takes a single argument of the value (after formatting with any optional \c "type" formats) and returns the value that will be output for the field
 
         <b>Extra AbstractCsvIterator Spec Hash Options</b>
@@ -701,6 +702,11 @@ while (i.next()) {
                 splice type, 0, 1;
             }
 
+            # a value read with a ValueMask mask
+            if (exists fh.mask) {
+                return handleMask(fh, type, val);
+            }
+
             switch (type) {
                 case "int": {
                     *string fmt = fh.format ?? number_format;
@@ -781,6 +787,45 @@ while (i.next()) {
                     break;
             }
 
+            return rv;
+        }
+
+        #! Returns a value read with the \c "mask" attribute of its field
+        /** @param fh the field description
+            @param type the field type without the optional \c "*" prefix
+            @param val the value
+
+            @throw FIELD-VALUE-ERROR the value does not fit the mask, or an \c "int" value has decimals
+        */
+        private auto handleMask(hash<auto> fh, string type, *string val) {
+            if (type == "date") {
+                if (val.empty()) {
+                    return 1970-01-01Z;
+                }
+                *TimeZone tz = fh.timezone ?? timezone;
+                *date rv = tz
+                    ? ValueMask::parseDate(val, fh.mask, tz, fh.mask_kind)
+                    : ValueMask::parseDate(val, fh.mask, NOTHING, fh.mask_kind);
+                if (!exists rv) {
+                    throw "FIELD-VALUE-ERROR", sprintf("invalid %s value: %y does not fit the mask %y", type, val,
+                        fh.mask);
+                }
+                return rv;
+            }
+            *number rv = ValueMask::parseNumber(val ?? "", fh.mask);
+            if (!exists rv) {
+                throw "FIELD-VALUE-ERROR", sprintf("invalid %s value: %y does not fit the mask %y", type, val, fh.mask);
+            }
+            switch (type) {
+                case "int":
+                    if (rv != rv.toInt()) {
+                        throw "FIELD-VALUE-ERROR", sprintf("invalid %s value: %y does not fit the mask %y as a whole "
+                            "number", type, val, fh.mask);
+                    }
+                    return rv.toInt();
+                case "float":
+                    return float(rv);
+            }
             return rv;
         }
 

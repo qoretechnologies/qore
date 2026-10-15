@@ -767,7 +767,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                         "response timed out: no event arrived within %d ms",
                         timeout_ms);
                 }
-                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+                deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{"done": True}, opts);
                 return;
             }
             if (!evt.data.val()) {
@@ -811,7 +811,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                     && event_data.delta.text.val()) {
                 event.delta = event_data.delta.text;
             }
-            callback(event);
+            deliverStreamEvent(callback, event, opts);
             if (done) {
                 return;
             }
