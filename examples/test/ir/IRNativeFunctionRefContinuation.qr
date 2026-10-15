@@ -223,12 +223,19 @@ foreach code<auto()> invalidCall in ((
 int captured = 5;
 code<int(int)> closure = int sub (int value) { return value + captured; };
 expect(62, assignedInt(closure, 7));
+float capturedFloat = 0.5;
+code<float(float)> floatClosure = float sub (float value) { return value + capturedFloat; };
+expect(8.0, assignedFloat(floatClosure, 2.5));
 Program foreign(PO_NO_CHILD_PO_RESTRICTIONS);
 foreign.setExecMode(EM_IR);
 foreign.parse("%modern\nint sub identity(int value) { return value; }\n"
-    "code<int(int)> sub callback() { return \\identity(); }", "native-continuation-foreign");
+    "code<int(int)> sub callback() { return \\identity(); }\n"
+    "float sub floatIdentity(float value) { return value; }\n"
+    "code<float(float)> sub floatCallback() { return \\floatIdentity(); }", "native-continuation-foreign");
 code<int(int)> foreignRef = foreign.callFunction("callback");
 expect(1125899906842624, assignedInt(foreignRef, 1125899906842624));
+code<float(float)> foreignFloatRef = foreign.callFunction("floatCallback");
+expect(-3.0e307, assignedFloat(foreignFloatRef, -3.0e307));
 
 sub replacedForeignTargets(code<int(int)> local, code<int(int)> foreignRef) {
     int value = 7;
@@ -239,6 +246,15 @@ sub replacedForeignTargets(code<int(int)> local, code<int(int)> foreignRef) {
     }
 }
 replacedForeignTargets(\plusOne(), foreignRef);
+sub replacedForeignFloatTargets(code<float(float)> local, code<float(float)> foreignRef) {
+    float value = 7.0;
+    for (int i = 0; i < 90; ++i) {
+        code<float(float)> fn = i % 3 == 0 ? local : foreignRef;
+        value = fn(value);
+        expect(7.0 + float(i / 3 + 1) * 0.5, value);
+    }
+}
+replacedForeignFloatTargets(\floatAdd(), foreignFloatRef);
 
 thread_local bool recordingCallback = False;
 class CallbackDebugger inherits DebugProgram {
@@ -271,4 +287,19 @@ sub debuggerAfterCacheHit(code<int(int)> fn) {
     expect(3, dbg.entries);
 }
 debuggerAfterCacheHit(\plusOne());
+sub floatDebuggerAfterCacheHit(code<float(float)> fn) {
+    CallbackDebugger dbg();
+    ProgramControl pc = ProgramControl::getProgram();
+    float value = 0.0;
+    for (int i = 0; i < 8; ++i) {
+        if (i == 2) { dbg.addProgram(pc); }
+        if (i == 5) { dbg.removeProgram(pc); }
+        recordingCallback = True;
+        value = fn(value);
+        recordingCallback = False;
+    }
+    expect(4.0, value);
+    expect(3, dbg.entries);
+}
+floatDebuggerAfterCacheHit(\floatAdd());
 printf("native-funcref-continuation: ok\n");

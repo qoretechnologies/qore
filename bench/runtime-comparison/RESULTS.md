@@ -13325,3 +13325,140 @@ exclusive main-thread samples there. Persistent storage is a distinct mechanism
 from previously rejected automatic-frame marker deferral. Native-method frames
 and compiler-visible invariant admission remain further candidates. Neither
 Java parity nor a performance ceiling has been established.
+
+
+## Reusable AOT floating callback frames (2026-10-15)
+
+Retain revision B as a targeted improvement, with measured non-target costs.
+Against baseline `83a236cf4`, floating callbacks improve from 8.874 to 7.029
+ns/element (-20.80%); the same-runtime floating-v3 control is 8.762 (-19.78%).
+Fresh matched Java is 2.788, leaving a 2.52x gap. This is not universal
+non-regression: closure costs and the identical-executable control below are
+part of the retention decision, not discarded outliers.
+
+The additive float()/float(float) runtime-v4 helpers reuse the existing
+invocation-owned 208-byte, 16-aligned scratch. Integer and floating loop sites
+share the four-slot/832-byte budget. The complete non-throwing callee-v3 proof
+permits deferred context; the frame stores no scalar payload, and arguments and
+results remain native doubles. Ordinary floating callbacks retain v3 and eager
+markers. Both dispatch and callee physical stack checks, live Program/debugger/
+body/readiness/binding/pending checks, and per-call publication/removal with
+reader completion remain. There is no new heap allocation or TLS access.
+Every exit destroys inactive scratch before its borrowed cache owner.
+
+Actual release assembly reduces the floating helper frame from 288 to 80 bytes;
+the public wrapper has five instructions and no frame. Assembly was a feasibility
+gate, not proof of speed. Only AOT lowering gains this path; IR/JIT are correctness
+controls. `QORE_DISABLE_AOT_FUNCREF_FLOAT_FRAME_REUSE=1` selects floating-v3 while
+retaining integer-v4; the pre-existing overall frame-reuse control remains.
+
+### Screens and placement control
+
+Revision A's 1080-window screen improves floating callbacks -16.96% against
+frozen baseline and -16.83% against same-runtime off, but closure aggregates
+regress about 1.5-1.9%. Its 810-window short screen repeats approximately 2%
+closure costs versus frozen. Revision B moves only the four additive floating
+helper definitions after the existing helper group; bodies and checks are
+unchanged. This single definition-order control is not a best-layout search or
+proof of alignment causality. Some downstream symbols still move.
+
+B's same-sized screen improves floating callbacks -18.41% frozen/-17.11% off.
+Closure aggregates improve about 1% versus frozen, but shuffle509 remains
+adverse. Its short screen gives on/off changes of +0.194%/-1.390%/-14.122% for
+floating callback counts 1/17/1024; integer1024 is +0.755%. Uncaptured/captured
+closure changes are +0.393%/-0.226% off and -0.034%/-0.739% frozen. Count1 does
+not execute a warm reused frame. Noisy sorted baseline floating1024 samples,
+all adverse layouts and both complete revisions are retained.
+
+### Fresh matched Java confirmation
+
+The final matrix retains 3120 windows: five forks, three warmups, three 300ms
+measurement windows, count4096/seed7, randomized block order seed135733. Frozen,
+enabled and same-runtime disabled variants each use default/sorted/reverse/
+shuffle487/shuffle509 layouts. Fresh Temurin25.0.2+10/JMH1.37 JVMs are interleaved;
+target DONT_INLINE hints and all 555 reference outputs are verified. Qore values
+are the median of five layout medians of fork means; Java is the median of five
+fork means. Units are whole-workload ns/element, not isolated call latency.
+
+|!Workload|!Frozen baseline|!Retained B|!Same-runtime off|!Java|!B/baseline change|!B/Java
+|Integer callback|6.019|6.053|5.957|1.885|+0.56%|3.21x
+|Floating callback|8.874|7.029|8.762|2.788|-20.80%|2.52x
+|Native integer method|10.077|10.165|10.258|3.066|+0.87%|3.32x
+|Effectful integer method|86.071|85.190|85.458|1.855|-1.02%|45.94x
+|Native floating method|11.327|11.286|11.272|3.343|-0.36%|3.38x
+|Boxed integer method|15.849|15.621|15.391|2.521|-1.44%|6.20x
+|Boxed floating method|18.990|18.923|19.107|2.543|-0.35%|7.44x
+|Integer member read|30.195|30.121|30.553|2.542|-0.24%|11.85x
+|Floating member read|31.398|31.289|31.022|2.494|-0.35%|12.55x
+|List build|84.064|83.856|84.146|2.604|-0.25%|32.21x
+|List mutation|234.197|232.536|232.923|4.011|-0.71%|57.98x
+|Uncaptured closure|25.380|25.832|25.168|1.650|+1.78%|15.66x
+|Captured closure|30.991|31.311|30.671|1.735|+1.03%|18.05x
+
+All five floating-target on/off medians improve 16.45-21.87%, with disjoint
+five-fork ranges. Sorted baseline/off floating samples remain noisy. Integer
+callback paired layouts are mixed; shuffle509 costs 4.37% frozen/4.25% off.
+Uncaptured closure costs 1.78% frozen/2.64% off in aggregate; default is
++5.47%/+6.54%, reverse +4.39%/+5.13%, while shuffle487 improves 4.55% off.
+Captured closures cost 1.03% frozen/2.09% off, with mixed paired layouts.
+All data are preserved; ranges are descriptive, not significance tests.
+The historical `*_method_fallback` labels denote scalar member reads, not
+necessarily generic fallback. Small changes on untargeted workloads are not
+claimed as causal benefits.
+
+### Identical-executable runtime control
+
+Five frozen executables are each run against both verified runtime libraries,
+without recompilation. These still call integer-v4 and floating-v3, never the
+new floating-v4 helpers. Five forks, three warmups, three 300ms windows,
+count4096/seed7 and randomized paired-block seed135751 retain 600 more windows.
+All ten configurations pass the 555-output grid and actual-library checks.
+
+|!Workload|!Frozen runtime|!Candidate runtime|!Change
+|Integer callback|5.950|6.079|+2.17%
+|Floating callback|8.759|8.765|+0.06%
+|Uncaptured closure|25.182|25.616|+1.72%
+|Captured closure|30.924|30.749|-0.57%
+
+Uncaptured closure medians are adverse in all five layouts (+0.14% to +5.61%);
+default/reverse/shuffle487 fork ranges are disjoint. This confirms a runtime-wide
+cost, not its exact cause. Integer medians are adverse in four layouts
+(-0.14% to +2.36%); all ranges overlap. Captured closures and legacy floating
+callbacks have mixed paired results. The runtime control does not explain all
+generated on/off differences or prove that code alignment is the cause.
+
+The retention decision accepts these documented costs for a substantially
+larger, replicated floating-target gain. It does not assert a Pareto improvement
+or a solved closure path. No further layout tuning is selected from these data.
+
+### Qualification and next work
+
+Release and debug each pass 13 files, 29 cases, 8170 assertions, plus IR/AOT
+555-output grids. Coverage includes mixed integer/floating scratch budgets,
+cold/short/zero counts, wide doubles, NaN, signed zero, infinities, pending sinks,
+early and published-frame overflow, main/foreign threads, foreign Programs,
+live debugger changes, readiness fallback, target replacement, concurrent stack
+readers, caught-error reuse and repeated cleanup. All 64 owned release qmod
+aliases and release artifacts are restored and verified after debug. An initial
+duplicate test-factory name caused a parse failure, was fixed, and the entire
+qualification rerun; that failure is preserved, not counted as a pass.
+
+These are selected macOS arm64 checks, not full-suite, sanitizer, non-SCU or
+cross-platform qualification. Shared-host frequency/thermal/load effects are
+uncontrolled. No Java parity or performance ceiling is established.
+
+Next: investigate persistent native-method contexts and compiler-visible
+admission with explicit RuntimeConfig, while retaining live invalidation and
+reader semantics. Closure/frame overhead remains a priority, including the
+non-target costs above. A split admission/native-call/cleanup ABI is only an
+unproven hypothesis and requires assembly and exception-cleanup feasibility
+evidence first. Member/list gaps also need lookup, lvalue, reference and locking
+work. Direct/static calls need a separate broader milestone; these callback
+ratios do not describe every same-Program call.
+
+[Complete evidence and individual audit](results-aot-float-frame-reuse-macos-arm64.json)
+retains all 7500 windows, both revisions, short controls, raw Java results,
+runtime-only controls, source/artifact identities, tests and assembly evidence.
+
+|!Audit scope|!Pass|!N/A|!Fail
+|Retained runtime, compiler, tests, documentation and evidence; every checklist item recorded individually|21|41|0

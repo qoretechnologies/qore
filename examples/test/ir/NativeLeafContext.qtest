@@ -32,6 +32,8 @@ class NativeLeafContextTest inherits QUnit::Test {
             "code<int(int)> sub makeProbe() { return \\nativeLeafProbe(); }\n"
             "float sub nativeLeafFloatProbe(float value) { return value + 0.5; }\n"
             "code<float(float)> sub makeFloatProbe() { return \\nativeLeafFloatProbe(); }\n"
+            "float sub nativeLeafFloatIdentity(float value) { return value; }\n"
+            "code<float(float)> sub makeFloatCallbackIdentityProbe() { return \\nativeLeafFloatIdentity(); }\n"
             "enum NativeLeafReceiverKind : int { Sample = 7 }\n"
             "NativeLeafReceiverKind sub makeEnumProbe() { return NativeLeafReceiverKind::Sample; }\n"
             "int sub methodReceiverProbe(code<int()> probe) { return probe(); }\n"

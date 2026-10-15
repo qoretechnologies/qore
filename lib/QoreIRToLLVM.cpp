@@ -1006,7 +1006,10 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
     // Reuse only signatures with an existing non-reentrant scalar companion,
     // in loop regions where repeated calls can amortize initialization. Bound
     // caller scratch to 4 * 208 bytes and cleanup to at most four calls per exit.
-    bool reusable_frame = prepared_target && ret_kind == 1 && arg_kind <= 1
+    bool reusable_signature = (ret_kind == 1 && arg_kind <= 1)
+        || (ret_kind == 2 && (arg_kind == 0 || arg_kind == 2)
+            && !std::getenv("QORE_DISABLE_AOT_FUNCREF_FLOAT_FRAME_REUSE"));
+    bool reusable_frame = prepared_target && reusable_signature
         && current_lowering_block_
         && (current_lowering_block_->is_loop_header || current_lowering_block_->enclosing_loop_exit)
         && funcref_frame_allocas.size() < MaxReusableFunctionRefFrames

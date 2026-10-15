@@ -535,6 +535,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
 #undef QORE_TYPED_FUNCREF_SYMBOL
     { "qore_rt_try_funcref_int_0_v4", reinterpret_cast<void*>(&qore_rt_try_funcref_int_0_v4) },
     { "qore_rt_try_funcref_int_int_v4", reinterpret_cast<void*>(&qore_rt_try_funcref_int_int_v4) },
+    { "qore_rt_try_funcref_float_0_v4", reinterpret_cast<void*>(&qore_rt_try_funcref_float_0_v4) },
+    { "qore_rt_try_funcref_float_float_v4", reinterpret_cast<void*>(&qore_rt_try_funcref_float_float_v4) },
     { "qore_rt_release_funcref_frame_v1", reinterpret_cast<void*>(&qore_rt_release_funcref_frame_v1) },
     { "qore_rt_create_self_method_ref_aot", reinterpret_cast<void*>(&qore_rt_create_self_method_ref_aot) },
     { "qore_rt_create_self_method_ref_aot_throwing",
@@ -10984,7 +10986,9 @@ template <auto Legacy, uint32_t Signature, typename Result, typename... Args>
 __attribute__((always_inline)) static int tryReusableFunctionRef(RuntimeConfig& rc,
         QorePreparedFunctionRefV3& cache, uint64_t ref_bits, Result* result, ExceptionSink* xsink,
         QorePreparedFunctionRefFrameV4* frame_slot, Args... args) {
-    static_assert(!std::is_floating_point_v<Result>);
+    // The frame owns no scalar payload. Integer and floating callee-v3 entries
+    // share the same complete non-throwing, non-reentrant body proof; both the
+    // dispatch guard below and the callee's physical stack guard remain live.
     if (!cache.owner || cache.owner != ref_bits
             || !prepareTypedFunctionRef(rc, ref_bits, Signature, cache, xsink)) {
         return Legacy(ref_bits, args..., result, xsink, &rc, &cache);
@@ -13233,6 +13237,39 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_coerce_value_thr
         throw QoreJITException();
     }
     return result;
+}
+
+// Additive floating callback dispatch is grouped after the existing runtime
+// helper definitions so their relative definition order stays unchanged.
+__attribute__((noinline)) static int tryReusableFloatResult(
+        uint64_t ref, double* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    return tryReusableFunctionRef<qore_rt_try_funcref_float_0_v3, 2>(*rc, *cache, ref, result, xsink, frame);
+}
+
+__attribute__((noinline)) static int tryReusableFloatUnary(
+        uint64_t ref, double arg, double* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    return tryReusableFunctionRef<qore_rt_try_funcref_float_float_v3, 2 | (2 << 2)>(
+        *rc, *cache, ref, result, xsink, frame, arg);
+}
+
+extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_float_0_v4(
+        uint64_t ref, double* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    if (cache->owner != ref) {
+        return qore_rt_try_funcref_float_0_v3(ref, result, xsink, rc, cache);
+    }
+    return tryReusableFloatResult(ref, result, xsink, rc, cache, frame);
+}
+
+extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_float_float_v4(
+        uint64_t ref, double arg, double* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    if (cache->owner != ref) {
+        return qore_rt_try_funcref_float_float_v3(ref, arg, result, xsink, rc, cache);
+    }
+    return tryReusableFloatUnary(ref, arg, result, xsink, rc, cache, frame);
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_coerce_value_aot_throwing(

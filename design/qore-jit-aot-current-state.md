@@ -2293,3 +2293,48 @@ infer that floating marker deferral alone helps: earlier automatic-frame trials
 were negative. Any persistent design must cover floating edge values, generic
 fallback, foreign Program/debugger changes, stack readers, cold/short invocations
 and same-runtime controls before being retained.
+
+
+## Reusable AOT floating callback frames (2026-10-15)
+
+Retained additive float()/float(float)-v4 dispatch reuses invocation-owned
+diagnostic storage in loops. It shares the existing four-slot/832-byte budget
+with integer-v4. The frame stores no scalar payload; arguments/results remain
+native doubles. Both physical stack guards, all live admission/readiness checks,
+per-call publication/removal and reader completion remain. No new heap or TLS
+operation; every exit releases scratch before its borrowed cache owner. Ordinary
+floating-v3/eager-marker and legacy paths remain. This is an AOT optimization,
+not a measured IR/JIT speedup.
+
+Fresh five-fork/five-layout Java comparison: floating callback 8.874 -> 7.029
+ns/element (-20.80% frozen/-19.78% same-runtime off), Java2.788 (2.52x gap).
+All five target ranges are disjoint. Integer callbacks remain6.053 versus
+Java1.885 (3.21x); native integer/floating methods3.32x/3.38x. These are matched
+whole-workload numbers, not isolated call latency or general language ratios.
+
+This is a targeted tradeoff, not universal non-regression. Final uncaptured/
+captured closure aggregates cost1.78%/1.03% versus frozen and2.64%/2.09% versus
+same-runtime off; some layouts are worse. Identical frozen executables against
+both runtimes confirm+1.72% uncaptured-closure and+2.17% integer-callback
+aggregate costs; captured closures-0.57%, legacy floating callbacks+0.06%.
+The uncaptured-closure cost spans all five medians, with three disjoint ranges.
+The exact runtime-wide cause is not established. Retain the much larger target
+gain with these costs explicitly tracked; no more layout selection is inferred.
+
+Release/debug each pass13files29cases8170assertions and both555reference grids;
+all64owned release-module aliases/artifacts are restored. The full7500-window
+evidence, both revisions, short controls, setup failure, rawJava, runtime-only
+control and individual audit are in
+`bench/runtime-comparison/results-aot-float-frame-reuse-macos-arm64.json`.
+The full13-workload table and caveats are in `bench/runtime-comparison/RESULTS.md`.
+
+Next: persistent native-method contexts, compiler-visible admission and closure
+frame costs, retaining live debugger/body invalidation and reader/exception
+semantics. A split admission/callee/cleanup ABI needs an assembly and EH proof
+before implementation. Member/list gaps need broader execution optimization;
+direct/static calls require a separate measurement milestone. Neither parity
+nor a performance ceiling has been reached.
+
+The full 62-item audit records 21 Pass, 41 N/A and 0 Fail; every measurement
+window is independently replayed. The audit retains the regression caveats,
+not a claim that all call paths improve.

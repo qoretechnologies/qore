@@ -1174,7 +1174,7 @@ QORE_DECLARE_TYPED_FUNCREF_RESULT(bool, int64_t)
 
 //! V4 adds null-initialized, invocation-owned scratch to the stable v3 cache ABI.
 //! The slot must be released on every exit/error cleanup, before releasing the cache owner.
-//! Only non-reentrant callee-v3 integer results reuse frames; legacy targets tail-call v3.
+//! Only non-reentrant callee-v3 integer/floating results reuse frames; legacy targets tail-call v3.
 /** @param ref the original NaN-boxed function reference
     @param result receives a native result when handled; unchanged on a miss
     @param xsink exception sink; pending exceptions prevent execution
@@ -1197,6 +1197,34 @@ int qore_rt_try_funcref_int_0_v4(uint64_t ref, int64_t* result, ExceptionSink* x
     @return 1 if handled (including exceptions), 0 if the caller must use generic evaluation
 */
 int qore_rt_try_funcref_int_int_v4(uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+
+//! Zero-argument floating counterpart of qore_rt_try_funcref_int_0_v4().
+/** @param ref the original NaN-boxed function reference
+    @param result receives a native double when handled; unchanged on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's runtime context
+    @param cache one zero-argument floating-signature descriptor owned by this invocation
+    @param frame null-initialized scratch paired with this exact cache
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note Only complete non-throwing callee-v3 bodies may use the reusable deferred context.
+        Both physical stack guards and per-call reader synchronization are retained.
+        Release the frame before its borrowed cache owner, using qore_rt_release_funcref_frame_v1().
+*/
+int qore_rt_try_funcref_float_0_v4(uint64_t ref, double* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+//! Unary floating counterpart of qore_rt_try_funcref_float_0_v4().
+/** @param ref the original NaN-boxed function reference
+    @param arg native double argument, not a NaN-boxed payload
+    @param result receives a native double when handled; unchanged on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's runtime context
+    @param cache one floating-to-floating signature descriptor owned by this invocation
+    @param frame null-initialized scratch paired with this exact cache
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note The same guard, ownership and cleanup contract as qore_rt_try_funcref_float_0_v4() applies.
+*/
+int qore_rt_try_funcref_float_float_v4(uint64_t ref, double arg, double* result, ExceptionSink* xsink,
     RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
 
 //! Destroy an inactive placement-constructed frame and clear its slot.

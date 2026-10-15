@@ -5,16 +5,28 @@
 
 hashdecl PreparedFrameReadResult {
     int seen;
+    int float_seen;
     list<string> errors;
 }
 
 int sub preparedLeafA(int value) { return (value + 17) & 65535; }
 int sub preparedLeafB(int value) { return (value + 19) & 65535; }
+float sub preparedFloatLeafA(float value) { return value + 0.25; }
+float sub preparedFloatLeafB(float value) { return value + 0.5; }
 
 int sub preparedBatch(code<int(int)> first, code<int(int)> second, bool replace) {
     int value = 0;
     for (int i = 0; i < 4096; ++i) {
         code<int(int)> fn = replace && (i & 1) ? first : second;
+        value = fn(value);
+    }
+    return value;
+}
+
+float sub preparedFloatBatch(code<float(float)> first, code<float(float)> second, bool replace) {
+    float value = 0.0;
+    for (int i = 0; i < 4096; ++i) {
+        code<float(float)> fn = replace && (i & 1) ? first : second;
         value = fn(value);
     }
     return value;
@@ -43,13 +55,14 @@ sub preparedReader(Counter readers, Counter done, Queue results) {
     }
     hash<PreparedFrameReadResult> result();
     result.seen = 0;
+    result.float_seen = 0;
     result.errors = ();
     for (int i = 0; i < 400; ++i) {
         hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
         foreach hash<auto> tid_stack in (stacks.pairIterator()) {
             bool caller = False;
             foreach hash<CallStackInfo> frame in (tid_stack.value) {
-                if (frame.function == "preparedCaller") {
+                if (frame.function == "preparedCaller" || frame.function == "preparedFloatCaller") {
                     caller = True;
                     break;
                 }
@@ -60,11 +73,18 @@ sub preparedReader(Counter readers, Counter done, Queue results) {
             foreach hash<CallStackInfo> frame in (tid_stack.value) {
                 if (frame.type == "user" && frame.function != "preparedCaller"
                         && frame.function != "preparedBatch" && frame.function != "preparedLeafA"
-                        && frame.function != "preparedLeafB") {
+                        && frame.function != "preparedLeafB" && frame.function != "preparedFloatCaller"
+                        && frame.function != "preparedFloatBatch" && frame.function != "preparedFloatLeafA"
+                        && frame.function != "preparedFloatLeafB") {
                     result.errors += sprintf("unexpected caller frame: %y", frame);
                 }
-                if (frame.function == "preparedLeafA" || frame.function == "preparedLeafB") {
-                    ++result.seen;
+                bool floating = frame.function == "preparedFloatLeafA" || frame.function == "preparedFloatLeafB";
+                if (frame.function == "preparedLeafA" || frame.function == "preparedLeafB" || floating) {
+                    if (floating) {
+                        ++result.float_seen;
+                    } else {
+                        ++result.seen;
+                    }
                     if (frame.type != "user" || frame.file.empty() || frame.line < 0
                             || frame.endline < frame.line) {
                         result.errors += sprintf("invalid native frame: %y", frame);
@@ -76,6 +96,22 @@ sub preparedReader(Counter readers, Counter done, Queue results) {
     results.push(result);
 }
 
+sub preparedFloatCaller(Counter started, Counter readers, Counter done, Queue failures) {
+    on_exit done.dec();
+    code<float(float)> first = \preparedFloatLeafA();
+    code<float(float)> second = \preparedFloatLeafB();
+    started.dec();
+    bool replace = False;
+    while (readers.getCount()) {
+        float actual = preparedFloatBatch(first, second, replace);
+        if (actual != (replace ? 1536.0 : 2048.0)) {
+            failures.push("incorrect floating callback result");
+            return;
+        }
+        replace = !replace;
+    }
+}
+
 Counter started(4);
 Counter readers(2);
 Counter callers_done(4);
@@ -83,7 +119,11 @@ Counter readers_done(2);
 Queue failures();
 Queue results();
 for (int i = 0; i < 4; ++i) {
-    background preparedCaller(started, readers, callers_done, failures);
+    if (i & 1) {
+        background preparedFloatCaller(started, readers, callers_done, failures);
+    } else {
+        background preparedCaller(started, readers, callers_done, failures);
+    }
 }
 started.waitForZero();
 for (int i = 0; i < 2; ++i) {
@@ -92,14 +132,17 @@ for (int i = 0; i < 2; ++i) {
 readers_done.waitForZero();
 callers_done.waitForZero();
 int seen = 0;
+int float_seen = 0;
 for (int i = 0; i < 2; ++i) {
     hash<PreparedFrameReadResult> result = results.get(10000);
     seen += result.seen;
+    float_seen += result.float_seen;
     if (result.errors) {
         throw "PREPARED-FRAME-TEST", result.errors.join("\n");
     }
 }
-if (!seen || failures.size()) {
-    throw "PREPARED-FRAME-TEST", sprintf("observed %d leaf frames; %d caller failures", seen, failures.size());
+if (!seen || !float_seen || failures.size()) {
+    throw "PREPARED-FRAME-TEST", sprintf("observed %d integer/%d floating leaf frames; %d caller failures",
+        seen, float_seen, failures.size());
 }
 printf("prepared-frame-readers: ok\n");

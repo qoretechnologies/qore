@@ -257,8 +257,9 @@ private:
     borrowed frame before its ordinary cold continuation can enter generic code.
     Diagnostic stack publication is always retained. Empty local/closure
     markers are private to this thread and unobservable by the admitted body. The
-    integer-result path materializes them before any stack exception; floating
-    results retain eager markers after measured regressions from deferring them.
+    integer-result and reusable callback paths materialize them before any stack
+    exception. Ordinary automatic floating callback frames retain eager markers after
+    measured regressions from deferring them without persistent frame storage.
     Requires the dispatch helper's entry guard and a guarded native callee entry:
     this middle publication frame does not repeat their stack checks. The sink
     parameter is retained for the common helper construction signature, but not used.

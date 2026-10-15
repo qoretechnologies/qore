@@ -104,6 +104,45 @@ float sub invoke_float_float(code<float(float)> fn, float arg) {
     float result = fn(arg);
     return result;
 }
+float sub repeat_float_zero(code<float()> fn, int count) {
+    float result = 0.0;
+    for (int i = 0; i < count; ++i) {
+        result = fn();
+    }
+    return result;
+}
+float sub repeat_float_float(code<float(float)> fn, float arg, int count) {
+    float result = 0.0;
+    for (int i = 0; i < count; ++i) {
+        result = fn(arg);
+        if (i == 3) {
+            try { throw "FLOAT-FRAME-RECOVERY", "reuse after caught cleanup"; }
+            catch (hash<ExceptionInfo> ex) { expect("FLOAT-FRAME-RECOVERY", ex.err); }
+        }
+        if (i == 9) {
+            break;
+        }
+    }
+    return result;
+}
+float sub plus_half(float arg) { return arg + 0.5; }
+auto sub generic_plus_half(float arg) { return arg + 0.5; }
+# Integer and floating sites share one four-frame budget, not four of each.
+int sub budget_mixed(code<int(int)> integer, code<float(float)> floating, int count) {
+    if (count < 0) {
+        return 0;
+    }
+    int int_result = 0;
+    float float_result = 0.0;
+    for (int i = 0; i < count; ++i) {
+        int_result = integer(int_result);
+        float_result = floating(float_result);
+        int_result = integer(int_result);
+        float_result = floating(float_result);
+        float_result = floating(float_result);
+    }
+    return int_result + int(float_result * 2.0);
+}
 float sub target_float_bool(bool arg) { return -3.0e307; }
 auto sub generic_float_bool(bool arg) { return -3.0e307; }
 float sub invoke_float_bool(code<float(bool)> fn, bool arg) {
@@ -138,6 +177,9 @@ bool sub invoke_bool_bool(code<bool(bool)> fn, bool arg) {
 for (int round = 0; round < 30; ++round) {
     expect(round * 5, budget_int(\plus_one(), round));
     expect(round * 5, budget_int(\generic_plus_one(), round));
+    expect(round * 5, budget_mixed(\plus_one(), \plus_half(), round));
+    expect(round * 5, budget_mixed(\generic_plus_one(), \generic_plus_half(), round));
+    expect(0, budget_mixed(\plus_one(), \plus_half(), -1));
     expect(0, budget_int(\plus_one(), -1));
     expect(round < 10 ? round : 10, recover_int(\plus_one(), round));
     expect(round < 10 ? round : 10, recover_int(\generic_plus_one(), round));
@@ -155,6 +197,10 @@ for (int round = 0; round < 30; ++round) {
     expect(-9223372036854775807 - 1, invoke_int_bool(\target_int_bool(), False));
     expect(-9223372036854775807 - 1, invoke_int_bool(\generic_int_bool(), False));
     expect(-3.0e307, invoke_float_zero(\target_float_zero()));
+    expect(round ? -3.0e307 : 0.0, repeat_float_zero(\target_float_zero(), round));
+    expect(round ? -3.0e307 : 0.0, repeat_float_zero(\generic_float_zero(), round));
+    expect(round ? -3.0e307 : 0.0, repeat_float_float(\target_float_float(), -3.0e307, round));
+    expect(round ? -3.0e307 : 0.0, repeat_float_float(\generic_float_float(), -6.0e307, round));
     expect(-3.0e307, invoke_float_zero(\generic_float_zero()));
     expect(-3.0e307, invoke_float_int(\target_float_int(), 1125899906842624));
     expect(-3.0e307, invoke_float_int(\generic_float_int(), 1125899906842624));
