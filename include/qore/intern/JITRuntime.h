@@ -74,6 +74,21 @@ struct QorePreparedFunctionRefV3 {
 };
 static_assert(offsetof(QorePreparedFunctionRefV3, owner) == 0);
 
+//! Caller-owned scratch for one reusable, non-reentrant integer callback site.
+/** Native v4 ABI: exactly 208 bytes, aligned to 16, with a null-initialized
+    pointer in the first word. The remaining bytes are runtime-private storage.
+    Only one invocation/thread may use a slot. Cleanup destroys the inactive
+    placement-constructed frame and clears the pointer before the cache owner
+    is released. Never copy an initialized slot or reuse it for another cache.
+*/
+struct alignas(16) QorePreparedFunctionRefFrameV4 {
+    void* frame;
+    alignas(16) unsigned char storage[192];
+};
+static_assert(offsetof(QorePreparedFunctionRefFrameV4, frame) == 0);
+static_assert(offsetof(QorePreparedFunctionRefFrameV4, storage) == 16);
+static_assert(sizeof(QorePreparedFunctionRefFrameV4) == 208);
+
 //! Borrowed flag addresses for a generated no-pending cancellation check.
 /** Versioned native ABI: three target-sized pointers, all null when unsupported
     or when no live thread context exists. The compiler reads deferral as i32,
@@ -1156,6 +1171,39 @@ QORE_DECLARE_TYPED_FUNCREF_RESULT(int, int64_t)
 QORE_DECLARE_TYPED_FUNCREF_RESULT(float, double)
 QORE_DECLARE_TYPED_FUNCREF_RESULT(bool, int64_t)
 #undef QORE_DECLARE_TYPED_FUNCREF_RESULT
+
+//! V4 adds null-initialized, invocation-owned scratch to the stable v3 cache ABI.
+//! The slot must be released on every exit/error cleanup, before releasing the cache owner.
+//! Only non-reentrant callee-v3 integer results reuse frames; legacy targets tail-call v3.
+/** @param ref the original NaN-boxed function reference
+    @param result receives a native result when handled; unchanged on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's runtime context
+    @param cache one zero-argument integer-signature descriptor owned by this invocation
+    @param frame null-initialized scratch paired with this exact cache
+    @return 1 if handled (including exceptions), 0 if the caller must use generic evaluation
+    @note Runtime-private ABI; the reference and descriptor have the same lifetime rules as v3.
+*/
+int qore_rt_try_funcref_int_0_v4(uint64_t ref, int64_t* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+//! Unary integer counterpart of qore_rt_try_funcref_int_0_v4().
+/** @param ref the original NaN-boxed function reference
+    @param arg native integer argument
+    @param result receives a native result when handled; unchanged on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's runtime context
+    @param cache one integer-to-integer signature descriptor owned by this invocation
+    @param frame null-initialized scratch paired with this exact cache
+    @return 1 if handled (including exceptions), 0 if the caller must use generic evaluation
+*/
+int qore_rt_try_funcref_int_int_v4(uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+
+//! Destroy an inactive placement-constructed frame and clear its slot.
+/** @param frame non-null scratch pointer; a null first word makes cleanup a no-op
+    @note Call before releasing the borrowed descriptor owner; idempotent after cleanup.
+*/
+void qore_rt_release_funcref_frame_v1(QorePreparedFunctionRefFrameV4* frame);
 
 //! Create a method reference; returns NaN-boxed QoreValue
 uint64_t qore_rt_create_method_ref(uint64_t expr_bits, ExceptionSink* xsink);

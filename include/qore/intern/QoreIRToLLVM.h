@@ -728,6 +728,10 @@ private:
     // discard.temps must not clear them while the local alloca still borrows
     // their owned reference.
     std::unordered_set<llvm::Value*> persistent_cleanup_allocas;
+    // Opaque reusable callback frames, released before their borrowed cache owners.
+    // Bound scratch growth and cleanup IR to a constant per function.
+    static constexpr size_t MaxReusableFunctionRefFrames = 4;
+    std::vector<llvm::Value*> funcref_frame_allocas;
     // Map from local key (LocalVar* as void*) to invoke-result cleanup allocas
     // that hold references to values stored in this local.  Used by
     // UninstantiateLocal to clear cleanup allocas when block-scoped locals

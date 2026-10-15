@@ -40,6 +40,16 @@ struct LeafInvocation {
     bool inline_method = false;
 };
 
+struct ReusableCallbackFrame {
+    QorePreparedFunctionRefFrameV4 slot{};
+    ~ReusableCallbackFrame() {
+        qore_rt_release_funcref_frame_v1(&slot);
+        assert(!slot.frame);
+        qore_rt_release_funcref_frame_v1(&slot);
+        assert(!slot.frame);
+    }
+};
+
 // Test-only adapter: the actual compiler-proven entry still executes, using a
 // null view or a changed live limit after frame publication. Each test owns an unshared Program;
 // the saved target belongs only to this thread and is restored before teardown.
@@ -249,6 +259,7 @@ static void checkPreparedMisses(QoreProgram* program, const char* other_factory,
 // The leaf remains an actually bound native entry from the script aggregate.
 static QoreValue paddedSweep(const void* ptr, const QoreListNode*, RuntimeConfig&, ExceptionSink* xsink) {
     const auto& invocation = *static_cast<const LeafInvocation*>(ptr);
+    ReusableCallbackFrame reusable;
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
     int64_t result = 0;
     QoreProgram* caller = qore_get_call_program_context();
@@ -259,7 +270,8 @@ static QoreValue paddedSweep(const void* ptr, const QoreListNode*, RuntimeConfig
         unsigned published = 0;
         for (unsigned gap = 0; gap < 4096; gap += 16) {
             *limit = get_stack_pos() - gap;
-            int handled = qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &result, xsink, rc, invocation.cache);
+            int handled = qore_rt_try_funcref_int_int_v4(invocation.bits, 7, &result, xsink, rc, invocation.cache,
+                &reusable.slot);
             *limit = saved_limit;
             assert(handled == 1 && qore_get_call_program_context() == caller);
             if (*xsink) {
@@ -291,7 +303,8 @@ static QoreValue paddedSweep(const void* ptr, const QoreListNode*, RuntimeConfig
 #else
     assert(!limit);
 #endif
-    assert(qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &result, xsink, rc, invocation.cache) == 1);
+    assert(qore_rt_try_funcref_int_int_v4(invocation.bits, 7, &result, xsink, rc, invocation.cache,
+        &reusable.slot) == 1);
     assert(!*xsink && result == 24);
     return QoreValue(result);
 }
@@ -2044,63 +2057,116 @@ static void check(bool inline_entry, bool inline_method) {
     QoreValue empty;
     std::memcpy(&cache.owner, &empty, sizeof(cache.owner));
     int64_t result = 0;
-    assert(qore_rt_try_funcref_int_int_v3(bits, 7, &result, &xsink, rc, &cache) == 1);
-    assert(!xsink && result == 24);
-    assert(cache.owner == bits && cache.ref == target);
-    checkPreparedMisses(*program, "makeFloatProbe", qore_rt_try_funcref_int_int_v3,
-        bits, cache, rc, int64_t{7}, int64_t{24}, 5, &xsink);
-    QoreProgram* caller = qore_get_call_program_context();
-    size_t* limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
-#if defined(__aarch64__) || defined(__x86_64__)
-    if (limit) {
-        unsigned observed_leaf = 0;
-        unsigned observed_early = 0;
-        const size_t saved_limit = *limit;
-        // Test-only mutation of the same-thread live limit. Sweep individual
-        // bytes to cover the caller/frame/callee guard boundaries independent
-        // of release/debug frame sizes; always restore before inspecting errors.
-        for (unsigned gap = 0; gap < 4096; ++gap) {
-            *limit = get_stack_pos() - gap;
-            int handled = qore_rt_try_funcref_int_int_v3(bits, 7, &result, &xsink, rc, &cache);
-            *limit = saved_limit;
-            assert(handled == 1);
-            assert(qore_get_call_program_context() == caller);
-            if (xsink) {
-                assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
-                ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
-                assert(!xsink);
-                const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
-                assert(stack);
-                bool leaf = false;
-                for (size_t i = 0; i < stack->size(); ++i) {
-                    const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
-                    assert(frame);
-                    const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
-                    if (name && std::strstr(name->c_str(), "nativeLeafProbe")) {
-                        const auto* file = info->getKeyValue("file").get<const QoreStringNode>();
-                        assert(file && !file->empty());
-                        leaf = true;
-                    }
-                    if (!(i % 100)) {
-                        assert(!qore_check_cancel(&xsink, "native leaf stack inspection"));
-                    }
-                }
-                ++(leaf ? observed_leaf : observed_early);
-            } else {
-                assert(result == 24);
-            }
-            if (!(gap % 10)) {
-                assert(!qore_check_cancel(&xsink, "native leaf guard sweep"));
-            }
+    for (bool reuse : {false, true}) {
+        ReusableCallbackFrame reusable;
+        auto call = [&reusable, reuse](uint64_t bits, int64_t arg, int64_t* result, ExceptionSink* sink,
+                RuntimeConfig* config, QorePreparedFunctionRefV3* prepared) {
+            return reuse ? qore_rt_try_funcref_int_int_v4(bits, arg, result, sink, config, prepared, &reusable.slot)
+                : qore_rt_try_funcref_int_int_v3(bits, arg, result, sink, config, prepared);
+        };
+        assert(call(bits, 7, &result, &xsink, rc, &cache) == 1);
+        assert(!xsink && result == 24);
+        assert(cache.owner == bits && cache.ref == target);
+        assert(!reusable.slot.frame); // first call only populates the cache
+        assert(call(bits, 7, &result, &xsink, rc, &cache) == 1);
+        assert(!xsink && result == 24);
+        assert(bool(reusable.slot.frame) == (reuse && inline_entry));
+        void* original_frame = reusable.slot.frame;
+        checkPreparedMisses(*program, "makeFloatProbe", call,
+            bits, cache, rc, int64_t{7}, int64_t{24}, 5, &xsink);
+        xsink.raiseException("CALLBACK-PENDING", "pending sink must prevent entry");
+        result = 123;
+        assert(call(bits, 7, &result, &xsink, rc, &cache) == 1);
+        assert(result == 0 && xsink.getExceptionErr().get<const QoreStringNode>()->equal("CALLBACK-PENDING"));
+        {
+            ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+            assert(!xsink && info);
         }
-        assert(observed_leaf && observed_early);
-    }
+        assert(reusable.slot.frame == original_frame);
+        {
+            // Admission remains Program-specific even with a warm frame/cache.
+            QoreProgramHelper foreign(PO_MODERN, xsink);
+            QoreExternalProgramContextHelper foreign_context(&xsink, *foreign);
+            assert(!xsink);
+            result = 123;
+            assert(call(bits, 7, &result, &xsink, qore_rt_get_fast_runtime_config(), &cache) == 0);
+            assert(!xsink && result == 123 && cache.owner == bits);
+        }
+        assert(call(bits, 7, &result, &xsink, rc, &cache) == 1);
+        assert(!xsink && result == 24 && reusable.slot.frame == original_frame);
+        auto* leaf_ctx = cache.uvb->getCachedAOTContext();
+        assert(leaf_ctx);
+        bool was_ready = leaf_ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
+        assert(call(bits, 7, &result, &xsink, rc, &cache) == 1);
+        leaf_ctx->pc_loc_map_attached.store(was_ready, std::memory_order_release);
+        assert(!xsink && result == 24 && reusable.slot.frame == original_frame);
+        QoreProgram* caller = qore_get_call_program_context();
+        size_t* limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
+#if defined(__aarch64__) || defined(__x86_64__)
+        if (limit) {
+            unsigned observed_leaf = 0;
+            unsigned observed_early = 0;
+            const size_t saved_limit = *limit;
+            // Test-only mutation of the same-thread live limit. Sweep individual
+            // bytes to cover the caller/frame/callee guard boundaries independent
+            // of release/debug frame sizes; always restore before inspecting errors.
+            for (unsigned gap = 0; gap < 4096; ++gap) {
+                *limit = get_stack_pos() - gap;
+                int handled = call(bits, 7, &result, &xsink, rc, &cache);
+                *limit = saved_limit;
+                assert(handled == 1);
+                assert(qore_get_call_program_context() == caller);
+                if (xsink) {
+                    assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+                    ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+                    assert(!xsink);
+                    const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+                    assert(stack);
+                    bool leaf = false;
+                    for (size_t i = 0; i < stack->size(); ++i) {
+                        const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                        assert(frame);
+                        const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                        if (name && std::strstr(name->c_str(), "nativeLeafProbe")) {
+                            const auto* file = info->getKeyValue("file").get<const QoreStringNode>();
+                            assert(file && !file->empty());
+                            leaf = true;
+                        }
+                        if (!(i % 100)) {
+                            assert(!qore_check_cancel(&xsink, "native leaf stack inspection"));
+                        }
+                    }
+                    ++(leaf ? observed_leaf : observed_early);
+                } else {
+                    assert(result == 24);
+                }
+                if (!(gap % 10)) {
+                    assert(!qore_check_cancel(&xsink, "native leaf guard sweep"));
+                }
+            }
+            assert(observed_leaf && observed_early);
+        }
 #else
-    assert(!limit);
+        assert(!limit);
 #endif
-    for (unsigned i = 0; i < 20; ++i) {
-        assert(qore_rt_try_funcref_int_int_v3(bits, i, &result, &xsink, rc, &cache) == 1);
-        assert(!xsink && result == i + 17);
+        for (unsigned i = 0; i < 20; ++i) {
+            assert(call(bits, i, &result, &xsink, rc, &cache) == 1);
+            assert(!xsink && result == i + 17);
+        }
+        assert(reusable.slot.frame == original_frame);
+        qore_rt_release_funcref_frame_v1(&reusable.slot);
+        assert(!reusable.slot.frame);
+        if (!reuse) {
+            QoreValue owner;
+            std::memcpy(&owner, &cache.owner, sizeof(owner));
+            owner.discard(&xsink);
+            assert(!xsink);
+            std::memcpy(&cache.owner, &empty, sizeof(cache.owner));
+        } else {
+            // Reconstruct in the same scratch after cleanup, with the owner intact.
+            assert(call(bits, 7, &result, &xsink, rc, &cache) == 1);
+            assert(!xsink && result == 24 && bool(reusable.slot.frame) == inline_entry);
+        }
     }
     checkMethod(*program, "methodProbe", inline_method);
     checkMethod(*program, "optionalMethodProbe", inline_method);

@@ -37,6 +37,7 @@ class FunctionRefScalarABITest inherits QUnit::Test {
         }
         TmpDir dir("qore-scalar-abi-");
         foreach string prefix in (("", "QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_FRAME_REUSE=1 ",
                 "QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG=1 ",
                 "QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG=1 ",
                 "QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1 ",
@@ -52,7 +53,7 @@ class FunctionRefScalarABITest inherits QUnit::Test {
                     foreach string arg in (("0", "int", "float", "bool")) {
                         string base = "@qore_rt_try_funcref_" + result + "_" + arg;
                         assertEq(True, ir.find("call i32 " + base + "_" + version + "(") >= 0,
-                            "scalar helper ABI: " + base + "_" + version);
+                            "straight-line scalar helper ABI: " + base + "_" + version);
                         string target = "target_" + result + "_" + (arg == "0" ? "zero" : arg);
                         bool native = result != "bool" && (arg == "0" || result == arg)
                             && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY");
@@ -60,6 +61,24 @@ class FunctionRefScalarABITest inherits QUnit::Test {
                             regex(ir, target + "[^\n]*funcref_typed_v1"), "native callee: " + target);
                     }
                 }
+                bool reuse = version == "v3" && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_FRAME_REUSE");
+                foreach string arg in (("0", "int")) {
+                    assertEq(reuse, ir.find("call i32 @qore_rt_try_funcref_int_" + arg + "_v4(") >= 0,
+                        "loop callback frame reuse: " + arg);
+                }
+                assertEq(reuse, ir.find("call void @qore_rt_release_funcref_frame_v1(") >= 0,
+                    "reusable frame exit cleanup");
+                bool budget_limited = False;
+                foreach string definition in (ir.split("\ndefine ")) {
+                    int frames = definition.split("alloca [208 x i8]").size() - 1;
+                    assertEq(True, frames <= 4, "at most 832 bytes of reusable scratch per function");
+                    if (frames == 4 && definition.split("\n")[0].find("budget_int") >= 0) {
+                        budget_limited = True;
+                        assertEq(True, definition.find("call i32 @qore_rt_try_funcref_int_int_v3(") >= 0,
+                            "fifth callback site keeps the v3 entry");
+                    }
+                }
+                assertEq(reuse, budget_limited, "loop frame budget exercised");
                 assertEq(Expected, run((exe,)), "AOT " + level);
                 assertEq(Expected, run((exe,), "QORE_DISABLE_FUNCREF_FAST_CALL=1 "), "runtime fallback");
             }

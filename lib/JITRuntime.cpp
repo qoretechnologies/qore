@@ -61,6 +61,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <new>
 #include <optional>
 #include <set>
 #include <string>
@@ -532,6 +533,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     QORE_TYPED_FUNCREF_RESULT_SYMBOLS(bool)
 #undef QORE_TYPED_FUNCREF_RESULT_SYMBOLS
 #undef QORE_TYPED_FUNCREF_SYMBOL
+    { "qore_rt_try_funcref_int_0_v4", reinterpret_cast<void*>(&qore_rt_try_funcref_int_0_v4) },
+    { "qore_rt_try_funcref_int_int_v4", reinterpret_cast<void*>(&qore_rt_try_funcref_int_int_v4) },
+    { "qore_rt_release_funcref_frame_v1", reinterpret_cast<void*>(&qore_rt_release_funcref_frame_v1) },
     { "qore_rt_create_self_method_ref_aot", reinterpret_cast<void*>(&qore_rt_create_self_method_ref_aot) },
     { "qore_rt_create_self_method_ref_aot_throwing",
         reinterpret_cast<void*>(&qore_rt_create_self_method_ref_aot_throwing) },
@@ -10375,6 +10379,67 @@ private:
 };
 static_assert(sizeof(QorePreparedFunctionRefStackLocation<>) < sizeof(QoreExplicitFunctionRefStackLocation));
 
+// One inactive diagnostic object per call site/native invocation. Unlike an
+// automatic stack location its vtables and invariant context survive successive
+// calls. Publication and the reader-completion handshake are still PER CALL:
+// neither the cache nor the caller location can change while a reader uses it.
+class QoreReusableFunctionRefFrame final : public QoreStackLocation, public QoreAOTStackFrameMarker {
+public:
+    QoreReusableFunctionRefFrame(RuntimeConfig& rc, const QorePreparedFunctionRefV3& cache)
+        : cache(cache), helper(rc, cache) {
+    }
+    ~QoreReusableFunctionRefFrame() override {
+        assert(!active);
+    }
+    class Scope {
+    public:
+        __attribute__((always_inline)) explicit Scope(QoreReusableFunctionRefFrame& frame) : frame(frame) {
+            assert(!frame.active);
+#ifndef NDEBUG
+            frame.active = true;
+#endif
+            frame.helper.enter(&frame, frame.loc);
+        }
+        __attribute__((always_inline)) ~Scope() {
+            frame.helper.leave();
+#ifndef NDEBUG
+            frame.active = false;
+#endif
+        }
+        Scope(const Scope&) = delete;
+        Scope& operator=(const Scope&) = delete;
+    private:
+        QoreReusableFunctionRefFrame& frame;
+    };
+    const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+    bool isAOTFrame() const override { return true; }
+    const std::string& getCallName() const override { return *cache.name; }
+    qore_call_t getCallType() const override { return CT_USER; }
+    QoreProgram* getProgram() const override { return cache.pgm; }
+    const AbstractStatement* getStatement() const override { return cache.statements; }
+
+private:
+    const QorePreparedFunctionRefV3& cache;
+    const QoreProgramLocation* loc = nullptr;
+#ifndef NDEBUG
+    bool active = false;
+#endif
+    RuntimeConfigReusableNativeLeafCallHelper helper;
+};
+
+static_assert(sizeof(QoreReusableFunctionRefFrame) <= sizeof(QorePreparedFunctionRefFrameV4::storage));
+static_assert(alignof(QoreReusableFunctionRefFrame) <= alignof(QorePreparedFunctionRefFrameV4));
+
+extern "C" DLLEXPORT void qore_rt_release_funcref_frame_v1(QorePreparedFunctionRefFrameV4* frame) {
+    // Generated exit/error cleanup can visit a slot more than once, including
+    // caught exceptions that resume the invocation. Never leave a stale owner.
+    auto* owned = static_cast<QoreReusableFunctionRefFrame*>(frame->frame);
+    frame->frame = nullptr;
+    if (owned) {
+        std::destroy_at(owned);
+    }
+}
+
 extern "C" DLLEXPORT RuntimeConfig* qore_rt_get_fast_runtime_config() {
     return &RuntimeConfigNativeAccess::getCurrent();
 }
@@ -10877,7 +10942,7 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
             uint64_t ref, ARG_TYPE arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc) { \
         return tryTypedFunctionRefExplicit<TYPE, RET_KIND | (ARG_KIND << 2)>(*rc, ref, result, xsink, arg); \
     } \
-    extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_##NAME##_##ARG_NAME##_v3( \
+    extern "C" DLLEXPORT __attribute__((aligned(64), noinline)) int qore_rt_try_funcref_##NAME##_##ARG_NAME##_v3( \
             uint64_t ref, ARG_TYPE arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, \
             QorePreparedFunctionRefV3* cache) { \
         return tryPreparedFunctionRef<TYPE, RET_KIND | (ARG_KIND << 2)>(*rc, *cache, ref, result, xsink, arg); \
@@ -10891,7 +10956,7 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
             uint64_t ref, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc) { \
         return tryTypedFunctionRefExplicit<TYPE, KIND>(*rc, ref, result, xsink); \
     } \
-    extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_##NAME##_0_v3( \
+    extern "C" DLLEXPORT __attribute__((aligned(64), noinline)) int qore_rt_try_funcref_##NAME##_0_v3( \
             uint64_t ref, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, \
             QorePreparedFunctionRefV3* cache) { \
         return tryPreparedFunctionRef<TYPE, KIND>(*rc, *cache, ref, result, xsink); \
@@ -10904,6 +10969,86 @@ QORE_TYPED_FUNCREF_RESULT(float, double, 2)
 QORE_TYPED_FUNCREF_RESULT(bool, int64_t, 3)
 #undef QORE_TYPED_FUNCREF_RESULT
 #undef QORE_TYPED_FUNCREF_UNARY
+
+// Initialize only on a later admitted positive hit. No allocation, publication,
+// or Qore reentry occurs here; one-call invocations never construct a frame.
+__attribute__((noinline)) static QoreReusableFunctionRefFrame* initReusableFunctionRefFrame(RuntimeConfig& rc,
+        const QorePreparedFunctionRefV3& cache, QorePreparedFunctionRefFrameV4& slot) {
+    assert(!slot.frame);
+    auto* frame = new (slot.storage) QoreReusableFunctionRefFrame(rc, cache);
+    slot.frame = frame;
+    return frame;
+}
+
+template <auto Legacy, uint32_t Signature, typename Result, typename... Args>
+__attribute__((always_inline)) static int tryReusableFunctionRef(RuntimeConfig& rc,
+        QorePreparedFunctionRefV3& cache, uint64_t ref_bits, Result* result, ExceptionSink* xsink,
+        QorePreparedFunctionRefFrameV4* frame_slot, Args... args) {
+    static_assert(!std::is_floating_point_v<Result>);
+    if (!cache.owner || cache.owner != ref_bits
+            || !prepareTypedFunctionRef(rc, ref_bits, Signature, cache, xsink)) {
+        return Legacy(ref_bits, args..., result, xsink, &rc, &cache);
+    }
+    // Readiness and binding are still live. The cold entry preserves the order
+    // of stack checking, lazy materialization and fallback when either is absent.
+    QoreAOTContext* ctx = cache.uvb->getCachedAOTContext();
+    auto inline_entry = cache.ref->getPreparedTypedInlineStackEntry(Signature);
+    if (!ctx || !ctx->pc_loc_map_attached.load(std::memory_order_acquire) || !inline_entry) {
+        return Legacy(ref_bits, args..., result, xsink, &rc, &cache);
+    }
+    *result = Result{};
+    if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
+        return 1;
+    }
+    auto* reusable = static_cast<QoreReusableFunctionRefFrame*>(frame_slot->frame);
+    if (!reusable) {
+        reusable = initReusableFunctionRefFrame(rc, cache, *frame_slot);
+    }
+    QoreReusableFunctionRefFrame::Scope frame(*reusable);
+    // enter() only stores/publishes live state; it cannot allocate, reenter
+    // Qore or raise an exception after the pending-sink/physical-stack checks.
+    using Entry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*);
+    try {
+        *result = reinterpret_cast<Entry>(inline_entry)(args..., ctx, xsink, &rc,
+            qore_rt_get_stack_limit_v1(&rc));
+    } catch (const QoreJITException&) {
+        // Overflow materialized this context; Scope restores it before reuse.
+    }
+    return 1;
+}
+
+// Keep admission misses outside the reusable helper's EH/register-save frame.
+// Both wrapper branches retain the exact public argument order for tail calls.
+__attribute__((noinline)) static int tryReusableIntResult(
+        uint64_t ref, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    return tryReusableFunctionRef<qore_rt_try_funcref_int_0_v3, 1>(*rc, *cache, ref, result, xsink, frame);
+}
+
+__attribute__((noinline)) static int tryReusableIntUnary(
+        uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    return tryReusableFunctionRef<qore_rt_try_funcref_int_int_v3, 1 | (1 << 2)>(
+        *rc, *cache, ref, result, xsink, frame, arg);
+}
+
+extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_int_0_v4(
+        uint64_t ref, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    if (cache->owner != ref) {
+        return qore_rt_try_funcref_int_0_v3(ref, result, xsink, rc, cache);
+    }
+    return tryReusableIntResult(ref, result, xsink, rc, cache, frame);
+}
+
+extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_int_int_v4(
+        uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    if (cache->owner != ref) {
+        return qore_rt_try_funcref_int_int_v3(ref, arg, result, xsink, rc, cache);
+    }
+    return tryReusableIntUnary(ref, arg, result, xsink, rc, cache, frame);
+}
 
 /** Handle body local instantiation before JIT execution and deopt/cleanup after.
 

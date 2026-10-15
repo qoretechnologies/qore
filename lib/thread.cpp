@@ -2348,6 +2348,22 @@ __attribute__((always_inline)) RuntimeConfigNativeCallHelper::~RuntimeConfigNati
     td->call_program_context = old_call_pgm;
 }
 
+RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
+        const QorePreparedFunctionRefV3& cache)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), callback_cache(&cache), previous(nullptr),
+          state(ContextState::DeferredMarkers), target_kind(TargetKind::Callback) {
+}
+
+__attribute__((always_inline)) void RuntimeConfigNativeLeafCallHelper::enterReusableCallback(
+        QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc) {
+    assert(td->current_pgm == callback_cache->pgm);
+    previous = td->native_leaf_context;
+    state = ContextState::DeferredMarkers;
+    call_loc = td->runtime_loc ? td->runtime_loc : callback_cache->parse_loc;
+    td->native_leaf_context = this;
+    old_stack = publish_pushed_stack_location(td, stack_loc);
+}
+
 __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
         QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
         const QorePreparedFunctionRefV3& cache, ExceptionSink*, bool defer_markers)

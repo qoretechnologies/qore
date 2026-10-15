@@ -1003,8 +1003,16 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
     const char* names[] = {"0", "int", "float", "bool"};
     bool explicit_context = !std::getenv("QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG");
     bool prepared_target = explicit_context && !std::getenv("QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET");
+    // Reuse only signatures with an existing non-reentrant scalar companion,
+    // in loop regions where repeated calls can amortize initialization. Bound
+    // caller scratch to 4 * 208 bytes and cleanup to at most four calls per exit.
+    bool reusable_frame = prepared_target && ret_kind == 1 && arg_kind <= 1
+        && current_lowering_block_
+        && (current_lowering_block_->is_loop_header || current_lowering_block_->enclosing_loop_exit)
+        && funcref_frame_allocas.size() < MaxReusableFunctionRefFrames
+        && !std::getenv("QORE_DISABLE_AOT_FUNCREF_FRAME_REUSE");
     std::string helper_name = std::string("qore_rt_try_funcref_") + names[ret_kind] + "_"
-        + names[arg_kind] + (prepared_target ? "_v3" : explicit_context ? "_v2" : "_v1");
+        + names[arg_kind] + (reusable_frame ? "_v4" : prepared_target ? "_v3" : explicit_context ? "_v2" : "_v1");
     std::vector<llvm::Type*> types{i64_type};
     std::vector<llvm::Value*> args{ref_boxed};
     if (arg) {
@@ -1041,6 +1049,17 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
         registerPersistentCleanupAlloca(cache);
         types.push_back(ptr_type);
         args.push_back(cache);
+        if (reusable_frame) {
+            // Fixed versioned byte count/alignment, independent of host pointer
+            // size. Only the first target-sized pointer is compiler-visible.
+            auto* frame = entry_builder.CreateAlloca(llvm::ArrayType::get(llvm::Type::getInt8Ty(ctx), 208), nullptr,
+                "prepared_funcref_frame");
+            frame->setAlignment(llvm::Align(16));
+            entry_builder.CreateStore(llvm::Constant::getNullValue(ptr_type), frame);
+            funcref_frame_allocas.push_back(frame);
+            types.push_back(ptr_type);
+            args.push_back(frame);
+        }
     }
     auto helper = module.getOrInsertFunction(helper_name, llvm::FunctionType::get(i32_type, types, false));
     llvm::Value* handled = builder->CreateCall(helper, args);
@@ -4467,6 +4486,16 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
 }
 
 void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
+    if (!funcref_frame_allocas.empty()) {
+        auto release = module.getOrInsertFunction("qore_rt_release_funcref_frame_v1",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
+        // Compile-time budget bounds this loop to four sites, even in functions
+        // with thousands of callbacks/exits. No superlinear cleanup IR growth.
+        assert(funcref_frame_allocas.size() <= MaxReusableFunctionRefFrames);
+        for (auto it = funcref_frame_allocas.rbegin(); it != funcref_frame_allocas.rend(); ++it) {
+            builder->CreateCall(release, {*it});
+        }
+    }
     if (invoke_result_allocas.empty()) {
         return;
     }
@@ -4896,7 +4925,7 @@ void QoreIRToLLVM::emitIteratorCleanup(llvm::Module& module) {
 
 void QoreIRToLLVM::emitLateExitCleanup(llvm::Function* llvm_func,
         llvm::Module& module) {
-    if (invoke_result_allocas.empty() && iterator_cleanup_allocas.empty()) {
+    if (invoke_result_allocas.empty() && iterator_cleanup_allocas.empty() && funcref_frame_allocas.empty()) {
         return;
     }
 
@@ -12374,6 +12403,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     owned_ir_local_alloca_keys.clear();
     invoke_result_allocas.clear();
     persistent_cleanup_allocas.clear();
+    funcref_frame_allocas.clear();
     temp_cleanup_marks.clear();
     boxed_exit_cleanup_array = nullptr;
     boxed_exit_cleanup_array_count = 0;

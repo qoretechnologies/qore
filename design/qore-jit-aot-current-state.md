@@ -2229,3 +2229,39 @@ Candidate release checks passed six files/13 cases/3364 assertions and both
 reference grids. The original core and 62 modules were restored and checked;
 full measurements, profiles, setup diagnostics, validation and all audit items
 are in `bench/runtime-comparison/results-aot-layout-calibration-macos-arm64.json`.
+
+
+### Reusable AOT integer callback frames (2026-10-14)
+
+Retained additive runtime-v4 dispatch reuses caller-owned diagnostic state for
+loop-local int()/int(int) callback sites. Existing v3 cache/callee ABI remains;
+at most four 208-byte, 16-aligned slots per invocation. Construction is deferred
+until a positive admitted hit, no heap allocation occurs, every call refreshes
+context/location and performs existing reader publication/removal, and every
+exit destroys inactive scratch before its borrowed descriptor owner. Live
+Program/debugger/body/readiness/signature/pending/stack guards are retained.
+Only AOT lowering changes; no IR/JIT performance benefit is claimed.
+
+Final five-layout baseline/on/off matrix interleaved with fresh Java/JMH:
+integer callbacks 6.905 -> 6.300 ns/element (-8.76% frozen; -11.66% same-runtime off),
+Java 1.958 ns/element (3.22x gap). All five target layouts improve with disjoint
+fork ranges. Short controls retain approximately1% aggregate costs; some
+member-read control layouts are adverse. Native integer/floating methods remain
+3.30x/3.58x Java, boxed methods 6.15x/7.57x, member reads 12.10x/12.48x,
+effectful methods 47.75x, list build 26.97x and mutation 57.88x. These are matched
+whole-workload ratios, not isolated call overhead or general language claims.
+
+Release and debug each pass 13 files/29 cases/7322 assertions and both reference
+grids; release artifacts and 62 qmod aliases restored. The evidence includes
+6057 windows, rejected heap-frame variants, short controls, negative
+register-preserving ABI probes and fresh diagnostic profiles. No performance
+ceiling or parity claim: hot integer dispatch still holds 39.80% of exclusive
+main-thread samples, frame removal 8.59%; floating/method dispatch remains large.
+
+Next: prove or reject warm reusable-frame duplicate stack-check elimination,
+then separately evaluate method/floating reusable contexts. Preserve physical
+guarding before fallible/reentrant work, current limits, debugger transitions,
+overflow materialization, reader lifetimes and legacy entries. Larger member
+and list gaps require targeted lookup/lvalue/reference/synchronization work.
+See the reusable-frame section of `bench/runtime-comparison/RESULTS.md` and
+`results-aot-frame-reuse-macos-arm64.json` for controls, caveats and full audit.

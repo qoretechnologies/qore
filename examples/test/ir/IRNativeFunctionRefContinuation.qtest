@@ -38,6 +38,7 @@ class NativeFunctionRefContinuationTest inherits QUnit::Test {
         TmpDir dir("qore-native-continuation-");
         foreach string prefix in (("", "QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION=1 ",
                 "QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_FRAME_REUSE=1 ",
                 "QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG=1 ",
                 "QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1 ",
                 "QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1 ",
@@ -55,10 +56,14 @@ class NativeFunctionRefContinuationTest inherits QUnit::Test {
                     && !prefix.startsWith("QORE_DISABLE_AOT_TYPED_FUNCREF_CALL");
                 assertEq(enabled, generated.find("typed_funcref_native_value") >= 0,
                     "native continuation selection");
-                assertEq(!prefix.startsWith("QORE_DISABLE_AOT_TYPED_FUNCREF_CALL")
+                bool prepared = !prefix.startsWith("QORE_DISABLE_AOT_TYPED_FUNCREF_CALL")
                         && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG")
-                        && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET"),
+                        && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET");
+                assertEq(prepared,
                     generated.find("qore_rt_try_funcref_int_int_v3") >= 0, "prepared target selection");
+                assertEq(prepared && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_FRAME_REUSE"),
+                    generated.find("call i32 @qore_rt_try_funcref_int_int_v4(") >= 0,
+                    "loop callbacks exercise reusable frames alongside the legacy scalar ABI");
                 assertEq(!prefix.startsWith("QORE_DISABLE_AOT_TYPED_FUNCREF_CALL")
                         && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY"),
                     generated =~ /floatAdd[^\n]*funcref_typed_v1/, "float leaf adapter selection");

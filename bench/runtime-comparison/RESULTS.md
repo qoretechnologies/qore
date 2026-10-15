@@ -13073,3 +13073,139 @@ is research evidence, not production approval.
 
 |!Audit scope|!Pass|!N/A|!Fail
 |Retained documentation and research data; all 62 checklist items recorded in the dataset|7|55|0
+
+
+## Caller-owned reusable AOT callback frames (2026-10-14)
+
+Baseline `c6dbcc966`. Retain revision D: repeated same-Program integer callbacks
+reuse an invocation-owned diagnostic object, while still publishing/unpublishing
+it and waiting for concurrent readers on every call. The final matched run
+reduces the integer-callback workload from 6.905 to 6.300 ns/element (-8.76%),
+or -11.66% against the same rebuilt runtime with reuse disabled. Java measures
+1.958 ns/element: Qore remains 3.22x slower. This is not isolated call latency,
+Java parity, a general speedup for all calls, or evidence of a performance ceiling.
+
+### Implementation and rejected alternatives
+
+The additive runtime-v4 helpers accept a fixed 208-byte/16-byte-aligned scratch
+slot paired with the existing v3 prepared descriptor. Only AOT int()/int(int)
+sites in loop regions qualify, with a four-site (832-byte) per-function budget.
+The first miss uses v3; a later admitted hit placement-constructs the object,
+without heap allocation. A frameless owner-test wrapper tail-calls the hot helper
+or v3. The hot helper has an 80-byte C++ frame on this toolchain, versus the old
+272-byte unary dispatch frame. Cleanup destroys scratch before releasing its
+borrowed cache owner and is idempotent across error cleanup and resumed execution.
+The v3 scalar callee ABI and cache layout are unchanged. Existing RuntimeConfig
+thread/cache addresses are reused; no new TLS lookup is introduced.
+
+Program identity, live debugger/body admission, readiness, signature/binding,
+pending exceptions and physical stack checks remain live. Caller location and
+the previous native context refresh each call. The existing frame-reader
+publication/removal handshake and materialized-overflow restoration are retained.
+Scratch is never shared between threads/invocations. No frame-pointer/unwind
+information is removed. The compile-only control is
+`QORE_DISABLE_AOT_FUNCREF_FRAME_REUSE=1`; IR/JIT lowering is unchanged.
+
+Before implementing reuse, preserve_most/preserve_all assembly probes were
+negative for these callers/toolchain. Changing only the callee expanded cold
+spill requirements; matching the cold chain preserved tiny callee bodies, but
+actual SCU caller assembly still matched the ordinary convention, including
+272/288-byte integer/floating frames. Mismatched probe objects were never linked
+or executed. This does not prove those conventions cannot help another caller.
+
+Four reuse revisions were measured with all five predeclared layouts retained:
+
+|!Revision|!Hot integer on/off|!Decision
+|A: heap frame inside original helper|+2.27%|Reject; original large helper frame remains
+|B: separate hot helper, heap-owned frame|-14.08%|Reject; uncaptured/captured closure controls regress +5.70%/+3.67%
+|C: bounded caller scratch, v3 fallback|-8.70%|Revise; uncaptured closure screen still +2.27%
+|D: caller scratch plus frameless miss wrapper|-9.51% screening; -11.66% final|Retain with short/control caveats below
+
+A-D each have 540 windows: three forks, three warmups and three 300 ms windows,
+count 4096/seed 7; default/sorted/reverse/Random(487)/Random(509) link orders, frozen
+baseline/on/off controls, randomized order seed 135571. No winning layout was
+selected. B/C/D short screens each add 675 windows using the same verified
+binaries: three forks, two warmups, three 200 ms windows, seed 135587; callback
+counts 1/17/1024 and closure counts 4096. D summary on/off changes were +0.99%,
++0.73%, -6.89%, +0.80% uncaptured and -0.28% captured. All five D uncaptured
+closure layout medians were slightly slower in that screen (+0.11% to +1.97%),
+with overlapping fork ranges; the final larger-count closure comparison below
+has the opposite sign. Do not claim that every small cost was eliminated.
+
+### Fresh matched Java matrix
+
+Final source passed both release and debug qualification before recompilation
+of all 15 Qore configurations. The final matrix interleaves those configurations
+with pinned Temurin 25/JMH 1.37, one JVM per kernel/fork, three forks, three warmups
+and three 300 ms windows, count 4096/seed 7, randomized order seed 135613: 1872 windows.
+Java target DONT_INLINE hints (including both closure classes) are checked;
+all 16 configurations pass the same 555 reference outputs. Runtime library paths,
+executable/object/compiler/JVM/dependency/source hashes are verified. The two
+Qore runtime paths and all Qore executable paths have equal lengths.
+
+Qore columns are medians of the five layout medians of fork means; Java is the
+median of three fork means. Units are whole-workload ns/element. Positive on/off
+means slower. The historical `*_method_fallback` kernel names below are member
+reads with admitted scalar entries, not a claim that generic fallback ran.
+
+|!Workload|!Frozen before|!Reuse off|!Reuse on|!Java|!On/off|!Qore/Java
+|Integer callback|6.905|7.132|6.300|1.958|-11.66%|3.22x
+|Floating callback|9.118|9.243|9.343|2.920|+1.08%|3.20x
+|Native integer method|10.535|10.467|10.623|3.220|+1.49%|3.30x
+|Effectful integer method|89.509|89.425|89.576|1.876|+0.17%|47.75x
+|Native floating method|12.087|12.055|12.152|3.395|+0.80%|3.58x
+|Boxed integer method|16.628|16.725|16.592|2.697|-0.79%|6.15x
+|Boxed floating method|20.376|20.017|20.096|2.656|+0.39%|7.57x
+|Integer member read|31.342|31.487|31.755|2.625|+0.85%|12.10x
+|Floating member read|33.237|32.640|33.072|2.651|+1.32%|12.48x
+|List build|89.715|89.246|89.085|3.303|-0.18%|26.97x
+|List mutation|241.226|244.375|244.621|4.226|+0.10%|57.88x
+|Uncaptured closure|26.240|26.064|25.589|1.684|-1.82%|15.20x
+|Captured closure|32.554|33.202|32.607|1.807|-1.79%|18.04x
+
+Integer callback on/off wins in all five layouts (-14.60% to -5.95%), with
+non-overlapping three-fork ranges in each. Other paths are not targeted:
+native-integer paired changes range -4.16% to +5.19%, with overlapping ranges;
+floating member reads include +3.35% and +2.56% adverse layouts with disjoint
+fork ranges, even though the aggregate enabled/frozen change is -0.50%.
+Integer member-read paired medians are all slightly adverse (+0.14% to +2.85%).
+These controls and every noisy window remain in the dataset. Neither universal
+non-regression nor causal layout explanations are established by this matrix.
+
+### Qualification, profile and next iteration
+
+Release and debug each pass 13 files, 29 cases, 7322 assertions plus IR/AOT 555-output
+reference grids. Coverage includes scalar/legacy/off entries, wide integers,
+zero/negative counts, four-site budget/fifth-site fallback, caught-exception
+reuse, pending sinks, warmed foreign-Program misses, readiness fallback, debugger
+attach after cache hits, main/foreign threads, concurrent readers, forced stack
+boundaries and context restoration, cancellation and bounded cleanup. All 62
+selected release qmod aliases/artifacts are restored after debug qualification.
+This is selected macOS arm64 qualification, not full-suite, sanitizer, non-SCU
+or cross-platform coverage. The initial C build typo and failed probe disassembly
+setup are preserved separately; subsequent builds/probes succeeded.
+
+Five serial profiles run after timing show integer hot dispatch 39.80%, wrapper
+3.24%, caller 23.95%, frame removal 8.59%, and tiny callee 10.92% of exclusive
+main-thread samples. Floating callback dispatch is 64.86%; native integer-method
+dispatch 57.81%, frame removal 6.53% and entry stack check 5.48%. Effectful calls
+remain spread across local-value handling, member-name comparison and locks;
+list mutation across reference handling, lvalue traversal and type checks.
+Idle signal-thread samples are excluded. Sampling locations are not causal
+latencies, and instrumented durations are excluded from timing conclusions.
+
+Next investigate whether an already-initialized reusable frame can rely on the
+callee-v3 first-instruction physical stack guard without the earlier duplicate
+check. This requires an explicit proof of bounded, non-reentrant pre-guard work,
+retained cold/initialization checks, live limit semantics and overflow restoration;
+it is not authorization to simply remove checks. Then consider equivalent
+caller-owned method/floating contexts only where their distinct marker policies
+and semantics can be preserved. Larger member/list gaps need separate lvalue,
+reference, lookup and synchronization work, not just another call convention.
+
+[Complete evidence and 62-item audit](results-aot-frame-reuse-macos-arm64.json)
+retains 6057 windows, all four revisions, short controls, raw Java results,
+source/artifact identities, qualification, profiles and assembly probes.
+
+|!Audit scope|!Pass|!N/A|!Fail
+|Retained runtime, compiler, tests, documentation and evidence; all 62 checks recorded in the dataset|21|41|0

@@ -279,6 +279,9 @@ public:
     RuntimeConfigNativeLeafCallHelper& operator=(const RuntimeConfigNativeLeafCallHelper&) = delete;
 
 protected:
+    // Initialize an inactive callback context owned by one native invocation.
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, const QorePreparedFunctionRefV3& cache);
+    DLLLOCAL void enterReusableCallback(QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc);
     // Construct only through the policy-specific RAII wrapper below.
     DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
         const QoreProgramLocation*& call_loc, const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink,
@@ -317,6 +320,31 @@ private:
     enum class TargetKind : uint8_t { Callback, Method };
     TargetKind target_kind;
     bool swapped; //!< Initialized only when context is materialized
+};
+
+//! Inactive between calls; a separate per-call scope must pair enter() and leave().
+class RuntimeConfigReusableNativeLeafCallHelper final : public RuntimeConfigNativeLeafCallHelper {
+public:
+    //! Borrow stable thread/cache addresses for one native invocation, without publishing a frame.
+    /** @param rc the current thread's runtime context
+        @param cache the invocation-owned prepared callback descriptor; must outlive this helper
+    */
+    RuntimeConfigReusableNativeLeafCallHelper(RuntimeConfig& rc, const QorePreparedFunctionRefV3& cache)
+        : RuntimeConfigNativeLeafCallHelper(rc, cache) {
+    }
+    //! Publish fresh per-call state only after all live admission and entry-stack checks succeed.
+    /** @param stack_loc the fully initialized diagnostic frame
+        @param call_loc receives the current caller location, valid until leave() completes
+        @note Pair every successful enter() with leave() before modifying the frame or descriptor.
+    */
+    __attribute__((always_inline)) void enter(QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc) {
+        enterReusableCallback(stack_loc, call_loc);
+    }
+    //! Restore context and wait for every reader before the frame or cache can be reused.
+    /** @note Called by the per-call RAII scope, including on exceptional exits. */
+    __attribute__((always_inline)) void leave() {
+        restoreDeferred();
+    }
 };
 
 //! Compile-time marker policy keeps eager floating cleanup free of a runtime policy branch.

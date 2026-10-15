@@ -24,6 +24,56 @@ int sub invoke_int_int(code<int(int)> fn, int arg) {
     int result = fn(arg);
     return result;
 }
+int sub repeat_int_zero(code<int()> fn, int count) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        result = fn();
+    }
+    return result;
+}
+int sub repeat_int_int(code<int(int)> fn, int arg, int count) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        result = fn(arg);
+    }
+    return result;
+}
+int sub plus_one(int arg) { return arg + 1; }
+auto sub generic_plus_one(int arg) { return arg + 1; }
+# Five eligible sites must exhaust the four-frame budget without changing calls.
+int sub budget_int(code<int(int)> fn, int count) {
+    if (count < 0) {
+        return 0;
+    }
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        result = fn(result);
+        result = fn(result);
+        result = fn(result);
+        result = fn(result);
+        result = fn(result);
+    }
+    return result;
+}
+# A caught exception between hot calls can drain invocation cleanup. The same
+# call site must be usable again, including after an early return or loop break.
+int sub recover_int(code<int(int)> fn, int count) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        result = fn(result);
+        if (i == 3) {
+            try {
+                throw "FRAME-RECOVERY-TEST", "continue with the same callback site";
+            } catch (hash<ExceptionInfo> ex) {
+                expect("FRAME-RECOVERY-TEST", ex.err);
+            }
+        }
+        if (i == 9) {
+            break;
+        }
+    }
+    return result;
+}
 int sub target_int_float(float arg) { return -9223372036854775807 - 1; }
 auto sub generic_int_float(float arg) { return -9223372036854775807 - 1; }
 int sub invoke_int_float(code<int(float)> fn, float arg) {
@@ -86,6 +136,16 @@ bool sub invoke_bool_bool(code<bool(bool)> fn, bool arg) {
 }
 
 for (int round = 0; round < 30; ++round) {
+    expect(round * 5, budget_int(\plus_one(), round));
+    expect(round * 5, budget_int(\generic_plus_one(), round));
+    expect(0, budget_int(\plus_one(), -1));
+    expect(round < 10 ? round : 10, recover_int(\plus_one(), round));
+    expect(round < 10 ? round : 10, recover_int(\generic_plus_one(), round));
+    expect(round ? -9223372036854775807 - 1 : 0, repeat_int_zero(\target_int_zero(), round));
+    expect(round ? -9223372036854775807 - 1 : 0, repeat_int_zero(\generic_int_zero(), round));
+    expect(round ? -9223372036854775807 - 1 : 0,
+        repeat_int_int(\target_int_int(), -9223372036854775807 - 1, round));
+    expect(round ? -9223372036854775807 - 1 : 0, repeat_int_int(\generic_int_int(), round, round));
     expect(-9223372036854775807 - 1, invoke_int_zero(\target_int_zero()));
     expect(-9223372036854775807 - 1, invoke_int_zero(\generic_int_zero()));
     expect(-9223372036854775807 - 1, invoke_int_int(\target_int_int(), -9223372036854775807 - 1));
