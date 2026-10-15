@@ -10685,6 +10685,40 @@ private:
     RuntimeConfigNativeCallHelper helper;
 };
 
+class QoreDeferredNativeClosureStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
+public:
+    QoreDeferredNativeClosureStackLocation(RuntimeConfig& rc, const UserVariantBase* uvb)
+        : name(closureName()), statements(uvb->getStatementBlock()), pgm(uvb->pgm),
+          helper(rc, this, loc, uvb) {
+    }
+    const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+    bool isAOTFrame() const override { return true; }
+    const std::string& getCallName() const override { return name; }
+    qore_call_t getCallType() const override { return CT_USER; }
+    QoreProgram* getProgram() const override { return pgm; }
+    const AbstractStatement* getStatement() const override { return statements; }
+
+private:
+    static const std::string& closureName() {
+        static const std::string name("<anonymous closure>");
+        return name;
+    }
+    const std::string& name;
+    const StatementBlock* statements;
+    QoreProgram* pgm;
+    const QoreProgramLocation* loc = nullptr;
+    RuntimeConfigNativeClosureCallHelper helper;
+};
+
+// Keep the legacy full frame out of the deferred helper's successful stack path.
+static __attribute__((noinline, cold)) int64_t execNativeClosureEagerContext(RuntimeConfig& rc,
+        const UserVariantBase* uvb, QoreAOTContext::NativeIntUnaryClosureEntry entry,
+        int64_t argument, const QoreClosureBase* closure, int* accepted,
+        QoreAOTContext* ctx, ExceptionSink* xsink) {
+    QoreNativeClosureStackLocation frame(rc, uvb, xsink);
+    return *xsink ? 0 : entry(argument, closure, &rc, accepted, ctx, xsink);
+}
+
 static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBase* closure,
         const UserVariantBase* uvb, int64_t argument, int64_t& result, ExceptionSink* xsink) {
     QoreAOTContext* ctx = uvb ? uvb->getCachedAOTContext() : nullptr;
@@ -10721,15 +10755,16 @@ static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBa
     RuntimeConfigNativeObjectHelper context(rc, self, closure->getClassCtx());
     int accepted = 1;
     int64_t value = 0;
-    {
-        QoreNativeClosureStackLocation frame(rc, uvb, xsink);
-        if (!*xsink) {
-            try {
-                value = entry(argument, closure, &rc, &accepted, ctx, xsink);
-            } catch (const QoreJITException&) {
-                // Native stack exceptions already belong to the sink.
-            }
+    static const bool deferred = !std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT");
+    try {
+        if (deferred) {
+            QoreDeferredNativeClosureStackLocation frame(rc, uvb);
+            value = entry(argument, closure, &rc, &accepted, ctx, xsink);
+        } else {
+            value = execNativeClosureEagerContext(rc, uvb, entry, argument, closure, &accepted, ctx, xsink);
         }
+    } catch (const QoreJITException&) {
+        // Native stack exceptions already belong to the sink.
     }
     if (!accepted && !*xsink) {
         // Only bounded pure scalar operations and locked, non-evaluating capture

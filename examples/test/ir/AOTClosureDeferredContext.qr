@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+code<int(int)> sub closureContextPlain() {
+    return int sub(int value) { return value + 17; };
+}
+code<int(int)> sub closureContextCaptured() {
+    int offset = 17;
+    return int sub(int value) { return value + offset; };
+}
+class ClosureContextObject {
+    code<int(int)> make() {
+        int offset = 17;
+        return int sub(int value) { return value + offset; };
+    }
+}
+code<int(int)> sub closureContextObject() {
+    ClosureContextObject object();
+    return object.make();
+}
+int sub closureContextCaller(code<int(int)> callback, int value) { return callback(value); }

@@ -13599,3 +13599,181 @@ in the linked dataset: 7 Pass, 55 N/A, 0 Fail.
 |Credential handling|Pass|Allowlisted runtime paths and environment hashes only
 |Correctness|Pass|Candidate/restored qualification and exact restored executable text verified
 |Remaining 55 checks|N/A|Docs/data-only final diff; each item individually explained in dataset
+
+
+## Deferred scalar-closure context (2026-10-15)
+
+Retain deferred empty variable markers and parse/call context for admitted AOT
+integer closure companions. Five-fork confirmation improves the noncapturing
+closure workload 22.04% versus frozen baseline and 23.48% versus same-runtime
+eager context; captured closures improve 18.67% against either control. Every
+layout improves, with disjoint observed fork ranges. This is a targeted gain,
+not universal non-regression: callback controls and one-element invocations
+have small adverse aggregates described below. Java parity is not reached.
+
+[Complete evidence](results-aot-closure-deferred-context-macos-arm64.json)
+contains all 3765 measurement windows, raw Qore/JMH outputs, source/artifact
+identities, reference grids, compile-only and linked assembly, release/debug
+qualification, the fixture setup failure and test-only follow-up, and the
+individual audit checks. No sample or layout is discarded.
+
+### Mechanism and proof
+
+The existing compiler admits only one bounded straight-line block of at most
+64 instructions: one integer parameter/result, no body locals, arbitrary calls,
+writes, reference evaluation or generic reentry. Captures are read using an
+explicit closure pointer under the existing lock at every source read; repeated
+reads are not coalesced. Every companion already calls the full live stack guard
+before body work. No compiler, serialized metadata or calling ABI change is needed.
+
+Dispatch retains all live Program, debugger, normal-body identity, PC-map,
+signature and pending-error checks plus its physical entry guard. The new
+invocation-owned helper publishes the diagnostic frame without installing empty
+variable boundaries or swapping parse/call context. A failed callee guard
+materializes that state before exception construction; both guards remain.
+Frame removal still waits for diagnostic readers. A speculative capture miss
+destroys the frame before ordinary execution can resume. No closure owner is
+cached or retained, and there is no new heap allocation or caller scratch.
+Eager object/class substitution and optional closure-self context are unchanged.
+The existing closure AOT frame marker is preserved.
+
+`QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT=1` selects the legacy eager
+frame. That diagnostic path is outlined, so its extra call is not treated as
+equivalent to the original binary: the separately frozen runtime is essential.
+The actual dispatch frame grows from 336 to 352 bytes (306 to 352 static
+instructions, plus a 33-instruction cold initialization fragment). Its old
+out-of-line eager constructor/destructor work is removed from successful calls;
+the numbers are not a total-stack saving or a speed prediction. Integer and
+floating callback helpers remain 153 instructions with 80-byte frames, and their
+dispatch wrappers remain five instructions. Address/layout identity or a causal
+explanation for timing variation is not claimed.
+
+### Qualification and measurement protocol
+
+Frozen source is clean `7744259d4`, using the separately qualified restored
+runtime from the preceding rejected-method trial. Candidate release and debug
+each pass 21 files, 54 cases, 12260 assertions, all 64 owned qmods and the 555-result
+IR and AOT reference grids. The new fixture wraps actual compiled closures and
+forces overflow after publication, then verifies error handling, state restoration,
+caller locals/captures across stack-block boundaries, successful subsequent calls,
+pending sinks, readiness misses, foreign Programs and foreign-thread reattachment.
+Existing tests cover mutable/reference/unassigned captures, distinct environments,
+wide integers, effects/fallback, debugger attachment, concurrent mutation/readers,
+private context, destroyed self and shared-module closure lifetime.
+
+The first fixture setup attempted a one-input batch aggregate, which qcc rejects
+before native execution; adding its required second input corrected the fixture.
+After timing, review made padded caller execution explicitly AST and gated only
+the artificial-limit case on availability of a supported native stack view.
+That test-only change passes again in release and debug (one case/18 assertions
+each). The measured production sources and both runtime artifacts remain exactly
+unchanged. All 64 release qmod aliases are restored; unrelated links are untouched.
+Unsupported architectures retain ordinary fixture checks and full production guards.
+These are selected tests, not a full-suite, sanitizer, cross-platform or non-SCU claim.
+
+All measurements use macOS arm64, count4096/seed7, three warmups and three 300-ms
+windows per fresh process unless noted. Each default/sorted/reverse/shuffle487/
+shuffle509 layout uses the exact same executable/object across frozen runtime,
+candidate enabled and candidate runtime-off. All loaded library paths and hashes
+are checked, with 555 reference outputs per configuration. No task build, test,
+profile or evidence analysis overlaps timing. Host frequency/load/thermal state
+is not controlled. Values are whole-workload ns/element, not isolated call latency;
+Qore aggregates are medians of five layout medians of fork means. Positive changes
+are slower. Observed fork ranges are descriptive, not confidence intervals.
+
+### Initial broad screen
+
+Three forks, 13 workloads, randomized block order135797: 585 runs/1755 windows.
+
+|!Kernel|!Frozen|!Enabled|!Eager off|!Change vs frozen|!Change vs off
+|indirect_int_result|6.018|6.308|6.220|+4.83%|+1.42%
+|indirect_float_result|7.337|7.171|7.104|-2.26%|+0.94%
+|dynamic_int_result_call|10.192|10.251|10.283|+0.58%|-0.31%
+|boxed_int_method_effect|84.675|84.793|84.639|+0.14%|+0.18%
+|dynamic_float_result_call|11.251|11.275|11.293|+0.21%|-0.16%
+|boxed_int_method_call|15.628|15.715|15.666|+0.56%|+0.31%
+|boxed_float_method_call|19.025|19.138|19.133|+0.59%|+0.03%
+|boxed_int_method_fallback|30.293|30.076|29.912|-0.72%|+0.55%
+|boxed_float_method_fallback|30.969|31.220|31.142|+0.81%|+0.25%
+|closure_call|25.274|19.497|25.726|-22.86%|-24.21%
+|closure_capture|30.752|25.199|31.491|-18.06%|-19.98%
+|list_build|83.137|84.053|84.126|+1.10%|-0.09%
+|list_mutate|232.403|230.865|234.308|-0.66%|-1.47%
+
+Both closure targets improve in all five layouts with disjoint ranges. Integer
+callbacks initially cost 4.83% in aggregate, with unusually wide fork variation;
+shuffle509 costs 26.71% versus frozen and 21.92% versus off. The on/off ranges
+overlap there, and the kernel does not execute the changed closure path. This
+observation triggered an independent confirmation; it is retained, not explained
+away or silently replaced. Other broad-screen aggregates range from -0.72% to
++1.10% versus frozen, apart from floating callbacks (-2.26%) and closure targets.
+
+### Five-fork confirmation and fresh Java
+
+Five forks, five selected workloads, randomized block order135811: 400 runs/1200
+windows. Both closure targets, both callback controls and the adverse list-build
+control are selected explicitly. The other eight broad-screen workloads do not
+have a new Java comparison. Temurin25.0.2+10/JMH1.37 uses one fresh JVM per
+workload/fork, interleaved with Qore, one thread, `-Xms256m -Xmx256m`, GC profiling,
+matching count/seed/windows and verified DONT_INLINE target hints. Java also passes
+555 reference outputs; its aggregate is the median of five fork means.
+
+|!Kernel|!Frozen|!Enabled|!Eager off|!Change vs frozen|!Change vs off|!Java|!Enabled/Java
+|indirect_int_result|6.029|6.105|6.160|+1.26%|-0.89%|1.883|3.24x
+|indirect_float_result|7.192|7.337|7.271|+2.01%|+0.91%|2.686|2.73x
+|closure_call|25.271|19.701|25.747|-22.04%|-23.48%|1.663|11.85x
+|closure_capture|31.410|25.545|31.412|-18.67%|-18.68%|1.738|14.70x
+|list_build|84.335|84.332|84.304|-0.00%|+0.03%|2.594|32.51x
+
+Noncapturing closure gains are 21.90-27.70% versus frozen and 23.39-24.65% versus
+off across layouts. Captured gains are 15.68-19.46% and 17.41-20.30%, respectively.
+Every closure comparison has disjoint observed fork ranges. The large integer
+callback anomaly does not repeat: its aggregate costs 1.26% versus frozen and
+improves 0.89% versus off; all layout ranges overlap. Floating callbacks cost
+2.01% versus frozen and 0.91% versus off, also with overlap in every layout.
+List construction is essentially unchanged. These controls support targeted
+retention, not a claim that non-target costs are zero or statistically insignificant.
+
+### Short invocations
+
+Three forks, two warmups, three 200-ms windows, seed7, order135823, counts1/17/1024,
+all five layouts and three runtime configurations: 270 runs/810 windows. These use
+the already verified initial-screen executables with no recompilation.
+
+|!Kernel|!Count|!Frozen|!Enabled|!Eager off|!Change vs frozen|!Change vs off
+|closure_call|1|2039.282|2059.304|2063.065|+0.98%|-0.18%
+|closure_call|17|145.755|143.339|148.795|-1.66%|-3.67%
+|closure_call|1024|27.119|21.633|27.774|-20.23%|-22.11%
+|closure_capture|1|2087.122|2135.683|2130.597|+2.33%|+0.24%
+|closure_capture|17|151.679|148.722|154.805|-1.95%|-3.93%
+|closure_capture|1024|32.880|27.020|32.916|-17.82%|-17.91%
+
+One-element workloads are dominated by surrounding setup and show no gain;
+their adverse frozen comparisons are retained. Gains grow with repeated calls,
+reaching roughly18-20% at1024 elements. No single-call latency or Java parity is
+inferred from amortized results.
+
+### Next work
+
+Inspect the remaining eager object/class/closure-self setup and repeated immutable
+signature admission, then the full callee guard call and capture lookup/locking.
+Only move work after proving that the complete body cannot observe it; retain
+live debugger/Program/body state, overflow behavior, capture mutation and reader
+synchronization. Short closure construction/setup also deserves a separate profile.
+Broader direct/typed/nullable/monomorphic AOT comparisons remain pending. There is
+no performance-ceiling claim.
+
+### Audit summary
+
+All 62 audit-changes items are individually recorded with evidence in the dataset:
+21 Pass, 41 N/A and 0 Fail. The final test-only follow-up is included in the audit.
+
+|!Check group|!Status|!Evidence
+|New-file copyright and test conventions|Pass|2026/MIT; modern, executable fixtures; in-repo dependencies
+|Filesystem/network and fixture I/O|Pass|No production I/O added; isolated temporary test compilation
+|Cancellation and blocking|Pass|Bounded new loops, checked stack traversal, unchanged reader protocol
+|Implementation, exception and thread safety|Pass|Complete RAII path; deferred rollback/restoration; no retained closure owner
+|Type safety and input/error handling|Pass|Existing scalar ABI/proof and all live guards retained; real-callee failure tests
+|Performance and correctness|Pass|All 3765 windows replayed; release/debug and supplemental tests; adverse controls retained
+|Documentation and credential handling|Pass|Strict Qore tables; explicit limitations; paths/hashes only in archived environments
+|Module, DataProvider, JNI, QPP and sandbox-manager checks|N/A|No applicable registration, dependency, method or production I/O change

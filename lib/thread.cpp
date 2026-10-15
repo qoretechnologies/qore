@@ -2410,6 +2410,19 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
     // As for callback-v3, publish before the guard so overflow materializes it.
 }
 
+__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(
+        RuntimeConfig& rc, QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        const UserVariantBase* uvb)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), closure_uvb(uvb),
+          previous(td->native_leaf_context), state(ContextState::DeferredMarkers), target_kind(TargetKind::Closure) {
+    assert(uvb && td->current_pgm == uvb->pgm);
+    call_loc = td->runtime_loc ? td->runtime_loc : uvb->getUserSignature()->getParseLocation();
+    td->native_leaf_context = this;
+    old_stack = publish_pushed_stack_location(td, stack_loc);
+    // No allocation or reentry here. The closure-v1 callee checks its live
+    // stack before scalar work; a failed guard materializes this context.
+}
+
 // Never pull exception-only context traffic back into the successful call path.
 __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() {
     if (state == ContextState::Materialized) {
@@ -2428,6 +2441,10 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
     if (target_kind == TargetKind::Method) {
         uvb = method_context->cache.native_scalar_uvb;
         pgm = method_context->cache.native_scalar_program;
+        parse_loc = uvb->getUserSignature()->getParseLocation();
+    } else if (target_kind == TargetKind::Closure) {
+        uvb = closure_uvb;
+        pgm = uvb->pgm;
         parse_loc = uvb->getUserSignature()->getParseLocation();
     } else {
         uvb = callback_cache->uvb;

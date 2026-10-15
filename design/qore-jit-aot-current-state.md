@@ -2370,3 +2370,41 @@ nor a performance ceiling has been reached.
 
 The final docs/data-only audit records 7 Pass, 55 N/A and 0 Fail across all
 62 checks, with every measured window independently replayed.
+
+
+## Scalar-closure context deferral retained (2026-10-15)
+
+The existing bounded integer closure-v1 compiler proof now permits deferred empty
+local/capture boundaries and parse/call context. Runtime dispatch still checks
+live Program/debugger/body/map/signature state and its physical stack boundary;
+the actual native callee checks its own boundary before scalar work. Overflow
+materializes context before raising. Per-read capture locking, eager object/class
+and optional closure-self context, diagnostic publication/removal and reader waits
+are unchanged. No new ABI, compiler lowering, closure ownership or caller storage
+is introduced. Previously compiled eligible AOT images benefit from the runtime
+change. This is not a measured speedup for ordinary IR/JIT closure execution.
+
+Five-fork/five-layout confirmation: noncapturing closures go from 25.271 to 19.701
+ns/element (-22.04% frozen, -23.48% same-runtime eager); captured closures go from
+31.410 to 25.545 (-18.67% both). All closure layout ranges are disjoint. Fresh Java
+is 1.663/1.738 ns/element, leaving 11.85x/14.70x workload gaps. These are amortized
+whole-workload figures, not isolated call latency. Integer/floating callback
+controls cost 1.26%/2.01% versus frozen with overlapping ranges; the initial integer
+4.83% aggregate and 26.71% adverse layout are preserved. One-element closure
+workloads do not benefit (+0.98%/+2.33% frozen).
+
+Release/debug each pass 21 files, 54 cases and 12260 assertions, 64 qmods and the
+555-result IR/AOT grids.
+The new fixture tests actual native entries, forced post-publication overflow,
+caller-state restoration, pending/readiness misses and foreign Program/thread use.
+A test-only portability/explicit-AST follow-up passes 18 assertions in each build
+without changing measured runtime artifacts; all 64 release qmod aliases are restored.
+All 3765 windows, initial setup failure, adverse results and artifact identities are
+in `bench/runtime-comparison/results-aot-closure-deferred-context-macos-arm64.json`.
+The full 62-item audit accompanies the retained change: 21 Pass, 41 N/A and 0 Fail.
+
+Next: prove whether eager closure object/class/self context and immutable signature
+checks can move off the hot path, then evaluate callee-guard and capture costs.
+Each step requires frozen and same-runtime controls, observability/fallback tests
+and fresh measurements. Closure setup at short counts and the broader call matrix
+remain open. Neither Java parity nor a performance ceiling has been reached.

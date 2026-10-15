@@ -251,13 +251,14 @@ private:
 //! Deferred context for a prepared non-reentrant native scalar callee.
 /** Keep as the last member of its published stack location. The callee may
     evaluate native scalar operations, perform bounded locked member probes
-    through explicit receiver/class arguments, or enter the full stack guard.
+    through explicit receiver/class arguments, read scalar captures through an
+    explicit closure argument, or enter the full stack guard.
     Member probes cannot allocate, release ownership, reenter Qore, or inspect
     the deferred TLS/local context. An effect-prefix miss must unpublish this
     borrowed frame before its ordinary cold continuation can enter generic code.
     Diagnostic stack publication is always retained. Empty local/closure
     markers are private to this thread and unobservable by the admitted body. The
-    integer-result and reusable callback paths materialize them before any stack
+    integer-result, reusable callback, and scalar closure paths materialize them before any stack
     exception. Ordinary automatic floating callback frames retain eager markers after
     measured regressions from deferring them without persistent frame storage.
     Requires the dispatch helper's entry guard and a guarded native callee entry:
@@ -283,6 +284,9 @@ protected:
     // Initialize an inactive callback context owned by one native invocation.
     DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, const QorePreparedFunctionRefV3& cache);
     DLLLOCAL void enterReusableCallback(QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc);
+    // Compiler-proven scalar closure-v1 body; both dispatch and callee guard the live stack.
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
+        const QoreProgramLocation*& call_loc, const UserVariantBase* closure_uvb);
     // Construct only through the policy-specific RAII wrapper below.
     DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
         const QoreProgramLocation*& call_loc, const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink,
@@ -306,6 +310,7 @@ private:
     union {
         const QorePreparedFunctionRefV3* callback_cache;
         RuntimeConfigNativeMethodContext* method_context;
+        const UserVariantBase* closure_uvb;
     };
     RuntimeConfigNativeLeafCallHelper* previous;
     const QoreStackLocation* old_stack;
@@ -318,9 +323,26 @@ private:
     uintptr_t old_sp;
     enum class ContextState : uint8_t { EagerMarkers, DeferredMarkers, Materialized };
     ContextState state;
-    enum class TargetKind : uint8_t { Callback, Method };
+    enum class TargetKind : uint8_t { Callback, Method, Closure };
     TargetKind target_kind;
     bool swapped; //!< Initialized only when context is materialized
+};
+
+//! Deferred scalar-closure context, owned entirely by the current invocation.
+class RuntimeConfigNativeClosureCallHelper final : public RuntimeConfigNativeLeafCallHelper {
+public:
+    /** Publish a compiler-proven, bounded scalar closure-v1 frame.
+        @param rc current thread's live invocation context
+        @param frame fully initialized diagnostic frame; this helper must be its last member
+        @param loc caller-location slot initialized before publication
+        @param uvb borrowed closure variant, alive until unpublication and reader completion
+        @note Dispatch and callee guards remain mandatory. Object/class/self context is managed separately.
+    */
+    __attribute__((always_inline)) RuntimeConfigNativeClosureCallHelper(RuntimeConfig& rc,
+            QoreStackLocation* frame, const QoreProgramLocation*& loc, const UserVariantBase* uvb)
+            : RuntimeConfigNativeLeafCallHelper(rc, frame, loc, uvb) {}
+    //! Restore materialized state and unpublish, waiting for diagnostic readers before destruction.
+    __attribute__((always_inline)) ~RuntimeConfigNativeClosureCallHelper() { restoreDeferred(); }
 };
 
 //! Inactive between calls; a separate per-call scope must pair enter() and leave().
