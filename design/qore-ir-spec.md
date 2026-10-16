@@ -224,3 +224,16 @@ changes. AOT artifacts require a matching runtime and recompilation.
 PHIs, loop overwrites, exceptional exits and serialized closures in AST, IR,
 JIT, tiered and AOT O0/O3 modes. Native tests verify exact reference counts on
 return, non-return and error exits, including pooled frame reuse.
+
+### Constant-local proofs include fused accesses
+
+Fixed-aggregate scalarization must not infer a constant local from a partial
+LoadLocal/StoreLocal inventory. `AddAssignLocalInt` reads its source and reads and
+writes its target; `IncrementLocalInt` reads and writes its local;
+`BranchIfLtLocalInt` reads both comparison locals. These references live in
+instruction metadata rather than SSA operands. Exclude all such locals from the
+constant-local shortcut, including dead-selector/initializer removal. A fused
+read keeps an initializer live even if there is no explicit LoadLocal; a fused
+write invalidates a previously constant selector. The existing native-local
+definite-assignment proof can optimize the preserved initialization normally.
+`IRScalarFusedLocals.qtest` covers both correctness and native counter selection.

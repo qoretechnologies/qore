@@ -2345,6 +2345,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     std::unordered_map<const QoreIRInstruction*, InstructionPosition> positions;
     std::unordered_map<const LocalVar*, std::vector<InstructionPosition>> local_accesses;
     std::unordered_map<const LocalVar*, std::vector<InstructionPosition>> local_path_operations;
+    // Fused instructions access locals through metadata, not LoadLocal/StoreLocal operands.
+    // Their reads keep initializers live and their writes invalidate constant selectors.
+    std::unordered_set<const LocalVar*> fused_local_accesses;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
         for (size_t offset = 0; offset < func.blocks[block_id]->instructions.size(); ++offset) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -2368,6 +2371,22 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 }
             }
             switch (inst->opcode) {
+                case QoreIROpcode::AddAssignLocalInt: {
+                    const auto* add = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+                    fused_local_accesses.insert(add->target);
+                    fused_local_accesses.insert(add->source);
+                    break;
+                }
+                case QoreIROpcode::IncrementLocalInt:
+                    fused_local_accesses.insert(
+                        static_cast<const QoreIRIncrementLocalIntInstruction*>(inst)->local);
+                    break;
+                case QoreIROpcode::BranchIfLtLocalInt: {
+                    const auto* branch = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst);
+                    fused_local_accesses.insert(branch->lhs);
+                    fused_local_accesses.insert(branch->rhs);
+                    break;
+                }
                 case QoreIROpcode::LValuePathAssign:
                 case QoreIROpcode::LValuePathCompound:
                 case QoreIROpcode::LValuePathUnary:
@@ -2413,6 +2432,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 || !func.ir_only_locals.count(local_key)
                 || func.ast_referenced_locals.count(local_key)
                 || func.lvalue_path_locals.count(local_key)
+                || fused_local_accesses.count(local)
                 || local_path_operations.count(local)) {
             continue;
         }

@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+int sub nonzeroStart(int count, int value) {
+    int sum = 0;
+    for (int i = 7; i < count; ++i) {
+        list<int> pair = (value, value + 1);
+        sum += pair[0];
+    }
+    return sum;
+}
+int sub negativeStart(int count, int value) {
+    int sum = 0;
+    for (int i = -3; i < count; ++i) {
+        list<int> pair = (value, value + 1);
+        sum += pair[0];
+    }
+    return sum;
+}
+int sub localBound(int value) {
+    int bound = 3;
+    int sum = 0;
+    for (int i = 0; i < bound; ++i) {
+        list<int> pair = (value, value + 1);
+        sum += pair[0];
+    }
+    return sum;
+}
+int sub addSource(int value) {
+    int step = 7;
+    int sum = 2;
+    list<int> pair = (value, value + 1);
+    sum += step;
+    return sum + pair[0];
+}
+int sub incrementIndex(int value) {
+    int index = 0;
+    list<int> pair = (value, value + 1);
+    ++index;
+    return pair[index];
+}
+int sub decrementIndex(int value) {
+    int index = 1;
+    list<int> pair = (value, value + 1);
+    --index;
+    return pair[index];
+}
+int sub addIndex(int value, int step) {
+    int index = 0;
+    list<int> pair = (value, value + 1);
+    index += step;
+    return pair[index];
+}
+int sub wideStart(int limit, int value) {
+    list<int> pair = (value, value + 1);
+    for (int i = 140737488355330; i < limit; ++i) {
+        return i + pair[0];
+    }
+    return pair[1];
+}
+int sub wideCounter(int limit, int value) {
+    int visits = 0;
+    for (int i = 140737488355330; i < limit; ++i) {
+        list<int> pair = (value, value + 1);
+        visits += pair[0];
+        if (visits >= 2) {
+            break;
+        }
+    }
+    return visits;
+}
+
+int sub hashLoop(int count, int value) {
+    int sum = 0;
+    for (int i = 7; i < count; ++i) {
+        hash<string, int> values = {"a": value, "b": value + 1};
+        sum += values.a;
+    }
+    return sum;
+}
+int sub capturedCounter(int count, int value) {
+    int i = 7;
+    int sum = 0;
+    code<int()> next = int sub () { return ++i; };
+    while (i < count) {
+        list<int> pair = (value, value + 1);
+        sum += pair[0];
+        next();
+    }
+    return sum;
+}
+int sub referencedCounter(int count, int value) {
+    int i = 7;
+    reference<int> current = \i;
+    int sum = 0;
+    while (i < count) {
+        list<int> pair = (value, value + 1);
+        sum += pair[0];
+        ++current;
+    }
+    return sum;
+}
+int sub caughtCounter(int count, int value) {
+    int sum = 0;
+    try {
+        for (int i = 7; i < count; ++i) {
+            list<int> pair = (value, value + 1);
+            sum += pair[0];
+        }
+        throw "EXPECTED", "counter cleanup";
+    } catch (hash<auto> ex) {
+        if (ex.err != "EXPECTED") {
+            rethrow;
+        }
+    }
+    return sum;
+}
+
+sub equal(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "MISMATCH", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+foreach int value in ((-13, -1, 0, 1, 17)) {
+    foreach int count in ((-5, -3, -2, 0, 2, 6, 7, 8, 10, 101)) {
+        int expected = count > 7 ? (count - 7) * value : 0;
+        equal(expected, nonzeroStart(count, value));
+        equal(expected, hashLoop(count, value));
+        equal(expected, capturedCounter(count, value));
+        equal(expected, referencedCounter(count, value));
+        equal(expected, caughtCounter(count, value));
+        equal(count > -3 ? (count + 3) * value : 0, negativeStart(count, value));
+    }
+    equal(3 * value, localBound(value));
+    equal(value + 9, addSource(value));
+}
+foreach int value in ((-9223372036854775807 - 1, -140737488355329, -1, 0, 1,
+        140737488355328, 9223372036854775806)) {
+    equal(value + 1, incrementIndex(value));
+    equal(value, decrementIndex(value));
+    equal(value, addIndex(value, 0));
+    equal(value + 1, addIndex(value, 1));
+}
+equal(140737488355331, wideStart(140737488355331, 1));
+equal(2, wideStart(140737488355330, 1));
+equal(1, wideCounter(140737488355331, 1));
+equal(2, wideCounter(140737488355332, 1));
+equal(0, wideCounter(140737488355330, 1));
+printf("fused local scalarization checks passed\n");

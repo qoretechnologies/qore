@@ -14833,3 +14833,116 @@ macOS. This is not full-suite, sanitizer, cross-platform, startup or production
 qualification. IR/JIT performance is not timed. There is no fresh Java comparison;
 do not combine current Qore values with an older Java epoch to make a new ratio.
 Java parity and a global performance ceiling remain open.
+
+## Fused-local visibility: native loop execution restored (optimized AOT)
+
+The next checkpoint fixes the constant-local cleanup issue identified above.
+Fused add-assignment, increment and less-than-branch instructions refer to locals
+through metadata. The fixed-aggregate scalarizer now excludes those locals from
+its constant-local shortcut, preserving live initializers and preventing changing
+indices from being folded to stale constants. Existing native definite-assignment
+and context-independence proofs then apply. No runtime helper, opcode, ABI,
+reflection/ownership rule or cancellation behavior is changed.
+
+Before is frozen validated post-merge `38856b968`, including develop `6f46bbc9b`.
+The develop performance reference remains frozen optimized `347db1015`, not the
+current target tip. All runtimes are Release `-O3 -DNDEBUG`; binaries `qcc -O3`.
+Three fixed layouts, 4096 items, seed 7, three warmup and three measured 300 ms
+windows per fork, randomized interleaved blocks, no concurrent owned analysis,
+build, test or profile. Every fork contributes its mean of three windows; each
+aggregate is the median of the three layout medians. Values are whole-workload
+ns/item, not isolated call latency. Observed ranges are not confidence intervals.
+
+Three-fork screen: 324 runs, 972 measured windows.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Develop ns/item|!Time change|!Versus develop
+|direct_call|1.541|1.550|7.109|+0.60%|-78.19%
+|indirect_call|6.833|6.764|230.909|-1.01%|-97.07%
+|closure_call|20.789|20.524|139.807|-1.27%|-85.32%
+|closure_capture|27.689|26.653|158.576|-3.74%|-83.19%
+|list_build|90.740|90.600|110.580|-0.15%|-18.07%
+|list_mutate|200.666|200.992|208.777|+0.16%|-3.73%
+|temporary_list|18.290|1.637|141.034|-91.05%|-98.84%
+|temporary_hash|330.544|331.346|327.146|+0.24%|+1.28%
+|csv_report|976.686|979.258|1108.788|+0.26%|-11.68%
+|object_orders|1883.475|1902.799|2137.055|+1.03%|-10.96%
+|callback_pipeline|88.086|87.779|302.108|-0.35%|-70.94%
+|text_index|1485.995|1492.817|1733.130|+0.46%|-13.87%
+
+Five-fork confirmation of all twelve workloads: the same before/candidate artifact
+pairs, no relink or layout search, 360 runs, 1080 measured windows. Develop was
+not rerun in this epoch; do not pool epochs or construct cross-epoch ratios.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Time change
+|direct_call|1.561|1.561|-0.02%
+|indirect_call|6.805|6.866|+0.89%
+|closure_call|20.843|20.582|-1.25%
+|closure_capture|27.595|26.561|-3.75%
+|list_build|90.696|89.838|-0.95%
+|list_mutate|201.761|201.180|-0.29%
+|temporary_list|18.351|1.639|-91.07%
+|temporary_hash|332.296|330.832|-0.44%
+|csv_report|974.471|979.782|+0.54%
+|object_orders|1900.222|1901.616|+0.07%
+|callback_pipeline|87.650|85.939|-1.95%
+|text_index|1471.823|1485.380|+0.92%
+
+Temporary-list time falls **91.07% (11.20x faster)**. Default/reverse/shuffled
+layout medians improve 91.11% / 91.11% / 90.96%; every candidate observed range
+is disjoint and faster in both epochs. Both temporary-list entry points still
+contain zero list-construction calls, and their runtime counter-update call count
+falls from one to zero in all layouts. The restored initializer enables native
+counter storage and restores context-independent fast-entry eligibility. This
+supports the combined lowering mechanism, not attribution of unrelated changes.
+
+Captured closures improve 3.75%, with disjoint faster ranges in all three layouts
+in both epochs; ordinary closures improve 1.25% and callback pipeline 1.95% in
+confirmation. Their causal mechanism is not isolated. Do not treat this as proof
+that the preceding snapshot checkpoint's layout-specific slowdown is resolved.
+
+Adverse findings remain: confirmation indirect calls +0.89%, CSV +0.54%, text
+index +0.92%, object orders +0.07%; their layout ranges overlap. List mutation's
+shuffled layout is +0.73% despite the -0.29% aggregate. The screen had three
+pairs with disjoint slower ranges: direct calls shuffled +1.06%, list mutation
+default +1.53%, temporary hash shuffled +4.88%. None repeats as a disjoint adverse
+confirmation pair; that does not establish non-regression. Temporary hash is
+still +1.28% versus develop in the screen. Host load, frequency and thermals are
+uncontrolled; all 2052 windows are retained and no timing run failed.
+
+Baseline Release/Debug each passed 21 selected files, 28 cases and 4973 harness
+assertions; candidate each passes 22 files, 29 cases and 5041 assertions. Every
+qualification rebuilds 64 qmods and passes 555 reference checks per IR/AOT mode.
+Debug native checks pass 1082/1082 in both bounded-pair control states, before and
+after. Upstream abrupt socket-drop regression passes four assertions in Debug
+and is skipped in Release. Each Debug wrapper restores exactly 64 owned Release
+module aliases and preserves unrelated aliases.
+
+The targeted baseline probe is intentionally separate from passing benchmark
+output checks: eight of nine cases are wrong in IR/JIT/tiered/AOT O0/O3, while
+AST and scalarization-disabled controls are correct. It covers nonzero/negative
+starts, constant bounds, fused addition, changing selectors and a bounded wide
+counter. Candidate gives the expected result in every mode/control. The new test
+has 343 expected-value checks per execution and 68 harness assertions, including
+captured/referenced counters, exceptional cleanup, signed integer boundaries,
+AOT O0/O3, strip-source, native-local-disabled/SSA-disabled controls, native EH,
+no-debug and split compilation. It also checks allocation elimination and native
+counter selection directly.
+
+The first benchmark preparation stopped at the strict symbol-inventory check:
+the correction restores temporaryList's original context-independent fast contract
+`h3df57e4032f601e3`, replacing `hfb57ab5215081003`. Candidate therefore uses the
+original parent order files; before retains the prior one-name mapping. Actual
+function order is verified for every nondefault layout, and no entry was moved.
+The failed preparation was not timed and remains in the evidence.
+
+`results-aot-fused-local-macos-arm64.json` records both epochs and every window,
+source/binary provenance, qualification, probes, disassembly, preparation history,
+drivers and the full audit. Linux-only RSS checks are skipped on macOS. This is
+not full-suite, sanitizer, cross-platform, startup or production qualification.
+No fresh Java timing or IR/JIT performance measurement is claimed; Java parity
+and a global performance ceiling remain unestablished.
+
+Next inspect remaining native-loop overhead and a possible semantics-preserving
+rearrangement of cancellation flag polling, then generic trim/builtin-call setup.
+Require independent proof, controls and before/after measurement for each. Refresh
+paired optimized Java/develop numbers at a stable checkpoint.

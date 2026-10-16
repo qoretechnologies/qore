@@ -2781,3 +2781,54 @@ analysis, add regressions, then measure whether the counter becomes native.
 Do not relax reflective-local or boxed-value ownership checks. Generic trim
 setup remains a subsequent target. No fresh Java ratio, full-suite certification
 or global performance ceiling is established.
+
+### Fused-local visibility restores native loop execution
+
+The counter issue above is fixed by including the metadata-only local accesses
+of AddAssignLocalInt, IncrementLocalInt and BranchIfLtLocalInt in the scalarizer's
+constant-local eligibility check. Their locals are excluded from that shortcut.
+This preserves live initializers and prevents changing indices from being
+substituted as constants. There is no new runtime helper, opcode or ABI, and no
+relaxation of reflection, ownership, exception or cancellation checks.
+
+The post-merge baseline `38856b968` includes develop `6f46bbc9b`. It reproduces
+eight wrong results in nine targeted probes in IR/JIT/tiered and AOT O0/O3; AST
+and disabled-scalarization controls are correct. The candidate fixes all probes.
+Release/Debug each pass 22 selected files, 29 cases, 5041 assertions, 555 reference
+checks per IR/AOT and 64 qmod rebuilds. Native checks remain 1082/1082 enabled and
+disabled. The new fixture checks 343 expected values and 68 harness assertions,
+including captures/references, exceptional cleanup, boxed-width values, changing
+indices, native-local-disabled controls, split, no-debug and source-stripped AOT.
+Upstream's abrupt socket-drop regression passes four assertions in Debug
+(skipped in Release); both Debug wrappers restore exactly 64 Release aliases.
+
+Optimized AOT confirmation: temporary list **18.351 -> 1.639 ns/item**, **91.07%
+less time (11.20x faster)**. All three layouts have disjoint faster ranges in both
+screening and confirmation. The initializer now satisfies the existing native
+definite-assignment proof; both temporary-list entry points retain zero list
+allocations and remove their runtime counter-update call. Context-independent
+fast-entry eligibility is restored too, restoring its original contract symbol
+and original predeclared order-file entry. No function is reordered.
+
+Confirmation direct calls are unchanged (1.561 ns/item); indirect calls are
++0.89% (6.866), ordinary closures -1.25% (20.582), captured closures -3.75%
+(26.561). The closure movement's cause is not isolated. Retain adverse CSV
++0.54%, text index +0.92%, object orders +0.07%; their observed ranges overlap,
+which does not prove non-regression. Three disjoint adverse screen layout pairs
+do not repeat as disjoint adverse confirmation pairs. Temporary hash remains
++1.28% versus frozen optimized develop in the screen.
+
+All 2052 windows, before/after source/artifact provenance, qualifications,
+reproducers, failed symbol-inventory preparation and audit are recorded in
+`bench/runtime-comparison/results-aot-fused-local-macos-arm64.json`; full numbers
+are in that directory's `RESULTS.md`. Runtimes are Release -O3/NDEBUG and binaries
+qcc -O3. Values are whole-workload rates, not call latency. The screen's develop
+reference is still `347db1015`, not the current target tip. No fresh Java result
+or IR/JIT timing is claimed; do not manufacture a ratio across timing epochs.
+
+Next inspect residual native-loop overhead, including whether cancellation flag
+polling can be rearranged without changing checks or semantics, then generic
+trim/builtin-call setup. Each needs independent proof and measured controls.
+Refresh paired optimized Java/develop measurements at a stable checkpoint.
+Selected tests are not full-suite, sanitizer or cross-platform certification;
+Java parity and a global performance ceiling remain open.
