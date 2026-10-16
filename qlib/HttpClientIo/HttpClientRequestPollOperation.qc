@@ -194,6 +194,8 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
         *HttpClientConnection tracked;
         #! Failed connection attempts
         int failures = 0;
+        #! The decisions to send the request again after a transport error; see HttpClientConnectionManager
+        hash<HttpClientResendInfo> resend();
         #! The connection readiness notifier
         *EventNotifier conn_notifier;
         #! True if @ref conn_notifier was signaled by this object
@@ -352,16 +354,28 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
     */
     *hash<SocketPollInfo> continuePoll() {
         AutoLock al(m);
-        try {
-            return continuePollIntern();
-        } catch (hash<ExceptionInfo> ex) {
-            cancelStream();
-            state = ST_ABORTED;
-            if (promise) {
-                rejectIntern(translateError(ex));
-                return;
+        while (True) {
+            try {
+                return continuePollIntern();
+            } catch (hash<ExceptionInfo> ex) {
+                # a request that failed after it got a stream, before any of its response was handed over, is sent
+                # again on another connection if the connection manager decides so, as for its synchronous
+                # requests: for example a request that the server refused without processing it, or one that failed
+                # on a connection that closed; failed connection attempts are bounded in the connecting state
+                if (stream && !done && rf
+                        && mgr.resendRequest(rf.getOrigin(), rf.getMethod(), stream, ex, \resend)) {
+                    cancelStream();
+                    resendRequest();
+                    continue;
+                }
+                cancelStream();
+                state = ST_ABORTED;
+                if (promise) {
+                    rejectIntern(translateError(ex));
+                    return;
+                }
+                raiseError(ex);
             }
-            raiseError(ex);
         }
     }
 

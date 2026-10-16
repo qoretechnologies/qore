@@ -3989,9 +3989,16 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
             auto sit = session->streams_.find(stream_id);
             if (sit != session->streams_.end() && sit->second->error_message.empty()) {
                 char buf[128];
-                snprintf(buf, sizeof(buf),
-                    "peer reset stream (HTTP/3 error code 0x%llx)",
-                    (unsigned long long)app_error_code);
+                if (!session->is_server_ && app_error_code == NGHTTP3_H3_REQUEST_REJECTED) {
+                    // the peer did not process the request (RFC 9114 section 4.1.1), so it can be sent again
+                    snprintf(buf, sizeof(buf), "the peer rejected the request on stream %lld without processing it "
+                        "(H3_REQUEST_REJECTED)", (long long)stream_id);
+                    sit->second->request_rejected = true;
+                } else {
+                    snprintf(buf, sizeof(buf),
+                        "peer reset stream (HTTP/3 error code 0x%llx)",
+                        (unsigned long long)app_error_code);
+                }
                 sit->second->error_message = buf;
             }
             // This is the only place a peer STOP_SENDING becomes visible: ngtcp2
@@ -5352,7 +5359,33 @@ int QuicSession::h3ShutdownCallback(nghttp3_conn* /* conn */, int64_t id,
     // write is safe only because the caller holds the lock.
     session->goaway_received_.store(true, std::memory_order_release);
     session->goaway_max_stream_id_ = id;
+    if (!session->is_server_) {
+        session->rejectRequestsBeyondGoaway(id);
+    }
     return 0;
+}
+
+void QuicSession::rejectRequestsBeyondGoaway(int64_t goaway_id) {
+    // the peer does not process the requests on this client's bidirectional streams from the GOAWAY's stream ID on
+    // (RFC 9114 section 5.2), so they end now as rejected, as nghttp2 closes them with REFUSED_STREAM; otherwise they
+    // waited for the connection to close and failed with an error that does not tell that they can be sent again
+    std::vector<int64_t> rejected;
+    for (auto& [stream_id, stream] : streams_) {
+        if (stream_id >= goaway_id && (stream_id & 0x3) == 0 && !stream->body_complete && !stream->is_connect) {
+            rejected.push_back(stream_id);
+        }
+    }
+    for (int64_t stream_id : rejected) {
+        auto it = streams_.find(stream_id);
+        if (it->second->error_message.empty()) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "the peer's GOAWAY excludes stream %lld (stream ID %lld or above is not "
+                "processed)", (long long)stream_id, (long long)goaway_id);
+            it->second->error_message = buf;
+        }
+        it->second->request_rejected = true;
+        markStreamComplete(stream_id);
+    }
 }
 
 void QuicSession::setStreamInputStream(int64_t stream_id, InputStream* is, ExceptionSink* xsink) {

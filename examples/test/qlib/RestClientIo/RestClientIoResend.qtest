@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A request with a call-local timeout, an async request, and a request of restDoRequestWithRetry() are sent with an
+    async request operation, which sent a request only once: a request that the server refused without processing
+    it, or one whose connection failed, failed where restDoRequest(), which uses the connection manager's request(),
+    sends it again.  An embedding request refused on an HTTP/3 connection that the server had sent GOAWAY on failed a
+    Qorus design turn this way.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../RawHttp2TestServer.qm
+
+%exec-class RestClientIoResendTest
+
+public class RestClientIoResendTest inherits QUnit::Test {
+    constructor() : Test("RestClientIoResendTest", "1.0") {
+        addTestCase("a refused request with a timeout is sent again", \refusedWithTimeoutTest());
+        addTestCase("a refused async request is sent again", \refusedAsyncTest());
+        addTestCase("a request with a timeout that GOAWAY excludes is sent again on a new connection",
+            \goawayExcludedWithTimeoutTest());
+        set_return_value(main());
+    }
+
+    #! Runs the request in the background; the response or the error is pushed on the returned queue
+    private Queue inBackground(code<auto()> request) {
+        Queue q();
+        background sub () {
+            try {
+                q.push(request());
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+        return q;
+    }
+
+    #! Returns the response from the queue or fails with the error it got
+    private hash<auto> getResponse(Queue q) {
+        auto rv = q.get(20000);
+        if (rv.fullType() == "hash<ExceptionInfo>") {
+            throw rv.err, rv.desc, rv.arg;
+        }
+        return rv;
+    }
+
+    private RestClientIo getClient(RawHttp2Listener srv) {
+        return new RestClientIo({
+            "url": srv.getUrl(),
+            "data": "json",
+            "protocol": "h2",
+            "connect_timeout": 10s,
+            "timeout": 20s,
+        });
+    }
+
+    refusedWithTimeoutTest() {
+        RawHttp2Listener srv();
+        on_exit srv.close();
+        RestClientIo rest = getClient(srv);
+
+        Queue q = inBackground(auto sub () {
+            return rest.restDoRequestWithTimeout("POST", "/embed", {"input": "text"}, NOTHING, 20000);
+        });
+        RawHttp2Connection conn = srv.accept();
+        on_exit conn.close();
+        # REFUSED_STREAM: the request was not processed, so it is sent again whatever its method
+        conn.rstStream(conn.readRequest(), RefusedStream);
+        conn.respond(conn.readRequest(), "{\"result\":\"second\"}", "application/json");
+        hash<auto> resp = getResponse(q);
+        assertEq(200, resp.status_code);
+        assertEq({"result": "second"}, resp.body);
+    }
+
+    refusedAsyncTest() {
+        RawHttp2Listener srv();
+        on_exit srv.close();
+        RestClientIo rest = getClient(srv);
+
+        Queue q = inBackground(auto sub () {
+            return rest.restDoRequestAsync("POST", "/embed", {"input": "text"}).get(20000);
+        });
+        RawHttp2Connection conn = srv.accept();
+        on_exit conn.close();
+        conn.rstStream(conn.readRequest(), RefusedStream);
+        conn.respond(conn.readRequest(), "{\"result\":\"second\"}", "application/json");
+        hash<auto> resp = getResponse(q);
+        assertEq(200, resp.status_code);
+        assertEq({"result": "second"}, resp.body);
+    }
+
+    goawayExcludedWithTimeoutTest() {
+        RawHttp2Listener srv();
+        on_exit srv.close();
+        RestClientIo rest = getClient(srv);
+
+        Queue q = inBackground(auto sub () {
+            return rest.restDoRequestWithTimeout("POST", "/embed", {"input": "text"}, NOTHING, 20000);
+        });
+        RawHttp2Connection conn = srv.accept();
+        on_exit conn.close();
+        conn.readRequest();
+        # last stream ID 0: the request was not processed
+        conn.goaway(0);
+        RawHttp2Connection conn2 = srv.accept();
+        on_exit conn2.close();
+        conn2.respond(conn2.readRequest(), "{\"result\":\"new connection\"}", "application/json");
+        hash<auto> resp = getResponse(q);
+        assertEq(200, resp.status_code);
+        assertEq({"result": "new connection"}, resp.body);
+    }
+}

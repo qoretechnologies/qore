@@ -708,6 +708,17 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         fireReadyCallback(xsink);
     }
 
+    // after the peer's GOAWAY the connection drains: the requests in progress are still answered, while new
+    // requests go to another connection
+    if (!goaway_seen && static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->isGoawayReceived()) {
+        goaway_seen = true;
+        printd(5, "Http2ClientPollOperationPriv::handleReading() GOAWAY received; draining\n");
+        AutoLocker al(stream_lock);
+        if (connection_priv) {
+            connection_priv->setDraining();  // Pure C++, I/O-thread safe
+        }
+    }
+
     // Drain registered CONNECT stream queues after every read poll cycle.
     // The inner op may have processed DATA frames for CONNECT streams that
     // need to be delivered to handler threads via their registered Queues.

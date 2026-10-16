@@ -633,7 +633,10 @@ QoreValue SocketQuicClientPollOperation::getOutput() const {
         // Use a more specific error code for peer-reset streams; keep
         // QUIC-BODY-TOO-LARGE for the request-body-exceeded case (legacy).
         const char* err_code = "QUIC-STREAM-ERROR";
-        if (cached_stream->body_too_large) {
+        if (cached_stream->request_rejected) {
+            // the peer did not process the request; it can be sent again on another connection
+            err_code = "HTTP3-REQUEST-REJECTED";
+        } else if (cached_stream->body_too_large) {
             err_code = "HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE";
         } else if (cached_stream->error_message.find("exceeded maximum size")
                 != std::string::npos) {

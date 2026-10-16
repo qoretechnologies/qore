@@ -291,6 +291,9 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 delete data_channel;
             }
             releaseReservationIfHeld();
+            if (notifier) {
+                checkSubmissionRefused(ex);
+            }
             rethrow;
         }
 

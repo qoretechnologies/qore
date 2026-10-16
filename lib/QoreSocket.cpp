@@ -19007,10 +19007,18 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
     }
 
     if (stream->reset && stream->error_code != 0) {
-        char errbuf[64];
-        snprintf(errbuf, sizeof(errbuf), "HTTP/2 stream %d reset by peer "
-            "(error_code=%u)", stream_id, stream->error_code);
-        response->setKeyValue("err", new QoreStringNode("HTTP2-STREAM-RESET"),
+        // REFUSED_STREAM: the peer did not process the request, which can be sent again on another connection; see
+        // Http2Session::raiseStreamReset()
+        bool refused = stream->error_code == NGHTTP2_REFUSED_STREAM;
+        char errbuf[96];
+        if (refused) {
+            snprintf(errbuf, sizeof(errbuf), "HTTP/2 stream %d was refused by the peer without being processed "
+                "(REFUSED_STREAM)", stream_id);
+        } else {
+            snprintf(errbuf, sizeof(errbuf), "HTTP/2 stream %d reset by peer "
+                "(error_code=%u)", stream_id, stream->error_code);
+        }
+        response->setKeyValue("err", new QoreStringNode(refused ? "HTTP2-STREAM-REFUSED" : "HTTP2-STREAM-RESET"),
             xsink);
         response->setKeyValue("desc", new QoreStringNode(errbuf), xsink);
         response->setKeyValue("stream_id", stream_id, xsink);
@@ -19098,6 +19106,14 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
         }
     };
 
+    // after the peer's GOAWAY the connection ends only when the session is done (RFC 9113 section 6.8): nghttp2
+    // still answers the streams the peer accepted, up to its last stream ID, closes the others with REFUSED_STREAM,
+    // and then wants to neither read nor write; ending the connection on the GOAWAY itself failed every request
+    // still in progress on it, including those the peer was answering
+    auto goaway_done = [&]() -> bool {
+        return h2_session->isGoawayReceived() && !h2_session->wantRead() && !h2_session->wantWrite();
+    };
+
     // Check if the socket was closed by another thread (e.g., connection
     // close during h2c probe timeout).  Without this check, subsequent
     // operations (brecv, send) would hit an assertion failure on the
@@ -19172,6 +19188,11 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                     return nullptr;
                 }
                 if (rv == -1) {
+                    if (goaway_done()) {
+                        h2_state = H2C_CLOSED;
+                        clear_non_block();
+                        return nullptr;
+                    }
                     // Would block - poll for read (and write if we have pending data)
                     int events = SOCK_POLLIN;
                     if (h2_session->wantWrite() || h2_session->hasPendingData()) {
@@ -19330,8 +19351,7 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                     h2_state = H2C_READING;
                 }
 
-                // Check for GOAWAY
-                if (h2_session->isGoawayReceived()) {
+                if (goaway_done()) {
                     h2_state = H2C_CLOSED;
                     clear_non_block();
                     return nullptr;

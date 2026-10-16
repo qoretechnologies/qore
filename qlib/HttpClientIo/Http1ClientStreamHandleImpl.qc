@@ -205,6 +205,9 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             streaming = False;
             request_body_streaming = False;
             remove data_channel;
+            if (notifier) {
+                checkSubmissionRefused(ex);
+            }
             rethrow;
         }
 

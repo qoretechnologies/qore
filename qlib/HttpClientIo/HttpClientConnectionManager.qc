@@ -1517,10 +1517,10 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
     #! Performs a single HTTP request with connection retry (no redirect following)
     private hash<auto> requestIntern(string url, string method, string path,
             *hash<auto> headers, *data body, *timeout timeout_ms, bool decode_text) {
-        int retries = 0;
         int max_retries = opts.max_request_retries;
+        # the decisions to send the request again; see resendRequest()
+        hash<HttpClientResendInfo> resend();
         bool timeout_retried = False;
-        bool h3_close_retried = False;
         bool proxy_connect_retried = False;
         # Wall-clock fail-safe across the entire retry loop.  Without this, a
         # bug in per-stream wait handling (incorrect deadline, non-firing
@@ -1557,8 +1557,8 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 if (budget_deadline && now_us() >= budget_deadline) {
                     throw "HTTPCLIENT-TIMEOUT",
                         sprintf("total request budget of %d ms exceeded across "
-                            "%d attempt%s", total_budget_ms, retries + 1,
-                            retries == 0 ? "" : "s");
+                            "%d attempt%s", total_budget_ms, resend.retries + 1,
+                            resend.retries == 0 ? "" : "s");
                 }
 
                 stream = acquireStream(url);
@@ -1616,29 +1616,15 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 # never on a fresh connection (genuinely unreachable).
                 if (ex.err == "HTTPCLIENT-TIMEOUT") {
                     if (stream && stream.wasConnectionReused() && !timeout_retried
-                            && retries < max_retries && canRetryRequest(method, stream)) {
+                            && resend.retries < max_retries && canRetryRequest(method, stream)) {
                         timeout_retried = True;
-                        ++retries;
+                        ++resend.retries;
                         HttpClientConnection timed_out_conn = stream.getConnection();
                         log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d, "
                             "evicting stale connection and retrying with connect_timeout=%y (%d/%d)",
                             timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
-                            opts.connect_timeout, retries, max_retries);
+                            opts.connect_timeout, resend.retries, max_retries);
                         try { timed_out_conn.close(); } catch () {}
-                        evictDeadConnections(url);
-                        continue;
-                    }
-                    rethrow;
-                }
-                # HTTP3-CONNECTION-CLOSED / HTTP3-READ-ERROR retry ONCE only —
-                # see acquireAndStartStreaming for rationale.
-                if (isHttp3ConnectionCloseError(ex.err)) {
-                    if (!h3_close_retried && retries < max_retries
-                            && canRetryRequest(method, stream, ex.err)) {
-                        h3_close_retried = True;
-                        ++retries;
-                        log(LoggerLevel::DEBUG, "sync request %s, retrying once on fresh connection (%d/%d)",
-                            ex.err, retries, max_retries);
                         evictDeadConnections(url);
                         continue;
                     }
@@ -1653,18 +1639,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                     evictDeadConnections(url);
                     continue;
                 }
-                if ((isCapacityError(ex.err) || isConnectionError(ex.err))
-                        && retries < max_retries && canRetryRequest(method, stream)) {
-                    ++retries;
-                    if (isConnectionError(ex.err)) {
-                        log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
-                            ex.err, retries, max_retries);
-                        evictDeadConnections(url);
-                        handleProtocolFallback(url, ex.err, ex.arg);
-                    } else {
-                        log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)",
-                            ex.err, retries, max_retries);
-                    }
+                if (resendRequest(url, method, stream, ex, \resend)) {
                     continue;
                 }
                 rethrow;
@@ -3763,6 +3738,98 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         }
     }
 
+    #! Decides whether a request that failed is sent again, and prepares the connection pool for the next attempt
+    /** Every API that sends requests makes this decision: @ref request(), @ref HttpClientRequestPollOperation (and so
+        @ref requestAsync()), and the request operations of the RestClientIo module.  A request is sent again, on a
+        connection acquired anew:
+        - whatever its method, if the server refused it without processing it (see
+          @ref isRefusedRequestErrorStatic()), or if it was not submitted
+        - once, if its HTTP/3 connection closed or failed to read, and it was not submitted, its method is idempotent,
+          or the transport proves that it was not processed
+        - if its connection failed or was at capacity, and it was not submitted, or its method is idempotent
+
+        All of them are bounded by the \c max_request_retries option.  A request that is pinned to a persistent
+        session is never sent again, and a timeout (\c HTTPCLIENT-TIMEOUT) is never a reason to send a request again
+        here: the deadline of a poll operation is the caller's, and @ref request() handles the timeout of an attempt
+        on a reused connection itself.
+
+        @param url the URL of the request; only scheme, host, and port are used
+        @param method the request method
+        @param stream the stream of the failed attempt, if one was acquired
+        @param ex the error that ended the attempt
+        @param state the decisions made for the request so far; updated when the request is sent again
+
+        @return @ref True if the request is to be sent again, @ref False if the error ends the request
+
+        @since HttpClientIo 1.0
+    */
+    bool resendRequest(string url, string method, *HttpClientStreamHandle stream, hash<ExceptionInfo> ex,
+            reference<hash<HttpClientResendInfo>> state) {
+        # a pinned persistent-session request must never be sent on another connection: that would break the
+        # connection-scoped transaction affinity
+        if (getPinnedConnection()) {
+            return False;
+        }
+        # HTTPCLIENT-TIMEOUT is also a connection error (see isConnectionErrorStatic()), but a request's deadline
+        # is never a reason to send it again
+        if (ex.err == "HTTPCLIENT-TIMEOUT") {
+            return False;
+        }
+        int max_retries = opts.max_request_retries;
+        if (state.retries >= max_retries) {
+            return False;
+        }
+        if (isRefusedRequestErrorStatic(ex.err)) {
+            ++state.retries;
+            log(LoggerLevel::DEBUG, "the server did not process the request (%s); sending it again (%d/%d)",
+                ex.err, state.retries, max_retries);
+            evictDeadConnections(url);
+            return True;
+        }
+        # HTTP3-CONNECTION-CLOSED / HTTP3-READ-ERROR are retried once only — see acquireAndStartStreaming for the
+        # rationale
+        if (isHttp3ConnectionCloseError(ex.err)) {
+            if (state.h3_close_retried || !canRetryRequest(method, stream, ex.err)) {
+                return False;
+            }
+            state.h3_close_retried = True;
+            ++state.retries;
+            log(LoggerLevel::DEBUG, "%s; sending the request again once on a fresh connection (%d/%d)", ex.err,
+                state.retries, max_retries);
+            evictDeadConnections(url);
+            return True;
+        }
+        if ((isCapacityError(ex.err) || isConnectionError(ex.err)) && canRetryRequest(method, stream)) {
+            ++state.retries;
+            if (isConnectionError(ex.err)) {
+                log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)", ex.err,
+                    state.retries, max_retries);
+                evictDeadConnections(url);
+                # h2c failure on plain HTTP → fall back to h1 for this host
+                handleProtocolFallback(url, ex.err, ex.arg);
+            } else {
+                log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)", ex.err, state.retries, max_retries);
+            }
+            return True;
+        }
+        return False;
+    }
+
+    #! Returns @ref True for the errors of a request that the server refused without processing it
+    /** \c HTTP2-STREAM-REFUSED is a stream closed with REFUSED_STREAM (RFC 9113 section 8.7), which nghttp2 also uses
+        for a stream that the server's GOAWAY excludes; \c HTTP3-REQUEST-REJECTED is a stream reset with
+        H3_REQUEST_REJECTED, or a stream at or beyond the stream ID of the server's GOAWAY (RFC 9114 sections 4.1.1
+        and 5.2).  Such a request can be sent again on another connection whatever its method.
+
+        @param err the error code
+        @return @ref True if the error means that the server did not process the request
+
+        @since HttpClientIo 1.0
+    */
+    static bool isRefusedRequestErrorStatic(string err) {
+        return err == "HTTP2-STREAM-REFUSED" || err == "HTTP3-REQUEST-REJECTED";
+    }
+
     #! Internal: checks if an error indicates a capacity limit
     private bool isCapacityError(string err) {
         return err == "HTTP1-CAPACITY-ERROR"
@@ -3793,8 +3860,9 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     #! Internal: checks if a failed request may be retried safely
     /** Connection-only failures can be retried for any method.  After stream
         submission, only idempotent methods are retried automatically, unless
-        the transport itself proves the peer never processed the request; see
-        @ref isUnprocessedOnReusedConnection().
+        the transport itself proves the peer never processed the request (see
+        @ref isUnprocessedOnReusedConnection()), or the server refused it (see
+        @ref isRefusedRequestErrorStatic()).
 
         @param method the request method
         @param stream the failed stream handle, if any
@@ -3805,7 +3873,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     private bool canRetryRequest(string method, *HttpClientStreamHandle stream,
             *string err) {
         return isConnectionOnlyFailure(stream) || isIdempotentMethod(method)
-            || isUnprocessedOnReusedConnection(err, stream);
+            || isUnprocessedOnReusedConnection(err, stream)
+            || (err.val() && isRefusedRequestErrorStatic(err));
     }
 
     #! Internal: True when a pooled connection died before the peer processed the request

@@ -104,6 +104,11 @@ struct QuicStreamInfo {
     */
     bool fin_received = false;
     std::string error_message;  //!< non-empty if stream terminated with error
+    //! true if the peer did not process the request on this client stream
+    /** The peer reset the stream with H3_REQUEST_REJECTED, or its GOAWAY named this stream or a lower one (RFC 9114
+        sections 4.1.1 and 5.2); the request can be sent again on another connection
+    */
+    bool request_rejected = false;
     //! true once a body on this stream exceeded its maximum size
     /** - server: the request body exceeded the maximum request body size before the request was dispatched; the
           bytes buffered when the limit was exceeded are kept, so every consumer sees more than the limit; the rest
@@ -1327,6 +1332,11 @@ private:
 
     //! Mark a stream as complete and move to the completed queue
     DLLLOCAL void markStreamComplete(int64_t stream_id);
+
+    //! Ends the client's requests that the peer's GOAWAY excludes as rejected; called with mtx_ held
+    /** @param goaway_id the stream ID of the GOAWAY: the requests on this stream and higher ones are not processed
+    */
+    DLLLOCAL void rejectRequestsBeyondGoaway(int64_t goaway_id);
 
     //! Update the QUIC keepalive timer based on whether any streams are active
     /** Mirrors curl's cf_ngtcp2_setup_keep_alive (lib/vquic/curl_ngtcp2.c):

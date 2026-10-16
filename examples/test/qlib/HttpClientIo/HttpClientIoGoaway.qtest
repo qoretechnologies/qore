@@ -1,0 +1,357 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A server's GOAWAY and the requests that a server refuses without processing them.
+
+    - HTTP/3: a connection that received GOAWAY was never marked draining (the poll-result hook that checks for it
+      runs only when the long-running read operation completes, which is when the connection closes), so the pool
+      kept handing it new requests, which nghttp3 refused with ERR_CONN_CLOSING; an async request (as RestClientIo
+      sends a request with a timeout) failed on that refusal instead of acquiring another connection
+    - HTTP/2: a GOAWAY ended the connection at once, failing the requests in progress that the server was answering
+    - a request that the server refused without processing it (HTTP/2 REFUSED_STREAM, also used by nghttp2 for the
+      streams a GOAWAY excludes) was reported as a stream reset and never sent again, whatever its method
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires AsyncSocketIo
+%requires ../../TestCertificates.qm
+%requires ../../RawHttp2TestServer.qm
+
+%exec-class HttpClientIoGoawayTest
+
+#! Answers every request with "ok"
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+}
+
+public class HttpClientIoGoawayTest inherits QUnit::Test {
+    constructor() : Test("HttpClientIoGoawayTest", "1.0") {
+        addTestCase("HTTP/2: requests in progress when GOAWAY arrives are answered",
+            \h2InProgressGoawayTest());
+        addTestCase("HTTP/2: a refused request is sent again", \h2RefusedRequestTest());
+        addTestCase("HTTP/2: a request that GOAWAY excludes is sent again on a new connection",
+            \h2GoawayExcludedRequestTest());
+        addTestCase("HTTP/2: requestAsync() sends a refused request again", \h2RefusedRequestAsyncTest());
+        addTestCase("HTTP/3: a connection drains when GOAWAY arrives", \h3GoawayDrainsTest());
+        addTestCase("HTTP/3: a request that GOAWAY excludes is sent again on a new connection",
+            \h3GoawayExcludedRequestTest());
+        addTestCase("a notifier-mode submission that the connection refuses is reported as not ready",
+            \refusedSubmissionTest());
+        set_return_value(main());
+    }
+
+    #! Sends a request in the background; the response or the error is pushed on the returned queue
+    private Queue requestInBackground(HttpClientConnectionManager mgr, string url, string method, string path,
+            *data body, *bool async) {
+        Queue q();
+        background sub () {
+            try {
+                q.push(async
+                    ? mgr.requestAsync(url, method, path, NOTHING, body).get(20s)
+                    : mgr.request(url, method, path, NOTHING, body));
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+        return q;
+    }
+
+    #! Returns the response from the queue or fails with the error it got
+    private hash<auto> getResponse(Queue q) {
+        auto rv = q.get(20000);
+        if (rv.fullType() == "hash<ExceptionInfo>") {
+            throw rv.err, rv.desc, rv.arg;
+        }
+        return rv;
+    }
+
+    #! Polls until the condition is met
+    private waitForCondition(code<bool()> condition, string what, timeout to = 10s) {
+        date deadline = now_us() + to;
+        while (!condition()) {
+            if (now_us() >= deadline) {
+                throw "TIMEOUT", sprintf("%s: not met within %y", what, to);
+            }
+            usleep(5ms);
+        }
+    }
+
+    #! Returns the pool statistics of the only host
+    private hash<auto> getHostStats(HttpClientConnectionManager mgr) {
+        return mgr.getStats().per_host.firstValue() ?? {};
+    }
+
+    private HttpClientConnectionManager getH2Manager() {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+        });
+    }
+
+    h2InProgressGoawayTest() {
+        RawHttp2Listener srv();
+        on_exit srv.close();
+        HttpClientConnectionManager mgr = getH2Manager();
+        on_exit mgr.closeAll();
+
+        # a POST is not sent again, so it shows whether the request survives the GOAWAY itself
+        Queue q = requestInBackground(mgr, srv.getUrl(), "POST", "/in-progress", "body");
+        RawHttp2Connection conn = srv.accept();
+        on_exit conn.close();
+        int stream_id = conn.readRequest();
+        # the server accepted the request: it answers it after its GOAWAY
+        conn.goaway(stream_id);
+        # the connection takes no new request while the request is answered
+        waitForCondition(bool sub () { return getHostStats(mgr).draining == 1; }, "the connection drains");
+        conn.respond(stream_id, "answered");
+        hash<auto> resp = getResponse(q);
+        assertEq(200, resp.status_code);
+        assertEq("answered", resp.body);
+    }
+
+    h2RefusedRequestTest() {
+        RawHttp2Listener srv();
+        on_exit srv.close();
+        HttpClientConnectionManager mgr = getH2Manager();
+        on_exit mgr.closeAll();
+
+        Queue q = requestInBackground(mgr, srv.getUrl(), "POST", "/refused", "body");
+        RawHttp2Connection conn = srv.accept();
+        on_exit conn.close();
+        int stream_id = conn.readRequest();
+        # REFUSED_STREAM: the request was not processed, so it can be sent again whatever its method
+        conn.rstStream(stream_id, RefusedStream);
+        int stream_id2 = conn.readRequest();
+        assertGt(stream_id, stream_id2, "the request is sent again on a new stream");
+        conn.respond(stream_id2, "second");
+        hash<auto> resp = getResponse(q);
+        assertEq(200, resp.status_code);
+        assertEq("second", resp.body);
+    }
+
+    h2GoawayExcludedRequestTest() {
+        RawHttp2Listener srv();
+        on_exit srv.close();
+        HttpClientConnectionManager mgr = getH2Manager();
+        on_exit mgr.closeAll();
+
+        Queue q = requestInBackground(mgr, srv.getUrl(), "POST", "/excluded", "body");
+        RawHttp2Connection conn = srv.accept();
+        on_exit conn.close();
+        conn.readRequest();
+        # last stream ID 0: the request was not processed
+        conn.goaway(0);
+        RawHttp2Connection conn2 = srv.accept();
+        on_exit conn2.close();
+        int stream_id = conn2.readRequest();
+        conn2.respond(stream_id, "new connection");
+        hash<auto> resp = getResponse(q);
+        assertEq(200, resp.status_code);
+        assertEq("new connection", resp.body);
+    }
+
+    h2RefusedRequestAsyncTest() {
+        RawHttp2Listener srv();
+        on_exit srv.close();
+        HttpClientConnectionManager mgr = getH2Manager();
+        on_exit mgr.closeAll();
+
+        # requestAsync() sends the request with an HttpClientRequestPollOperation
+        Queue q = requestInBackground(mgr, srv.getUrl(), "POST", "/refused-async", "body", True);
+        RawHttp2Connection conn = srv.accept();
+        on_exit conn.close();
+        conn.rstStream(conn.readRequest(), RefusedStream);
+        int stream_id = conn.readRequest();
+        conn.respond(stream_id, "second");
+        hash<auto> resp = getResponse(q);
+        assertEq(200, resp.status_code);
+        assertEq("second", resp.body);
+    }
+
+    #! Starts a raw QUIC server; returns the context of the test
+    private hash<auto> startQuicServer() {
+        Socket sock();
+        sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+        sock.setCertificate(new SSLCertificate(TestCertificates::CertPem));
+        sock.setPrivateKey(new SSLPrivateKey(TestCertificates::KeyPem));
+        AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        AbstractPollOperation accept_op = sock.startPollQuicAccept();
+        string owner = sock.uniqueHash();
+        return {
+            "sock": sock,
+            "ctrl": ctrl,
+            "owner": owner,
+            "accept_op": accept_op,
+            "accept_q": ctrl.submit(<SocketPollOperationInfo>{
+                "sock": sock,
+                "spop": accept_op,
+                "owner": owner,
+                "to": 30s,
+            }),
+            "url": sprintf("https://127.0.0.1:%d", sock.getSocketInfo().port),
+        };
+    }
+
+    #! Waits for the next request on the raw QUIC server and returns it
+    private hash<auto> getQuicRequest(hash<auto> ctx) {
+        hash<SocketPollResultInfo> result = ctx.accept_q.get(20000);
+        if (result.ex) {
+            throw result.ex.err, result.ex.desc, result.ex.arg;
+        }
+        return ctx.accept_op.getOutput();
+    }
+
+    #! Answers a request on the raw QUIC server; the server keeps reading afterwards
+    private respondQuic(reference<hash<auto>> ctx, hash<auto> req, string body) {
+        AbstractPollOperation send_op = ctx.sock.startPollQuicSendResponse(req.session_id, req.stream_id, 200,
+            {"content-type": "text/plain"}, body);
+        auto send_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
+            "sock": ctx.sock,
+            "spop": send_op,
+            "owner": ctx.owner,
+            "key": sprintf("send-%d-%d", req.session_id, req.stream_id),
+            "to": 30s,
+        }, True);
+        hash<SocketPollResultInfo> result = send_q.get(20000);
+        if (result.ex) {
+            throw result.ex.err, result.ex.desc, result.ex.arg;
+        }
+    }
+
+    #! Lets the raw QUIC server read again after a request
+    private resumeQuicServer(reference<hash<auto>> ctx) {
+        ctx.accept_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
+            "sock": ctx.sock,
+            "spop": ctx.accept_op,
+            "owner": ctx.owner,
+            "to": 30s,
+        }, True);
+    }
+
+    private HttpClientConnectionManager getH3Manager() {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+        });
+    }
+
+    h3GoawayDrainsTest() {
+        hash<auto> ctx = startQuicServer();
+        on_exit try { ctx.ctrl.cancelByOwner(ctx.owner); } catch () {}
+        HttpClientConnectionManager mgr = getH3Manager();
+        on_exit mgr.closeAll();
+
+        Queue q = requestInBackground(mgr, ctx.url, "GET", "/first");
+        hash<auto> req = getQuicRequest(ctx);
+        respondQuic(\ctx, req, "first");
+        assertEq(200, getResponse(q).status_code);
+
+        # GOAWAY without closing the session: the connection stays open
+        resumeQuicServer(\ctx);
+        ctx.sock.submitQuicShutdownNotice(req.session_id);
+        ctx.ctrl.wakeSocket(ctx.sock);
+        waitForCondition(bool sub () { return getHostStats(mgr).draining == 1; }, "the connection drains");
+        hash<auto> host = getHostStats(mgr);
+        assertEq(1, host.connections, "the connection is still open");
+        assertEq(0, host.usable_connections, "the connection takes no new request");
+    }
+
+    h3GoawayExcludedRequestTest() {
+        hash<auto> ctx = startQuicServer();
+        on_exit try { ctx.ctrl.cancelByOwner(ctx.owner); } catch () {}
+        HttpClientConnectionManager mgr = getH3Manager();
+        on_exit mgr.closeAll();
+
+        Queue q = requestInBackground(mgr, ctx.url, "GET", "/first");
+        hash<auto> req = getQuicRequest(ctx);
+        respondQuic(\ctx, req, "first");
+        assertEq(200, getResponse(q).status_code);
+
+        # the final GOAWAY is queued while nothing is read or written on the server socket, so the client sends its
+        # next request on a stream beyond the GOAWAY; the server rejects it when it reads it (RFC 9114 section 5.2)
+        ctx.sock.submitQuicShutdown(req.session_id);
+        q = requestInBackground(mgr, ctx.url, "POST", "/second", "body");
+        waitForCondition(bool sub () { return mgr.getStats().total_active_streams == 1; }, "the request is sent");
+        resumeQuicServer(\ctx);
+        # the request is sent again on a new connection
+        hash<auto> req2 = getQuicRequest(ctx);
+        assertNeq(req.session_id, req2.session_id, "the request is sent again on another connection");
+        assertEq("/second", req2.path);
+        respondQuic(\ctx, req2, "second");
+        hash<auto> resp = getResponse(q);
+        assertEq(200, resp.status_code);
+        assertEq("second", resp.body);
+    }
+
+    refusedSubmissionTest() {
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("h3-refused-submission",
+            LoggerLevel::getLevelInfo())});
+        on_exit server.stop();
+        server.setDefaultHandler("ok", new OkHandler());
+        server.waitForAsyncIo();
+        int port = server.addQuicListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+        string url = sprintf("https://127.0.0.1:%d", port);
+
+        HttpClientConnectionManager mgr = getH3Manager();
+        on_exit mgr.closeAll();
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code);
+
+        HttpClientStreamHandle stream = mgr.acquireStream(url);
+        HttpClientStreamHandle stream2 = mgr.acquireStream(url);
+        HttpClientConnection conn = stream.getConnection();
+        assertEq(conn.getConnectionId(), stream2.getConnection().getConnectionId());
+        # the poll operation records a submission refused as nghttp3 refuses a new stream after GOAWAY, while the
+        # connection is still marked ready, as it is until the I/O thread processes the operation
+        cast<Http3ClientPollOperation>(conn.getPollOperation()).setSubmitError("QUIC-HTTP3-ERROR",
+            "nghttp3_conn_submit_request failed: ERR_CONN_CLOSING");
+
+        EventNotifier notifier();
+        assertThrows("HTTPCLIENT-NOT-READY", \stream.submitAsyncWithNotifier(), ("POST", "/ok", NOTHING, "body",
+            notifier));
+        assertFalse(stream.isSubmitted(), "nothing was submitted");
+        assertThrows("HTTPCLIENT-NOT-READY", \stream2.startStreaming(), ("GET", "/ok", NOTHING, False, NOTHING,
+            notifier));
+        assertFalse(stream2.isSubmitted(), "nothing was submitted");
+
+        # the next request gets another connection
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code);
+    }
+}

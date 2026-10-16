@@ -427,6 +427,14 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 auto session = inner_op->getSession();
                 if (session && session->isGoawayReceived()) {
                     goaway_received.store(true, std::memory_order_release);
+                    // the server accepts no new request from now on, so the connection drains here: this
+                    // long-running operation completes only when the connection closes, so the poll-result
+                    // hook that checks for GOAWAY would mark it draining only then, and until then the
+                    // connection manager gave it new requests, which the HTTP/3 layer refused
+                    AutoLocker al(stream_lock);
+                    if (connection_priv) {
+                        connection_priv->setDraining();  // Pure C++, I/O-thread safe
+                    }
                 }
             }
         }

@@ -461,6 +461,31 @@ public class HttpClientStreamHandle {
         }
     }
 
+    #! Raises \c HTTPCLIENT-NOT-READY for a failed notifier-mode submission when the connection takes no request
+    /** A notifier-mode submission only queues the request for the I/O thread, so when it fails, nothing was
+        sent.  If the connection can take no request any more, the request failed because the connection is not
+        ready, and callers acquire another connection, as they do for a connection that is still connecting.  An
+        HTTP/3 connection whose peer sent GOAWAY, for example, refuses every new stream from the moment the
+        GOAWAY is read, before the I/O thread marks the connection draining.  The poll operation records a
+        refusal at once, while the connection's own state is updated later on the I/O thread, so both are
+        checked.
+
+        Returns if the connection can still take requests; the caller then rethrows the original exception.
+
+        @param ex the exception that the submission raised; its code and description are given in the argument
+        of the \c HTTPCLIENT-NOT-READY exception
+
+        @throw HTTPCLIENT-NOT-READY the connection takes no request
+    */
+    private checkSubmissionRefused(hash<ExceptionInfo> ex) {
+        HttpClientPollOperation op = conn.getPollOperation();
+        if (conn.isReady() && !op.isClosed() && !op.hasError()) {
+            return;
+        }
+        throw "HTTPCLIENT-NOT-READY", sprintf("the connection refused the request: %s: %s", ex.err, ex.desc),
+            {"err": ex.err, "desc": ex.desc};
+    }
+
     #! Sets trailers that end the request body of a streaming-send request
     /** Implemented for HTTP/1.1 (chunked-transfer trailers), HTTP/2, and HTTP/3; the trailers are sent when
         \c sendData() is called with \c end_stream = \c True
@@ -615,9 +640,10 @@ public class HttpClientStreamHandle {
             if (ex.err == "HTTPCLIENT-CANCELLED") {
                 throw "HTTPCLIENT-CANCELLED", "request was cancelled";
             }
-            # Let connection errors propagate unwrapped so the connection
-            # manager can detect, evict dead connections, and retry
-            if (HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+            # Let connection errors and the errors of requests that the server refused propagate unwrapped so the
+            # connection manager can detect, evict dead connections, and send the request again
+            if (HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)
+                    || HttpClientIo::HttpClientConnectionManager::isRefusedRequestErrorStatic(ex.err)) {
                 rethrow;
             }
             # a response body over the limit is reported with the same error as by the futures and HTTPClient
@@ -733,6 +759,9 @@ public class HttpClientStreamHandle {
         @return hash with "stream_id" (int) and "future" (Future)
 
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
+        @throw HTTPCLIENT-NOT-READY the connection is not ready, or it refused the request because it takes no
+        request any more (for example after the server's GOAWAY); nothing was sent, and the caller acquires
+        another connection
     */
     hash<auto> submitAsyncWithNotifier(string method, string path, *hash<auto> headers,
             *data body, EventNotifier notifier) {
@@ -788,6 +817,7 @@ public class HttpClientStreamHandle {
                 }
             }
             releaseReservationIfHeld();
+            checkSubmissionRefused(ex);
             rethrow;
         }
 
