@@ -2832,3 +2832,27 @@ trim/builtin-call setup. Each needs independent proof and measured controls.
 Refresh paired optimized Java/develop measurements at a stable checkpoint.
 Selected tests are not full-suite, sanitizer or cross-platform certification;
 Java parity and a global performance ceiling remain open.
+
+### Combined cancellation polling rejected after measurement
+
+The post-`ffa3e8019` experiment combined atomic pending flags before the
+thread-private deferral check while preserving availability, full handling and
+checkpoint frequency. The optimized three-layout/three-fork screen retained all
+972 windows. Against a compile-disabled guard in the identical candidate runtime,
+direct calls changed -0.18%, arithmetic +0.07%, temporary list +0.29%, captured
+closures +1.02%. The temporary-list candidate is slower in every layout, with
+overlapping ranges. Default-layout object orders has disjoint slower ranges
+(+2.68%) against the control; unrelated aggregate movements are not causal proof.
+
+The implementation and its experimental test additions are reverted exactly.
+Release was rebuilt and requalified after restoration: 24 selected files, 31
+cases, 5167 assertions, plus 22 cases/110 cancellation assertions, 64 qmods and
+555 references per IR/AOT. Candidate Release had 5205 selected assertions. No
+candidate Debug run or five-fork confirmation was justified by the screening
+result. No Java/develop rerun occurred, and no cross-epoch ratio is valid.
+
+Evidence and the complete audit are preserved in
+`bench/runtime-comparison/results-aot-combined-poll-rejected-macos-arm64.json`;
+the results directory documents every workload and adverse observation. This
+does not establish a global performance ceiling. The next target is generic
+trim/builtin-call setup with canonical overload and exception/context semantics.

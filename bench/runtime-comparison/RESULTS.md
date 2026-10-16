@@ -14946,3 +14946,62 @@ Next inspect remaining native-loop overhead and a possible semantics-preserving
 rearrangement of cancellation flag polling, then generic trim/builtin-call setup.
 Require independent proof, controls and before/after measurement for each. Refresh
 paired optimized Java/develop numbers at a stable checkpoint.
+
+### Rejected combined cancellation-poll experiment
+
+After `ffa3e8019`, a candidate combined the thread and program pending flags
+before reading the thread-private deferral depth. It retained descriptor
+availability checks, sequentially consistent atomic loads, full cancellation
+handling and checkpoint frequency. A compile-disabled control used the original
+guard with the exact same candidate runtime. The candidate is **reverted**:
+reduced common-path instruction count did not deliver the intended loop gain.
+
+The predeclared optimized screen used twelve workloads, three fixed layouts and
+three forks, with randomized interleaving and three warmup/three measured 300ms
+windows per fork (4096 items, seed 7). Runtimes are Release -O3/NDEBUG and qcc
+executables -O3. All 972 measured windows are retained. These are whole-workload
+ns/item, not isolated call latency; the before artifact is the retained fused-local
+implementation, frozen before this experiment. No Java or develop rerun occurred.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Vs before|!Vs disabled
+|arithmetic|1.486|1.487|1.486|+0.04%|+0.07%
+|direct_call|1.491|1.483|1.485|-0.55%|-0.18%
+|method_call|1.548|1.550|1.546|+0.14%|+0.29%
+|indirect_call|6.466|6.419|6.712|-0.72%|-4.37%
+|closure_call|19.565|19.656|19.698|+0.47%|-0.21%
+|closure_capture|25.391|25.576|25.318|+0.73%|+1.02%
+|temporary_list|1.574|1.563|1.559|-0.68%|+0.29%
+|list_mutate|190.943|189.529|192.576|-0.74%|-1.58%
+|csv_report|920.676|907.338|917.605|-1.45%|-1.12%
+|object_orders|1747.180|1745.468|1751.862|-0.10%|-0.36%
+|callback_pipeline|82.387|82.139|82.084|-0.30%|+0.07%
+|text_index|1404.072|1407.892|1404.455|+0.27%|+0.24%
+
+Arithmetic is effectively flat and direct-call layout directions are mixed.
+Temporary-list candidate medians are slower than the disabled control in all
+three layouts (+1.39%, +0.10%, +0.10%), with overlapping ranges. Captured closures
+are +1.02% overall. Default-layout object orders has disjoint slower ranges versus
+the disabled control (+2.68%), despite the opposite aggregate direction. There
+are no disjoint adverse pairs versus before. Other movements, including indirect
+calls and CSV, do not establish an isolated mechanism. Observed ranges are not
+confidence intervals; host load, frequency and thermals are uncontrolled. Do not
+pool this epoch with earlier results or infer new Java ratios from it.
+
+Disassembly confirms combined polling only in the candidate, and preserved full
+cancellation helpers, native temporary-list counters and allocation elimination.
+All nondefault function orders match their original predeclared order files.
+Candidate Release qualification passes 24 files, 31 cases and 5205 assertions;
+the restored baseline passes 24/31/5167. Each additionally passes 22 cases/110
+assertions in the three thread cancellation fixtures, rebuilds 64 qmods and
+passes 555 reference checks in each of IR/AOT. Upstream abrupt-drop testing is
+skipped in Release. There was no candidate Debug qualification or five-fork
+confirmation: the intended target gain did not justify retaining the change.
+
+`results-aot-combined-poll-rejected-macos-arm64.json` preserves the experimental
+patch, raw windows, controls, artifacts, selection checks, Release qualification,
+exact source rollback, restored qualification and full audit. No production or
+test edit remains from this experiment. This rejects this implementation on this
+host, not all possible polling optimizations. The committed temporary-list gain
+is unaffected. Continue with generic trim/builtin setup, preserving canonical
+overload, ownership, context and error semantics; Java parity and global maximum
+performance remain unestablished.
