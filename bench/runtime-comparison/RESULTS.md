@@ -14631,3 +14631,93 @@ startup or general application performance result is claimed.
 Next: profile the remaining generic trim call and container allocation/cleanup;
 consider broader result/argument facts only with an independent semantic proof
 and measured benefit. Java parity and a global performance ceiling remain open.
+
+## Bounded inline-integer pair allocation removal (optimized AOT)
+
+This checkpoint removes the temporary two-integer list when its dynamic index
+is proven to be zero or one and both elements are proven inline integers. It
+extends the existing non-escaping, read-only scalarizer; all alias, visibility,
+dominance and exception barriers remain. It uses existing integer IR operations,
+with no new ABI, runtime helper or calling convention. AOT needs recompilation;
+the shared pass also applies to IR/JIT, but only AOT is timed here.
+
+All runtimes are Release `-O3 -DNDEBUG`; all executables use `qcc -O3`. Before is
+the frozen validated `4cb6acb0a` executable/runtime pair (merged develop
+`4f4130fca`). The develop comparison remains frozen optimized `347db1015`, not
+the current target tip. `QORE_DISABLE_IR_BOUNDED_PAIR_SCALAR_REPLACEMENT` is used
+only while compiling the candidate control. Enabled/control binaries use the
+same frozen candidate runtime. The transform changes one internal fast-entry
+contract symbol; that name is remapped in the existing reverse/shuffled order
+files without moving any entry. Actual function order is verified, and both
+temporary-list entry points have zero list-construction calls in candidate
+versus one in before/control, for every layout.
+
+Both trials use 4096 items, seed 7, three warmup and three measured 300 ms windows
+per fork, three fixed layouts, randomized interleaved configuration blocks and
+retained raw output. No owned build/test/profile/analysis runs during timing.
+The aggregate is the median of the three layout medians; each fork contributes
+its mean of three windows. Values are whole-workload ns/item, not isolated call
+latency. Observed ranges are not confidence intervals.
+
+The three-fork screen (144 runs, 432 windows) gives temporary-list time
+133.660 -> 18.107 ns/item, -86.45% before/after and -86.42% versus compile control.
+List mutation is +0.22%, closure calls -1.44%, text indexing +0.66%. All target
+layout ranges are disjoint and faster; no disjoint adverse before/after range.
+
+Five-fork confirmation (660 runs, 1980 windows):
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Compile-disabled ns/item|!Develop ns/item|!Time change|!Versus develop
+|List mutation|200.759|201.408|202.211|208.094|+0.32%|-3.21%
+|List building|89.808|89.577|90.091|110.857|-0.26%|-19.20%
+|Temporary list|134.014|18.229|134.918|141.521|-86.40%|-87.12%
+|Temporary hash|335.959|333.900|331.990|330.687|-0.61%|+0.97%
+|Boxed-int method with effects|90.038|90.227|90.603|377.964|+0.21%|-76.13%
+|Indirect call|6.895|6.812|6.822|231.081|-1.21%|-97.05%
+|Closure call|20.554|20.440|20.346|138.369|-0.55%|-85.23%
+|CSV report|976.621|972.605|968.662|1103.172|-0.41%|-11.84%
+|Object orders|1912.137|1892.705|1906.494|2156.502|-1.02%|-12.23%
+|Callback pipeline|84.944|85.794|85.418|302.101|+1.00%|-71.60%
+|Text index|1550.368|1545.966|1548.708|1730.524|-0.28%|-10.66%
+
+Temporary-list time falls **86.40% (7.35x faster)** and is -86.49% versus the
+compile-disabled control. Default/reverse/shuffled layout medians improve
+86.26% / 86.51% / 86.38%; every observed candidate range is disjoint and faster
+than both before and control. This supports the allocation-removal mechanism,
+not attribution of unrelated small workload movements.
+
+Adverse findings remain: callback pipeline increases +1.00% overall and
++1.48% / +0.98% / +0.54% in its three layouts. Temporary hash's shuffled layout
+increases +4.50% despite the -0.61% aggregate; it remains +0.97% versus develop.
+Indirect calls increase +1.54% in default layout despite the -1.21% aggregate;
+list mutation's shuffled layout is +1.02%. These observed ranges overlap, which
+does not establish non-regression. No confirmation before/after workload/layout
+has disjoint adverse ranges. Host load, frequency and thermals are uncontrolled.
+
+Release and Debug each pass 15 selected files, eight QUnit cases and 3869
+harness assertions, plus 555 reference checks per IR/AOT mode. The new test has
+224 harness assertions and its fixture checks 2491 values per execution against
+explicit expectations, including signed 64-bit values, inline signed bounds,
+aliases, captures/references, mutations, constructor side effects and ordinary
+out-of-range behavior. Enabled/disabled IR/JIT/tiered agree with AST; AOT O0/O3,
+native EH, source stripping, split compilation and no-debug variants also pass.
+Native checks pass 1028/1028 with the control enabled and disabled. All 64 owned
+Release module aliases were restored after Debug qualification.
+
+The unrestricted prototype failed wide-integer lifetime checks and was never
+timed: a NativeInt fact does not prevent heap boxing and statement cleanup.
+The retained transform requires inline-element lifetime proof and keeps list
+allocation for unproven/wide values. A separate minimal constant-index example
+reproduces that lifetime issue in the existing scalarizer; this remains a
+follow-up, not a solved case. One incomplete-fixture preparation was rejected
+by the source-stability guard; one benchmark preparation was rejected by the
+exact-symbol inventory check before the name remapping above. No timing run
+failed and no measured window was dropped.
+
+`results-aot-bounded-pair-macos-arm64.json` records both trials, all 2412 windows,
+artifacts, raw output, compilation controls, disassembly, qualifications,
+investigation/preparation history and all 62 audit checks. This is not a
+full-suite, sanitizer, cross-platform, startup or general-application result.
+There is no fresh paired Java measurement; do not combine this Qore result with
+an older Java epoch to manufacture a new ratio. Java parity and a global ceiling
+remain unestablished. Next address the existing scalar lifetime issue, then the
+remaining runtime-local accumulation/reload cost and generic trim call setup.

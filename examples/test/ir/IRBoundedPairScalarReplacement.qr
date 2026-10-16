@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+int sub boundedPair(int first, int second, int index) {
+    list<int> values = (first, second);
+    return values[index & 1];
+}
+
+int sub commutedPair(int first, int second, int index) {
+    list<int> values = (first, second);
+    return values[1 & index];
+}
+
+int sub multipleReads(int first, int second, int index) {
+    list<int> values = (first, second);
+    return values[index & 1] ^ values[(index + 1) & 1] ^ values[0];
+}
+
+int sub crossBlockPair(int first, int second, int index, bool choose) {
+    list<int> values = (first, second);
+    if (choose) {
+        return values[index & 1];
+    }
+    return values[(index + 1) & 1];
+}
+
+int sub inlinePair(int first, int second, int index) {
+    list<int> values = (first & 65535, second & 65535);
+    return values[index & 1];
+}
+
+int sub inlineCommutedPair(int first, int second, int index) {
+    list<int> values = (first & 65535, second & 65535);
+    return values[1 & index];
+}
+
+int sub inlineMultipleReads(int first, int second, int index) {
+    list<int> values = (first & 65535, second & 65535);
+    return values[index & 1] ^ values[(index + 1) & 1] ^ values[0];
+}
+
+int sub inlineCrossBlockPair(int first, int second, int index, bool choose) {
+    list<int> values = (first & 65535, second & 65535);
+    if (choose) {
+        return values[index & 1];
+    }
+    return values[(index + 1) & 1];
+}
+
+int sub loopPair(int count, int seed) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        list<int> values = (seed, seed + 1);
+        sum += values[seed & 1];
+    }
+    return sum;
+}
+
+int sub inlineExtremes(int index) {
+    list<int> values = (-140737488355328, 140737488355327);
+    return values[index & 1];
+}
+
+int sub wideConstantPair(int index) {
+    list<int> values = (-9223372036854775807 - 1, 9223372036854775807);
+    return values[index & 1];
+}
+
+*int sub uncheckedPair(int first, int second, int index) {
+    list<int> values = (first, second);
+    return values[index];
+}
+
+*int sub wideMaskPair(int first, int second, int index) {
+    list<int> values = (first, second);
+    return values[index & 3];
+}
+
+*int sub negativeMaskPair(int first, int second, int index) {
+    list<int> values = (first, second);
+    return values[index & -1];
+}
+
+string sub boxedPair(string first, string second, int index) {
+    list<string> values = (first, second);
+    return values[index & 1];
+}
+
+int sub mutatedPair(int first, int second, int index) {
+    list<int> values = (first, second);
+    values[0] += 10;
+    return values[index & 1];
+}
+
+int sub aliasedPair(int first, int second, int index) {
+    list<int> values = (first, second);
+    list<int> alias = values;
+    values[0] += 10;
+    return alias[index & 1] + values[index & 1];
+}
+
+int sub capturedPair(int first, int second, int index) {
+    list<int> values = (first, second);
+    code<int()> read = int sub () { return values[index & 1]; };
+    values[0] += 10;
+    return read();
+}
+
+sub replacePair(reference<list<int>> values) {
+    values = (101, 202);
+}
+
+int sub referencedPair(int first, int second, int index) {
+    list<int> values = (first, second);
+    replacePair(\values);
+    return values[index & 1];
+}
+
+int sub caughtPair(int first, int second, int index) {
+    try {
+        list<int> values = (first, second);
+        return values[index & 1];
+    } catch (hash<auto> ex) {
+        rethrow;
+    }
+}
+
+int sub nextValue(reference<int> sequence) {
+    return ++sequence;
+}
+
+int sub sideEffectPair(int index) {
+    int sequence = 0;
+    list<int> values = (nextValue(\sequence), nextValue(\sequence));
+    return sequence * 10 + values[index & 1];
+}
+
+sub equal(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "MISMATCH", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+foreach int first in ((-9223372036854775807 - 1, -1, 0, 1, 9223372036854775807)) {
+    foreach int second in ((-9223372036854775807 - 1, -1, 0, 1, 9223372036854775807)) {
+        foreach int index in ((-9223372036854775807 - 1, -3, -2, -1, 0, 1, 2, 3, 9223372036854775807)) {
+            int expected = (index & 1) ? second : first;
+            equal(expected, boundedPair(first, second, index));
+            equal((index & 1) ? (second & 65535) : (first & 65535), inlinePair(first, second, index));
+            equal((index & 1) ? (second & 65535) : (first & 65535), inlineCommutedPair(first, second, index));
+            equal(second & 65535, inlineMultipleReads(first, second, index));
+            equal((index & 1) ? (second & 65535) : (first & 65535), inlineCrossBlockPair(first, second, index, True));
+            equal((index & 1) ? (first & 65535) : (second & 65535), inlineCrossBlockPair(first, second, index, False));
+            equal(expected, commutedPair(first, second, index));
+            equal(second, multipleReads(first, second, index));
+            equal(expected, crossBlockPair(first, second, index, True));
+            equal((index & 1) ? first : second, crossBlockPair(first, second, index, False));
+            equal(expected, caughtPair(first, second, index));
+        }
+    }
+}
+foreach int index in ((0, 1)) {
+    equal(index ? 140737488355327 : -140737488355328, inlineExtremes(index));
+    equal(index ? 9223372036854775807 : -9223372036854775807 - 1, wideConstantPair(index));
+    equal(index ? 8 : 17, mutatedPair(7, 8, index));
+    equal(index ? 16 : 24, aliasedPair(7, 8, index));
+    equal(index ? 8 : 17, capturedPair(7, 8, index));
+    equal(index ? 202 : 101, referencedPair(7, 8, index));
+    equal(index ? "second long string" : "first long string", boxedPair("first long string", "second long string", index));
+    equal(index ? 22 : 21, sideEffectPair(index));
+}
+foreach int index in ((-2, -1, 0, 1, 2, 3)) {
+    printf("index %d: %y %y %y\n", index, uncheckedPair(7, 8, index),
+        wideMaskPair(7, 8, index), negativeMaskPair(7, 8, index));
+}
+printf("loop: %d; bounded pair checks passed\n", loopPair(4096, 7));

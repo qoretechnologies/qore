@@ -2677,3 +2677,57 @@ Continue with the remaining generic trim call and container allocation/cleanup.
 Broader assignment facts require an independent proof; a declared return type
 alone is not sufficient. No fresh Java, full-suite, sanitizer, cross-platform
 or startup result is claimed. Java parity and a global ceiling remain open.
+
+### Bounded inline-integer pair scalar replacement
+
+The next allocation checkpoint extends read-only fixed-list scalar replacement
+to a two-element `list<int>` read through an assigned native `index & 1` (either
+operand order). Both elements must be assigned and proven to fit the inline
+integer representation. Existing alias, escape, reflective visibility,
+dominance and exception checks remain. Selection becomes
+`first ^ ((first ^ second) & -index)` using existing IR operations; both
+constructor expressions still execute. No opcode, runtime helper, calling
+convention, ABI or serialized layout is added. Recompile AOT artifacts to benefit;
+the shared pass also affects IR/JIT, whose performance is not measured here.
+`QORE_DISABLE_IR_BOUNDED_PAIR_SCALAR_REPLACEMENT` is the compile-only control.
+
+The lifetime restriction matters: NativeInt arithmetic facts do not imply an
+unboxed interpreter value. An unrestricted prototype lost wide integers after
+`DiscardTemps` and was never timed. The retained candidate keeps allocation for
+unproven/wide elements. Bounds can come from existing facts, masks, exact
+addition/subtraction, or a preceding exact scalar store. The latter proof is
+limited to 64 same-block instructions and recursion depth 8, rejects referenced
+or captured locals, and stops at possible reentry, cleanup or unknown operations.
+Signed inline boundaries and full 64-bit fallback are covered by tests.
+
+Optimized confirmation: temporary-list processing 134.014 -> 18.229 ns/item,
+**86.40% less time (7.35x speedup)**; -86.49% versus the compile-disabled control,
+-87.12% versus frozen optimized develop `347db1015`. All three layout ranges are
+disjoint and faster than before/control. The screen gave -86.45%. Before is the
+validated frozen `4cb6acb0a` pair, including merged develop `4f4130fca`; the develop
+measurement is not against that newer tip. The changed internal fast-entry
+contract symbol is remapped once in each predeclared order file, without moving
+an entry; actual function order and allocation removal are checked.
+
+Retain the adverse findings: callback pipeline +1.00% overall and +0.54% to +1.48%
+in all three layouts; list mutation +0.32%, boxed-effect calls +0.21%; temporary
+hash shuffled layout +4.50% (aggregate -0.61%, still +0.97% versus develop),
+indirect-call default layout +1.54%. These ranges overlap; this does not prove
+non-regression. No confirmation before/after range is disjoint and adverse.
+Unrelated movements are not attributed to the pair transform.
+
+Release/Debug each pass 15 selected files, 3869 harness assertions, 64 qmods and
+555 reference checks per IR/AOT mode. The new fixture has 224 harness assertions
+plus 2491 explicit value checks per execution, covering mode parity, disabled
+selection, O0/O3, EH, strip-source, split compilation and no-debug builds. Native
+checks pass 1028/1028 with the control enabled/disabled; 64 Release aliases are
+restored after Debug. Both trials and all 2412 windows are retained in
+`bench/runtime-comparison/results-aot-bounded-pair-macos-arm64.json` with the full
+audit. Numbers and qualifications are in `bench/runtime-comparison/RESULTS.md`.
+
+The investigation also reproduced a wide-integer lifetime failure in the
+existing constant-index scalarizer, which does not use this new path. Resolve
+that before widening scalarization. Runtime-local accumulation/reload and
+boxing/cleanup still remain in the optimized loop; preserve reflective-local
+correctness when investigating them. Generic trim setup is another candidate.
+No fresh Java comparison or global performance ceiling is established.

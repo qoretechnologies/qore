@@ -2324,6 +2324,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         std::getenv("QORE_DISABLE_IR_FIXED_AGGREGATE_MUTATION_SCALAR_REPLACEMENT") == nullptr;
     const bool enable_return_materialization =
         std::getenv("QORE_DISABLE_IR_FIXED_AGGREGATE_RETURN_MATERIALIZATION") == nullptr;
+    const bool enable_bounded_pair_reads =
+        std::getenv("QORE_DISABLE_IR_BOUNDED_PAIR_SCALAR_REPLACEMENT") == nullptr;
     if (!enable_lists && !enable_hashes) {
         return stats;
     }
@@ -2493,6 +2495,111 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         result = constant->constant.string_value;
         return true;
     };
+    // NativeInt describes arithmetic, not lifetime: the interpreter can box a
+    // wide integer and DiscardTemps can clear that SSA value. A new dynamic
+    // projection may cross statement drains only for proven inline operands.
+    // Recover narrow bounds through straight-line exact scalar stores as well
+    // as expressions. Stop at every possible runtime-local mutation/reentry.
+    std::function<bool(QoreIRValue, int64_t&, int64_t&, size_t)> inline_int_bounds;
+    inline_int_bounds = [&](QoreIRValue value, int64_t& low, int64_t& high,
+            size_t depth) -> bool {
+        if (depth > 8) {
+            return false;
+        }
+        const QoreIRValueFacts* facts = func.getValueFacts(value);
+        if (!facts || facts->representation != QoreIRValueRepresentation::NativeInt
+                || facts->assigned_state != QoreIRAssignedState::Assigned
+                || !facts->never_nothing) {
+            return false;
+        }
+        if (facts->hasInlineIntRange()) {
+            low = facts->int_range_min;
+            high = facts->int_range_max;
+            return true;
+        }
+        auto definition = definitions.find(value.id);
+        if (definition == definitions.end()) {
+            return false;
+        }
+        const QoreIRInstruction* inst = definition->second.inst;
+        if (inst->opcode == QoreIROpcode::LoadLocal) {
+            const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+            const void* local_key = reinterpret_cast<const void*>(load->local);
+            if (!load->local || load->local->closureUse() || load->local->isTopLevel()
+                    || load->is_closure || load->is_ref || func.has_opaque_ast_local_access
+                    || func.ast_referenced_locals.count(local_key)
+                    || load->local->getTypeInfo() != bigIntTypeInfo) {
+                return false;
+            }
+            const auto& instructions = func.blocks[definition->second.block]->instructions;
+            // Bound compile-time work even in very large generated blocks.
+            size_t stop = definition->second.offset > 64 ? definition->second.offset - 64 : 0;
+            for (size_t i = definition->second.offset; i > stop; --i) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR bounded-pair scalar store proof")) {
+                    return false;
+                }
+                const QoreIRInstruction* previous = instructions[i - 1].get();
+                if (previous->opcode == QoreIROpcode::StoreLocal) {
+                    const auto* store = static_cast<const QoreIRLocalInstruction*>(previous);
+                    return store->local == load->local && !store->is_closure && !store->is_ref
+                        && store->mode == AssignmentMode::Normal && store->operands.size() == 1
+                        && inline_int_bounds(store->operands[0], low, high, depth + 1);
+                }
+                if (previous->exception_target
+                        || (previous->opcode != QoreIROpcode::PushTempMark
+                            && previous->opcode != QoreIROpcode::ConstInt
+                            && previous->opcode != QoreIROpcode::LoadLocal
+                            && !qore_ir_is_native_scalar_pure_opcode(previous->opcode))) {
+                    return false;
+                }
+                // Even an apparently scalar load may unwrap a reference.
+                if (previous->opcode == QoreIROpcode::LoadLocal) {
+                    const auto* other = static_cast<const QoreIRLocalInstruction*>(previous);
+                    if (!other->local || other->local->isTopLevel() || other->is_ref || other->is_closure
+                            || other->local->closureUse()
+                            || other->local->getTypeInfo() != bigIntTypeInfo) {
+                        return false;
+                    }
+                }
+            }
+            return false;
+        }
+        if (inst->operands.size() != 2) {
+            return false;
+        }
+        if (inst->opcode == QoreIROpcode::AndInt) {
+            int64_t mask = 0;
+            if ((resolve_int_selector(inst->operands[0], mask)
+                        || resolve_int_selector(inst->operands[1], mask))
+                    && mask >= 0 && mask <= QoreValue::InlineIntMax) {
+                low = 0;
+                high = mask;
+                return true;
+            }
+            return false;
+        }
+        if (inst->opcode != QoreIROpcode::AddInt && inst->opcode != QoreIROpcode::SubInt) {
+            return false;
+        }
+        int64_t left_low, left_high, right_low, right_high;
+        if (!inline_int_bounds(inst->operands[0], left_low, left_high, depth + 1)
+                || !inline_int_bounds(inst->operands[1], right_low, right_high, depth + 1)) {
+            return false;
+        }
+        __int128 result_low = inst->opcode == QoreIROpcode::AddInt
+            ? static_cast<__int128>(left_low) + right_low
+            : static_cast<__int128>(left_low) - right_high;
+        __int128 result_high = inst->opcode == QoreIROpcode::AddInt
+            ? static_cast<__int128>(left_high) + right_high
+            : static_cast<__int128>(left_high) - right_low;
+        if (result_low < QoreValue::InlineIntMin || result_high > QoreValue::InlineIntMax) {
+            return false;
+        }
+        low = static_cast<int64_t>(result_low);
+        high = static_cast<int64_t>(result_high);
+        return true;
+    };
     std::unordered_set<const QoreIRInstruction*> eliminated;
     std::unordered_map<uint32_t, QoreIRValue> replacements;
     struct ScalarizedPathOperation {
@@ -2551,6 +2658,13 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     };
     std::unordered_map<const QoreIRInstruction*, ScalarizedLiteralIntQuery>
         scalarized_literal_int_queries;
+    struct ScalarizedBoundedPairRead {
+        QoreIRValue first;
+        QoreIRValue second;
+        QoreIRValue index;
+    };
+    std::unordered_map<const QoreIRInstruction*, ScalarizedBoundedPairRead>
+        scalarized_bounded_pair_reads;
     std::unordered_set<const LocalVar*> scalarized_container_locals;
     size_t scalarized = 0;
 
@@ -2972,6 +3086,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             candidate_aggregate_materializations;
         std::unordered_map<const QoreIRInstruction*,
             ScalarizedLiteralIntQuery> candidate_literal_int_queries;
+        std::unordered_map<const QoreIRInstruction*, ScalarizedBoundedPairRead>
+            candidate_bounded_pair_reads;
         std::unordered_map<std::string, QoreIRValue> hash_values;
         if (hash_candidate) {
             for (size_t i = 0; i < hash_keys.size(); ++i) {
@@ -4024,6 +4140,44 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                         int64_t index = 0;
                         if (!resolve_int_selector(
                                 use.inst->operands[1], index)) {
+                            // For an immutable, non-escaping integer pair, an
+                            // assigned native (x & 1) can only select element 0
+                            // or 1. Keep every existing ownership/visibility and
+                            // dominance check; do not speculate about arbitrary
+                            // indexes, boxed elements, or mutable lists.
+                            QoreIRValue selector = use.inst->operands[1];
+                            const QoreIRValueFacts* selector_facts =
+                                func.getValueFacts(selector);
+                            auto selector_def = definitions.find(selector.id);
+                            const QoreIRInstruction* mask =
+                                selector_def == definitions.end()
+                                ? nullptr : selector_def->second.inst;
+                            int64_t left_mask = 0;
+                            int64_t right_mask = 0;
+                            int64_t low = 0;
+                            int64_t high = 0;
+                            if (enable_bounded_pair_reads
+                                    && element_type == bigIntTypeInfo
+                                    && aggregate_values.size() == 2
+                                    && selector_facts
+                                    && selector_facts->representation
+                                        == QoreIRValueRepresentation::NativeInt
+                                    && selector_facts->assigned_state
+                                        == QoreIRAssignedState::Assigned
+                                    && selector_facts->never_nothing
+                                    && mask && mask->opcode == QoreIROpcode::AndInt
+                                    && mask->operands.size() == 2
+                                    && ((resolve_int_selector(mask->operands[0], left_mask)
+                                            && left_mask == 1)
+                                        || (resolve_int_selector(mask->operands[1], right_mask)
+                                            && right_mask == 1))
+                                    && inline_int_bounds(aggregate_values[0], low, high, 0)
+                                    && inline_int_bounds(aggregate_values[1], low, high, 0)) {
+                                candidate_bounded_pair_reads.emplace(use.inst,
+                                    ScalarizedBoundedPairRead{aggregate_values[0],
+                                        aggregate_values[1], selector});
+                                continue;
+                            }
                             invalid = true;
                             break;
                         }
@@ -4264,7 +4418,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         if (invalid || (candidate_replacements.empty()
                 && candidate_path_operations.empty()
                 && candidate_literal_int_queries.empty()
-                && candidate_owned_aggregate_reads.empty())) {
+                && candidate_owned_aggregate_reads.empty()
+                && candidate_bounded_pair_reads.empty())) {
             continue;
         }
         if (!retain_aggregate_owner) {
@@ -4321,6 +4476,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         scalarized_literal_int_queries.insert(
             candidate_literal_int_queries.begin(),
             candidate_literal_int_queries.end());
+        scalarized_bounded_pair_reads.insert(candidate_bounded_pair_reads.begin(),
+            candidate_bounded_pair_reads.end());
         if (has_mutation && !retain_aggregate_owner) {
             scalarized_container_locals.insert(local);
         }
@@ -4544,6 +4701,51 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             if (eliminated.count(it->get())) {
                 it = instructions.erase(it);
             } else {
+                auto pair_read = scalarized_bounded_pair_reads.find(it->get());
+                if (pair_read != scalarized_bounded_pair_reads.end()) {
+                    const QoreIRInstruction* old = it->get();
+                    // first ^ ((first ^ second) & -index) selects the original
+                    // value without arithmetic on either element. Only 0 or 1
+                    // is negated; XOR/AND of sign-extended inline integers also
+                    // fit that representation, including its signed extremes.
+                    QoreIRValueFacts facts;
+                    facts.type_info = bigIntTypeInfo;
+                    facts.representation = QoreIRValueRepresentation::NativeInt;
+                    facts.assigned_state = QoreIRAssignedState::Assigned;
+                    facts.never_nothing = true;
+                    facts.ownership = QoreIRValueOwnership::ReferenceFree;
+                    facts.int_range_known = true;
+                    facts.int_range_min = QoreValue::InlineIntMin;
+                    facts.int_range_max = QoreValue::InlineIntMax;
+                    auto emit = [&](QoreIROpcode opcode,
+                            std::vector<QoreIRValue> operands, bool last) {
+                        auto inst = std::make_unique<QoreIRInstruction>(opcode);
+                        inst->loc = old->loc;
+                        inst->cached_start_line = old->cached_start_line;
+                        inst->temp_scope_id = old->temp_scope_id;
+                        inst->result = last ? old->result : func.createValue();
+                        func.max_value_id = std::max(func.max_value_id, inst->result.id);
+                        inst->operands = std::move(operands);
+                        func.setValueFacts(inst->result, facts);
+                        (void)qore_ir_rewrite_value_operands(
+                            *inst, replacements, check_count, false);
+                        QoreIRValue result = inst->result;
+                        if (last) {
+                            *it = std::move(inst);
+                        } else {
+                            it = instructions.insert(it, std::move(inst));
+                            ++it;
+                        }
+                        return result;
+                    };
+                    const auto& read = pair_read->second;
+                    QoreIRValue mask = emit(QoreIROpcode::UnaryMinusInt, {read.index}, false);
+                    QoreIRValue diff = emit(QoreIROpcode::XorInt, {read.first, read.second}, false);
+                    QoreIRValue selected = emit(QoreIROpcode::AndInt, {diff, mask}, false);
+                    emit(QoreIROpcode::XorInt, {read.first, selected}, true);
+                    ++it;
+                    continue;
+                }
                 auto owned_read =
                     scalarized_owned_aggregate_reads.find(it->get());
                 if (owned_read
