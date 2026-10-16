@@ -461,6 +461,19 @@ public namespace HttpClientIo {
         *int h2_error_code;
     }
 
+    #! The state of the decisions to send one request again after it failed
+    /** @see @ref HttpClientIo::HttpClientConnectionManager::resendRequest()
+
+        @since HttpClientIo 1.0
+    */
+    public hashdecl HttpClientResendInfo {
+        #! The number of times the request was sent again
+        int retries = 0;
+
+        #! True once the request was sent again after its HTTP/3 connection closed or failed to read
+        bool h3_close_retried = False;
+    }
+
     #! Unified connection info for HTTP client connections
     public hashdecl HttpClientConnectionInfo {
         #! Host name

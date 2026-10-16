@@ -500,6 +500,9 @@ private:
     //! True once the peer's SETTINGS frame has been processed; the connection is ready from then on
     std::atomic<bool> h2_confirmed{false};
 
+    //! True once the peer's GOAWAY frame has been seen and the connection marked draining (I/O thread only)
+    bool goaway_seen = false;
+
     //! Whether SSL/TLS is required
     bool ssl_required;
 

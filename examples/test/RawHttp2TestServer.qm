@@ -1,0 +1,203 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file RawHttp2TestServer.qm a cleartext HTTP/2 server that tests drive frame by frame
+
+/*  RawHttp2TestServer.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module RawHttp2TestServer {
+    version = "1.0";
+    desc    = "a cleartext HTTP/2 server that tests drive frame by frame";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+}
+
+/** A client test that needs the server to send frames that a real server sends only in rare conditions (a GOAWAY
+    while a request is in progress, a request stream refused with REFUSED_STREAM) drives this server: it speaks
+    HTTP/2 with prior knowledge over a cleartext TCP connection, and every frame it sends is sent by the test.
+
+    @par Example:
+    @code{.py}
+%requires ../../RawHttp2TestServer.qm
+
+RawHttp2Listener srv();
+# a client sends a request to srv.getUrl() in another thread
+RawHttp2Connection conn = srv.accept();
+int stream_id = conn.readRequest();
+conn.respond(stream_id, "ok");
+    @endcode
+*/
+public namespace RawHttp2TestServer {
+#! Frame types (RFC 9113 section 6)
+public const FrameData = 0;
+public const FrameHeaders = 1;
+public const FrameRstStream = 3;
+public const FrameSettings = 4;
+public const FramePing = 6;
+public const FrameGoaway = 7;
+
+#! Flags
+public const FlagEndStream = 0x1;
+public const FlagAck = 0x1;
+public const FlagEndHeaders = 0x4;
+
+#! Error codes (RFC 9113 section 7)
+public const NoError = 0;
+public const RefusedStream = 0x7;
+
+#! A listening TCP socket on 127.0.0.1 that accepts HTTP/2 connections
+public class RawHttp2Listener {
+    private {
+        Socket sock();
+        int port;
+    }
+
+    #! Listens on an ephemeral port of 127.0.0.1
+    constructor() {
+        sock.bind("127.0.0.1:0", True);
+        sock.listen();
+        port = sock.getSocketInfo().port;
+    }
+
+    #! Returns the URL of the server
+    string getUrl() {
+        return sprintf("http://127.0.0.1:%d", port);
+    }
+
+    #! Accepts a connection and completes the connection preface
+    /** @throw RAW-HTTP2-TIMEOUT no connection was accepted in time
+    */
+    RawHttp2Connection accept(timeout to = 10s) {
+        *Socket s = sock.accept(to);
+        if (!s) {
+            throw "RAW-HTTP2-TIMEOUT", sprintf("no connection was accepted within %y", to);
+        }
+        RawHttp2Connection conn(s);
+        conn.handshake(to);
+        return conn;
+    }
+
+    #! Closes the listening socket
+    close() {
+        sock.close();
+    }
+}
+
+#! One HTTP/2 connection to a client
+public class RawHttp2Connection {
+    private {
+        Socket sock;
+    }
+
+    constructor(Socket sock) {
+        self.sock = sock;
+    }
+
+    #! Reads the client connection preface and sends the server's SETTINGS
+    handshake(timeout to = 10s) {
+        string preface = sock.recvBinary(24, to).toString();
+        if (preface != "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") {
+            throw "RAW-HTTP2-PROTOCOL-ERROR", sprintf("unexpected connection preface: %y", preface);
+        }
+        sendFrame(FrameSettings, 0, 0);
+    }
+
+    #! Reads the next frame; SETTINGS and PING frames of the client are acknowledged as they are read
+    /** @return a hash with the \c type, \c flags, \c stream_id, and \c payload keys
+    */
+    hash<auto> readFrame(timeout to = 10s) {
+        binary hdr = sock.recvBinary(9, to);
+        int len = (get_byte(hdr, 0) << 16) | (get_byte(hdr, 1) << 8) | get_byte(hdr, 2);
+        int type = get_byte(hdr, 3);
+        int flags = get_byte(hdr, 4);
+        int stream_id = ((get_byte(hdr, 5) & 0x7f) << 24) | (get_byte(hdr, 6) << 16) | (get_byte(hdr, 7) << 8)
+            | get_byte(hdr, 8);
+        binary payload = len ? sock.recvBinary(len, to) : binary();
+        if (type == FrameSettings && !(flags & FlagAck)) {
+            sendFrame(FrameSettings, FlagAck, 0);
+        } else if (type == FramePing && !(flags & FlagAck)) {
+            sendFrame(FramePing, FlagAck, 0, payload);
+        }
+        return {
+            "type": type,
+            "flags": flags,
+            "stream_id": stream_id,
+            "payload": payload,
+        };
+    }
+
+    #! Reads frames until a request has been received whole, and returns its stream ID
+    int readRequest(timeout to = 10s) {
+        while (True) {
+            hash<auto> f = readFrame(to);
+            if (f.type != FrameHeaders) {
+                continue;
+            }
+            int stream_id = f.stream_id;
+            if (f.flags & FlagEndStream) {
+                return stream_id;
+            }
+            # the request has a body
+            while (True) {
+                f = readFrame(to);
+                if (f.type == FrameData && f.stream_id == stream_id && (f.flags & FlagEndStream)) {
+                    return stream_id;
+                }
+            }
+        }
+    }
+
+    #! Answers a request with status 200 and the given body
+    /** @param stream_id the stream of the request
+        @param body the response body
+        @param content_type the content type of the response
+    */
+    respond(int stream_id, string body, string content_type = "text/plain") {
+        # ":status: 200" is entry 8 of the HPACK static table; content-type (entry 31) is a literal without indexing
+        # with its indexed name: the 4-bit prefix 15 and 31 - 15 = 16, then the value as a plain string
+        sendFrame(FrameHeaders, FlagEndHeaders, stream_id,
+            parse_hex_string(sprintf("880f10%02x", content_type.size())) + binary(content_type));
+        sendFrame(FrameData, FlagEndStream, stream_id, binary(body));
+    }
+
+    #! Sends GOAWAY with the given last stream ID
+    goaway(int last_stream_id, int error_code = NoError) {
+        sendFrame(FrameGoaway, 0, 0, parse_hex_string(sprintf("%08x%08x", last_stream_id, error_code)));
+    }
+
+    #! Resets a stream with the given error code
+    rstStream(int stream_id, int error_code) {
+        sendFrame(FrameRstStream, 0, stream_id, parse_hex_string(sprintf("%08x", error_code)));
+    }
+
+    #! Sends a frame
+    sendFrame(int type, int flags, int stream_id, binary payload = binary()) {
+        sock.send(parse_hex_string(sprintf("%06x%02x%02x%08x", payload.size(), type, flags, stream_id)) + payload);
+    }
+
+    #! Closes the connection
+    close() {
+        sock.close();
+    }
+}
+}

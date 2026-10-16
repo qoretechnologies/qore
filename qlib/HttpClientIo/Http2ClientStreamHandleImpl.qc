@@ -185,6 +185,9 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                 request_body_streaming = False;
                 delete data_channel;
             }
+            if (notifier) {
+                checkSubmissionRefused(ex);
+            }
             rethrow;
         }
 

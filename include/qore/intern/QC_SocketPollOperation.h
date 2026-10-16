@@ -1513,6 +1513,13 @@ public:
         return h2_session && h2_session->isRemoteSettingsReceived();
     }
 
+    //! Returns true once the peer's GOAWAY frame has been processed; call on the thread that runs continuePoll()
+    /** The connection then takes no new request; the streams the peer accepted are still answered.
+    */
+    DLLLOCAL bool isGoawayReceived() const {
+        return h2_session && h2_session->isGoawayReceived();
+    }
+
     //! Collects the response header of each stream whose header arrived and has not been reported
     /** @see Http2Session::takeResponseHeaderEvents()
 

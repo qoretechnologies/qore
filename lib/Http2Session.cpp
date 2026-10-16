@@ -2206,6 +2206,19 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
     return 0;
 }
 
+void Http2Session::raiseStreamReset(int32_t stream_id, uint32_t error_code, ExceptionSink* xsink) {
+    // REFUSED_STREAM means that the peer did not process the request at all (RFC 9113 section 8.7); nghttp2 also
+    // closes a request stream with it when the peer's GOAWAY excludes the stream or forbids its HEADERS, so a client
+    // may send the request again on another connection, and the error has its own code
+    if (error_code == NGHTTP2_REFUSED_STREAM) {
+        xsink->raiseException("HTTP2-STREAM-REFUSED", "stream %d was refused by the peer without being processed "
+            "(REFUSED_STREAM)", stream_id);
+        return;
+    }
+    xsink->raiseException("HTTP2-STREAM-RESET", "stream %d was reset by peer (error code %u)", stream_id,
+        error_code);
+}
+
 int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream_id,
         uint32_t error_code, void* user_data) {
     Http2Session* h2 = static_cast<Http2Session*>(user_data);
@@ -2570,8 +2583,7 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
             // are monotonic so there's no re-use; this keeps the map bounded on
             // long-lived sessions.
             peer_reset_streams.erase(pit);
-            xsink->raiseException("HTTP2-STREAM-RESET",
-                "stream %d was reset by peer (error code %u)", stream_id, ec);
+            raiseStreamReset(stream_id, ec, xsink);
             return -1;
         }
         // A stream that closed without an error was erased by onStreamCloseCallback(); this includes a stream the
@@ -2595,8 +2607,7 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     if (stream && stream->state == Http2StreamState::Closed) {
         printd(2, "sendStreamData() stream %d CLOSED: reset=%d error_code=%u end_stream=%d\n",
             stream_id, stream->reset ? 1 : 0, stream->error_code, end_stream ? 1 : 0);
-        xsink->raiseException("HTTP2-STREAM-RESET",
-            "stream %d was reset by peer (error code %u)", stream_id, stream->error_code);
+        raiseStreamReset(stream_id, stream->error_code, xsink);
         return -1;
     }
 

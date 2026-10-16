@@ -181,6 +181,10 @@ resp = rc.restGet("/api/data");
     - call-local timeout requests now cancel unfinished I/O when their deadline expires
     - a call-local request timeout (restDoRequestWithTimeout(), restPostWithTimeout()) is also the request's transport
       deadline, so it may exceed the client's request timeout; such requests previously failed at the client's timeout
+    - requests with a call-local timeout, async requests, and the requests of restDoRequestWithRetry() are sent again
+      after a transport error in the same cases as restDoRequest() sends a request again, for example when the server
+      refused the request without processing it or its connection failed; they previously failed on the first such
+      error
     - preserve fractional milliseconds in response waits so nested retry budgets do not send an extra request
     - async request and SSE startup timeouts retain their completion error when the controller aborts I/O
     - initial release
@@ -5376,6 +5380,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         #! Whether a Basic or Digest challenge was already answered
         bool http_auth_retried = False;
 
+        #! The decisions to send the request again after a transport error; see @ref resendAfter()
+        hash<HttpClientIo::HttpClientResendInfo> resend();
+
         #! Follows redirects; created with the first request as it was sent
         *HttpRedirectFollower rf;
 
@@ -5512,18 +5519,58 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     }
 
     *hash<SocketPollInfo> continuePoll() {
-        try {
-            return continuePollIntern();
-        } catch (hash<ExceptionInfo> ex) {
-            reject(ex);
-            state = SPS_COMPLETE;
-            if (caller_driven) {
-                # nothing is watching the Promise; the caller drives this operation and would otherwise loop
-                # on goalReached() forever with the failure invisible
-                rethrow;
+        while (True) {
+            try {
+                return continuePollIntern();
+            } catch (hash<ExceptionInfo> ex) {
+                if (resendAfter(ex)) {
+                    continue;
+                }
+                reject(ex);
+                state = SPS_COMPLETE;
+                if (caller_driven) {
+                    # nothing is watching the Promise; the caller drives this operation and would otherwise loop
+                    # on goalReached() forever with the failure invisible
+                    rethrow;
+                }
+                return NOTHING;
             }
-            return NOTHING;
         }
+    }
+
+    #! Prepares the request to be sent again if a submitted request failed with an error that allows it
+    /** The connection manager makes the same decision as for its synchronous requests (see
+        @ref HttpClientIo::HttpClientConnectionManager::resendRequest()), so a request sent with this operation is
+        sent again in the same cases as one sent with @ref RestClientIo::restDoRequest(): for example a request that
+        the server refused without processing it, or one whose connection failed.  Requests with a call-local timeout
+        and the requests of @ref RestClientIo::restDoRequestWithRetry() are sent with this operation, so they would
+        otherwise fail on transport errors that a plain request recovers from.  Failed connection attempts are bounded
+        by the connector, so only a request that was submitted is considered.
+
+        @param ex the error of the request
+
+        @return @ref True if the request is sent again, on a connection acquired anew
+    */
+    private bool resendAfter(hash<ExceptionInfo> ex) {
+        if (state != SPS_IO_WAITING || !pending_stream || promise_done) {
+            return False;
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = rcio.getConnectionManager();
+        string url = isRedirected() ? rf.getOrigin() : rcio.getUrl();
+        if (!mgr.resendRequest(url, isRedirected() ? rf.getMethod() : method, pending_stream, ex, \resend)) {
+            return False;
+        }
+        cancelPendingStream();
+        delete pending_future;
+        delete pending_stream;
+        # the request is prepared again when it is submitted, as after an authentication challenge
+        delete prepared_attempt;
+        connector = new RestClientIoAsyncConnector(rcio, isRedirected() ? rf.getOrigin() : NOTHING);
+        connection_ready_notifier = NOTHING;
+        waiting_for_connection = False;
+        self_signaled_notifier = False;
+        state = SPS_CONNECTING;
+        return True;
     }
 
     #! Called by the controller on completion, timeout, or cancellation

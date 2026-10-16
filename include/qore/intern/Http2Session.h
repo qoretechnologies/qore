@@ -863,6 +863,13 @@ private:
         int32_t stream_id, const uint8_t* data, size_t len, void* user_data);
     static int onStreamCloseCallback(nghttp2_session* session, int32_t stream_id,
         uint32_t error_code, void* user_data);
+
+    //! Raises the error for a stream that the peer closed with an error code
+    /** @c HTTP2-STREAM-REFUSED for REFUSED_STREAM, which means that the request was not processed, otherwise
+        @c HTTP2-STREAM-RESET
+    */
+    static void raiseStreamReset(int32_t stream_id, uint32_t error_code, ExceptionSink* xsink);
+
     static int onHeaderCallback(nghttp2_session* session, const nghttp2_frame* frame,
         const uint8_t* name, size_t namelen, const uint8_t* value, size_t valuelen,
         uint8_t flags, void* user_data);
