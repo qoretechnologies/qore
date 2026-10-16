@@ -76,6 +76,105 @@ private:
     const QoreProgramLocation* old_runtime_loc = nullptr;
     const QoreStackLocation* old_stack;
 };
+
+// Global trim has no class/receiver or type parameters. Admission requires its
+// Program and caller context to match. Preserve the ordinary builtin parse-option
+// transition: an AOT body can have different runtime options from its Program.
+class QoreAOTStringTrimFrame final : public QoreStackLocation {
+public:
+    explicit QoreAOTStringTrimFrame(RuntimeConfig& rc) : rc(rc), loc(get_runtime_location()) {
+    }
+
+    bool init(QoreProgram& program, const AbstractQoreFunctionVariant& variant, ExceptionSink* xsink) {
+        QoreParseOptions po = program.getParseOptions();
+        if (runtime_get_parse_options() != po) {
+            old_rc_po = rc.getParseOptions();
+            rc.setParseOptions(po);
+            restore_policy = true;
+            swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), po,
+                old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+            if (*xsink) {
+                return false;
+            }
+        }
+        old_return_type = saveReturnTypeInfo(variant.getReturnTypeInfo());
+        old_flags = rc.getRuntimeFlags();
+        rc.setRuntimeFlags(static_cast<q_rt_flags_t>(variant.getFlags()));
+        old_stack = update_get_runtime_stack_builtin_location(this, stmt, pgm, old_runtime_loc);
+        pushed = true;
+        return true;
+    }
+
+    ~QoreAOTStringTrimFrame() override {
+        if (pushed) {
+            update_runtime_stack_location(old_stack, old_runtime_loc);
+        }
+        if (restore_policy) {
+            rc.setParseOptions(old_rc_po);
+            update_runtime_statement_location(old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+        }
+        if (pushed) {
+            rc.setRuntimeFlags(old_flags);
+            saveReturnTypeInfo(old_return_type);
+        }
+    }
+
+    QoreProgram* getProgram() const override { return pgm; }
+    const AbstractStatement* getStatement() const override { return stmt; }
+    const std::string& getCallName() const override {
+        static const std::string name = "trim";
+        return name;
+    }
+    qore_call_t getCallType() const override { return CT_BUILTIN; }
+    const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+
+private:
+    RuntimeConfig& rc;
+    const QoreProgramLocation* loc;
+    q_rt_flags_t old_flags;
+    const QoreTypeInfo* old_return_type;
+    const AbstractStatement* stmt = nullptr;
+    QoreProgram* pgm = nullptr;
+    const QoreProgramLocation* old_runtime_loc = nullptr;
+    const QoreStackLocation* old_stack;
+    bool pushed = false;
+    bool restore_policy = false;
+    QoreParseOptions old_rc_po;
+    QoreParseOptions old_runtime_po;
+    const AbstractStatement* old_runtime_stmt = nullptr;
+    const QoreProgramLocation* old_runtime_ctx_loc = nullptr;
+};
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_string_trim_aot_v1(QoreAOTContext* ctx,
+        int32_t slot, uint64_t value, uint64_t** arg_cleanups, ExceptionSink* xsink) {
+    assert(ctx && ctx->call_targets && slot >= 0 && slot < ctx->num_exprs && xsink);
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_STRING_TRIM")
+        && !std::getenv("QORE_AOT_DISABLE_PRELINKED_CALLS");
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreValue arg = fromBits(value);
+    QoreProgram* pgm = target.pgm ? target.pgm : rc.getProgram();
+    if (!enabled || arg.isEnum() || arg.getType() != NT_STRING || !target.variant
+            || !pgm || pgm != rc.getProgram() || pgm != getProgram()
+            || pgm != qore_get_call_program_context()) {
+        return qore_rt_call_direct_aot_consume_args(ctx, slot, &value, arg_cleanups, 1, xsink);
+    }
+    if (*xsink || check_stack(xsink)) {
+        return toBits(QoreValue());
+    }
+    QoreAOTStringTrimFrame frame(rc);
+    if (!frame.init(*pgm, *target.variant, xsink)) {
+        return toBits(QoreValue());
+    }
+    CodeContextHelper context(xsink, CT_BUILTIN, "trim");
+    return toBits(qore_eval_builtin_call(xsink, [&]() -> QoreValue {
+        // Use the canonical Unicode-aware implementation, not the byte-only
+        // qore_fast_trim helper. In particular, malformed encodings must throw.
+        QoreStringNodeValueHelper str(arg);
+        SimpleRefHolder<QoreStringNode> result(str->copy());
+        return result->trim(xsink, nullptr) ? QoreValue() : result.release();
+    }));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_split_aot_v1(QoreAOTContext* ctx,

@@ -427,6 +427,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_assign_exact_scalar_local_aot_v2) },
     { "qore_rt_pseudo_string_split_aot_v1",
         reinterpret_cast<void*>(&qore_rt_pseudo_string_split_aot_v1) },
+    { "qore_rt_string_trim_aot_v1", reinterpret_cast<void*>(&qore_rt_string_trim_aot_v1) },
     { "qore_rt_assign_exact_scalar_local_aot_throwing_v2",
         reinterpret_cast<void*>(&qore_rt_assign_exact_scalar_local_aot_throwing_v2) },
     { "qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing) },
@@ -9472,8 +9473,6 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
                 } else if ((!strcmp(fname, "toupper") || !strcmp(fname, "upr"))
                         && fromBits(args[0]).getType() == NT_STRING) {
                     return qore_rt_pseudo_string_upr_noguard(args[0], xsink);
-                } else if (!strcmp(fname, "trim")) {
-                    return qore_fast_trim(args[0], xsink);
                 } else if (!strcmp(fname, "abs")) {
                     return qore_fast_abs(args[0], xsink);
                 } else if (!strcmp(fname, "first")) {

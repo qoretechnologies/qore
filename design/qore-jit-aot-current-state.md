@@ -2856,3 +2856,45 @@ Evidence and the complete audit are preserved in
 the results directory documents every workload and adverse observation. This
 does not establish a global performance ceiling. The next target is generic
 trim/builtin-call setup with canonical overload and exception/context semantics.
+
+### Canonical AOT trim setup validated
+
+The canonical one-argument value overload of trim now has a guarded AOT CallDirect
+helper. Exact builtin signature/flags/default/domain proof is done at compilation;
+non-string/enum arguments and differing Program/caller contexts retain ordinary
+dispatch. The specialized frame preserves runtime parse-option and statement-
+location transitions, flags, return type, diagnostic stack, class/object context
+and stack checks. It calls canonical Unicode-aware trim on an owned copy, retaining
+caller cleanup, exceptions and local reloads. Invoke lowering is unchanged.
+
+An initial prepared candidate was never timed: its parse-option equality guard
+always rejected the text-index workload. A debugger confirmed the mismatch. The
+retained frame reproduces ordinary dispatch's transition, then restores it. Fresh
+qualification and untimed sampling confirm the fast body actually runs. The new
+fixture also exposes a pre-existing JIT trim(reference) bug; removing the old
+name-only shortcut restores canonical reference mutation. No IR/JIT speedup claim.
+
+Optimized confirmation: text index **1423.941 -> 1288.218 ns/item**, **9.53% less
+time**, and **8.73% less than the same-runtime compile-disabled control**. All
+three layouts have disjoint faster ranges in both screening and confirmation.
+Basic calls change little: direct 1.502, method 1.563, indirect 6.605, closure
+19.699, captured closure 25.351 ns/item. These are whole-workload rates, not call
+latencies. Adverse indirect +0.80%, direct +0.19%, list mutation +0.21% and CSV
++0.13% versus before remain recorded; closures +1.34% and callbacks +0.64% versus
+disabled are also retained. Two adverse callback screen layout pairs do not repeat
+as disjoint adverse pairs in confirmation. Overlap does not prove non-regression.
+
+Release/Debug each pass 25 files, 32 cases, 5256 assertions (89 new), plus 22
+cancellation cases/110 assertions, 555 references per IR/AOT and 64 qmod rebuilds.
+Debug native checks remain 1082/1082 in both control states; upstream abrupt-drop
+regression passes four Debug assertions and is skipped in Release. Exactly 64
+owned Release aliases are restored after Debug qualification.
+
+All 2592 windows, controls, artifacts, histories, profiles, fixtures and audit are
+in `bench/runtime-comparison/results-aot-string-trim-macos-arm64.json`; complete
+tables are in that directory's RESULTS.md. Host frequency/load are uncontrolled,
+and unrelated movements are not attributed to the optimization. No fresh Java or
+develop timing is claimed. Next integrate origin/develop at a clean checkpoint,
+refresh paired optimized Java/develop comparisons, then continue profile-led
+builtin and list-mutation work. Selected tests are not full-suite/sanitizer
+certification; Java parity and a global performance ceiling remain open.

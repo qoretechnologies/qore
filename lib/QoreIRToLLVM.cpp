@@ -2286,6 +2286,36 @@ static const char* qore_llvm_get_single_arg_fast_builtin_helper(
     return nullptr;
 }
 
+//! Only the canonical value overload has no argument binding work for a runtime string.
+static bool qore_llvm_is_aot_string_trim(const QoreValue& expr) {
+    const auto* call = expr.hasNode()
+        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+    if (!call || call->hasExplicitTypeArgs() || !call->getName()
+            || strcmp(call->getName(), "trim") || std::getenv("QORE_DISABLE_AOT_STRING_TRIM")) {
+        return false;
+    }
+    const auto* variant = dynamic_cast<const BuiltinFunctionValueVariant*>(call->getVariant());
+    const FunctionEntry* fe = call->getFunctionEntry();
+    std::string namespace_path;
+    if (fe && fe->getNamespace()) {
+        fe->getNamespace()->getPath(namespace_path);
+    }
+    if (!variant || !fe || !fe->hasBuiltin() || namespace_path != "Qore"
+            || variant->getFunctionality() != QDOM_DEFAULT
+            || variant->getFlags() != (QCF_PURE | QCF_HOST_PORTABLE | QCF_NAMED_ARGS)
+            || variant->getReturnTypeInfo() != stringTypeInfo) {
+        return false;
+    }
+    const auto* sig = variant->getSignature();
+    if (!sig || sig->numParams() != 2 || sig->hasVarargs() || sig->needsTypeParameterSubstitution()) {
+        return false;
+    }
+    const auto& types = sig->getTypeList();
+    const auto& defaults = sig->getDefaultArgList();
+    return types.size() == 2 && types[0] == stringTypeInfo && types[1] == stringOrNothingTypeInfo
+        && defaults.size() == 2 && defaults[0].isNothing() && defaults[1].isNothing();
+}
+
 static std::string formatLLVMDateOffset(int utc_offset) {
     char buf[16];
     char sign = utc_offset < 0 ? '-' : '+';
@@ -21237,6 +21267,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     direct_inst->expr, current_ir_func,
                     direct_inst->operands[arg_start], aot_mode)
                 : nullptr;
+            bool string_trim_fast_path = aot_mode && nargs == 1 && !direct_inst->has_ref_args
+                && !explicit_inst && qore_llvm_is_aot_string_trim(direct_inst->expr);
 
             // Collect raw args first so context-independent native fast entries
             // can avoid creating boxed temporaries that no call path observes.
@@ -21382,7 +21414,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool call_may_modify_runtime_locals = true;
             bool call_may_throw = true;
             const BatchCalleeInfo* call_effect_info = nullptr;
-            if (type_name_fast_path) {
+            if (string_trim_fast_path) {
+                QoreValue expr_val = direct_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_string_trim_aot_v1",
+                    llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper,
+                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), boxed_args[0],
+                     arg_cleanups, xsink_arg});
+                if (has_arg_cleanups) {
+                    auto clear_helper = module.getOrInsertFunction("qore_rt_clear_arg_cleanups",
+                        llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(clear_helper,
+                        {arg_cleanups, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
+                // The guarded fallback can run ordinary dispatch: keep exception,
+                // ownership and runtime-local reload handling unchanged.
+            } else if (type_name_fast_path) {
                 auto helper = module.getOrInsertFunction("qore_rt_pseudo_type",
                         llvm::FunctionType::get(i64_type, {i64_type}, false));
                 call_result = builder->CreateCall(helper, {boxed_args[0]});

@@ -237,3 +237,30 @@ read keeps an initializer live even if there is no explicit LoadLocal; a fused
 write invalidates a previously constant selector. The existing native-local
 definite-assignment proof can optimize the preserved initialization normally.
 `IRScalarFusedLocals.qtest` covers both correctness and native counter selection.
+
+### Canonical one-argument trim in AOT CallDirect
+
+One non-reference argument to the canonical Qore builtin trim value overload can
+use `qore_rt_string_trim_aot_v1`. Admission proves a BuiltinFunctionValueVariant in
+namespace Qore named trim, exact string return and string/*string parameters,
+PURE/HOST_PORTABLE/NAMED_ARGS flags, default domain, no varargs/type substitution
+or explicit type arguments, and two NOTHING default slots. This does not infer
+assignment from a type hint: the helper guards a non-enum runtime string and the
+same active Program/caller context; misses use ordinary consuming dispatch.
+
+The helper omits argument-list construction and default/type binding only. Its
+frame reproduces the canonical Program parse-option/statement-location transition
+when runtime options differ, with restoration on error and success. It retains
+runtime flags, return type, builtin diagnostics, class/object context and stack
+checks. The result is an owned copy trimmed by the canonical Unicode-aware API;
+caller argument cleanup, exception/result ownership and runtime-local reloads
+are unchanged. No IR opcode, RuntimeConfig layout or serialized call-target layout
+changes; the versioned internal helper uses the ordinary runtime symbol registry.
+
+`QORE_DISABLE_AOT_STRING_TRIM` disables lowering at compile time and exercises
+ordinary consuming dispatch at execution. Prelink-disabled execution also falls
+back. Other overloads and Invoke lowering retain normal dispatch. The old JIT
+name-only trim shortcut is removed because it did not preserve reference overload
+semantics; the legacy byte-only helper is not used by this specialization.
+`AOTStringTrim.qtest` covers overloads, encodings, exceptions, context restoration
+and AOT compilation/control variants.

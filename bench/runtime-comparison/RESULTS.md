@@ -15005,3 +15005,116 @@ host, not all possible polling optimizations. The committed temporary-list gain
 is unaffected. Continue with generic trim/builtin setup, preserving canonical
 overload, ownership, context and error semantics; Java parity and global maximum
 performance remain unestablished.
+
+### Canonical AOT trim call setup
+
+After `6f231f67a`, AOT CallDirect specializes the canonical one-argument value
+overload of `Qore::trim`. Compilation proves its exact builtin signature, flags,
+return type and omitted default. Runtime guards retain ordinary consuming dispatch
+for non-string/enum arguments or differing Program/caller contexts. The specialized
+frame preserves the canonical parse-option/statement-location transition, flags,
+return type, builtin diagnostic frame, class/object context handling and stack
+checks. It calls the same Unicode-aware trimming operation on an owned copy.
+Argument cleanup, result ownership, exceptions and runtime-local reloads remain
+unchanged. Invoke lowering is not specialized.
+
+The fixture exposed an independent pre-existing JIT bug: the name-only fast trim
+shortcut stringified a reference instead of trimming its lvalue. Frozen
+`ffa3e8019`-source reproduces that failure in JIT; AST, IR and tiered agree on the
+correct mutation. The shortcut is removed, preserving ordinary overload resolution.
+The legacy byte-oriented helper is not reused. No IR/JIT performance gain is claimed.
+
+Both epochs use Release -O3/NDEBUG runtimes and qcc -O3 executables. Before is the
+frozen retained fused-local implementation. Disabled means the identical candidate
+runtime with `QORE_DISABLE_AOT_STRING_TRIM=1` only during compilation. All twelve
+workloads use default/reverse/shuffle-487 layouts, randomized interleaving, 4096
+items/seed 7 and three warmup/three measured 300ms windows. Values are median layout
+medians of fork means, in whole-workload ns/item, not isolated call latency. No new
+Java/develop timing occurred; do not pool epochs or construct cross-epoch ratios.
+
+Screen: three forks, order seed 136181, 324 jobs/972 windows.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Vs before|!Vs disabled
+|arithmetic|1.484|1.485|1.482|+0.10%|+0.21%
+|direct_call|1.487|1.485|1.487|-0.16%|-0.10%
+|method_call|1.554|1.547|1.549|-0.42%|-0.12%
+|indirect_call|6.493|6.537|6.518|+0.68%|+0.30%
+|closure_call|19.504|19.478|19.523|-0.14%|-0.23%
+|closure_capture|25.203|25.204|25.104|+0.00%|+0.40%
+|temporary_list|1.568|1.562|1.571|-0.40%|-0.60%
+|list_mutate|189.916|192.620|192.531|+1.42%|+0.05%
+|csv_report|922.542|918.573|912.894|-0.43%|+0.62%
+|object_orders|1729.704|1743.139|1727.161|+0.78%|+0.93%
+|callback_pipeline|81.713|82.590|82.449|+1.07%|+0.17%
+|text_index|1406.061|1290.943|1395.049|-8.19%|-7.46%
+
+Confirmation reruns every workload with the exact same artifact pairs, five forks
+and order seed 136187: 540 jobs/1620 windows.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Vs before|!Vs disabled
+|arithmetic|1.501|1.504|1.497|+0.14%|+0.43%
+|direct_call|1.499|1.502|1.496|+0.19%|+0.39%
+|method_call|1.566|1.563|1.560|-0.18%|+0.20%
+|indirect_call|6.552|6.605|6.637|+0.80%|-0.48%
+|closure_call|19.774|19.699|19.439|-0.38%|+1.34%
+|closure_capture|25.359|25.351|25.337|-0.03%|+0.05%
+|temporary_list|1.582|1.574|1.579|-0.51%|-0.37%
+|list_mutate|190.887|191.280|193.631|+0.21%|-1.21%
+|csv_report|924.205|925.435|925.885|+0.13%|-0.05%
+|object_orders|1748.096|1735.417|1744.280|-0.73%|-0.51%
+|callback_pipeline|83.005|82.546|82.023|-0.55%|+0.64%
+|text_index|1423.941|1288.218|1411.374|-9.53%|-8.73%
+
+Retain the optimization: text indexing takes **9.53% less time versus before**
+and **8.73% less versus the same-runtime disabled control** in confirmation.
+Every layout has disjoint faster observed ranges against both controls in both
+epochs. Confirmation layout improvements versus before are 9.91% / 9.69% / 8.52%;
+versus disabled, 8.53% / 9.18% / 8.73%. Disassembly verifies one specialized trim
+call in each candidate text-index body and none in either control. Actual function
+orders match the original predeclared files. Untimed sampling confirms the fast
+body executes without generic trim argument/default setup below that helper;
+other builtins still use generic setup. Instrumented durations are excluded.
+
+Adverse findings are retained. Indirect calls are +0.80%, arithmetic +0.14%, direct
+calls +0.19%, list mutation +0.21% and CSV +0.13% versus before in confirmation.
+Closures are +1.34% and callbacks +0.64% versus disabled. Screen callbacks have
+disjoint slower reverse/shuffled ranges versus before (+2.27%/+2.08%); neither
+repeats in confirmation. No confirmation pair has disjoint slower ranges, which
+does not prove non-regression. Host load, frequency and thermals are uncontrolled;
+observed ranges are not confidence intervals. Small unrelated movements are not
+attributed to trim setup.
+
+Release and Debug each pass 25 selected files, 32 cases and 5256 assertions,
+including 89 new trim harness assertions. Each rebuilds 64 qmods, passes 555
+references per IR/AOT and three cancellation fixtures (22 cases/110 assertions).
+Debug native checks pass 1082/1082 with bounded-pair scalarization enabled and
+disabled. Upstream abrupt-drop testing passes four Debug assertions and is skipped
+in Release. Debug wrappers restore exactly 64 owned Release aliases and preserve
+unrelated aliases. The fixture covers overloads, missing/optional strings, reference
+mutation, namespaced overrides, malformed/stateful encodings, source preservation,
+class-context restoration, AST/IR/JIT/tiered, AOT O0/O3, stripped source, native EH,
+no-debug, split compilation and compile/runtime-disabled/prelink-disabled controls.
+
+Development history is preserved: an initial build failed on the string-holder
+type; the next test exposed the JIT reference bug. A qualified initial candidate
+was prepared but never timed because sampling showed it always fell back. The
+debugger identified RuntimeConfig/Program parse-option inequality. The final
+frame reproduces ordinary dispatch's transition rather than requiring equality;
+it was rebuilt, requalified and frozen separately before measurement. The first
+baseline probe overexpected tiered failure; only JIT reproduced the bug. An initial
+whole-profile generic-setup absence assertion was too broad: final validation
+checks trim subtrees specifically. These attempts are not substituted for final
+qualification or timing results.
+
+The baseline probe's original captured strings, including the form-feed case,
+are preserved in its completed.json. Auxiliary text sidecars normalize line
+separators; the audit checks that transformation. Timing and qualification logs
+are unaffected.
+
+`results-aot-string-trim-macos-arm64.json` records all 2592 measured windows,
+qualifications, source/artifact provenance, probes, profiles, disassembly, prior
+attempts, drivers and the full audit. This is not full-suite, sanitizer,
+cross-platform, startup or production qualification. Next refresh paired optimized
+Java/develop comparisons at a clean integration checkpoint, then continue
+profile-led builtin setup and list mutation work. Java parity and a global
+performance maximum remain unestablished.

@@ -1,0 +1,71 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+sub emit(string name, auto value) { printf("%s:%y\n", name, value); }
+string sub selected(string value) { return trim(value); }
+string sub temporary(string value) { return trim(tolower(value)); }
+string sub named(string value) { return trim(str: value); }
+auto sub optional(*string value) { return trim(value); }
+auto sub missing(bool assigned) {
+    string value;
+    if (assigned) { value = " contents "; }
+    return trim(value);
+}
+auto sub dynamicTrim(auto value) { return trim(value); }
+sub observe(string name, string value) {
+    try {
+        string result = selected(value);
+        emit(name, (convert_encoding(result, "UTF-8"), result.encoding()));
+    } catch (hash<ExceptionInfo> ex) {
+        emit(name + "-error", (ex.err, ex.callstack[0].function, ex.callstack[0].type));
+    }
+}
+namespace Other {
+    public string sub trim(string value) { return "override:" + value; }
+}
+class TrimContext {
+    private { string value = "class context"; }
+    private string read() { return value; }
+    public string check() {
+        emit("class-trim", selected(" class "));
+        observe("class-error", binary_to_string(<ff>, "UTF-8"));
+        return read();
+    }
+}
+
+foreach string value in (("", " ", " \n\r\t\v\0", "unchanged", " x ",
+        "  longer heap string  ", " \0embedded\0null\0 ", " 日本語 é ", " \f ")) {
+    string original = value;
+    emit("selected", selected(value));
+    emit("temporary", temporary(value));
+    emit("named", named(value));
+    emit("source-unchanged", value == original);
+}
+foreach string encoding in (("UTF-8", "UTF-16LE", "UTF-16BE", "ISO-2022-JP", "ISO-8859-1")) {
+    observe(encoding, convert_encoding("  A B  ", encoding));
+}
+observe("utf8-unicode", " 日本語 ");
+observe("bad-leading", binary_to_string(<ff61>, "UTF-8"));
+observe("bad-middle", binary_to_string(<61ff62>, "UTF-8"));
+observe("bad-trailing", binary_to_string(<61ff>, "UTF-8"));
+observe("bad-stateful", binary_to_string(<1b2442467c4b>, "ISO-2022-JP"));
+observe("after-error", " good ");
+foreach bool assigned in ((True, False)) {
+    try { emit("optional", optional(assigned ? " yes " : NOTHING)); }
+    catch (hash<ExceptionInfo> ex) { emit("optional-error", ex.err); }
+    try { emit("missing", missing(assigned)); }
+    catch (hash<ExceptionInfo> ex) { emit("missing-error", ex.err); }
+}
+string referenced = " referenced ";
+emit("reference-result", trim(\referenced));
+emit("reference-after", referenced);
+emit("explicit-characters", trim("xxvaluexx", "x"));
+emit("explicit-nothing", trim(" contents ", NOTHING));
+emit("other-namespace", Other::trim(" unchanged "));
+emit("dynamic-string", dynamicTrim(" dynamic "));
+try { emit("dynamic-nothing", dynamicTrim(NOTHING)); }
+catch (hash<ExceptionInfo> ex) { emit("dynamic-nothing-error", ex.err); }
+TrimContext checker();
+emit("context-after", checker.check());

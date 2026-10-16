@@ -2131,6 +2131,18 @@ int qore_rt_object_has_exact_aot_target_class_only(QoreAOTContext* ctx, int32_t 
 uint64_t qore_rt_call_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
     uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
+//! Executes the compile-proven canonical trim(string) overload in the current Program.
+/** @param ctx active AOT context
+    @param slot prelinked canonical trim value-overload slot
+    @param value borrowed boxed argument; non-string/enum values use ordinary dispatch
+    @param arg_cleanups caller-owned argument cleanup slots; the caller clears these after return
+    @param xsink exception sink, including canonical encoding/stack failures
+    @return owned boxed result, or NOTHING on error
+    @note Context/type/control misses use consuming ordinary dispatch. No call checkpoint is removed.
+*/
+uint64_t qore_rt_string_trim_aot_v1(QoreAOTContext* ctx, int32_t slot, uint64_t value,
+    uint64_t** arg_cleanups, ExceptionSink* xsink);
+
 //! Direct function call — resolved at parse time, bypasses dynamic_cast chain and AST node copy.
 //! Calls QoreFunction::evalFunctionTmpArgs() directly.
 uint64_t qore_rt_call_function_direct(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
