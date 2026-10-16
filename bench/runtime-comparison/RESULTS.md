@@ -15232,3 +15232,107 @@ Next investigate the still-generic exact-integer fresh-list push path and
 remaining mutation/local publication costs; then revisit closure contexts
 with lifetime, reference, cancellation and observability guarantees intact.
 Java parity and a justified global performance ceiling remain open.
+
+## Exact builtin integer list push (2026-10-16)
+
+Retained candidate: specialize an already-proven fresh, assigned, exclusively
+owned list's in-place push when both source and element types are exact builtin
+`int`. Ordinary optional, unassigned, soft, enum, reference and unproven cases
+keep the checked path. Native signed-64-bit and already NaN-boxed values use
+separate helpers, so wide integers retain their full range and existing boxes
+are shared rather than unboxed and reallocated. This changes LLVM AOT/JIT
+lowering, not the ordinary IR interpreter; only AOT performance is measured.
+
+### Optimized before/after and same-runtime control
+
+Before is frozen `5a23d43e0` from the preceding current checkpoint; parent
+`efa2434d2` is documentation-only. Both runtimes use Release `-O3 -DNDEBUG`,
+LLVM 22.1.8 and `qcc -O3`. The disabled control compiles with
+`QORE_DISABLE_IR_NATIVE_INT_IN_PLACE_LIST_PUSH=1` and uses the identical
+candidate library. Three fixed layouts (default, reverse, shuffle-487), three
+screen forks and five confirmation forks reuse exact frozen artifacts. Each
+fork uses three warmup and three measured 300 ms windows, 4096 items, seed 7.
+Orders are predeclared seeds 136199/136211. All 3024 measured windows remain;
+there are no failed runs, retries or excluded samples. These are whole-workload
+ns/item, not isolated call or push latencies. Values are medians across three
+layout medians of per-fork window means; epochs are not pooled.
+
+|!Workload|!Screen change vs before|!Confirmation before ns/item|!Confirmation candidate ns/item|!Confirmation disabled ns/item|!Change vs before|!Change vs disabled
+|arithmetic|+0.03%|1.499|1.498|1.498|-0.01%|+0.05%
+|direct_call|+0.50%|1.499|1.506|1.495|+0.52%|+0.79%
+|method_call|+0.27%|1.561|1.562|1.565|+0.09%|-0.19%
+|indirect_call|-0.58%|6.618|6.530|6.545|-1.33%|-0.23%
+|closure_call|+1.29%|19.588|19.607|19.927|+0.10%|-1.61%
+|closure_capture|+0.04%|25.365|25.620|25.504|+1.01%|+0.45%
+|temporary_list|+0.33%|1.581|1.579|1.577|-0.07%|+0.14%
+|list_build|-7.73%|86.529|79.591|86.214|-8.02%|-7.68%
+|list_mutate|-1.28%|193.435|193.099|192.158|-0.17%|+0.49%
+|temporary_hash|-0.12%|315.144|315.584|324.101|+0.14%|-2.63%
+|csv_report|-0.17%|930.931|916.271|911.096|-1.57%|+0.57%
+|object_orders|-0.86%|1759.812|1758.558|1759.998|-0.07%|-0.08%
+|callback_pipeline|-0.42%|82.843|82.323|83.214|-0.63%|-1.07%
+|text_index|-0.34%|1300.203|1285.082|1288.770|-1.16%|-0.29%
+
+The target list-building workload improves **86.529 -> 79.591 ns/item**, **8.02%
+less time** versus before and **7.68% less** versus the identical-runtime
+control. All three target layouts have disjoint faster observed fork-mean
+ranges against both controls in both epochs. Confirmation per-layout changes:
+
+|!Layout|!Versus before|!Versus disabled
+|default|-8.065%|-7.783%
+|reverse|-7.751%|-7.414%
+|shuffle-487|-8.303%|-8.568%
+
+The screen's indirect-call shuffled layout is +6.249% versus before with
+non-overlapping adverse ranges; it does not repeat as a disjoint adverse pair
+in confirmation. No confirmation pair has disjoint adverse ranges, which does
+not prove non-regression. Captured closures (+1.01%), direct calls (+0.52%),
+methods (+0.09%) and temporary hashes (+0.14%) remain slower in aggregate versus
+before. Direct calls are +0.79%, captured closures +0.45%, CSV +0.57% and list
+mutation +0.49% versus disabled. All results are retained; unrelated movements
+are not causally assigned to this append specialization. The list-mutation
+change versus before is only -0.17%, not evidence that indexed mutation was
+optimized. No new Java/develop ratios are formed across these separate epochs.
+
+### Proof, qualification and remaining work
+
+Existing freshness, borrowed-root, cache invalidation, paired writeback,
+operand snapshot, cancellation and exception cleanup rules remain intact.
+Admission requires exact builtin integer type pointers: matching only an
+integer base type would also match enums. A dedicated boxed helper takes a
+reference to an existing wide-integer box. Generated list-building code selects
+the new helper only when enabled, and retains the generic coercion and store.
+Actual loaded libraries and all fixed non-default function orders are checked.
+
+Release and Debug each pass 32 selected fixtures / 34 cases / 5333 assertions,
+including 77 focused assertions across AST/IR/JIT/tiered and AOT O0/O3, stripped
+source, EH, no-debug, split and disabled configurations. Native helper tests
+check full-width values, shared box identity/counts and both destruction orders.
+The baseline fixture's 85 lines agree in four execution modes, including enum
+identity, integer conversion and rejected pushes leaving empty lists. Three
+thread/cancellation fixtures add 22 cases / 110 assertions; each IR/AOT mode
+passes 555 reference checks. Debug native tests pass 1082/1082 in both bounded-
+pair control modes; abrupt-drop passes four assertions (Release skips). Both
+builds rebuild 64 qmods; exactly 64 owned Release links are restored afterward.
+
+Untimed profiling is kept separate. The original profile and measured assembly
+show larger remaining costs in paired local coercion/assignment. Structured
+indexed mutation uses a different generic path and is not specialized here.
+Next investigate eliminating demonstrably redundant typed-list coercion and
+publication work without losing runtime-backed local ownership, aliasing,
+re-entrant visibility or cancellation behavior; then revisit closure contexts.
+
+The initial raw-only candidate was revised before timing to preserve boxed
+integers; type admission was narrowed and enum regressions added before timing.
+An early qualification stopped on a successful plain-marker test because the
+driver expected QUnit output; the exact marker handling was corrected. All
+histories, qualification, profiles, raw samples, reference checks, drivers and
+62 audit items are retained in
+`results-aot-native-int-list-push-macos-arm64.json`.
+
+No owned build/test/profile/analysis overlapped timing. Host load, frequency
+and thermals were uncontrolled. Observed ranges are not confidence intervals.
+This is selected macOS arm64 qualification, not full-suite, sanitizer,
+cross-platform, startup or production-workload certification. The preceding
+checkpoint remains the Java/develop comparison; Java parity and a global
+performance ceiling remain open.

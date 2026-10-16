@@ -26457,6 +26457,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 bool native_specialization =
                     !std::getenv("QORE_DISABLE_IR_NATIVE_IN_PLACE_LIST_PUSH");
                 if (native_specialization && assigned_native
+                        && !std::getenv("QORE_DISABLE_IR_NATIVE_INT_IN_PLACE_LIST_PUSH")
+                        && facts->representation == QoreIRValueRepresentation::NativeInt
+                        && facts->type_info == bigIntTypeInfo
+                        && inst->element_type == bigIntTypeInfo
+                        && val->getType() == i64_type) {
+                    // A scalar base-type match is insufficient for enum elements.
+                    // NativeInt facts can still describe a NaN-boxed snapshot.
+                    // Preserve that box instead of unboxing and reallocating it.
+                    bool boxed = nanboxed_values.count(inst->operands[1].id);
+                    auto helper = module.getOrInsertFunction(
+                        boxed ? "qore_rt_list_push_int_bits_in_place_unchecked_v1"
+                              : "qore_rt_list_push_int_in_place_unchecked_v1",
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+                    values[inst->result.id] = builder->CreateCall(helper,
+                        {list_boxed, val}, "list_push_int_in_place");
+                    nanboxed_values.insert(inst->result.id);
+                    return true;
+                }
+                if (native_specialization && assigned_native
                         && facts->representation == QoreIRValueRepresentation::NativeFloat
                         && QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT
                         && val->getType() == double_type) {

@@ -2928,3 +2928,36 @@ raw timing, optimized-build provenance, separate untimed profiles and all
 Continue with exact-integer fresh-list push and mutation/local publication
 costs, then closure context lifetime work. No cross-Program, new IR/JIT,
 full-suite or cross-platform claim. Java parity and a global ceiling are open.
+
+## Exact integer list-push lowering validated
+
+Existing fresh/exclusive in-place list pushes now bypass repeated element
+validation only for assigned, non-NOTHING, exact builtin integer source and
+list element facts. Native i64 and NaN-boxed i64 use distinct versioned helpers;
+the latter shares an existing wide-integer box. Enum base types, soft/optional
+values and unproven cases retain normal checks. No new opcode, RuntimeConfig
+layout or serialized metadata; borrowed roots, COW, snapshots, paired store/
+coercion and cancellation are unchanged. LLVM AOT/JIT both use the lowering;
+ordinary IR interpretation is unchanged and only AOT speed is measured.
+
+Optimized five-fork confirmation improves list building **86.529 -> 79.591
+ns/item**, **8.02% less time**, and **7.68% less** versus the same-library
+compile-disabled control. All three fixed layouts improve with disjoint faster
+observed ranges in both three-fork screening and confirmation. The screening
+indirect-call adverse shuffled layout does not repeat as disjoint adverse in
+confirmation. Small aggregate slowdowns remain (captured closure +1.01%, direct
++0.52%, method +0.09%, temporary hash +0.14% versus before). List mutation changes
+only -0.17%; no general call-speed or indexed-mutation improvement is claimed.
+
+Release/Debug each pass 32 fixtures, 34 cases, 5333 assertions, plus 22 thread/
+cancellation cases and 110 assertions, 555 references per IR/AOT and 64 qmod
+rebuilds. All 1082 Debug native tests pass in both bounded-pair states; four abrupt-drop
+assertions pass in Debug (Release skips). All 3024 timing windows, complete
+control tables, source/artifact identity, untimed profiles, earlier revisions
+and audit are in `bench/runtime-comparison/results-aot-native-int-list-push-macos-arm64.json`.
+
+Next: paired typed-list coercion/publication remains a larger list-building
+cost, and indexed mutation still uses generic lvalue navigation. Prove a narrow
+elision or specialized publication contract before changing those paths. The
+prior optimized checkpoint remains the separate Java/develop comparison; no
+cross-epoch ratios, Java parity or global performance ceiling are claimed.

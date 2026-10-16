@@ -704,6 +704,22 @@ uint64_t qore_rt_list_push_in_place_throwing(uint64_t list_bits, uint64_t val_bi
 uint64_t qore_rt_list_push_float_in_place_unchecked(uint64_t list_bits, double value);
 uint64_t qore_rt_list_push_bool_in_place_unchecked(uint64_t list_bits, int64_t value);
 
+//! Append an exact native integer to a proven fresh, assigned list<int>.
+/** @param list_bits borrowed list; the compiler proves exclusive ownership and exact element type
+    @param value full-width signed integer, not NaN-boxed bits
+    @return the unchanged borrowed list bits; the list owns the appended value
+    @note This does not replace copy-on-write or type checks for unproven lists.
+*/
+uint64_t qore_rt_list_push_int_in_place_unchecked_v1(uint64_t list_bits, int64_t value);
+
+//! Append an already boxed exact integer without replacing its representation.
+/** @param list_bits borrowed fresh, assigned, exclusively owned list<int>
+    @param value_bits borrowed NaN-boxed integer; the list acquires its own reference
+    @return the unchanged borrowed list bits
+    @note Shares an existing wide-integer box rather than allocating a duplicate.
+*/
+uint64_t qore_rt_list_push_int_bits_in_place_unchecked_v1(uint64_t list_bits, uint64_t value_bits);
+
 // --- Statement execution helpers ---
 
 //! Execute a statement (foreach, on_block_exit, context, etc.)

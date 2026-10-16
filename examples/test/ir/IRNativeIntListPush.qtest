@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class IRNativeIntListPushTest
+
+class IRNativeIntListPushTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("Native integer in-place list push", "1.0", \ARGV) {
+        addTestCase("wide values, snapshots, ownership and fallback", \check());
+        addTestCase("native and boxed helper ownership", \nativeOwnership());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private nativeOwnership() {
+        string root = realpath(get_script_dir() + "/../../..");
+        TmpDir dir("qore-native-int-push-ownership-");
+        string executable = dir.path + "/native-test";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++17", "-pthread", "-g",
+            "-I" + root + "/include", "-I" + libdir + "/include",
+            get_script_dir() + "/native_int_list_push.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", executable);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        foreach string level in (("-O0", "-O3")) {
+            run(args + (level,));
+            assertEq("native-int-list-push: ok\n", run((executable,)), level);
+        }
+    }
+    private check() {
+        string source = get_script_dir() + "/IRNativeIntListPush.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex("exact:9223372036854775807:", expected, "full positive integer range");
+        assertRegex("exact:-9223372036854775808:", expected, "full negative integer range");
+        assertRegex("alias:140737488355328:12:", expected, "copy-on-write preserves alias");
+        assertRegex("enum-one:enum<PushState>:", expected, "enum identity is preserved");
+        assertRegex("enum-wide:enum<PushState>:", expected, "wide enum identity is preserved");
+        assertRegex("enum-wrong:RUNTIME-TYPE-ERROR:0", expected, "foreign enum is rejected without mutation");
+        assertRegex("enum-int:RUNTIME-TYPE-ERROR:0", expected, "integer is not an enum");
+        assertRegex("enum-arithmetic:RUNTIME-TYPE-ERROR:0", expected, "native arithmetic is not an enum");
+        assertRegex("enum-to-int:integer:0:", expected, "enum to integer conversion is preserved");
+        assertRegex("enum-wide-to-int:integer:0:", expected, "wide enum to integer conversion is preserved");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            foreach string prefix in (("", "QORE_DISABLE_IR_NATIVE_INT_IN_PLACE_LIST_PUSH=1 ")) {
+                assertEq(expected, run((qore, "--exec-mode=" + mode, source), prefix), prefix + mode);
+            }
+        }
+        TmpDir dir("qore-native-int-list-push-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "QORE_DISABLE_IR_NATIVE_INT_IN_PLACE_LIST_PUSH=1 ",
+                "QORE_DISABLE_IR_NATIVE_IN_PLACE_LIST_PUSH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool enabled = prefix !~ /QORE_DISABLE_IR_NATIVE/;
+                assertEq(enabled, regex(ir,
+                    "(?:call|invoke) i64 @qore_rt_list_push_int_in_place_unchecked_v1"),
+                    "native integer helper selected only with lowering enabled");
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+}

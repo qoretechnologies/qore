@@ -453,6 +453,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_load_constant_aot", reinterpret_cast<void*>(&qore_rt_load_constant_aot) },
     { "qore_rt_list_assignment_value", reinterpret_cast<void*>(&qore_rt_list_assignment_value) },
     { "qore_rt_list_assignment_value_throwing", reinterpret_cast<void*>(&qore_rt_list_assignment_value_throwing) },
+    { "qore_rt_list_push_int_in_place_unchecked_v1",
+        reinterpret_cast<void*>(&qore_rt_list_push_int_in_place_unchecked_v1) },
+    { "qore_rt_list_push_int_bits_in_place_unchecked_v1",
+        reinterpret_cast<void*>(&qore_rt_list_push_int_bits_in_place_unchecked_v1) },
     { "qore_rt_load_static_var_by_path", reinterpret_cast<void*>(&qore_rt_load_static_var_by_path) },
     { "qore_rt_load_static_var_by_path_for_call",
         reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_for_call) },
@@ -4531,6 +4535,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_push_bool_in_place_unchecked(
         uint64_t list_bits, int64_t value) {
     return qore_rt_list_push_native_in_place_unchecked(list_bits,
         QoreValue(value != 0));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_push_int_in_place_unchecked_v1(
+        uint64_t list_bits, int64_t value) {
+    return qore_rt_list_push_native_in_place_unchecked(list_bits, QoreValue(value));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_push_int_bits_in_place_unchecked_v1(
+        uint64_t list_bits, uint64_t value_bits) {
+    QoreValue value = fromBits(value_bits);
+    assert(value.getType() == NT_INT);
+    return qore_rt_list_push_native_in_place_unchecked(list_bits, value.refSelf());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_push_by_type_path(uint64_t list_bits, uint64_t val_bits,

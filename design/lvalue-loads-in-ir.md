@@ -258,3 +258,31 @@ When adding a new lvalue opcode or helper:
 - Removal opcodes match `LValueRemoveHelper` semantics, including which forms run
   destructors, and run them with the lvalue locks released.
 - Tests cover unique and shared-container mutation.
+
+## Exact builtin integer append lowering
+
+LLVM AOT/JIT lowering may replace an already-marked in-place list push with an
+unchecked integer helper only when the source has assigned, never-NOTHING
+NativeInt facts, both source and element type are exactly `bigIntTypeInfo`,
+and the LLVM operand is i64. A scalar base-type match is not sufficient: enum
+values also have scalar base types. The original freshness/exclusive-local
+proof, borrowed root and cache cleanup requirements still apply.
+
+A raw native integer uses `qore_rt_list_push_int_in_place_unchecked_v1`; an
+already NaN-boxed operand uses `qore_rt_list_push_int_bits_in_place_unchecked_v1`.
+The first accepts all signed 64-bit values and constructs the normal QoreValue;
+the second acquires the list's own reference without replacing an existing
+wide-integer box. Both return unchanged borrowed list bits. Operand cleanup
+continues to own any source box independently. These helpers introduce no
+runtime policy/context, callback or type-conversion operation.
+
+Optional/unassigned/soft/enum values and unproven lists retain ordinary checked
+handling. No shared-local locking, COW, mutation snapshot or cancellation rule
+is weakened. Paired stores and their coercion are not removed by this change,
+including for runtime-backed AOT locals. `QORE_DISABLE_IR_NATIVE_INT_IN_PLACE_LIST_PUSH`
+disables this lowering; the existing general native-push gate also applies.
+Neither gate adds a runtime branch. Ordinary IR interpretation is unchanged.
+
+`IRNativeIntListPush.qtest` covers wide integers, aliases, reference roots,
+snapshots, unassigned/optional/soft inputs, enum identity/conversion/rejection,
+AOT configurations and native reference-count/box identity tests at O0/O3.
