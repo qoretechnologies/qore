@@ -5638,6 +5638,34 @@ static QoreValue f_dbg_force_fd_swap_next_wait(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Debug-only: arm a one-shot hook so the async I/O controller treats a registered socket's object as deleted on
+//! its next wait-generation check.
+/** This reproduces, deterministically and without a race, the state behind an AsyncIoController I/O-thread spin:
+    a socket object deleted while one of its operations is still registered.  Deleting the object for real closes
+    its fd, so the event-driven controller stops re-queuing the operation and the deleted-socket path is never
+    reached; the hook instead leaves the socket (and its firing fd) in place and makes the controller's next
+    wait-generation check behave as if the object were deleted, ending the operation with SOCKET-CLOSED through the
+    normal eviction path.  One-shot, DEBUG builds only.
+*/
+static QoreValue f_dbg_force_async_io_deleted(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    if (!obj) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR",
+            "dbg_force_async_io_deleted() requires a Socket argument");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreSocketObject> sock(
+        reinterpret_cast<QoreSocketObject*>(
+            const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET, xsink)),
+        xsink);
+    if (*xsink || !sock) {
+        return QoreValue();
+    }
+    sock->dbgForceAsyncIoDeleted();
+    return QoreValue();
+}
+
 //! Debug-only: arm a one-shot connection abort for an exact mutation \c "op_id".
 /** A consumer of the datasource mutation observer cannot otherwise produce a structural
     LOST_CONNECTION outcome on a real driver: connection_aborted is settable only from inside a
@@ -6754,6 +6782,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_force_async_io_deleted", f_dbg_force_async_io_deleted,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_ds_arm_connection_abort", f_dbg_ds_arm_connection_abort,

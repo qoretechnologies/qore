@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%require-types
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/AsyncSocketIo
+
+%exec-class DeletedSocketEvictionTest
+
+#! Waits for the socket to become readable and never consumes it, so the controller keeps the operation registered
+#! and re-queues it every I/O loop iteration (the state in which a deleted backing socket would otherwise spin).
+class WaitReadableOp inherits Qore::AbstractPollOperation {
+    public {
+        Counter registered(1);
+    }
+    private {
+        Socket sock;
+        bool first = True;
+    }
+    constructor(Socket s) {
+        sock = s;
+    }
+    string getGoal() { return "wait-readable"; }
+    string getState() { return "waiting"; }
+    bool goalReached() { return False; }
+    *hash<SocketPollInfo> continuePoll() {
+        if (first) {
+            first = False;
+            registered.dec();
+        }
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": sock};
+    }
+    abort() {
+    }
+}
+
+class DeletedSocketEvictionTest inherits QUnit::Test {
+    private {
+        Logger logger;
+    }
+
+    constructor() : QUnit::Test("DeletedSocketEvictionTest", "1.0", \ARGV) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        addTestCase("deleted socket evicts the operation", \deletedSocketEviction());
+        set_return_value(main());
+    }
+
+    #! A socket object deleted while one of its operations is registered must not make the controller's I/O thread
+    #! spin re-querying the deleted object forever; the operation must be evicted with a SOCKET-CLOSED error.
+    /** The deleted condition is simulated with the debug hook dbg_force_async_io_deleted(), which is registered
+        only in a library-debug build: deleting the object for real closes its fd, so the event-driven controller
+        would stop re-queuing the operation and never reach the deleted-socket path.  The hook leaves the socket
+        (and its firing fd) in place and makes the controller's next wait-generation check behave as if the object
+        were deleted - exactly the production state behind the spin.
+    */
+    deletedSocketEviction() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_force_async_io_deleted() is only registered in a library-debug build");
+        }
+
+        AsyncSocketIo::AsyncSocketIoController ctl(logger);
+        ctl.start();
+        on_exit delete ctl;
+
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+        on_exit server.close();
+
+        Socket client();
+        client.connect("127.0.0.1:" + port, 5s);
+        on_exit client.close();
+        Socket accepted = server.accept(5s);
+
+        # the peer sends data and the operation never consumes it, so "accepted" stays readable and the controller
+        # keeps the operation queued every iteration - the state in which a deleted backing socket spins
+        client.send("data-that-is-never-consumed");
+
+        WaitReadableOp op(accepted);
+        Queue q = ctl.submit(<SocketPollOperationInfo>{
+            "sock": accepted,
+            "spop": op,
+            "owner": "deleted-socket-test",
+            "to": 30s,
+        });
+
+        # wait until the operation is registered and its wait generation is established (deterministic: unblocks
+        # when continuePoll() first runs, no sleep)
+        op.registered.waitForZero(10s);
+
+        # simulate the backing socket object being deleted while the operation is registered and its fd is firing
+        call_function("dbg_force_async_io_deleted", accepted);
+
+        # the controller must evict the operation promptly with SOCKET-CLOSED, not spin forever
+        date start = now_us();
+        auto result = q.get(10s);
+        date elapsed = now_us() - start;
+
+        assertEq(Qore::NT_HASH, result.typeCode(), "the operation delivered a completion");
+        assertTrue(exists result.ex, "the completion carries an error");
+        assertEq("SOCKET-CLOSED", result.ex.err, "a deleted backing socket ends the operation with SOCKET-CLOSED");
+        assertTrue(elapsed < 5s, sprintf("the operation is evicted promptly, not spun on; took %y", elapsed));
+
+        accepted.close();
+    }
+}

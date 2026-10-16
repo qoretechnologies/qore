@@ -32,6 +32,13 @@
     now released when the jump is taken, so the loop runs at a constant speed, and a temporary value held across
     the jump is released when the jump leaves its scope rather than when the enclosing function returns.
 
+    Deleting a @ref Qore::Socket "Socket" object while an asynchronous I/O operation on it is still registered with
+    the async I/O controller no longer makes the controller's I/O thread spin at 100% CPU, which stopped the server
+    from handling further I/O and from shutting down. A client could trigger this remotely — for example by opening
+    a log WebSocket with a large history and disconnecting while the server was still sending the queued history —
+    so it was a denial-of-service exposure. The operation on a deleted socket is now ended with a
+    <tt>SOCKET-CLOSED</tt> error and removed from the wait set.
+
     AOT-compiled modules record the AOT runtime identity of the %Qore library that compiled them, and a module
     compiled by a library with a different generated-code contract is refused when it is loaded, with an error that
     names the module and both identities and asks for the module to be rebuilt, instead of loading and failing later
