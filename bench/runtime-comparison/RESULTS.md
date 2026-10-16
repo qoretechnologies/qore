@@ -15118,3 +15118,117 @@ cross-platform, startup or production qualification. Next refresh paired optimiz
 Java/develop comparisons at a clean integration checkpoint, then continue
 profile-led builtin setup and list mutation work. Java parity and a global
 performance maximum remain unestablished.
+
+## Current optimized feature, develop and Java checkpoint (2026-10-16)
+
+This supersedes earlier Java/develop checkpoints for the current retained branch.
+Feature `5a23d43e0` and current develop `6f46bbc9b` are independently built with
+matching Release `-O3 -DNDEBUG` compiler flags, LLVM 22.1.8, SDK/dependencies
+and SCU settings; each compiles its own `qcc -O3` executables. Allocation tracking
+is off. Java is warmed Temurin 25.0.2+10 with JMH 1.37, never `-Xint`.
+
+All 37 microbenchmarks and four mixed workloads share one interleaved epoch.
+Qore uses three fixed layouts (default, reverse, shuffle-487), each with five
+processes. Each microbenchmark block also contains one fresh Java fork. Three
+warmups, three 300 ms measurement windows, count 4096, seed 7; randomized
+workload/fork blocks and runtime/layout order (seed 136193). All 1415 jobs and
+4245 windows are retained. Qore is the median of three layout medians of five
+process means; Java is the median of five fork means. No best-layout selection.
+
+These are whole-workload ns/element, not isolated call latency. Direct/final
+targets permit inlining; Java dynamic/callback targets have verified
+`DONT_INLINE` hints. Compiler, ownership and allocation semantics differ.
+
+|!Workload|!Develop AOT ns/element|!Feature AOT ns/element|!Java JIT ns/element|!Develop / feature time|!Feature / Java time
+|arithmetic|6.930|1.451|0.888|4.777x|1.633x
+|direct_call|7.027|1.448|0.885|4.853x|1.636x
+|method_call|6.937|1.530|0.888|4.534x|1.724x
+|indirect_call|217.216|6.489|1.671|33.472x|3.883x
+|polymorphic_call|297.104|21.855|2.520|13.595x|8.673x
+|polymorphic_expression_call|127.690|10.255|2.521|12.452x|4.067x
+|monomorphic_call|11.609|3.405|1.661|3.410x|2.050x
+|optional_method_call|195.728|10.183|1.658|19.221x|6.142x
+|polymorphic_float_call|315.597|22.107|2.545|14.276x|8.686x
+|polymorphic_float_expression_call|147.701|10.341|2.545|14.283x|4.063x
+|monomorphic_float_call|11.760|3.353|1.641|3.508x|2.043x
+|optional_float_method_call|204.020|10.506|1.654|19.420x|6.351x
+|boxed_float_method_call|232.474|18.942|2.548|12.273x|7.434x
+|dynamic_int_result_call|188.913|9.996|3.057|18.898x|3.270x
+|dynamic_int_result_fallback|432.281|20.946|2.989|20.638x|7.009x
+|boxed_int_method_call|213.849|16.106|2.520|13.277x|6.392x
+|boxed_int_method_fallback|256.672|29.988|2.533|8.559x|11.840x
+|boxed_float_method_fallback|305.627|30.954|2.520|9.874x|12.281x
+|boxed_int_method_effect|356.058|84.519|1.887|4.213x|44.790x
+|dynamic_float_result_call|206.752|11.278|3.318|18.332x|3.400x
+|indirect_wide|262.354|6.635|1.663|39.543x|3.989x
+|indirect_float|221.902|6.340|1.631|34.999x|3.887x
+|indirect_int_result|192.055|5.962|1.874|32.215x|3.182x
+|indirect_float_result|196.045|7.238|2.937|27.084x|2.464x
+|indirect_tagged_float|269.035|6.536|1.625|41.161x|4.022x
+|indirect_branch_float|229.210|6.513|1.640|35.195x|3.971x
+|indirect_affine|218.078|6.564|1.614|33.226x|4.067x
+|indirect_affine_wide|264.453|6.449|1.626|41.004x|3.966x
+|indirect_branch_int|218.741|6.710|1.662|32.599x|4.038x
+|dispatch_control|7.296|1.562|0.934|4.670x|1.672x
+|list_read|8.510|2.636|0.282|3.229x|9.363x
+|list_build|103.340|85.698|2.593|1.206x|33.046x
+|list_mutate|196.651|191.877|4.009|1.025x|47.863x
+|temporary_list|135.361|1.537|1.161|88.054x|1.324x
+|temporary_hash|309.078|313.596|15.271|0.986x|20.535x
+|closure_call|132.164|19.654|1.653|6.725x|11.893x
+|closure_capture|152.988|25.300|1.733|6.047x|14.603x
+
+Direct/final workloads improve 4.85x/4.53x over develop but still take
+1.64x/1.72x Java time. Direct is near the Qore arithmetic control, so that
+entire gap cannot be attributed to call overhead. Stable native methods
+remain about 2.05x Java time, typed callbacks 3.88x, and plain/captured
+closures 11.89x/14.60x. Same-Program fast paths help substantially but do
+not establish Java parity across call categories. Cross-Program calls are
+not measured here. The temporary-list result is a scalarizable two-element
+list workload, not arbitrary dynamic-list throughput.
+
+### Mixed processing and adverse results
+
+|!Workload|!Develop ms / 4096 records|!Feature ms / 4096 records|!Speedup|!Elapsed-time change
+|csv_report|4.276|3.716|1.151x|-13.11%
+|object_orders|8.086|6.995|1.156x|-13.49%
+|callback_pipeline|1.167|0.337|3.467x|-71.16%
+|text_index|6.707|5.212|1.287x|-22.28%
+
+Input generation, startup and compilation are excluded; parsing, transformation,
+temporary allocation, aggregation and result formatting are included. These
+synthetic CPU workloads are not production applications; there is no single
+overall Qore speedup, external I/O or Java mixed-workload claim.
+
+List mutation is 2.43% faster than current develop, with all three layout
+medians improved (-2.83%, -2.97%, -2.25%). The earlier 15.88% regression is
+not observed here, but mutation still takes 47.86x Java time. Temporary
+hashes remain 1.46% slower overall: default +1.46%, reverse -0.74%, shuffle-487
++3.66%. The shuffled layout has disjoint adverse fork-mean ranges. This is
+the only disjoint adverse feature/develop layout pair in this matrix; it is
+retained without causal attribution. Observed ranges are not confidence
+intervals and overlap does not prove non-regression.
+
+### Qualification, evidence and next work
+
+The committed feature Release rebuild passes 25 fixtures / 32 cases / 5256
+assertions, 64 qmods, three thread/cancellation fixtures (22 cases / 110
+assertions), and 555 references in each IR/AOT mode. The abrupt-drop fixture
+is skipped in Release. Both benchmark runtimes and every AOT layout pass
+555 micro and 60 mixed reference cases; Java passes 555. Actual library
+loading and fixed symbol order are checked (the immovable Mach-O header
+is excluded from order validation). This is not a new full-suite, debug,
+sanitizer, cross-platform or general IR/JIT speed qualification.
+
+No task-owned builds, tests, profiling or evidence analysis overlapped
+timing. Host background load, frequency and thermals were not controlled.
+Raw outputs, JMH JSON, process/layout summaries, all 4245 windows, exact
+revisions, build/source/artifact hashes, references, qualification, serial
+untimed diagnostic profiles, drivers and all 62 audit items are retained in
+`results-aot-current-checkpoint-macos-arm64.json`. Do not mix these values
+with older epochs to manufacture additional ratios.
+
+Next investigate the still-generic exact-integer fresh-list push path and
+remaining mutation/local publication costs; then revisit closure contexts
+with lifetime, reference, cancellation and observability guarantees intact.
+Java parity and a justified global performance ceiling remain open.

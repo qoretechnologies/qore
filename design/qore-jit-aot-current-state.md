@@ -2898,3 +2898,33 @@ develop timing is claimed. Next integrate origin/develop at a clean checkpoint,
 refresh paired optimized Java/develop comparisons, then continue profile-led
 builtin and list-mutation work. Selected tests are not full-suite/sanitizer
 certification; Java parity and a global performance ceiling remain open.
+
+## Current optimized branch/develop/Java checkpoint (2026-10-16)
+
+One fresh interleaved epoch compares feature `5a23d43e0`, current develop
+`6f46bbc9b` and warmed Temurin 25.0.2+10/JMH 1.37. Both Qore builds use matching
+Release `-O3 -DNDEBUG` flags and `qcc -O3`. All 37 microbenchmarks, four mixed
+workloads, three fixed Qore layouts, five forks and 4245 windows are retained.
+
+Direct/final workloads improve 4.85x/4.53x over develop, but take 1.64x/1.72x
+Java time. Direct is near its own arithmetic control; these are whole-workload
+costs, not isolated call latency. Stable native methods are about 2.05x Java,
+typed callbacks 3.88x, plain/captured closures 11.89x/14.60x. Temporary-list
+scalarization reaches 1.537 ns/element versus Java 1.161 and develop 135.361.
+
+Mixed CSV/object/callback/text processing improves 1.151x/1.156x/3.467x/1.287x
+over develop. List mutation improves 2.43%, with all three layout medians
+improved, but still takes 47.86x Java time. Temporary hashes remain 1.46%
+slower overall; shuffle-487 is +3.66% with disjoint observed fork ranges.
+No universal non-regression or production-application speedup is inferred.
+
+The committed Release rebuild passes 25 files / 32 cases / 5256 assertions,
+64 qmods, thread/cancellation tests and IR/AOT references. Every benchmark
+artifact and Java also passes its independent reference grid. Full tables,
+methodology and limitations are in `bench/runtime-comparison/RESULTS.md`;
+raw timing, optimized-build provenance, separate untimed profiles and all
+62 audit items are in `results-aot-current-checkpoint-macos-arm64.json` there.
+
+Continue with exact-integer fresh-list push and mutation/local publication
+costs, then closure context lifetime work. No cross-Program, new IR/JIT,
+full-suite or cross-platform claim. Java parity and a global ceiling are open.
