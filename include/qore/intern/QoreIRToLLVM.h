@@ -514,6 +514,9 @@ private:
     std::unordered_map<uint32_t, const QoreTypeInfo*>
         fresh_container_init_types;
     std::unordered_set<uint32_t> exact_fresh_container_values;
+    // Exact integer in-place push results can skip coercion only when stored
+    // back to the same declaration. Runtime publication is still required.
+    std::unordered_map<uint32_t, const LocalVar*> exact_int_list_push_locals;
     size_t fused_fresh_container_inits = 0;
     size_t assigned_hash_guard_elisions = 0;
 

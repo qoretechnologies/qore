@@ -286,3 +286,28 @@ Neither gate adds a runtime branch. Ordinary IR interpretation is unchanged.
 `IRNativeIntListPush.qtest` covers wide integers, aliases, reference roots,
 snapshots, unassigned/optional/soft inputs, enum identity/conversion/rejection,
 AOT configurations and native reference-count/box identity tests at O0/O3.
+
+## Exact integer paired-store coercion
+
+AOT lowering records the originating `LocalVar` only after selecting the exact
+integer in-place helper above, and only for an ordinary non-reference,
+non-closure declaration whose type is canonical `list<int>`. The paired normal
+`StoreLocal` may skip coercion only when it carries both in-place and local-COW
+markers, targets that same declaration, and still has that exact type. The
+producer's borrowed result preserves the list pointer and type and cannot run
+a conversion or callback. A different local or incomplete proof retains checks.
+The compiler-private map is cleared at each function; it is not runtime state.
+
+This eliminates only repeated coercion and its temporary ownership/error work.
+It does not eliminate runtime-backed assignment, cache cleanup/reload, local
+ownership, weak-reference normalization, reflective visibility, exception
+handling or cancellation. Outlining that removes the strong markers prevents
+admission. IR-only redundant-store behavior remains as before. No generic COW
+replacement writeback may be removed using this coercion proof alone.
+
+`QORE_DISABLE_AOT_IN_PLACE_INT_LIST_STORE` disables the new lowering without a
+runtime branch. Disabling the existing integer-push helper also prevents this
+proof. Ordinary IR interpretation and LLVM JIT are unchanged by this extension.
+`AOTInPlaceIntListStore.qtest` pins generated coercion/writeback sites as well
+as wide integers, aliases, expression values, exceptions, reference/captured
+fallbacks, remove/revive, sparse mutation and reflective local replacement.

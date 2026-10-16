@@ -12435,6 +12435,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     reusable_hashdecl_literal_values.clear();
     fresh_container_init_types.clear();
     exact_fresh_container_values.clear();
+    exact_int_list_push_locals.clear();
     fused_fresh_container_inits = 0;
     assigned_hash_guard_elisions = 0;
     local_allocas.clear();
@@ -16968,6 +16969,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool exact_fresh_container =
                 exact_fresh_container_values.count(
                     inst->operands[0].id);
+            auto exact_push = exact_int_list_push_locals.find(inst->operands[0].id);
+            bool exact_int_list_push = exact_push != exact_int_list_push_locals.end()
+                && exact_push->second == linst->local
+                && inst->list_push_in_place && inst->list_push_local_cow
+                && !linst->is_ref && !linst->is_closure
+                && linst->mode == AssignmentMode::Normal
+                && local_ti == qore_get_complex_list_type(bigIntTypeInfo);
+            // The push preserves this declaration's exact container type.
+            // Only coercion is redundant: keep runtime writeback and cache
+            // ownership handling below, including for AOT body locals.
+            bool exact_container_value = exact_fresh_container || exact_int_list_push;
 
             // Case 1: Complex hash/list and hashdecl types need type coercion
             // via acceptAssignment() to set complexTypeInfo for runtime variant
@@ -16977,7 +16989,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool is_complex_typed = linst->local
                 && QoreTypeInfo::isComplex(local_ti)
                 && !QoreTypeInfo::isReference(local_ti)
-                && !exact_fresh_container;
+                && !exact_container_value;
 
             // Case 2: Plain hash/list types need type STRIPPING.
             // When a hash literal like (key: 1) is created by qore_rt_make_hash,
@@ -17023,7 +17035,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool needs_scalar_coerce = linst->local
                 && QoreTypeInfo::hasType(local_ti)
                 && !QoreTypeInfo::isReference(local_ti)
-                && !exact_fresh_container
+                && !exact_container_value
                 && !is_complex_typed
                 && !needs_type_strip
                 && !QoreTypeInfo::getTypedHash(local_ti)
@@ -17228,7 +17240,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // Type-stripped: qore_rt_coerce_value already produced the
                 // plain hash/list value.
                 bool use_no_coerce = needs_value_coerce || needs_type_strip
-                    || exact_fresh_container || linst->mode != AssignmentMode::Normal;
+                    || exact_container_value || linst->mode != AssignmentMode::Normal;
                 const char* aot_helper_name = linst->mode != AssignmentMode::Normal ? "qore_rt_assign_local_no_coerce_aot"
                         : (use_no_coerce ? "qore_rt_assign_local_no_coerce_eval_weak_aot"
                             : "qore_rt_assign_local_eval_weak_aot");
@@ -26429,6 +26441,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[1].id, error);
             if (!val) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            const LocalVar* exact_int_list_local = nullptr;
             if (inst->list_push_local_cow) {
                 auto definition = value_definitions.find(inst->operands[0].id);
                 if (definition == value_definitions.end()
@@ -26438,6 +26451,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 const auto* load = static_cast<const QoreIRLocalInstruction*>(
                     definition->second);
+                if (aot_mode && load->local && !load->is_ref && !load->is_closure
+                        && load->local->getTypeInfoForLValue()
+                            == qore_get_complex_list_type(bigIntTypeInfo)
+                        && !std::getenv("QORE_DISABLE_AOT_IN_PLACE_INT_LIST_STORE")) {
+                    exact_int_list_local = load->local;
+                }
                 auto key = reinterpret_cast<const void*>(load->local);
                 if (local_allocas.count(key)
                         && !(ir_only_locals_set && ir_only_locals_set->count(key))) {
@@ -26473,6 +26492,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     values[inst->result.id] = builder->CreateCall(helper,
                         {list_boxed, val}, "list_push_int_in_place");
                     nanboxed_values.insert(inst->result.id);
+                    if (exact_int_list_local) {
+                        // No conversion, callback or replacement occurs in the
+                        // exact integer helper. Its borrowed result is still the
+                        // correctly typed list loaded from this same local.
+                        exact_int_list_push_locals.emplace(inst->result.id, exact_int_list_local);
+                    }
                     return true;
                 }
                 if (native_specialization && assigned_native

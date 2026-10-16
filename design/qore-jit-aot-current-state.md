@@ -2961,3 +2961,44 @@ cost, and indexed mutation still uses generic lvalue navigation. Prove a narrow
 elision or specialized publication contract before changing those paths. The
 prior optimized checkpoint remains the separate Java/develop comparison; no
 cross-epoch ratios, Java parity or global performance ceiling are claimed.
+
+## Exact integer AOT paired-store coercion validated
+
+After merging develop `2dffa9a52` into feature at `1a709c1bc`, a qualified frozen
+baseline includes the previous integer append specialization. AOT now skips
+repeated coercion only when the exact in-place integer helper's borrowed result
+returns to the same ordinary canonical `list<int>` declaration through its
+paired normal store. Runtime assignment, ownership/cache bookkeeping, weak
+normalization, reflection and cancellation remain. A per-function compiler map
+provides the proof; no runtime state, opcode or ABI changes. The compile control
+is `QORE_DISABLE_AOT_IN_PLACE_INT_LIST_STORE`. JIT/interpreter are unchanged.
+
+Optimized confirmation improves list building **77.551 -> 51.913 ns/item**,
+**33.06% less time** versus the merged baseline and **32.88% less** versus the
+identical-runtime disabled control. All three fixed layouts improve with
+disjoint faster observed ranges in both screening and confirmation. All 3024
+windows remain, without pooling, retries or overlapping owned workloads.
+
+Retained as a targeted gain, with unresolved non-target slowdowns: plain
+closures/object workloads are +2.97%/+1.85% versus before in confirmation,
+and +1.84%/+1.50% versus disabled. Six adverse disjoint pairs in screening and
+two different pairs in confirmation remain in the report. No identical pair
+repeats, but aggregate closure/object slowdowns occur in both epochs. Untimed
+instruction comparison finds unchanged closure, object and callback hot bodies;
+that does not exclude layout/cache/allocator effects or prove non-regression.
+No general call-speed or indexed-mutation improvement is inferred.
+
+Release/Debug each pass 38 selected fixtures / 44 cases / 5723 assertions,
+including 121 focused checks. Upstream HTTP tests add 10 cases / 30 assertions;
+thread/cancellation tests add 22 / 110; IR/AOT each pass 555 reference checks.
+Debug native tests pass 1082 in both bounded-pair states. All 64 owned Release
+qmod aliases are restored. Full timing, qualification, profile, diagnostic
+history and audit evidence is in
+`bench/runtime-comparison/results-aot-in-place-int-list-store-macos-arm64.json`.
+
+Next: the retained runtime assignment is now the largest sampled list-building
+cost. Prove an unchanged-root publication optimization separately, preserving
+runtime ownership, cache freshness and reflective replacement; do not relax
+general paired COW writeback. Then revisit closure context costs. The previous
+Java/develop checkpoint is a separate older epoch; no new Java/develop ratio,
+global ceiling or full-suite/cross-platform certification is claimed.
