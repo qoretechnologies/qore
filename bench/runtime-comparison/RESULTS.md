@@ -14721,3 +14721,115 @@ There is no fresh paired Java measurement; do not combine this Qore result with
 an older Java epoch to manufacture a new ratio. Java parity and a global ceiling
 remain unestablished. Next address the existing scalar lifetime issue, then the
 remaining runtime-local accumulation/reload cost and generic trim call setup.
+
+## Exact numeric snapshots: lifetime correction and AOT regression measurements
+
+This checkpoint fixes the existing scalarized-aggregate lifetime failure for
+wide integers and tag-colliding doubles. New exact numeric snapshots retain
+interpreter values across statement cleanup and materialize native values at
+their definitions. Mutation/PHI values, native PHI alias chains, aggregate-return
+summaries, error exits and frame reuse are covered. Proven inline pair selection
+is unchanged: both temporary-list entry points still have zero list-construction
+calls in before/candidate for every layout. This is a correctness fix, not a
+claim of general performance improvement or non-regression.
+
+All runtimes use Release `-O3 -DNDEBUG`, executables `qcc -O3`. Before is frozen
+`ac156224f` source. Develop remains frozen optimized `347db1015`, not the current
+target tip. Three fixed layouts (default/reverse/shuffle-487), 4096 items, seed 7,
+three warmup and three measured 300 ms windows per fork; randomized interleaved
+blocks and no owned concurrent analysis/build/test/profile. Each fork contributes
+its mean; the aggregate is the median of the three layout medians. These are
+whole-workload ns/item, not isolated call latency. All 2097 windows are retained;
+separate epochs are not pooled. Observed ranges are not confidence intervals.
+
+Three-fork screen: 459 runs, 1377 measured windows.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Develop ns/item|!Time change|!Versus develop
+|direct_call|1.559|1.558|7.185|-0.02%|-78.31%
+|method_call|1.638|1.622|7.241|-0.98%|-77.61%
+|indirect_call|6.852|6.913|232.850|+0.89%|-97.03%
+|monomorphic_call|3.697|3.743|12.054|+1.26%|-68.94%
+|polymorphic_call|23.124|22.815|312.671|-1.34%|-92.70%
+|polymorphic_expression_call|10.597|10.832|136.255|+2.22%|-92.05%
+|closure_call|20.507|20.523|138.604|+0.08%|-85.19%
+|closure_capture|26.414|26.772|160.026|+1.36%|-83.27%
+|boxed_int_method_effect|91.194|89.581|381.108|-1.77%|-76.49%
+|list_build|89.970|89.707|110.463|-0.29%|-18.79%
+|list_mutate|203.105|202.300|208.969|-0.40%|-3.19%
+|temporary_list|17.970|18.377|141.711|+2.27%|-87.03%
+|temporary_hash|344.942|329.505|330.641|-4.48%|-0.34%
+|csv_report|975.070|966.134|1102.981|-0.92%|-12.41%
+|object_orders|1876.576|1893.068|2157.185|+0.88%|-12.24%
+|callback_pipeline|85.677|87.075|304.003|+1.63%|-71.36%
+|text_index|1543.580|1479.624|1715.272|-4.14%|-13.74%
+
+Five-fork confirmation: eight selected workloads, the exact same artifact pairs,
+240 runs, 720 measured windows; no develop rerun in this epoch.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Time change
+|direct_call|1.551|1.548|-0.19%
+|indirect_call|6.874|6.830|-0.64%
+|closure_call|20.263|20.566|+1.49%
+|closure_capture|26.618|26.871|+0.95%
+|polymorphic_expression_call|10.658|10.709|+0.47%
+|temporary_list|18.072|18.236|+0.91%
+|callback_pipeline|85.707|86.962|+1.46%
+|text_index|1543.998|1475.007|-4.47%
+
+Adverse results are retained. Captured closure's shuffled layout has disjoint
+slower ranges in both epochs: +4.61% screening, +4.44% confirmation (before
+26.148-26.970, candidate 27.529-28.033 ns/item). Confirmation ordinary closures
+and callback pipeline slow in all layouts (+0.87% to +3.02% and +1.46% to +1.58%,
+respectively), although their observed ranges overlap. Temporary list is +0.91%
+in aggregate but has mixed layout directions (-0.38%, +1.07%, -0.27%). The other
+three disjoint adverse screen pairs (indirect shuffled, closure reversed and
+temporary list shuffled) do not repeat as disjoint adverse confirmation pairs.
+Overlapping ranges do not prove non-regression. Text index is disjoint and faster
+in all layouts in both epochs (-4.47% confirmation aggregate); the mechanism for
+this broader movement is not isolated. Host load, frequency and thermals are
+uncontrolled. No timing sample was discarded.
+
+The two dynamic captured-closure companions retain 33 and 15 instructions and
+matching coarsely normalized structure in all layouts. Replacing hexadecimal
+operands is not proof of identical machine code or a causal explanation for the
+slowdown. No alignment or layout tuning was attempted. Function order is verified
+against the predeclared order files; no further contract-symbol remapping is
+needed beyond the prior bounded-pair mapping.
+
+Release and Debug each pass 21 selected files, 28 QUnit cases and 4973 assertions,
+64 rebuilt qmods, and 555 reference checks per IR/AOT mode. The new fixture has
+151 explicit value checks per execution and 104 harness assertions, covering
+AST/IR/JIT/tiered parity, fixed-list/hash-disabled controls, AOT O0/O3, native EH,
+strip-source, split and no-debug builds. Native ownership tests bring checks to
+1082/1082 with the bounded-pair control enabled/disabled; they verify exact
+reference counts across return, non-return, wrong-type error and reused frames.
+Supplemental scalar-CSE temporary-lifetime tests pass in Release/Debug. All 64
+owned Release module aliases are restored after Debug; unrelated links preserved.
+
+Failed preparations remain in the record: a prototype missed branch-mutation
+snapshot inputs; a fixture used the wrong comment syntax; first full qualification
+found a native PHI forward-reference issue, and the next lost aggregate-return
+summary selection. All were corrected before successful qualification/timing.
+No failed preparation is reported as a timing observation. The earlier frozen
+baseline reproduces the wide-integer IR/JIT lifetime failure; no baseline AOT
+failure is inferred from it.
+
+A separate follow-up reproduces an existing bug in both frozen before and current
+IR/JIT: after scalarizing a parameterized pair, a typed-local loop bound allows
+fused local instructions to hide a live nonzero counter initializer from dead
+constant-local cleanup. The minimal loop starting at seven and ending at ten
+returns ten instead of AST's three; disabling fixed-list scalarization restores
+three. Two earlier probes with constant inputs/bounds did not reproduce it and
+are retained. The zero-start benchmark also loses the initializer, preventing
+native definite-assignment proof and leaving the counter runtime-backed (the
+accumulator is already native). Fix this analysis separately, add regressions,
+and measure the resulting code before pursuing generic trim setup. Preserve
+reflective-local synchronization and boxed lifetime checks.
+
+`results-aot-scalar-snapshot-macos-arm64.json` contains all raw timing output,
+frozen artifact/source digests, qualification, failures, disassembly, drivers,
+follow-up reproducers and the full audit. Linux-only RSS checks are skipped on
+macOS. This is not full-suite, sanitizer, cross-platform, startup or production
+qualification. IR/JIT performance is not timed. There is no fresh Java comparison;
+do not combine current Qore values with an older Java epoch to make a new ratio.
+Java parity and a global performance ceiling remain open.

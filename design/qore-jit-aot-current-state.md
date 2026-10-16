@@ -2731,3 +2731,53 @@ that before widening scalarization. Runtime-local accumulation/reload and
 boxing/cleanup still remain in the optimized loop; preserve reflective-local
 correctness when investigating them. Generic trim setup is another candidate.
 No fresh Java comparison or global performance ceiling is established.
+
+### Scalarized numeric lifetime correction
+
+The wide-value follow-up above is resolved by exact numeric snapshots. Removing
+an aggregate must not expose constructor values to `DiscardTemps`: even native
+integer/float arithmetic can own boxed nodes. New `SnapshotInt`/`SnapshotFloat`
+instructions preserve these values in an interpreter frame-owned ledger and
+force native unboxing at their definitions. Mutation/PHI inputs and results are
+covered; snapshot aliases of native PHIs are predeclared for block storage order.
+Aggregate-return summaries retain their existing proven numeric projections.
+No object lifetime is extended. See `design/qore-ir-spec.md` for ownership and
+serialization details. The earlier bounded inline-pair path remains selected.
+
+Release and Debug each pass 21 selected files, 28 QUnit cases, 4973 assertions,
+64 qmod rebuilds and 555 reference checks per IR/AOT. Native checks pass
+1082/1082 with the bounded-pair control enabled/disabled. The new fixture has
+151 explicit value checks per execution and 104 harness assertions, including
+O0/O3, EH, strip-source, split and no-debug variants. Supplemental scalar-CSE
+lifetime tests pass in both builds; 64 Release module aliases are restored.
+
+This is retained as a correctness fix, not a general performance win. Optimized
+AOT screening (three layouts, three forks) and confirmation (same artifact pairs,
+five forks) retain all 2097 windows. Before is frozen `ac156224f` source; the
+screen's develop comparison remains frozen optimized `347db1015`, not current
+develop. Confirmation direct calls are 1.551 -> 1.548 ns/item (-0.19%), indirect
+6.874 -> 6.830 (-0.64%), temporary list 18.072 -> 18.236 (+0.91%), and text index
+1543.998 -> 1475.007 (-4.47%). These are whole-workload rates, not call latency.
+
+Adverse findings are explicit: ordinary closures +1.49%, captured closures
++0.95%, callback pipeline +1.46%. Captured closure's shuffled layout slows
++4.44%, with disjoint observed ranges, repeating the screen's +4.61%. Coarse
+closure instruction structure matches, but that does not explain the movement
+or prove identical machine code. No layout tuning was attempted. Overlapping
+ranges in other cases do not establish non-regression. Host load/frequency and
+thermals are uncontrolled, and epochs are not pooled. Full results, preparation
+failures and audit are in `bench/runtime-comparison/RESULTS.md` and
+`results-aot-scalar-snapshot-macos-arm64.json` in that directory.
+
+The next concrete issue is independent and pre-existing: fixed-aggregate
+constant-local cleanup misses fused local reads/writes and can remove a live
+loop-counter initializer. With a typed-local loop bound, `for (int i = 7;
+i < count; ++i)` processes ten instead of three iterations for count ten in
+frozen before/current IR/JIT; disabling fixed-list scalarization restores AST
+behavior. In the zero-start temporary-list benchmark, the missing initializer
+also prevents definite-assignment proof and leaves the counter runtime-backed;
+the accumulator is already native. Preserve all fused local accesses in that
+analysis, add regressions, then measure whether the counter becomes native.
+Do not relax reflective-local or boxed-value ownership checks. Generic trim
+setup remains a subsequent target. No fresh Java ratio, full-suite certification
+or global performance ceiling is established.

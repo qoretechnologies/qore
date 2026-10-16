@@ -2666,6 +2666,32 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     std::unordered_map<const QoreIRInstruction*, ScalarizedBoundedPairRead>
         scalarized_bounded_pair_reads;
     std::unordered_set<const LocalVar*> scalarized_container_locals;
+    std::unordered_set<uint32_t> snapshot_candidates;
+    auto preserve_scalar = [&](QoreIRValue value) {
+        const QoreIRValueFacts* facts = func.getValueFacts(value);
+        if (!facts || facts->assigned_state != QoreIRAssignedState::Assigned || !facts->never_nothing
+                || (facts->representation != QoreIRValueRepresentation::NativeInt
+                    && facts->representation != QoreIRValueRepresentation::NativeFloat)) {
+            return;
+        }
+        auto definition = definitions.find(value.id);
+        const QoreIRInstruction* inst = definition == definitions.end() ? nullptr : definition->second.inst;
+        if (inst && (inst->opcode == QoreIROpcode::SnapshotInt
+                || inst->opcode == QoreIROpcode::SnapshotFloat)) {
+            return;
+        }
+        int64_t low, high;
+        if (facts->representation == QoreIRValueRepresentation::NativeInt
+                && inline_int_bounds(value, low, high, 0)) {
+            return;
+        }
+        if (inst && inst->opcode == QoreIROpcode::ConstFloat
+                && !QoreValue::rawDoubleCollidesWithTag(std::bit_cast<uint64_t>(
+                    static_cast<const QoreIRConstInstruction*>(inst)->constant.float_value))) {
+            return;
+        }
+        snapshot_candidates.insert(value.id);
+    };
     size_t scalarized = 0;
 
     for (const auto& [local, accesses] : local_accesses) {
@@ -3933,6 +3959,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                                 invalid = true;
                                 break;
                             }
+                            // Later incoming mutations need not remain in the constructor's range.
+                            phi_facts.int_range_known = false;
                             QoreIRValue result = func.createValue();
                             func.max_value_id = std::max(
                                 func.max_value_id, result.id);
@@ -4422,6 +4450,40 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 && candidate_bounded_pair_reads.empty())) {
             continue;
         }
+        // Container ownership previously kept these numbers alive across statements. NativeInt/Float
+        // describes their arithmetic type, not whether their interpreter QoreValue can own a node.
+        // Record the proof before erasing definitions; snapshot insertion below is part of the commit.
+        for (QoreIRValue value : aggregate_values) {
+            (void)qore_ir_analysis_cancelled(check_count, "IR scalar snapshot operand analysis");
+            preserve_scalar(value);
+        }
+        for (const auto& [id, value] : candidate_replacements) {
+            (void)id;
+            (void)qore_ir_analysis_cancelled(check_count, "IR scalar snapshot replacement analysis");
+            preserve_scalar(value);
+        }
+        for (const auto& [inst, operation] : candidate_path_operations) {
+            (void)inst;
+            (void)qore_ir_analysis_cancelled(check_count, "IR scalar snapshot mutation analysis");
+            preserve_scalar(operation.left);
+            preserve_scalar(operation.right);
+            snapshot_candidates.insert(operation.result.id);
+        }
+        for (const auto& phi : candidate_aggregate_phis) {
+            (void)qore_ir_analysis_cancelled(check_count, "IR scalar snapshot phi analysis");
+            snapshot_candidates.insert(phi.result.id);
+            for (const auto& [value, predecessor] : phi.incoming) {
+                (void)predecessor;
+                (void)qore_ir_analysis_cancelled(check_count, "IR scalar snapshot phi input analysis");
+                preserve_scalar(value);
+            }
+        }
+        for (const auto& materialization : candidate_aggregate_materializations) {
+            for (QoreIRValue value : materialization.values) {
+                (void)qore_ir_analysis_cancelled(check_count, "IR scalar snapshot materialization analysis");
+                preserve_scalar(value);
+            }
+        }
         if (!retain_aggregate_owner) {
             eliminated.insert(make);
             eliminated.insert(literal_key_constants.begin(),
@@ -4828,13 +4890,72 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     replacement_inst->exception_target =
                         old->exception_target;
                     replacement_inst->temp_scope_id = old->temp_scope_id;
-                    func.setValueFacts(replacement_inst->result,
-                        operation.facts);
+                    // The old element's range does not bound the result of a mutation.
+                    QoreIRValueFacts result_facts = operation.facts;
+                    result_facts.int_range_known = false;
+                    func.setValueFacts(replacement_inst->result, result_facts);
                     *it = std::move(replacement_inst);
                 }
                 (void)qore_ir_rewrite_value_operands(
                     **it, replacements, check_count, false);
                 ++it;
+            }
+        }
+    }
+    // Snapshot at the definition, before any drain or reentrant operation, rather than at the later
+    // projection. Source order gives deterministic IDs. PHIs stay contiguous at block entry.
+    std::unordered_map<uint32_t, QoreIRValue> snapshots;
+    if (!snapshot_candidates.empty()) {
+        for (const auto& block : func.blocks) {
+            std::vector<std::unique_ptr<QoreIRInstruction>> rewritten;
+            std::vector<std::unique_ptr<QoreIRInstruction>> phi_snapshots;
+            rewritten.reserve(block->instructions.size());
+            for (auto& inst : block->instructions) {
+                (void)qore_ir_analysis_cancelled(check_count, "IR scalar snapshot commit");
+                if (inst->opcode != QoreIROpcode::Phi && !phi_snapshots.empty()) {
+                    for (auto& snapshot : phi_snapshots) {
+                        (void)qore_ir_analysis_cancelled(check_count, "IR scalar snapshot phi commit");
+                        rewritten.push_back(std::move(snapshot));
+                    }
+                    phi_snapshots.clear();
+                }
+                std::unique_ptr<QoreIRInstruction> snapshot;
+                if (snapshot_candidates.count(inst->result.id)) {
+                    const QoreIRValueFacts* facts = func.getValueFacts(inst->result);
+                    if (facts && (facts->representation == QoreIRValueRepresentation::NativeInt
+                            || facts->representation == QoreIRValueRepresentation::NativeFloat)) {
+                        QoreIRValueFacts saved = *facts;
+                        saved.ownership = QoreIRValueOwnership::Owned;
+                        snapshot = std::make_unique<QoreIRInstruction>(
+                            facts->representation == QoreIRValueRepresentation::NativeInt
+                                ? QoreIROpcode::SnapshotInt : QoreIROpcode::SnapshotFloat);
+                        snapshot->operands = {inst->result};
+                        snapshot->loc = inst->loc;
+                        snapshot->cached_start_line = inst->cached_start_line;
+                        snapshot->temp_scope_id = inst->temp_scope_id;
+                        snapshot->result = func.createValue();
+                        func.max_value_id = std::max(func.max_value_id, snapshot->result.id);
+                        func.setValueFacts(snapshot->result, saved);
+                        snapshots.emplace(inst->result.id, snapshot->result);
+                    }
+                }
+                bool phi = inst->opcode == QoreIROpcode::Phi;
+                rewritten.push_back(std::move(inst));
+                if (snapshot) {
+                    (phi ? phi_snapshots : rewritten).push_back(std::move(snapshot));
+                }
+            }
+            assert(phi_snapshots.empty()); // A valid block ends with a terminator, not a PHI.
+            block->instructions = std::move(rewritten);
+        }
+    }
+    if (!snapshots.empty()) {
+        for (const auto& block : func.blocks) {
+            for (auto& inst : block->instructions) {
+                (void)qore_ir_analysis_cancelled(check_count, "IR scalar snapshot use commit");
+                if (inst->opcode != QoreIROpcode::SnapshotInt && inst->opcode != QoreIROpcode::SnapshotFloat) {
+                    (void)qore_ir_rewrite_value_operands(*inst, snapshots, check_count, false);
+                }
             }
         }
     }

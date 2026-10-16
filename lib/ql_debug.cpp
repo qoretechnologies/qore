@@ -311,6 +311,74 @@ struct UnitTestCounters {
     } \
 } while (0)
 
+//! Numeric snapshots survive statement drains and release exactly once on every frame exit.
+static void ut_ir_scalar_snapshot(UnitTestCounters& c) {
+    for (bool floating : {false, true}) {
+        ExceptionSink xsink;
+        ValueHolder input(floating ? QoreValue(-4.4942328371557898e307)
+            : QoreValue(std::numeric_limits<int64_t>::min()), &xsink);
+        UT_ASSERT(c, input->hasNode(), "snapshot fixture uses a boxed numeric value");
+        if (!input->hasNode()) {
+            continue;
+        }
+        const AbstractQoreNode* node = input->getInternalNode();
+        for (int mode = 0; mode < 3; ++mode) {
+            QoreIRFunction func("scalar_snapshot_ownership");
+            auto* block = func.createBlock("entry");
+            auto mark = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushTempMark);
+            mark->temp_scope_id = 1;
+            block->instructions.push_back(std::move(mark));
+            auto load = std::make_unique<QoreIRInstruction>(QoreIROpcode::LoadArg);
+            load->result = func.createValue();
+            QoreIRValue source = load->result;
+            block->instructions.push_back(std::move(load));
+            auto snapshot = std::make_unique<QoreIRInstruction>(
+                floating ? QoreIROpcode::SnapshotFloat : QoreIROpcode::SnapshotInt);
+            snapshot->operands = {source};
+            snapshot->result = func.createValue();
+            QoreIRValue result = snapshot->result;
+            func.max_value_id = result.id;
+            block->instructions.push_back(std::move(snapshot));
+            auto drain = std::make_unique<QoreIRInstruction>(QoreIROpcode::DiscardTemps);
+            drain->temp_scope_id = 1;
+            block->instructions.push_back(std::move(drain));
+            if (mode == 2) {
+                // A malformed numeric snapshot raises without leaking the preceding valid one.
+                auto invalid = std::make_unique<QoreIRInstruction>(
+                    floating ? QoreIROpcode::SnapshotInt : QoreIROpcode::SnapshotFloat);
+                invalid->operands = {result};
+                invalid->result = func.createValue();
+                func.max_value_id = invalid->result.id;
+                block->instructions.push_back(std::move(invalid));
+            }
+            auto ret = std::make_unique<QoreIRReturnInstruction>();
+            if (!mode) {
+                ret->opcode = QoreIROpcode::Return;
+                ret->has_value = true;
+                ret->value = result;
+                ret->operands = {result};
+            }
+            block->instructions.push_back(std::move(ret));
+            std::vector<QoreValue> args{*input}; // borrowed from input
+            for (int repeat = 0; repeat < 2; ++repeat) {
+                QoreValue returned;
+                bool ok = QoreIRInterpreter::execute(func, returned, &xsink, nullptr, &args);
+                UT_ASSERT_EQ(c, mode != 2, ok, "snapshot exit status");
+                UT_ASSERT_EQ(c, mode == 2, bool(xsink), "snapshot exception status");
+                if (!mode) {
+                    UT_ASSERT(c, returned.getInternalNode() == node, "return preserves the boxed numeric value");
+                    UT_ASSERT_EQ(c, 2, node->reference_count(), "only input and return own the snapshot value");
+                } else {
+                    UT_ASSERT(c, returned.isNothing(), "non-value exit has no result");
+                }
+                returned.discard(nullptr);
+                xsink.clear();
+                UT_ASSERT_EQ(c, 1, node->reference_count(), "snapshot frame and pool retain no numeric reference");
+            }
+        }
+    }
+}
+
 //! A final release may reenter and delete the variable whose value is being released.
 class UtLocalDiscardString : public QoreStringNode {
 public:
@@ -6720,6 +6788,7 @@ static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* x
 
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
+    ut_ir_scalar_snapshot(c);
     ut_aot_string_split(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
@@ -6739,6 +6808,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
 
 static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
+    ut_ir_scalar_snapshot(c);
     ut_aot_string_split(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);

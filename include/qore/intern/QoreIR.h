@@ -796,7 +796,15 @@ enum class QoreIROpcode : uint16_t {
     //! vector back to (and including) the mark.  See design/ir-loop-jump-temp-scope.md.
     UnwindTemps = 408,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (409, 410, ...)
+    //! Snapshot an assigned exact integer/float before its statement temporaries are released.
+    //!
+    //! Native backends unbox at this instruction, not at a later use. The interpreter owns the
+    //! numeric value until this result slot is overwritten or its frame exits. Only numeric
+    //! primitives are permitted: extending an object's lifetime would change destructor timing.
+    SnapshotInt = 409,
+    SnapshotFloat = 410,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (411, 412, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -805,8 +813,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::UnwindTemps);
-static_assert(QORE_IR_MAX_OPCODE == 408, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::SnapshotFloat);
+static_assert(QORE_IR_MAX_OPCODE == 410, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)

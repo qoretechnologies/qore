@@ -53,7 +53,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 408,
+static_assert(QORE_IR_MAX_OPCODE == 410,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -12508,6 +12508,59 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 phi_node, phi, block.get(), phi->value_kind});
         }
     }
+    // A snapshot of an already-native PHI (or of another such snapshot) is an LLVM alias,
+    // not an unboxing operation. Predeclare the aliases too: the snapshot's dominating block
+    // can follow its users in storage order, just like the PHI above. Do not move unboxing of
+    // a boxed source to a use; it must still happen at the snapshot's original cleanup boundary.
+    std::unordered_multimap<uint32_t, const QoreIRInstruction*> phi_snapshot_users;
+    size_t snapshot_scan_count = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (++snapshot_scan_count % 100 == 0
+                    && qore_check_cancel(nullptr, "LLVM scalar snapshot predeclaration")) {
+                error = "cancelled during LLVM scalar snapshot predeclaration";
+                return false;
+            }
+            if ((inst->opcode == QoreIROpcode::SnapshotInt || inst->opcode == QoreIROpcode::SnapshotFloat)
+                    && inst->operands.size() == 1) {
+                phi_snapshot_users.emplace(inst->operands[0].id, inst.get());
+            }
+        }
+    }
+    std::vector<uint32_t> snapshot_worklist;
+    for (const auto& [phi_node, phi_inst, phi_block, kind] : pending_phis) {
+        (void)phi_node;
+        (void)phi_block;
+        if (++snapshot_scan_count % 100 == 0
+                && qore_check_cancel(nullptr, "LLVM scalar snapshot roots")) {
+            error = "cancelled during LLVM scalar snapshot roots";
+            return false;
+        }
+        if (kind == QoreIRPhiValueKind::NativeInt || kind == QoreIRPhiValueKind::NativeFloat) {
+            snapshot_worklist.push_back(phi_inst->result.id);
+        }
+    }
+    for (size_t i = 0; i < snapshot_worklist.size(); ++i) {
+        if (++snapshot_scan_count % 100 == 0
+                && qore_check_cancel(nullptr, "LLVM scalar snapshot alias worklist")) {
+            error = "cancelled during LLVM scalar snapshot alias worklist";
+            return false;
+        }
+        auto [first, last] = phi_snapshot_users.equal_range(snapshot_worklist[i]);
+        llvm::Value* source = values.at(snapshot_worklist[i]);
+        for (auto user = first; user != last; ++user) {
+            if (++snapshot_scan_count % 100 == 0
+                    && qore_check_cancel(nullptr, "LLVM scalar snapshot alias propagation")) {
+                error = "cancelled during LLVM scalar snapshot alias propagation";
+                return false;
+            }
+            const QoreIRInstruction* snapshot = user->second;
+            llvm::Type* expected = snapshot->opcode == QoreIROpcode::SnapshotInt ? i64_type : double_type;
+            if (source->getType() == expected && values.emplace(snapshot->result.id, source).second) {
+                snapshot_worklist.push_back(snapshot->result.id);
+            }
+        }
+    }
     local_reload_trackers.clear();
     local_reload_deferred.clear();
     local_reload_epoch = nullptr;
@@ -15658,6 +15711,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
 
         // === Unary operations ===
+        case QoreIROpcode::SnapshotInt:
+        case QoreIROpcode::SnapshotFloat: {
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) { return false; }
+            values[inst->result.id] = inst->opcode == QoreIROpcode::SnapshotInt
+                ? ensureIntTypeInline(val, inst->operands[0].id)
+                : ensureFloatType(val, inst->operands[0].id, module);
+            return true;
+        }
         case QoreIROpcode::UnaryMinusInt: {
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }

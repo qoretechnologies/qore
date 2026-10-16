@@ -193,3 +193,34 @@ published for cross-block reuse. Non-consuming-use checks remain necessary.
 `IRScalarCSETemporaryLifetime.qtest` compares signed integer boundaries, computed
 large products, boxed finite doubles, empty loops and ordinary small values in
 AST, IR, tiered, JIT and AOT at optimization levels zero and three.
+
+### Exact numeric snapshots after aggregate scalarization
+
+`SnapshotInt` (409) and `SnapshotFloat` (410) preserve an assigned exact numeric
+SSA value after its owning aggregate is removed. Native arithmetic facts alone
+do not prove inline `QoreValue` storage. The fixed-aggregate scalarizer snapshots
+possibly boxed operands, mutation results and merge values before statement
+cleanup can invalidate them; it also invalidates stale integer bounds on new
+mutation/PHI results. Proven inline values need no snapshot. This does not permit
+extending object lifetimes or hoisting arbitrary conversions.
+
+The interpreter retains snapshots in a separate frame-owned, unique-slot ledger.
+Overwriting a snapshot releases its previous value; ordinary temporary cleanup
+does not release it. Normal, exceptional and cancelled frame exits drain the
+ledger, and returning a snapshot transfers its owned value. Only exact integers
+or floats are accepted, not enum values. The ledger is initialized lazily and
+has at most one registration per SSA slot, including repeated loop execution.
+
+LLVM materializes the native value at the snapshot definition, never by delaying
+unboxing until a later use. Snapshots of native PHIs, including snapshot alias
+chains, are predeclared native aliases so basic-block storage order need not
+match dominance order. Aggregate-return summaries propagate snapshots only with
+matching assigned, never-Nothing native facts. The existing Base instruction
+serialization group carries these unary instructions; the appended opcode
+maximum rejects older readers. No runtime-helper ABI or RuntimeConfig layout
+changes. AOT artifacts require a matching runtime and recompilation.
+
+`IRScalarSnapshot.qtest` covers wide integers, tag-colliding doubles, mutation,
+PHIs, loop overwrites, exceptional exits and serialized closures in AST, IR,
+JIT, tiered and AOT O0/O3 modes. Native tests verify exact reference counts on
+return, non-return and error exits, including pooled frame reuse.

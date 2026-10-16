@@ -8094,6 +8094,25 @@ static bool qore_aot_get_conditional_aggregate_shape(
                         param->second});
                     break;
                 }
+                case QoreIROpcode::SnapshotInt:
+                case QoreIROpcode::SnapshotFloat: {
+                    if (!inst->result.isValid() || inst->operands.size() != 1) {
+                        return false;
+                    }
+                    auto source = values.find(inst->operands[0].id);
+                    const QoreIRValueFacts* facts = func.getValueFacts(inst->operands[0]);
+                    QoreIRValueRepresentation expected = inst->opcode == QoreIROpcode::SnapshotInt
+                        ? QoreIRValueRepresentation::NativeInt : QoreIRValueRepresentation::NativeFloat;
+                    if (source == values.end() || !facts || !facts->never_nothing
+                            || facts->assigned_state != QoreIRAssignedState::Assigned
+                            || facts->representation != expected) {
+                        return false;
+                    }
+                    // An exact numeric snapshot changes lifetime, not the summarized value.
+                    AggregateValue value = source->second;
+                    values.emplace(inst->result.id, value);
+                    break;
+                }
                 case QoreIROpcode::ConstInt:
                 case QoreIROpcode::ConstFloat:
                 case QoreIROpcode::ConstBool: {
@@ -8564,6 +8583,24 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                 }
                 values.emplace(inst->result.id, AggregateValue{
                     AOTAggregateReturnValueKind::Parameter, param->second});
+                break;
+            }
+            case QoreIROpcode::SnapshotInt:
+            case QoreIROpcode::SnapshotFloat: {
+                if (!inst->result.isValid() || inst->operands.size() != 1) {
+                    return false;
+                }
+                auto source = values.find(inst->operands[0].id);
+                const QoreIRValueFacts* facts = func.getValueFacts(inst->operands[0]);
+                QoreIRValueRepresentation expected = inst->opcode == QoreIROpcode::SnapshotInt
+                    ? QoreIRValueRepresentation::NativeInt : QoreIRValueRepresentation::NativeFloat;
+                if (source == values.end() || !facts || !facts->never_nothing
+                        || facts->assigned_state != QoreIRAssignedState::Assigned
+                        || facts->representation != expected) {
+                    return false;
+                }
+                AggregateValue value = source->second;
+                values.emplace(inst->result.id, value);
                 break;
             }
             case QoreIROpcode::ConstInt:

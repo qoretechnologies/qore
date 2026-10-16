@@ -80,7 +80,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 408,
+static_assert(QORE_IR_MAX_OPCODE == 410,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -934,6 +934,10 @@ private:
 struct IRCallFrame {
     std::vector<QoreValue> values;
     IRCleanupSlots cleanup;
+    // Numeric snapshots own their slots independently of statement cleanup. Registration is
+    // once per result slot; overwrite releases the previous iteration's value.
+    IRCleanupSlots scalar_snapshots;
+    bool scalar_snapshots_initialized = false;
     // Remaining uses for borrowed SSA values. Indexed by value ID so hot
     // list-element reads avoid hash-table traffic; storage is pooled per frame.
     std::vector<int32_t> borrowed_temp_remaining;
@@ -987,6 +991,16 @@ struct IRCallFrame {
             }
         }
         cleanup.clear();
+        size_t scalar_cleanup_count = 0;
+        for (auto it = scalar_snapshots.rbegin(); it != scalar_snapshots.rend(); ++it) {
+            if (++scalar_cleanup_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr, "IR scalar snapshot cleanup");
+            }
+            uint32_t id = *it;
+            values[id].discard(xsink);
+            values[id] = QoreValue();
+        }
+        scalar_snapshots.clear();
         for (auto& val : locals_slot_cache) {
             val.discard(xsink);
             val = QoreValue();
@@ -1009,6 +1023,7 @@ struct IRCallFrame {
         values.clear();
         values.resize(reserve_size);
         cleanup.reset(reserve_size);
+        scalar_snapshots_initialized = false;
         if (borrowed_temp_active) {
             std::fill(borrowed_temp_remaining.begin(), borrowed_temp_remaining.end(), 0);
             borrowed_temp_active = 0;
@@ -11926,6 +11941,32 @@ load_local_done:
                 }
                 return false;
             }
+            case QoreIROpcode::SnapshotInt:
+            case QoreIROpcode::SnapshotFloat: {
+                QoreValue value = getIRValue(values, inst->operands[0]);
+                qore_type_t expected = inst->opcode == QoreIROpcode::SnapshotInt ? NT_INT : NT_FLOAT;
+                if (value.getType() != expected || value.isEnum()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "scalar snapshot requires an exact numeric operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                // Initialize the separate ledger only in frames that execute a snapshot. A
+                // local's cleanup can clear a dead init slot before the next loop iteration;
+                // membership, not its current value, ensures registration stays bounded.
+                if (!frame.scalar_snapshots_initialized) {
+                    frame.scalar_snapshots.reset(values.size());
+                    frame.scalar_snapshots_initialized = true;
+                }
+                if (!frame.scalar_snapshots.contains(inst->result.id)) {
+                    frame.scalar_snapshots.push_back(inst->result.id);
+                }
+                setValueSlot(values, inst->result.id, value.refSelf(), xsink);
+                ++ip;
+                break;
+            }
             case QoreIROpcode::DiscardTemps: {
                 // Drain cleanup back to (and including) the nearest PushTempMark
                 // sentinel so expression temps are destructed at end of
@@ -15725,6 +15766,9 @@ load_local_done:
                 if (ret->has_value) {
                     QoreValue val = getIRValue(values, ret->value);
                     bool owned_return_slot = removeCleanupEntry(cleanup, ret->value.id);
+                    if (!owned_return_slot) {
+                        owned_return_slot = removeCleanupEntry(frame.scalar_snapshots, ret->value.id);
+                    }
                     traceIRRef(inst, "return.input", ret->value.id, val,
                         owned_return_slot ? "owned" : "borrowed");
                     if (owned_return_slot && ret->value.id < values.size()) {
