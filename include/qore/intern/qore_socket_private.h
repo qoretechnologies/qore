@@ -1248,15 +1248,6 @@ struct qore_socket_private : public QoreReferenceCounter {
         @since %Qore 3.0
     */
     bool debug_force_fd_swap_next_wait = false;
-
-    //! One-shot hook: the async I/O controller treats this socket's object as deleted on its next
-    //! wait-generation check (dbg_force_async_io_deleted()), to test the deleted-socket eviction path
-    //! deterministically without actually deleting the object (which would close the fd and stop the
-    //! operation from being re-queued).
-    /** @note DEBUG builds only.
-        @since %Qore 3.0
-    */
-    bool debug_force_async_io_deleted = false;
 #endif
 
     // issue #3512: the remote certificate captured

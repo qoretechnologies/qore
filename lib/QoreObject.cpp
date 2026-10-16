@@ -2198,6 +2198,12 @@ AbstractPrivateData* QoreObject::tryGetReferencedPrivateData(qore_classid_t key,
     return priv->tryGetReferencedPrivateData(key, xsink);
 }
 
+AbstractPrivateData* QoreObject::getReferencedPrivateDataIfExists(qore_classid_t key) const {
+    // getScanPrivateData() returns nullptr for a deleted object, an object with no private data, and one that no
+    // longer holds private data for this class ID, in every case without raising an exception
+    return priv->getScanPrivateData(key);
+}
+
 AbstractPrivateData* QoreObject::getAndClearPrivateData(qore_classid_t key, ExceptionSink* xsink) {
     QoreSafeVarRWWriteLocker sl(priv->rml);
 

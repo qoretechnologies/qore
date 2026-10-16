@@ -103,13 +103,6 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL void dbgForceFdSwapNextWait();
-
-    //! arms a one-shot hook so the async I/O controller treats this socket's object as deleted on its next
-    //! wait-generation check, to test the deleted-socket eviction path deterministically (DEBUG builds only)
-    /**
-        @since %Qore 3.0
-    */
-    DLLLOCAL void dbgForceAsyncIoDeleted();
 #endif
 
     DLLEXPORT QoreSocketObject();

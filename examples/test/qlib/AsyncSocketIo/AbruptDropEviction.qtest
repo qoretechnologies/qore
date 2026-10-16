@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%require-types
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/AsyncSocketIo
+
+%exec-class AbruptDropEvictionTest
+
+#! Waits for the socket to become readable and never consumes it, so the controller keeps the operation registered
+#! and re-queues it every I/O loop iteration (the state in which a torn-down backing socket would otherwise spin).
+class WaitReadableOp inherits Qore::AbstractPollOperation {
+    public {
+        Counter registered(1);
+    }
+    private {
+        Socket sock;
+        bool first = True;
+    }
+    constructor(Socket s) {
+        sock = s;
+    }
+    string getGoal() { return "wait-readable"; }
+    string getState() { return "waiting"; }
+    bool goalReached() { return False; }
+    *hash<SocketPollInfo> continuePoll() {
+        if (first) {
+            first = False;
+            registered.dec();
+        }
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": sock};
+    }
+    abort() {
+    }
+}
+
+class AbruptDropEvictionTest inherits QUnit::Test {
+    private {
+        Logger logger;
+    }
+
+    constructor() : QUnit::Test("AbruptDropEvictionTest", "1.0", \ARGV) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        addTestCase("abrupt drop evicts the operation", \abruptDropEviction());
+        set_return_value(main());
+    }
+
+    #! An abrupt transport drop (a client that dropped TCP without a WebSocket close frame) tears the socket down
+    #! while one of its operations is still registered and its fd is still firing; this must not make the
+    #! controller's I/O thread spin re-querying the torn-down socket forever - the operation must be evicted with a
+    #! SOCKET-CLOSED error.
+    /** The genuine abrupt-drop state is reproduced with dbg_detach_async_io_socket() (library-debug builds only):
+        it releases the socket's private data while keeping the object live and its fd open and registered - exactly
+        what the abrupt teardown leaves behind, and exactly the state a real delete cannot produce (a delete closes
+        the fd, so the event-driven controller would stop re-queuing the operation and never reach the path).  On
+        the emptied object getReferencedPrivateData() raises an incompatible-class error every iteration (the spin);
+        the controller must instead end the operation.
+    */
+    abruptDropEviction() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_detach_async_io_socket() is only registered in a library-debug build");
+        }
+
+        AsyncSocketIo::AsyncSocketIoController ctl(logger);
+        ctl.start();
+        on_exit delete ctl;
+        # release the socket private data that dbg_detach_async_io_socket() holds open, so it does not leak
+        on_exit call_function("dbg_release_detached_async_io_sockets");
+
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+        on_exit server.close();
+
+        Socket client();
+        client.connect("127.0.0.1:" + port, 5s);
+        on_exit client.close();
+        Socket accepted = server.accept(5s);
+
+        # a short operation deadline re-queries the operation through the controller's timeout heap, which is
+        # platform-independent (unlike relying on epoll/kqueue readiness re-firing); the controller checks the
+        # socket's wait generation before the deadline fires, so a torn-down socket ends the operation with
+        # SOCKET-CLOSED rather than SOCKET-TIMEOUT
+        WaitReadableOp op(accepted);
+        Queue q = ctl.submit(<SocketPollOperationInfo>{
+            "sock": accepted,
+            "spop": op,
+            "owner": "abrupt-drop-test",
+            "to": 1s,
+        });
+
+        # wait until the operation is registered and its wait generation is established (deterministic: unblocks
+        # when continuePoll() first runs, no sleep) - this happens-before the 1s deadline below
+        op.registered.waitForZero(10s);
+
+        # reproduce the abrupt-drop state: release the backing socket's private data while the object stays live and
+        # its fd stays open and registered (the detached socket's fd is held open by the library for the process),
+        # so when the controller re-queries the operation it finds a Socket object that no longer has socket private
+        # data - the condition that made its I/O thread spin raising and dropping a backtrace every iteration
+        call_function("dbg_detach_async_io_socket", accepted);
+
+        # the controller must evict the operation with SOCKET-CLOSED, not spin forever on the torn-down socket
+        date start = now_us();
+        auto result = q.get(10s);
+        date elapsed = now_us() - start;
+
+        assertEq(Qore::NT_HASH, result.typeCode(), "the operation delivered a completion");
+        assertTrue(exists result.ex, "the completion carries an error");
+        assertEq("SOCKET-CLOSED", result.ex.err, "a torn-down backing socket ends the operation with SOCKET-CLOSED");
+        assertTrue(elapsed < 8s, sprintf("the operation is evicted, not spun on; took %y", elapsed));
+    }
+}

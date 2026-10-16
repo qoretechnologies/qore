@@ -5638,31 +5638,52 @@ static QoreValue f_dbg_force_fd_swap_next_wait(const QoreListNode* params, Runti
     return QoreValue();
 }
 
-//! Debug-only: arm a one-shot hook so the async I/O controller treats a registered socket's object as deleted on
-//! its next wait-generation check.
-/** This reproduces, deterministically and without a race, the state behind an AsyncIoController I/O-thread spin:
-    a socket object deleted while one of its operations is still registered.  Deleting the object for real closes
-    its fd, so the event-driven controller stops re-queuing the operation and the deleted-socket path is never
-    reached; the hook instead leaves the socket (and its firing fd) in place and makes the controller's next
-    wait-generation check behave as if the object were deleted, ending the operation with SOCKET-CLOSED through the
-    normal eviction path.  One-shot, DEBUG builds only.
+//! Debug-only: detach (release) a registered socket's private data while keeping the object live and its fd open.
+/** This reproduces, deterministically and without a race, the exact object state behind the AsyncIoController
+    I/O-thread spin: an abrupt transport drop (a client that dropped TCP without a WebSocket close frame) tore the
+    socket down, so the Socket object stays live and registered but no longer holds its socket private data, while
+    its fd stays open and keeps firing.  The detached private data (and its fd) is kept alive here on purpose, so
+    the fd stays registered and readable and the controller keeps re-queuing the operation - exactly the production
+    condition.  getReferencedPrivateData() on the emptied object then raises an incompatible-class error (building a
+    full backtrace) on every I/O loop iteration, which is the 100% CPU spin; the controller must instead end the
+    operation.  DEBUG builds only.  The fd is closed when the process exits.
 */
-static QoreValue f_dbg_force_async_io_deleted(const QoreListNode* params, RuntimeConfig& rc,
+static std::mutex dbg_detached_async_io_sockets_lock;
+static std::vector<AbstractPrivateData*> dbg_detached_async_io_sockets;
+
+static QoreValue f_dbg_detach_async_io_socket(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
     if (!obj) {
         xsink->raiseException("DBG-ARGUMENT-ERROR",
-            "dbg_force_async_io_deleted() requires a Socket argument");
+            "dbg_detach_async_io_socket() requires a Socket argument");
         return QoreValue();
     }
-    ReferenceHolder<QoreSocketObject> sock(
-        reinterpret_cast<QoreSocketObject*>(
-            const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET, xsink)),
-        xsink);
-    if (*xsink || !sock) {
-        return QoreValue();
+    // clear the socket private data from the object (the object stays live and Socket-class) and keep a reference
+    // to it so its fd stays open and registered with the controller - the genuine abrupt-drop state
+    AbstractPrivateData* pd = const_cast<QoreObject*>(obj)->getAndClearPrivateData(CID_SOCKET, xsink);
+    if (pd) {
+        std::lock_guard<std::mutex> al(dbg_detached_async_io_sockets_lock);
+        dbg_detached_async_io_sockets.push_back(pd);
     }
-    sock->dbgForceAsyncIoDeleted();
+    return QoreValue();
+}
+
+//! Debug-only: release the socket private data detached by dbg_detach_async_io_socket(), closing its fd.
+/** A test arms dbg_detach_async_io_socket() to reproduce the abrupt-drop state and calls this once the controller
+    has evicted the operation, so the held fd and its buffers are freed (otherwise the detached socket is kept
+    alive on purpose and reported as a leak at exit).  DEBUG builds only.
+*/
+static QoreValue f_dbg_release_detached_async_io_sockets(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::vector<AbstractPrivateData*> detached;
+    {
+        std::lock_guard<std::mutex> al(dbg_detached_async_io_sockets_lock);
+        detached.swap(dbg_detached_async_io_sockets);
+    }
+    for (AbstractPrivateData* pd : detached) {
+        pd->deref(xsink);
+    }
     return QoreValue();
 }
 
@@ -6784,9 +6805,11 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
-    qns.addBuiltinVariant("dbg_force_async_io_deleted", f_dbg_force_async_io_deleted,
+    qns.addBuiltinVariant("dbg_detach_async_io_socket", f_dbg_detach_async_io_socket,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_release_detached_async_io_sockets", f_dbg_release_detached_async_io_sockets,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_ds_arm_connection_abort", f_dbg_ds_arm_connection_abort,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3,
         QC_ABSTRACTDATASOURCE->getTypeInfo(), QORE_PARAM_NO_ARG, "ds",
