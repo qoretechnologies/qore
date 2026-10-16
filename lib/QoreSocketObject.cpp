@@ -6089,11 +6089,6 @@ void QoreSocketObject::dbgForceFdSwapNextWait() {
     AutoLocker al(priv->m);
     qore_socket_private::get(*priv->socket)->debug_force_fd_swap_next_wait = true;
 }
-
-void QoreSocketObject::dbgForceAsyncIoDeleted() {
-    AutoLocker al(priv->m);
-    qore_socket_private::get(*priv->socket)->debug_force_async_io_deleted = true;
-}
 #endif
 
 void QoreSocketObject::setEncoding(const QoreEncoding* id) {

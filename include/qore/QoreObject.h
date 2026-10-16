@@ -303,6 +303,19 @@ public:
     */
     DLLEXPORT AbstractPrivateData* tryGetReferencedPrivateData(qore_classid_t key, ExceptionSink* xsink) const;
 
+    //! returns the referenced private data for the class ID if the object is valid and still holds it, otherwise nullptr; never raises
+    /** Unlike getReferencedPrivateData() and tryGetReferencedPrivateData(), this never raises an exception: a
+        deleted object, an object with no private data, and an object that no longer holds private data for this
+        class ID all return nullptr.  It is for hot paths that must poll whether an object still provides a kind of
+        private data without paying to build (and discard) an exception when it does not.
+
+        @param key the class ID of the class to get the private data for
+        @return the referenced private data (caller owns the reference) or nullptr; never raises
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT AbstractPrivateData* getReferencedPrivateDataIfExists(qore_classid_t key) const;
+
     //! returns the private data corresponding to the class ID passed with an incremented reference count if it exists, caller owns the reference
     /**
         @param key the class ID of the class to get the private data for

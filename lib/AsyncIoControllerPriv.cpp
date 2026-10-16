@@ -596,12 +596,12 @@ void AsyncIoControllerPriv::snapshotSocketWaitGeneration(PollInfo& pinfo, QoreHa
         return;
     }
 
+    // A socket object that no longer provides socket private data (deleted, or torn down by an abrupt transport
+    // drop while registered) leaves the wait generation invalid, as reset above; do not query it with
+    // getReferencedPrivateData(), which raises and builds a backtrace.  See design/async-io-deleted-socket.md.
     ExceptionSink xsink;
-    QoreSocketObject* sock = static_cast<QoreSocketObject*>(obj->getReferencedPrivateData(CID_SOCKET, &xsink));
+    QoreSocketObject* sock = static_cast<QoreSocketObject*>(obj->getReferencedPrivateDataIfExists(CID_SOCKET));
     if (!sock) {
-        if (xsink) {
-            xsink.clear();
-        }
         return;
     }
 
@@ -636,8 +636,8 @@ static QoreHashNode* makeSocketObjectDeletedException(ExceptionSink* xsink) {
     if (!*xsink) {
         ex->setKeyValue("err", new QoreStringNode("SOCKET-CLOSED"), xsink);
         ex->setKeyValue("desc",
-            new QoreStringNode("the underlying socket object was deleted while Socket async I/O was waiting "
-                "for I/O readiness"), xsink);
+            new QoreStringNode("the underlying socket object was deleted or torn down while Socket async I/O was "
+                "waiting for I/O readiness"), xsink);
         ex->setKeyValue("type", new QoreStringNode("User"), xsink);
     }
     return *xsink ? nullptr : ex.release();
@@ -654,27 +654,36 @@ QoreHashNode* AsyncIoControllerPriv::makeSocketWaitGenerationException(PollInfo&
         return nullptr;
     }
 
-    // Terminal: the socket object was deleted (for example by an explicit delete, or when the object that owned it
-    // was deleted) while this operation was registered, so it can never make progress.  This is checked before the
-    // wait-generation guard below and without getReferencedPrivateData(), because that raises OBJECT-ALREADY-DELETED
-    // for a deleted object - building a full backtrace each time - and a deleted socket never establishes a wait
-    // generation, so the generation guard would otherwise never fire and the operation would be re-queried on every
-    // I/O loop iteration forever (a 100% CPU spin that keeps the process from stopping).  Ending the operation here
-    // routes it through the normal completion-and-eviction path, removing it from the wait set with a SOCKET-CLOSED
-    // error its waiter already understands.  See design/async-io-deleted-socket.md.
-    if (!obj->isValid()) {
-        pinfo.socket_wait_generation_valid = false;
-        return makeSocketObjectDeletedException(xsink);
-    }
-
-    if (!pinfo.socket_wait_generation_valid) {
+    // Terminal: a Socket object backing this operation no longer provides socket private data, so the operation
+    // can never make progress.  Two teardowns reach this: a clean close derefs the connection object and the
+    // socket object is deleted (status OS_DELETED); an abrupt transport drop (a client that dropped the TCP
+    // connection without a WebSocket close frame) releases the socket's private data while the object itself stays
+    // live and registered.  getReferencedPrivateDataIfExists() reports both as nullptr without raising;
+    // getReferencedPrivateData() would instead raise (OBJECT-ALREADY-DELETED for the deleted object, or an
+    // incompatible-class error once the private data is gone) and build a full backtrace, re-run on every I/O loop
+    // iteration - a 100% CPU spin that stops the process from serving or shutting down.  Ending it here routes the
+    // operation through the normal completion-and-eviction path with a SOCKET-CLOSED error its waiter understands.
+    //
+    // A pollable that is NOT a Socket at all (for example an EventNotifier used as a poll target) also returns
+    // nullptr here; that is normal and must NOT be treated as terminal - it has no wait generation to check, so we
+    // return nullptr as before.  validInstanceOf(CID_SOCKET) tells a torn-down Socket (its class is still Socket)
+    // from a non-Socket pollable without raising; it is only reached on the nullptr path, so it costs nothing for
+    // healthy Socket operations.  See design/async-io-deleted-socket.md.
+    ExceptionSink local_xsink;
+    QoreSocketObject* sock = static_cast<QoreSocketObject*>(
+        obj->getReferencedPrivateDataIfExists(CID_SOCKET));
+    if (!sock) {
+        if (!obj->isValid() || obj->validInstanceOf(CID_SOCKET)) {
+            // a deleted object, or a live Socket-class object whose socket private data is gone: terminal
+            pinfo.socket_wait_generation_valid = false;
+            return makeSocketObjectDeletedException(xsink);
+        }
+        // not a Socket (e.g. an EventNotifier pollable): nothing to check here
         return nullptr;
     }
 
-    ExceptionSink local_xsink;
-    QoreSocketObject* sock = static_cast<QoreSocketObject*>(
-        obj->getReferencedPrivateData(CID_SOCKET, &local_xsink));
-    if (!sock) {
+    if (!pinfo.socket_wait_generation_valid) {
+        sock->deref(&local_xsink);
         if (local_xsink) {
             local_xsink.clear();
         }
@@ -682,36 +691,17 @@ QoreHashNode* AsyncIoControllerPriv::makeSocketWaitGenerationException(PollInfo&
     }
 
     bool changed = false;
-#ifdef DEBUG
-    bool force_deleted = false;
-#endif
     {
         AutoLocker al(sock->priv->m);
         qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
         changed = sp->fd_generation != pinfo.socket_wait_fd_generation
             || sp->sock != pinfo.socket_wait_fd;
-#ifdef DEBUG
-        // test hook (dbg_force_async_io_deleted()): simulate the socket object being deleted while the operation
-        // is registered and its fd is still firing, so the controller's eviction path can be exercised
-        // deterministically; the real trigger is the !obj->isValid() check above.  One-shot.
-        if (sp->debug_force_async_io_deleted) {
-            sp->debug_force_async_io_deleted = false;
-            force_deleted = true;
-        }
-#endif
     }
 
     sock->deref(&local_xsink);
     if (local_xsink) {
         local_xsink.clear();
     }
-
-#ifdef DEBUG
-    if (force_deleted) {
-        pinfo.socket_wait_generation_valid = false;
-        return makeSocketObjectDeletedException(xsink);
-    }
-#endif
 
     if (!changed) {
         return nullptr;
@@ -740,21 +730,16 @@ bool AsyncIoControllerPriv::hasSocketWaitGenerationChanged(PollInfo& pinfo, Qore
         return false;
     }
 
-    // A deleted socket object counts as changed, so the caller re-registers and the operation is then ended
-    // through makeSocketWaitGenerationException(); checked without getReferencedPrivateData(), which raises for a
-    // deleted object.  See design/async-io-deleted-socket.md.
-    if (!obj->isValid()) {
-        return true;
-    }
-
+    // A socket object that no longer provides socket private data (deleted on a clean close, or its private data
+    // released by an abrupt transport drop) counts as changed, so the caller re-registers and the operation is
+    // then ended through makeSocketWaitGenerationException(); checked with getReferencedPrivateDataIfExists(),
+    // which reports both without raising (getReferencedPrivateData() would raise and build a backtrace).  See
+    // design/async-io-deleted-socket.md.
     ExceptionSink local_xsink;
     QoreSocketObject* sock = static_cast<QoreSocketObject*>(
-        obj->getReferencedPrivateData(CID_SOCKET, &local_xsink));
+        obj->getReferencedPrivateDataIfExists(CID_SOCKET));
     if (!sock) {
-        if (local_xsink) {
-            local_xsink.clear();
-        }
-        return false;
+        return true;
     }
 
     bool changed = false;
@@ -789,22 +774,18 @@ bool AsyncIoControllerPriv::refreshSocketWaitGeneration(PollInfo& pinfo, QoreHas
         return false;
     }
 
-    // Do not query a deleted socket object: getReferencedPrivateData() raises OBJECT-ALREADY-DELETED for it, which
-    // builds a full backtrace every call and, before this operation is ended by makeSocketWaitGenerationException()
-    // in Phase 2, would run on every I/O loop iteration.  Leaving the wait generation invalid (as reset above) is
-    // correct: the operation is about to be torn down.  See design/async-io-deleted-socket.md.
-    if (!obj->isValid()) {
-        return was_valid;
-    }
-
+    // Do not query a socket object that no longer provides socket private data (deleted on a clean close, or its
+    // private data released by an abrupt transport drop while the object stays registered):
+    // getReferencedPrivateData() raises and builds a full backtrace every call, and before this operation is ended
+    // by makeSocketWaitGenerationException() in Phase 2 that ran on every I/O loop iteration.
+    // getReferencedPrivateDataIfExists() reports both cases as nullptr without raising.  Leaving the wait
+    // generation invalid (as reset above) is correct: the operation is about to be torn down.  See
+    // design/async-io-deleted-socket.md.
     ExceptionSink local_xsink;
     QoreSocketObject* sock = static_cast<QoreSocketObject*>(
-        obj->getReferencedPrivateData(CID_SOCKET, &local_xsink));
+        obj->getReferencedPrivateDataIfExists(CID_SOCKET));
     if (!sock) {
-        if (local_xsink) {
-            local_xsink.clear();
-        }
-        return false;
+        return was_valid;
     }
 
     bool changed = false;
