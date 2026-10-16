@@ -20,6 +20,45 @@ list<string> sub selectedInvoke(string value, string separator) {
 list<string> sub named(string value, string separator) {
     return value.split(separator: separator);
 }
+auto sub guardedTrim(string value, string separator) {
+    return trim(tolower(value)).split(separator);
+}
+auto sub guardedTrimInvoke(string value, string separator) {
+    try {
+        return trim(tolower(value)).split(separator);
+    } catch (hash<ExceptionInfo> ex) {
+        emit("guarded-error", (ex.err, ex.callstack[0].function));
+        return ("caught",);
+    }
+}
+auto sub guardedTrimInvokeLiteral(string value) {
+    try {
+        return trim(tolower(value)).split(",");
+    } catch (hash<ExceptionInfo> ex) {
+        emit("guarded-literal-error", ex.err);
+        return ("caught",);
+    }
+}
+auto sub guardedTrimInvokeEncoding(string value) {
+    try {
+        return trim(tolower(value)).split("日");
+    } catch (hash<ExceptionInfo> ex) {
+        emit("guarded-encoding-error", (ex.err, ex.callstack[0].function));
+        return ("caught",);
+    }
+}
+auto sub guardedOptional(*string value, string separator) {
+    # This separator has no assignment proof; consuming dispatch must remain.
+    return value.split(separator + "");
+}
+auto sub guardedOptionalLiteral(*string value) {
+    return value.split("abcdefgh");
+}
+auto sub guardedMissing(bool assigned) {
+    string value;
+    if (assigned) { value = "leftabcdefghrightabcdefgh"; }
+    return value.split("abcdefgh");
+}
 auto sub dynamicSplit(auto value, auto separator) {
     return value.split(separator);
 }
@@ -48,6 +87,22 @@ foreach string value in (("", ",", "a,b", "a,,b,", "longer,heap,string,", "日,�
     emit("invoke", selectedInvoke(value, ","));
     emit("named", named(value, ","));
     emit("empty-separator", selected(value, ""));
+    emit("guarded-trim", guardedTrim(" " + value + " ", ","));
+    emit("guarded-trim-invoke", guardedTrimInvoke(" " + value + " ", ","));
+    emit("guarded-trim-invoke-literal", guardedTrimInvokeLiteral(" " + value + " "));
+}
+emit("guarded-conversion-error", guardedTrimInvoke(convert_encoding(" A,B ", "ASCII"), "日"));
+emit("guarded-literal-conversion-error", guardedTrimInvokeEncoding(convert_encoding(" A,B ", "ASCII")));
+emit("guarded-literal-unicode", guardedTrimInvokeEncoding(" 日,本語 "));
+emit("guarded-after-error", guardedTrim(" A,B ", ","));
+foreach bool assigned in ((True, False)) {
+    *string value = assigned ? "leftabcdefghrightabcdefgh" : NOTHING;
+    try { emit("guarded-optional", guardedOptional(value, "abcdefgh")); }
+    catch (hash<ExceptionInfo> ex) { emit("guarded-optional-error", ex.err); }
+    try { emit("guarded-optional-literal", guardedOptionalLiteral(value)); }
+    catch (hash<ExceptionInfo> ex) { emit("guarded-optional-literal-error", ex.err); }
+    try { emit("guarded-missing", guardedMissing(assigned)); }
+    catch (hash<ExceptionInfo> ex) { emit("guarded-missing-error", ex.err); }
 }
 emit("embedded-null", selected("a\0b,c", ","));
 emit("long-separator", selected("leftabcdefghrightabcdefgh", "abcdefgh"));

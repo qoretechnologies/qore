@@ -39,14 +39,31 @@ class AOTStringSplitTest inherits QUnit::Test {
         }
         TmpDir dir("qore-aot-string-split-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
-                "QORE_DISABLE_AOT_STRING_SPLIT=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+                "QORE_DISABLE_AOT_STRING_SPLIT=1 ", "QORE_DISABLE_AOT_STRING_SPLIT_GUARDED_BASE=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
                 string ir = run((qcc, level, "--strip-source", "-o", executable, source),
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
                 string selected = "(?:call|invoke) i64 @qore_rt_pseudo_string_split_aot_v1";
-                assertEq(!prefix.startsWith("QORE_DISABLE_AOT_STRING_SPLIT"), regex(ir, selected),
+                assertEq(prefix != "QORE_DISABLE_AOT_STRING_SPLIT=1 ", regex(ir, selected),
                     "only enabled AOT lowering selects the canonical split helper");
+                if (level == "-O3") {
+                    foreach string name in (("guardedTrim", "guardedTrimInvokeLiteral",
+                            "guardedTrimInvokeEncoding", "guardedOptionalLiteral", "guardedMissing")) {
+                        *list<*string> body = regex_extract(ir, "(?s)define [^\n]*@" + name
+                            + "_[^\n]*\n(.*?)\n\\}");
+                        assertTrue(!!body, name + " LLVM definition");
+                        assertEq(!prefix.startsWith("QORE_DISABLE_AOT_STRING_SPLIT"),
+                            regex(body[0] ?? "", selected), name + " guarded receiver selection");
+                    }
+                    foreach string name in (("guardedTrimInvoke", "guardedOptional")) {
+                        *list<*string> body = regex_extract(ir, "(?s)define [^\n]*@" + name
+                            + "_[^\n]*\n(.*?)\n\\}");
+                        assertTrue(!!body, name + " LLVM definition");
+                        assertFalse(regex(body[0] ?? "", selected), name + " retains separator assignment guard");
+                    }
+                }
                 foreach string runtime in (("", "QORE_DISABLE_AOT_STRING_SPLIT=1 ")) {
                     assertEq(expected, run((executable,), runtime), prefix + level + runtime);
                 }

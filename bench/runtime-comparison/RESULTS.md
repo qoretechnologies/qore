@@ -14530,3 +14530,104 @@ costs in temporary containers; extend compile-time proofs only where semantics
 and measured benefit justify them. This is newly compiled AOT work, not a general
 IR/JIT improvement. No fresh Java, full-suite, sanitizer, cross-platform or
 startup result is claimed. Java parity and a performance ceiling remain open.
+
+### Guarded string receivers for AOT split (2026-10-15)
+
+Extend the preceding selector to known-string receivers without asserting that
+they are assigned. The existing runtime helper checks actual values and enum
+tags and uses the original consuming dispatch on a miss. The separator still
+needs an assigned-string proof; canonical overload/flags/domain/default checks,
+frame, stack check, cleanup and runtime-local reloads are unchanged. No runtime
+helper, ABI, serialized layout or new IR fact is added. This affects newly
+compiled AOT, not ordinary IR/JIT execution.
+
+The targeted call is `trim(tolower(line)).split(" ")` in text indexing. In all
+three fixed layouts, disassembly shows two specialized split sites in the
+candidate versus one in the baseline and receiver-only compile control. CSV
+keeps its existing two sites in every configuration.
+
+Before is a frozen optimized executable/runtime pair from post-merge
+`d779bf456` (including upstream `53d1e32bd`), not the earlier pre-merge pair.
+The **develop comparison remains frozen optimized `347db1015`**, not that newer
+upstream tip. Every runtime uses `-O3 -DNDEBUG`; every executable uses `qcc -O3`.
+The five configurations are before, candidate, identical candidate executable
+with all split helpers runtime-disabled, separately compiled assigned-receiver
+only, and develop. `QORE_DISABLE_AOT_STRING_SPLIT_GUARDED_BASE` restores the
+assigned-receiver-only selector at compile time. The older
+`QORE_DISABLE_AOT_STRING_SPLIT` runtime control measures the cumulative split
+optimization, not just this receiver extension.
+
+The three-fork screen measured text indexing at 1703.228 -> 1533.643 ns/item
+(-9.96%; -10.37% against the receiver-only control). Mutation was +0.67%, closure
++0.27%, and CSV -0.95%. All three text layout ranges were disjoint and faster
+than both before and the receiver-only control.
+
+Five-fork confirmation follows. Each cell is the median of three fixed-layout
+medians; a fork's value is its mean of three measured 300 ms windows after three
+warmup windows, count 4096 and seed 7. Jobs were randomly interleaved and run
+serially, with no owned build/test/profile/analysis work during timing. Lower
+ns/item is better; these are whole workloads, not isolated call latency.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Runtime disabled|!Receiver-only control|!Develop ns/item|!Change vs before|!Change vs develop
+|List mutation|201.408|202.236|200.859|200.884|209.213|+0.41%|-3.33%
+|List build|89.215|89.394|89.054|89.587|109.937|+0.20%|-18.69%
+|Temporary list|134.166|136.148|135.748|134.663|141.554|+1.48%|-3.82%
+|Temporary hash|339.014|333.454|331.494|331.566|327.847|-1.64%|+1.71%
+|Boxed integer method with effects|88.975|88.292|88.558|87.980|382.390|-0.77%|-76.91%
+|Indirect call|6.810|6.859|6.869|6.913|231.330|+0.72%|-97.03%
+|Closure call|20.921|20.728|20.684|20.960|138.443|-0.92%|-85.03%
+|CSV report|969.824|966.490|1151.985|966.422|1101.666|-0.34%|-12.27%
+|Object orders|1889.938|1876.118|1898.485|1882.417|2155.085|-0.73%|-12.94%
+|Callback pipeline|86.084|85.821|85.617|85.804|300.862|-0.31%|-71.48%
+|Text index|1697.431|1532.624|1710.907|1690.597|1710.912|-9.71%|-10.42%
+
+The text gain repeats: -9.71% versus before and -9.34% versus the receiver-only
+compile control. Every text layout's observed candidate range is disjoint and
+faster than both controls. The -10.42% versus all-split-disabled result includes
+the preceding split optimization. CSV is effectively unchanged versus the
+receiver-only control (+0.007%); its improvement versus develop is cumulative.
+Do not attribute other workload movements to this split call.
+
+All adverse results remain included. Temporary-list time increases +1.48%
+overall and +1.76% / +1.56% / +1.27% in default / reverse / shuffled layout
+medians. Their observed ranges overlap, which does not prove absence of a
+regression. Indirect-call shuffled layout is +2.81%, also with overlapping
+ranges; its aggregate is +0.72%. No confirmation before/after workload/layout
+has disjoint adverse ranges, but no universal non-regression claim is made.
+Temporary hash remains +1.71% slower than the frozen develop baseline. Ranges
+are not confidence intervals; shared-host activity, frequency and thermal state
+were not controlled.
+
+Post-merge Release and Debug validation passed the previous seven optimization
+files (7010 assertions), the upstream loop-cleanup and retry-policy tests, and
+555 reference checks per IR/AOT mode. The loop suite had 14 Release assertions
+(growth checks unavailable without library debugging) and 33 Debug assertions;
+the retry suite had 150 in each. The changed RestClientIo qmod was rebuilt.
+Candidate Release and Debug each passed seven files, 11 QUnit cases and 7106
+assertions, including the expanded 164-assertion split test and one silent
+fixture, plus 555 references per IR/AOT mode. Native checks remain 1028/1028
+with the runtime helper enabled and disabled. Exactly 64 owned Release qmod
+aliases were restored after each Debug run.
+
+Tests distinguish eligible normal/invoke calls with literal separators,
+optional/missing receivers taking the guard fallback, and cases whose separator
+lacks an assignment proof and must remain generic. They retain AST parity for
+encodings, conversion errors, temporary cleanup, reference mutation and dynamic
+overrides, with O0/O3, native EH, source stripping, split compilation and
+no-debug-info variants. A fixture comment correction was rejected by the
+qualification source-stability guard before tests. An initial selection
+assertion was too broad for a variable separator after an invoke; a
+literal-separator probe isolated that boundary, and final tests assert both
+positive and conservative-negative selection. No failed timing run or discarded
+measurement is hidden.
+
+`results-aot-guarded-string-split-macos-arm64.json` contains both trials and all
+3015 windows, frozen artifact digests, raw outputs, controls, disassembly,
+baseline/candidate qualification, preparation history, drivers and the full
+62-item audit. The pre-existing embedded-NUL/empty-separator AST hang remains
+excluded and unresolved. No new Java, full-suite, sanitizer, cross-platform,
+startup or general application performance result is claimed.
+
+Next: profile the remaining generic trim call and container allocation/cleanup;
+consider broader result/argument facts only with an independent semantic proof
+and measured benefit. Java parity and a global performance ceiling remain open.

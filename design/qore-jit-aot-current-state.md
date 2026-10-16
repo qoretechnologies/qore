@@ -2634,3 +2634,46 @@ limitations are in `bench/runtime-comparison/RESULTS.md`.
 Continue with remaining generic pseudo calls and container allocation costs,
 then closure-context work under the existing lifetime/stack/capture constraints.
 There is no new Java comparison or evidence that performance is maximized.
+
+### Guarded string receivers for AOT split
+
+The next checkpoint admits a known-string receiver without claiming it is
+assigned. The existing helper already guards actual value types and enum tags,
+falling back to ordinary consuming dispatch on a miss. Separator assignment
+proof and all canonical overload/default/flags/domain checks remain. No new IR
+fact, runtime helper, ABI, serialized layout or RuntimeConfig change is needed;
+ownership, exception frames, physical stack checks and runtime-local reloads are
+unchanged. `QORE_DISABLE_AOT_STRING_SPLIT_GUARDED_BASE` restores the preceding
+assigned-receiver-only selection at compile time. Ordinary IR/JIT is unchanged.
+
+This reaches the hot `trim(tolower(line)).split(" ")` call: all three layouts
+have two specialized text-index split sites versus one in baseline/control;
+CSV remains two. Optimized confirmation (five forks, three layouts, 2475
+windows) gives text indexing 1697.431 -> 1532.624 ns/item, -9.71% before/after,
+-9.34% versus the receiver-only compile control, and -10.42% versus frozen
+optimized develop `347db1015`. All text layout ranges are disjoint and faster
+than before and that control; the three-fork screen gave -9.96% before/after.
+Before is a fresh frozen post-merge `d779bf456` executable/runtime pair,
+including upstream `53d1e32bd`; the develop measurement is not against that tip.
+
+Retain the adverse results: temporary list +1.48% overall, with all three layout
+medians up +1.27% to +1.76%; indirect calls +0.72% overall, shuffled layout
++2.81%. These observed ranges overlap, which does not prove non-regression.
+Temporary hash remains +1.71% slower than develop. Other movements are not
+attributed to this call; CSV is +0.007% versus the receiver-only control.
+Ranges are not confidence intervals and host frequency/load are uncontrolled.
+
+Candidate Release/Debug each pass seven selected files, 7106 assertions and
+555 reference checks per IR/AOT mode; native checks remain 1028/1028 in both
+runtime control modes. The expanded split fixture has 164 assertions, including
+positive normal/invoke selection, optional/missing receiver fallback and
+negative separator-proof cases. Post-merge baseline tests also cover upstream
+loop cleanup and retry policy. Each Debug wrapper restores 64 Release aliases.
+Both trials, all 3015 windows, provenance, preparation history and the full audit
+are in `bench/runtime-comparison/results-aot-guarded-string-split-macos-arm64.json`;
+all workload/control numbers are in `bench/runtime-comparison/RESULTS.md`.
+
+Continue with the remaining generic trim call and container allocation/cleanup.
+Broader assignment facts require an independent proof; a declared return type
+alone is not sufficient. No fresh Java, full-suite, sanitizer, cross-platform
+or startup result is claimed. Java parity and a global ceiling remain open.

@@ -11287,7 +11287,12 @@ static const QoreTypeParamInstantiation* qore_ir_get_explicit_dot_eval_type_inst
 //! Admit only the immutable builtin overload whose omitted defaults are immediate false values.
 template <typename Instruction>
 static bool qore_ir_is_aot_string_split(const Instruction& inst, int nargs) {
-    if (!inst.pseudo || !inst.pseudo_base_known_assigned_string
+    // The runtime helper guards the receiver and preserves ordinary consuming
+    // dispatch on a miss. A string type hint is enough; do not invent an
+    // assignment fact for a possibly-NOTHING local or call result.
+    if (!inst.pseudo || !inst.pseudo_base_known_string
+            || (!inst.pseudo_base_known_assigned_string
+                && std::getenv("QORE_DISABLE_AOT_STRING_SPLIT_GUARDED_BASE"))
             || !inst.pseudo_arg0_known_assigned_string || nargs != 1
             || !inst.method || !inst.variant || inst.variant->isUser()
             || inst.qc != qore_pseudo_get_class(NT_STRING)
