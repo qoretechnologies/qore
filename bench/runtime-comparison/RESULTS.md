@@ -17174,6 +17174,204 @@ field synchronization before presenting Java ratios. Do not retry a rejected
 candidate unchanged.
 
 
+## Rejected zero-argument scalar getters with complete matched fallback (post-5a067c2a8)
+
+Integer getter loop: 281.553 -> 131.036 ns/item (-53.459% time). Floating getter loop: 313.602 -> 137.777 ns/item (-56.066% time). The candidate is rejected; complete candidate sources/modes are archived and production is independently restored/requalified. Repeated adverse non-target layouts: boxed_float_method_call/default, boxed_float_method_call/reverse, monomorphic_call/default, string_result_loop/reverse, string_result_loop/shuffle-487.
+
+Release `-O3 -DNDEBUG`, qcc `-O3`, LLVM 22.1.8. Qualified frozen before/candidate
+artifacts; 23 micro workloads, four mixed workloads and 14 independent probes;
+4096 items / seed 7, three warmup and three measured 300 ms windows. Fixed
+default/reverse/shuffle-487 layouts. Screen: three forks/order 136387; independent
+confirmation: five forks/order 136389 when both screen targets pass. All 5904
+measured windows are preserved. No task-owned build/test/profile/read/analysis overlaps
+timing; no rescue epoch, pooling or layout search. Host load/frequency/thermals are
+uncontrolled. Observed fork-mean ranges are not confidence intervals.
+
+Values are whole-workload ns/item (median of layout medians of fork means), not
+isolated call latency. The probes include two receiver calls, a callback and setup;
+short variants also include ordinary `call_function` dispatch. No fresh Java/develop
+ratio is inferred from these measurements.
+
+|!Workload|!Screen before|!Screen candidate|!Change|!Confirmation before|!Confirmation candidate|!Change
+|arithmetic|1.555|1.543|-0.719%|1.527|1.528|+0.084%
+|direct_call|1.545|1.550|+0.324%|1.527|1.531|+0.251%
+|method_call|1.623|1.621|-0.092%|1.594|1.602|+0.464%
+|indirect_call|6.976|6.938|-0.550%|6.841|6.824|-0.249%
+|polymorphic_call|23.443|23.360|-0.353%|23.096|22.950|-0.632%
+|monomorphic_call|3.513|3.547|+0.947%|3.507|3.464|-1.228%
+|optional_method_call|10.793|11.012|+2.029%|10.658|10.819|+1.514%
+|boxed_int_method_effect|91.389|89.503|-2.064%|89.760|87.844|-2.135%
+|boxed_int_method_fallback|31.159|31.587|+1.372%|30.868|30.872|+0.011%
+|closure_call|18.069|17.912|-0.867%|17.797|17.657|-0.786%
+|closure_capture|24.847|24.131|-2.882%|24.209|23.638|-2.357%
+|indirect_wide|6.790|6.822|+0.477%|6.722|6.735|+0.189%
+|indirect_float|6.628|6.661|+0.500%|6.556|6.545|-0.168%
+|list_read|2.836|2.810|-0.905%|2.673|2.775|+3.816%
+|list_build|26.709|26.800|+0.338%|26.211|26.148|-0.240%
+|list_mutate|189.206|189.132|-0.039%|188.482|185.928|-1.355%
+|temporary_list|1.631|1.638|+0.387%|1.609|1.611|+0.083%
+|temporary_hash|343.767|337.592|-1.796%|328.896|323.867|-1.529%
+|boxed_int_method_call|16.265|16.337|+0.447%|16.149|16.256|+0.666%
+|boxed_float_method_call|20.041|21.110|+5.335%|19.698|20.663|+4.899%
+|boxed_float_method_fallback|32.691|33.602|+2.785%|32.676|33.363|+2.103%
+|dynamic_int_result_call|10.819|10.784|-0.322%|10.644|10.850|+1.939%
+|dynamic_float_result_call|12.028|12.124|+0.797%|11.809|12.005|+1.657%
+|csv_report|957.683|979.045|+2.231%|946.605|958.816|+1.290%
+|object_orders|1928.598|1939.491|+0.565%|1848.128|1849.353|+0.066%
+|callback_pipeline|85.036|85.023|-0.016%|83.269|82.592|-0.813%
+|text_index|1350.410|1350.821|+0.030%|1338.108|1345.783|+0.574%
+|object_loop|284.211|134.514|-52.671%|281.553|131.036|-53.459%
+|object_short|1220.763|1064.800|-12.776%|1197.375|1044.908|-12.733%
+|float_loop|320.118|137.317|-57.104%|313.602|137.777|-56.066%
+|float_short|1248.472|1068.891|-14.384%|1242.454|1062.928|-14.449%
+|string_loop|375.942|378.637|+0.717%|375.398|375.959|+0.149%
+|string_short|1250.167|1271.649|+1.718%|1241.749|1242.786|+0.084%
+|effect_loop|343.909|357.627|+3.989%|343.223|366.684|+6.835%
+|effect_short|1279.927|1282.289|+0.185%|1248.646|1273.605|+1.999%
+|two_read_loop|376.209|403.027|+7.128%|378.965|403.463|+6.464%
+|two_read_short|1312.462|1335.798|+1.778%|1283.287|1318.131|+2.715%
+|default_loop|686.159|719.825|+4.907%|700.657|709.628|+1.280%
+|default_short|1642.175|1657.214|+0.916%|1628.364|1650.149|+1.338%
+|string_result_loop|429.840|462.278|+7.547%|407.520|447.565|+9.827%
+|string_result_short|1356.291|1393.909|+2.774%|1350.834|1361.960|+0.824%
+
+Both getter loops must improve at least 2% in aggregate and improve every layout
+in each epoch. Reject any repeated non-target kernel/layout at least 3% slower
+with disjoint observed ranges in both epochs. Smaller losses are not declared
+absent or insignificant. All target layouts and non-target losses at least 3% follow:
+
+|!Epoch|!Workload|!Layout|!Change|!Before observed range|!Candidate observed range|!Disjoint adverse
+|screen|indirect_call|reverse|+7.813%|7.002 to 7.250|7.623 to 7.726|True
+|screen|monomorphic_call|default|+6.378%|3.498 to 3.537|3.699 to 3.741|True
+|screen|indirect_float|default|+3.818%|6.554 to 6.770|6.553 to 6.820|False
+|screen|boxed_float_method_call|default|+4.822%|19.882 to 20.314|20.864 to 21.306|True
+|screen|boxed_float_method_call|reverse|+7.280%|19.599 to 19.771|20.714 to 21.397|True
+|screen|boxed_float_method_call|shuffle-487|+5.095%|19.947 to 20.054|20.892 to 21.191|True
+|screen|dynamic_float_result_call|shuffle-487|+3.817%|11.879 to 13.705|12.358 to 12.450|False
+|screen|object_loop|default|-53.095%|284.069 to 304.335|133.515 to 147.149|False
+|screen|object_loop|reverse|-52.173%|281.845 to 286.967|132.587 to 144.203|False
+|screen|object_loop|shuffle-487|-52.999%|281.632 to 286.964|132.701 to 138.748|False
+|screen|float_loop|default|-57.255%|316.151 to 341.517|136.388 to 138.372|False
+|screen|float_loop|reverse|-58.754%|331.627 to 339.618|135.584 to 139.561|False
+|screen|float_loop|shuffle-487|-56.983%|318.443 to 323.722|136.461 to 139.326|False
+|screen|effect_loop|default|+6.377%|336.131 to 357.533|360.164 to 383.365|True
+|screen|effect_loop|reverse|+3.790%|336.197 to 366.826|350.279 to 365.322|False
+|screen|effect_loop|shuffle-487|+3.989%|341.762 to 345.175|356.517 to 359.892|True
+|screen|two_read_loop|default|+7.854%|372.439 to 376.143|390.211 to 408.372|True
+|screen|two_read_loop|reverse|+7.118%|373.334 to 385.371|385.179 to 406.951|False
+|screen|two_read_loop|shuffle-487|+3.406%|377.813 to 391.356|388.917 to 406.120|False
+|screen|default_loop|reverse|+5.745%|680.554 to 691.187|706.791 to 741.331|True
+|screen|default_loop|shuffle-487|+4.599%|684.718 to 690.781|705.267 to 746.158|True
+|screen|string_result_loop|default|+6.879%|411.423 to 434.198|453.494 to 464.096|True
+|screen|string_result_loop|reverse|+13.193%|407.422 to 430.806|438.548 to 466.732|True
+|screen|string_result_loop|shuffle-487|+4.224%|405.883 to 435.244|446.248 to 471.794|True
+|confirmation|indirect_call|reverse|+5.500%|6.716 to 8.405|6.752 to 7.719|False
+|confirmation|monomorphic_call|default|+6.565%|3.427 to 3.474|3.645 to 3.686|True
+|confirmation|list_read|default|+3.816%|2.632 to 2.863|2.603 to 3.748|False
+|confirmation|list_read|shuffle-487|+4.797%|2.610 to 2.788|2.678 to 2.941|False
+|confirmation|boxed_float_method_call|default|+4.880%|19.667 to 19.862|20.331 to 20.780|True
+|confirmation|boxed_float_method_call|reverse|+6.583%|19.419 to 19.781|20.261 to 21.484|True
+|confirmation|boxed_float_method_fallback|reverse|+3.010%|31.803 to 32.555|32.605 to 34.072|True
+|confirmation|object_loop|default|-53.540%|275.168 to 284.394|129.740 to 133.038|False
+|confirmation|object_loop|reverse|-52.306%|275.148 to 285.810|133.418 to 137.459|False
+|confirmation|object_loop|shuffle-487|-53.058%|276.755 to 287.521|130.282 to 134.365|False
+|confirmation|float_loop|default|-56.654%|306.074 to 315.211|133.739 to 135.500|False
+|confirmation|float_loop|reverse|-55.799%|310.226 to 317.369|134.821 to 140.464|False
+|confirmation|float_loop|shuffle-487|-56.536%|308.743 to 340.725|134.518 to 152.546|False
+|confirmation|effect_loop|reverse|+6.835%|336.429 to 348.015|336.508 to 386.327|False
+|confirmation|effect_loop|shuffle-487|+6.912%|335.426 to 347.233|332.606 to 398.359|False
+|confirmation|two_read_loop|default|+5.966%|368.040 to 407.292|380.436 to 429.384|False
+|confirmation|two_read_loop|reverse|+14.251%|364.474 to 389.302|382.981 to 439.873|False
+|confirmation|two_read_loop|shuffle-487|+5.199%|370.588 to 389.071|385.674 to 434.273|False
+|confirmation|string_result_loop|default|+9.923%|396.230 to 443.711|439.440 to 451.844|False
+|confirmation|string_result_loop|reverse|+11.549%|397.000 to 432.029|442.808 to 462.897|True
+|confirmation|string_result_loop|shuffle-487|+4.883%|398.419 to 434.084|442.784 to 462.354|True
+
+### Contract and diagnostics
+
+The shared method PIC layout and existing ordinary/unary dispatch source remain
+unchanged. Separate typed six-pointer zero-argument getter companions use the bounded
+one-block/64-instruction/exactly-one-member-read proof and synchronized live reads.
+Full receiver/type/access/Program/parse-options/epoch and applicable parse-selected
+identity checks precede invocation. Exact normal-body binding, readiness, signature,
+debugger and stack checks remain. RuntimeConfig is passed from the caller; no member
+value is cached, no lock is elided and no unary witness is reinterpreted.
+
+After a complete matching cache key, ordinary continuation first attempts existing
+fast dispatch. A non-fast-eligible name-resolved call directly evaluates the matched
+variant with the checked context; exact parse-selected calls use the existing
+method dispatcher. This avoids restarting name lookup on that matched path. Method
+and variant pointers are copied before arbitrary execution, with no later PIC access.
+Native getter invocation is separately outlined; eager object/class substitution
+and reader-safe logical-frame teardown finish before any ordinary continuation.
+Unmatched, foreign-Program, static and parameterized routes retain existing fallback.
+
+Generated-code review covers 207 common functions plus 2 getter companions.
+Runtime review covers 23 disassemblies, including float-unary calls,
+local assignment, complete getter dispatch, outlined invocation and synchronized
+reads. Fourteen serial untimed profiles cover before/candidate getter, default,
+string-result, two-read, boxed-float and monomorphic workloads. Static instruction
+counts and sample counts are not dynamic call costs or causal allocations of time.
+
+All 5,904 measured windows are retained: 738 screen jobs / 2,214 windows and 1,230 confirmation jobs / 3,690 windows. Both target aggregate/all-layout checks pass. Five repeated adverse non-target/layout pairs fail the unchanged gate: boxed-float/default and reverse, monomorphic/default, and string-result/reverse and shuffle. No rescue epoch, pooling, retuning or layout search.
+
+Confirmed whole-workload ns/item: integer getter 281.552562 -> 131.036341 (-53.459%); floating getter 313.602194 -> 137.776774 (-56.066%); default loop 700.657242 -> 709.627780 (+1.280%); boxed float 19.697728 -> 20.662681 (+4.899%); string result 407.519869 -> 447.565386 (+9.827%). Effect loop +6.835% and two-read loop +6.464% also remain visible, even though their observed ranges do not trigger the repeated-disjoint gate. Monomorphic aggregate -1.228% does not erase its default-layout +6.565% loss.
+
+Generated comparison covers 150 micro, 29 mixed and 28 probe common functions, plus two new companions. Micro changes integerArg (normal/fast) and the main compressed-metadata size; mixed changes integerArg (normal/fast) and orderReport; probe changes binders, integerArg (normal/fast), main and three loop callers. Boxed-float and monomorphic hot caller bodies are unchanged. Compared with the previous isolated candidate, only micro/probe main compressed-metadata-size constants differ across 209 generated functions.
+
+Runtime review covers 23 disassemblies. Ordinary name dispatch has 2,202 static instructions, fast dispatch 2,411, ordinary dot dispatch 153 with a 0x70 frame, and local assignment 137 in both runtimes. The four synchronized read helpers have 47/45/45/44 instructions in both. Float-unary changes from 460 to 468 instructions, with the same 0x170 frame and call multiset but different guard/cold-block code. Getter public dispatch has 435 instructions / 0x100 frame; outlined invocation 562 / 0x190; complete ordinary continuation 70 / 0x40; binders 33 each. Static counts are not dynamic costs, and address-sensitive linked code is not claimed identical.
+
+Fourteen serial untimed samples cover before/candidate getters, defaults, string results, two-read, boxed-float and monomorphic calls. Getter invocation/frame setup and dispatch guards remain prominent, alongside local loads, reference counting and member lookup. The default profile directly reaches NormalMethodFunction::evalMethodTmpArgs from the matched ordinary continuation, avoiding the earlier redundant name-dispatch restart. String-result/two-read profiles still pass through the speculative getter wrapper before ordinary fast execution. Samples do not partition the measured regression causally.
+
+Boxed-float samples are dominated by qore_rt_try_method_float_unary_v2, the unchanged generated caller and local assignment; the zero-argument getter helper is not its hot route. Its runtime helper changed despite unchanged source. Monomorphic samples remain dominated by the unchanged generated body. Placement, cache and compiler-global effects remain hypotheses; none justifies discarding a repeatable loss.
+
+An untimed compiled size probe reports QoreAOTContext at 880 -> 896 bytes, alignment 8; both sizes map to 896 bytes via malloc_good_size. The shared PIC entry remains 240 bytes, alignment 8. There is no allocator-bucket increase for this type on this host. Metadata compaction is not selected merely on a speculative bucket explanation; no runtime allocation trace or general cache conclusion is claimed.
+
+Candidate Release and Debug each pass 69 core files / 112 cases / 17,595 assertions, including four getter cases / 1,053 assertions. The 13 lvalue/DGC suites, HTTP/offline LLM/thread integrations, 555 IR plus 555 AOT references, 1,985 Debug native checks per bounded-pair mode, and restoration of 64 module aliases pass. This is not full-suite, sanitizer or cross-platform certification.
+
+Next investigate positive compiler-published getter admission within an already-matched ordinary route, avoiding blanket rewriting of zero-argument callers and unsupported-call overhead. Separately assess compile-time exclusion of provably non-object receivers and native context/proof deferral. Preserve full live guards, exact publication and ownership. These are unmeasured hypotheses, not already validated fixes.
+
+This is an AOT-only experiment, with no fresh Java/develop ratio. Probes include two receiver calls, a callback and setup; short variants also include ordinary call_function. Future Java getter comparisons must make synchronization explicit. Java parity and a global performance maximum remain open.
+
+### Qualification and audit
+
+baseline_release: 68 files / 108 cases / 16542 assertions; baseline_debug: 68 files / 108 cases / 16542 assertions; candidate_release: 69 files / 112 cases / 17595 assertions; candidate_debug: 69 files / 112 cases / 17595 assertions; restored_release: 68 files / 108 cases / 16542 assertions; restored_debug: 68 files / 108 cases / 16542 assertions.
+
+Candidate Release/Debug each include the four-case/1053-assertion getter suite.
+Extended inherited/exact/default/string-result controls validate ordinary ownership
+and alternating warm default success/throw behavior, with exactly 64 default
+evaluations. The expanded fixture first passes baseline AST independently.
+Real native adapters cover binding conflicts, wrong body/readiness, overflow,
+cross-Program exclusion, epoch changes, wide floats, debugger events, concurrent
+member replacement and frame readers. O0/O3, exceptions and disabling controls pass.
+
+Each qualified build also includes 13 lvalue/DGC suites / 82 cases / 1330 Release
+or 2663 Debug assertions; HTTP 10/30, offline LLM 4/23, threads 22/110, 555 IR and
+555 AOT references. Debug runs 1985 native checks in each bounded-pair mode and
+the abrupt-drop test. All 64 owned qmods are rebuilt and exactly 64 Release aliases
+restored, preserving unrelated links. The independent probe passes 168 references
+in baseline AST/stripped O0/stripped O3 and 12600 oracle cases. All 18 campaign
+executables pass suite references and actual loaded-library checks.
+
+The audit record in `results-aot-zero-arg-getter-complete-rejected-macos-arm64.json` covers every audit-changes item and independent
+replay of raw windows, orders, references, decisions, source/artifact identity,
+generated/runtime code, runner/oracle tests, strict Qore tables and diff checks.
+The checkpoint is committed only after that audit passes. Development commands
+and actual terminal statuses remain recorded; no failed or incomplete run is
+represented as qualification. Selected macOS arm64 validation, not full-suite,
+sanitizer or cross-platform certification. No compile-time, memory-footprint,
+cold-start, cross-Program or application-wide performance claim.
+
+Next test positive compiler-published getter admission within already-matched
+ordinary dispatch, avoiding blanket zero-argument caller rewrites. Separately
+consider compile-time exclusion of provably non-object receivers and context/proof
+deferral. Do not combine changes to rescue a rejected campaign. The type-size probe
+found no larger allocator bucket; no allocator/layout cause is established.
+Any retained improvement needs a fresh matched optimized feature/develop/Java
+checkpoint, with synchronization made explicit for getter comparisons. Java parity
+and a justified global performance ceiling remain open.
+
+
 ## Rejected caller-selected isolated zero-argument scalar getter entries (post-e9b2c7235)
 
 Integer getter loop: 280.403 -> 137.344 ns/item (-51.019% time). Floating getter loop: 313.892 -> 146.731 ns/item (-53.254% time). The candidate is not retained. Repeated adverse non-target layouts: boxed_float_method_call/default, boxed_float_method_call/reverse, default_loop/default, default_loop/reverse, default_loop/shuffle-487, default_short/default, default_short/reverse, monomorphic_call/default, string_result_loop/default, string_result_loop/shuffle-487. Complete source/patch/modes are archived; production is restored and independently requalified. No rescue epoch or retention-rule change.

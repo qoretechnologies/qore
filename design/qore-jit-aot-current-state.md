@@ -3456,3 +3456,25 @@ Remaining work starts with complete already-resolved ordinary fallback and outli
 native getter invocation, then separate proof/check removal and a matched optimized
 Java/develop checkpoint. Java parity
 and a justified global performance ceiling remain open.
+
+
+## Rejected zero-argument scalar getters with complete matched fallback (post-5a067c2a8)
+
+Integer getter loop: 281.553 -> 131.036 ns/item (-53.459% time). Floating getter loop: 313.602 -> 137.777 ns/item (-56.066% time). The candidate is rejected; complete candidate sources/modes are archived and production is independently restored/requalified. Repeated adverse non-target layouts: boxed_float_method_call/default, boxed_float_method_call/reverse, monomorphic_call/default, string_result_loop/reverse, string_result_loop/shuffle-487.
+
+All 5904 optimized windows across 41 workloads/three fixed layouts are preserved.
+The candidate completes matched ordinary fallback and outlines getter invocation;
+full live guards, synchronized reads, eager explicit context and reader-safe frames
+remain. Shared PIC layout and unary ABI/witness are unchanged. No lock elision or
+member-value caching. Release/Debug candidate each pass 69 core files / 112 cases /
+17595 assertions, including 1053 getter assertions, plus lvalue/DGC, integration,
+native/reference controls and exact 64-qmod alias restoration. Baseline/restored
+qualification is separately fingerprinted. See RESULTS and `results-aot-zero-arg-getter-complete-rejected-macos-arm64.json` for
+all gains/losses, provenance, diagnostics, limitations and the full 62-item audit.
+
+Next test positive getter admission within already-matched ordinary dispatch,
+then separate compile-time exclusion/proof checks or caller-native context deferral.
+The context grew from 880 to 896 bytes but both use a 896-byte allocator bucket
+on this host; metadata compaction is not selected on a bucket-growth hypothesis. A retained
+change requires fresh matched optimized feature/develop/Java measurements. No fresh
+Java ratio or global performance ceiling is established by this AOT experiment.
