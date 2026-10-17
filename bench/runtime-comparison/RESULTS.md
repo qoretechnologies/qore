@@ -17024,3 +17024,151 @@ receiver/Program/body/access/readiness/epoch/stack/exception guards and synchron
 member reads, and receive new independent references and optimized before/after
 measurements. Do not retry this rejected cache candidate unchanged. Java parity
 and a justified global performance ceiling remain unestablished.
+
+
+## Rejected zero-argument scalar getter entries (post-849454696)
+
+Integer getter loop: 280.434 -> 157.997 ns/item (-43.660% time). Floating getter loop: 314.270 -> 165.712 ns/item (-47.271% time). The candidate is not retained. Repeated adverse non-target layouts: boxed_float_method_call/default, boxed_int_method_call/default, closure_call/default, closure_call/shuffle-487. Complete source/patch/modes are archived; production is restored and independently requalified. No rescue epoch or retention-rule change.
+
+Release `-O3 -DNDEBUG`, qcc `-O3`, LLVM 22.1.8, qualified frozen baseline/candidate
+artifacts. 23 existing micro, four mixed and six independent getter/string probes;
+4096 items / seed 7, three warmup and three measured 300 ms windows, fixed
+default/reverse/shuffle-487 layouts. Screen three forks/order 136379; independent
+confirmation five forks/order 136381 only when both screen targets pass.
+**All 4752 measured windows are retained.** No owned build/test/profile/read/
+analysis overlaps timing. All 18 artifacts pass 555 micro / 60 mixed / 72 probe independent
+reference checks and actual loaded-library checks; the probe oracle also passes 5400
+small-case checks. Baseline probe independently passes AST/stripped O0 / stripped O3.
+
+Values are whole-workload ns/item, median of layout medians of fork means, not
+isolated getter latency. Each probe iteration includes two receiver calls and a
+callback; short variants include ordinary `call_function` dispatch per item.
+Allocation/setup is included. No fresh Java/develop ratio is claimed.
+
+|!Workload|!Screen before|!Screen candidate|!Change|!Confirmation before|!Confirmation candidate|!Change
+|arithmetic|1.519|1.524|+0.283%|1.532|1.532|-0.001%
+|direct_call|1.521|1.528|+0.470%|1.517|1.526|+0.616%
+|method_call|1.597|1.601|+0.192%|1.598|1.600|+0.149%
+|indirect_call|6.830|6.804|-0.379%|6.796|6.835|+0.574%
+|polymorphic_call|23.003|22.942|-0.263%|23.080|22.993|-0.380%
+|monomorphic_call|3.529|3.519|-0.304%|3.510|3.497|-0.378%
+|optional_method_call|10.714|10.802|+0.823%|10.703|10.770|+0.627%
+|boxed_int_method_effect|90.361|89.630|-0.809%|90.105|89.130|-1.082%
+|boxed_int_method_fallback|30.756|30.924|+0.546%|30.908|30.739|-0.546%
+|closure_call|17.727|18.422|+3.918%|17.652|18.442|+4.475%
+|closure_capture|24.189|24.432|+1.006%|24.357|24.405|+0.194%
+|indirect_wide|6.885|6.837|-0.690%|6.902|6.814|-1.282%
+|indirect_float|6.517|6.578|+0.927%|6.587|6.573|-0.200%
+|list_read|2.760|2.758|-0.087%|2.779|2.691|-3.168%
+|list_build|26.271|26.315|+0.165%|26.291|26.287|-0.013%
+|list_mutate|185.641|186.275|+0.342%|186.456|186.761|+0.164%
+|temporary_list|1.610|1.607|-0.167%|1.615|1.612|-0.209%
+|temporary_hash|333.982|329.965|-1.203%|329.573|326.429|-0.954%
+|boxed_int_method_call|15.994|16.085|+0.572%|16.046|16.232|+1.155%
+|boxed_float_method_call|19.624|20.135|+2.607%|19.718|20.658|+4.770%
+|boxed_float_method_fallback|32.087|32.662|+1.791%|32.364|32.983|+1.913%
+|dynamic_int_result_call|10.735|10.822|+0.804%|10.641|10.803|+1.519%
+|dynamic_float_result_call|11.775|11.990|+1.823%|11.724|11.985|+2.225%
+|csv_report|945.977|947.595|+0.171%|956.603|958.442|+0.192%
+|object_orders|1834.087|1860.433|+1.436%|1841.577|1886.750|+2.453%
+|callback_pipeline|84.585|83.679|-1.070%|83.996|83.614|-0.454%
+|text_index|1327.451|1342.375|+1.124%|1327.263|1351.585|+1.832%
+|object_loop|284.338|157.031|-44.773%|280.434|157.997|-43.660%
+|object_short|1191.756|1068.011|-10.383%|1204.346|1067.800|-11.338%
+|float_loop|313.192|165.193|-47.255%|314.270|165.712|-47.271%
+|float_short|1221.414|1068.163|-12.547%|1227.258|1073.381|-12.538%
+|string_loop|375.354|373.909|-0.385%|374.481|371.461|-0.807%
+|string_short|1245.168|1252.149|+0.561%|1251.811|1255.216|+0.272%
+
+Both object_loop and float_loop must improve at least 2% in aggregate, and every
+layout must improve in both epochs. Reject a repeated non-target kernel/layout at least 3% slower
+with disjoint observed fork-mean ranges in both epochs. Ranges are observations,
+not confidence intervals; smaller losses are not declared absent or insignificant.
+Every target layout and non-target loss at least 3% follows:
+
+|!Epoch|!Workload|!Layout|!Change|!Before observed range|!Candidate observed range|!Disjoint adverse
+|screen|closure_call|default|+3.918%|17.695 to 17.845|18.274 to 18.726|True
+|screen|closure_call|shuffle-487|+5.646%|17.490 to 17.654|18.550 to 18.794|True
+|screen|boxed_int_method_call|default|+3.304%|15.998 to 16.100|16.370 to 16.550|True
+|screen|boxed_float_method_call|default|+4.185%|19.770 to 19.962|20.511 to 20.840|True
+|screen|boxed_float_method_fallback|default|+3.839%|31.835 to 32.923|33.125 to 33.441|True
+|screen|object_loop|default|-44.751%|280.924 to 307.918|157.113 to 160.391|False
+|screen|object_loop|reverse|-43.438%|277.358 to 283.016|156.338 to 157.255|False
+|screen|object_loop|shuffle-487|-44.775%|281.926 to 290.507|155.944 to 157.156|False
+|screen|float_loop|default|-47.566%|310.406 to 317.921|164.007 to 168.278|False
+|screen|float_loop|reverse|-49.364%|323.455 to 328.900|163.920 to 166.779|False
+|screen|float_loop|shuffle-487|-46.300%|309.515 to 322.600|165.363 to 167.364|False
+|confirmation|closure_call|default|+4.498%|17.424 to 17.730|18.159 to 18.691|True
+|confirmation|closure_call|shuffle-487|+4.145%|17.412 to 17.795|18.033 to 18.516|True
+|confirmation|boxed_int_method_call|default|+3.056%|15.968 to 16.149|16.158 to 16.701|True
+|confirmation|boxed_float_method_call|default|+5.596%|19.681 to 20.115|20.118 to 21.086|True
+|confirmation|boxed_float_method_call|reverse|+4.770%|19.302 to 19.746|20.377 to 20.776|True
+|confirmation|boxed_float_method_call|shuffle-487|+4.217%|19.396 to 19.983|20.041 to 20.763|True
+|confirmation|object_loop|default|-44.102%|276.721 to 292.474|155.979 to 159.376|False
+|confirmation|object_loop|reverse|-43.643%|275.176 to 294.419|156.978 to 160.568|False
+|confirmation|object_loop|shuffle-487|-43.446%|277.175 to 296.126|156.440 to 171.186|False
+|confirmation|float_loop|default|-46.392%|305.261 to 338.733|165.620 to 175.541|False
+|confirmation|float_loop|reverse|-49.534%|314.186 to 329.203|162.981 to 166.682|False
+|confirmation|float_loop|shuffle-487|-47.271%|311.097 to 331.597|164.128 to 166.888|False
+
+### Contract and review
+
+Separate append-only integer/float zero-argument companions take borrowed receiver,
+defining class, same-thread RuntimeConfig, accepted output, exact AOT context and
+sink. The existing unary ABI, compact Program/type witness and effect-prefix
+contract are unchanged. A one-block / at-most-64-instruction whole-body proof requires
+exactly one member read and a strict scalar return family; calls, branches, effects,
+locals/ARGV/explicit-self/opaque access and unsupported signatures stay ordinary.
+
+Existing full-key name/pre-resolved PIC lookup retains receiver/type/access/parse-
+options/epoch/Program checks. Separate immutable signature admission never caches
+negative lazy publication. Exact normal-body binding, live readiness/body/receiver/
+Program/debugger/stack guards and synchronized member loads remain. No value or lock
+is cached. Eager explicit object/class context and the existing logical native frame
+are retained. The borrowed PIC name is unpublished and reader-safe before a miss can
+enter generic code and replace its owner. Results preserve ordinary boxing/ownership.
+
+Generated-code review covers all 199 common functions plus 2 new getter
+companions; fixed non-default layouts place each companion immediately after its
+normal body, without alignment search. 13 runtime disassemblies
+cover ordinary dispatch, separate getter dispatch/publication and synchronized reads.
+Six serial untimed samples cover before/candidate integer, float and string loops.
+Static instruction counts are not dynamic call counts; profile samples are not
+isolated latencies, and unchanged bodies do not justify discarding adverse timings.
+Detailed manually reviewed findings are preserved in the JSON evidence.
+
+### Qualification and audit
+
+baseline_release: 63 files / 96 cases / 13287 assertions; baseline_debug: 63 files / 96 cases / 13287 assertions; candidate_release: 69 files / 112 cases / 17427 assertions; candidate_debug: 69 files / 112 cases / 17427 assertions; restored_release: 68 files / 108 cases / 16542 assertions; restored_debug: 68 files / 108 cases / 16542 assertions.
+The baseline additionally passes five separately fingerprinted existing member/
+native/diagnostic suites: 12 cases / 3255 assertions per build. The candidate's new getter
+suite independently passes 4 cases / 885 assertions in each build. Native adapters forward
+to actual compiled entries and count hits/misses, including body/readiness/null-entry
+guards, wrong/conflicting binders, forced overflow, cross-Program exclusion and
+post-epoch warm admission. O0 / O3 and EH are tested; threaded member replacement,
+debugger events and concurrent frame readers also pass. Filtered development runs
+are explicitly not full-suite qualification.
+
+Each core phase includes 13 lvalue/DGC suites / 82 cases / 1330 Release or 2663 Debug assertions,
+HTTP 10/30, offline LLM 4/23, threads 22/110, 555 IR + 555 AOT references, 1985 Debug native checks in
+each bounded-pair mode, and the Debug abrupt-drop test. All 64 owned qmods are rebuilt;
+Debug wrappers restore exactly 64 Release aliases and preserve unrelated links.
+Development failures and their corrections remain in the report, including strict
+excess-argument expectations, native aggregate linkage and post-epoch warmup.
+Repetitive development text is losslessly zlib/base64 encoded inside the JSON;
+the audit decodes every file and verifies its original SHA-256 and raw archive.
+
+The audit-changes review records **7 Pass / 55 N/A / zero Fail** over all 62 items, independently
+replaying timing orders/samples/statistics/decisions, references, source/artifact
+identities and code comparisons. Runner 17 / mixed-reference 8 / probe-oracle 5400, strict
+Qore tables and diff checks pass. See `results-aot-zero-arg-getter-rejected-macos-arm64.json` for complete raw evidence,
+sources/modes, drivers and limitations. Selected macOS arm64 qualification only,
+not full-suite/sanitizer/cross-platform certification. Host load/frequency/thermals
+are uncontrolled. No compile-time, memory-footprint, cold-start or application-wide
+performance claim. Java parity/global maximum remain unestablished.
+
+Next use the measured/profiled result to assess caller-native getter continuations
+and separately proven context deferral. Any retained change needs a fresh matched
+optimized feature/develop/Java checkpoint; getter comparisons must explicitly match
+field synchronization before presenting Java ratios. Do not retry a rejected
+candidate unchanged.

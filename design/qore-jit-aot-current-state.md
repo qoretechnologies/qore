@@ -3410,3 +3410,26 @@ show generic zero-argument method/frame/context/member-load work. Next investiga
 an append-only zero-argument scalar getter/pure-method companion while preserving
 the unary contract and all live guards/synchronized reads. This needs a new
 predeclared optimized campaign; it is not a gain claim. Java parity remains open.
+
+
+## Rejected zero-argument scalar getter entries (post-849454696)
+
+Integer getter loop: 280.434 -> 157.997 ns/item (-43.660% time). Floating getter loop: 314.270 -> 165.712 ns/item (-47.271% time). The candidate is not retained. Repeated adverse non-target layouts: boxed_float_method_call/default, boxed_int_method_call/default, closure_call/default, closure_call/shuffle-487. Complete source/patch/modes are archived; production is restored and independently requalified. No rescue epoch or retention-rule change.
+
+All 4752 optimized windows are preserved across 33 workloads/three fixed layouts.
+Six-argument zero-argument getter companions have separate signature admission;
+the unary ABI/witness is unchanged. Full live dispatch/body/Program/debugger/stack
+guards, synchronized member reads, eager explicit context and reader-safe logical
+frames remain. No member value is cached and no lock is elided.
+
+Candidate Release/Debug each pass 69 core files / 112 cases / 17427 assertions, including
+885 getter assertions, plus lvalue/DGC, HTTP/LLM/threads, 555 IR + 555 AOT and 1985 Debug native
+checks per mode. Baseline core 63/96/13287 plus five supplemental suites 12/3255 per
+build is separately fingerprinted. All 64 owned qmods rebuilt and Release aliases
+restored. Audit: 7 Pass / 55 N/A / zero Fail across 62 items. See RESULTS and
+`results-aot-zero-arg-getter-rejected-macos-arm64.json` under `bench/runtime-comparison/` for every gain/loss, provenance,
+development attempt and qualification limit. No fresh Java/develop ratio is claimed.
+
+Remaining work includes measuring caller-native getter continuations and separately
+proven context deferral, then a matched optimized Java/develop checkpoint. Java parity
+and a justified global performance ceiling remain open.
