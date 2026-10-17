@@ -1338,12 +1338,30 @@ public class DpqlParser {
         string val;
 
         if (rest[0] == "{") {
-            # Bracketed value: find matching closing '}'
+            # Bracketed value: find the matching closing '}' the same way the tokenizer did when it ended the token
+            # (DpqlTokenizer::scanTemplateRef()): a backslash escapes the next character, and a quoted string ('...'
+            # or "...", with backslash escapes inside) is skipped, so a brace in either does not count.  Counting
+            # every brace instead closed the value early, truncating values such as {c.a\}b} or {c."x}y"}.
             int depth = 0;
             int close_pos = -1;
-            for (int i = 0; i < rest.size(); ++i) {
+            int size = rest.size();
+            for (int i = 0; i < size; ++i) {
                 string ch = rest[i];
-                if (ch == "{") {
+                if (ch == "\\") {
+                    # skip the escaped character
+                    ++i;
+                } else if (ch == '"' || ch == "'") {
+                    # skip the quoted string, honoring backslash escapes inside it
+                    string quote = ch;
+                    for (++i; i < size; ++i) {
+                        ch = rest[i];
+                        if (ch == "\\") {
+                            ++i;
+                        } else if (ch == quote) {
+                            break;
+                        }
+                    }
+                } else if (ch == "{") {
                     ++depth;
                 } else if (ch == "}") {
                     --depth;

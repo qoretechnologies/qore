@@ -5079,6 +5079,41 @@ public class DpqlTest inherits QUnit::Test {
             assertEq("ctx", ref.tmpl_context);
             assertEq("", ref.tmpl_value, "empty brackets yield empty value");
         }
+
+        # The bracketed value ends where the tokenizer ends it: a backslash escapes the next character and a quoted
+        # string ('...' or "...", with backslash escapes inside) is skipped, so a brace in either does not close the
+        # template.  The value is kept verbatim, escapes included.
+        {
+            list<list<string>> cases = (
+                # brace escaped with a backslash
+                ('$record:{c.a\}b}', "record", 'c.a\}b'),
+                # brace inside a double-quoted string
+                ('$record:{c."x}y"}', "record", 'c."x}y"'),
+                # brace inside a single-quoted string
+                ("$record:{c.'x}y'}", "record", "c.'x}y'"),
+                # escaped quote inside a quoted string does not end the string
+                ('$record:{c."x\"}y"}', "record", 'c."x\"}y"'),
+                # a Qore expression whose string literal contains a brace
+                ('$qore-expr:{"a}b" + "c"}', "qore-expr", '"a}b" + "c"'),
+                # unchanged: values that parse correctly without any escaping or quoting
+                ('$record:{create.items[*].id}', "record", 'create.items[*].id'),
+                ('$record:{create.items[0].id}', "record", 'create.items[0].id'),
+                ('$record:{create.order-id}', "record", 'create.order-id'),
+                ('$record:{c.a\.b}', "record", 'c.a\.b'),
+                ('$record:{c.a\{b}', "record", 'c.a\{b'),
+            );
+            foreach list<string> c in (cases) {
+                hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(c[0]);
+                assertEq(DP_EXPR_TEMPLATE, exp.exp, c[0]);
+                hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
+                assertEq(c[1], ref.tmpl_context, c[0]);
+                assertEq(c[2], ref.tmpl_value, c[0]);
+                assertEq(c[0], ref.raw, c[0]);
+            }
+        }
+
+        # an unescaped '}' still ends the template, so what follows it is a syntax error
+        assertThrows("DPQL-PARSE-ERROR", \DataProvider::parseDpqlExpression(), '$record:{c.a}b}');
     }
 
     templateSerializerTests() {
