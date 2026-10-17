@@ -3385,3 +3385,28 @@ frame publication and capture synchronization remain. Next verify conditional
 receiver/Phi provenance as profitability input for the existing guarded object
 parameter cache, preserving epoch/ownership and weak-load cleanup semantics.
 Measure short invocations and broad optimized workloads. Java parity remains open.
+
+
+## Rejected conditional receiver object-parameter cache (post-5d3fc6e39)
+
+The targeted ordinary conditional-object loop improves 6.881% in the optimized
+screen and 12.852% in confirmation (314.087 -> 273.719 ns/item), all layouts faster.
+Reject nevertheless: boxed_int_method_call/shuffle-487 is repeatedly 4.268% / 4.198%
+slower with disjoint adverse ranges, triggering the predeclared broad-regression
+gate. All 4464 windows and smaller losses are retained; no rescue or rule change.
+See RESULTS and `results-aot-conditional-object-param-rejected-macos-arm64.json` under `bench/runtime-comparison/`.
+
+The compiler source is restored exactly; two new candidate-only fixtures are
+archived with executable modes and removed from the working tree. No runtime API
+or new control remains. Fresh restored Release/Debug each pass 63 core files /
+96 cases / 13287 assertions plus lvalue/DGC, HTTP/LLM/threads, 555 IR + 555 AOT and
+1985 Debug native checks per mode; 64 Release aliases restored. Candidate-specific
+14407 assertions are not claimed for restored code. Evidence-only audit: 7 Pass /
+55 N/A / zero Fail across 62 items.
+
+Generated code adds cache admissions/epoch guards and grows the boxed-int frame
+432 -> 512 bytes; the target frame grows 768 -> 848 bytes. Untimed profiles still
+show generic zero-argument method/frame/context/member-load work. Next investigate
+an append-only zero-argument scalar getter/pure-method companion while preserving
+the unary contract and all live guards/synchronized reads. This needs a new
+predeclared optimized campaign; it is not a gain claim. Java parity remains open.

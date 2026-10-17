@@ -16858,3 +16858,169 @@ weak-load cleanup set and all strong-slot/epoch/owner/reference safeguards, and 
 short invocations as well as warm loops. This is a new hypothesis, not a gain or an
 explanation for prior regressions. Do not retry this rejected v3 candidate unchanged.
 Java parity and a justified global performance ceiling remain unestablished.
+
+
+## Rejected conditional receiver object-parameter cache (2026-10-17, post-5d3fc6e39)
+
+The targeted ordinary conditional-object loop improves **6.881%** in the screen
+and **12.852%** in confirmation: **314.087 -> 273.719 ns/item** in confirmation,
+with every layout faster in both epochs. Nevertheless, **reject the candidate**:
+`boxed_int_method_call` in shuffle-487 repeatedly regresses **4.268% / 4.198%**,
+with disjoint adverse observed fork-mean ranges in both epochs. This triggers the
+predeclared non-target rejection rule. No rescue epoch, pooling, layout search or
+post-measurement rule change. The compiler file is restored exactly; two new
+candidate-only fixtures are removed from the working tree but preserved with
+executable modes and a complete recoverable patch. No new runtime control is retained.
+
+### Optimized method and all results
+
+Release `-O3 -DNDEBUG`, qcc `-O3`, LLVM 22.1.8; frozen qualified baseline and
+candidate artifacts, 4096 items / seed 7, three warmup and three measured 300 ms
+windows. 23 micro, four mixed and four independent probe workloads, with fixed
+default/reverse/shuffle-487 layouts. Three-fork screen/order seed 136367:
+558 runs / 1674 measured windows. Independent five-fork confirmation/order 136373:
+930 runs / 2790 windows. **All 4464 measured windows are retained.** No owned
+build/test/profile/read/analysis overlaps timing. All 18 artifacts pass checks
+against independent references (555 micro / 60 mixed / 48 probe) and actual
+loaded-library checks. The probe oracle additionally passes 3600 small-case checks.
+
+Values below are whole-workload ns/item, median of layout medians of fork means,
+not isolated call latency. Each probe iteration has two receiver calls and a
+callback; short variants also include ordinary `call_function` dispatch per item.
+Setup/allocation remains included. No fresh Java/develop ratio is claimed.
+
+|!Workload|!Screen before|!Screen candidate|!Change|!Confirmation before|!Confirmation candidate|!Change
+|arithmetic|1.551|1.549|-0.100%|1.556|1.554|-0.130%
+|direct_call|1.547|1.548|+0.079%|1.562|1.562|-0.018%
+|method_call|1.624|1.641|+1.074%|1.633|1.622|-0.641%
+|indirect_call|6.828|6.826|-0.036%|6.872|6.952|+1.167%
+|polymorphic_call|22.934|23.124|+0.827%|23.220|23.174|-0.200%
+|monomorphic_call|3.511|3.596|+2.432%|3.548|3.737|+5.343%
+|optional_method_call|10.570|10.710|+1.329%|10.793|10.806|+0.119%
+|boxed_int_method_effect|90.873|88.676|-2.418%|91.183|88.734|-2.686%
+|boxed_int_method_fallback|31.020|31.349|+1.062%|31.370|31.585|+0.685%
+|closure_call|17.710|17.761|+0.288%|17.945|17.996|+0.289%
+|closure_capture|24.724|24.520|-0.823%|24.800|24.795|-0.020%
+|indirect_wide|6.750|6.759|+0.136%|6.871|6.831|-0.589%
+|indirect_float|6.605|6.605|+0.006%|6.691|6.686|-0.084%
+|list_read|2.684|2.752|+2.540%|2.796|2.822|+0.950%
+|list_build|26.884|26.893|+0.031%|26.762|26.732|-0.114%
+|list_mutate|186.764|186.298|-0.250%|188.096|190.307|+1.176%
+|temporary_list|1.570|1.588|+1.112%|1.639|1.632|-0.411%
+|temporary_hash|334.097|329.660|-1.328%|332.637|332.485|-0.046%
+|boxed_int_method_call|16.044|16.384|+2.122%|16.199|16.516|+1.953%
+|boxed_float_method_call|19.872|19.770|-0.510%|19.950|19.997|+0.235%
+|boxed_float_method_fallback|31.977|31.436|-1.691%|33.115|33.231|+0.349%
+|dynamic_int_result_call|10.779|10.750|-0.269%|10.721|10.827|+0.991%
+|dynamic_float_result_call|11.977|11.974|-0.027%|11.900|12.083|+1.543%
+|csv_report|956.418|967.217|+1.129%|967.840|980.490|+1.307%
+|object_orders|1851.109|1906.737|+3.005%|1901.520|1919.563|+0.949%
+|callback_pipeline|84.459|84.127|-0.393%|84.797|85.078|+0.332%
+|text_index|1353.722|1362.019|+0.613%|1350.749|1353.860|+0.230%
+|object_loop|310.701|289.321|-6.881%|314.087|273.719|-12.852%
+|object_short|1198.576|1201.653|+0.257%|1234.344|1289.595|+4.476%
+|string_loop|360.874|365.050|+1.157%|376.265|378.379|+0.562%
+|string_short|1241.807|1243.884|+0.167%|1258.824|1278.459|+1.560%
+
+
+Retention requires object_loop to improve >=2% in aggregate and improve every
+layout in both epochs. Reject any repeated non-target kernel/layout >=3% slower
+with disjoint observed fork-mean ranges in both epochs. Every smaller loss remains
+visible, including confirmation monomorphic +5.343%, object_short +4.476%, CSV
++1.307%, list mutation +1.176%, and object orders +0.949%. Observed ranges are not
+confidence intervals. All target layouts and non-target losses >=3% follow:
+
+|!Epoch|!Workload|!Layout|!Change|!Before observed range|!Candidate observed range|!Disjoint adverse
+|screen|monomorphic_call|default|+3.186%|3.318 to 3.636|3.589 to 3.717|False
+|screen|list_read|shuffle-487|+5.671%|2.610 to 2.829|2.795 to 2.887|False
+|screen|boxed_int_method_call|shuffle-487|+4.268%|15.607 to 16.104|16.272 to 16.549|True
+|screen|object_orders|default|+3.005%|1720.049 to 1885.671|1763.184 to 1913.374|False
+|screen|object_orders|shuffle-487|+4.914%|1693.672 to 1911.536|1740.985 to 1945.289|False
+|screen|object_loop|default|-6.240%|304.124 to 315.758|275.028 to 293.103|False
+|screen|object_loop|reverse|-15.420%|286.198 to 340.592|263.943 to 275.887|False
+|screen|object_loop|shuffle-487|-5.728%|295.610 to 310.279|276.887 to 302.567|False
+|confirmation|monomorphic_call|default|+5.343%|3.504 to 3.557|3.701 to 3.815|True
+|confirmation|boxed_int_method_call|shuffle-487|+4.198%|15.918 to 16.340|16.418 to 17.530|True
+|confirmation|object_orders|default|+3.510%|1850.256 to 1928.078|1890.928 to 1989.029|False
+|confirmation|object_loop|default|-13.991%|307.568 to 331.454|265.341 to 301.025|False
+|confirmation|object_loop|reverse|-12.354%|316.357 to 324.832|265.248 to 287.948|False
+|confirmation|object_loop|shuffle-487|-11.944%|306.314 to 334.299|266.686 to 288.066|False
+|confirmation|object_short|shuffle-487|+5.174%|1228.215 to 1261.617|1289.313 to 1553.894|True
+
+
+### Implementation and diagnosis
+
+The rejected change follows only QoreValue Phi ancestry in an independent
+visited-on-enqueue worklist, with cancellation every 100 combined seeds/nodes/edges,
+to extend an existing profitability hint for ordinary read-only auto parameters.
+It does not change the direct-receiver set used by weak-load cleanup. All existing
+stored-local/reference/capture/weak/opaque/private-entry exclusions and runtime
+strong-slot/identity/epoch/entry-owner/reload guards remain. No ABI/runtime helper change.
+
+Before candidate build or timing, source inspection established that generic
+lvalue member writes classify their roots as stored. The original effectful target
+therefore remains excluded. The original plan and its pre-build amendment are both
+preserved: object_loop is the target; effectful methods remain a control. Its
+observed gains cannot be attributed to the new cache. No write/COW/reference guard
+was weakened to force a benefit.
+
+Generated-code review compares all **196 common functions** (150 micro / 29 mixed /
+17 probe), with no added/removed functions. Seven ordinary micro receiver bodies,
+two ordinary probe bodies and three main initialization immediates change. Private
+native entries remain unchanged. The ordinary boxed-int method grows from
+1421 to 1512 instructions and **432 to 512 bytes of stack**; each ordinary probe
+body grows from 1534 to 1666 instructions and **768 to 848 bytes of stack**.
+Three admission calls and per-read epoch guards add work even where another fast
+continuation is already efficient. This is an observed mechanism, not a measured
+causal decomposition of the regression. Static reload sites are not dynamic counts.
+
+Eight runtime helper disassemblies preserve strong-slot selection, saturating
+pre-assignment invalidation and owner-safe stale reloads. Four serial untimed
+profiles show the object probe still using generic method dispatch, diagnostic
+frame/string work, context transitions, member-name lookup and synchronized getter
+loads. Strings continue through pseudo-method dispatch/conversion. Parent/child
+samples are not summed, and signal-wait samples are idle helper-thread work.
+Profiles are excluded from timing. Unchanged generated bodies do not justify
+discarding adverse results.
+
+### Qualification, restoration and audit
+
+Frozen baseline core qualification: 59 files / 92 cases / 11703 assertions per
+Release/Debug build, plus four separately fingerprinted cache suites / four cases /
+1584 assertions per build. Candidate: **64 / 97 / 14407**, including the new
+conditional receiver fixture with 1120 assertions. Freshly rebuilt restored code:
+**63 / 96 / 13287** per build; candidate-only fixtures are not claimed for restoration.
+The restored binaries are qualified separately, not inferred from source rollback.
+
+All core phases also include 13 lvalue/DGC suites / 82 cases / 1330 Release or
+2663 Debug assertions, HTTP 10/30, offline LLM 4/23, threads 22/110 and 555 IR +
+555 AOT reference checks. Debug native tests pass 1985 checks in each bounded-pair
+mode; abrupt-drop passes four assertions in Debug and skips Release. All 64 owned
+qmods are rebuilt; each Debug wrapper restores exactly 64 Release aliases and
+preserves unrelated links.
+
+One untimed inspection initially asserted zero admission for every existing micro
+kernel; that diagnostic expectation was wrong. Read-only boxed/dynamic kernels
+gain three admissions, while the stored-root effectful kernel stays at zero. Its
+failed driver/output and corrected O0/O3 checks are preserved. Production code and
+retention rules were unchanged. Supplemental baseline AST/IR fixture outputs lack
+a frozen source fingerprint and are not primary qualification evidence; the fully
+fingerprinted candidate qualifications independently check AST/IR behavior.
+
+The documentation/evidence-only audit records **7 Pass / 55 N/A / zero Fail** over
+all 62 audit-changes items, independently replaying all 4464 windows, randomized
+orders, references, decisions, source/artifact identities and disassemblies.
+Runner 17 / mixed-reference 8 / probe-oracle 3600, strict Qore tables and diff checks
+pass. Full candidate sources, complete patch/modes, drivers, raw outputs and
+restoration evidence are in `results-aot-conditional-object-param-rejected-macos-arm64.json`. Selected macOS arm64 qualification only;
+not full-suite, sanitizer or cross-platform certification. Host load, frequency
+and thermals are uncontrolled. No compile-time, memory-footprint or cold-start claim.
+
+Next investigate zero-argument strict scalar getters/pure methods: existing native
+scalar-member admission and name-method continuation require one argument, so
+zero-argument getters remain on the generic path. Any new companion must use an
+append-only contract without reinterpreting the unary ABI/witness, preserve live
+receiver/Program/body/access/readiness/epoch/stack/exception guards and synchronized
+member reads, and receive new independent references and optimized before/after
+measurements. Do not retry this rejected cache candidate unchanged. Java parity
+and a justified global performance ceiling remain unestablished.
