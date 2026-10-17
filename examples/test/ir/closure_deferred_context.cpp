@@ -18,6 +18,7 @@
 #include <initializer_list>
 #include <string>
 #include <thread>
+#include <utility>
 #if defined(__aarch64__)
 #include <qore/macros-aarch64.h>
 #elif defined(__x86_64__)
@@ -32,6 +33,9 @@ struct ClosureProbe {
     QoreAOTContext* ctx;
     QoreAOTContext::NativeIntUnaryClosureEntry target;
     bool overflow = false;
+    bool replace_impl = false;
+    bool reject = false;
+    bool live_object = false;
     unsigned calls = 0;
     static thread_local ClosureProbe* current;
     explicit ClosureProbe(QoreAOTContext* ctx) : ctx(ctx),
@@ -49,6 +53,30 @@ struct ClosureProbe {
         auto& probe = *current;
         assert(ctx == probe.ctx);
         ++probe.calls;
+        assert(rc->getObject() == closure->getObject() && rc->getClass() == closure->getClassCtx());
+        if (probe.replace_impl) {
+            // The helper must restore the current implementation, not an Impl
+            // pointer retained across the callee. Keep the native view valid.
+            RuntimeConfig replacement(*rc);
+            *rc = std::move(replacement);
+            assert(!replacement.getObject() && !replacement.getClass());
+            replacement.setObject(closure->getObject());
+            replacement.setClass(closure->getClassCtx());
+            assert(replacement.getObject() == closure->getObject());
+            assert(replacement.getClass() == closure->getClassCtx());
+        }
+        assert((closure->getObject() && closure->getObject()->isValid()) == probe.live_object);
+        if (probe.live_object) {
+            uint64_t bits = qore_rt_load_self_member("contextMarker", xsink);
+            QoreValue value;
+            std::memcpy(&value, &bits, sizeof(value));
+            ValueHolder marker(value, xsink);
+            assert(!*xsink && marker->getAsBigInt() == 927);
+        }
+        if (probe.reject) {
+            *accepted = 0;
+            return 0;
+        }
         struct RestoreLimit {
             size_t* address = nullptr;
             size_t saved = 0;
@@ -89,48 +117,68 @@ struct Invocation {
     uint64_t bits;
     QoreAOTContext* ctx;
     QorePreparedFunctionRefV3 cache{};
+    QoreObject* snapshot_object = nullptr;
+    bool live_object = false;
 };
 
 static QoreValue sweep(const void* ptr, const QoreListNode*, RuntimeConfig&, ExceptionSink* xsink) {
     auto& invocation = *static_cast<Invocation*>(const_cast<void*>(ptr));
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    QoreObject* old_object = rc->getObject();
+    const qore_class_private* old_class = rc->getClass();
+    assert(invocation.snapshot_object && invocation.snapshot_object != old_object);
+    // Only alter the compatibility snapshot. Live thread context is independent.
+    rc->setObject(invocation.snapshot_object);
+    rc->setClass(qore_class_private::get(*invocation.snapshot_object->getClass()));
     RuntimeConfig before = *rc;
     QoreProgram* caller = qore_get_call_program_context();
     ClosureProbe probe(invocation.ctx);
-    for (bool request_overflow : {false, true, false}) {
-        // Unsupported native views still exercise ordinary calls/restoration;
-        // the production full stack guard remains enabled on those targets.
-        bool overflow = request_overflow && qore_rt_get_stack_limit_v1(rc);
-        probe.overflow = overflow;
-        int64_t result = 123;
-        assert(qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &result, xsink, rc, &invocation.cache) == 1);
-        assert(result == (overflow ? 0 : 24) && static_cast<bool>(*xsink) == overflow);
+    probe.live_object = invocation.live_object;
+    for (bool replace_impl : {false, true}) {
+        probe.replace_impl = replace_impl;
+        for (bool request_overflow : {false, true, false}) {
+            // Unsupported native views still exercise ordinary calls/restoration;
+            // the production full stack guard remains enabled on those targets.
+            bool overflow = request_overflow && qore_rt_get_stack_limit_v1(rc);
+            probe.overflow = overflow;
+            int64_t result = 123;
+            assert(qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &result, xsink, rc, &invocation.cache) == 1);
+            assert(result == (overflow ? 0 : 24) && static_cast<bool>(*xsink) == overflow);
+            sameContext(before);
+            assert(qore_get_call_program_context() == caller);
+            if (overflow) {
+                assert(xsink->getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+                ReferenceHolder<QoreHashNode> info(xsink->getExceptionInfo(), xsink);
+                assert(!*xsink);
+                const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+                assert(stack);
+                unsigned closures = 0;
+                for (size_t i = 0; i < stack->size(); ++i) {
+                    const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                    const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                    if (name && name->equal("<anonymous closure>")) {
+                        ++closures;
+                        assert(frame->getKeyValue("file").get<const QoreStringNode>()->strlen());
+                    }
+                    if (!(i % 100)) { assert(!qore_check_cancel(xsink, "closure overflow stack inspection")); }
+                }
+                assert(closures == 1);
+            }
+        }
+        probe.overflow = false;
+        probe.reject = true;
+        int64_t rejected = 123;
+        assert(qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &rejected, xsink, rc, &invocation.cache) == 0);
+        assert(!*xsink && rejected == 0);
         sameContext(before);
         assert(qore_get_call_program_context() == caller);
-        if (overflow) {
-            assert(xsink->getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
-            ReferenceHolder<QoreHashNode> info(xsink->getExceptionInfo(), xsink);
-            assert(!*xsink);
-            const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
-            assert(stack);
-            unsigned closures = 0;
-            for (size_t i = 0; i < stack->size(); ++i) {
-                const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
-                const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
-                if (name && name->equal("<anonymous closure>")) {
-                    ++closures;
-                    assert(frame->getKeyValue("file").get<const QoreStringNode>()->strlen());
-                }
-                if (!(i % 100)) { assert(!qore_check_cancel(xsink, "closure overflow stack inspection")); }
-            }
-            assert(closures == 1);
-        }
+        probe.reject = false;
     }
-    assert(probe.calls == 3);
+    assert(probe.calls == 8);
     xsink->raiseException("CLOSURE-PENDING", "pending sink must prevent entry");
     int64_t result = 123;
     assert(qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &result, xsink, rc, &invocation.cache) == 1);
-    assert(*xsink && result == 0 && probe.calls == 3);
+    assert(*xsink && result == 0 && probe.calls == 8);
     xsink->clear();
     sameContext(before);
     bool ready = invocation.ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
@@ -138,8 +186,10 @@ static QoreValue sweep(const void* ptr, const QoreListNode*, RuntimeConfig&, Exc
     result = 123;
     int handled = qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &result, xsink, rc, &invocation.cache);
     invocation.ctx->pc_loc_map_attached.store(ready, std::memory_order_release);
-    assert(!handled && !*xsink && result == 123 && probe.calls == 3);
+    assert(!handled && !*xsink && result == 123 && probe.calls == 8);
     sameContext(before);
+    rc->setObject(old_object);
+    rc->setClass(old_class);
     return QoreValue(int64_t(24));
 }
 
@@ -186,8 +236,20 @@ static void check() {
         program->parse(source.c_str(), "closure-context-padded", &xsink);
         assert(!xsink);
     }
-    for (const char* factory : {"closureContextPlain", "closureContextCaptured", "closureContextObject"}) {
-        ValueHolder ref(program->callFunction(factory, nullptr, &xsink), &xsink);
+    ValueHolder snapshot(program->callFunction("closureContextOwnedObject", nullptr, &xsink), &xsink);
+    assert(!xsink && snapshot->getType() == NT_LIST && snapshot->get<QoreListNode>()->size() == 2);
+    invocation.snapshot_object = snapshot->get<QoreListNode>()->retrieveEntry(0).get<QoreObject>();
+    assert(invocation.snapshot_object && invocation.snapshot_object->isValid());
+    for (const char* factory : {"closureContextPlain", "closureContextCaptured", "closureContextObject",
+            "closureContextOwnedObject"}) {
+        invocation.live_object = !std::strcmp(factory, "closureContextOwnedObject");
+        ValueHolder owner(program->callFunction(factory, nullptr, &xsink), &xsink);
+        assert(!xsink);
+        if (invocation.live_object) {
+            assert(owner->getType() == NT_LIST && owner->get<QoreListNode>()->size() == 2);
+        }
+        ValueHolder ref(invocation.live_object
+            ? owner->get<QoreListNode>()->retrieveEntry(1).refSelf() : owner->refSelf(), &xsink);
         assert(!xsink && ref->getType() == NT_RUNTIME_CLOSURE);
         const auto* closure = static_cast<const QoreClosureBase*>(ref->getInternalNode());
         const auto* uvb = closure->getFunction()->first()->getUserVariantBase();

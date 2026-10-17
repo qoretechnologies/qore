@@ -3200,3 +3200,36 @@ RuntimeConfig snapshot access; nullable public accessors and independent live /
 snapshot restoration must remain intact. No retained speedup from this failed
 candidate, full-suite/cross-platform certification, Java parity or global
 performance ceiling is claimed.
+
+
+## Rejected native-only snapshot access (post-799ddfaa5)
+
+The RuntimeConfigNativeObjectHelper non-null accessor candidate is not retained.
+It removed nullable/default allocation guards without changing public behavior,
+independent live/snapshot pairs, current-Impl restoration, admission, ownership,
+capture locks, stack observation or cancellation. Optimized three-layout,
+three-fork screening found plain closures 19.260 -> 19.236 ns/item (-0.127%) and
+captured closures 25.572 -> 25.413 (-0.624%); one layout per target was slower.
+Both miss the predeclared 2%/all-layout criterion. All 1188 windows are retained,
+including list read +3.181% and every smaller adverse result. No confirmation
+or rescue trial. No fresh Java/develop comparison is inferred.
+
+Assembly confirms the intended guard removal, but not sufficient measured gain.
+Both production files are restored exactly. Stronger context tests remain:
+separate live/snapshot state, current Impl replacement, public moved-from
+semantics, owned live and deleted receivers, private-member access, native miss,
+overflow/recovery, pending sink and readiness/Program rejection. Two corrected
+baseline test assumptions and all original outputs are archived.
+
+Candidate and freshly restored Release/Debug each pass 59 selected fixtures /
+92 cases / 11621 assertions, plus HTTP, offline LLM, cancellation/thread,
+555 IR + 555 AOT references and Debug native/abrupt-drop checks. Exactly64
+Release aliases restored. The 62-item audit records21 Pass/41 N/A/zero Fail;
+all1188 windows independently replayed. Full results and provenance:
+`bench/runtime-comparison/results-aot-native-snapshot-access-rejected-macos-arm64.json`.
+
+Next target: inline the first lvalue object-count record, preserving all nested
+tracking, reverse propagation, clear/reuse and moved-from emptiness. This
+addresses an allocation visible in the list-mutation profile. Deferred closure
+context needs a distinct versioned contract and proof, not an unannounced change
+to v1. Neither Java parity nor a global performance ceiling is established.

@@ -11,6 +11,7 @@ code<int(int)> sub closureContextCaptured() {
     return int sub(int value) { return value + offset; };
 }
 class ClosureContextObject {
+    private { int contextMarker = 927; }
     code<int(int)> make() {
         int offset = 17;
         return int sub(int value) { return value + offset; };
@@ -19,5 +20,9 @@ class ClosureContextObject {
 code<int(int)> sub closureContextObject() {
     ClosureContextObject object();
     return object.make();
+}
+list<auto> sub closureContextOwnedObject() {
+    ClosureContextObject object();
+    return (object, object.make());
 }
 int sub closureContextCaller(code<int(int)> callback, int value) { return callback(value); }

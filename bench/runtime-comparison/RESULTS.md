@@ -16139,3 +16139,111 @@ snapshot access without weakening nullable public behavior, independent live
 and snapshot restoration, ownership, stack observation or cancellation. Then
 evaluate lvalue bookkeeping allocation or a separately proven live-type coercion
 fast path. Java parity and a justified global performance ceiling remain open.
+
+
+## Rejected native-only RuntimeConfig snapshot access (2026-10-17, post-799ddfaa5)
+
+**No production optimization is retained.** The candidate specialized the
+already admitted `RuntimeConfigNativeObjectHelper` context substitution with
+internal non-null snapshot accessors. It preserved separate live ThreadData and
+RuntimeConfig object/class pairs, all installs/restores, and re-read the current
+Impl after the callee. Public nullable/moved-from access and allocating setters
+were unchanged. Program/body/readiness/debugger/stack checks, capture locks,
+ownership, frame publication and cancellation were not weakened. No new public
+layout, serialized format, runtime dispatch ABI or diagnostic branch.
+
+### Optimized screen
+
+Frozen qualified before and candidate Release `-O3 -DNDEBUG`, qcc `-O3`, LLVM
+22.1.8; default/reverse/shuffle-487 layouts, three forks, fixed randomized
+interleaving seed 136303, three warmup/three measured 300 ms windows, 4096 items
+and seed 7. All 396 jobs / 1188 measured windows are retained. Every executable
+passed its reference grid (555 micro or 60 mixed) and actual loaded-library
+verification. These are whole-workload ns/item, not isolated call latencies.
+
+Both closure targets needed at least 2% reduction and improvement in every
+layout, then an independent five-fork confirmation. Plain closures improve
+**19.260 to 19.236 (-0.127%)**; captured closures **25.572 to 25.413 (-0.624%)**.
+Plain-layout changes are -0.735%, +0.422%, -0.956%; captured changes are +1.316%,
+-0.415%, -1.394%. The screen fails; no confirmation, rescue epoch or layout search.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Time change
+|arithmetic|1.515|1.517|+0.160%
+|direct_call|1.519|1.520|+0.042%
+|method_call|1.598|1.597|-0.049%
+|indirect_call|6.751|6.746|-0.068%
+|polymorphic_call|22.514|22.538|+0.107%
+|monomorphic_call|3.450|3.450|-0.015%
+|optional_method_call|10.587|10.621|+0.321%
+|boxed_int_method_effect|88.893|87.791|-1.239%
+|boxed_int_method_fallback|31.097|31.044|-0.168%
+|closure_call|19.260|19.236|-0.127%
+|closure_capture|25.572|25.413|-0.624%
+|indirect_wide|6.722|6.787|+0.969%
+|indirect_float|6.606|6.644|+0.563%
+|list_read|2.734|2.821|+3.181%
+|list_build|26.244|26.327|+0.318%
+|list_mutate|198.345|198.843|+0.251%
+|temporary_list|1.603|1.598|-0.278%
+|temporary_hash|327.145|329.557|+0.737%
+|csv_report|945.357|950.595|+0.554%
+|object_orders|1845.406|1818.509|-1.458%
+|callback_pipeline|84.725|84.560|-0.194%
+|text_index|1328.502|1345.702|+1.295%
+
+List read is +3.181% overall in this screen; the other adverse results above
+are also preserved. No independently confirmed regression is claimed from one
+epoch. Every layout median and observed fork-mean range is in the report;
+ranges are not confidence intervals. No fresh Java/develop ratio is derived
+from this experiment; use the preceding matched optimized checkpoint.
+
+### Assembly, regression tests and rollback
+
+Untimed disassembly verifies removal of the nullable-Impl selection and
+allocation guards in the closure context helper. Independent live/snapshot
+restoration and current-Impl reload remain. This is a real instruction reduction
+but not sufficient measured benefit. All 150 micro and 29 mixed generated
+functions were compared: only the micro `_main` metadata-length immediate
+changes (0x7b6c to 0x7b6a). Identical workload instructions do not imply equal
+timing or invalidate losses. No accessor export was added in Release or Debug.
+
+Retained tests cover independent snapshots, replacing the current RuntimeConfig
+Impl during the callee, nullable moved-from getters/setters, private-member
+access through an owned live receiver, and the existing deleted-receiver case.
+Success, post-publication stack overflow, recovery, native miss, pending sink,
+unready context and cross-Program rejection preserve caller state. Each worker
+owns a separate Program. Both provider and C++ harness run O0/O3 with native
+assertions enabled. Two initial baseline diagnostics incorrectly attempted
+member access through an intentionally deleted receiver; the expected
+OBJECT-ALREADY-DELETED was confirmed and a separately owned live-receiver case
+added. Both corrected tests passed unchanged baseline before production edits.
+
+Both production files are restored byte-for-byte to HEAD. Candidate and freshly
+restored Release/Debug each pass 59 fixtures / 92 cases / 11621 assertions,
+including closure-context 18 and native-leaf 652. All 64 qmods rebuilt; HTTP
+10/30, offline LLM 4/23, thread/cancellation 22/110, and 555 references per IR/AOT
+pass. Debug native checks pass 1082 in both bounded-pair modes and abrupt-drop
+four; Release skips abrupt-drop. Wrappers restore exactly 64 Release aliases,
+preserving unrelated links. This is selected macOS arm64 qualification, not
+full-suite, sanitizer or cross-platform certification.
+
+The full 62-item audit records 21 Pass, 41 N/A and zero Fail. Each item and the
+independent replay of all 1188 windows, raw output, original candidate source,
+qualification histories, disassembly and drivers are retained in
+`results-aot-native-snapshot-access-rejected-macos-arm64.json`.
+
+|!Audit group|!Status|!Evidence
+|Test structure and native fixture|Pass|Modern/executable scripts, shipped dependencies, O0/O3 assertions, bounded loops and existing stack cancellation polling
+|Exception, context, ownership and thread correctness|Pass|Independent snapshot/live pairs and current Impl replacement; separate worker Programs; exact production rollback
+|Measurement and decision|Pass|All 1188 windows replayed; both targets fail; no confirmation or rescue
+|Documentation and provenance|Pass|Baseline test diagnostics, all losses and restored qualification preserved; strict Qore tables
+|Module/QPP/DataProvider/JNI registration|N/A|No such retained change
+
+No task-owned build/test/profile/read/analysis overlapped timing. Host load,
+frequency and thermals were uncontrolled. Next evaluate inline storage for the
+first lvalue object-count record, removing a profiled single-index allocation
+without removing any GC tracking, reverse propagation, move or clear behavior.
+A versioned deferred closure-context contract remains a separate unproven
+followup; the current v1 entry contract must not silently change. No speedup is
+credited for this rejected candidate. Java parity and a justified global
+performance ceiling remain open.
