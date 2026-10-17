@@ -3818,8 +3818,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     #! Returns @ref True for the errors of a request that the server refused without processing it
     /** \c HTTP2-STREAM-REFUSED is a stream closed with REFUSED_STREAM (RFC 9113 section 8.7), which nghttp2 also uses
         for a stream that the server's GOAWAY excludes; \c HTTP3-REQUEST-REJECTED is a stream reset with
-        H3_REQUEST_REJECTED, or a stream at or beyond the stream ID of the server's GOAWAY (RFC 9114 sections 4.1.1
-        and 5.2).  Such a request can be sent again on another connection whatever its method.
+        H3_REQUEST_REJECTED (RFC 9114 section 4.1.1).  Such a request can be sent again on another connection whatever
+        its method.
 
         @param err the error code
         @return @ref True if the error means that the server did not process the request

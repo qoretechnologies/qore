@@ -5359,33 +5359,12 @@ int QuicSession::h3ShutdownCallback(nghttp3_conn* /* conn */, int64_t id,
     // write is safe only because the caller holds the lock.
     session->goaway_received_.store(true, std::memory_order_release);
     session->goaway_max_stream_id_ = id;
-    if (!session->is_server_) {
-        session->rejectRequestsBeyondGoaway(id);
-    }
+    // a client's requests in progress are not ended here: servers disagree on what the GOAWAY's stream ID names
+    // (RFC 9114 section 5.2 and nghttp3 send the first stream not processed, Cloudflare's quiche the last one
+    // processed), so a request it names may be one the server is answering.  A request the server does not process
+    // is reset with H3_REQUEST_REJECTED (RFC 9114 section 4.1.1), which marks it rejected (streamCloseCallback()),
+    // as curl relies on it; the connection takes no new request from now on (draining)
     return 0;
-}
-
-void QuicSession::rejectRequestsBeyondGoaway(int64_t goaway_id) {
-    // the peer does not process the requests on this client's bidirectional streams from the GOAWAY's stream ID on
-    // (RFC 9114 section 5.2), so they end now as rejected, as nghttp2 closes them with REFUSED_STREAM; otherwise they
-    // waited for the connection to close and failed with an error that does not tell that they can be sent again
-    std::vector<int64_t> rejected;
-    for (auto& [stream_id, stream] : streams_) {
-        if (stream_id >= goaway_id && (stream_id & 0x3) == 0 && !stream->body_complete && !stream->is_connect) {
-            rejected.push_back(stream_id);
-        }
-    }
-    for (int64_t stream_id : rejected) {
-        auto it = streams_.find(stream_id);
-        if (it->second->error_message.empty()) {
-            char buf[128];
-            snprintf(buf, sizeof(buf), "the peer's GOAWAY excludes stream %lld (stream ID %lld or above is not "
-                "processed)", (long long)stream_id, (long long)goaway_id);
-            it->second->error_message = buf;
-        }
-        it->second->request_rejected = true;
-        markStreamComplete(stream_id);
-    }
 }
 
 void QuicSession::setStreamInputStream(int64_t stream_id, InputStream* is, ExceptionSink* xsink) {

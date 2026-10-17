@@ -465,6 +465,8 @@ backend.chatStream(history,
                 stop_reason = "tool_use";
                 break;
             case "length":
+            # Mistral: the model's context length was reached
+            case "model_length":
                 stop_reason = "max_tokens";
                 break;
             default:
@@ -475,22 +477,15 @@ backend.chatStream(history,
         # A terminal output limit or content filter can leave even the first
         # argument object unfinished.  Preserve status, usage and raw evidence
         # without exposing any calls from this incomplete response for execution.
-        if (msg.tool_calls && choice.finish_reason != "length"
+        if (msg.tool_calls && stop_reason != "max_tokens"
                 && choice.finish_reason != "content_filter") {
             parsed_tool_calls = ();
             foreach hash<auto> tc in (msg.tool_calls) {
-                *hash<auto> args;
-                if (tc.function.arguments.val()) {
-                    if (tc.function.arguments.typeCode() == NT_STRING) {
-                        args = parse_json(tc.function.arguments);
-                    } else {
-                        args = tc.function.arguments;
-                    }
-                }
                 push parsed_tool_calls, <ChatToolCall>{
                     "id": tc.id,
                     "name": tc.function.name,
-                    "arguments": args,
+                    # arguments that are not a JSON object are kept in _raw
+                    "arguments": parseToolCallArguments(tc.function.arguments),
                     "thought_signature": tc.thought_signature.typeCode() == NT_STRING
                             && tc.thought_signature.val()
                         ? tc.thought_signature
