@@ -3089,3 +3089,38 @@ live guard and capture lifetime rule; measure this separately. Refresh the
 matched optimized Java/develop comparison after the next retained batch.
 No fresh Java/develop ratio, IR/JIT speed claim, full-suite/cross-platform
 certification or global performance ceiling is inferred.
+
+
+## Rejected dynamic closure signature-proof shortcut (post-906a1d5cf)
+
+The compiler's dynamic integer closure eligibility already proves canonical
+builtin `int(int)` without type substitution, and AOT signature reconstruction
+preserves that proof. A measured candidate trusted the published companion in
+Release, retained a Debug assertion and offered a same-artifact runtime recheck
+control. It did not cache captures or relax live Program, body, readiness,
+debugger, physical-stack, exception, lexical-context or capture-lock checks.
+
+**The shortcut is not retained.** In optimized three-layout confirmation, plain
+closures improve 19.556 to 18.716 ns/item (-4.296%) and captured closures improve
+25.603 to 24.714 (-3.471%), but list building worsens 26.527 to 27.534 (+3.797%).
+List building has a repeated >=3% adverse median with disjoint ranges in all
+three layouts across screen and confirmation, failing the predeclared rule.
+All four production/header files are restored exactly to `906a1d5cf`; dispatch
+continues to recheck the exact signature. The experimental
+`QORE_DISABLE_AOT_CLOSURE_SIGNATURE_PROOF` control has no effect in the restored
+runtime. The new 208-assertion signature-selection/fallback regression remains.
+
+All 4752 windows, including smaller adverse results, are preserved in
+`bench/runtime-comparison/results-aot-closure-signature-proof-rejected-macos-arm64.json`
+and summarized in `bench/runtime-comparison/RESULTS.md`. Timed benchmark bodies
+are instruction-identical; only the micro `_main` metadata-length constant
+differs. Runtime disassembly verifies the intended bypass. The repeated
+non-target slowdown is unexplained, not dismissed as a layout effect. No third
+rescue trial or alignment search was used.
+
+Candidate and freshly restored Release/Debug each pass 57 selected fixtures,
+89 cases and 10799 assertions, plus upstream HTTP/offline LLM, cancellation,
+native and IR/AOT reference checks. This does not establish full-suite or
+cross-platform qualification, fresh Java/develop ratios, or a global ceiling.
+Next: refresh the matched optimized branch/develop/Java checkpoint, then choose
+a distinct AOT-first target from remaining live admission/context/capture costs.

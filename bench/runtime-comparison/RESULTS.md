@@ -15721,3 +15721,170 @@ sanitizer, cross-platform or production-workload certification.
 Raw samples, provenance, all controls, qualification logs, failed baseline
 history, disassembly, profiles, drivers and all 62 audit items are in
 `results-aot-closure-miss-route-macos-arm64.json`.
+
+
+## Rejected AOT closure signature-proof experiment after merge 906a1d5cf
+
+This candidate is **not retained**. Exact signature checks were moved off the
+Release default closure path using the existing compiler-proven companion ABI;
+Debug kept the original predicate as an assertion. The five-fork confirmation
+reproduced closure gains, but also a list-building regression above the
+predeclared threshold with disjoint fork-mean ranges in every layout. All four
+production/header files were restored byte-for-byte to `906a1d5cf`; only the
+signature-selection/fallback tests and this evidence remain.
+The freshly rebuilt Release `qore`, `qcc` and `libqore` binaries also match the
+frozen before artifacts byte-for-byte.
+
+The baseline is newly rebuilt and qualified merged `906a1d5cf`, including the
+accepted closure miss route and `origin/develop` `14f418ea7`. Both runtimes use
+Release `-O3 -DNDEBUG`, LLVM 22.1.8, and independently compiled `qcc -O3`
+executables. Three fixed function orders (default, reverse, shuffle-487), three
+screen forks and five independent confirmation forks cover eighteen micro and
+four mixed workloads. Each process uses 4096 items/seed 7, three warmup and three
+measured 300ms windows. Randomized interleaving uses seeds 136261 and 136273.
+All 4752 measured windows are retained; there was no owned build, test, profile
+or analysis during timing. Confirmation reuses the exact frozen artifacts.
+Native links use `MACOSX_DEPLOYMENT_TARGET=28.0` consistently with the preceding
+experiment; runtime CMake build flags are unchanged.
+
+`signature_rechecked` uses the **same candidate executable and shared library**
+with `QORE_DISABLE_AOT_CLOSURE_SIGNATURE_PROOF=1`, restoring the original
+predicate. The gate and compiler decisions remain in that control, so it is not
+identical to the before build. This environment variable has no effect in the
+restored runtime. All figures below are whole-workload ns/item, not isolated
+call latency, application throughput, or fresh Java/develop comparisons.
+
+### Three-fork screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Rechecked ns/item|!Change vs before|!Change vs rechecked
+|`arithmetic`|1.548870|1.554064|1.543488|+0.335%|+0.685%
+|`direct_call`|1.554997|1.547940|1.546495|-0.454%|+0.093%
+|`method_call`|1.622231|1.608606|1.622717|-0.840%|-0.870%
+|`indirect_call`|6.847065|6.863777|6.830640|+0.244%|+0.485%
+|`closure_call`|19.561929|18.750972|19.834061|-4.146%|-5.461%
+|`closure_capture`|25.556186|24.769310|25.578942|-3.079%|-3.165%
+|`indirect_wide`|6.803294|6.786431|6.819877|-0.248%|-0.490%
+|`indirect_float`|6.764706|6.742001|6.671411|-0.336%|+1.058%
+|`indirect_int_result`|6.293328|6.217431|6.220190|-1.206%|-0.044%
+|`indirect_float_result`|7.596593|7.525448|7.404360|-0.937%|+1.635%
+|`indirect_tagged_float`|6.906066|6.877360|6.862890|-0.416%|+0.211%
+|`indirect_branch_float`|6.739794|6.764528|6.774483|+0.367%|-0.147%
+|`indirect_affine`|6.797591|6.819290|6.869671|+0.319%|-0.733%
+|`indirect_affine_wide`|6.867020|6.862395|6.819727|-0.067%|+0.626%
+|`indirect_branch_int`|6.779387|6.812031|6.704987|+0.482%|+1.596%
+|`list_build`|26.540336|27.699014|27.532969|+4.366%|+0.603%
+|`list_mutate`|199.993182|202.712796|201.740787|+1.360%|+0.482%
+|`temporary_hash`|335.153262|338.026629|344.138965|+0.857%|-1.776%
+|`csv_report`|960.788825|962.016386|957.711954|+0.128%|+0.449%
+|`object_orders`|1872.951201|1859.852021|1875.682290|-0.699%|-0.844%
+|`callback_pipeline`|86.244758|84.699864|85.954985|-1.791%|-1.460%
+|`text_index`|1353.505775|1359.275343|1354.842287|+0.426%|+0.327%
+
+### Five-fork confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Rechecked ns/item|!Change vs before|!Change vs rechecked
+|`arithmetic`|1.547035|1.542070|1.540988|-0.321%|+0.070%
+|`direct_call`|1.547236|1.540543|1.540023|-0.433%|+0.034%
+|`method_call`|1.613172|1.610092|1.610929|-0.191%|-0.052%
+|`indirect_call`|6.776689|6.827946|6.744658|+0.756%|+1.235%
+|`closure_call`|19.556352|18.716122|19.720175|-4.296%|-5.092%
+|`closure_capture`|25.602975|24.714340|25.718124|-3.471%|-3.903%
+|`indirect_wide`|6.797847|6.831325|6.710823|+0.492%|+1.796%
+|`indirect_float`|6.712029|6.657440|6.644970|-0.813%|+0.188%
+|`indirect_int_result`|6.173281|6.248892|6.279306|+1.225%|-0.484%
+|`indirect_float_result`|7.554636|7.482624|7.442596|-0.953%|+0.538%
+|`indirect_tagged_float`|6.881345|6.830294|6.828439|-0.742%|+0.027%
+|`indirect_branch_float`|6.759700|6.756016|6.741646|-0.055%|+0.213%
+|`indirect_affine`|6.883866|6.694928|6.771642|-2.745%|-1.133%
+|`indirect_affine_wide`|6.815597|6.790049|6.857052|-0.375%|-0.977%
+|`indirect_branch_int`|6.732576|6.821726|6.709573|+1.324%|+1.672%
+|`list_build`|26.526541|27.533758|27.416349|+3.797%|+0.428%
+|`list_mutate`|200.163468|203.263584|202.630874|+1.549%|+0.312%
+|`temporary_hash`|331.536627|333.198698|333.329502|+0.501%|-0.039%
+|`csv_report`|956.701432|951.768270|956.608612|-0.516%|-0.506%
+|`object_orders`|1880.989949|1882.339243|1877.334203|+0.072%|+0.267%
+|`callback_pipeline`|85.890527|84.801993|85.916604|-1.267%|-1.297%
+|`text_index`|1337.425331|1352.072866|1349.246863|+1.095%|+0.209%
+
+### Retention decision and adverse results
+
+The rule required both closure workloads to improve at least 2% in aggregate
+against both controls in each trial, with improvement in every layout, and no
+repeated non-target kernel/layout/control slowdown of at least 3% with disjoint
+fork-mean ranges. Both closure targets passed: all twelve target comparisons
+have disjoint faster ranges in the screen, and ten of twelve in confirmation;
+all target layout medians improve. The following repeated adverse pairs fail
+the regression criterion. No third rescue trial or alignment search was run.
+
+|!Trial|!List-build layout|!Before fork-mean range ns/item|!Candidate fork-mean range ns/item|!Median change
+|screen|default|26.487806 to 26.547586|27.295809 to 27.500771|+3.474%
+|screen|reverse|26.231978 to 26.598676|27.505773 to 27.800212|+4.524%
+|screen|shuffle-487|26.322862 to 26.810162|27.454048 to 27.772744|+4.366%
+|confirmation|default|26.173344 to 26.562406|27.207612 to 28.128096|+3.593%
+|confirmation|reverse|26.230771 to 26.701566|27.083855 to 27.622242|+3.797%
+|confirmation|shuffle-487|26.395350 to 26.683585|27.184842 to 27.924849|+3.792%
+
+Eight other screen comparisons had disjoint adverse ranges; none repeats with
+disjoint adverse ranges in confirmation. Their smaller/non-repeating movements
+are retained, not treated as proof of absence of a regression:
+
+|!Workload|!Screen layout|!Control|!Median slowdown
+|`arithmetic`|default|signature_rechecked|+1.287%
+|`indirect_call`|reverse|before|+0.348%
+|`indirect_call`|reverse|signature_rechecked|+0.751%
+|`indirect_wide`|reverse|before|+0.985%
+|`indirect_affine`|reverse|before|+3.372%
+|`indirect_affine`|reverse|signature_rechecked|+2.957%
+|`temporary_hash`|default|before|+3.675%
+|`text_index`|reverse|signature_rechecked|+0.594%
+
+List mutation also worsens in aggregate in both trials (+1.360%/+1.549% against
+before), as do ordinary indirect calls (+0.244%/+0.756%) and branch-integer
+callbacks (+0.482%/+1.324%). These changes remain visible in the full tables;
+the rejection does not rely on claiming them to be noise.
+
+### Code review, correctness, and next checkpoint
+
+The compiler already requires canonical builtin `int(int)` without type
+substitution before emitting the dynamic closure companion. Fresh signature
+reconstruction resolves builtin `int` canonically before variant publication;
+the existing release/acquire binding and live normal-body identity match the
+proof to its owner. The rejected candidate kept same-Program, debugger,
+readiness, physical-stack, pending-exception, lexical-context and synchronized
+capture checks. The source proof remains an architectural observation, not a
+retained runtime shortcut.
+
+Relocatable instruction comparison preserves all immediates and rebases only
+local branch destinations: 149 of 150 micro functions and all 29 mixed functions
+match. The sole micro difference is `_main`'s metadata-length argument
+(`0x7ba2` before, `0x7b9d` candidate); no timed loop body changes. Runtime
+disassembly confirms the default signature-check bypass and its rechecked
+control. Untimed captured-closure samples still show native admission/context
+handling and synchronized capture loads. These observations do not establish
+the cause of the list-building regression or override it. Host load, frequency,
+thermals, allocation placement and code/cache layout remain uncontrolled;
+observed ranges are not confidence intervals.
+
+New `AOTClosureSignatureProof.qtest` covers exact/captured integer companions,
+wide signed boundaries and ten ineligible optional/soft/auto/enum/float/arity
+shapes. It checks AST/IR/JIT/tiered and stripped AOT O0/O3, EH, no-debug,
+split-compilation and native-disabled behavior, plus compiler selection. Its
+208 assertions passed on the unchanged baseline before editing production code.
+Candidate and freshly restored Release/Debug qualifications each pass 57 files,
+89 cases and 10799 assertions, plus HTTP 10 cases/30 assertions, offline LLM
+4/23, cancellation 22/110 and 555 references per IR/AOT. Debug native tests pass
+1082 tests in each bounded-pair state; abrupt-drop passes four assertions
+in Debug and skips Release. Each Debug wrapper restores exactly 64 owned Release
+module aliases. This is selected macOS arm64 qualification, not full-suite,
+sanitizer or cross-platform certification.
+
+The next checkpoint refreshes matched optimized branch/develop/Java timings,
+including every call family and mixed Qore workloads. Follow-up optimization
+must use a distinct evidence-backed hypothesis; this unchanged implementation
+will not be retried to search for a favorable layout. Java parity and a global
+performance ceiling remain unestablished.
+
+Full samples, artifact hashes, candidate patch, source-proof review, both trials,
+all qualification logs, exact rollback, disassembly, profiles and the complete
+audit-changes checklist are in
+`results-aot-closure-signature-proof-rejected-macos-arm64.json`.
