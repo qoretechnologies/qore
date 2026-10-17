@@ -3283,3 +3283,26 @@ audit-changes checklist are in
 correctness prerequisite. The last matched Java/develop performance checkpoint
 predates this change. Next measure inline first-record storage against this
 corrected baseline; Java parity and a global performance ceiling remain open.
+
+
+## Validated inline lvalue object-count record (post-1356f556a)
+
+The storage optimization is retained after both predeclared epochs pass. Optimized confirmation list mutation is
+198.897 -> 185.712ns/item (-6.629%).
+All 3168 windows across 22 workloads and three fixed layouts are retained;
+the complete target/regression rule, all gains/losses and both epochs when run
+are in RESULTS and `results-aot-lvalue-inline-record-macos-arm64.json` under `bench/runtime-comparison/`.
+No new Java/develop or general IR/JIT ratio is inferred.
+
+The candidate stores only the first borrowed object-count snapshot inline.
+All record sites, scan decisions, locks, ownership and reverse propagation
+remain unchanged. Move explicitly empties the source; clear preserves vector
+overflow capacity. The previously committed 789 record checks pass against both
+the corrected vector baseline and candidate. The separately audited object-removal
+correction is identical in both runtimes. Release/Debug pass 59 core fixtures, 92 cases, 11621 assertions plus 13
+lvalue/DGC suites, upstream HTTP/LLM/thread tests, 555 IR + 555 AOT references and
+Debug 1871 native checks in both bounded-pair modes. All 64 Release aliases restored.
+The 62-item audit records 16 Pass / 46 N/A / zero Fail. Selected qualification only;
+no full-suite/sanitizer/cross-platform or global-ceiling claim.
+
+Next refresh the matched optimized branch/develop/Java checkpoint, then investigate residual indexed-mutation and native-context costs. Java parity remains open.

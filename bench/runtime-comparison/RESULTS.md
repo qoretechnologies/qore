@@ -16297,3 +16297,147 @@ audit-changes checklist are in
 correctness prerequisite. The last matched Java/develop performance checkpoint
 predates this change. Next measure inline first-record storage against this
 corrected baseline; Java parity and a global performance ceiling remain open.
+
+
+## Validated inline lvalue object-count record (2026-10-17, post-1356f556a)
+
+The storage optimization is retained after both predeclared epochs pass.
+
+The candidate keeps its first borrowed `ObjCountRec` in an optional member;
+only additional records use a vector. All nine push sites, four clear sites, lock/ownership
+rules, scan decisions and reverse hierarchy propagation in `Variable.cpp`
+are unchanged. Move construction explicitly empties the source optional and
+overflow vector; default optional move alone would retain an engaged record.
+A compile-time assertion requires trivially copyable records. No object-count
+tracking is elided on the strength of declared list types. Internal helper size
+increases, so broad regressions are measured rather than assumed absent.
+There is no new serialized format, public dispatch ABI or runtime control branch.
+
+### Method and decision
+
+Both baseline and candidate use qualified Release `-O3 -DNDEBUG`, qcc `-O3`,
+LLVM 22.1.8, 4096 items / seed 7, three warmup / three measured 300 ms windows. Three fixed
+layouts (default/reverse/shuffle-487), 18 micro/four mixed workloads. The screen
+uses three forks/order seed 136321; independent five-fork confirmation, when the
+screen passes, uses 136327 and exactly the same executables without relinking.
+The target requires >=2% median-over-layout reduction and improvement in every
+layout in both epochs. Reject repeated non-target >=3% adverse layout medians
+with disjoint observed fork-mean ranges in both epochs. Keep all smaller losses.
+No pooling, third rescue epoch, best-layout selection or alignment search.
+
+The confirmation list-mutation result is **198.897 -> 185.712
+ns/item (-6.629%)**. All 3168 windows are retained.
+These are whole-workload costs, not isolated call/append latencies. Observed
+fork-mean ranges are not confidence intervals. Every artifact passed its
+555 micro / 60 mixed reference grid and actual loaded-library check.
+
+### Screen (whole-workload ns/item)
+
+|!Workload|!Before|!Candidate|!Time change
+|arithmetic|1.511|1.509|-0.111%
+|direct_call|1.510|1.518|+0.531%
+|method_call|1.577|1.578|+0.069%
+|indirect_call|6.814|6.807|-0.102%
+|polymorphic_call|22.820|23.028|+0.911%
+|monomorphic_call|3.439|3.469|+0.870%
+|optional_method_call|10.669|10.528|-1.324%
+|boxed_int_method_effect|87.051|87.960|+1.044%
+|boxed_int_method_fallback|31.144|30.597|-1.758%
+|closure_call|19.387|19.169|-1.126%
+|closure_capture|25.123|25.199|+0.304%
+|indirect_wide|6.618|6.795|+2.683%
+|indirect_float|6.620|6.633|+0.196%
+|list_read|2.786|2.746|-1.439%
+|list_build|26.008|26.246|+0.914%
+|list_mutate|199.259|187.689|-5.807%
+|temporary_list|1.594|1.604|+0.619%
+|temporary_hash|329.215|327.371|-0.560%
+|csv_report|945.553|942.607|-0.312%
+|object_orders|1828.228|1831.171|+0.161%
+|callback_pipeline|85.208|84.122|-1.275%
+|text_index|1320.691|1333.085|+0.938%
+
+List-mutation layout changes: default -6.665%, reverse -7.070%, shuffle-487 -4.544%.
+
+### Confirmation (whole-workload ns/item)
+
+|!Workload|!Before|!Candidate|!Time change
+|arithmetic|1.511|1.512|+0.091%
+|direct_call|1.510|1.505|-0.367%
+|method_call|1.590|1.588|-0.083%
+|indirect_call|6.757|6.874|+1.745%
+|polymorphic_call|22.943|23.054|+0.483%
+|monomorphic_call|3.441|3.453|+0.337%
+|optional_method_call|10.606|10.643|+0.356%
+|boxed_int_method_effect|87.848|87.469|-0.431%
+|boxed_int_method_fallback|31.090|30.534|-1.788%
+|closure_call|19.126|19.204|+0.408%
+|closure_capture|25.210|25.095|-0.456%
+|indirect_wide|6.724|6.728|+0.060%
+|indirect_float|6.614|6.733|+1.800%
+|list_read|2.745|2.775|+1.102%
+|list_build|26.051|26.472|+1.615%
+|list_mutate|198.897|185.712|-6.629%
+|temporary_list|1.599|1.594|-0.300%
+|temporary_hash|332.732|325.179|-2.270%
+|csv_report|945.411|942.379|-0.321%
+|object_orders|1851.708|1832.637|-1.030%
+|callback_pipeline|84.778|84.009|-0.907%
+|text_index|1321.192|1326.757|+0.421%
+
+List-mutation layout changes: default -6.326%, reverse -6.629%, shuffle-487 -6.648%.
+
+
+No repeated >=3% non-target disjoint adverse pair was established under the predeclared rule. This does not prove universal non-regression; smaller and non-repeating losses remain in the tables and raw evidence.
+
+### Correctness and evidence
+
+The first expanded baseline exposed an object-removal accounting
+assertion. That correction and its before/after evidence were audited and
+committed separately in `results-lvalue-object-removal-correction-macos-arm64.json`.
+Both timed runtimes contain the same correction; the failing baseline was not
+used for performance acceptance. All compiled inputs of the qualified baseline
+match the frozen runtime; only audited documentation/evidence changed at commit.
+
+Representation-independent native tests were committed and qualified against
+the corrected vector baseline, before freezing it or editing storage. They
+cover sizes 0, 1, 2, 9, 65, snapshot flags, forward/reverse order, move chains,
+moved-from emptiness/reuse, clear/reuse and borrowed list/hash references.
+Those 789 checks had raised the native suite from 1082 to 1871. Existing integration
+tests check actual nested lvalues, aliases, operand-temporary/destructor ordering,
+threaded paths, removals, cycle collection and scan accounting in multiple tiers.
+
+|!Stage|!Build|!Core files/cases/assertions|!Additional lvalue/DGC files/cases/assertions
+|baseline|release|59/92/11621|13/82/1330
+|baseline|debug|59/92/11621|13/82/2663
+|candidate|release|59/92/11621|13/82/1330
+|candidate|debug|59/92/11621|13/82/2663
+
+
+All 64 owned qmods are rebuilt as needed. HTTP 10/30, offline LLM 4/23, thread/cancellation
+22/110 and 555 references per IR/AOT pass. Debug passes 1871 native checks in both
+bounded-pair modes and abrupt-drop 4; Release skips abrupt-drop. Every Debug
+wrapper restores exactly 64 Release aliases and preserves unrelated links.
+This is selected macOS arm64 qualification, not full-suite/sanitizer/cross-platform
+certification. Only optimized AOT performance is measured; a shared runtime
+change does not by itself establish an AST/IR/JIT percentage benefit.
+
+Separate untimed profiles and before/candidate runtime disassemblies are retained
+alongside an independently replayed 179-function generated-code comparison.
+The only changed generated instruction is the micro executable's initialization
+metadata-size immediate (0x7b66 -> 0x7b71); the benchmark function bodies match.
+Runtime navigation stores the first record inline before reaching the same list
+lvalue helper. Baseline allocation/free stacks beneath navigation/destruction
+are absent from the candidate sample; list-buffer reallocation remains. Sampling
+supports the intended mechanism but is not an allocation census.
+Instrumented durations are excluded from the timing results; source/code identity
+cannot invalidate an observed loss or establish isolated operation cost.
+The full 62-item audit records 16 Pass / 46 N/A / zero Fail, including independent replay
+of every timing window, outcome rule and artifact identity, runner 17 / mixed 8,
+strict Qore tables and diff checks. Raw outputs, qualification, source patches,
+serial iteration logs and reproducible drivers are in `results-aot-lvalue-inline-record-macos-arm64.json`.
+
+No task-owned builds/tests/profiles/reads/analysis overlapped timing. Host load,
+frequency and thermals were uncontrolled. No fresh Java/develop ratio is inferred
+from this epoch. Next refresh the matched optimized branch/develop/Java checkpoint, then investigate residual indexed-mutation and native-context costs.
+Java parity and a justified global performance ceiling remain open.
