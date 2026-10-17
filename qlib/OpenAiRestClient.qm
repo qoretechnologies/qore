@@ -136,6 +136,10 @@ stream.close();
       reasoning effort \c none on the models that accept it, and selects the lowest effort of the models that cannot
       turn reasoning off (@ref OpenAiRestClient::OpenAiLlmProvider::getOffReasoningEffort()
       "OpenAiLlmProvider::getOffReasoningEffort()"); requests for other models are unchanged
+    - a tool call whose arguments are not a JSON object no longer raises \c JSON-PARSE-ERROR, which lost the response
+      and its usage: its arguments are kept in the \c _raw key, as those of a streamed call are
+    - the finish reason \c model_length (the model's context length was reached) is an output limit, as \c length
+      is: the stop reason is \c max_tokens, and no tool call of the unfinished response is given
 
     @subsection OpenAiRestClientv1_1 OpenAiRestClient v1.1
 
@@ -2257,6 +2261,8 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 stop_reason = "tool_use";
                 break;
             case "length":
+            # Mistral: the model's context length was reached
+            case "model_length":
                 stop_reason = "max_tokens";
                 break;
             default:
@@ -2267,22 +2273,16 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         # A terminal output limit or content filter can leave even the first
         # argument object unfinished.  Preserve status, usage and raw evidence
         # without exposing any calls from this incomplete response for execution.
-        if (msg.tool_calls && choice.finish_reason != "length"
+        if (msg.tool_calls && stop_reason != "max_tokens"
                 && choice.finish_reason != "content_filter") {
             parsed_tool_calls = ();
             foreach hash<auto> tc in (msg.tool_calls) {
-                *hash<auto> args;
-                if (tc.function.arguments.val()) {
-                    if (tc.function.arguments.typeCode() == NT_STRING) {
-                        args = parse_json(tc.function.arguments);
-                    } else {
-                        args = tc.function.arguments;
-                    }
-                }
                 push parsed_tool_calls, <QoreLlmUtils::ChatToolCall>{
                     "id": tc.id,
                     "name": tc.function.name,
-                    "arguments": args,
+                    # arguments that are not a JSON object are kept in _raw (qorus#673 run 673m46: a Mistral call
+                    # wrote broken JSON in its arguments, and the JSON-PARSE-ERROR raised for it lost the response)
+                    "arguments": QoreLlmUtils::AbstractLlmProvider::parseToolCallArguments(tc.function.arguments),
                 };
             }
         }

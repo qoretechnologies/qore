@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    A model can write broken JSON in the arguments of a tool call.  A non-streaming response with such a call raised
+    JSON-PARSE-ERROR, which lost the response and the usage it was billed for (qorus#673 run 673m46: a Mistral call
+    with broken JSON in its arguments); the arguments are now kept in the _raw key, as those of a streamed call are.
+    A Mistral response that ended because the model's context length was reached (finish reason model_length) is an
+    output limit, as one that reached the output token budget is.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreLlmUtils
+%requires OpenAiRestClient
+
+%exec-class LlmToolCallArgumentsTest
+
+#! Gives the test the response parser of the OpenAI-compatible provider
+class TestOpenAiProvider inherits OpenAiRestClient::OpenAiLlmProvider {
+    constructor() : OpenAiRestClient::OpenAiLlmProvider(<QoreLlmUtils::LlmBackendConfig>{
+        "url": "https://localhost",
+        "api_key": "test",
+    }) {
+    }
+
+    hash<QoreLlmUtils::ChatResponse> parse(hash<auto> response) {
+        return parseOpenAiChatResponse(response);
+    }
+}
+
+public class LlmToolCallArgumentsTest inherits QUnit::Test {
+    public {
+        #! Broken JSON in a call's arguments: an array element without its separator
+        const BrokenArguments = "{\"steps\":[\"a\" \"b\"]}";
+
+        const Usage = {"prompt_tokens": 53092, "completion_tokens": 6512, "total_tokens": 59604};
+    }
+
+    constructor() : Test("LlmToolCallArgumentsTest", "1.0") {
+        addTestCase("the arguments of a call are read", \argumentsTest());
+        addTestCase("OpenAI-compatible: broken arguments keep the response and its usage", \openAiBrokenTest());
+        addTestCase("OpenAI-compatible: model_length is an output limit", \openAiModelLengthTest());
+        addTestCase("callback: broken arguments keep the response and its usage", \callbackBrokenTest());
+        set_return_value(main());
+    }
+
+    private static hash<auto> response(string arguments, string finish_reason = "tool_calls") {
+        return {
+            "id": "resp-1",
+            "model": "mistral-large-4",
+            "choices": ({
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": ({
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "submit_recovery_plan", "arguments": arguments},
+                    },),
+                },
+                "finish_reason": finish_reason,
+            },),
+            "usage": Usage,
+        };
+    }
+
+    argumentsTest() {
+        code<*hash<auto>(auto)> parse = *hash<auto> sub (auto arguments) {
+            return QoreLlmUtils::AbstractLlmProvider::parseToolCallArguments(arguments);
+        };
+        assertEq({"a": 1}, parse("{\"a\":1}"));
+        assertEq({"a": 1}, parse({"a": 1}));
+        assertEq(NOTHING, parse(""));
+        assertEq(NOTHING, parse(NOTHING));
+        assertEq({"_raw": BrokenArguments}, parse(BrokenArguments), "broken JSON is kept");
+        assertEq({"_raw": "[1,2]"}, parse("[1,2]"), "JSON that is not an object is kept");
+        assertEq({"_raw": "null"}, parse("null"), "as the arguments of a streamed call are");
+    }
+
+    openAiBrokenTest() {
+        TestOpenAiProvider provider();
+        hash<QoreLlmUtils::ChatResponse> rv = provider.parse(response(BrokenArguments));
+        assertEq("tool_use", rv.stop_reason);
+        assertEq(Usage, rv.usage, "the usage of the response is kept");
+        assertEq(1, rv.tool_calls.size());
+        assertEq("submit_recovery_plan", rv.tool_calls[0].name);
+        assertEq({"_raw": BrokenArguments}, rv.tool_calls[0].arguments);
+        # valid arguments are unchanged
+        rv = provider.parse(response("{\"plan\":\"retry\"}"));
+        assertEq({"plan": "retry"}, rv.tool_calls[0].arguments);
+    }
+
+    openAiModelLengthTest() {
+        TestOpenAiProvider provider();
+        foreach string finish_reason in (("length", "model_length")) {
+            hash<QoreLlmUtils::ChatResponse> rv = provider.parse(response("{\"steps\":[\"a\"", finish_reason));
+            assertEq("max_tokens", rv.stop_reason, finish_reason);
+            assertEq(NOTHING, rv.tool_calls, finish_reason + ": no call of an unfinished response is given");
+            assertEq(Usage, rv.usage, finish_reason);
+        }
+    }
+
+    callbackBrokenTest() {
+        hash<auto> answer = response(BrokenArguments);
+        QoreLlmUtils::CallbackLlmProvider provider(<QoreLlmUtils::LlmBackendConfig>{
+            "api_callback": hash<auto> sub (string method, string path, hash<auto> body) { return answer; },
+        });
+        hash<QoreLlmUtils::ChatResponse> rv = provider.chat((<QoreLlmUtils::ChatMessage>{"role": "user",
+            "content": "plan"},));
+        assertEq(Usage, rv.usage, "the usage of the response is kept");
+        assertEq({"_raw": BrokenArguments}, rv.tool_calls[0].arguments);
+
+        answer = response("{\"steps\":[\"a\"", "model_length");
+        rv = provider.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "plan"},));
+        assertEq("max_tokens", rv.stop_reason);
+        assertEq(NOTHING, rv.tool_calls);
+    }
+}

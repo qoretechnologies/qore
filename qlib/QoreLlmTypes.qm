@@ -26,6 +26,7 @@
 %modern
 
 %requires reflection
+%requires json
 
 module QoreLlmTypes {
     version = "1.0.0";
@@ -102,6 +103,9 @@ module QoreLlmTypes {
       @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning", asks every provider to turn
       reasoning off where the model can, and to select the model's lowest reasoning setting where it cannot
       (@ref QoreLlmUtils::AbstractLlmProvider::getRequestReasoningOff() "AbstractLlmProvider::getRequestReasoningOff()")
+    - @ref QoreLlmUtils::AbstractLlmProvider::parseToolCallArguments() "AbstractLlmProvider::parseToolCallArguments()"
+      reads the arguments of a tool call; arguments that are not a JSON object are returned in the \c _raw key, as the
+      arguments of a streamed call are, instead of a \c JSON-PARSE-ERROR that lost the response and its usage
 */
 
 #! Provider-neutral LLM types and abstract classes (shared with QoreLlmUtils)
@@ -1172,6 +1176,43 @@ public class AbstractLlmProvider {
         code should call @ref getRequestMaxOutputTokens() for clarity. */
     int getRequestMaxTokens(*hash<LlmRequestOptions> opts) {
         return getRequestMaxOutputTokens(opts);
+    }
+
+    #! Reads the arguments of a tool call that a provider returned, as JSON text or as a hash
+    /** Arguments given as text that is not a JSON object are returned in the \c _raw key, so the call and the
+        response that has it stay visible, as the arguments of a streamed call are: a model can write broken JSON in
+        its arguments, and raising the parse error lost a response that was paid for, with its usage.
+
+        @param arguments the arguments of the call
+
+        @return the arguments as a hash; @ref NOTHING if there are none
+
+        @since QoreLlmTypes 1.0
+    */
+    static *hash<auto> parseToolCallArguments(auto arguments) {
+        switch (arguments.typeCode()) {
+            case NT_HASH:
+                return arguments;
+            case NT_STRING:
+                break;
+            default:
+                return;
+        }
+        string text = arguments;
+        if (!text.val()) {
+            return;
+        }
+        try {
+            auto value = parse_json(text);
+            if (value.typeCode() == NT_HASH) {
+                return value;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "JSON-PARSE-ERROR") {
+                rethrow;
+            }
+        }
+        return {"_raw": text};
     }
 
     #! Resolves the provider-neutral hidden-reasoning budget for a single call
