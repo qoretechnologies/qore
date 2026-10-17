@@ -16018,3 +16018,124 @@ JMH data, all windows, exact revisions/hashes, qualified-binary provenance,
 profiles, reproducible drivers and all 62 audit items are retained in
 `results-aot-post-closure-checkpoint-macos-arm64.json`. Java parity and a justified
 global performance ceiling remain open.
+
+
+## Rejected guarded integer-list COW append (2026-10-17, post-4428adbb2)
+
+**No production optimization is retained.** AOT list mutation still uses the
+ordinary append/coercion/publication path. The candidate specialized an adjacent
+runtime-backed local append with a declared canonical `list<int>` and an exact,
+assigned integer value. Its corrected helper checked the actual live list's
+validity and integer element metadata, preserved natural-reference-count COW,
+owned results, wide-box identity and sparse slots, and kept ordinary paired-store
+coercion, local cleanup/reload and replacement publication. Other inputs used the
+unchanged generic helper. No new serialized opcode or layout was introduced.
+
+An initial declaration-only proof also skipped paired-store coercion. It passed
+Release value checks but failed a Debug assertion when reflection replaced the
+local with a plain list. A declaration is not proof of current runtime metadata.
+That proof/map was removed before any timing. The strengthened test checks AOT
+metadata inside the function, before return filtering can hide a missing store
+coercion. Frozen baseline AOT O0/O3 passes this check; AST intentionally retains
+plain-list metadata there, so that additional assertion is explicitly AOT-only.
+Ordinary value output still matches AST/IR/JIT/tiered. The initial failed Debug
+build, successful-but-insufficient Release checks and both binaries are archived.
+Two diagnostic fixture mistakes (a C++-style comment in Qore and an overly broad
+AST metadata expectation) were corrected against baseline before qualification.
+
+### Optimized screen and rejection
+
+Qualified frozen before runtime corresponds to `4428adbb2` (runtime sources
+identical to `906a1d5cf`); candidate and separately compiled disabled artifacts
+share the identical candidate runtime. The compile-only control was
+`QORE_DISABLE_AOT_EXACT_INT_LIST_COW_PUSH=1`. That gate and its helper symbols are
+absent from restored production source. Release `-O3 -DNDEBUG`, qcc `-O3`, LLVM
+22.1.8; three fixed layouts (default/reverse/shuffle-487), three forks, randomized
+interleaving (seed 136291), three warmup and three measured 300 ms windows,
+4096 items / seed 7. All 594 jobs / 1782 measured windows are retained.
+
+The predeclared target required at least 2% list-mutation improvement against
+both controls, improving every layout, followed by an independent five-fork
+confirmation. The screen failed: **198.465 to 198.957 ns/item (+0.248%)** versus
+before and only -0.046% versus disabled. Baseline-layout changes are +0.356%,
++0.203%, +0.279%. No confirmation, third rescue trial or favorable-layout search
+was run. The table includes all targets, controls and adverse results. These are
+whole-workload times, not isolated append or call latency.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate / before change|!Candidate / disabled change
+|arithmetic|1.523|1.528|1.528|+0.311%|-0.039%
+|direct_call|1.540|1.549|1.545|+0.602%|+0.226%
+|method_call|1.598|1.596|1.600|-0.094%|-0.222%
+|indirect_call|6.775|7.016|7.132|+3.557%|-1.621%
+|polymorphic_call|22.836|22.703|22.558|-0.584%|+0.641%
+|monomorphic_call|3.450|3.454|3.460|+0.099%|-0.174%
+|optional_method_call|10.713|10.591|10.667|-1.145%|-0.714%
+|boxed_int_method_effect|89.918|89.320|89.578|-0.665%|-0.288%
+|boxed_int_method_fallback|31.341|30.928|30.910|-1.320%|+0.059%
+|closure_call|19.336|19.434|19.306|+0.510%|+0.662%
+|closure_capture|25.443|25.353|25.417|-0.356%|-0.254%
+|indirect_wide|6.802|7.003|6.926|+2.956%|+1.107%
+|indirect_float|6.643|6.614|6.677|-0.438%|-0.950%
+|list_read|2.707|2.766|2.708|+2.209%|+2.146%
+|list_build|26.292|26.191|26.213|-0.387%|-0.085%
+|list_mutate|198.465|198.957|199.048|+0.248%|-0.046%
+|temporary_list|1.622|1.615|1.614|-0.462%|+0.027%
+|temporary_hash|332.365|336.890|328.982|+1.362%|+2.404%
+|csv_report|952.947|970.334|968.282|+1.824%|+0.212%
+|object_orders|1865.586|1860.978|1880.845|-0.247%|-1.056%
+|callback_pipeline|85.392|84.460|84.615|-1.092%|-0.183%
+|text_index|1336.344|1345.706|1343.966|+0.701%|+0.129%
+
+The indirect-call +3.557% and other non-target losses are single-screen
+observations, not independently confirmed regressions. They are not discarded
+because generated instructions match. Every per-layout median and observed
+fork-mean range is in the evidence; ranges are not confidence intervals.
+No fresh Java/develop ratio is inferred from this epoch. The preceding matched
+checkpoint remains the relevant branch/develop/Java comparison.
+
+### Diagnostics, rollback and qualification
+
+Selection/disassembly checks verify the guarded helper in all three candidate
+list-mutation layouts, absent in both controls, with unchanged counts of paired
+coercion and local-publication calls. Across 150 micro and 29 mixed functions,
+only list mutation and embedded-metadata `_main` immediates differ from before;
+against disabled, only list mutation differs. This does not establish equal
+timing or explain away slowdowns. Separate untimed sampling confirms execution
+of the guarded append; it still shows general lvalue compound navigation,
+coercion/filtering, local loads and reference cleanup. Nested samples are not
+added into a percentage breakdown. Single-index navigation also allocates its
+object-count tracking vector; bounded inline storage is a distinct followup,
+not permission to omit GC/object-count bookkeeping.
+
+The corrected candidate passes Release/Debug: 58 selected fixtures, 91 cases,
+11139 assertions (340 in the candidate fixture). All three production files are
+restored byte-for-byte to HEAD. Fresh restored Release/Debug each pass 58 / 91 /
+10969 (170 retained fixture assertions), all 64 owned qmods, HTTP 10 / 30,
+offline LLM 4 / 23, thread/cancellation 22 / 110, and 555 references per IR/AOT.
+Debug additionally passes 1082 native checks in both bounded-pair states and
+four abrupt-drop assertions; Release skips abrupt-drop. Both Debug wrappers
+restore exactly 64 Release qmod aliases and preserve unrelated links. This is
+selected macOS arm64 qualification, not full-suite/sanitizer/cross-platform
+certification. Native O0/O3 executions are correctness checks, not timings.
+
+Retained tests cover aliases, sparse entries, wide integer boxes, unique/shared
+ownership, fallback metadata, pending exceptions and reflected-store semantics
+using the ordinary typed-push helper. No speedup is credited for the rejected
+candidate. The full 62-item audit records 21 Pass, 41 N/A and zero Fail after
+rollback and requalification; detailed item evidence and independent replay of
+all 1782 windows are in
+`results-aot-exact-int-list-cow-rejected-macos-arm64.json`.
+
+|!Audit group|!Status|!Evidence
+|Test structure and retained native fixture|Pass|Modern directives, executable scripts, shipped dependencies, RAII ownership and bounded loops
+|Exception, thread, type and input correctness|Pass|Independent snapshot/alias/type checks and Release/Debug regressions; no production change retained
+|Measurement and decision|Pass|All samples replayed; failed target rejected; exact source rollback and fresh qualification
+|Documentation and provenance|Pass|Initial failure, correction, all losses and no-confirmation decision retained; strict Qore tables
+|Module/QPP/DataProvider/JNI registration|N/A|No such retained changes
+
+No owned build/test/profile/evidence analysis overlapped timing. Host load,
+frequency and thermals were uncontrolled. Next evaluate native RuntimeConfig
+snapshot access without weakening nullable public behavior, independent live
+and snapshot restoration, ownership, stack observation or cancellation. Then
+evaluate lvalue bookkeeping allocation or a separately proven live-type coercion
+fast path. Java parity and a justified global performance ceiling remain open.

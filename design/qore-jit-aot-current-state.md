@@ -3161,3 +3161,42 @@ then improve indexed mutation with exact semantics. Native RuntimeConfig
 snapshot/context and effectful method overhead remain followups. No new
 full-suite, sanitizer, cross-platform or general IR/JIT speed claim. Java
 parity and a justified global performance ceiling remain open.
+
+
+## Rejected guarded integer-list COW append (post-4428adbb2)
+
+The measured guarded AOT append is not retained. An initial declaration-only
+coercion proof failed Debug when reflection replaced a `list<int>` local with
+plain-list runtime metadata; it was removed before timing. The corrected
+candidate guards actual list validity/integer element type and retains ordinary
+COW, owned results, paired-store coercion and replacement publication. New tests
+check metadata before return filtering, plus wide boxes, aliases, sparse slots
+and fallback conversion. Baseline AOT O0/O3 verifies the strengthened check;
+AST's existing internal metadata behavior differs but ordinary values agree.
+
+One optimized three-fork, three-layout screen retains all 1782 windows across
+18 micro/four mixed workloads. List mutation goes 198.465 to 198.957 ns/item
+(+0.248%), versus disabled 199.048 (-0.046%). All baseline layout medians are
+slower; neither predeclared 2% target passes. No confirmation/rescue rerun.
+Indirect calls are +3.557% in this single screen; every smaller/control/adverse
+result is retained in RESULTS and the JSON evidence. Generated-body equality
+does not invalidate timing differences. No new Java/develop ratio is inferred.
+
+All three production files are restored exactly; neither the new helpers nor
+their diagnostic compile gate remain. Only regression tests, documentation and
+evidence are retained. Candidate Release/Debug each pass 58 files / 91 cases /
+11139 assertions; fresh restored builds each pass 58 / 91 / 10969, plus HTTP,
+offline LLM, cancellation/thread and 555 references in each IR/AOT mode. Debug
+native checks pass 1082 in both bounded-pair modes, abrupt-drop four. Exactly
+64 Release aliases are restored. The 62-item audit reports 21 Pass / 41 N/A /
+zero Fail. Full failed-proof, corrected-candidate, rollback and replay evidence:
+`bench/runtime-comparison/results-aot-exact-int-list-cow-rejected-macos-arm64.json`.
+
+Untimed profiles confirm selection of the guarded append but retain major
+general lvalue/coercion/local-cleanup paths. Lvalue single-index navigation also
+allocates its object-count vector; any inline-storage followup must preserve
+all tracking and moved-from/destructor semantics. Next evaluate native-only
+RuntimeConfig snapshot access; nullable public accessors and independent live /
+snapshot restoration must remain intact. No retained speedup from this failed
+candidate, full-suite/cross-platform certification, Java parity or global
+performance ceiling is claimed.

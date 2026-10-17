@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+int sub exactCowLoop(int count, int seed) {
+    list<int> values = ();
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        push values, seed;
+    }
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        values[i] += 1;
+        total += values[i];
+    }
+    return total;
+}
+
+string sub exactCowAlias(int value) {
+    list<int> values = (3,);
+    list<int> alias = values;
+    push values, value;
+    values[0] += 1;
+    list<int> second = values;
+    push values, value ^ 1;
+    return sprintf("%y:%y:%y", alias, second, values);
+}
+
+list<int> sub exactCowParameter(list<int> values, int value) {
+    push values, value;
+    values[0] += 1;
+    return values;
+}
+
+list<int> sub exactCowSparse(int value) {
+    list<int> values = ();
+    values[3] = value;
+    list<int> alias = values;
+    push values, value;
+    if (alias.size() != 4 || alias[0] !== NOTHING || values[0] !== NOTHING) {
+        throw "COW-SPARSE-ERROR", "copy changed sparse slots or the alias";
+    }
+    return values;
+}
+
+list<int> sub exactCowExpression(int value) {
+    list<int> values = (1,);
+    list<int> alias = values;
+    return push values, value;
+}
+
+list<int> cow_snapshot;
+sub replaceCowLocal() {
+    cow_snapshot = get_local_vars(1).values.value;
+    set_local_var_value(1, "values", (41,));
+}
+
+list<int> sub exactCowReflect(int value) {
+    list<int> values = (17,);
+    values[0] += 1;
+    call_function("replaceCowLocal");
+    push values, value;
+    # Preserve AOT's ordinary paired-store coercion before the return filter.
+    # AST append leaves reflected plain-list metadata alone, so test this only
+    # in the explicit AOT mode while comparing ordinary value output with AST.
+    if (ARGV && ARGV[0] == "check-aot-store-type" && values.fullType() != "list<int>") {
+        throw "COW-REFLECT-TYPE", values.fullType();
+    }
+    return values;
+}
+
+string sub exactCowCaught(int value) {
+    list<int> values = (3,);
+    list<int> alias = values;
+    try {
+        push values, value;
+        values[0] += 1;
+        throw "AFTER-COW", "mutation must remain visible";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s:%y:%y", ex.err, alias, values);
+    }
+}
+
+foreach int value in ((0, 1, -1, 140737488355327, 140737488355328,
+        -140737488355328, -140737488355329, 9223372036854775807,
+        -9223372036854775807 - 1)) {
+    printf("alias:%d:%s\n", value, exactCowAlias(value));
+    list<int> input = (3,);
+    list<int> result = exactCowParameter(input, value);
+    printf("parameter:%d:%y:%y\n", value, input, result);
+    printf("sparse:%d:%y\n", value, exactCowSparse(value));
+    printf("expression:%d:%y\n", value, exactCowExpression(value));
+    printf("caught:%d:%s\n", value, exactCowCaught(value));
+    printf("reflect:%d:%y:", value, call_function("exactCowReflect", value));
+    printf("%y\n", cow_snapshot);
+}
+foreach int count in ((0, 1, 16, 1024)) {
+    printf("loop:%d:%d\n", count, exactCowLoop(count, 7));
+}
