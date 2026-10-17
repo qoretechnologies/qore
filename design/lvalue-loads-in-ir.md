@@ -298,7 +298,7 @@ producer's borrowed result preserves the list pointer and type and cannot run
 a conversion or callback. A different local or incomplete proof retains checks.
 The compiler-private map is cleared at each function; it is not runtime state.
 
-This eliminates only repeated coercion and its temporary ownership/error work.
+By itself this eliminates only repeated coercion and its temporary ownership/error work.
 It does not eliminate runtime-backed assignment, cache cleanup/reload, local
 ownership, weak-reference normalization, reflective visibility, exception
 handling or cancellation. Outlining that removes the strong markers prevents
@@ -311,3 +311,28 @@ proof. Ordinary IR interpretation and LLVM JIT are unchanged by this extension.
 `AOTInPlaceIntListStore.qtest` pins generated coercion/writeback sites as well
 as wide integers, aliases, expression values, exceptions, reference/captured
 fallbacks, remove/revive, sparse mutation and reflective local replacement.
+
+## Unchanged integer-list body-local publication
+
+The paired coercion proof above is necessary but not sufficient to elide
+runtime assignment. AOT lowering additionally requires a runtime-backed body
+local, a redundant-store marker, no closure use or weak assignment, and neither
+a fast-entry parameter owner nor a pre-instantiated entry cleanup owner. The
+existing analysis requires adjacent load/push/store instructions in one block.
+The exact integer helper returns the same strong list pointer without changing
+its type, invoking user code or replacing its root. The runtime slot already
+owns that mutated list, so assigning it the same pointer again is unnecessary.
+
+This path retains the common cache/reload cleanup, alloca update and freshness
+mark, exception check, normal cache reference retention/deferred cleanup and
+consumed-operand cleanup. The ordinary runtime slot remains an owner throughout.
+It does not relax general COW replacement writeback, parameter ownership,
+reference/closure handling, weak normalization or cancellation. Any missing
+proof retains ordinary publication; outlining removes the strong markers.
+
+`QORE_DISABLE_AOT_IN_PLACE_INT_LIST_PUBLICATION` disables only this extension.
+Disabling either integer-push or paired-coercion lowering also prevents it.
+`AOTInPlaceIntListPublication.qtest` checks one fewer writeback in eligible
+loops, retained initial publication, both prerequisite fallbacks and the shared
+wide-integer, alias, exception and reflective-replacement fixture at O0/O3.
+This is AOT-only, with no new runtime layout, helper ABI or serialized metadata.

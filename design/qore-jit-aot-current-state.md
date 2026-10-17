@@ -3002,3 +3002,44 @@ runtime ownership, cache freshness and reflective replacement; do not relax
 general paired COW writeback. Then revisit closure context costs. The previous
 Java/develop checkpoint is a separate older epoch; no new Java/develop ratio,
 global ceiling or full-suite/cross-platform certification is claimed.
+
+## Unchanged integer-list AOT publication validated
+
+Building on `ae773cf87`, AOT now avoids redundant assignment of an unchanged
+exact integer-list root to its already-owning runtime body-local slot. Besides
+the paired coercion proof, admission requires ordinary runtime-backed body-local
+ownership, a redundant-store marker, no closure use or weak assignment, and no
+fast-entry parameter/pre-instantiated cleanup owner. Common cache ownership,
+cleanup, freshness and exception handling remain; generic COW replacements
+still publish. The control is `QORE_DISABLE_AOT_IN_PLACE_INT_LIST_PUBLICATION`.
+There is no new runtime ABI/opcode or ordinary IR/JIT change.
+
+Optimized confirmation improves list building **52.801 -> 25.269 ns/item**,
+**52.14% less time** versus the exact qualified frozen committed baseline and
+**51.97% less** versus the identical-runtime disabled control. All three fixed
+layouts improve with disjoint faster ranges against both controls in two
+epochs; all 3024 windows remain without pooling or retries.
+
+Retained as a targeted gain, not universal non-regression. Screening's one
+disjoint adverse pair (arithmetic/reverse +1.071% versus disabled) does not
+repeat in confirmation, which has no disjoint adverse pair. Confirmation still
+has indirect calls +1.93% versus before/+2.74% versus disabled, plain closures
++3.82% versus disabled, object processing +0.55% versus before and text +0.32%.
+Unchanged generated indirect/closure/object/callback hot bodies do not rule out
+layout/cache/allocator or host effects. All movements are retained in the report.
+
+Release/Debug each pass 39 fixtures / 45 cases / 5866 assertions, including
+143 publication checks, plus HTTP 10 cases / 30 assertions, thread/cancellation
+22 / 110 and 555 references per IR/AOT. Debug native tests pass 1082 in each
+bounded-pair state. All 64 Release qmod aliases are restored. Earlier successful
+qualification before comment-only proof clarifications is also preserved.
+Evidence and all audit items are in
+`bench/runtime-comparison/results-aot-in-place-int-list-publication-macos-arm64.json`.
+
+Repeated runtime assignment is no longer a major sampled list-building cost;
+indexed reads, append/growth and reference cleanup remain. Next investigate
+rejected ordinary-function-reference lookup on the dynamic closure route,
+without retaining closures or weakening live Program/debugger/stack guards.
+Refresh matched optimized Java/develop measurements after the next retained
+batch. Earlier Java/develop numbers remain a separate epoch, not a new ratio;
+Java parity and a global performance ceiling are still unestablished.

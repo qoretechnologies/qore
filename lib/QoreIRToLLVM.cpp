@@ -16977,8 +16977,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && linst->mode == AssignmentMode::Normal
                 && local_ti == qore_get_complex_list_type(bigIntTypeInfo);
             // The push preserves this declaration's exact container type.
-            // Only coercion is redundant: keep runtime writeback and cache
-            // ownership handling below, including for AOT body locals.
+            // This proves only coercion redundant. Runtime writeback needs the
+            // separate body-local proof below; cache ownership still applies.
             bool exact_container_value = exact_fresh_container || exact_int_list_push;
 
             // Case 1: Complex hash/list and hashdecl types need type coercion
@@ -17204,6 +17204,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         local_cleanup_allocas[key].push_back(ca);
                     }
                 }
+            }
+            if (exact_int_list_push && is_aot_body_local && !is_ir_only
+                    && inst->redundant_store && !linst->local->closureUse()
+                    && !weak_assigned_locals.count(key)
+                    && !fast_entry_param_allocas_by_local.count(key)
+                    && !preinstantiated_entry_cleanup_by_local.count(key)
+                    && !std::getenv("QORE_DISABLE_AOT_IN_PLACE_INT_LIST_PUBLICATION")) {
+                // The uninterrupted load/push/store pair mutated the same
+                // strong list already owned by this body local's runtime slot.
+                // The exact integer helper cannot replace it, normalize a weak
+                // value or invoke user code. No publication is needed, but keep
+                // the ordinary cache owner, deferred cleanup and error edge.
+                // Parameters, weak assignments and COW replacements do not use
+                // this path; coercion elision alone is not a publication proof.
+                emitExceptionCheck(module, llvm_func, inst);
+                retainLocalCacheValue(key, boxed, module, llvm_func, false);
+                clear_cleanup_alloca(consumed_cleanup);
+                clear_consumed_operand_cleanup(inst->operands[0].id);
+                return true;
             }
             // Sync to Qore thread-local variable stack so AST callbacks can resolve this local.
             // Skip sync for IR-only locals unless this is a weak assignment: weak loads

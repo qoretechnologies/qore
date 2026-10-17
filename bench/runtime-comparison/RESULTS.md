@@ -15448,3 +15448,125 @@ No owned build/test/profile/analysis overlapped timing. Host load, frequency
 and thermals were uncontrolled; observed ranges are not confidence intervals.
 Selected macOS arm64 qualification is not full-suite, sanitizer or cross-platform
 certification. Java parity and a global performance ceiling remain open.
+
+
+## AOT unchanged integer-list publication (2026-10-16)
+
+The next retained compiler optimization avoids assigning an unchanged list root
+back to a runtime-backed AOT body local after an exact in-place integer push.
+It requires the preceding same-declaration coercion proof plus a redundant-store
+marker, ordinary body-local ownership, no weak assignment or closure use, and
+no fast-entry parameter or pre-instantiated entry cleanup owner. The existing
+analysis proves adjacent load/push/store operations. The helper cannot replace
+the pointer, change the type or invoke user code: the runtime slot already owns
+the mutated list. **General COW replacements still publish normally.**
+
+Common cache/reload cleanup, alloca update, cache freshness, exception checks,
+cache reference retention/deferred cleanup and consumed-operand cleanup remain.
+There is no new helper, runtime ABI, opcode or cancellation change. The compile
+control is `QORE_DISABLE_AOT_IN_PLACE_INT_LIST_PUBLICATION=1`. Disabling either
+prerequisite integer-push or coercion optimization also prevents admission.
+This extension is AOT-only; ordinary IR interpretation and JIT are unchanged.
+
+### Optimized measurements
+
+Before is the exact qualified frozen Release binary whose implementation is
+committed as `ae773cf87`, with its original precommit build provenance retained.
+Its source/artifact identity is verified against the preceding audited report;
+it is not rebuilt. Candidate and disabled control share the identical candidate
+runtime. All use Release `-O3 -DNDEBUG`, LLVM 22.1.8 and `qcc -O3`. All 18
+executables pass references and actual loaded-library checks. Three fixed
+layouts (default/reverse/shuffle-487) and exact frozen pairs are reused for
+confirmation, without relinking or layout search.
+
+Ten micro/four mixed workloads use three screen forks and five confirmation
+forks, three warmup/three measured 300 ms windows, 4096 items and seed 7. Orders
+136237/136241 are predeclared randomized blocks. All **3024 windows** remain;
+no failed timing, retry, exclusion or pooling. Values are whole-workload
+ns/item, not isolated calls or assignment costs: median of three layout medians
+of per-fork window means.
+
+|!Workload|!Screen vs before|!Confirmation before ns/item|!Confirmation candidate ns/item|!Confirmation disabled ns/item|!Vs before|!Vs disabled
+|arithmetic|-0.10%|1.450|1.450|1.444|+0.00%|+0.38%
+|direct_call|+0.09%|1.572|1.552|1.558|-1.31%|-0.41%
+|method_call|-0.19%|1.644|1.620|1.624|-1.48%|-0.26%
+|indirect_call|-1.45%|6.785|6.915|6.731|+1.93%|+2.74%
+|closure_call|-3.48%|20.287|20.147|19.406|-0.69%|+3.82%
+|closure_capture|-2.54%|26.166|25.244|25.116|-3.53%|+0.51%
+|temporary_list|-0.19%|1.655|1.642|1.633|-0.79%|+0.53%
+|list_build|-51.35%|52.801|25.269|52.611|-52.14%|-51.97%
+|list_mutate|-0.48%|199.914|198.739|199.423|-0.59%|-0.34%
+|temporary_hash|+1.36%|334.732|326.446|340.599|-2.48%|-4.16%
+|csv_report|+0.27%|969.608|960.947|964.251|-0.89%|-0.34%
+|object_orders|-0.12%|1886.626|1897.054|1891.829|+0.55%|+0.28%
+|callback_pipeline|-0.63%|85.957|85.799|86.217|-0.18%|-0.49%
+|text_index|-0.32%|1276.261|1280.323|1273.380|+0.32%|+0.55%
+
+List building improves **52.801 -> 25.269 ns/item**, **52.14% less time**
+versus before, and **51.97% less** versus the identical-runtime disabled
+control. Screening gives 51.750 -> 25.175 ns/item (-51.35%). All target layouts
+have disjoint faster observed fork-mean ranges versus both controls in both
+epochs. Confirmation per-layout changes:
+
+|!Layout|!Versus before|!Versus disabled
+|default|-53.461%|-51.970%
+|reverse|-51.714%|-52.197%
+|shuffle-487|-52.294%|-51.607%
+
+Retained as a targeted improvement, **not universal non-regression**. Screening
+has one disjoint adverse pair: arithmetic/reverse +1.071% versus disabled.
+Confirmation has none, which is not proof of non-regression. The screen's
+aggregate temporary-hash slowdown (+1.36% versus before) reverses to -2.48%
+in confirmation. Confirmation indirect calls remain +1.93% versus before and
++2.74% versus disabled; plain closures are -0.69% versus before but +3.82%
+versus disabled. Object processing is +0.55%/+0.28% and text +0.32%/+0.55%.
+Other small control slowdowns remain in the full table. No extra timing was
+run to seek a favorable outcome, and unrelated gains are not credited to this
+optimization. Indexed list mutation still uses its generic path.
+
+Untimed comparison of all 150 micro and 29 mixed relocatable function bodies
+finds unchanged indirect/closure bodies, object methods/report and callback
+pipeline/callbacks after rebasing only branch destinations. Candidate versus
+disabled changes only list-building/input-building bodies; the mixed changes
+are in untimed input preparation. Before's micro entry also differs in one
+immediate. Identical hot-body instructions do not exclude layout/cache/allocator
+or host effects. Cross-epoch baseline movements are visible and not pooled.
+
+### Qualification and remaining costs
+
+Final Release/Debug each pass 39 fixtures / 45 cases / 5866 assertions, including
+143 new enabled/disabled publication checks and the prior 121 coercion checks.
+The shared semantic fixture covers wide integers, aliases, expressions,
+exceptions, remove/revive/sparse mutation, reference/captured fallbacks and
+reflective inspection/replacement. AST/IR/JIT/tiered and AOT O0/O3 normal, EH,
+stripped-source, no-debug, split and prerequisite-disabled variants agree.
+Generated target code retains coercion counts and the integer helper, loses
+exactly one publication call only when enabled, and keeps initial publication.
+
+Each build also passes HTTP 10 cases / 30 assertions, thread/cancellation 22 /
+110, and 555 reference checks per IR/AOT. Debug native tests pass 1082 in both
+bounded-pair states; abrupt-drop passes four assertions (Release skips). All
+64 owned qmods rebuild, and exactly 64 Release aliases are restored. An initial
+successful Release run preceded comment-only proof clarifications; final source
+was rebuilt/requalified before timing. Both histories remain in the evidence.
+
+Separate untimed profiling no longer puts repeated runtime assignment in the
+hot list-building loop. Candidate stack counts include 844 at indexed reads
+and 546 at integer append, with substantial reference-count cleanup and some
+capacity growth. These are stack samples, not isolated latencies or timing
+fractions. Remaining opportunities require separate proofs; cache ownership
+must not simply be dropped. Next investigate the dynamic closure route's
+repeated rejected ordinary-function-reference lookup while preserving borrowed
+closure lifetime and live Program/debugger/stack guards, then refresh the
+optimized Java/develop checkpoint after the next meaningful retained batch.
+
+Raw samples, optimized provenance, qualification, generated-code checks,
+profiles, drivers and all 62 audit items are in
+`results-aot-in-place-int-list-publication-macos-arm64.json`. The earlier
+Java/develop checkpoint is a separate epoch at its recorded commits; do not
+form new ratios using its Java time or multiply cross-epoch improvements.
+No owned build/test/profile/analysis overlaps timing. Host load, frequency and
+thermals are uncontrolled; observed ranges are not confidence intervals.
+Selected macOS arm64 qualification is not full-suite, sanitizer, cross-platform
+or production-workload certification. Java parity and a global ceiling remain
+unestablished.

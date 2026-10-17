@@ -1,0 +1,74 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AOTInPlaceIntListPublicationTest
+
+class AOTInPlaceIntListPublicationTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("AOT unchanged integer list publication", "1.0", \ARGV) {
+        addTestCase("unchanged-root publication elision preserves runtime ownership", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private string loopBody(string ir) {
+        *list<*string> body = regex_extract(ir,
+            "(?s)define [^\n]*@exactListStoreLoop_[^\n]*_fast_[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!body, "exact integer loop fast-entry definition");
+        return body[0] ?? "";
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTInPlaceIntListStore.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex("wide:9223372036854775807:", expected, "full positive integer range");
+        assertRegex("wide:-9223372036854775808:", expected, "full negative integer range");
+        assertRegex("loop-zero:0\nloop-one:248\nloop-many:33766912\n", expected,
+            "empty, one-element and repeated mutation reference");
+        assertRegex("reflect:\\[41, 43\\]", expected, "runtime publication and reflective replacement");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-exact-list-store-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ",
+                "QORE_DISABLE_IR_NATIVE_INT_IN_PLACE_LIST_PUSH=1 ",
+                "QORE_DISABLE_AOT_IN_PLACE_INT_LIST_STORE=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                list<string> bodies = ();
+                foreach string control in (("", "QORE_DISABLE_AOT_IN_PLACE_INT_LIST_PUBLICATION=1 ")) {
+                    string executable = dir.path + "/fixture";
+                    string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                        prefix + control + "QORE_DUMP_LLVM_IR=1 ");
+                    string body = loopBody(ir);
+                    push bodies, body;
+                    assertTrue(regex(body, "(?:call|invoke) void @qore_rt_assign_local_no_coerce_eval_weak_aot"),
+                        "initial runtime publication is retained " + prefix + control + level);
+                    assertEq(expected, run((executable,)), prefix + control + level);
+                }
+                int enabled = bodies[0].split("call void @qore_rt_assign_local_no_coerce_eval_weak_aot").size() - 1;
+                int disabled = bodies[1].split("call void @qore_rt_assign_local_no_coerce_eval_weak_aot").size() - 1;
+                assertEq(prefix.startsWith("QORE_DISABLE_") ? 0 : 1,
+                    disabled - enabled, "only the unchanged paired body-local publication is removed " + prefix + level);
+            }
+        }
+    }
+}
