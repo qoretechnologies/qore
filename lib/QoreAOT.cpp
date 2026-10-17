@@ -17855,6 +17855,54 @@ static bool isAOTDynamicIntClosureEligible(const QoreIRFunction& ir,
     return returns_value;
 }
 
+// The v1 IR proof permits cleanup/conversion lowering that could need implicit
+// context. Bind v2 only when the complete lowered body has no such helper or
+// indirect call. This deliberately fails closed as lowering gains new helpers.
+static bool isAOTDeferredClosureContextEligible(const llvm::Function& function, bool& cancelled) {
+    cancelled = false;
+    if (std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2")) {
+        return false;
+    }
+    size_t count = 0;
+    bool stack_guard = false;
+    for (const auto& block : function) {
+        for (const auto& inst : block) {
+            if (++count > 1024) {
+                return false;
+            }
+            if (!(count % 100) && qore_check_cancel(nullptr, "AOT closure context proof")) {
+                cancelled = true;
+                return false;
+            }
+            const auto* call = llvm::dyn_cast<llvm::CallBase>(&inst);
+            if (!call) {
+                continue;
+            }
+            const llvm::Function* callee = call->getCalledFunction();
+            if (!callee) {
+                return false;
+            }
+            auto name = callee->getName();
+            if (name.starts_with("llvm.lifetime.start.") || name.starts_with("llvm.lifetime.end.")) {
+                // Non-executing stack-slot hints can precede the live guard.
+                continue;
+            }
+            if (name == "qore_rt_check_stack_v2") {
+                if (stack_guard || &block != &function.getEntryBlock() || call->arg_size() != 2
+                        || call->getArgOperand(0) != function.getArg(5)
+                        || call->getArgOperand(1) != function.getArg(2)) {
+                    return false;
+                }
+                stack_guard = true;
+            } else if (!stack_guard || name != "qore_rt_try_load_closure_int_v1") {
+                return false;
+            }
+        }
+    }
+    // The ordinary dynamic lowerer emits this guard before scalar body work.
+    return stack_guard;
+}
+
 //! Compile closure bodies referenced by one compiled body's expression slots.
 /** Closure entries are appended immediately after their owner.  This ordering lets
     runtime slot-map reconstruction create the closure variant from the owner's
@@ -18387,6 +18435,20 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                         llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
                             {ptr_ty, ptr_ty, ptr_ty}, false));
                     bind_builder.CreateCall(bind, {normal->getArg(0), normal, dynamic_fn});
+                    bool cancelled;
+                    bool context_v2 = isAOTDeferredClosureContextEligible(*dynamic_fn, cancelled);
+                    if (cancelled) {
+                        delete ir_func;
+                        setAOTCompileFatal(fatal_error, "closure", native_key,
+                            "deferred context proof", "cancelled");
+                        return false;
+                    }
+                    if (context_v2) {
+                        auto bind_v2 = module.getOrInsertFunction("qore_rt_bind_closure_int_unary_v2",
+                            llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
+                                {ptr_ty, ptr_ty, ptr_ty}, false));
+                        bind_builder.CreateCall(bind_v2, {normal->getArg(0), normal, dynamic_fn});
+                    }
                 }
                 const auto& loc_table = lowerer.getAOTLocTable();
                 for (size_t loc_index = 0; loc_index < loc_table.size(); ++loc_index) {

@@ -1435,3 +1435,19 @@ then randomizes revision/layout order across five processes and three layouts.
 See the optimized checkpoint in `RESULTS.md` for complete results, regressions,
 raw evidence, exact revisions and limitations; do not treat a suite average as
 an overall application speedup.
+
+
+`QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2=1` disables the additive fully
+deferred object/class/self contract at compilation and execution; v1's eager
+object context and independently published binding remain. New v2 publication
+requires both the existing bounded IR eligibility proof and a complete lowered
+call proof. It still uses the existing `_dynamic_int_v1` companion body, not a
+separate LLVM body. Capture reads stay separately synchronized. Full diagnostic
+frame publication, reader waits and all live admission/stack guards remain.
+Exception-time materialization installs the closure context and restores live
+and RuntimeConfig snapshot state independently, including after an Impl move.
+The older `QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT=1` control also
+disables v2 selection and restores eager markers. Controls are presence flags,
+sampled once at runtime. Compare separately compiled optimized artifacts against
+older runtimes; new artifacts need the v2 binder. See RESULTS for the measured
+closure gains and the effectful-method regression, not a universal speedup.

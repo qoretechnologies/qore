@@ -510,6 +510,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_try_method_float_unary_v1) },
     { "qore_rt_bind_closure_int_unary_v1",
         reinterpret_cast<void*>(&qore_rt_bind_closure_int_unary_v1) },
+    { "qore_rt_bind_closure_int_unary_v2",
+        reinterpret_cast<void*>(&qore_rt_bind_closure_int_unary_v2) },
     { "qore_rt_bind_member_int_v1", reinterpret_cast<void*>(&qore_rt_bind_member_int_v1) },
     { "qore_rt_bind_member_float_v1", reinterpret_cast<void*>(&qore_rt_bind_member_float_v1) },
     { "qore_rt_bind_effect_member_int_v1", reinterpret_cast<void*>(&qore_rt_bind_effect_member_int_v1) },
@@ -10673,6 +10675,18 @@ extern "C" DLLEXPORT void qore_rt_bind_closure_int_unary_v1(QoreAOTContext* ctx,
         std::memory_order_release, std::memory_order_relaxed);
 }
 
+extern "C" DLLEXPORT void qore_rt_bind_closure_int_unary_v2(QoreAOTContext* ctx,
+        uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+        QoreAOTContext::NativeIntUnaryClosureEntry entry) {
+    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal
+            || ctx->native_int_unary_closure_entry_v2.load(std::memory_order_relaxed)) {
+        return;
+    }
+    QoreAOTContext::NativeIntUnaryClosureEntry expected = nullptr;
+    ctx->native_int_unary_closure_entry_v2.compare_exchange_strong(expected, entry,
+        std::memory_order_release, std::memory_order_relaxed);
+}
+
 extern "C" DLLEXPORT int qore_rt_try_load_closure_int_v1(const QoreClosureBase* closure,
         QoreAOTContext* ctx, int32_t slot, int64_t* result) {
     if (!closure || !ctx || slot < 0 || slot >= ctx->num_locals || !result) {
@@ -10735,6 +10749,34 @@ private:
     RuntimeConfigNativeClosureCallHelper helper;
 };
 
+class QoreDeferredNativeClosureStackLocationV2 : public QoreStackLocation, public QoreAOTStackFrameMarker {
+public:
+    QoreDeferredNativeClosureStackLocationV2(RuntimeConfig& rc, const UserVariantBase* uvb,
+            const QoreClosureBase* closure)
+        : name(closureName()), statements(uvb->getStatementBlock()), pgm(uvb->pgm),
+          context(rc, closure, uvb), helper(rc, this, loc, context) {
+    }
+    const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+    bool isAOTFrame() const override { return true; }
+    const std::string& getCallName() const override { return name; }
+    qore_call_t getCallType() const override { return CT_USER; }
+    QoreProgram* getProgram() const override { return pgm; }
+    const AbstractStatement* getStatement() const override { return statements; }
+
+private:
+    static const std::string& closureName() {
+        static const std::string name("<anonymous closure>");
+        return name;
+    }
+    const std::string& name;
+    const StatementBlock* statements;
+    QoreProgram* pgm;
+    const QoreProgramLocation* loc = nullptr;
+    RuntimeConfigNativeClosureContext context;
+    // Last: wait for diagnostic readers before destroying metadata or saved context.
+    RuntimeConfigNativeClosureCallHelperV2 helper;
+};
+
 // Keep the legacy full frame out of the deferred helper's successful stack path.
 static __attribute__((noinline, cold)) int64_t execNativeClosureEagerContext(RuntimeConfig& rc,
         const UserVariantBase* uvb, QoreAOTContext::NativeIntUnaryClosureEntry entry,
@@ -10742,6 +10784,24 @@ static __attribute__((noinline, cold)) int64_t execNativeClosureEagerContext(Run
         QoreAOTContext* ctx, ExceptionSink* xsink) {
     QoreNativeClosureStackLocation frame(rc, uvb, xsink);
     return *xsink ? 0 : entry(argument, closure, &rc, accepted, ctx, xsink);
+}
+
+// Retain v1's eager object/class/self contract, including for older compiled modules.
+static __attribute__((noinline)) int64_t execNativeClosureV1Context(RuntimeConfig& rc,
+        const UserVariantBase* uvb, QoreAOTContext::NativeIntUnaryClosureEntry entry,
+        int64_t argument, const QoreClosureBase* closure, int* accepted,
+        QoreAOTContext* ctx, ExceptionSink* xsink, bool deferred) {
+    QoreObject* self = closure->getObject();
+    std::optional<QoreClosureSelfContextHelper> self_context;
+    if (self) {
+        self_context.emplace(self);
+    }
+    RuntimeConfigNativeObjectHelper context(rc, self, closure->getClassCtx());
+    if (deferred) {
+        QoreDeferredNativeClosureStackLocation frame(rc, uvb);
+        return entry(argument, closure, &rc, accepted, ctx, xsink);
+    }
+    return execNativeClosureEagerContext(rc, uvb, entry, argument, closure, accepted, ctx, xsink);
 }
 
 static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBase* closure,
@@ -10772,21 +10832,18 @@ static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBa
     if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
         return true;
     }
-    QoreObject* self = closure->getObject();
-    std::optional<QoreClosureSelfContextHelper> self_context;
-    if (self) {
-        self_context.emplace(self);
-    }
-    RuntimeConfigNativeObjectHelper context(rc, self, closure->getClassCtx());
     int accepted = 1;
     int64_t value = 0;
     static const bool deferred = !std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT");
+    static const bool context_v2 = !std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2");
+    auto entry_v2 = deferred && context_v2
+        ? ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire) : nullptr;
     try {
-        if (deferred) {
-            QoreDeferredNativeClosureStackLocation frame(rc, uvb);
-            value = entry(argument, closure, &rc, &accepted, ctx, xsink);
+        if (entry_v2) {
+            QoreDeferredNativeClosureStackLocationV2 frame(rc, uvb, closure);
+            value = entry_v2(argument, closure, &rc, &accepted, ctx, xsink);
         } else {
-            value = execNativeClosureEagerContext(rc, uvb, entry, argument, closure, &accepted, ctx, xsink);
+            value = execNativeClosureV1Context(rc, uvb, entry, argument, closure, &accepted, ctx, xsink, deferred);
         }
     } catch (const QoreJITException&) {
         // Native stack exceptions already belong to the sink.

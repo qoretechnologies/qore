@@ -3338,3 +3338,27 @@ Audit:7Pass/55N/A/zeroFail; all4245windows independently replayed.
 Next investigate residual indexed mutation and versioned deferred closure
 context with separate correctness proof and matched optimized measurements.
 Java parity and a justified global performance ceiling remain open.
+
+
+## Fully deferred scalar closure context v2 (post-a0e895a56)
+
+Retained: optimized confirmation plain closure 19.735 -> 18.021 ns/item (-8.682%),
+captured closure 25.825 -> 24.815 (-3.911%). Both improve every fixed layout in the
+three-fork screen and five-fork confirmation; all 3168 windows retained. Effectful
+boxed methods regress 2.316% / 2.918% in aggregate, with a 5.021% disjoint adverse
+confirmation/default result. The predeclared rule passes, not universal non-regression.
+See RESULTS and `results-aot-closure-context-v2-macos-arm64.json` under `bench/runtime-comparison/` for all gains/losses.
+
+Append-only v2 binding adds a complete lowered-call proof and defers object/class/
+self substitution on successful eligible closure calls. V1 semantics, same-Program/
+identity/debugger/stack/sink guards, synchronized capture reads, immutable per-call
+diagnostic publication and reader waits remain. Exception materialization/restoration
+preserves independent live/snapshot views and current-Impl moves. No extra ownership.
+Release/Debug pass 59 core files / 92 cases / 11703 assertions plus 13 lvalue/DGC suites,
+HTTP/LLM/thread checks and555 IR + 555 AOT references; Debug 1985 native checks in both
+bounded-pair modes. All 64 Release aliases restored. Audit 21 Pass / 41 N/A / zero Fail.
+Selected qualification only; no fresh Java/develop or general IR/JIT ratio.
+
+Next diagnose effectful-method local/reference/member costs; then evaluate a
+separate additive closure companion with an inline live stack-limit check and
+the old full-guard fallback. Java parity/global performance ceiling remain open.

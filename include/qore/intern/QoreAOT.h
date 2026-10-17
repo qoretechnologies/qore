@@ -456,6 +456,11 @@ struct QoreAOTContext {
     //! Immutable module-owned metadata, published before scalar_member_int_entry by the matching body.
     std::atomic<const QoreAOTEffectMemberIntEntryV1*> effect_member_int_entry{nullptr};
 
+    //! Additive closure contract: the complete lowered body cannot inspect implicit object/class/self context.
+    //! The live stack guard materializes it before exception work; capture reads stay synchronized.
+    //! Append-only; v1 retains its eager object/class/self context and all existing field offsets.
+    std::atomic<NativeIntUnaryClosureEntry> native_int_unary_closure_entry_v2{nullptr};
+
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
     ~QoreAOTContext();

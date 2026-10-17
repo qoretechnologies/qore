@@ -16557,3 +16557,157 @@ and binary identities, profiles and drivers are in
 `results-aot-post-lvalue-checkpoint-macos-arm64.json`.
 Only progress monitoring overlapped timing. Host load, frequency and thermals
 were uncontrolled. Java parity and a global performance ceiling remain open.
+
+
+## Fully deferred scalar closure context v2 (2026-10-17, post-a0e895a56)
+
+Retained after both predeclared epochs pass. Optimized confirmation reduces
+plain closure workload time from **19.735 to 18.021 ns/item (-8.682%)**, and
+captured closure time from **25.825 to 24.815 ns/item (-3.911%)**. Both improve
+in all three fixed layouts in both epochs. These are whole-workload costs,
+not isolated call latencies or a fresh Java/develop comparison.
+
+There is a material caveat: effectful boxed-method time increases **2.316% in
+screen and 2.918% in confirmation**; all layouts are slower in both epochs.
+Confirmation/default is **5.021% slower with disjoint observed fork-mean ranges**.
+Shuffle has smaller disjoint losses in both epochs. This is not a universal
+non-regression result, even though the predeclared repeated >=3% rule passes.
+No loss is discarded on the basis of unchanged generated instructions.
+
+### Contract and method
+
+An append-only atomic v2 binding publishes the existing scalar closure companion
+after the bounded IR proof and a complete lowered-function call proof. V1 retains
+its eager object/class/self context. V2 constructs the same immutable per-call
+diagnostic frame but defers object/class/self lookup and substitution until a
+guard materializes context for exception handling. It keeps all identity, ready
+PC-map, same-Program, debugger, signature, pending-sink and physical stack checks.
+The frame is unpublished and readers are waited for before borrowed metadata dies.
+Materialization is caller-first; live and compatibility-snapshot views are saved
+independently and restored through the current RuntimeConfig implementation.
+No extra closure ownership, capture caching, read coalescing or lock removal.
+
+The <=1024-instruction lowered proof allows only lifetime hints, one entry-block
+live stack guard with matching arguments, and synchronized capture-read helpers.
+Unknown or indirect calls fail closed. Cancellation is checked every 100 instructions
+and propagates as compilation failure. No serialized stride or existing field
+offset changes; compiled artifacts require the new binder and matching runtime.
+
+Qualified Release `-O3 -DNDEBUG`, qcc `-O3`, LLVM 22.1.8; 4096 items / seed 7,
+three warmup and three measured 300 ms windows. Default/reverse/shuffle-487 layouts,
+18 micro/four mixed workloads. Three-fork screen/order 136337 and independent
+five-fork confirmation/order 136343 use exactly the same frozen executables,
+without relinking. Both targets must improve >=2% in aggregate and improve every
+layout in both epochs. Reject a repeated non-target >=3% adverse layout median
+with disjoint observed fork-mean ranges in both epochs. All 3168 windows retained;
+no pooling, rescue epoch, best-layout selection or alignment search. Ranges are
+not confidence intervals. Every artifact passes 555 micro / 60 mixed reference checks
+and its actual loaded-library check.
+
+### Screen (whole-workload ns/item)
+
+|!Workload|!Before|!Candidate|!Time change
+|arithmetic|1.567|1.569|+0.101%
+|direct_call|1.575|1.573|-0.173%
+|method_call|1.619|1.628|+0.509%
+|indirect_call|6.986|6.804|-2.614%
+|polymorphic_call|23.543|23.477|-0.280%
+|monomorphic_call|3.565|3.556|-0.238%
+|optional_method_call|10.806|10.794|-0.113%
+|boxed_int_method_effect|89.833|91.914|+2.316%
+|boxed_int_method_fallback|31.418|31.595|+0.564%
+|closure_call|19.774|17.983|-9.056%
+|closure_capture|25.974|24.723|-4.816%
+|indirect_wide|7.002|6.784|-3.119%
+|indirect_float|6.838|6.612|-3.312%
+|list_read|2.805|2.813|+0.288%
+|list_build|27.102|26.711|-1.443%
+|list_mutate|191.525|188.003|-1.839%
+|temporary_list|1.650|1.654|+0.297%
+|temporary_hash|330.677|335.968|+1.600%
+|csv_report|975.189|963.523|-1.196%
+|object_orders|1920.584|1879.480|-2.140%
+|callback_pipeline|86.929|85.339|-1.828%
+|text_index|1359.694|1349.302|-0.764%
+
+closure_call layout changes: default -9.162%, reverse -7.262%, shuffle-487 -9.848%.
+
+closure_capture layout changes: default -5.034%, reverse -3.376%, shuffle-487 -7.672%.
+
+### Confirmation (whole-workload ns/item)
+
+|!Workload|!Before|!Candidate|!Time change
+|arithmetic|1.576|1.556|-1.269%
+|direct_call|1.563|1.567|+0.247%
+|method_call|1.628|1.623|-0.268%
+|indirect_call|6.930|6.835|-1.370%
+|polymorphic_call|23.637|23.473|-0.694%
+|monomorphic_call|3.526|3.567|+1.187%
+|optional_method_call|10.785|10.844|+0.550%
+|boxed_int_method_effect|89.785|92.404|+2.918%
+|boxed_int_method_fallback|31.496|31.347|-0.472%
+|closure_call|19.735|18.021|-8.682%
+|closure_capture|25.825|24.815|-3.911%
+|indirect_wide|7.027|6.881|-2.083%
+|indirect_float|6.817|6.659|-2.315%
+|list_read|2.835|2.783|-1.838%
+|list_build|27.039|26.820|-0.810%
+|list_mutate|191.492|189.803|-0.882%
+|temporary_list|1.652|1.641|-0.681%
+|temporary_hash|335.544|334.737|-0.240%
+|csv_report|974.383|977.503|+0.320%
+|object_orders|1916.221|1899.748|-0.860%
+|callback_pipeline|86.381|85.073|-1.514%
+|text_index|1382.510|1363.603|-1.368%
+
+closure_call layout changes: default -8.386%, reverse -8.682%, shuffle-487 -8.740%.
+
+closure_capture layout changes: default -3.415%, reverse -3.928%, shuffle-487 -6.647%.
+
+
+The screen's temporary_hash/reverse loss is 3.008% with disjoint ranges;
+list_read/shuffle is 3.613% with overlapping ranges. Neither meets the repeated
+adverse rule. All smaller losses and raw observations remain in the evidence.
+
+### Qualification and audit
+
+The frozen baseline reuses the prior fully qualified inline-lvalue runtime;
+compiled sources/tests are unchanged since that qualification. New v2 tests are
+candidate-only, not retroactively claimed for baseline. Baseline core qualification
+is 59 files / 92 cases / 11621 assertions, Debug native 1871. Candidate Release and Debug
+pass 59 files / 92 cases / **11703 assertions**, plus 13 lvalue/DGC files / 82 cases and 1330 Release
+or 2663 Debug assertions; Debug native **1985** passes in each bounded-pair mode.
+The 114 new native assertions exercise hidden TLS internally, without exported test
+APIs. Fixtures cover mixed v1/v2, plain/captured/live/deleted self, independent
+live/snapshot state, current-Impl moves, idempotent materialization, padded caller
+markers, overflow after publication, pending sinks, unready/cross-Program/debugger
+fallback, capture mutation, ownership and foreign-thread diagnostic readers.
+
+HTTP 10/30, offline LLM 4/23, thread/cancellation 22/110 and 555 references per IR/AOT
+pass. Debug abrupt-drop 4; Release skips it. All 64 owned qmods rebuilt; the Debug
+wrapper restores exactly 64 Release aliases and preserves unrelated links.
+Two failed development qualifications are retained: hidden test-symbol linking,
+then an overly restrictive proof rejecting lifetime hints. Both were corrected
+before final qualification and timing. An unsuccessful Release native-unit
+diagnostic ran no tests because that builtin is Debug-only.
+
+Generated-code review compares 179 functions: three normal closure entries add
+v2 binding and associated register/branch changes; micro main changes its
+initialization metadata-size immediate 0x7b71 -> 0x7b64. Dynamic companions and
+other generated functions are unchanged. Nine runtime disassemblies and four
+untimed closure samples support the intended hot-path change. Two separate
+effectful-method samples show local reload/reference/member/locking costs but
+do not identify the cause of the regression. Instrumented durations are excluded.
+
+The 62-item audit records 21 Pass / 41 N/A / zero Fail, independently replaying all 3168 windows,
+fixed orders, acceptance rules, artifacts, qualifications and code comparisons;
+runner 17 / mixed 8, strict Qore tables and diff checks pass. Full raw evidence,
+sources, drivers, failed development attempts and limitations are in `results-aot-closure-context-v2-macos-arm64.json`.
+This is selected macOS arm64 qualification, not full-suite/sanitizer/cross-platform
+certification. No owned build/test/profile/read/analysis overlaps timing. Host
+load/frequency/thermals are uncontrolled. No general AST/IR/JIT speedup inferred.
+
+Next investigate the effectful-method regression and repeated local/reference/
+member work before a separate live-inline-stack-guard closure experiment.
+Do not rescue the current result with another timing epoch or alignment tuning.
+Java parity and a justified global performance ceiling remain open.

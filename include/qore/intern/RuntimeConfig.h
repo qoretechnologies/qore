@@ -248,6 +248,37 @@ private:
     DLLLOCAL void restore(ThreadData* td);
 };
 
+//! Invocation-owned deferred object/class/self context for a proven closure-v2 body.
+/** The closure and variant are borrowed until the leaf helper has unpublished its
+    frame and waited for readers. Construction performs no context lookup or write.
+    Only materialize/restore access saved state; captures are never cached here.
+*/
+class RuntimeConfigNativeClosureContext {
+public:
+    //! @param rc initialized same-thread invocation context
+    //! @param closure borrowed closure, alive throughout this invocation
+    //! @param uvb matching immutable closure variant
+    RuntimeConfigNativeClosureContext(RuntimeConfig& rc, const QoreClosureBase* closure,
+            const UserVariantBase* uvb) : rc(rc), closure(closure), uvb(uvb) {
+    }
+    RuntimeConfigNativeClosureContext(const RuntimeConfigNativeClosureContext&) = delete;
+    RuntimeConfigNativeClosureContext& operator=(const RuntimeConfigNativeClosureContext&) = delete;
+
+private:
+    friend class RuntimeConfigNativeLeafCallHelper;
+    RuntimeConfig& rc;
+    const QoreClosureBase* closure;
+    const UserVariantBase* uvb;
+    QoreObject* old_object;
+    const qore_class_private* old_class;
+    QoreObject* old_rc_object;
+    const qore_class_private* old_rc_class;
+    const QoreObject* old_self;
+    bool restore_self;
+    DLLLOCAL void materialize(ThreadData* td);
+    DLLLOCAL void restore(ThreadData* td);
+};
+
 //! Deferred context for a prepared non-reentrant native scalar callee.
 /** Keep as the last member of its published stack location. The callee may
     evaluate native scalar operations, perform bounded locked member probes
@@ -287,6 +318,9 @@ protected:
     // Compiler-proven scalar closure-v1 body; both dispatch and callee guard the live stack.
     DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
         const QoreProgramLocation*& call_loc, const UserVariantBase* closure_uvb);
+    // Additive closure-v2 contract also defers object/class/self substitution.
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
+        const QoreProgramLocation*& call_loc, RuntimeConfigNativeClosureContext& context);
     // Construct only through the policy-specific RAII wrapper below.
     DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
         const QoreProgramLocation*& call_loc, const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink,
@@ -311,6 +345,7 @@ private:
         const QorePreparedFunctionRefV3* callback_cache;
         RuntimeConfigNativeMethodContext* method_context;
         const UserVariantBase* closure_uvb;
+        RuntimeConfigNativeClosureContext* closure_context;
     };
     RuntimeConfigNativeLeafCallHelper* previous;
     const QoreStackLocation* old_stack;
@@ -323,7 +358,7 @@ private:
     uintptr_t old_sp;
     enum class ContextState : uint8_t { EagerMarkers, DeferredMarkers, Materialized };
     ContextState state;
-    enum class TargetKind : uint8_t { Callback, Method, Closure };
+    enum class TargetKind : uint8_t { Callback, Method, Closure, ClosureV2 };
     TargetKind target_kind;
     bool swapped; //!< Initialized only when context is materialized
 };
@@ -343,6 +378,20 @@ public:
             : RuntimeConfigNativeLeafCallHelper(rc, frame, loc, uvb) {}
     //! Restore materialized state and unpublish, waiting for diagnostic readers before destruction.
     __attribute__((always_inline)) ~RuntimeConfigNativeClosureCallHelper() { restoreDeferred(); }
+};
+
+//! Full deferred closure-v2 context; v1's separate eager object context is unchanged.
+class RuntimeConfigNativeClosureCallHelperV2 final : public RuntimeConfigNativeLeafCallHelper {
+public:
+    //! @param rc current thread's live invocation context
+    //! @param frame fully initialized immutable diagnostic frame; keep this helper last
+    //! @param loc caller-location slot initialized before publication
+    //! @param context invocation-owned closure metadata, alive until unpublication completes
+    __attribute__((always_inline)) RuntimeConfigNativeClosureCallHelperV2(RuntimeConfig& rc,
+            QoreStackLocation* frame, const QoreProgramLocation*& loc, RuntimeConfigNativeClosureContext& context)
+            : RuntimeConfigNativeLeafCallHelper(rc, frame, loc, context) {}
+    //! Restore any materialized context and wait for readers before destroying borrowed metadata.
+    __attribute__((always_inline)) ~RuntimeConfigNativeClosureCallHelperV2() { restoreDeferred(); }
 };
 
 //! Inactive between calls; a separate per-call scope must pair enter() and leave().

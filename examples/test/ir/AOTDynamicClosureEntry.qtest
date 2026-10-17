@@ -36,16 +36,20 @@ class DynamicClosureEntryTest inherits QUnit::Test {
         TmpDir dir("qore-dynamic-closure-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ",
                 "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 ",
+                "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
                 string ir = run((ENV.QCC ?? libdir + "/qcc", level, "--strip-source",
                     "-o", executable, source), prefix + "QORE_DUMP_LLVM_IR=1 ");
-                bool enabled = !prefix.startsWith("QORE_DISABLE_");
+                bool enabled = !prefix.startsWith("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=");
                 foreach string factory in (("dynamicClosureFactory", "dynamicClosurePlain")) {
                     assertEq(enabled, regex(ir,
                         "call void @qore_rt_bind_closure_int_unary_v1[^\\n]*" + factory),
                         factory + " binding " + prefix + level);
+                    assertEq(enabled && !prefix.startsWith("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2="), regex(ir,
+                        "call void @qore_rt_bind_closure_int_unary_v2[^\\n]*" + factory),
+                        factory + " context-v2 binding " + prefix + level);
                 }
                 # The repeated capture must remain two separately synchronized
                 # reads even when native LLVM optimization is enabled.
@@ -60,6 +64,8 @@ class DynamicClosureEntryTest inherits QUnit::Test {
                 assertTrue(ir.contains("call i32 @qore_rt_try_funcref_int_int_v4("),
                     "alternating loop exercises the prepared callback miss route");
                 assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2=1 "),
+                    "v1 context " + prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLOSURE_MISS_ROUTE=1 "),
                     "original prepared miss route " + prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT=1 "),
@@ -80,6 +86,8 @@ class DynamicClosureEntryTest inherits QUnit::Test {
                 "-o", executable, source), "QORE_DUMP_LLVM_IR=1 ");
             assertTrue(ir.contains("call void @qore_rt_bind_closure_int_unary_v1"), "native binding");
             assertEq(expected, run((executable,)), level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2=1 "),
+                "v1 context " + level);
             assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLOSURE_MISS_ROUTE=1 "),
                 "original prepared miss route " + level);
             assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT=1 "),
@@ -101,6 +109,8 @@ class DynamicClosureEntryTest inherits QUnit::Test {
                 "-o", executable, source), "QORE_DUMP_LLVM_IR=1 ");
             assertTrue(ir.contains("call void @qore_rt_bind_closure_int_unary_v1"), "native binding");
             assertEq(expected, run((executable,)), level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2=1 "),
+                "v1 context " + level);
             assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLOSURE_MISS_ROUTE=1 "),
                 "original prepared miss route " + level);
             assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT=1 "),

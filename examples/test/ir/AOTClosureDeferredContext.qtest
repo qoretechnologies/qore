@@ -44,13 +44,15 @@ class ClosureDeferredContextTest inherits QUnit::Test {
                 + quote(control_source) + " 2>&1", \status);
             assertEq(0, status, output);
             assertRegex("call void @qore_rt_bind_closure_int_unary_v1", output);
+            assertRegex("call void @qore_rt_bind_closure_int_unary_v2", output);
             assertRegex("(?s)define[^\n]*_dynamic_int_v1[^\n]*\\{[^}]*call i32 @qore_rt_check_stack_v2", output);
             list<string> objects = glob(dir.path + "/*.qo");
             assertEq(3, objects.size(), "provider, control and aggregate");
             output = backquote((map quote($1), args + (level,)).join(" ") + " "
                 + (map quote($1), objects).join(" ") + " 2>&1", \status);
             assertEq(0, status, output);
-            foreach string control in (("", "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT=1 ")) {
+            foreach string control in (("", "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2=1 ",
+                    "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT=1 ")) {
                 output = backquote(env + control + quote(exe) + " 2>&1", \status);
                 assertEq(0, status, output);
                 assertEq("closure-deferred-context: ok\n", output);

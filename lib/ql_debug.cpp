@@ -45,6 +45,7 @@
 #include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/UnicodeByteOrder.h"
 
 #include <map>
@@ -401,6 +402,119 @@ private:
     VarValueBase*& owner;
     UnitTestCounters& counters;
 };
+
+//! Test hidden closure-self TLS without exposing additional runtime APIs to an external fixture.
+static void ut_native_closure_context(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreProgramHelper program(PO_MODERN, xsink);
+    {
+        ProgramRuntimeExternalParseContextHelper parse(*program);
+        UT_ASSERT(c, parse, "closure context fixture has a parse context");
+        program->parse("%modern\n"
+            "class NativeClosureContextOwner {\n"
+            " private { int marker = 927; }\n"
+            " code<int(int)> make() { int delta = 17; return int sub(int x) { return x + delta; }; }\n"
+            "}\n"
+            "list<auto> sub owned() { NativeClosureContextOwner o(); return (o, o.make()); }\n"
+            "code<int(int)> sub deleted() { NativeClosureContextOwner o(); return o.make(); }\n"
+            "code<int(int)> sub plain() { return int sub(int x) { return x + 17; }; }\n",
+            "native-closure-context-unit", &xsink);
+    }
+    UT_ASSERT(c, !xsink, "closure context fixture parses");
+    if (xsink) {
+        return;
+    }
+    QoreExternalProgramContextHelper program_context(&xsink, *program);
+    ValueHolder caller(program->callFunction("owned", nullptr, &xsink), &xsink);
+    UT_ASSERT(c, !xsink && caller->getType() == NT_LIST, "caller owner is retained");
+    if (xsink || caller->getType() != NT_LIST) {
+        return;
+    }
+    QoreObject* caller_object = caller->get<QoreListNode>()->retrieveEntry(0).get<QoreObject>();
+    const qore_class_private* caller_class = qore_class_private::get(*caller_object->getClass());
+    for (const char* factory : {"plain", "owned", "deleted"}) {
+        ValueHolder owner(program->callFunction(factory, nullptr, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "closure factory succeeds");
+        if (xsink) {
+            return;
+        }
+        QoreValue ref = owner->getType() == NT_LIST ? owner->get<QoreListNode>()->retrieveEntry(1) : *owner;
+        UT_ASSERT(c, ref.getType() == NT_RUNTIME_CLOSURE, "factory supplies a live closure reference");
+        if (ref.getType() != NT_RUNTIME_CLOSURE) {
+            return;
+        }
+        const auto* closure = static_cast<const QoreClosureBase*>(ref.getInternalNode());
+        const auto* uvb = closure->getFunction()->first()->getUserVariantBase();
+        for (bool materialize : {false, true}) {
+            for (bool replace_impl : {false, true}) {
+                RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+                RuntimeConfigNativeObjectHelper caller_context(rc, caller_object, nullptr);
+                QoreClosureSelfContextHelper caller_self(caller_object);
+                // Deliberately distinct live and compatibility-snapshot views.
+                rc.setObject(nullptr);
+                rc.setClass(caller_class);
+                {
+                    struct Frame : QoreStackLocation {
+                        const UserVariantBase* uvb;
+                        const std::string name = "native closure context unit";
+                        const QoreProgramLocation* loc = nullptr;
+                        RuntimeConfigNativeClosureContext context;
+                        RuntimeConfigNativeClosureCallHelperV2 helper;
+                        Frame(RuntimeConfig& rc, const UserVariantBase* uvb, const QoreClosureBase* closure)
+                            : uvb(uvb), context(rc, closure, uvb), helper(rc, this, loc, context) {}
+                        QoreProgram* getProgram() const override { return uvb->pgm; }
+                        const AbstractStatement* getStatement() const override { return uvb->getStatementBlock(); }
+                        const std::string& getCallName() const override { return name; }
+                        qore_call_t getCallType() const override { return CT_USER; }
+                        const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+                    } frame(rc, uvb, closure);
+                    UT_ASSERT(c, !rc.getObject() && rc.getClass() == caller_class,
+                        "deferred entry leaves snapshot context untouched");
+                    UT_ASSERT(c, runtime_get_stack_object() == caller_object && !runtime_get_class(),
+                        "deferred entry leaves live context untouched");
+                    UT_ASSERT(c, qore_closure_self_context(caller_object), "deferred entry leaves self TLS untouched");
+                    if (materialize) {
+                        frame.helper.materialize();
+                        frame.helper.materialize(); // Idempotence must not overwrite saved caller state.
+                        UT_ASSERT(c, rc.getObject() == closure->getObject() && rc.getClass() == closure->getClassCtx(),
+                            "materialization installs closure snapshot context");
+                        UT_ASSERT(c, runtime_get_stack_object() == closure->getObject()
+                            && runtime_get_class() == closure->getClassCtx(), "materialization installs live context");
+                        UT_ASSERT(c, qore_closure_self_context(closure->getObject() ? closure->getObject() : caller_object),
+                            "materialization installs self only for an object closure");
+                        if (closure->getObject()) {
+                            ExceptionSink probe_sink;
+                            uint64_t bits = qore_rt_load_self_member("marker", &probe_sink);
+                            QoreValue value;
+                            std::memcpy(&value, &bits, sizeof(value));
+                            ValueHolder marker(value, &probe_sink);
+                            bool deleted = !closure->getObject()->isValid();
+                            UT_ASSERT_EQ(c, deleted, bool(probe_sink), "captured self validity remains enforced");
+                            if (deleted) {
+                                UT_ASSERT(c, probe_sink.getExceptionErr().get<const QoreStringNode>()
+                                    ->equal("OBJECT-ALREADY-DELETED"), "deleted captured self reports the normal error");
+                            } else {
+                                UT_ASSERT_EQ(c, 927, marker->getAsBigInt(), "live self retains private member access");
+                            }
+                            probe_sink.clear();
+                        }
+                    }
+                    if (replace_impl) {
+                        RuntimeConfig replacement(rc);
+                        rc = std::move(replacement);
+                        UT_ASSERT(c, !replacement.getObject() && !replacement.getClass(), "moved-from context is empty");
+                    }
+                }
+                UT_ASSERT(c, !rc.getObject() && rc.getClass() == caller_class,
+                    "closure scope restores the current snapshot implementation independently");
+                UT_ASSERT(c, runtime_get_stack_object() == caller_object && !runtime_get_class(),
+                    "closure scope restores the live caller independently");
+                UT_ASSERT(c, qore_closure_self_context(caller_object), "closure scope restores caller self TLS");
+            }
+        }
+    }
+    UT_ASSERT(c, !xsink, "closure context tests leave no exception");
+}
 
 //! Object-count bookkeeping preserves order, flags and borrowed ownership across moves and clears.
 static void ut_lvalue_object_count_records(UnitTestCounters& c) {
@@ -6873,6 +6987,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     UnitTestCounters c;
     ut_ir_scalar_snapshot(c);
     ut_aot_string_split(c);
+    ut_native_closure_context(c);
     ut_lvalue_object_count_records(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
@@ -6894,6 +7009,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     UnitTestCounters c;
     ut_ir_scalar_snapshot(c);
     ut_aot_string_split(c);
+    ut_native_closure_context(c);
     ut_lvalue_object_count_records(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);

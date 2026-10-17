@@ -46,6 +46,7 @@
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreJIT.h"
@@ -2423,6 +2424,17 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
     // stack before scalar work; a failed guard materializes this context.
 }
 
+__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(
+        RuntimeConfig& rc, QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        RuntimeConfigNativeClosureContext& context)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), closure_context(&context),
+          previous(td->native_leaf_context), state(ContextState::DeferredMarkers), target_kind(TargetKind::ClosureV2) {
+    assert(context.uvb && td->current_pgm == context.uvb->pgm);
+    call_loc = td->runtime_loc ? td->runtime_loc : context.uvb->getUserSignature()->getParseLocation();
+    td->native_leaf_context = this;
+    old_stack = publish_pushed_stack_location(td, stack_loc);
+}
+
 // Never pull exception-only context traffic back into the successful call path.
 __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() {
     if (state == ContextState::Materialized) {
@@ -2442,8 +2454,8 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
         uvb = method_context->cache.native_scalar_uvb;
         pgm = method_context->cache.native_scalar_program;
         parse_loc = uvb->getUserSignature()->getParseLocation();
-    } else if (target_kind == TargetKind::Closure) {
-        uvb = closure_uvb;
+    } else if (target_kind == TargetKind::Closure || target_kind == TargetKind::ClosureV2) {
+        uvb = target_kind == TargetKind::Closure ? closure_uvb : closure_context->uvb;
         pgm = uvb->pgm;
         parse_loc = uvb->getUserSignature()->getParseLocation();
     } else {
@@ -2473,6 +2485,8 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
     swapped = parse_loc != nullptr;
     if (target_kind == TargetKind::Method) {
         method_context->materialize(td);
+    } else if (target_kind == TargetKind::ClosureV2) {
+        closure_context->materialize(td);
     }
     state = ContextState::Materialized;
     td->call_program_context = pgm;
@@ -2530,6 +2544,8 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeLeafCallHelper::restoreM
     td->call_program_context = old_call_pgm;
     if (target_kind == TargetKind::Method) {
         method_context->restore(td);
+    } else if (target_kind == TargetKind::ClosureV2) {
+        closure_context->restore(td);
     }
 }
 
@@ -2552,6 +2568,34 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::restore(T
     td->current_class = old_class;
     rc.setObject(old_rc_object);
     rc.setClass(old_rc_class);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::materialize(ThreadData* td) {
+    old_object = td->current_obj;
+    old_class = td->current_class;
+    old_rc_object = rc.getObject();
+    old_rc_class = rc.getClass();
+    QoreObject* object = closure->getObject();
+    const qore_class_private* cls = closure->getClassCtx();
+    restore_self = object != nullptr;
+    if (restore_self) {
+        old_self = QoreClosureSelfContextHelper::exchange(object);
+    }
+    td->current_obj = object;
+    td->current_class = cls;
+    rc.setObject(object);
+    rc.setClass(cls);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::restore(ThreadData* td) {
+    td->current_obj = old_object;
+    td->current_class = old_class;
+    // Restore the current Impl, including after an exception-time refresh or move.
+    rc.setObject(old_rc_object);
+    rc.setClass(old_rc_class);
+    if (restore_self) {
+        QoreClosureSelfContextHelper::exchange(old_self);
+    }
 }
 
 // called when pushing a new location on the stack

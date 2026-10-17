@@ -15,6 +15,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <initializer_list>
 #include <string>
 #include <thread>
@@ -32,20 +33,36 @@ extern "C" void init_CLOSURE_DEFERRED_CONTEXT_qo(QoreProgram*);
 struct ClosureProbe {
     QoreAOTContext* ctx;
     QoreAOTContext::NativeIntUnaryClosureEntry target;
+    QoreAOTContext::NativeIntUnaryClosureEntry original_v2;
+    bool v2;
+    QoreObject* caller_object;
+    const qore_class_private* caller_class;
     bool overflow = false;
     bool replace_impl = false;
     bool reject = false;
     bool live_object = false;
     unsigned calls = 0;
     static thread_local ClosureProbe* current;
-    explicit ClosureProbe(QoreAOTContext* ctx) : ctx(ctx),
-            target(ctx->native_int_unary_closure_entry.load(std::memory_order_acquire)) {
+    ClosureProbe(QoreAOTContext* ctx, bool v2, RuntimeConfig& rc) : ctx(ctx),
+            target(v2 ? ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire)
+                : ctx->native_int_unary_closure_entry.load(std::memory_order_acquire)),
+            original_v2(ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire)),
+            v2(v2), caller_object(rc.getObject()), caller_class(rc.getClass()) {
         assert(target && !current);
         current = this;
-        ctx->native_int_unary_closure_entry.store(invoke, std::memory_order_release);
+        if (v2) {
+            ctx->native_int_unary_closure_entry_v2.store(invoke, std::memory_order_release);
+        } else {
+            // Exercise old-module semantics in the same process as v2 modules.
+            ctx->native_int_unary_closure_entry_v2.store(nullptr, std::memory_order_release);
+            ctx->native_int_unary_closure_entry.store(invoke, std::memory_order_release);
+        }
     }
     ~ClosureProbe() {
-        ctx->native_int_unary_closure_entry.store(target, std::memory_order_release);
+        if (!v2) {
+            ctx->native_int_unary_closure_entry.store(target, std::memory_order_release);
+        }
+        ctx->native_int_unary_closure_entry_v2.store(original_v2, std::memory_order_release);
         current = nullptr;
     }
     static int64_t invoke(int64_t arg, const QoreClosureBase* closure, RuntimeConfig* rc,
@@ -53,7 +70,11 @@ struct ClosureProbe {
         auto& probe = *current;
         assert(ctx == probe.ctx);
         ++probe.calls;
-        assert(rc->getObject() == closure->getObject() && rc->getClass() == closure->getClassCtx());
+        if (probe.v2) {
+            assert(rc->getObject() == probe.caller_object && rc->getClass() == probe.caller_class);
+        } else {
+            assert(rc->getObject() == closure->getObject() && rc->getClass() == closure->getClassCtx());
+        }
         if (probe.replace_impl) {
             // The helper must restore the current implementation, not an Impl
             // pointer retained across the callee. Keep the native view valid.
@@ -66,7 +87,7 @@ struct ClosureProbe {
             assert(replacement.getClass() == closure->getClassCtx());
         }
         assert((closure->getObject() && closure->getObject()->isValid()) == probe.live_object);
-        if (probe.live_object) {
+        if (probe.live_object && !probe.v2) {
             uint64_t bits = qore_rt_load_self_member("contextMarker", xsink);
             QoreValue value;
             std::memcpy(&value, &bits, sizeof(value));
@@ -96,6 +117,12 @@ struct ClosureProbe {
         if (probe.overflow) {
             assert(*xsink && qore_get_call_program_context() == closure->getProgram());
             assert(rc->getObject() == closure->getObject() && rc->getClass() == closure->getClassCtx());
+            if (probe.replace_impl) {
+                // Materialization must also restore the current Impl after a cold-path move.
+                RuntimeConfig replacement(*rc);
+                *rc = std::move(replacement);
+                assert(!replacement.getObject() && !replacement.getClass());
+            }
         }
         return result;
     }
@@ -119,7 +146,13 @@ struct Invocation {
     QorePreparedFunctionRefV3 cache{};
     QoreObject* snapshot_object = nullptr;
     bool live_object = false;
+    bool v2 = false;
 };
+
+static uint64_t wrongClosureBody(QoreAOTContext*, ExceptionSink*) {
+    assert(false && "identity-mismatched binding must never be called");
+    return 0;
+}
 
 static QoreValue sweep(const void* ptr, const QoreListNode*, RuntimeConfig&, ExceptionSink* xsink) {
     auto& invocation = *static_cast<Invocation*>(const_cast<void*>(ptr));
@@ -132,7 +165,7 @@ static QoreValue sweep(const void* ptr, const QoreListNode*, RuntimeConfig&, Exc
     rc->setClass(qore_class_private::get(*invocation.snapshot_object->getClass()));
     RuntimeConfig before = *rc;
     QoreProgram* caller = qore_get_call_program_context();
-    ClosureProbe probe(invocation.ctx);
+    ClosureProbe probe(invocation.ctx, invocation.v2, *rc);
     probe.live_object = invocation.live_object;
     for (bool replace_impl : {false, true}) {
         probe.replace_impl = replace_impl;
@@ -261,13 +294,31 @@ static void check() {
         assert(!xsink && warm->getAsBigInt() == 24);
         invocation.ctx = uvb->getCachedAOTContext();
         assert(invocation.ctx && invocation.ctx->native_int_unary_closure_entry.load(std::memory_order_acquire));
+        assert(invocation.ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire));
+        auto v2_entry = invocation.ctx->native_int_unary_closure_entry_v2.exchange(nullptr, std::memory_order_acq_rel);
+        auto normal = invocation.ctx->pc_loc_fn;
+        qore_rt_bind_closure_int_unary_v2(nullptr, normal, v2_entry);
+        qore_rt_bind_closure_int_unary_v2(invocation.ctx, nullptr, v2_entry);
+        qore_rt_bind_closure_int_unary_v2(invocation.ctx, normal, nullptr);
+        qore_rt_bind_closure_int_unary_v2(invocation.ctx, wrongClosureBody, v2_entry);
+        assert(!invocation.ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire));
+        qore_rt_bind_closure_int_unary_v2(invocation.ctx, normal, v2_entry);
+        qore_rt_bind_closure_int_unary_v2(invocation.ctx, normal, ClosureProbe::invoke);
+        assert(invocation.ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire) == v2_entry);
         std::memcpy(&invocation.bits, &*ref, sizeof(invocation.bits));
         qore_exec_mode_t mode = program->getExecMode();
         program->setExecMode(QEM_AST, true);
-        for (unsigned padding : {0, 31, 32, 33, 63, 64, 65, 70}) {
-            std::string name = "padded" + std::to_string(padding);
-            ValueHolder value(program->callFunction(name.c_str(), nullptr, &xsink), &xsink);
-            assert(!xsink && value->getAsBigInt() == 24 && invocation.cache.owner == empty_bits);
+        for (bool v2 : {false, true, false}) {
+            if (v2 && (std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2")
+                    || std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT"))) {
+                continue;
+            }
+            invocation.v2 = v2;
+            for (unsigned padding : {0, 31, 32, 33, 63, 64, 65, 70}) {
+                std::string name = "padded" + std::to_string(padding);
+                ValueHolder value(program->callFunction(name.c_str(), nullptr, &xsink), &xsink);
+                assert(!xsink && value->getAsBigInt() == 24 && invocation.cache.owner == empty_bits);
+            }
         }
         program->setExecMode(mode, true);
         QoreProgramHelper other(PO_MODERN, xsink);

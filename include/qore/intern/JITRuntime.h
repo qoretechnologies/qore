@@ -1143,6 +1143,14 @@ void qore_rt_bind_closure_int_unary_v1(QoreAOTContext* ctx,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
     int64_t (*entry)(int64_t, const QoreClosureBase*, RuntimeConfig*, int*, QoreAOTContext*, ExceptionSink*));
 
+//! Publish the additive fully deferred closure-v2 contract after checking the entire lowered body.
+//! @param ctx runtime-owned context, without per-instance captured values
+//! @param normal exact normal body identity; v1 remains independently published
+//! @param entry context-independent scalar companion with a materializing live stack guard
+void qore_rt_bind_closure_int_unary_v2(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(int64_t, const QoreClosureBase*, RuntimeConfig*, int*, QoreAOTContext*, ExceptionSink*));
+
 //! Read a single capture under its normal lock, without TLS lookup or reference evaluation.
 //! @param closure borrowed live closure instance
 //! @param ctx context mapping the compiled slot to its lexical local
