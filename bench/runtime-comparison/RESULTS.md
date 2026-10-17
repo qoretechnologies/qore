@@ -17172,3 +17172,207 @@ and separately proven context deferral. Any retained change needs a fresh matche
 optimized feature/develop/Java checkpoint; getter comparisons must explicitly match
 field synchronization before presenting Java ratios. Do not retry a rejected
 candidate unchanged.
+
+
+## Rejected caller-selected isolated zero-argument scalar getter entries (post-e9b2c7235)
+
+Integer getter loop: 280.403 -> 137.344 ns/item (-51.019% time). Floating getter loop: 313.892 -> 146.731 ns/item (-53.254% time). The candidate is not retained. Repeated adverse non-target layouts: boxed_float_method_call/default, boxed_float_method_call/reverse, default_loop/default, default_loop/reverse, default_loop/shuffle-487, default_short/default, default_short/reverse, monomorphic_call/default, string_result_loop/default, string_result_loop/shuffle-487. Complete source/patch/modes are archived; production is restored and independently requalified. No rescue epoch or retention-rule change.
+
+Release `-O3 -DNDEBUG`, qcc `-O3`, LLVM 22.1.8, qualified frozen baseline/candidate
+artifacts. 23 existing micro, four mixed and 14 independent getter/negative-control probes;
+4096 items / seed 7, three warmup and three measured 300 ms windows, fixed
+default/reverse/shuffle-487 layouts. Screen three forks/order 136383; independent
+confirmation five forks/order 136385 only when both screen targets pass.
+**All 5904 measured windows are retained.** No owned build/test/profile/read/
+analysis overlaps timing. All 18 artifacts pass suite-specific independent reference
+checks (555 micro / 60 mixed / 168 probe) and actual loaded-library checks; the probe oracle also passes 12600
+small-case checks. Baseline probe independently passes AST/stripped O0 / stripped O3.
+
+Values are whole-workload ns/item, median of layout medians of fork means, not
+isolated getter latency. Each probe iteration includes two receiver calls and a
+callback; short variants include ordinary `call_function` dispatch per item.
+Allocation/setup is included. No fresh Java/develop ratio is claimed.
+
+|!Workload|!Screen before|!Screen candidate|!Change|!Confirmation before|!Confirmation candidate|!Change
+|arithmetic|1.520|1.521|+0.076%|1.525|1.527|+0.163%
+|direct_call|1.528|1.525|-0.227%|1.521|1.533|+0.834%
+|method_call|1.592|1.594|+0.115%|1.592|1.591|-0.030%
+|indirect_call|6.745|6.830|+1.264%|6.774|6.873|+1.475%
+|polymorphic_call|23.074|23.169|+0.411%|23.189|22.935|-1.093%
+|monomorphic_call|3.505|3.494|-0.310%|3.516|3.504|-0.321%
+|optional_method_call|10.679|10.792|+1.051%|10.678|10.828|+1.408%
+|boxed_int_method_effect|89.761|89.105|-0.731%|89.606|89.258|-0.389%
+|boxed_int_method_fallback|30.993|31.523|+1.711%|30.877|31.512|+2.056%
+|closure_call|17.720|17.786|+0.373%|17.905|17.813|-0.512%
+|closure_capture|24.443|24.009|-1.773%|24.388|23.901|-1.997%
+|indirect_wide|6.786|6.792|+0.088%|6.731|6.690|-0.614%
+|indirect_float|6.553|6.522|-0.473%|6.591|6.595|+0.065%
+|list_read|2.819|2.814|-0.189%|2.788|2.718|-2.514%
+|list_build|26.105|26.286|+0.693%|26.228|26.286|+0.223%
+|list_mutate|186.946|186.512|-0.232%|185.161|186.980|+0.983%
+|temporary_list|1.605|1.600|-0.325%|1.612|1.611|-0.067%
+|temporary_hash|327.484|327.548|+0.020%|329.775|331.338|+0.474%
+|boxed_int_method_call|16.219|16.176|-0.268%|16.046|16.298|+1.572%
+|boxed_float_method_call|19.648|20.678|+5.243%|19.627|20.903|+6.501%
+|boxed_float_method_fallback|32.569|33.278|+2.178%|32.369|33.160|+2.446%
+|dynamic_int_result_call|10.600|10.825|+2.123%|10.640|10.814|+1.639%
+|dynamic_float_result_call|11.768|11.785|+0.146%|11.697|12.021|+2.772%
+|csv_report|941.792|954.277|+1.326%|942.321|958.509|+1.718%
+|object_orders|1842.838|1876.518|+1.828%|1826.148|1871.704|+2.495%
+|callback_pipeline|83.466|82.534|-1.116%|83.821|83.516|-0.364%
+|text_index|1330.180|1343.767|+1.021%|1323.281|1344.231|+1.583%
+|object_loop|280.028|138.163|-50.661%|280.403|137.344|-51.019%
+|object_short|1191.459|1052.415|-11.670%|1191.289|1048.633|-11.975%
+|float_loop|311.121|146.222|-53.002%|313.892|146.731|-53.254%
+|float_short|1242.846|1056.914|-14.960%|1238.828|1062.372|-14.244%
+|string_loop|373.130|370.536|-0.695%|374.491|374.852|+0.097%
+|string_short|1247.549|1251.651|+0.329%|1242.398|1245.849|+0.278%
+|effect_loop|339.620|343.366|+1.103%|338.406|357.989|+5.787%
+|effect_short|1255.584|1282.306|+2.128%|1252.822|1272.114|+1.540%
+|two_read_loop|383.497|403.565|+5.233%|371.580|389.381|+4.791%
+|two_read_short|1306.172|1316.221|+0.769%|1296.911|1315.809|+1.457%
+|default_loop|683.355|775.191|+13.439%|691.070|774.573|+12.083%
+|default_short|1616.755|1708.829|+5.695%|1629.486|1694.594|+3.996%
+|string_result_loop|405.262|437.944|+8.064%|413.868|445.849|+7.727%
+|string_result_short|1349.523|1384.562|+2.596%|1351.391|1359.783|+0.621%
+
+Both object_loop and float_loop must improve at least 2% in aggregate, and every
+layout must improve in both epochs. Reject a repeated non-target kernel/layout at least 3% slower
+with disjoint observed fork-mean ranges in both epochs. Ranges are observations,
+not confidence intervals; smaller losses are not declared absent or insignificant.
+Every target layout and non-target loss at least 3% follows:
+
+|!Epoch|!Workload|!Layout|!Change|!Before observed range|!Candidate observed range|!Disjoint adverse
+|screen|indirect_call|reverse|+11.238%|6.657 to 7.276|7.212 to 7.500|False
+|screen|monomorphic_call|default|+5.295%|3.443 to 3.544|3.674 to 3.690|True
+|screen|boxed_float_method_call|default|+4.152%|19.579 to 19.805|20.423 to 20.592|True
+|screen|boxed_float_method_call|reverse|+6.157%|19.535 to 19.696|20.619 to 21.074|True
+|screen|boxed_float_method_call|shuffle-487|+5.734%|19.476 to 19.613|20.296 to 20.679|True
+|screen|boxed_float_method_fallback|default|+3.119%|31.994 to 32.601|33.256 to 33.861|True
+|screen|dynamic_int_result_call|shuffle-487|+3.054%|10.444 to 10.586|10.719 to 10.882|True
+|screen|object_loop|default|-50.279%|276.168 to 285.115|134.933 to 139.283|False
+|screen|object_loop|reverse|-51.127%|279.549 to 283.755|137.309 to 138.724|False
+|screen|object_loop|shuffle-487|-51.312%|278.065 to 283.229|135.834 to 137.595|False
+|screen|float_loop|default|-53.002%|303.709 to 318.202|145.257 to 147.697|False
+|screen|float_loop|reverse|-54.193%|313.278 to 343.049|145.597 to 148.897|False
+|screen|float_loop|shuffle-487|-53.089%|308.206 to 318.813|143.028 to 147.709|False
+|screen|string_loop|default|+3.133%|368.633 to 397.873|372.755 to 388.259|False
+|screen|effect_loop|default|+4.540%|332.223 to 343.096|351.043 to 361.301|True
+|screen|two_read_loop|default|+7.591%|373.449 to 394.686|382.866 to 445.806|False
+|screen|two_read_loop|reverse|+3.202%|384.298 to 401.925|375.275 to 404.552|False
+|screen|two_read_loop|shuffle-487|+10.727%|382.221 to 388.635|423.935 to 433.611|True
+|screen|two_read_short|reverse|+3.219%|1258.171 to 1289.388|1302.526 to 1335.362|True
+|screen|default_loop|default|+15.361%|674.670 to 699.175|756.407 to 793.419|True
+|screen|default_loop|reverse|+10.915%|670.226 to 713.084|775.170 to 778.586|True
+|screen|default_loop|shuffle-487|+13.004%|674.123 to 693.591|753.850 to 800.786|True
+|screen|default_short|default|+3.936%|1582.069 to 1631.995|1667.529 to 1754.053|True
+|screen|default_short|reverse|+7.424%|1597.712 to 1642.424|1696.138 to 1722.270|True
+|screen|default_short|shuffle-487|+3.840%|1637.928 to 1693.730|1681.613 to 1734.501|False
+|screen|string_result_loop|default|+5.422%|401.041 to 405.086|423.469 to 431.790|True
+|screen|string_result_loop|reverse|+12.739%|404.749 to 414.693|430.289 to 461.554|True
+|screen|string_result_loop|shuffle-487|+4.996%|405.966 to 427.848|431.220 to 439.176|True
+|confirmation|indirect_call|reverse|+9.685%|6.665 to 7.177|7.216 to 7.626|True
+|confirmation|indirect_call|shuffle-487|+3.532%|6.569 to 6.768|6.663 to 6.922|False
+|confirmation|monomorphic_call|default|+5.218%|3.486 to 3.525|3.648 to 3.759|True
+|confirmation|boxed_int_method_call|shuffle-487|+3.612%|15.735 to 16.005|16.186 to 16.753|True
+|confirmation|boxed_float_method_call|default|+5.064%|19.650 to 20.173|20.195 to 21.111|True
+|confirmation|boxed_float_method_call|reverse|+8.015%|19.411 to 19.615|20.682 to 21.371|True
+|confirmation|boxed_float_method_call|shuffle-487|+4.804%|19.512 to 25.622|20.436 to 20.923|False
+|confirmation|boxed_float_method_fallback|reverse|+3.109%|32.006 to 36.629|32.553 to 33.444|False
+|confirmation|dynamic_float_result_call|shuffle-487|+3.808%|11.587 to 11.872|11.916 to 12.231|True
+|confirmation|object_loop|default|-51.511%|278.477 to 306.849|135.101 to 136.534|False
+|confirmation|object_loop|reverse|-50.259%|275.809 to 282.197|135.949 to 140.596|False
+|confirmation|object_loop|shuffle-487|-51.360%|279.701 to 293.313|135.595 to 137.681|False
+|confirmation|float_loop|default|-53.791%|305.048 to 329.337|144.745 to 147.049|False
+|confirmation|float_loop|reverse|-54.791%|307.457 to 330.413|146.147 to 149.074|False
+|confirmation|float_loop|shuffle-487|-52.860%|309.524 to 320.192|146.116 to 148.875|False
+|confirmation|effect_loop|default|+6.215%|333.245 to 345.064|331.352 to 375.798|False
+|confirmation|effect_loop|reverse|+7.335%|333.410 to 348.630|332.612 to 376.299|False
+|confirmation|two_read_loop|default|+4.986%|367.649 to 375.270|375.721 to 390.552|True
+|confirmation|two_read_loop|shuffle-487|+4.491%|366.592 to 405.228|371.384 to 432.556|False
+|confirmation|default_loop|default|+13.966%|670.311 to 701.127|763.515 to 798.240|True
+|confirmation|default_loop|reverse|+11.440%|680.660 to 702.469|758.448 to 783.825|True
+|confirmation|default_loop|shuffle-487|+13.861%|686.533 to 706.120|774.239 to 816.066|True
+|confirmation|default_short|default|+4.161%|1597.585 to 1663.785|1681.760 to 1798.754|True
+|confirmation|default_short|reverse|+3.558%|1611.627 to 1658.698|1676.773 to 1732.630|True
+|confirmation|default_short|shuffle-487|+3.403%|1596.750 to 1652.300|1666.796 to 1737.501|True
+|confirmation|string_result_loop|default|+7.727%|393.693 to 424.527|434.486 to 473.410|True
+|confirmation|string_result_loop|reverse|+4.520%|405.358 to 433.124|426.084 to 462.217|False
+|confirmation|string_result_loop|shuffle-487|+11.115%|399.378 to 419.957|431.314 to 473.325|True
+
+### Contract and review
+
+Separate append-only integer/float zero-argument companions take borrowed receiver,
+defining class, same-thread RuntimeConfig, accepted output, exact AOT context and
+sink. The existing unary ABI, compact Program/type witness and effect-prefix
+contract are unchanged. A one-block / at-most-64-instruction whole-body proof requires
+exactly one member read and a strict scalar return family; calls, branches, effects,
+locals/ARGV/explicit-self/opaque access and unsupported signatures stay ordinary.
+
+Caller-selected zero-argument dispatch leaves the shared PIC layout and existing
+name/pre-resolved/unary dispatch source unchanged. RuntimeConfig is acquired/reused
+once in the logical caller entry. Full receiver/type/access/parse-options/epoch/
+Program and applicable parse-selected identity checks remain; no negative lazy
+publication is cached. Exact normal-body binding, live readiness/body/receiver/
+Program/debugger/stack guards and synchronized member loads remain. No value or lock
+is cached. Eager explicit object/class context and the existing logical native frame
+are retained. The borrowed PIC name is unpublished and reader-safe before a miss can
+enter generic code and replace its owner. Results preserve ordinary boxing/ownership.
+
+Generated-code review covers all 207 common functions plus 2 new getter
+companions; fixed non-default layouts place each companion immediately after its
+normal body, without alignment search. 18 runtime disassemblies
+cover ordinary dispatch, separate getter dispatch/publication and synchronized reads.
+Fourteen serial untimed samples cover before/candidate integer/float getters, defaults,
+string results, two-member reads, boxed-float methods and monomorphic calls.
+Static instruction counts are not dynamic call counts; profile samples are not
+isolated latencies, and unchanged bodies do not justify discarding adverse timings.
+Detailed manually reviewed findings are preserved in the JSON evidence.
+
+The candidate's ordinary continuation attempts existing fast dispatch after a full
+cache-key match, but a non-fast-eligible method then falls back to full dot/name
+lookup again. Source and default-loop samples confirm this redundant path for default
+arguments. The new public helper has 813 static instructions and a 0x1e0 stack frame;
+ordinary dot dispatch has 153 instructions and a 0x70 frame in both runtimes. This
+motivates an outlined getter invocation and complete already-resolved ordinary fallback,
+not a quantified attribution of the regression. Boxed-float/monomorphic caller bodies
+are unchanged, yet their repeated adverse layouts remain grounds for rejection;
+placement/cache effects are hypotheses, not established explanations.
+
+### Qualification and audit
+
+baseline_release: 68 files / 108 cases / 16542 assertions; baseline_debug: 68 files / 108 cases / 16542 assertions; candidate_release: 69 files / 112 cases / 17563 assertions; candidate_debug: 69 files / 112 cases / 17563 assertions; restored_release: 68 files / 108 cases / 16542 assertions; restored_debug: 68 files / 108 cases / 16542 assertions.
+Baseline and restored core each include 68 files / 108 cases / 16542 assertions
+per build. The candidate's new getter suite independently passes 4 cases / 1021 assertions in each build. Native adapters forward
+to actual compiled entries and count hits/misses, including body/readiness/null-entry
+guards, wrong/conflicting binders, forced overflow, cross-Program exclusion and
+post-epoch warm admission. O0 / O3 and EH are tested; threaded member replacement,
+debugger events and concurrent frame readers also pass. Filtered development runs
+are explicitly not full-suite qualification.
+
+Each qualification phase also includes 13 lvalue/DGC suites / 82 cases / 1330 Release or 2663 Debug assertions,
+HTTP 10/30, offline LLM 4/23, threads 22/110, 555 IR + 555 AOT references, 1985 Debug native checks in
+each bounded-pair mode, and the Debug abrupt-drop test. All 64 owned qmods are rebuilt;
+Debug wrappers restore exactly 64 Release aliases and preserve unrelated links.
+The initial application failed an exact shared-PIC equality assertion due to an extra
+blank line, before any writes; the corrected boundary and original failure are archived.
+A first 33-workload freeze was superseded before implementation/timing by the expanded
+41-workload plan; its terminal status was not observed and is not claimed successful.
+The final freeze, baseline probe, development build and all candidate/restored
+qualifications have recorded successful terminal statuses.
+
+The audit-changes review records **7 Pass / 55 N/A / zero Fail** over all 62 items, independently
+replaying timing orders/samples/statistics/decisions, references, source/artifact
+identities and code comparisons. Runner 17 / mixed-reference 8 / probe-oracle 12600, strict
+Qore tables and diff checks pass. See `results-aot-zero-arg-getter-isolated-rejected-macos-arm64.json` for complete raw evidence,
+sources/modes, drivers and limitations. Selected macOS arm64 qualification only,
+not full-suite/sanitizer/cross-platform certification. Host load/frequency/thermals
+are uncontrolled. No compile-time, memory-footprint, cold-start or application-wide
+performance claim. Java parity/global maximum remain unestablished.
+
+Next test complete ordinary fallback using the already-matched method/variant,
+with native getter frame setup outlined away from ordinary miss paths. Then assess
+separate compile-time proof/check removal or caller-native continuation/context deferral. Any retained change needs a fresh matched
+optimized feature/develop/Java checkpoint; getter comparisons must explicitly match
+field synchronization before presenting Java ratios. Do not retry a rejected
+candidate unchanged.

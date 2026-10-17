@@ -3433,3 +3433,26 @@ development attempt and qualification limit. No fresh Java/develop ratio is clai
 Remaining work includes measuring caller-native getter continuations and separately
 proven context deferral, then a matched optimized Java/develop checkpoint. Java parity
 and a justified global performance ceiling remain open.
+
+
+## Rejected caller-selected isolated zero-argument scalar getter entries (post-e9b2c7235)
+
+Integer getter loop: 280.403 -> 137.344 ns/item (-51.019% time). Floating getter loop: 313.892 -> 146.731 ns/item (-53.254% time). The candidate is not retained. Repeated adverse non-target layouts: boxed_float_method_call/default, boxed_float_method_call/reverse, default_loop/default, default_loop/reverse, default_loop/shuffle-487, default_short/default, default_short/reverse, monomorphic_call/default, string_result_loop/default, string_result_loop/shuffle-487. Complete source/patch/modes are archived; production is restored and independently requalified. No rescue epoch or retention-rule change.
+
+All 5904 optimized windows are preserved across 41 workloads/three fixed layouts.
+Six-argument zero-argument getter companions use caller-selected isolated dispatch;
+the shared PIC layout and unary ABI/witness are unchanged. Full live dispatch/body/Program/debugger/stack
+guards, synchronized member reads, eager explicit context and reader-safe logical
+frames remain. No member value is cached and no lock is elided.
+
+Candidate Release/Debug each pass 69 core files / 112 cases / 17563 assertions, including
+1021 getter assertions, plus lvalue/DGC, HTTP/LLM/threads, 555 IR + 555 AOT and 1985 Debug native
+checks per mode. Baseline and restored core 68/108/16542 per build are separately fingerprinted. All 64 owned qmods rebuilt and Release aliases
+restored. Audit: 7 Pass / 55 N/A / zero Fail across 62 items. See RESULTS and
+`results-aot-zero-arg-getter-isolated-rejected-macos-arm64.json` under `bench/runtime-comparison/` for every gain/loss, provenance,
+development attempt and qualification limit. No fresh Java/develop ratio is claimed.
+
+Remaining work starts with complete already-resolved ordinary fallback and outlined
+native getter invocation, then separate proof/check removal and a matched optimized
+Java/develop checkpoint. Java parity
+and a justified global performance ceiling remain open.
