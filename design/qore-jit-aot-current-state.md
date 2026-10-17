@@ -3306,3 +3306,35 @@ The 62-item audit records 16 Pass / 46 N/A / zero Fail. Selected qualification o
 no full-suite/sanitizer/cross-platform or global-ceiling claim.
 
 Next refresh the matched optimized branch/develop/Java checkpoint, then investigate residual indexed-mutation and native-context costs. Java parity remains open.
+
+
+## Optimized post-lvalue checkpoint (2026-10-17)
+
+Fresh interleaved feature `ed93cc675`, merged develop `14f418ea7` and warmed Java.
+Matched Release `-O3 -DNDEBUG`, qcc `-O3`, LLVM22.1.8, five forks and three
+fixed Qore layouts. All37micro/fourmixed and4245windows retained.
+Whole-workload costs, not isolated calls; no cross-Program results.
+
+|!Workload|!Develop / feature time|!Feature / Java time
+|direct_call|4.658x|1.611x
+|method_call|4.540x|1.705x
+|monomorphic_call|3.386x|2.017x
+|indirect_call|33.398x|3.973x
+|polymorphic_call|13.531x|8.846x
+|closure_call|7.211x|11.386x
+|closure_capture|6.382x|14.330x
+|list_build|4.040x|10.090x
+|list_mutate|1.099x|44.459x
+
+Full tables, every adverse layout, semantic caveats and exact qualification
+provenance are in RESULTS and `results-aot-post-lvalue-checkpoint-macos-arm64.json`
+under `bench/runtime-comparison/`. No universal non-regression, production
+throughput, general IR/JIT, full-suite or sanitizer claim. The effectful Java
+field-update workload is unsynchronized; Qore object locks remain unchanged.
+
+The feature runtime exactly matches the audited Release/Debug candidate
+qualification. No runtime code change accompanies this evidence checkpoint.
+Audit:7Pass/55N/A/zeroFail; all4245windows independently replayed.
+Next investigate residual indexed mutation and versioned deferred closure
+context with separate correctness proof and matched optimized measurements.
+Java parity and a justified global performance ceiling remain open.

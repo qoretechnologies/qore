@@ -16441,3 +16441,119 @@ No task-owned builds/tests/profiles/reads/analysis overlapped timing. Host load,
 frequency and thermals were uncontrolled. No fresh Java/develop ratio is inferred
 from this epoch. Next refresh the matched optimized branch/develop/Java checkpoint, then investigate residual indexed-mutation and native-context costs.
 Java parity and a justified global performance ceiling remain open.
+
+
+## Optimized post-lvalue branch, develop and Java checkpoint (2026-10-17)
+
+Feature `ed93cc675` versus merged develop `14f418ea7` and fresh warmed Java/JMH,
+in one interleaved epoch. Both Qore runtimes use matched Release `-O3 -DNDEBUG`,
+LLVM 22.1.8, SDK/dependencies/SCU, allocation tracking off; each compiles its
+own `qcc -O3` executables. Develop is freshly rebuilt. Feature uses the exact
+qualified inline-record candidate binaries; compiled sources and tests match
+the commit, and later documentation/evidence changes are explicit.
+
+37 microbenchmarks and four mixed workloads, three fixed Qore layouts
+(default/reverse/shuffle-487), five forks per layout, three warmup and three
+300 ms measured windows, 4096 items / seed 7. Block/order seed 136331.
+Each micro block includes a fresh Java JVM fork (Temurin 25.0.2+10, JMH 1.37,
+`-Xms256m -Xmx256m`, GC profiler). All 1415 jobs / 4245 windows retained.
+Qore values are medians of three layout medians of five process means;
+Java values are medians of five fork means. No favorable-layout selection.
+
+Whole-workload ns/item, not isolated call latency. Direct/final inlining is
+allowed; dynamic/callback Java `DONT_INLINE` hints are verified. These are
+same-Program workloads, not cross-Program calls. Effectful Java field updates
+are unsynchronized while Qore retains separate object read/write locking;
+that ratio is not a matched synchronized-call comparison. Dynamic Qore
+containers also have different ownership/COW/type/GC semantics from Java's
+primitive arrays and HashMap.
+
+|!Workload|!Develop AOT ns/item|!Feature AOT ns/item|!Java JIT ns/item|!Develop / feature time|!Feature / Java time
+|arithmetic|7.012|1.508|0.927|4.651x|1.626x
+|direct_call|7.047|1.513|0.939|4.658x|1.611x
+|method_call|7.214|1.589|0.932|4.540x|1.705x
+|indirect_call|228.218|6.833|1.720|33.398x|3.973x
+|polymorphic_call|311.055|22.989|2.599|13.531x|8.846x
+|polymorphic_expression_call|134.367|10.671|2.626|12.592x|4.064x
+|monomorphic_call|11.655|3.442|1.706|3.386x|2.017x
+|optional_method_call|206.945|10.643|1.702|19.443x|6.253x
+|polymorphic_float_call|340.222|23.496|2.611|14.480x|9.000x
+|polymorphic_float_expression_call|155.143|10.746|2.621|14.437x|4.100x
+|monomorphic_float_call|11.757|3.469|1.689|3.390x|2.054x
+|optional_float_method_call|210.941|11.011|1.689|19.158x|6.519x
+|boxed_float_method_call|243.819|19.698|2.614|12.378x|7.534x
+|dynamic_int_result_call|201.441|10.722|3.158|18.788x|3.395x
+|dynamic_int_result_fallback|452.108|21.591|3.023|20.940x|7.141x
+|boxed_int_method_call|222.663|15.969|2.610|13.944x|6.119x
+|boxed_int_method_fallback|276.889|31.096|2.627|8.904x|11.837x
+|boxed_float_method_fallback|315.584|32.286|2.616|9.775x|12.341x
+|boxed_int_method_effect|370.869|87.296|1.914|4.248x|45.608x
+|dynamic_float_result_call|215.492|11.837|3.377|18.205x|3.506x
+|indirect_wide|276.195|6.867|1.725|40.223x|3.980x
+|indirect_float|231.590|6.702|1.677|34.557x|3.995x
+|indirect_int_result|198.760|6.301|1.928|31.547x|3.268x
+|indirect_float_result|201.542|7.414|2.702|27.184x|2.744x
+|indirect_tagged_float|280.966|6.768|1.655|41.514x|4.089x
+|indirect_branch_float|240.897|6.754|1.669|35.665x|4.046x
+|indirect_affine|231.456|6.924|1.689|33.427x|4.100x
+|indirect_affine_wide|272.361|6.844|1.654|39.796x|4.138x
+|indirect_branch_int|229.097|6.792|1.705|33.729x|3.984x
+|dispatch_control|7.325|1.610|0.977|4.549x|1.648x
+|list_read|8.569|2.705|0.289|3.168x|9.347x
+|list_build|106.416|26.337|2.610|4.040x|10.090x
+|list_mutate|204.442|186.029|4.184|1.099x|44.459x
+|temporary_list|139.587|1.600|1.244|87.253x|1.286x
+|temporary_hash|328.388|333.485|16.100|0.985x|20.713x
+|closure_call|139.554|19.354|1.700|7.211x|11.386x
+|closure_capture|161.968|25.377|1.771|6.382x|14.330x
+
+### Mixed processing
+
+|!Workload|!Develop ms / 4096 records|!Feature ms / 4096 records|!Speedup|!Time change
+|csv_report|4.464|3.871|1.153x|-13.287%
+|object_orders|8.558|7.453|1.148x|-12.915%
+|callback_pipeline|1.231|0.353|3.488x|-71.333%
+|text_index|6.963|5.452|1.277x|-21.703%
+
+Input generation, startup and compilation are excluded; processing, temporary
+allocation, aggregation and formatting are included. These synthetic cases
+are not production applications or a single overall Qore score. No Java
+mixed-workload or general IR/JIT percentage claim.
+
+### Adverse results
+
+|!Workload|!Layout|!Feature time change vs develop|!Disjoint adverse fork ranges
+|temporary_hash|reverse|+1.856%|no
+|temporary_hash|shuffle-487|+1.552%|no
+
+All adverse results are retained. Overlapping fork-mean ranges are not proof
+of non-regression, and the ranges are not confidence intervals. Do not infer
+the inline-storage change's isolated benefit by comparing different epochs;
+its matched before/after result is in the preceding report.
+
+### Qualification and next work
+
+Feature Release/Debug qualification each passed 59 core fixtures / 92 cases /
+11621 assertions, plus 13 lvalue/DGC fixtures (1330 Release / 2663 Debug),
+HTTP 10/30, offline LLM 4/23, thread/cancellation 22/110 and 555 IR + 555 AOT
+references. Debug native1871 passed in both bounded-pair modes; the preceding
+audited report preserves those exact matching binaries and full logs.
+The checkpoint does not invent a repeated runtime qualification. Every fresh
+Qore benchmark layout passes 555 micro / 60 mixed references; Java passes555.
+Loaded-library paths, fixed symbol orders and every artifact hash are checked.
+This is selected macOS arm64 coverage, not full-suite/sanitizer certification.
+
+Separate untimed profiles cover feature list mutation, list building, captured
+closures and develop list mutation. Instrumented times are excluded. Next
+investigate residual indexed-lvalue local lookup, compound dispatch and cleanup,
+and a separately versioned deferred closure context, preserving ownership,
+locking, COW, metadata, exceptions, cancellation and observable runtime context.
+These are hypotheses, not established removable costs or new speedup claims.
+
+The 62-item audit records 7 Pass / 55 N/A / zero Fail after independently
+replaying all 4245 windows and every summary/ratio. Runner17 / mixed8, strict
+Qore tables and diff checks pass. Raw Qore/JMH data, exact revisions, source
+and binary identities, profiles and drivers are in
+`results-aot-post-lvalue-checkpoint-macos-arm64.json`.
+Only progress monitoring overlapped timing. Host load, frequency and thermals
+were uncontrolled. Java parity and a global performance ceiling remain open.
