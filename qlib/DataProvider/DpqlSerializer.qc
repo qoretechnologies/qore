@@ -791,7 +791,7 @@ public class DpqlSerializer {
     */
     private static bool isBareMemberName(string name) {
         return name =~ /^[\p{L}_](?:[\p{L}\p{M}\p{N}_]|-[a-zA-Z])*$/
-            && !inlist(name.lwr(), ("true", "false", "null"));
+            && !DpqlKeywordIdentifiers{name.lwr()};
     }
 
     #! Returns True if an accessor arg is a literal (not an expression)
@@ -844,12 +844,8 @@ public class DpqlSerializer {
         list<string> parts = ();
         for (int i = 1; i < args.size(); ++i) {
             string skey = string(args[i]);
-            # Check if key needs quoting
-            if (skey =~ /[^a-zA-Z0-9_]/ || skey =~ /^[0-9]/) {
-                parts += serializeString(skey);
-            } else {
-                parts += skey;
-            }
+            # a key that is not a bare name, or that is a keyword, is quoted
+            parts += DpqlTokenizer::isBareKey(skey) ? skey : serializeString(skey);
         }
         return parts.join(", ");
     }

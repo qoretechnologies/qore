@@ -6073,7 +6073,16 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @param val the value to evaluate (field reference, template reference, expression, or literal)
         @param template_context optional context hash passed through to template callbacks
 
+        A field reference with a path (<tt>\@customer.name</tt>) gives the value of each key in the value of the key
+        before it; when a value on the path is not a hash or an object (a plain value such as \c 5, a list, or no
+        value), the field reference has no value.  A list is not searched by key in a path; use an index
+        (<tt>\@items[0].name</tt>) or a @ref dpql_wildcards "wildcard" (<tt>\@items[*].name</tt>) instead.
+
+        @throw INVALID-OPERATION the first key of a field reference is not in the record
+
         @since DataProvider 2.3
+        @since DataProvider 3.10.1 a field reference whose path goes through a value that is not a hash or an object
+        has no value; it gave that value before
     */
     static auto evalGenericExpressionValue(hash<auto> rec, auto val, *hash<auto> template_context) {
         if (val instanceof hash<DataProviderFieldReference>) {
@@ -6088,8 +6097,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                         throw "INVALID-OPERATION", sprintf("expression references invalid key %y of a value of type "
                             "%y in field reference %y", field, rv.fullType(), val.field);
                     }
-                    # otherwise stop searching; no value will be returned
-                    break;
+                    # otherwise there is no value at the end of the path
+                    return;
                 }
                 auto new_rv = rv{field};
                 # only throw exceptions on the top-level key

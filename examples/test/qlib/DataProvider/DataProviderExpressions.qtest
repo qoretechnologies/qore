@@ -35,6 +35,24 @@ hash<DataProviderExpression> sub dp_expr(string exp_name, softlist<auto> args) {
     return <DataProviderExpression>{"exp": exp_name, "args": args};
 }
 
+#! An object whose member a field reference path reads
+class FieldPathObject {
+    public {
+        int b = 3;
+    }
+}
+
+#! Evaluates a DPQL expression on a record, also prepared (with its field paths worked out beforehand)
+auto sub eval_dpql(string dpql, hash<auto> rec) {
+    hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql);
+    auto rv = AbstractDataProvider::evalGenericExpressionValue(rec, exp);
+    auto prepared = AbstractDataProvider::evalGenericExpressionValue(rec, AbstractDataProvider::prepareExpression(exp));
+    if (rv !== prepared) {
+        throw "PREPARED-MISMATCH", sprintf("%s: %y != %y prepared", dpql, rv, prepared);
+    }
+    return rv;
+}
+
 class DataProviderExpressionsTest inherits QUnit::Test {
     constructor() : Test("DataProviderExpressions", "1.0") {
         addTestCase("arithmetic tests", \arithmeticTests());
@@ -66,6 +84,7 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         addTestCase("streaming operator tests", \streamingOperatorTests());
         addTestCase("like operator tests", \likeTests());
         addTestCase("empty substring tests", \emptySubstringTests());
+        addTestCase("field paths through values that are not hashes", \fieldPathTests());
         set_return_value(main());
     }
 
@@ -849,6 +868,40 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", sub () {
             eval_expr(DP_OP_DROP, (-1, field_ref("users")), rec);
         });
+    }
+
+    #! a field reference whose path goes through a value that is not a hash or an object has no value
+    fieldPathTests() {
+        # a plain value on the path
+        assertEq(NOTHING, eval_dpql("@a.b", {"a": 5}));
+        assertEq(NOTHING, eval_dpql("@a.b", {"a": "text"}));
+        assertEq(NOTHING, eval_dpql("@a.b", {"a": 2026-01-01}));
+        assertEq(NOTHING, eval_dpql("@a.b.c", {"a": {"b": 7}}));
+        # a list is not searched by key in a path; an index or a wildcard is
+        assertEq(NOTHING, eval_dpql("@a.b", {"a": (1, 2)}));
+        assertEq(NOTHING, eval_dpql("@a.b", {"a": ({"b": 1}, {"b": 2})}));
+        assertEq(1, eval_dpql("@a[0].b", {"a": ({"b": 1}, {"b": 2})}));
+        assertEq((1, 2), eval_dpql("@a[*].b", {"a": ({"b": 1}, {"b": 2})}));
+        # no value on the path
+        assertEq(NOTHING, eval_dpql("@a.b", {"a": NOTHING}));
+        assertEq(NOTHING, eval_dpql("@a.b.c", {"a": {}}));
+        assertEq(NOTHING, eval_dpql("@a.b.c", {"a": {"b": NOTHING}}));
+        # hashes and objects on the path give the field
+        assertEq(1, eval_dpql("@a.b", {"a": {"b": 1}}));
+        assertEq(2, eval_dpql("@a.b.c", {"a": {"b": {"c": 2}}}));
+        assertEq({"c": 2}, eval_dpql("@a.b", {"a": {"b": {"c": 2}}}));
+        assertEq(3, eval_dpql("@a.b", {"a": new FieldPathObject()}));
+        # an escaped dot is part of the key
+        assertEq(4, eval_dpql('@"a\\.b"', {"a.b": 4}));
+        # a comparison with the value of such a path compares no value
+        assertFalse(eval_dpql("@a.b == 5", {"a": 5}));
+        assertTrue(eval_dpql("@a.b == null", {"a": 5}));
+        # the first key of the path must be in the record
+        assertThrows("INVALID-OPERATION", "invalid key \"a\"", \eval_dpql(), ("@a.b", {"x": 1}));
+        # a wildcard reads its items with the same paths, as map does
+        hash<auto> rec = {"h": {"p": {"x": {"y": 1}}, "q": {"x": 5}, "r": {"x": NOTHING}}};
+        assertEq((1, NOTHING, NOTHING), eval_dpql("@h{*}.x.y", rec));
+        assertEq(eval_dpql("map @value.x.y, @h", rec), eval_dpql("@h{*}.x.y", rec));
     }
 
     #! an empty string is contained in every string, as in Qorus expressions and other languages

@@ -49,7 +49,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.10";
+    version = "3.10.1";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1455,6 +1455,25 @@ fetch
     expose first-class actions that take it.
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_10_1 DataProvider v3.10.1
+    - <b>behavior change</b>: a field reference whose path goes through a value that is not a hash or an object
+      now has no value: <tt>\@a.b</tt> is no value when \c a is \c 5, a string, a list or no value, as documented
+      for @ref DataProvider::AbstractDataProvider::evalGenericExpressionValue() "evalGenericExpressionValue()";
+      before, it gave that value (\c 5), so that <tt>\@a.b == 5</tt> was true.  A list is not searched by key in a
+      path: use an index (<tt>\@a[0].b</tt>) or a @ref dpql_wildcards "wildcard" (<tt>\@a[*].b</tt>).  This applies
+      wherever an expression is evaluated, including searches filtered by the client, \c filter-records and
+      mappers that use expressions, and to the paths read by \c map and the wildcards
+      (<tt>\@prices{*}.cur.code</tt>)
+    - a key that is \c true, \c false or \c null (in any case), or an empty key, is written quoted when an
+      expression is serialized (<tt>\@r{"true"}</tt>) and when completion inserts it, so that it parses back;
+      completion also escapes a quote or backslash in a key correctly
+    - a quoted field name after an accessor (<tt>\@r[0].\@"x y"</tt>) is the key \c x \c y; the quotes were kept as
+      part of the key
+    - added @ref DataProvider::DpqlParser::isItemScopedArg() "DpqlParser::isItemScopedArg()", which tells whether an
+      argument of an expression is evaluated for each item of a source (the body and filter of \c map, the
+      predicates of the streaming operators, the expression after a wildcard), so that code that collects or
+      validates the fields of a record can leave out the fields of the items, as DPQL validation does
 
     @subsection dataprovider_v3_10 DataProvider v3.10
     - added the DPQL @ref dpql_wildcards "wildcard accessors" \c [*] and \c {*}, which take a value from each item

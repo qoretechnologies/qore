@@ -1789,13 +1789,11 @@ public class DpqlCompletionProvider {
             if (!prefix || index(key_name.lwr(), lwr_prefix) == 0) {
                 AbstractDataField field = type_fields{key_name};
 
-                # Determine if key needs quoting
-                string insert_text;
-                if (key_name =~ /[^a-zA-Z0-9_]/ || key_name =~ /^[0-9]/) {
-                    insert_text = '"' + replace(key_name, '"', '\\"') + '"';
-                } else {
-                    insert_text = key_name;
-                }
+                # a key that is not a bare name, or that is a keyword, is quoted
+                # escape a backslash first, then a quote; in single quotes \\ is two backslashes, so '\"' is \"
+                string insert_text = DpqlTokenizer::isBareKey(key_name)
+                    ? key_name
+                    : '"' + replace(replace(key_name, "\\", "\\\\"), '"', '\"') + '"';
 
                 # Build documentation with type info
                 *string doc = field.getDescription();

@@ -119,6 +119,17 @@ public const DPQL_TOK_ERROR = 99;
 
 #!@}
 
+#! The identifiers that the tokenizer reads as keywords in any case, by lowercase name
+/** A key with one of these names is quoted when it is written, as a bare key it would be read as the keyword
+
+    @since DataProvider 3.10.1
+*/
+const DpqlKeywordIdentifiers = {
+    "true": True,
+    "false": True,
+    "null": True,
+};
+
 #! Maps token type codes to human-readable names
 public const hash<string, string> DpqlTokenTypeNames = {
     DPQL_TOK_FIELD: "field",
@@ -270,6 +281,21 @@ public class DpqlTokenizer {
         input = text.encoding() == "UTF-8" ? text : convert_encoding(text, "UTF-8");
         input_bytes = binary(input);
         len = input.size();
+    }
+
+    #! Returns True if a key can be written without quotes in a key accessor (<tt>{key}</tt>)
+    /** A bare key is an ASCII name that is not a keyword (\c true, \c false or \c null in any case); any other key,
+        including an empty one, is written as a string (<tt>{"true"}</tt>, <tt>{"key with spaces"}</tt>,
+        <tt>{"123"}</tt>)
+
+        @param key the key
+
+        @return True if the key can be written as <tt>{key}</tt>
+
+        @since DataProvider 3.10.1
+    */
+    static bool isBareKey(string key) {
+        return key =~ /^[a-zA-Z_][a-zA-Z0-9_]*$/ && !DpqlKeywordIdentifiers{key.lwr()};
     }
 
     #! Returns True if a field name can be written without quotes after \c @
@@ -1177,7 +1203,7 @@ public class DpqlTokenizer {
             }
         }
 
-        # Check for keywords
+        # Check for keywords (DpqlKeywordIdentifiers)
         switch (value.lwr()) {
             case "true":
             case "false":

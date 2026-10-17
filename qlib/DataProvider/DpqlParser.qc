@@ -554,13 +554,47 @@ public class DpqlParser {
     }
 
     #! Returns True if an argument of an expression is evaluated for each item of a source, not on the record
-    /** The body and the filter of \c map, the key, value and filter of \c hash_map, the predicates of the
-        streaming operators and the expression after a wildcard accessor refer to the fields of each item, so they
-        are not validated with the fields of the record
+    /** The field references in such an argument refer to the fields of each item of the source, not to the fields
+        of the record that the expression is evaluated on, so a walker that collects or validates the fields of the
+        record must not descend into it (DPQL validation does not).  The arguments evaluated for each item are:
+        - \c map (<tt>map body, source[, filter]</tt>): the body and the filter
+        - \c hash_map (<tt>hash_map key, value, source[, filter]</tt>): the key, the value and the filter
+        - \c select (<tt>select source, predicate</tt>): the predicate
+        - \c first, \c any and \c count with two arguments (<tt>first predicate, source</tt>): the predicate; with
+          one argument, it is the source
+        - \c all, \c takewhile and \c takeuntil (<tt>all predicate, source</tt>): the predicate
+        - the wildcard accessors @ref DP_FUNC_LIST_WILDCARD and @ref DP_FUNC_HASH_WILDCARD
+          (<tt>\@orders[*].id</tt>, <tt>\@prices{*}.amount</tt>): the expression after the wildcard, whose
+          accessors on the item itself start from @ref DP_FUNC_WILDCARD_ITEM, which has no arguments
 
-        @since DataProvider 3.10
+        Every other argument, including the source of each of these and the count of \c take and \c drop, is
+        evaluated on the record.
+
+        @param exp the expression
+        @param pos the position of the argument (0-based)
+
+        @return True if the argument at \a pos is evaluated for each item of a source, so that its field references
+        are fields of the item; False for any other argument and for a position that is not an argument
+
+        @par Example:
+        @code{.py}
+# map @id, @orders, @active: the body (0) and the filter (2) refer to the fields of each order
+hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression("map @id, @orders, @active");
+# (True, False, True)
+list<bool> scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
+
+# @orders[*].id: the expression after [*] (1) refers to the fields of each order; the source (0) does not
+exp = DataProvider::parseDpqlExpression("@orders[*].id");
+# (False, True)
+scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
+        @endcode
+
+        @since DataProvider 3.10.1
     */
-    private static bool isItemScopedArg(hash<DataProviderExpression> exp, int pos) {
+    static bool isItemScopedArg(hash<DataProviderExpression> exp, int pos) {
+        if (pos < 0 || pos >= exp.args.size()) {
+            return False;
+        }
         switch (exp.exp) {
             case DP_OP_MAP:
                 return pos == 0 || pos == 2;
@@ -1327,22 +1361,11 @@ public class DpqlParser {
         string value = tok.value;
 
         # Extract field name from @field or @"field"
-        string field_name;
-        if (value.size() > 1) {
-            if (value[1] == '"') {
-                # Quoted field: @"field name"
-                # Remove @" prefix and " suffix
-                string content = substr(value, 2, -1);
-                # Process escape sequences (same handling as parseStringLiteral)
-                field_name = unescapeString(content);
-            } else {
-                # Unquoted field: @field
-                field_name = substr(value, 1);
-            }
-        } else {
+        if (value.size() <= 1) {
             addError("Invalid field reference", "DPQL-E003", tok);
             throw "DPQL-PARSE-ERROR", "Invalid field reference";
         }
+        string field_name = getFieldTokenName(tok);
 
         auto result = <DataProviderFieldReference>{
             "field": field_name,
@@ -1484,13 +1507,8 @@ public class DpqlParser {
                     addError("Expected identifier after '.'", "DPQL-E020", id_tok);
                     throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
                 }
-                string member_name;
-                if (id_tok.type == DPQL_TOK_FIELD) {
-                    # Handle @field after dot - strip the @
-                    member_name = substr(id_tok.value, 1);
-                } else {
-                    member_name = id_tok.value;
-                }
+                # @field or @"field" after the dot is the name of the field
+                string member_name = id_tok.type == DPQL_TOK_FIELD ? getFieldTokenName(id_tok) : id_tok.value;
                 nextToken();  # consume identifier
                 # Member access is a single-key expression node
                 result = <DataProviderExpression>{
@@ -1584,10 +1602,10 @@ public class DpqlParser {
                 if (id_tok.value.size() > 1 && id_tok.value[1] == '"') {
                     # a quoted name is one key, as with {"key"}
                     return parseAccessorChain(<DataProviderFieldReference>{
-                        "field": DpqlParser::escapeFieldPathKey(unescapeString(substr(id_tok.value, 2, -1))),
+                        "field": DpqlParser::escapeFieldPathKey(getFieldTokenName(id_tok)),
                     });
                 }
-                return parseWildcardFieldPath(substr(id_tok.value, 1));
+                return parseWildcardFieldPath(getFieldTokenName(id_tok));
             }
             addError("Expected identifier after '.'", "DPQL-E020", id_tok);
             throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
@@ -1643,13 +1661,30 @@ public class DpqlParser {
                 nextToken();
                 return parseAccessorChain(<DataProviderExpression>{
                     "exp": DP_FUNC_KEY,
-                    "args": (<DataProviderFieldReference>{"field": path}, substr(id_tok.value, 1)),
+                    "args": (<DataProviderFieldReference>{"field": path}, getFieldTokenName(id_tok)),
                 });
             }
             addError("Expected identifier after '.'", "DPQL-E020", id_tok);
             throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
         }
         return parseAccessorChain(<DataProviderFieldReference>{"field": path});
+    }
+
+    #! Returns the name of a field token: the text after \c @, or the unescaped text between the quotes of
+    #! <tt>\@"..."</tt>
+    /** @param tok a @ref DPQL_TOK_FIELD token
+
+        @return the field name
+
+        @since DataProvider 3.10.1
+    */
+    private string getFieldTokenName(hash<DpqlTokenInfo> tok) {
+        string value = tok.value;
+        if (value.size() > 1 && value[1] == '"') {
+            # Process escape sequences (same handling as parseStringLiteral)
+            return unescapeString(substr(value, 2, -1));
+        }
+        return substr(value, 1);
     }
 
     #! Returns a key as one step of a field reference path: its dots are escaped

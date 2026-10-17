@@ -137,6 +137,10 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("nested expression verification", \nestedVerificationTests());
         addTestCase("argument type verification", \argumentTypeVerificationTests());
         addTestCase("field names in any script", \unicodeFieldNameTests());
+        addTestCase("keyword keys are quoted when serialized", \keywordKeyTests());
+        addTestCase("quoted member names after accessors", \quotedMemberTests());
+        addTestCase("completion quotes keyword keys", \keywordKeyCompletionTests());
+        addTestCase("item-scoped arguments", \itemScopedArgTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -155,6 +159,164 @@ public class DpqlTest inherits QUnit::Test {
 
     #! A field name may be written bare in any script: @menge_bestätigt, @größe; it round-trips through the
     #! serializer, and completion and errors keep whole characters
+    #! Collects the record fields of an expression, leaving out the fields of the items of a source
+    static collectRecordFields(auto arg, reference<hash<string, bool>> fields) {
+        if (arg instanceof hash<DataProviderFieldReference>) {
+            fields{(arg.field =~ x/^([^.]+)/)[0]} = True;
+        } else if (arg instanceof hash<DataProviderExpression>) {
+            foreach auto a in (arg.args) {
+                if (!DpqlParser::isItemScopedArg(arg, $#)) {
+                    DpqlTest::collectRecordFields(a, \fields);
+                }
+            }
+        }
+    }
+
+    #! The arguments evaluated for each item of a source, through the public API
+    itemScopedArgTests() {
+        hash<string, list<bool>> cases = {
+            "map @id, @orders": (True, False),
+            "map @id, @orders, @active": (True, False, True),
+            "hash_map @id, @name, @orders": (True, True, False),
+            "hash_map @id, @name, @orders, @active": (True, True, False, True),
+            "select @orders, @active": (False, True),
+            "first @orders": (False,),
+            "first @active, @orders": (True, False),
+            "any @flags": (False,),
+            "any @active, @orders": (True, False),
+            "count @orders": (False,),
+            "count @active, @orders": (True, False),
+            "all @active, @orders": (True, False),
+            "takewhile @active, @orders": (True, False),
+            "takeuntil @active, @orders": (True, False),
+            "take 2, @orders": (False, False),
+            "drop 1, @orders": (False, False),
+            "@orders[*].id": (False, True),
+            "@orders[*]": (False, True),
+            "@matrix[*][0]": (False, True),
+            "@prices{*}": (False, True),
+            "@prices{*}.amount": (False, True),
+            "@a == 1": (False, False),
+            "upr(@a)": (False,),
+            "@a[0]": (False, False),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(i.key);
+            assertEq(i.value, (map DpqlParser::isItemScopedArg(exp, $#), exp.args), i.key);
+            # a position that is not an argument is not one
+            assertFalse(DpqlParser::isItemScopedArg(exp, exp.args.size()), i.key + " past the arguments");
+        }
+        # the item of a list wildcard has no arguments; the accessors on it are part of the wildcard's argument
+        hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression("@matrix[*][0]");
+        assertEq((False, False), map DpqlParser::isItemScopedArg(exp.args[1], $#), exp.args[1].args);
+        assertEq(DP_FUNC_WILDCARD_ITEM, exp.args[1].args[0].exp);
+        assertFalse(DpqlParser::isItemScopedArg(exp.args[1].args[0], 0));
+
+        # a walker that leaves out the item-scoped arguments collects only the fields of the record
+        hash<string, string> walks = {
+            # the filter of map takes the rest of the expression unless map is in parentheses
+            "map @id, @orders, @active && @x > 1": "orders",
+            "(map @id, @orders, @active) && @x > 1": "orders,x",
+            "@orders[*].items[*].sku == @skus": "orders,skus",
+            "select @rows, @value > @min": "rows",
+            "count @active, @orders[*].lines": "orders",
+            "hash_map @key, @value.amount, @prices{*}, @value.ok": "prices",
+            "take @n, @orders": "n,orders",
+        };
+        foreach hash<auto> i in (walks.pairIterator()) {
+            hash<string, bool> fields = {};
+            DpqlTest::collectRecordFields(DataProvider::parseDpqlExpression(i.key), \fields);
+            assertEq(i.value, (sort(keys fields)).join(","), i.key);
+        }
+    }
+
+    #! A key that is a keyword is quoted when serialized
+    keywordKeyTests() {
+        # keys that the tokenizer reads as keywords, in any case, and the empty key, are quoted
+        hash<string, string> key_texts = {
+            "true": '@r{"true"}',
+            "false": '@r{"false"}',
+            "null": '@r{"null"}',
+            "TRUE": '@r{"TRUE"}',
+            "Null": '@r{"Null"}',
+            "": '@r{""}',
+            "nullable": '@r{nullable}',
+            "in": '@r{in}',
+        };
+        foreach hash<auto> i in (key_texts.pairIterator()) {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_FUNC_KEY,
+                "args": (<DataProviderFieldReference>{"field": "r"}, i.key),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq(i.value, dpql, sprintf("key %y", i.key));
+            assertEq(exp, DataProvider::parseDpqlExpression(dpql), sprintf("key %y round trip", i.key));
+            assertEq(1, AbstractDataProvider::evalGenericExpressionValue({"r": {i.key: 1}},
+                DataProvider::parseDpqlExpression(dpql)), sprintf("key %y value", i.key));
+        }
+        hash<DataProviderExpression> exp = <DataProviderExpression>{
+            "exp": DP_FUNC_KEY,
+            "args": (<DataProviderFieldReference>{"field": "r"}, "Null", "a", "false"),
+        };
+        assertEq('@r{"Null", a, "false"}', DataProvider::serializeDpqlExpression(exp));
+        assertEq(exp, DataProvider::parseDpqlExpression(DataProvider::serializeDpqlExpression(exp)));
+    }
+
+    #! A quoted member name after an accessor is the name, without its quotes
+    quotedMemberTests() {
+        hash<DataProviderExpression> exp;
+        hash<auto> rec = {"r": ({"x y": 1, "a\"b": 2, "k": {"q": 3}, "b.c": 4, "b": 5},)};
+        exp = DataProvider::parseDpqlExpression('@r[0].@"x y"');
+        assertEq(<DataProviderExpression>{
+            "exp": DP_FUNC_KEY,
+            "args": (<DataProviderExpression>{
+                "exp": DP_FUNC_INDEX,
+                "args": (<DataProviderFieldReference>{"field": "r"}, 0),
+            }, "x y"),
+        }, exp);
+        assertEq(1, AbstractDataProvider::evalGenericExpressionValue(rec, exp));
+        assertEq('@r[0]{"x y"}', DataProvider::serializeDpqlExpression(exp));
+        assertEq(exp, DataProvider::parseDpqlExpression(DataProvider::serializeDpqlExpression(exp)));
+        assertEq(2, AbstractDataProvider::evalGenericExpressionValue(rec,
+            DataProvider::parseDpqlExpression('@r[0].@"a\"b"')));
+        assertEq(3, AbstractDataProvider::evalGenericExpressionValue(rec,
+            DataProvider::parseDpqlExpression('@r[0]{k}.@"q"')));
+        # an unquoted member name is unchanged: one key, also with a dot
+        assertEq(5, AbstractDataProvider::evalGenericExpressionValue(rec,
+            DataProvider::parseDpqlExpression('@r[0].@b')));
+        assertEq(4, AbstractDataProvider::evalGenericExpressionValue(rec,
+            DataProvider::parseDpqlExpression('@r[0].@b.c')));
+        # after a wildcard's field path
+        assertEq((1,), AbstractDataProvider::evalGenericExpressionValue({"h": {"a": {"x y": 1}}},
+            DataProvider::parseDpqlExpression('@h{*}.@"x y"')));
+        assertEq((7,), AbstractDataProvider::evalGenericExpressionValue({"o": ({"c": {"x y": 7}},)},
+            DataProvider::parseDpqlExpression('@o[*].c.@"x y"')));
+        assertEq('@h{*}{"x y"}', DataProvider::serializeDpqlExpression(
+            DataProvider::parseDpqlExpression('@h{*}.@"x y"')));
+    }
+
+    #! Completion inserts a key that is a keyword quoted
+    keywordKeyCompletionTests() {
+        HashDataType flags_t("flags");
+        flags_t.addField(new QoreDataField("true", "true", AbstractDataProviderType::get("int")));
+        flags_t.addField(new QoreDataField("on", "on", AbstractDataProviderType::get("int")));
+        flags_t.addField(new QoreDataField("a\"b\\c", "quote and backslash", AbstractDataProviderType::get("int")));
+        hash<string, AbstractDataField> fields = {
+            "flags": new QoreDataField("flags", "flags", flags_t),
+        };
+        hash<string, string> inserts = map {$1.label: $1.insert_text},
+            DataProvider::getDpqlCompletions('@flags{', 7, fields);
+        assertEq('"true"', inserts."true");
+        assertEq("on", inserts.on);
+        # a quote and a backslash are escaped, so that the key parses back
+        string key = "a\"b\\c";
+        assertEq('"a\"b\\c"', inserts{key});
+        assertEq(<DataProviderExpression>{
+            "exp": DP_FUNC_KEY,
+            "args": (<DataProviderFieldReference>{"field": "flags"}, key),
+        }, DataProvider::parseDpqlExpression("@flags{" + inserts{key} + "}"));
+    }
+
     unicodeFieldNameTests() {
         # the names a bare field reference can have
         foreach string name in (("größe", "menge_bestätigt", "žluťoučký_kůň", "名前", "_x1", "order.id", "a.größe",

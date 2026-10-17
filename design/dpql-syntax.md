@@ -380,6 +380,14 @@ For hash sources, `select`, `first`, `take`, `drop`, `takewhile`, and `takeuntil
 `true` for an empty source. Each item or body result is one element of the result, also when it
 is a list: `map @items, @orders` is a list of lists, and so is a slice of a list of lists.
 
+The field references in a body, filter or predicate (and after a wildcard) are fields of each
+item, not of the record. Code that collects or validates the fields of a record must skip those
+arguments with `DpqlParser::isItemScopedArg(exp, pos)` rather than keep its own operator table;
+DPQL validation does so.
+
+A field reference path (`@customer.name`) has no value when a value on the path is not a hash
+or an object (a plain value, a list or no value); only the first key must be in the record.
+
 ## Values
 
 ### String Literals
