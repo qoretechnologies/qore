@@ -802,9 +802,9 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
 
     bool scan_value_removed = needs_scan(rv);
     if (scan_value_removed) {
-        if (!getScanCount()) {
-            lvh.setDelta(-1);
-        }
+        // The parent still holds this object, which needs_scan() counts even when it has no
+        // scan-relevant members.  Only swapKeyValue() updates this object's member count;
+        // propagating a delta to the parent would incorrectly remove its edge to this object.
         // the removal can take a reference out of this object's recursive set
         clearRSetClosed();
     }
@@ -831,7 +831,6 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
         return;
     }
 
-    unsigned old_count = getScanCount();
     bool scan_value_removed = false;
 
     QoreHashNode* id = nullptr;
@@ -878,9 +877,7 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
         assert(!*lvh.vl.xsink);
     }
 
-    if (old_count && !getScanCount()) {
-        lvh.setDelta(-1);
-    }
+    // As for takeMember(), emptying this object does not remove the parent's reference to it.
     if (scan_value_removed) {
         // the removal can take a reference out of this object's recursive set
         clearRSetClosed();

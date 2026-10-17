@@ -16247,3 +16247,53 @@ A versioned deferred closure-context contract remains a separate unproven
 followup; the current v1 entry contract must not silently change. No speedup is
 credited for this rejected candidate. Java parity and a justified global
 performance ceiling remain open.
+
+
+## Object-removal baseline correction before inline lvalue records
+
+Expanded baseline testing found an existing Debug assertion in the AOT
+`DgcRemoveScanChecks` module before any inline-record implementation or timing.
+Removing a child's last object-valued member incorrectly decremented the
+parent's scan count although the parent still held the child. Empty objects
+remain scan-relevant values. A minimal repeated-removal case reproduced this
+in AST, IR, JIT, tiered mode and AOT, for both single members and slices.
+
+The correction removes those two false parent-delta updates. Child member
+accounting, access checks, locks, removed-value lifetime and recursive-set
+scans remain intact. Regression cases repeatedly remove through object,
+hash and list parents and the Debug reference API, then create a back edge
+and check exact destruction counts. Additional strong/weak/opaque edge probes
+preserve live objects and release them exactly once; four AOT cases abort in
+the original frozen runtime and all 30 cases complete after the correction.
+These cases are also added to the permanent fixture before final qualification.
+Compiled-module tests cover O0/O2/O3;
+source tests include tiered mode. Native record-order/clear/move/borrowed-owner
+tests add 789 assertions without changing the vector representation.
+
+Fresh Release and Debug each pass 59 core fixtures /
+92 cases / 11621 assertions. Additional
+lvalue/DGC qualification passes 13 fixtures /
+82 cases / 1330 assertions
+in Release and 13 / 82 /
+2663 in Debug, plus HTTP, offline LLM, thread and
+cancellation checks and 555 IR + 555 AOT references. Debug native tests pass
+1871 assertions in each bounded-pair mode. Exactly 64 Release module aliases
+are restored. This is selected macOS arm64 qualification, not full-suite or
+sanitizer certification.
+
+The 62-item audit-changes review records 19 Pass / 43 N/A / zero Fail.
+
+|!Audit group|!Status|!Evidence
+|Fixture structure and bookkeeping coverage|Pass|Modern executable test, shipped dependencies, exact destruction counts, native borrowed-record tests
+|Exceptions, ownership and thread behavior|Pass|Child accounting and existing locking/scanning preserved; only the false parent delta removed
+|Performance claims and provenance|Pass|Original failures preserved; no timing or speedup attributed to this correctness prerequisite
+|Documentation and regression qualification|Pass|Strict Qore tables, fresh Release/Debug suites and identical minimal before/after sources
+|New module, QPP, DataProvider and JNI registration|N/A|No such change
+
+Evidence, original failures, corrected minimal cases and the complete
+audit-changes checklist are in
+`results-lvalue-object-removal-correction-macos-arm64.json` (under
+`bench/runtime-comparison/`). No timing or speedup is claimed for this
+correctness prerequisite. The last matched Java/develop performance checkpoint
+predates this change. Next measure inline first-record storage against this
+corrected baseline; Java parity and a global performance ceiling remain open.

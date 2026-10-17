@@ -41,6 +41,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/LocalVar.h"
+#include "qore/intern/Variable.h"
 #include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/RuntimeConfig.h"
@@ -400,6 +401,67 @@ private:
     VarValueBase*& owner;
     UnitTestCounters& counters;
 };
+
+//! Object-count bookkeeping preserves order, flags and borrowed ownership across moves and clears.
+static void ut_lvalue_object_count_records(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), &xsink);
+    ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), &xsink);
+    const ObjCountRec inputs[] = {ObjCountRec(*list), ObjCountRec(*hash)};
+    for (size_t count : {size_t(0), size_t(1), size_t(2), size_t(9), size_t(65)}) {
+        ocvec_t records;
+        UT_ASSERT(c, records.empty() && !records.size(), "object-count records start empty");
+        for (size_t i = 0; i < count; ++i) {
+            records.push_back(inputs[i % 2]);
+            // Exercise both snapshot flag values without changing the borrowed containers.
+            records[i].before = (i % 3) == 1;
+        }
+        auto verify = [&](ocvec_t& value) {
+            UT_ASSERT_EQ(c, count, value.size(), "all object-count records survive");
+            UT_ASSERT_EQ(c, count == 0, value.empty(), "object-count emptiness matches size");
+            if (value.size() != count) {
+                return;
+            }
+            for (size_t i = 0; i < count; ++i) {
+                UT_ASSERT(c, value[i].con == inputs[i % 2].con, "container order survives");
+                UT_ASSERT_EQ(c, (i % 3) == 1, value[i].before, "snapshot flag survives");
+            }
+            // The destructor propagates hierarchy differences in reverse order.
+            for (size_t i = count; i > 0; --i) {
+                UT_ASSERT(c, value[i - 1].con == inputs[(i - 1) % 2].con,
+                    "reverse hierarchy indexing preserves every container");
+            }
+        };
+        verify(records);
+        ocvec_t moved(std::move(records));
+        UT_ASSERT(c, records.empty() && !records.size(), "moved-from records are empty");
+        verify(moved);
+        ocvec_t again(std::move(moved));
+        UT_ASSERT(c, moved.empty() && !moved.size(), "move-chain source is empty");
+        verify(again);
+        records.push_back(inputs[1]);
+        UT_ASSERT_EQ(c, 1, records.size(), "moved-from storage can be reused");
+        UT_ASSERT(c, records[0].con == inputs[1].con && !records[0].before,
+            "reused source has only the new snapshot");
+        moved.clear();
+        moved.push_back(inputs[0]);
+        UT_ASSERT_EQ(c, 1, moved.size(), "cleared moved-from storage can be reused");
+        UT_ASSERT(c, moved[0].con == inputs[0].con && !moved[0].before,
+            "move-chain source has only its new snapshot");
+        again.clear();
+        again.clear();
+        UT_ASSERT(c, again.empty() && !again.size(), "repeated clear empties inline and overflow records");
+        again.push_back(inputs[1]);
+        again.push_back(inputs[0]);
+        UT_ASSERT_EQ(c, 2, again.size(), "cleared storage accepts inline and overflow records");
+        UT_ASSERT(c, again[0].con == inputs[1].con && again[1].con == inputs[0].con,
+            "clear and reuse preserves the new order");
+        UT_ASSERT(c, !again[0].before && !again[1].before, "clear and reuse discards old snapshot flags");
+        UT_ASSERT_EQ(c, 1, list->reference_count(), "object-count records borrow lists");
+        UT_ASSERT_EQ(c, 1, hash->reference_count(), "object-count records borrow hashes");
+    }
+    UT_ASSERT(c, !xsink, "object-count bookkeeping tests raise no exception");
+}
 
 static void ut_local_discard(UnitTestCounters& c) {
     ExceptionSink xsink;
@@ -6811,6 +6873,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     UnitTestCounters c;
     ut_ir_scalar_snapshot(c);
     ut_aot_string_split(c);
+    ut_lvalue_object_count_records(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
     ut_aot_prepared_local_reload(c);
@@ -6831,6 +6894,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     UnitTestCounters c;
     ut_ir_scalar_snapshot(c);
     ut_aot_string_split(c);
+    ut_lvalue_object_count_records(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
     ut_aot_prepared_local_reload(c);
