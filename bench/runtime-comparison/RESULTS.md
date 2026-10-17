@@ -16711,3 +16711,150 @@ Next investigate the effectful-method regression and repeated local/reference/
 member work before a separate live-inline-stack-guard closure experiment.
 Do not rescue the current result with another timing epoch or alignment tuning.
 Java parity and a justified global performance ceiling remain open.
+
+
+## Rejected closure inline live-stack guard v3 (2026-10-17, post-609a53eb9)
+
+Rejected after the predeclared three-fork screen. Plain closure time changes
+**17.229 -> 17.035 ns/item (-1.126%)**, below the required 2% reduction, and its
+default layout is **0.491% slower**. Captured closure time improves
+**23.573 -> 22.663 ns/item (-3.862%)**, with all three layouts faster, but both
+targets must pass. No confirmation or rescue epoch was run. All four production
+and four v3-dependent fixture files were archived and restored exactly to HEAD.
+The previously committed v2 closure optimization remains; no v3 binding/control
+is retained in the runtime.
+
+Broad losses also matter: list reads **+3.345%**, list mutation **+2.035%**,
+CSV **+2.235%**, object orders **+3.395%**, text index **+1.148%**. Individual
+disjoint adverse ranges occur for monomorphic/default **+5.762%**, list-read/shuffle
+**+7.061%**, list-mutate/reverse **+4.799%**, CSV/shuffle **+3.607%** and
+object-orders/reverse **+5.379%**. These are screen observations, not confirmed
+regressions; rejection is already required by the failed plain-closure target.
+All gains and losses are retained without discarding results whose generated
+instructions are unchanged.
+
+### Method and all workload results
+
+Qualified Release `-O3 -DNDEBUG`, qcc `-O3`, LLVM 22.1.8; 4096 items / seed 7,
+three warmup and three measured 300 ms windows, three forks/order seed 136351.
+18 micro and four mixed workloads, default/reverse/shuffle-487 layouts, before
+versus candidate: **396 runs / 1188 measured windows**, all retained. These are
+whole-workload ns/item, not isolated call latencies or a fresh Java/develop ratio.
+Each artifact passes 555 micro / 60 mixed references and an actual loaded-library
+check. Existing fixed order files are reused; each new v3 companion is placed
+immediately after its v1 body, without placement search.
+
+Predeclared rule: each closure target must improve >=2% in the aggregate and
+improve every layout in both screen and independent five-fork confirmation.
+A repeated non-target >=3% adverse layout with disjoint observed fork-mean ranges
+would also reject. Confirmation/order 136357 was planned but not launched because
+the screen failed. Observed fork-mean ranges are not confidence intervals.
+
+|!Workload|!Before|!Candidate|!Time change
+|arithmetic|1.482|1.486|+0.269%
+|direct_call|1.489|1.483|-0.377%
+|method_call|1.552|1.548|-0.267%
+|indirect_call|6.565|6.598|+0.494%
+|polymorphic_call|22.461|22.031|-1.915%
+|monomorphic_call|3.420|3.353|-1.957%
+|optional_method_call|10.410|10.324|-0.830%
+|boxed_int_method_effect|86.750|86.080|-0.772%
+|boxed_int_method_fallback|30.007|29.824|-0.608%
+|closure_call|17.229|17.035|-1.126%
+|closure_capture|23.573|22.663|-3.862%
+|indirect_wide|6.535|6.609|+1.125%
+|indirect_float|6.382|6.453|+1.109%
+|list_read|2.617|2.704|+3.345%
+|list_build|25.261|25.447|+0.739%
+|list_mutate|178.534|182.167|+2.035%
+|temporary_list|1.568|1.570|+0.075%
+|temporary_hash|327.204|317.588|-2.939%
+|csv_report|911.325|931.694|+2.235%
+|object_orders|1731.695|1790.486|+3.395%
+|callback_pipeline|79.711|79.532|-0.224%
+|text_index|1288.297|1303.087|+1.148%
+
+
+All target layouts and non-target layout losses >=3% are shown below. The full
+evidence also retains every smaller change and every raw timing window.
+
+|!Workload|!Layout|!Time change|!Before observed range|!Candidate observed range
+|monomorphic_call|default|+5.762%|3.307 to 3.521|3.557 to 3.572
+|closure_call|default|+0.491%|17.053 to 17.304|16.873 to 17.311
+|closure_call|reverse|-1.126%|17.062 to 17.263|17.033 to 17.041
+|closure_call|shuffle-487|-4.984%|17.641 to 17.935|16.859 to 17.182
+|closure_capture|default|-3.684%|23.542 to 23.853|22.652 to 22.925
+|closure_capture|reverse|-2.922%|23.174 to 23.862|22.531 to 23.648
+|closure_capture|shuffle-487|-4.227%|23.403 to 23.695|22.653 to 22.696
+|list_read|shuffle-487|+7.061%|2.548 to 2.591|2.632 to 2.775
+|list_mutate|reverse|+4.799%|173.445 to 178.721|179.533 to 184.383
+|csv_report|shuffle-487|+3.607%|895.496 to 899.492|915.597 to 944.914
+|object_orders|reverse|+5.379%|1713.581 to 1717.539|1726.276 to 1890.829
+|object_orders|shuffle-487|+3.395%|1709.165 to 1907.282|1736.544 to 1923.431
+
+
+### Rejected implementation and diagnosis
+
+The candidate added a seven-argument v3 entry after a complete bounded v2 proof,
+cloning the scalar body and replacing only its full stack helper with a live-bound
+load and physical-SP comparison. Null/unsupported/exhausted views tail to the
+original full-guard body before scalar work. Existing v1/v2 entries, dispatcher
+physical-stack check, same-Program/identity/debugger/signature/sink guards,
+synchronized capture reads, immutable diagnostic frames, reader waits and context
+restoration remain. No new owner, capture coalescing or cached limit value.
+Equality is checked structurally by the unsigned LLVM predicate, not by injecting
+the exact generated SP at runtime. New context slot and generated code increase
+size; compile-time, footprint and cold-start performance were not measured.
+
+Generated-code review covers 179 common functions plus three new v3 companions.
+Original dynamic companions are unchanged; three normal closure entries add five
+instructions each for binding, and both main functions change initialization
+metadata. Other common instructions are unchanged after local-branch rebasing.
+The plain new body has a transient 16-byte frame; captured companions use 48 bytes
+versus 64 in the original full-guard bodies. Captured reads remain synchronized.
+The runtime forms the live limit address inline, but still performs dispatcher
+admission, a 352-byte dispatcher frame, frame publication and indirect dispatch.
+Nine runtime disassemblies and four serial untimed samples are preserved. Profiles
+show v3 selection and remaining type/node/signature/frame/capture-lock work; they
+cannot attribute broad losses or establish an isolated cost. Signal-wait samples
+are helper-thread waiting, not active closure cost. No profile duration is timed data.
+
+### Qualification, restoration and audit
+
+Frozen baseline uses the previously qualified v2 sources/tests, unchanged since
+qualification except audited documentation/evidence. A reused descriptive freeze
+scope string still says before v2; its terminal record explicitly identifies the
+actual **post-v2/pre-v3** freeze, with source/artifact identities. This text is
+preserved, not silently rewritten. Baseline and freshly restored Release/Debug
+core suites pass **59 files / 92 cases / 11703 assertions**. Candidate suites pass
+**59 / 92 / 11817**, with v3/null-view/live-limit/ABI transition fixtures; the new
+tests are not retroactively claimed for baseline or retained after rejection.
+
+All six qualification archives include 13 lvalue/DGC files / 82 cases, 1330 Release
+or 2663 Debug assertions; HTTP 10/30, offline LLM 4/23, threads 22/110 and 555 IR +
+555 AOT references. Debug native checks pass **1985** in each bounded-pair mode;
+abrupt-drop passes four assertions in Debug and skips Release. All 64 owned qmods
+are rebuilt; Debug wrappers restore exactly 64 Release aliases, preserving unrelated
+links. Restoration is verified against HEAD and freshly built/tested binaries,
+not inferred from source rollback alone.
+
+Two development failures are archived: missing debug location on the cloned cold
+call caused LLVM verification failure; a callback control test then incorrectly
+required no stack intrinsic anywhere in a module containing independently enabled
+closure guards. Both were fixed before successful candidate qualification/timing.
+
+The documentation/evidence-only 62-item audit records **7 Pass / 55 N/A / zero Fail**,
+independently replaying all 1188 windows, fixed orders, decisions, artifact hashes,
+qualifications and disassemblies. Runner 17 / mixed reference 8, strict Qore tables
+and diff checks pass. Full candidate sources, drivers, failed attempts, restoration
+and raw evidence are in `results-aot-closure-inline-stack-v3-rejected-macos-arm64.json`. Selected macOS arm64 qualification, not full-suite,
+sanitizer or cross-platform certification. Host load/frequency/thermals are uncontrolled.
+No owned build/test/profile/read/analysis overlaps timing.
+
+Next inspect conditional receiver provenance for the existing guarded object-param
+cache: a separate profitability set may recognize ternary/Phi receivers currently
+missed by the direct-load heuristic. Verify actual IR first, preserve the independent
+weak-load cleanup set and all strong-slot/epoch/owner/reference safeguards, and test
+short invocations as well as warm loops. This is a new hypothesis, not a gain or an
+explanation for prior regressions. Do not retry this rejected v3 candidate unchanged.
+Java parity and a justified global performance ceiling remain unestablished.

@@ -3362,3 +3362,26 @@ Selected qualification only; no fresh Java/develop or general IR/JIT ratio.
 Next diagnose effectful-method local/reference/member costs; then evaluate a
 separate additive closure companion with an inline live stack-limit check and
 the old full-guard fallback. Java parity/global performance ceiling remain open.
+
+
+## Rejected closure inline live-stack guard v3 (post-609a53eb9)
+
+Three-fork optimized screen: plain closure 17.229 -> 17.035 ns/item (-1.126%)
+fails the >=2% target and default layout is +0.491%; captured closure improves
+23.573 -> 22.663 (-3.862%). No confirmation/rescue epoch. Broad observed losses
+include list reads +3.345%, list mutation +2.035%, CSV +2.235%, object orders +3.395%.
+All 1188 windows retained. See RESULTS and `results-aot-closure-inline-stack-v3-rejected-macos-arm64.json` under `bench/runtime-comparison/`.
+
+All four production and four v3-dependent fixture files are archived and restored
+exactly; the committed v2 implementation remains. Fresh restored Release/Debug
+pass 59 core files / 92 cases / 11703 assertions plus lvalue/DGC, HTTP/LLM/thread,
+555 IR + 555 AOT and Debug 1985 native checks per mode; 64 Release aliases restored.
+Candidate-specific qualification was 11817 assertions per build, not claimed for
+the restored code. Evidence-only audit: 7 Pass / 55 N/A / zero Fail. No v3 runtime API/control
+is retained. This is selected qualification, not a general performance ceiling.
+
+The inline check works in generated code, but dispatcher identity/type/signature,
+frame publication and capture synchronization remain. Next verify conditional
+receiver/Phi provenance as profitability input for the existing guarded object
+parameter cache, preserving epoch/ownership and weak-load cleanup semantics.
+Measure short invocations and broad optimized workloads. Java parity remains open.
