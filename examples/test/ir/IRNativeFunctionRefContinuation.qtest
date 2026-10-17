@@ -102,6 +102,8 @@ class NativeFunctionRefContinuationTest inherits QUnit::Test {
                 }
                 assertRegex("qore_rt_coerce_value_by_type_path_aot", generated, "checked fallback retained");
                 assertEq(expected, run((executable,)), "AOT " + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLOSURE_MISS_ROUTE=1 "),
+                    "original prepared miss route " + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_FUNCREF_FAST_CALL=1 "),
                     "runtime fallback " + level);
             }

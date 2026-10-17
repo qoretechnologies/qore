@@ -15570,3 +15570,154 @@ thermals are uncontrolled; observed ranges are not confidence intervals.
 Selected macOS arm64 qualification is not full-suite, sanitizer, cross-platform
 or production-workload certification. Java parity and a global ceiling remain
 unestablished.
+
+
+## Borrowed AOT closure miss-route optimization
+
+The candidate based on `4a2960cfa` routes `int(int)` runtime closures directly
+to the existing native continuation on a prepared-cache miss. Ordinary
+function-reference preparation always rejects this node type before changing
+the cache, so that lookup can be bypassed. The live callback stays borrowed:
+no closure/capture retention, cache mutation, eager body materialization or
+relaxation of Program, debugger, body-identity, readiness, signature, stack,
+object/class context or synchronized capture checks. Positive function-reference
+hits skip the new type/gate probe; other signatures compile out the change.
+No ABI, metadata layout, opcode or cancellation policy changes.
+
+`QORE_DISABLE_AOT_CLOSURE_MISS_ROUTE=1` is a runtime control. It uses the exact
+candidate executable and library, not a relink. The disabled control still
+contains the new branch and compiler inlining/layout decisions, so its result
+must not replace comparison with the unchanged baseline.
+
+### Optimized measurement
+
+Both runtimes are Release `-O3 -DNDEBUG`, LLVM 22.1.8, with `qcc -O3`
+executables. Eighteen micro/four mixed workloads use default, reverse and
+shuffle-487 function order. The three-fork screen and independent five-fork
+confirmation use randomized interleaving (seeds 136247/136253), three warmup
+and three measured 300ms windows, 4096 items/seed 7. All 1782 + 2970 = 4752
+windows remain, including outliers; no retries or pooling. Confirmation reuses
+the frozen artifacts. Values are whole-workload ns/item, not isolated call
+latencies. No owned build/test/profile/analysis overlaps timing.
+
+The predeclared rule requires both closure workloads to improve at least 2%
+against both controls in both epochs, with improvement in every layout. A
+non-target kernel/layout/control pair with a disjoint adverse fork-mean range
+and at least 3% median slowdown in both epochs rejects the candidate. This
+candidate passes. This rule is a retention decision, not statistical proof of
+universal non-regression.
+
+### Screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Route disabled ns/item|!Time vs before|!Time vs disabled
+|arithmetic|1.566|1.572|1.580|+0.34%|-0.52%
+|direct_call|1.558|1.556|1.560|-0.11%|-0.22%
+|method_call|1.636|1.629|1.627|-0.45%|+0.12%
+|indirect_call|6.846|6.882|6.875|+0.52%|+0.10%
+|closure_call|20.747|19.576|21.449|-5.64%|-8.73%
+|closure_capture|26.348|25.693|27.310|-2.49%|-5.92%
+|indirect_wide|6.897|6.918|6.905|+0.30%|+0.20%
+|indirect_float|6.794|6.783|6.795|-0.16%|-0.17%
+|indirect_int_result|6.226|6.367|6.350|+2.26%|+0.26%
+|indirect_float_result|7.595|7.524|7.571|-0.94%|-0.63%
+|indirect_tagged_float|7.001|7.058|6.859|+0.81%|+2.90%
+|indirect_branch_float|6.908|6.795|6.834|-1.64%|-0.58%
+|indirect_affine|6.901|6.881|6.939|-0.29%|-0.85%
+|indirect_affine_wide|6.923|6.975|6.857|+0.74%|+1.72%
+|indirect_branch_int|6.870|6.891|6.843|+0.31%|+0.70%
+|list_build|26.719|26.691|26.862|-0.10%|-0.64%
+|list_mutate|199.601|203.281|201.979|+1.84%|+0.64%
+|temporary_hash|331.937|333.243|338.329|+0.39%|-1.50%
+|csv_report|978.163|971.472|966.340|-0.68%|+0.53%
+|object_orders|1894.141|1881.257|1905.474|-0.68%|-1.27%
+|callback_pipeline|86.382|85.984|87.579|-0.46%|-1.82%
+|text_index|1371.724|1346.335|1344.768|-1.85%|+0.12%
+
+### Confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Route disabled ns/item|!Time vs before|!Time vs disabled
+|arithmetic|1.556|1.558|1.561|+0.13%|-0.20%
+|direct_call|1.569|1.557|1.561|-0.81%|-0.27%
+|method_call|1.621|1.629|1.622|+0.50%|+0.41%
+|indirect_call|6.911|6.907|6.811|-0.05%|+1.42%
+|closure_call|20.402|19.516|21.428|-4.34%|-8.92%
+|closure_capture|26.491|25.892|27.373|-2.26%|-5.41%
+|indirect_wide|6.920|6.847|6.879|-1.06%|-0.47%
+|indirect_float|6.849|6.764|6.769|-1.25%|-0.08%
+|indirect_int_result|6.296|6.289|6.328|-0.12%|-0.62%
+|indirect_float_result|7.537|7.453|7.519|-1.12%|-0.88%
+|indirect_tagged_float|6.962|7.060|6.928|+1.41%|+1.91%
+|indirect_branch_float|6.959|6.814|6.824|-2.09%|-0.14%
+|indirect_affine|6.932|6.921|6.836|-0.16%|+1.24%
+|indirect_affine_wide|6.890|6.936|6.889|+0.68%|+0.69%
+|indirect_branch_int|6.917|6.879|6.840|-0.56%|+0.57%
+|list_build|26.737|26.757|26.772|+0.07%|-0.06%
+|list_mutate|200.096|203.508|201.545|+1.71%|+0.97%
+|temporary_hash|333.224|334.543|335.876|+0.40%|-0.40%
+|csv_report|974.969|970.037|974.272|-0.51%|-0.43%
+|object_orders|1916.746|1912.633|1932.764|-0.21%|-1.04%
+|callback_pipeline|86.829|86.487|87.408|-0.39%|-1.05%
+|text_index|1354.382|1348.398|1345.006|-0.44%|+0.25%
+
+Confirmation plain closures improve **20.402 -> 19.516 ns/item (-4.34%)**,
+captured closures **26.491 -> 25.892 (-2.26%)** versus before. Against the
+identical-artifact disabled control, changes are -8.92%/-5.41%. Each layout
+improves versus both controls in both epochs, but some baseline ranges overlap:
+confirmation has disjoint faster ranges for only the reverse layout against
+baseline, for both closure workloads. The captured shuffle-layout improvement
+versus baseline is only 0.93%. Do not imply all ranges are disjoint.
+
+The screen has six disjoint adverse pairs: method/reverse versus baseline
+(+1.07%) and disabled (+0.92%), zero-argument integer callback/shuffle versus
+baseline (+6.44%), tagged-float callback/shuffle versus disabled (+4.93%),
+list mutation/default versus baseline (+2.05%), and object orders/shuffle
+versus baseline (+2.95%). None is disjoint adverse in confirmation. The
+zero-argument integer aggregate changes from +2.26% to -0.12% versus baseline.
+Smaller recurring aggregate slowdowns remain: list mutation +1.84%/+1.71%,
+tagged-float callbacks +0.81%/+1.41%, affine-wide callbacks +0.74%/+0.68%,
+and temporary hashes +0.39%/+0.40% versus baseline (screen/confirmation).
+Confirmation indirect calls are essentially flat versus baseline but +1.42%
+versus disabled. All controls and adverse movements remain visible; unchanged
+body instructions do not justify dismissing them as noise. No third timing
+trial was run to seek a more favorable result.
+
+### Qualification, mechanism and next work
+
+The unchanged baseline adds 17 call fixtures / 43 cases / 4725 assertions to
+its prior qualification. Candidate Release/Debug each pass 56 fixtures / 88
+cases / 10591 assertions, plus HTTP 10 / 30, thread/cancellation 22 / 110 and
+555 reference checks per IR/AOT. Debug native tests pass 1082 in both bounded-pair
+states; abrupt-drop passes four assertions (Release skips). Exactly 64 owned
+Release qmod aliases are restored after Debug. Expanded tests alternate owned
+function references and borrowed closures at one loop site, switch capture
+environments, and exercise wide integers, concurrent capture mutation, stack
+readers, debugger attachment, lifetime, recursion and fallback variants.
+
+An initial baseline test failed its no-warning assertion: LLVM emits macOS 28
+objects from its `arm64-apple-darwin27.0.0` host triple, while default linking
+targeted 27. The complete expanded baseline and candidate tests, and both
+benchmark variants, use `MACOSX_DEPLOYMENT_TARGET=28.0` for native linking.
+Runtime build flags are unchanged. No warning suppression or assertion
+relaxation was used; the initial failure is preserved in the evidence.
+
+Untimed comparison finds all 150 micro/29 mixed generated function bodies
+instruction-identical after rebasing local branch destinations. Runtime
+assembly confirms the new route bypasses ordinary preparation and also changes
+closure-helper inlining. Untimed profiling finds the rejected lookup in the
+baseline/disabled control but not the candidate sample; context handling and
+synchronized capture reads remain substantial costs. Samples are diagnostic,
+not isolated latencies or percentages of the measured gain.
+
+Next examine whether immutable signature eligibility already proved by the
+compiler can replace repeated runtime signature checks, while preserving live
+Program/debugger/body/stack guards and capture synchronization. Any follow-up
+needs its own semantic proof, optimized controls and measurements. Then refresh
+the matched optimized Java/develop checkpoint. No new Java/develop ratios,
+ordinary IR/JIT speedups or global performance ceiling are established here.
+Host load, frequency and thermals remain uncontrolled; observed ranges are not
+confidence intervals. Qualification is selected macOS arm64, not full-suite,
+sanitizer, cross-platform or production-workload certification.
+
+Raw samples, provenance, all controls, qualification logs, failed baseline
+history, disassembly, profiles, drivers and all 62 audit items are in
+`results-aot-closure-miss-route-macos-arm64.json`.

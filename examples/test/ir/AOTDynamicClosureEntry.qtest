@@ -57,7 +57,11 @@ class DynamicClosureEntryTest inherits QUnit::Test {
                 assertFalse(regex(ir,
                     "call void @qore_rt_bind_closure_int_unary_v1[^\\n]*dynamicClosureReference"),
                     "reference-backed capture not admitted");
+                assertTrue(ir.contains("call i32 @qore_rt_try_funcref_int_int_v4("),
+                    "alternating loop exercises the prepared callback miss route");
                 assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLOSURE_MISS_ROUTE=1 "),
+                    "original prepared miss route " + prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT=1 "),
                     "eager context " + prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 "),
@@ -76,6 +80,8 @@ class DynamicClosureEntryTest inherits QUnit::Test {
                 "-o", executable, source), "QORE_DUMP_LLVM_IR=1 ");
             assertTrue(ir.contains("call void @qore_rt_bind_closure_int_unary_v1"), "native binding");
             assertEq(expected, run((executable,)), level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLOSURE_MISS_ROUTE=1 "),
+                "original prepared miss route " + level);
             assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT=1 "),
                 "eager context " + level);
             assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 "),
@@ -95,6 +101,8 @@ class DynamicClosureEntryTest inherits QUnit::Test {
                 "-o", executable, source), "QORE_DUMP_LLVM_IR=1 ");
             assertTrue(ir.contains("call void @qore_rt_bind_closure_int_unary_v1"), "native binding");
             assertEq(expected, run((executable,)), level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLOSURE_MISS_ROUTE=1 "),
+                "original prepared miss route " + level);
             assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT=1 "),
                 "eager context " + level);
             assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 "),

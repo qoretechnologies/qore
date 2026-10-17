@@ -6,6 +6,17 @@
 int sub dynamicClosureCall(code<int(int)> callback, int value) {
     return callback(value);
 }
+int sub dynamicClosureFunction(int value) {
+    return ((value * 3 + 47) ^ 5);
+}
+int sub dynamicClosureAlternating(code<int(int)> first, code<int(int)> second, int count, int input) {
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        code<int(int)> selected = (i & 1) ? first : second;
+        total += selected(input + i);
+    }
+    return total;
+}
 code<int(int)> sub dynamicClosureFactory(int offset) {
     return int sub (int value) { return ((value * 3 + offset) ^ 5); };
 }
@@ -24,6 +35,7 @@ sub checkValue(int expected, int actual, string label) {
 code<int(int)> first = dynamicClosureFactory(17);
 code<int(int)> second = dynamicClosureFactory(31);
 code<int(int)> plain = dynamicClosurePlain();
+code<int(int)> function = \dynamicClosureFunction();
 int shared = 9;
 code<int(int)> changing = int sub (int value) { return (value + shared) ^ 7; };
 code<int(int)> repeated = int sub (int value) { return value + shared - shared; };
@@ -31,6 +43,22 @@ code<nothing(int)> write = nothing sub (int value) { shared = value; };
 code<int(int)> reference = dynamicClosureReference(\shared);
 foreach int input in ((0, 1, -1, 1125899906842624, -1125899906842624,
         9223372036854775807, -9223372036854775807 - 1)) {
+    # One loop site switches between an owned prepared function reference and
+    # borrowed closures, and between two instances of the same closure variant.
+    foreach int count in ((0, 1, 16)) {
+        int forward = 0;
+        int reverse = 0;
+        int environments = 0;
+        for (int i = 0; i < count; ++i) {
+            int value = input + i;
+            forward += (value * 3 + ((i & 1) ? 47 : 17)) ^ 5;
+            reverse += (value * 3 + ((i & 1) ? 17 : 47)) ^ 5;
+            environments += (value * 3 + ((i & 1) ? 17 : 31)) ^ 5;
+        }
+        checkValue(forward, dynamicClosureAlternating(function, first, count, input), "function/closure");
+        checkValue(reverse, dynamicClosureAlternating(first, function, count, input), "closure/function");
+        checkValue(environments, dynamicClosureAlternating(first, second, count, input), "two environments");
+    }
     for (int round = 0; round < 8; ++round) {
         checkValue((input * 3 + 17) ^ 5, dynamicClosureCall(first, input), "first environment");
         checkValue((input * 3 + 31) ^ 5, dynamicClosureCall(second, input), "second environment");

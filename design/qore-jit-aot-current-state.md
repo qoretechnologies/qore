@@ -3043,3 +3043,49 @@ without retaining closures or weakening live Program/debugger/stack guards.
 Refresh matched optimized Java/develop measurements after the next retained
 batch. Earlier Java/develop numbers remain a separate epoch, not a new ratio;
 Java parity and a global performance ceiling are still unestablished.
+
+
+## Borrowed closure miss route validated
+
+Based on `4a2960cfa`, the prepared `int(int)` callback route bypasses ordinary
+function-reference preparation for a live runtime closure on a cache miss.
+That preparation always rejects closures without cache mutation or ownership
+replacement. The closure remains borrowed; all native continuation admission,
+live Program/debugger/body/readiness/signature/stack checks, self/class context,
+capture locks, reader waits and fallback behavior remain. Positive ordinary
+function-reference hits skip the new type/gate probe; other signatures compile
+out the change. No new ABI/layout/opcode or cancellation behavior.
+
+Optimized confirmation improves plain closures **20.402 -> 19.516 ns/item
+(-4.34%)**, captured closures **26.491 -> 25.892 (-2.26%)** versus the exact
+qualified frozen baseline. Runtime-disabled control
+`QORE_DISABLE_AOT_CLOSURE_MISS_ROUTE=1` uses the identical candidate executable
+and library; changes versus it are -8.92%/-5.41%. The disabled control includes
+the new branch/inlining decisions and is not the old baseline. All 4752 windows
+remain across separate three/five-fork trials, three fixed layouts and 22
+workloads. Both targets meet predeclared thresholds; some ranges overlap.
+
+Retain narrowly, not as universal non-regression. Six disjoint adverse pairs
+in screening do not recur in confirmation, but aggregate list mutation
+(+1.71%), tagged-float callbacks (+1.41%), affine-wide callbacks (+0.68%) and
+temporary hashes (+0.40%) remain slower versus before. Generated benchmark
+bodies are instruction-identical; runtime inlining changes. Neither observation
+eliminates layout/cache/host effects or explains away adverse measurements.
+
+Candidate Release/Debug each pass 56 fixtures / 88 cases / 10591 assertions,
+plus HTTP 10 / 30, thread/cancellation 22 / 110 and 555 references per IR/AOT.
+Debug native 1082 passes in both bounded-pair states; all 64 Release qmod links
+are restored. The unchanged baseline also passes 17 expanded call fixtures /
+4725 assertions. A pre-existing macOS object/link target warning was resolved
+by aligning test/benchmark linking to macOS 28, without runtime rebuild flags,
+warning suppression or weakened assertions; the original failure is retained.
+Full evidence and all audit items are in
+`bench/runtime-comparison/results-aot-closure-miss-route-macos-arm64.json`.
+
+The rejected lookup disappears from the candidate profile, but closure context
+and synchronized capture reads remain costly. Next prove whether immutable
+signature checks can be moved to compilation/entry binding, preserving every
+live guard and capture lifetime rule; measure this separately. Refresh the
+matched optimized Java/develop comparison after the next retained batch.
+No fresh Java/develop ratio, IR/JIT speed claim, full-suite/cross-platform
+certification or global performance ceiling is inferred.

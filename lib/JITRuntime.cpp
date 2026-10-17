@@ -10935,6 +10935,19 @@ static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Res
 template <typename Result, uint32_t Signature, typename... Args>
 static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& cache,
         uint64_t ref_bits, Result* result, ExceptionSink* xsink, Args... args) {
+    if constexpr (Signature == (1 | (1 << 2))) {
+        if (cache.owner != ref_bits) {
+            // Ordinary function-reference preparation always rejects runtime closures
+            // without changing the cache. Route the borrowed live closure directly;
+            // the native continuation still checks all mutable admission conditions.
+            // Positive function-reference hits do not probe the closure type or gate.
+            static const bool route_closures = !std::getenv("QORE_DISABLE_AOT_CLOSURE_MISS_ROUTE");
+            if (route_closures && isDynamicClosureEntryEnabled()
+                    && fromBits(ref_bits).getType() == NT_RUNTIME_CLOSURE) {
+                return tryNativeClosureContinuation(rc, ref_bits, result, xsink, args...);
+            }
+        }
+    }
     if (!prepareTypedFunctionRef(rc, ref_bits, Signature, cache, xsink)) {
         if constexpr (Signature == (1 | (1 << 2))) {
             return tryNativeClosureContinuation(rc, ref_bits, result, xsink, args...);
