@@ -644,6 +644,7 @@ public class DpqlActionSession {
             case DPQL_TOK_OP_OR: return "operator";
             case DPQL_TOK_OP_NOT: return "operator";
             case DPQL_TOK_OP_REGEX: return "operator";
+            case DPQL_TOK_WILDCARD: return "operator";
             case DPQL_TOK_REGEX: return "string";
             case DPQL_TOK_LPAREN: return "punctuation";
             case DPQL_TOK_RPAREN: return "punctuation";

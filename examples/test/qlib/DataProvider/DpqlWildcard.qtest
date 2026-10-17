@@ -1,0 +1,770 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+# Tests the DPQL wildcard accessors [*] and {*}: the map operator written as an accessor
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class DpqlWildcardTest
+
+#! The expression names of the wildcard accessors; literals, so that the test runs against a module without them
+const ListWildcard = "list_wildcard";
+const HashWildcard = "hash_wildcard";
+const WildcardItem = "wildcard_item";
+
+#! The record that the evaluation tests use
+const Rec = {
+    "orders": (
+        {
+            "id": 1,
+            "customer": {"name": "Ann"},
+            "items": ({"sku": "a", "qty": 1}, {"sku": "b", "qty": 2}),
+            "tags": ("new", "vip"),
+            "order-id": "o-1",
+            "x.y": "dot-1",
+        },
+        {
+            "id": 2,
+            "customer": {"name": "Bob"},
+            "items": ({"sku": "c", "qty": 3},),
+            "tags": ("old",),
+            "order-id": "o-2",
+            "x.y": "dot-2",
+        },
+    ),
+    "prices": {
+        "p1": {"amount": 10, "cur": {"code": "EUR"}},
+        "p2": {"amount": 20, "cur": {"code": "USD"}},
+    },
+    "nums": (1, 2, 3),
+    "matrix": ((1, 2), (3, 4), (5, 6)),
+    "weights": {"a": 1, "b": 2},
+    "empty": (),
+    "emptyh": {},
+    "none": NOTHING,
+    "str": "abc",
+    "num": 5,
+    "partial": ({"b": 1}, {"c": 2}),
+    "mixed": ({"b": 1}, 5),
+    "with_null": ({"b": 1}, {"b": NOTHING}, {"b": 3}),
+};
+
+class DpqlWildcardTest inherits QUnit::Test {
+    constructor() : Test("DpqlWildcard", "1.0") {
+        addTestCase("tokenizer", \tokenizerTests());
+        addTestCase("parser: expression structure", \parserStructureTests());
+        addTestCase("parser: same expression as map", \parserMapStructureTests());
+        addTestCase("parser: errors", \parserErrorTests());
+        addTestCase("evaluation: lists and hashes", \evaluationTests());
+        addTestCase("evaluation: nested wildcards", \nestedEvaluationTests());
+        addTestCase("evaluation: accessors on the item", \itemEvaluationTests());
+        addTestCase("evaluation: same results and errors as map", \mapEquivalenceTests());
+        addTestCase("evaluation: in conditions and prepared expressions", \conditionTests());
+        addTestCase("map and the streaming operators keep list elements", \noFlatteningTests());
+        addTestCase("serializer round trip", \serializerTests());
+        addTestCase("types", \typeTests());
+        addTestCase("validation", \validationTests());
+        addTestCase("completion", \completionTests());
+        addTestCase("editor token spans", \tokenSpanTests());
+        set_return_value(main());
+    }
+
+    #! Parses and evaluates a DPQL expression on a record
+    static auto eval(string dpql, hash<auto> rec = Rec) {
+        return AbstractDataProvider::evalGenericExpressionValue(rec, DataProvider::parseDpqlExpression(dpql));
+    }
+
+    #! Returns the result of evaluating an expression, or the error that it raises, without the context added to
+    #! the message of an error for each expression that it passes through
+    static hash<auto> outcome(string dpql, hash<auto> rec = Rec) {
+        try {
+            return {"value": DpqlWildcardTest::eval(dpql, rec)};
+        } catch (hash<ExceptionInfo> ex) {
+            string desc = ex.desc;
+            desc =~ s/error in return value type "[^"]*" for "[^"]*" expression: //g;
+            return {"err": ex.err, "desc": desc};
+        }
+    }
+
+    #! Asserts that a wildcard gives the same result, or raises the same error, as a map expression
+    assertSameAsMap(string wildcard, string map_exp, hash<auto> rec = Rec) {
+        hash<auto> wildcard_outcome = DpqlWildcardTest::outcome(wildcard, rec);
+        hash<auto> map_outcome = DpqlWildcardTest::outcome(map_exp, rec);
+        assertEq(map_outcome, wildcard_outcome, sprintf("%s is %s", wildcard, map_exp));
+    }
+
+    #! Rewrites the wildcards that read a field of each item into the map expressions that they stand for
+    static auto toMap(auto exp) {
+        if (exp instanceof hash<DataProviderExpression>) {
+            list<auto> args = map DpqlWildcardTest::toMap($1), exp.args;
+            if (exp.exp == ListWildcard || exp.exp == HashWildcard) {
+                return <DataProviderExpression>{"exp": DP_OP_MAP, "args": (args[1], args[0])};
+            }
+            return <DataProviderExpression>{"exp": exp.exp, "args": args};
+        }
+        return exp;
+    }
+
+    static hash<DataProviderExpression> item() {
+        return <DataProviderExpression>{"exp": WildcardItem, "args": ()};
+    }
+
+    static hash<DataProviderFieldReference> ref(string field) {
+        return <DataProviderFieldReference>{"field": field};
+    }
+
+    static hash<DataProviderExpression> exp(string name, softlist<auto> args) {
+        return <DataProviderExpression>{"exp": name, "args": args};
+    }
+
+    #! Returns the parse error diagnostics of an expression, or fails if it parses
+    list<hash<DpqlDiagnostic>> parseErrors(string dpql) {
+        hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(dpql);
+        assertFalse(result.success, sprintf("%y is a parse error", dpql));
+        return map $1, result.diagnostics, $1.severity == "error";
+    }
+
+    tokenizerTests() {
+        list<hash<DpqlTokenInfo>> tokens = DataProvider::getDpqlTokens('@orders[*].id');
+        assertEq(("@orders", "[", "*", "]", ".", "id"), map $1.value, tokens, $1.type != DPQL_TOK_EOF);
+        assertEq("wildcard", DpqlTokenTypeNames{tokens[2].type});
+        assertEq(DPQL_TOK_LBRACKET, tokens[1].type);
+        assertEq(DPQL_TOK_RBRACKET, tokens[3].type);
+        assertEq(DPQL_TOK_DOT, tokens[4].type);
+        assertEq(1, tokens[2].line);
+        assertEq(9, tokens[2].column);
+
+        tokens = DataProvider::getDpqlTokens('@prices{*}');
+        assertEq(("@prices", "{", "*", "}"), map $1.value, tokens, $1.type != DPQL_TOK_EOF);
+        assertEq("wildcard", DpqlTokenTypeNames{tokens[2].type});
+        assertEq(DPQL_TOK_LBRACE, tokens[1].type);
+
+        # spaces inside the accessor
+        tokens = DataProvider::getDpqlTokens('@orders[ * ]');
+        assertEq(("wildcard",), map DpqlTokenTypeNames{$1.type}, tokens, $1.value == "*");
+
+        # a * that is not alone in an accessor is still multiplication
+        foreach string dpql in ('2 * 3', '@x * 2', '@a[0] * 2', '@a{b} * 2', '@a[*] * 2') {
+            list<hash<DpqlTokenInfo>> l = DataProvider::getDpqlTokens(dpql);
+            list<hash<DpqlTokenInfo>> stars = map $1, l, $1.value == "*";
+            assertEq(DPQL_TOK_OP_MULTIPLY, stars.last().type, sprintf("the last * in %y is multiplication", dpql));
+        }
+
+        # a quoted * is a key
+        tokens = DataProvider::getDpqlTokens('@a{"*"}');
+        assertEq(DPQL_TOK_STRING, tokens[2].type);
+    }
+
+    parserStructureTests() {
+        auto e = DataProvider::parseDpqlExpression('@orders[*].id');
+        assertEq(DpqlWildcardTest::exp(ListWildcard, (DpqlWildcardTest::ref("orders"), DpqlWildcardTest::ref("id"))),
+            e);
+
+        # the .name steps after the field are one field reference, as in @customer.name
+        e = DataProvider::parseDpqlExpression('@orders[*].customer.name');
+        assertEq(DpqlWildcardTest::ref("customer.name"), e.args[1]);
+
+        # a single key is a field; its dots are escaped
+        e = DataProvider::parseDpqlExpression('@orders[*]{"order-id"}');
+        assertEq(DpqlWildcardTest::ref("order-id"), e.args[1]);
+        e = DataProvider::parseDpqlExpression('@orders[*]{"x.y"}');
+        assertEq(DpqlWildcardTest::ref("x\\.y"), e.args[1]);
+        e = DataProvider::parseDpqlExpression('@orders[*]{id}');
+        assertEq(DpqlWildcardTest::ref("id"), e.args[1]);
+        e = DataProvider::parseDpqlExpression('@orders[*].@id');
+        assertEq(DpqlWildcardTest::ref("id"), e.args[1]);
+        e = DataProvider::parseDpqlExpression('@orders[*].order-id');
+        assertEq(DpqlWildcardTest::ref("order-id"), e.args[1]);
+
+        # ordinary accessors after the field
+        e = DataProvider::parseDpqlExpression('@orders[*].tags[0]');
+        assertEq(DpqlWildcardTest::exp(DP_FUNC_INDEX, (DpqlWildcardTest::ref("tags"), 0)), e.args[1]);
+        e = DataProvider::parseDpqlExpression('@orders[*].customer{"name"}');
+        assertEq(DpqlWildcardTest::exp(DP_FUNC_KEY, (DpqlWildcardTest::ref("customer"), "name")), e.args[1]);
+        e = DataProvider::parseDpqlExpression('@orders[*]{"customer"}.name');
+        assertEq(DpqlWildcardTest::exp(DP_FUNC_KEY, (DpqlWildcardTest::ref("customer"), "name")), e.args[1]);
+
+        # a trailing [*] is the item
+        e = DataProvider::parseDpqlExpression('@orders[*]');
+        assertEq(DpqlWildcardTest::exp(ListWildcard, (DpqlWildcardTest::ref("orders"), DpqlWildcardTest::item())), e);
+        e = DataProvider::parseDpqlExpression('@orders[ * ]');
+        assertEq(DpqlWildcardTest::exp(ListWildcard, (DpqlWildcardTest::ref("orders"), DpqlWildcardTest::item())), e);
+
+        # other accessors apply to the item
+        e = DataProvider::parseDpqlExpression('@matrix[*][0]');
+        assertEq(DpqlWildcardTest::exp(DP_FUNC_INDEX, (DpqlWildcardTest::item(), 0)), e.args[1]);
+        e = DataProvider::parseDpqlExpression('@matrix[*][0..1]');
+        assertEq(DP_FUNC_SLICE, e.args[1].exp);
+        assertEq(DpqlWildcardTest::item(), e.args[1].args[0]);
+        e = DataProvider::parseDpqlExpression('@orders[*]{id, tags}');
+        assertEq(DpqlWildcardTest::exp(DP_FUNC_KEY, (DpqlWildcardTest::item(), "id", "tags")), e.args[1]);
+
+        # {*}: the accessors apply to @value
+        e = DataProvider::parseDpqlExpression('@prices{*}');
+        assertEq(DpqlWildcardTest::exp(HashWildcard, (DpqlWildcardTest::ref("prices"), DpqlWildcardTest::ref("value"))),
+            e);
+        e = DataProvider::parseDpqlExpression('@prices{*}.cur.code');
+        assertEq(DpqlWildcardTest::ref("value.cur.code"), e.args[1]);
+        e = DataProvider::parseDpqlExpression('@prices{*}{"amount"}');
+        assertEq(DpqlWildcardTest::exp(DP_FUNC_KEY, (DpqlWildcardTest::ref("value"), "amount")), e.args[1]);
+        e = DataProvider::parseDpqlExpression('@matrix{*}[1]');
+        assertEq(DpqlWildcardTest::exp(DP_FUNC_INDEX, (DpqlWildcardTest::ref("value"), 1)), e.args[1]);
+
+        # nested wildcards
+        e = DataProvider::parseDpqlExpression('@orders[*].items[*].sku');
+        assertEq(DpqlWildcardTest::exp(ListWildcard, (DpqlWildcardTest::ref("orders"),
+            DpqlWildcardTest::exp(ListWildcard, (DpqlWildcardTest::ref("items"), DpqlWildcardTest::ref("sku"))))), e);
+        e = DataProvider::parseDpqlExpression('@matrix[*][*]');
+        assertEq(DpqlWildcardTest::exp(ListWildcard, (DpqlWildcardTest::item(), DpqlWildcardTest::item())), e.args[1]);
+        e = DataProvider::parseDpqlExpression('@orders[*]{*}');
+        assertEq(DpqlWildcardTest::exp(HashWildcard, (DpqlWildcardTest::item(), DpqlWildcardTest::ref("value"))),
+            e.args[1]);
+
+        # a wildcard after other accessors takes them as its source
+        e = DataProvider::parseDpqlExpression('@orders[0].items[*].sku');
+        assertEq(ListWildcard, e.exp);
+        assertEq(DpqlWildcardTest::exp(DP_FUNC_KEY, (DpqlWildcardTest::exp(DP_FUNC_INDEX,
+            (DpqlWildcardTest::ref("orders"), 0)), "items")), e.args[0]);
+
+        # a quoted * is a key, not a wildcard
+        e = DataProvider::parseDpqlExpression('@data{"*"}');
+        assertEq(DpqlWildcardTest::exp(DP_FUNC_KEY, (DpqlWildcardTest::ref("data"), "*")), e);
+
+        # a wildcard is an operand of the operators around it
+        e = DataProvider::parseDpqlExpression('@orders[*].id == (1, 2) && @x > 1');
+        assertEq(DP_OP_AND, e.exp);
+        assertEq(ListWildcard, e.args[0].args[0].exp);
+        e = DataProvider::parseDpqlExpression('map @x, @orders[*].items');
+        assertEq(DP_OP_MAP, e.exp);
+        assertEq(ListWildcard, e.args[1].exp);
+        e = DataProvider::parseDpqlExpression('listContains(@orders[*].id, 2)');
+        assertEq(ListWildcard, e.args[0].exp);
+    }
+
+    #! The wildcards that read a field of each item parse to the expressions of the map expressions they stand for
+    parserMapStructureTests() {
+        hash<string, string> pairs = {
+            '@orders[*].id': 'map @id, @orders',
+            '@orders[*].customer.name': 'map @customer.name, @orders',
+            '@orders[*]{"order-id"}': 'map @"order-id", @orders',
+            '@orders[*]{"x.y"}': 'map @"x\\.y", @orders',
+            '@orders[*].tags[0]': 'map @tags[0], @orders',
+            '@orders[*].tags[0..1]': 'map @tags[0..1], @orders',
+            '@orders[*].customer{"name"}': 'map @customer{"name"}, @orders',
+            '@orders[*].items[*].sku': 'map (map @sku, @items), @orders',
+            '@orders[*].customer{*}': 'map (map @value, @customer), @orders',
+            '@prices{*}': 'map @value, @prices',
+            '@prices{*}.amount': 'map @value.amount, @prices',
+            '@prices{*}.cur.code': 'map @value.cur.code, @prices',
+            '@prices{*}{"amount"}': 'map @value{"amount"}, @prices',
+            '@prices{*}.cur{code}': 'map @value.cur{code}, @prices',
+            '@weights[*].key': 'map @key, @weights',
+        };
+        foreach hash<auto> i in (pairs.pairIterator()) {
+            assertEq(DataProvider::parseDpqlExpression(i.value),
+                DpqlWildcardTest::toMap(DataProvider::parseDpqlExpression(i.key)), i.key);
+        }
+    }
+
+    parserErrorTests() {
+        # an unclosed wildcard
+        list<hash<DpqlDiagnostic>> errs = parseErrors('@orders[*');
+        assertEq("DPQL-E022", errs[0].code);
+        assertRegex("Unclosed index accessor", errs[0].message);
+        errs = parseErrors('@orders[*.id');
+        assertEq("DPQL-E022", errs[0].code);
+        errs = parseErrors('@prices{*');
+        assertEq("DPQL-E024", errs[0].code);
+        assertRegex("Unclosed key accessor", errs[0].message);
+
+        # the * is alone
+        foreach string dpql in ('@prices{**}', '@prices{*, a}', '@prices{a, *}', '@prices{* a}') {
+            errs = parseErrors(dpql);
+            assertEq("DPQL-E024", errs[0].code, dpql);
+        }
+        foreach string dpql in ('@orders[**]', '@orders[*, 1]', '@orders[1, *]', '@orders[*1]', '@orders[*..2]') {
+            errs = parseErrors(dpql);
+            assertEq("DPQL-E022", errs[0].code, dpql);
+        }
+        errs = parseErrors('@prices{**}');
+        assertRegex("written alone", errs[0].message);
+        errs = parseErrors('@orders[1, *]');
+        assertRegex("written alone", errs[0].message);
+
+        # a member after the wildcard needs a name
+        foreach string dpql in ('@orders[*].', '@orders[*]. == 1', '@orders[*].id.', '@prices{*}.', '@orders[*].1') {
+            errs = parseErrors(dpql);
+            assertEq("DPQL-E020", errs[0].code, dpql);
+        }
+
+        # the wildcard expressions are written as accessors, not as calls
+        foreach string dpql in ('list_wildcard(@orders, @id)', 'hash_wildcard(@prices, @value)', 'wildcard_item()') {
+            errs = parseErrors(dpql);
+            assertEq("DPQL-E001", errs[0].code, dpql);
+        }
+        errs = parseErrors('list_wildcard(@orders, @id)');
+        assertRegex("\\[\\*\\]", errs[0].message);
+
+        # parse errors raise DPQL-PARSE-ERROR from the throwing API
+        assertThrows("DPQL-PARSE-ERROR", \DataProvider::parseDpqlExpression(), '@orders[*');
+        assertThrows("DPQL-PARSE-ERROR", \DataProvider::parseDpqlExpression(), '@prices{**}');
+    }
+
+    evaluationTests() {
+        assertEq((1, 2), DpqlWildcardTest::eval('@orders[*].id'));
+        assertEq(("Ann", "Bob"), DpqlWildcardTest::eval('@orders[*].customer.name'));
+        assertEq(("o-1", "o-2"), DpqlWildcardTest::eval('@orders[*]{"order-id"}'));
+        assertEq(("o-1", "o-2"), DpqlWildcardTest::eval('@orders[*].order-id'));
+        # a key with a dot is one key
+        assertEq(("dot-1", "dot-2"), DpqlWildcardTest::eval('@orders[*]{"x.y"}'));
+        assertEq(("new", "old"), DpqlWildcardTest::eval('@orders[*].tags[0]'));
+        assertEq(("vip", "old"), DpqlWildcardTest::eval('@orders[*].tags[-1]'));
+        assertEq(("Ann", "Bob"), DpqlWildcardTest::eval('@orders[*].customer{"name"}'));
+        assertEq(("Ann", "Bob"), DpqlWildcardTest::eval('@orders[*]{"customer"}.name'));
+
+        # a trailing [*] is the list itself
+        assertEq(Rec.orders, DpqlWildcardTest::eval('@orders[*]'));
+        assertEq((1, 2, 3), DpqlWildcardTest::eval('@nums[*]'));
+
+        # {*}: the values of a hash in key order
+        assertEq((Rec.prices.p1, Rec.prices.p2), DpqlWildcardTest::eval('@prices{*}'));
+        assertEq((10, 20), DpqlWildcardTest::eval('@prices{*}.amount'));
+        assertEq(("EUR", "USD"), DpqlWildcardTest::eval('@prices{*}.cur.code'));
+        assertEq((10, 20), DpqlWildcardTest::eval('@prices{*}{"amount"}'));
+        assertEq((1, 2), DpqlWildcardTest::eval('@weights{*}'));
+        # key order is the hash's order, not sorted
+        assertEq((2, 1), DpqlWildcardTest::eval('@w{*}', {"w": {"z": 2, "a": 1}}));
+
+        # [*] over a hash goes through its key/value entries, as map does
+        assertEq(("a", "b"), DpqlWildcardTest::eval('@weights[*].key'));
+        assertEq((1, 2), DpqlWildcardTest::eval('@weights[*].value'));
+        assertEq(({"key": "a", "value": 1}, {"key": "b", "value": 2}), DpqlWildcardTest::eval('@weights[*]'));
+
+        # {*} over a list gives @value of each element, as map does
+        assertEq((1, 2, 3), DpqlWildcardTest::eval('@nums{*}'));
+
+        # empty sources give empty lists
+        assertEq((), DpqlWildcardTest::eval('@empty[*].b'));
+        assertEq((), DpqlWildcardTest::eval('@empty[*]'));
+        assertEq((), DpqlWildcardTest::eval('@emptyh{*}'));
+        assertEq((), DpqlWildcardTest::eval('@emptyh{*}.x'));
+        assertEq((), DpqlWildcardTest::eval('@emptyh[*]'));
+
+        # an element whose field has no value gives no value in its position
+        assertEq((1, NOTHING, 3), DpqlWildcardTest::eval('@with_null[*].b'));
+
+        # a wildcard after other accessors
+        assertEq(("a", "b"), DpqlWildcardTest::eval('@orders[0].items[*].sku'));
+    }
+
+    nestedEvaluationTests() {
+        # nested wildcards give nested lists
+        assertEq((("a", "b"), ("c",)), DpqlWildcardTest::eval('@orders[*].items[*].sku'));
+        assertEq(((1, 2), (3,)), DpqlWildcardTest::eval('@orders[*].items[*].qty'));
+        assertEq((("Ann",), ("Bob",)), DpqlWildcardTest::eval('@orders[*].customer{*}'));
+        assertEq(((1, 2), (3, 4), (5, 6)), DpqlWildcardTest::eval('@matrix[*][*]'));
+        assertEq((Rec.orders[0].items, Rec.orders[1].items), DpqlWildcardTest::eval('@orders[*].items'));
+        assertEq((((2,), (4,)), ((6,),)), DpqlWildcardTest::eval('@o[*].i[*].v{*}',
+            {"o": ({"i": ({"v": {"x": 2}}, {"v": {"x": 4}})}, {"i": ({"v": {"x": 6}},)})}));
+        # three levels
+        assertEq((((1, 2),), ((3,),)), DpqlWildcardTest::eval('@a[*].b[*].c[*]',
+            {"a": ({"b": ({"c": (1, 2)},)}, {"b": ({"c": (3,)},)})}));
+        # the same as the nested map expressions
+        assertSameAsMap('@orders[*].items[*].sku', 'map (map @sku, @items), @orders');
+        assertSameAsMap('@matrix[*][*]', 'map (map @value, @value), @matrix');
+    }
+
+    itemEvaluationTests() {
+        # accessors that do not start with a field apply to the item
+        assertEq((1, 3, 5), DpqlWildcardTest::eval('@matrix[*][0]'));
+        assertEq((2, 4, 6), DpqlWildcardTest::eval('@matrix[*][-1]'));
+        assertEq(((1, 2), (3, 4), (5, 6)), DpqlWildcardTest::eval('@matrix[*][0..1]'));
+        assertEq(((1,), (3,), (5,)), DpqlWildcardTest::eval('@matrix[*][0..0]'));
+        assertEq(({"id": 1, "tags": ("new", "vip")}, {"id": 2, "tags": ("old",)}),
+            DpqlWildcardTest::eval('@orders[*]{id, tags}'));
+        assertEq(("a", "x"), DpqlWildcardTest::eval('@s[*][0]', {"s": ("abc", "xyz")}));
+        # for elements that are not hashes, the item is @value in map
+        assertSameAsMap('@matrix[*][0]', 'map @value[0], @matrix');
+        assertSameAsMap('@matrix[*][0..1]', 'map @value[0..1], @matrix');
+        assertSameAsMap('@nums[*]', 'map @value, @nums');
+        # errors on the item are the errors of the accessor
+        hash<auto> o = DpqlWildcardTest::outcome('@orders[*][0]');
+        assertEq("INVALID-OPERATION", o.err);
+        assertRegex("index accessor", o.desc);
+        o = DpqlWildcardTest::outcome('@nums[*]{a, b}');
+        assertEq("INVALID-OPERATION", o.err);
+        # the item of a hash source is its key/value record
+        assertEq(({"key": "a"}, {"key": "b"}), DpqlWildcardTest::eval('@weights[*]{key, nokey}'));
+        # the item cannot be evaluated outside of a wildcard
+        assertThrows("INVALID-OPERATION", "item of a \\[\\*\\] wildcard",
+            \AbstractDataProvider::evalGenericExpressionValue(), ({}, DpqlWildcardTest::item()));
+    }
+
+    #! Wildcards give the same results and raise the same errors as the map expressions they stand for
+    mapEquivalenceTests() {
+        hash<string, string> pairs = {
+            # lists of hashes
+            '@orders[*].id': 'map @id, @orders',
+            '@orders[*].customer.name': 'map @customer.name, @orders',
+            '@orders[*]{"order-id"}': 'map @"order-id", @orders',
+            '@orders[*]{"x.y"}': 'map @"x\\.y", @orders',
+            '@orders[*].tags[0]': 'map @tags[0], @orders',
+            '@orders[*].customer{"name"}': 'map @customer{"name"}, @orders',
+            '@with_null[*].b': 'map @b, @with_null',
+            # hashes
+            '@prices{*}': 'map @value, @prices',
+            '@prices{*}.amount': 'map @value.amount, @prices',
+            '@prices{*}.cur.code': 'map @value.cur.code, @prices',
+            '@prices{*}{"amount"}': 'map @value{"amount"}, @prices',
+            '@weights[*].key': 'map @key, @weights',
+            '@weights[*].value': 'map @value, @weights',
+            '@nums{*}': 'map @value, @nums',
+            # a missing field in an element
+            '@partial[*].b': 'map @b, @partial',
+            '@mixed[*].b': 'map @b, @mixed',
+            '@nums[*].b': 'map @b, @nums',
+            '@weights[*].b': 'map @b, @weights',
+            '@orders{*}': 'map @value, @orders',
+            '@prices{*}.nosuch': 'map @value.nosuch, @prices',
+            # sources that are not lists or hashes
+            '@str[*].b': 'map @b, @str',
+            '@num[*].b': 'map @b, @num',
+            '@str{*}': 'map @value, @str',
+            '@num{*}.x': 'map @value.x, @num',
+            # no value
+            '@none[*].b': 'map @b, @none',
+            '@none{*}': 'map @value, @none',
+            # a missing source field
+            '@nosuch[*].b': 'map @b, @nosuch',
+            '@nosuch{*}': 'map @value, @nosuch',
+            # empty sources
+            '@empty[*].b': 'map @b, @empty',
+            '@emptyh{*}': 'map @value, @emptyh',
+            '@emptyh[*].key': 'map @key, @emptyh',
+        };
+        foreach hash<auto> i in (pairs.pairIterator()) {
+            assertSameAsMap(i.key, i.value);
+        }
+
+        # the errors themselves
+        hash<auto> o = DpqlWildcardTest::outcome('@partial[*].b');
+        assertEq("INVALID-OPERATION", o.err);
+        assertRegex("invalid key \"b\"", o.desc);
+        o = DpqlWildcardTest::outcome('@str[*].b');
+        assertEq("DATA-PROVIDER-EXPRESSION-ERROR", o.err);
+        assertRegex("must be a list or hash, got string", o.desc);
+        o = DpqlWildcardTest::outcome('@none{*}');
+        assertEq("DATA-PROVIDER-EXPRESSION-ERROR", o.err);
+        assertRegex("got nothing", o.desc);
+
+        # a trailing [*] has no map form; on a source that is not a list or a hash it raises map's error
+        assertEq(DpqlWildcardTest::outcome('map @value, @str'), DpqlWildcardTest::outcome('@str[*]'));
+        assertEq(DpqlWildcardTest::outcome('map @value, @none'), DpqlWildcardTest::outcome('@none[*]'));
+        assertEq(DpqlWildcardTest::outcome('map @value, @nosuch'), DpqlWildcardTest::outcome('@nosuch[*]'));
+        # and on a hash it gives the entries, as select does
+        assertEq(DpqlWildcardTest::eval('select @weights, true'), DpqlWildcardTest::eval('@weights[*]'));
+        assertEq(DpqlWildcardTest::eval('select @orders, true'), DpqlWildcardTest::eval('@orders[*]'));
+    }
+
+    conditionTests() {
+        assertTrue(DpqlWildcardTest::eval('listContains(@orders[*].id, 2)'));
+        assertFalse(DpqlWildcardTest::eval('listContains(@orders[*].id, 3)'));
+        assertTrue(DpqlWildcardTest::eval('@orders[*].id == (1, 2)'));
+        assertTrue(DpqlWildcardTest::eval('listContains(@prices{*}.cur.code, "USD")'));
+        assertEq(2, DpqlWildcardTest::eval('count @orders[*].id'));
+        assertEq((2, 4), DpqlWildcardTest::eval('map @value * 2, @orders[*].id'));
+
+        # a prepared expression (with precomputed field paths) gives the same results
+        foreach string dpql in ('@orders[*].customer.name', '@orders[*].items[*].sku', '@prices{*}.cur.code',
+                '@matrix[*][0]', '@orders[*]{"x.y"}', '@orders[*]') {
+            hash<DataProviderExpression> prepared = AbstractDataProvider::prepareExpression(
+                DataProvider::parseDpqlExpression(dpql));
+            assertEq(DpqlWildcardTest::eval(dpql), AbstractDataProvider::evalGenericExpressionValue(Rec, prepared),
+                dpql);
+        }
+
+        # wildcard expressions are known to generic expression verification
+        AbstractDataProvider::verifyGenericExpression(DataProvider::parseDpqlExpression('@orders[*].items[*].sku'));
+        AbstractDataProvider::verifyGenericExpression(DataProvider::parseDpqlExpression('@matrix[*][0]'));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", \AbstractDataProvider::verifyGenericExpression(),
+            DpqlWildcardTest::exp(ListWildcard, (DpqlWildcardTest::ref("a"),)));
+    }
+
+    #! map, select, take, drop, takewhile, takeuntil and slices keep an element that is a list as one element
+    noFlatteningTests() {
+        hash<auto> rec = {"ll": ((1, 2), (3, 4), (5, 6)), "o": ({"items": (1, 2)}, {"items": (3,)})};
+        assertEq(((1, 2), (3,)), DpqlWildcardTest::eval('map @items, @o', rec));
+        assertEq(((1, 2), (3, 4), (5, 6)), DpqlWildcardTest::eval('map @value, @ll', rec));
+        assertEq(((1, 2), (3, 4), (5, 6)), DpqlWildcardTest::eval('select @ll, true', rec));
+        assertEq(((1, 2), (3, 4)), DpqlWildcardTest::eval('take 2, @ll', rec));
+        assertEq(((3, 4), (5, 6)), DpqlWildcardTest::eval('drop 1, @ll', rec));
+        assertEq(((1, 2), (3, 4), (5, 6)), DpqlWildcardTest::eval('takewhile true, @ll', rec));
+        assertEq(((1, 2), (3, 4), (5, 6)), DpqlWildcardTest::eval('takeuntil false, @ll', rec));
+        assertEq(((1, 2), (3, 4)), DpqlWildcardTest::eval('@ll[0..1]', rec));
+        assertEq(((1, 2), (5, 6)), DpqlWildcardTest::eval('@ll[0, 2]', rec));
+        assertEq(((5, 6),), DpqlWildcardTest::eval('@ll[2..]', rec));
+        # elements that are not lists are unchanged
+        assertEq((1, NOTHING, 3), DpqlWildcardTest::eval('take 3, @n', {"n": (1, NOTHING, 3)}));
+        assertEq((2, 3), DpqlWildcardTest::eval('@n[1..2]', {"n": (1, 2, 3)}));
+    }
+
+    serializerTests() {
+        # the wildcard is kept as written; canonical forms
+        hash<string, string> canonical = {
+            '@orders[*].id': '@orders[*].id',
+            '@orders[*].customer.name': '@orders[*].customer.name',
+            '@orders[*]{"order-id"}': '@orders[*].order-id',
+            '@orders[*].order-id': '@orders[*].order-id',
+            '@orders[*]{"x.y"}': '@orders[*]{"x.y"}',
+            '@orders[*]{"a b"}': '@orders[*]{"a b"}',
+            '@orders[*]{"true"}': '@orders[*]{"true"}',
+            '@orders[*]{"123"}': '@orders[*]{"123"}',
+            '@orders[*]{id}': '@orders[*].id',
+            '@orders[*].@id': '@orders[*].id',
+            '@orders[*].tags[0]': '@orders[*].tags[0]',
+            '@orders[*].tags[0..1]': '@orders[*].tags[0..1]',
+            '@orders[*].customer{"name"}': '@orders[*].customer{name}',
+            '@orders[*]{"customer"}.name': '@orders[*].customer{name}',
+            '@orders[*]': '@orders[*]',
+            '@orders[ * ]': '@orders[*]',
+            '@matrix[*][0]': '@matrix[*][0]',
+            '@matrix[*][0..1]': '@matrix[*][0..1]',
+            '@orders[*]{id, tags}': '@orders[*]{id, tags}',
+            '@matrix[*][*]': '@matrix[*][*]',
+            '@orders[*].items[*].sku': '@orders[*].items[*].sku',
+            '@orders[*]{*}': '@orders[*]{*}',
+            '@prices{*}': '@prices{*}',
+            '@prices{*}.amount': '@prices{*}.amount',
+            '@prices{*}.cur.code': '@prices{*}.cur.code',
+            '@prices{*}{"amount"}': '@prices{*}{amount}',
+            '@prices{*}[0]': '@prices{*}[0]',
+            '@prices{*}{*}': '@prices{*}{*}',
+            '@prices{*}[*]': '@prices{*}[*]',
+            '@orders[0].items[*].sku': '@orders[0]{items}[*].sku',
+            '@orders[*].in': '@orders[*].in',
+            '@orders[*].größe': '@orders[*].größe',
+            '@orders[*].id == (1, 2)': '@orders[*].id == (1,2)',
+            'listContains(@orders[*].id, 2) && @x > 1': '@orders[*].id listContains 2 && @x > 1',
+            'map @x, @orders[*].items': 'map @x, @orders[*].items',
+            '@data{"*"}': '@data{"*"}',
+        };
+        foreach hash<auto> i in (canonical.pairIterator()) {
+            hash<DataProviderExpression> e = DataProvider::parseDpqlExpression(i.key);
+            string text = DataProvider::serializeDpqlExpression(e);
+            assertEq(i.value, text, i.key);
+            # the text parses back to the same expression
+            assertEq(e, DataProvider::parseDpqlExpression(text), i.key + " round trip");
+        }
+
+        # map is not rewritten as a wildcard
+        assertEq("map @id, @orders", DataProvider::serializeDpqlExpression(
+            DataProvider::parseDpqlExpression('map @id, @orders')));
+
+        # an expression for each item that accessors cannot write is written with map, which it means
+        hash<DataProviderExpression> e = DpqlWildcardTest::exp(ListWildcard, (DpqlWildcardTest::ref("orders"),
+            DpqlWildcardTest::exp(DP_OP_PLUS, (DpqlWildcardTest::ref("id"), 1))));
+        string text = DataProvider::serializeDpqlExpression(e);
+        assertEq("(map @id + 1, @orders)", text);
+        assertEq((2, 3), DpqlWildcardTest::eval(text));
+        assertEq((2, 3), AbstractDataProvider::evalGenericExpressionValue(Rec, e));
+        # a field path with a part that is not a name
+        e = DpqlWildcardTest::exp(HashWildcard, (DpqlWildcardTest::ref("prices"), DpqlWildcardTest::ref("value.a b")));
+        assertEq('(map @"value.a b", @prices)', DataProvider::serializeDpqlExpression(e));
+        e = DpqlWildcardTest::exp(HashWildcard, (DpqlWildcardTest::ref("prices"), DpqlWildcardTest::ref("amount")));
+        assertEq('(map @amount, @prices)', DataProvider::serializeDpqlExpression(e));
+        # an item expression that cannot be written
+        e = DpqlWildcardTest::exp(ListWildcard, (DpqlWildcardTest::ref("matrix"),
+            DpqlWildcardTest::exp(DP_OP_PLUS, (DpqlWildcardTest::exp(DP_FUNC_INDEX, (DpqlWildcardTest::item(), 0)), 1))));
+        assertThrows("DPQL-SERIALIZE-ERROR", \DataProvider::serializeDpqlExpression(), e);
+        assertThrows("DPQL-SERIALIZE-ERROR", \DataProvider::serializeDpqlExpression(),
+            DpqlWildcardTest::exp(ListWildcard, (DpqlWildcardTest::ref("a"),)));
+    }
+
+    typeTests() {
+        HashDataType customer_t("customer");
+        customer_t.addField(new QoreDataField("name", "name", AbstractDataProviderType::get("string")));
+        HashDataType item_t("item");
+        item_t.addField(new QoreDataField("sku", "sku", AbstractDataProviderType::get("string")));
+        item_t.addField(new QoreDataField("qty", "qty", AbstractDataProviderType::get("int")));
+        HashDataType order_t("order");
+        order_t.addField(new QoreDataField("id", "id", AbstractDataProviderType::get("int")));
+        order_t.addField(new QoreDataField("customer", "customer", customer_t));
+        order_t.addField(new QoreDataField("items", "items", new ListDataType(item_t)));
+        order_t.addField(new QoreDataField("tags", "tags", AbstractDataProviderType::get("list<string>")));
+        hash<string, AbstractDataField> fields = {
+            "orders": new QoreDataField("orders", "orders", new ListDataType(order_t)),
+            "prices": new QoreDataField("prices", "prices", AbstractDataProviderType::get("hash<string, int>")),
+            "matrix": new QoreDataField("matrix", "matrix", AbstractDataProviderType::get("list<list<int>>")),
+            "nums": new QoreDataField("nums", "nums", AbstractDataProviderType::get("list<int>")),
+            "any": new QoreDataField("any", "any", AbstractDataProviderType::get("auto")),
+            "name": new QoreDataField("name", "name", AbstractDataProviderType::get("string")),
+        };
+        code<string(string)> type = string sub (string dpql) {
+            *AbstractDataProviderType t = ExpressionTypes::getType(DataProvider::parseDpqlExpression(dpql), fields);
+            return t ? t.getName() : "<unknown>";
+        };
+        assertEq("list<int>", type('@orders[*].id'));
+        assertEq("list<string>", type('@orders[*].customer.name'));
+        assertEq("list<string>", type('@orders[*].tags[0]'));
+        assertEq("list<list<string>>", type('@orders[*].items[*].sku'));
+        assertEq("list<list<int>>", type('@orders[*].items[*].qty'));
+        # the items themselves: a list of the element type
+        *AbstractDataProviderType items_type = ExpressionTypes::getType(DataProvider::parseDpqlExpression('@orders[*]'),
+            fields);
+        assertTrue(items_type.isList());
+        assertEq("order", items_type.getElementType().getName());
+        assertEq("int", items_type.getElementType().getFieldType("id").getName());
+        assertEq("list<int>", type('@nums[*]'));
+        assertEq("list<int>", type('@matrix[*][0]'));
+        assertEq("list<list<int>>", type('@matrix[*][*]'));
+        assertEq("list<int>", type('@prices{*}'));
+        assertEq("list<string>", type('@prices[*].key'));
+        assertEq("list<int>", type('@prices[*].value'));
+        assertEq("list<int>", type('@nums{*}'));
+        # an unknown type of the items gives a list
+        assertEq("list<auto>", type('@orders[*].nosuch'));
+        assertEq("list<auto>", type('@any[*].x'));
+        assertEq("list<auto>", type('@nosuch[*].x'));
+        assertEq("list<auto>", type('@name[*]'));
+        assertEq("list<auto>", type('@orders[*]{id, tags}'));
+        # without fields; the type that map has
+        assertEq("list<auto>", ExpressionTypes::getType(DataProvider::parseDpqlExpression('@a[*].b')).getName());
+        assertEq(type('map @x, @name'), type('@name[*].x'));
+        # a wildcard is a list operand: comparing it with a string is reported
+        list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression('@orders[*].id == "x"', fields);
+        assertTrue(diags.size() > 0);
+        # a list wildcard is an accepted argument of a function taking a list
+        diags = DataProvider::validateDpqlExpression('listContains(@orders[*].id, 1)', fields);
+        assertEq((), map $1.message, diags, $1.severity == "error");
+    }
+
+    validationTests() {
+        hash<string, AbstractDataField> fields = {
+            "orders": new QoreDataField("orders", "orders", AbstractDataProviderType::get("list<hash<auto>>")),
+            "prices": new QoreDataField("prices", "prices", AbstractDataProviderType::get("hash<auto>")),
+            "x": new QoreDataField("x", "x", AbstractDataProviderType::get("int")),
+        };
+        code<list<string>(string)> errors = list<string> sub (string dpql) {
+            return map $1.message, DataProvider::validateDpqlExpression(dpql, fields), $1.severity == "error";
+        };
+        # the fields of the items are not fields of the record
+        assertEq((), errors('@orders[*].id'));
+        assertEq((), errors('@orders[*].items[*].sku'));
+        assertEq((), errors('@prices{*}.amount'));
+        assertEq((), errors('@orders[*].id == (1, 2) && @x > 1'));
+        # the source is
+        assertEq(("Unknown field 'nosuch'",), errors('@nosuch[*].id'));
+        assertEq(("Unknown field 'nosuch'",), errors('@nosuch{*}'));
+        # the same for map, hash_map and the streaming operators, whose bodies and predicates refer to the items
+        assertEq((), errors('map @id, @orders'));
+        assertEq((), errors('map @id, @orders, @active'));
+        assertEq((), errors('hash_map @id, @name, @orders, @active'));
+        assertEq((), errors('select @orders, @active'));
+        assertEq((), errors('first @active, @orders'));
+        assertEq((), errors('any @active, @orders'));
+        assertEq((), errors('all @active, @orders'));
+        assertEq((), errors('count @active, @orders'));
+        assertEq((), errors('takewhile @active, @orders'));
+        assertEq((), errors('takeuntil @active, @orders'));
+        # their sources are fields of the record
+        assertEq(("Unknown field 'nosuch'",), errors('map @id, @nosuch'));
+        assertEq(("Unknown field 'nosuch'",), errors('select @nosuch, @active'));
+        assertEq(("Unknown field 'nosuch'",), errors('first @nosuch'));
+        assertEq(("Unknown field 'nosuch'",), errors('count @nosuch'));
+        assertEq(("Unknown field 'nosuch'",), errors('take @nosuch, @orders'));
+    }
+
+    completionTests() {
+        HashDataType item_t("item");
+        item_t.addField(new QoreDataField("sku", "sku", AbstractDataProviderType::get("string")));
+        HashDataType order_t("order");
+        order_t.addField(new QoreDataField("id", "id", AbstractDataProviderType::get("int")));
+        order_t.addField(new QoreDataField("items", "items", new ListDataType(item_t)));
+        hash<string, AbstractDataField> fields = {
+            "orders": new QoreDataField("orders", "orders", new ListDataType(order_t)),
+            "prices": new QoreDataField("prices", "prices", AbstractDataProviderType::get("hash<string, int>")),
+            "rates": new QoreDataField("rates", "rates", AbstractDataProviderType::get("hash<string, hash<auto>>")),
+            "name": new QoreDataField("name", "name", AbstractDataProviderType::get("string")),
+            "data": new QoreDataField("data", "data", AbstractDataProviderType::get("auto")),
+        };
+        code<list<string>(string)> labels = list<string> sub (string text) {
+            return map $1.label, DataProvider::getDpqlCompletions(text, text.size(), fields);
+        };
+        code<list<string>(string)> wildcards = list<string> sub (string text) {
+            return map $1, labels(text), $1 == "[*]" || $1 == "{*}" || $1 == "*";
+        };
+        # [*] after a list, {*} after a hash, neither after a string; both when the type is not known
+        assertEq(("[*]",), wildcards('@orders '));
+        assertEq(("{*}",), wildcards('@prices '));
+        assertEq((), wildcards('@name '));
+        assertEq(("[*]", "{*}"), wildcards('@data '));
+        assertEq(("[*]", "{*}"), wildcards('@unknown '));
+        # after accessors: the type of the element
+        assertEq(("{*}",), wildcards('@orders[*]'));
+        assertEq(("{*}",), wildcards('@orders[0]'));
+        assertEq(("[*]",), wildcards('@orders[*].items '));
+        assertEq(("[*]",), wildcards('@orders[0].items '));
+        assertEq(("{*}",), wildcards('@orders[*].items[*]'));
+        assertEq((), wildcards('@orders[*].id '));
+        assertEq((), wildcards('@prices{*}'));
+        assertEq(("{*}",), wildcards('@rates{*}'));
+        # the wildcards are offered whole, after the value; not inside an accessor, where the keys and indexes are
+        assertEq((), wildcards('@orders['));
+        assertEq((), wildcards('@prices{'));
+        assertEq((), wildcards('@orders[*]{'));
+        # the keys of the elements after [*]
+        list<string> key_labels = labels('@orders[*]{');
+        assertTrue(inlist("id", key_labels));
+        assertTrue(inlist("items", key_labels));
+        key_labels = labels('@orders[*].items[*]{');
+        assertTrue(inlist("sku", key_labels));
+        # a member after accessors is followed by more accessors or operators
+        list<string> after = labels('@orders[*].items ');
+        assertTrue(inlist("==", after));
+        assertFalse(inlist("orders", after));
+        # the completion item
+        hash<DpqlCompletionItem> wc = (map $1, DataProvider::getDpqlCompletions('@orders ', 8, fields),
+            $1.label == "[*]")[0];
+        assertEq("[*]", wc.insert_text);
+        assertEq("operator", wc.kind);
+        # the wildcard expressions are not offered as functions
+        list<string> start = labels('');
+        assertFalse(inlist("list_wildcard", start));
+        assertFalse(inlist("hash_wildcard", start));
+        assertFalse(inlist("wildcard_item", start));
+        assertFalse(inlist("[*]", start));
+    }
+
+    tokenSpanTests() {
+        DpqlActionSession session();
+        hash<auto> rv = session.handleAction("dpql-get-tokens", {"text": '@orders[*].id'});
+        list<hash<auto>> spans = map $1, rv.tokens, $1.text == "*";
+        assertEq(1, spans.size());
+        assertEq("operator", spans[0].type);
+    }
+}
