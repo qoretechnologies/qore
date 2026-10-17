@@ -66,6 +66,9 @@ public hashdecl ExpressionArithmeticMismatch {
       integer, which evaluates to the integer) have no type, and are reported by @ref checkArithmetic()
     - for a key or an index of a value whose type describes its fields or elements: the type of the field or of
       the elements
+    - for a wildcard accessor (@ref dpql_wildcards "[*] and {*}"): a list of the type that the accessors after it
+      give for each item when that is known (ex: <tt>list<int></tt> for <tt>\@orders[*].id</tt> when \c id is an
+      \c int field of the elements of \c orders), otherwise \c list
     - for any other expression, from its definition: the type of its first argument when it gives the type of its
       first argument (\c return_type_first_arg), the first of its \c return_type_arg_priority types that one of
       its arguments has, or its declared \c return_type
@@ -413,6 +416,11 @@ string name = ExpressionTypes::getType(DataProvider::parseDpqlExpression("1 + 2.
                 return ExpressionTypes::getKeyType(exp, fields, expmap);
             case DP_FUNC_INDEX:
                 return ExpressionTypes::getIndexType(exp, fields, expmap);
+            case DP_FUNC_LIST_WILDCARD:
+            case DP_FUNC_HASH_WILDCARD:
+                return ExpressionTypes::getWildcardType(exp, fields, expmap);
+            case DP_FUNC_WILDCARD_ITEM:
+                return fields{DpWildcardItemKey} ? ExpressionTypes::known(fields{DpWildcardItemKey}.getType()) : NOTHING;
         }
         *hash<DataProviderExpressionInfo> info = ExpressionTypes::getExpressionInfo(exp.exp, expmap);
         if (!info) {
@@ -509,6 +517,84 @@ string name = ExpressionTypes::getType(DataProvider::parseDpqlExpression("1 + 2.
         }
         *AbstractDataProviderType type = ExpressionTypes::getType(exp.args[0], fields, expmap);
         return type && type.isList() ? ExpressionTypes::known(type.getElementType()) : NOTHING;
+    }
+
+    #! Returns the type of a wildcard accessor: a list of the type that the accessors give for each item
+    /** The accessors after the wildcard are typed with the fields of the record that \c map evaluates its body on:
+        the fields of a hash element, \c value for another element, and \c key and \c value for a hash entry; the
+        accessors that apply to the item itself are typed with the type of the item.
+
+        @return a list type with the element type when that is known, otherwise \c list
+    */
+    private static AbstractDataProviderType getWildcardType(hash<DataProviderExpression> exp,
+            *hash<string, AbstractDataField> fields, *hash<string, hash<DataProviderExpressionInfo>> expmap) {
+        if (exp.args.lsize() == 2) {
+            *hash<string, AbstractDataField> item_fields = ExpressionTypes::getWildcardItemFields(exp,
+                ExpressionTypes::getType(exp.args[0], fields, expmap));
+            if (item_fields) {
+                if (*AbstractDataProviderType type = ExpressionTypes::getType(exp.args[1], item_fields, expmap)) {
+                    return new ListDataType(type);
+                }
+            }
+        }
+        return AbstractDataProviderTypeMap."list";
+    }
+
+    #! Returns the fields that the expression evaluated for each item of a wildcard is typed with
+    /** @param exp the wildcard expression
+        @param source_type the type of its source, if known
+
+        @return the fields, or @ref nothing if they are not known
+    */
+    private static *hash<string, AbstractDataField> getWildcardItemFields(hash<DataProviderExpression> exp,
+            *AbstractDataProviderType source_type) {
+        if (!source_type) {
+            return;
+        }
+        *AbstractDataProviderType item_type;
+        bool hash_source;
+        if (source_type.isList()) {
+            item_type = source_type.getElementType();
+        } else if (source_type.getBaseTypeName() == "hash") {
+            hash_source = True;
+            # the type of the values, if they all have the same type
+            item_type = source_type.getFields() ? NOTHING : source_type.getElementType();
+        } else {
+            return;
+        }
+        item_type = ExpressionTypes::known(item_type);
+        if (exp.exp == DP_FUNC_LIST_WILDCARD && dp_wildcard_item_body(exp.args[1])) {
+            # the accessors apply to the item itself; a hash entry is a key/value record
+            if (hash_source) {
+                HashDataType entry_type();
+                entry_type.addField(new QoreDataField("key", NOTHING, AbstractDataProviderTypeMap."string"));
+                entry_type.addField(new QoreDataField("value", NOTHING,
+                    item_type ?? AbstractDataProviderTypeMap."auto"));
+                item_type = entry_type;
+            }
+            return item_type
+                ? {DpWildcardItemKey: new QoreDataField(DpWildcardItemKey, NOTHING, item_type)}
+                : NOTHING;
+        }
+        if (hash_source) {
+            # a hash entry gives key and value
+            hash<string, AbstractDataField> rv = {
+                "key": new QoreDataField("key", NOTHING, AbstractDataProviderTypeMap."string"),
+            };
+            if (item_type) {
+                rv.value = new QoreDataField("value", NOTHING, item_type);
+            }
+            return rv;
+        }
+        if (!item_type) {
+            return;
+        }
+        # a hash element is the record itself; its fields are known when its type describes them
+        if (item_type.getBaseTypeName() == "hash") {
+            return item_type.getFields();
+        }
+        # another element is the value
+        return {"value": new QoreDataField("value", NOTHING, item_type)};
     }
 
     #! Returns the type if it is known before the expression is evaluated: not \c any or \c auto

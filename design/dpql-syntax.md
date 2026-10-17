@@ -125,6 +125,38 @@ Field reference operators can be chained:
 @matrix[0][1]            # Nested list access
 ```
 
+### Wildcard Operators
+
+`[*]` and `{*}` take a value from each item of a list and each value of a hash. A wildcard
+is the `map` operator written as an accessor: the accessors after it are the body that `map`
+evaluates for each item, and it evaluates exactly as that `map` expression does.
+
+| Wildcard | Same as | Result |
+|----------|---------|--------|
+| `@orders[*].id` | `map @id, @orders` | The `id` of each order |
+| `@orders[*].customer.name` | `map @customer.name, @orders` | The `.name` steps continue the field |
+| `@orders[*]{"order-id"}` | `map @"order-id", @orders` | A single key is a field too |
+| `@orders[*].tags[0]` | `map @tags[0], @orders` | Ordinary accessors follow |
+| `@orders[*].items[*].sku` | `map (map @sku, @items), @orders` | Nested: a list of lists, never flattened |
+| `@prices{*}` | `map @value, @prices` | The values, in key order |
+| `@prices{*}.amount` | `map @value.amount, @prices` | The accessors apply to `@value` |
+| `@orders[*]` | `@orders` | A trailing `[*]` is the items: the list itself |
+| `@matrix[*][0]` | `map @value[0], @matrix` | Accessors that do not start with a field apply to the item |
+
+Missing fields, wrong source types (a non-list under `[*]`, a non-hash under `{*}`), empty
+sources and no value give the same results and raise the same errors as the `map` expression.
+`[*]` over a hash goes through its `key`/`value` entries (`@weights[*].key`), and a trailing
+`[*]` over a hash gives those entries, as `select` does. `@data{"*"}` is the key `*`, not a
+wildcard.
+
+Expression form (`DataProviderExpression`): `list_wildcard` / `hash_wildcard` with the source
+and the per-item expression as arguments (the per-item expression is the body of `map`; the
+`.name` steps after `[*]`/`{*}` form one field reference such as `customer.name` or
+`value.amount`); accessors on the item itself start from the zero-argument `wildcard_item`.
+The tokenizer gives the `*` its own token type (`DPQL_TOK_WILDCARD`), the serializer writes a
+wildcard back as written, the expression type is `list<T>` when the type of each value is known,
+and completion offers `[*]` after a list and `{*}` after a hash.
+
 ## Comparison Operators
 
 | Operator | Meaning |
@@ -345,7 +377,8 @@ takeuntil @status == "closed", @events
 
 For hash sources, `select`, `first`, `take`, `drop`, `takewhile`, and `takeuntil` return
 `key`/`value` records. `takeuntil` stops before the matching boundary item. `all` returns
-`true` for an empty source.
+`true` for an empty source. Each item or body result is one element of the result, also when it
+is a list: `map @items, @orders` is a list of lists, and so is a slice of a list of lists.
 
 ## Values
 

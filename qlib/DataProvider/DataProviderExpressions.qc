@@ -238,6 +238,124 @@ int sub dp_stream_non_negative_count(string op, auto value) {
     return count;
 }
 
+#! Evaluates a map body for each item of an evaluated source; the implementation of the map operator
+/** Each result is one element of the list returned, also when it is itself a list, so that a body that gives a list
+    gives a list of lists
+
+    @param source the evaluated source: a list or a hash
+    @param body the expression evaluated for each item: a list element that is a hash is the record that it is
+    evaluated on, another list element is \c value in it, and a hash entry gives \c key and \c value
+    @param filter an optional condition; only the items for which it is true are mapped
+    @param tc the template context
+
+    @return the result for each item that the filter accepts
+
+    @throw DATA-PROVIDER-EXPRESSION-ERROR the source is not a list or a hash
+
+    @since DataProvider 3.10
+*/
+list<auto> sub dp_map_source(auto source, auto body, *auto filter, *hash<auto> tc) {
+    list<auto> result = ();
+    switch (source.typeCode()) {
+        case NT_LIST:
+            foreach auto elem in (cast<list>(source)) {
+                hash<auto> iter_rec = dp_stream_list_record(elem);
+                if (!dp_stream_accept(iter_rec, filter, tc)) {
+                    continue;
+                }
+                push result, AbstractDataProvider::evalGenericExpressionValue(iter_rec, body, tc);
+            }
+            break;
+        case NT_HASH:
+            foreach string key in (cast<hash>(source).keys()) {
+                hash<auto> iter_rec = dp_stream_hash_record(key, source{key});
+                if (!dp_stream_accept(iter_rec, filter, tc)) {
+                    continue;
+                }
+                push result, AbstractDataProvider::evalGenericExpressionValue(iter_rec, body, tc);
+            }
+            break;
+        default:
+            dp_stream_source_error(DP_OP_MAP, source);
+    }
+    return result;
+}
+
+#! The key of the record that a list wildcard evaluates its item accessors on; the record holds only the item
+const DpWildcardItemKey = "$dpql-wildcard-item";
+
+#! Returns True if the body of a list wildcard applies its accessors to the item itself
+/** The accessors after \c [*] apply to the item itself when they do not start with a field: the innermost base of
+    the accessor chain is then @ref DP_FUNC_WILDCARD_ITEM.  Otherwise the body is evaluated as the body of
+    \c map is.
+
+    @param body the expression evaluated for each item of the wildcard
+
+    @return True if the accessors apply to the item itself
+
+    @since DataProvider 3.10
+*/
+bool sub dp_wildcard_item_body(auto body) {
+    while (body instanceof hash<DataProviderExpression>) {
+        switch (body.exp) {
+            case DP_FUNC_WILDCARD_ITEM:
+                return True;
+            case DP_FUNC_INDEX:
+            case DP_FUNC_SLICE:
+            case DP_FUNC_KEY:
+            case DP_FUNC_LIST_WILDCARD:
+            case DP_FUNC_HASH_WILDCARD:
+                if (!body.args) {
+                    return False;
+                }
+                body = body.args[0];
+                continue;
+        }
+        return False;
+    }
+    return False;
+}
+
+#! Evaluates the accessors of a list wildcard on each item of an evaluated source
+/** A list element is the item, and a hash entry gives a \c key / \c value record, as for the other streaming
+    operators.  Each result is one element of the list returned.
+
+    @param source the evaluated source: a list or a hash
+    @param body the accessors, starting from @ref DP_FUNC_WILDCARD_ITEM
+    @param tc the template context
+
+    @return the result for each item
+
+    @throw DATA-PROVIDER-EXPRESSION-ERROR the source is not a list or a hash, as from \c map
+
+    @since DataProvider 3.10
+*/
+list<auto> sub dp_wildcard_items(auto source, auto body, *hash<auto> tc) {
+    bool item_only = body instanceof hash<DataProviderExpression> && body.exp == DP_FUNC_WILDCARD_ITEM;
+    list<auto> result = ();
+    switch (source.typeCode()) {
+        case NT_LIST:
+            if (item_only) {
+                return source;
+            }
+            foreach auto elem in (cast<list>(source)) {
+                push result, AbstractDataProvider::evalGenericExpressionValue({DpWildcardItemKey: elem}, body, tc);
+            }
+            break;
+        case NT_HASH:
+            foreach string key in (cast<hash>(source).keys()) {
+                hash<auto> item = dp_stream_hash_record(key, source{key});
+                push result, item_only
+                    ? item
+                    : AbstractDataProvider::evalGenericExpressionValue({DpWildcardItemKey: item}, body, tc);
+            }
+            break;
+        default:
+            dp_stream_source_error(DP_OP_MAP, source);
+    }
+    return result;
+}
+
 #! Extended expression implementations for data providers
 /** @since DataProvider 3.3
 */
@@ -2947,33 +3065,101 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "return_type": AbstractDataProviderTypeMap."list",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
-            auto body = exp.args[0];
-            auto source = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], tc);
-            *auto filter = exp.args.size() > 2 ? exp.args[2] : NOTHING;
-            list<auto> result = ();
-            switch (source.typeCode()) {
-                case NT_LIST:
-                    foreach auto elem in (cast<list>(source)) {
-                        hash<auto> iter_rec = dp_stream_list_record(elem);
-                        if (!dp_stream_accept(iter_rec, filter, tc)) {
-                            continue;
-                        }
-                        result += AbstractDataProvider::evalGenericExpressionValue(iter_rec, body, tc);
-                    }
-                    break;
-                case NT_HASH:
-                    foreach string key in (cast<hash>(source).keys()) {
-                        hash<auto> iter_rec = dp_stream_hash_record(key, source{key});
-                        if (!dp_stream_accept(iter_rec, filter, tc)) {
-                            continue;
-                        }
-                        result += AbstractDataProvider::evalGenericExpressionValue(iter_rec, body, tc);
-                    }
-                    break;
-                default:
-                    dp_stream_source_error(DP_OP_MAP, source);
+            return dp_map_source(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], tc),
+                exp.args[0], exp.args.size() > 2 ? exp.args[2] : NOTHING, tc);
+        },
+    },
+    # --- Wildcard accessors: map written as an accessor ---
+    DP_FUNC_LIST_WILDCARD: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "role": ER_All,
+            "name": DP_FUNC_LIST_WILDCARD,
+            "display_name": "list wildcard ([*])",
+            "short_desc": "Applies the accessors after [*] to each item of a list, returning a new list",
+            "desc": "Written `source[*]` followed by accessors, such as `@orders[*].id`; it is the `map` operator "
+                "written as an accessor: `@orders[*].id` is `map @id, @orders`.  When the accessors do not start "
+                "with a field, they apply to the item itself (`@matrix[*][0]`), and a trailing `[*]` gives the "
+                "items: the list itself, or the `key`/`value` records of a hash",
+            "symbol": "[*]",
+            "render_template": "$arg[0][*] $arg[1]",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Source",
+                    "short_desc": "The list to iterate over",
+                    "desc": "The list (or hash) whose items the accessors are applied to",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Item Expression",
+                    "short_desc": "The accessors evaluated for each item",
+                    "desc": "The expression evaluated for each item, as the body of `map` is",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."list",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            auto source = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], tc);
+            return dp_wildcard_item_body(exp.args[1])
+                ? dp_wildcard_items(source, exp.args[1], tc)
+                : dp_map_source(source, exp.args[1], NOTHING, tc);
+        },
+    },
+    DP_FUNC_HASH_WILDCARD: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "role": ER_All,
+            "name": DP_FUNC_HASH_WILDCARD,
+            "display_name": "hash wildcard ({*})",
+            "short_desc": "Applies the accessors after {*} to each value of a hash, returning a new list",
+            "desc": "Written `source{*}` followed by accessors, such as `@prices{*}.amount`; it is the `map` "
+                "operator written as an accessor: `@prices{*}.amount` is `map @value.amount, @prices`, and a "
+                "trailing `{*}` gives the values of the hash in key order",
+            "symbol": "{*}",
+            "render_template": "$arg[0]{*} $arg[1]",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Source",
+                    "short_desc": "The hash to iterate over",
+                    "desc": "The hash (or list) whose values the accessors are applied to",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Value Expression",
+                    "short_desc": "The accessors evaluated for each value",
+                    "desc": "The expression evaluated for each value, as the body of `map` is; it starts with "
+                        "`@value`",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."list",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return dp_map_source(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], tc),
+                exp.args[1], NOTHING, tc);
+        },
+    },
+    DP_FUNC_WILDCARD_ITEM: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "role": ER_All,
+            "name": DP_FUNC_WILDCARD_ITEM,
+            "display_name": "wildcard item",
+            "short_desc": "The item of the enclosing [*] wildcard",
+            "desc": "The item that the accessors after `[*]` are applied to when they do not start with a field; "
+                "it is only valid in a list wildcard and is not written in DPQL",
+            "symbol": "",
+            "groups": "Data Manipulation",
+            "args": (),
+            "return_type": AbstractDataProviderTypeMap."any",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            if (!rec.hasKey(DpWildcardItemKey)) {
+                throw "INVALID-OPERATION", sprintf("%y is the item of a [*] wildcard and cannot be evaluated "
+                    "outside of one", DP_FUNC_WILDCARD_ITEM);
             }
-            return result;
+            return rec{DpWildcardItemKey};
         },
     },
     DP_OP_SELECT: {
@@ -3013,7 +3199,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 case NT_LIST:
                     foreach auto elem in (cast<list>(source)) {
                         if (dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
-                            result += elem;
+                            push result, elem;
                         }
                     }
                     break;
@@ -3021,7 +3207,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                     foreach string key in (cast<hash>(source).keys()) {
                         hash<auto> pair = dp_stream_hash_record(key, source{key});
                         if (dp_stream_accept(pair, predicate, tc)) {
-                            result += pair;
+                            push result, pair;
                         }
                     }
                     break;
@@ -3301,7 +3487,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
             switch (source.typeCode()) {
                 case NT_LIST:
                     foreach auto elem in (cast<list>(source)) {
-                        result += elem;
+                        push result, elem;
                         if (result.size() >= limit) {
                             break;
                         }
@@ -3309,7 +3495,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                     break;
                 case NT_HASH:
                     foreach string key in (cast<hash>(source).keys()) {
-                        result += dp_stream_hash_record(key, source{key});
+                        push result, dp_stream_hash_record(key, source{key});
                         if (result.size() >= limit) {
                             break;
                         }
@@ -3360,7 +3546,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                             ++skipped;
                             continue;
                         }
-                        result += elem;
+                        push result, elem;
                     }
                     break;
                 case NT_HASH:
@@ -3369,7 +3555,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                             ++skipped;
                             continue;
                         }
-                        result += dp_stream_hash_record(key, source{key});
+                        push result, dp_stream_hash_record(key, source{key});
                     }
                     break;
                 default:
@@ -3415,7 +3601,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                         if (!dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
                             break;
                         }
-                        result += elem;
+                        push result, elem;
                     }
                     break;
                 case NT_HASH:
@@ -3424,7 +3610,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                         if (!dp_stream_accept(pair, predicate, tc)) {
                             break;
                         }
-                        result += pair;
+                        push result, pair;
                     }
                     break;
                 default:
@@ -3470,7 +3656,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                         if (dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
                             break;
                         }
-                        result += elem;
+                        push result, elem;
                     }
                     break;
                 case NT_HASH:
@@ -3479,7 +3665,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                         if (dp_stream_accept(pair, predicate, tc)) {
                             break;
                         }
-                        result += pair;
+                        push result, pair;
                     }
                     break;
                 default:

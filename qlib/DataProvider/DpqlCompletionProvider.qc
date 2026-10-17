@@ -227,6 +227,16 @@ public class DpqlCompletionProvider {
                 "documentation": "Member access", "sort_priority": 7},
         );
 
+        #! Wildcard accessor completions, offered by the type of the value before the cursor
+        /** @since DataProvider 3.10
+        */
+        const ListWildcardCompletion = {"label": "[*]", "kind": "operator", "insert_text": "[*]",
+            "documentation": "Each item of the list: @orders[*].id is the id of each order (map @id, @orders)",
+            "sort_priority": 8};
+        const HashWildcardCompletion = {"label": "{*}", "kind": "operator", "insert_text": "{*}",
+            "documentation": "Each value of the hash, in key order: @prices{*} is map @value, @prices",
+            "sort_priority": 9};
+
         #! Well-known template contexts with descriptions
         const list<auto> DefaultTemplateContexts = (
             {"label": "$static:", "kind": "template", "insert_text": "$static:",
@@ -401,6 +411,7 @@ public class DpqlCompletionProvider {
             case DPQL_CTX_AFTER_FIELD:
                 # After field, suggest accessors and comparison operators
                 items += getAccessorCompletions(analysis.prefix);
+                items += getWildcardCompletions(substr(ctx.text, 0, ctx.position), ctx.fields, analysis.prefix);
                 if (in_search) {
                     # In search context after a field ref: only server-supported comparison ops
                     items += getServerOperatorCompletions(analysis.prefix, ctx.server_expressions);
@@ -442,6 +453,7 @@ public class DpqlCompletionProvider {
             case DPQL_CTX_AFTER_ACCESSOR:
                 # After ] or } - can add more accessors or operators
                 items += getAccessorCompletions(analysis.prefix);
+                items += getWildcardCompletions(substr(ctx.text, 0, ctx.position), ctx.fields, analysis.prefix);
                 items += getOperatorCompletions(analysis.prefix, True);
                 break;
         }
@@ -562,6 +574,18 @@ public class DpqlCompletionProvider {
                 "ctx": DPQL_CTX_AFTER_FIELD,
                 "prefix": prefix,
             };
+        }
+
+        # A member name after accessors, followed by whitespace (ex: "@orders[*].items "): more accessors or
+        # operators can follow, as after ] or }
+        if (!prefix && trimmed.size() < before.size() && trimmed =~ /[\]\}]\.[\p{L}\p{M}\p{N}_.\-]+$/) {
+            *hash<auto> chain = extractFieldPath(trimmed);
+            if (chain && chain.end == trimmed.size() && chain.accessors) {
+                return {
+                    "ctx": DPQL_CTX_AFTER_ACCESSOR,
+                    "prefix": prefix,
+                };
+            }
         }
 
         # Check if last token was an operator
@@ -1171,6 +1195,10 @@ public class DpqlCompletionProvider {
             if (isPrefixExpressionOperator(ename)) {
                 continue;
             }
+            # wildcard accessors are written [*] and {*}, never as a call
+            if (DpqlWildcardAccessors.hasKey(ename)) {
+                continue;
+            }
             if (info.type == DET_Operator && inlist("Comparison", info.groups)
                     && info.args.size() == 2 && sym =~ /^[a-zA-Z]/) {
                 continue;
@@ -1237,6 +1265,59 @@ public class DpqlCompletionProvider {
             }
         }
 
+        return items;
+    }
+
+    #! Returns the wildcard accessors that the value before the cursor can take
+    /** The type of the field reference and accessors before the cursor decides: a list takes \c [*] and a hash
+        takes \c {*}; when the type is not known, both are possible.
+
+        @param before the text before the cursor
+        @param fields the fields of the record
+
+        @return a hash with \c list (\c [*]) and \c hash (\c {*}) keys, each True if the wildcard can follow
+
+        @since DataProvider 3.10
+    */
+    private hash<string, bool> getWildcardKinds(string before, *hash<string, AbstractDataField> fields) {
+        *AbstractDataProviderType type;
+        if (*hash<auto> chain = extractFieldPath(before)) {
+            if (*AbstractDataField field = fields{chain.field_name}) {
+                type = traverseTypeWithAccessors(field.getType(), chain.accessors);
+            }
+        }
+        if (!type || !type.hasType()) {
+            return {"list": True, "hash": True};
+        }
+        return {
+            "list": type.isList(),
+            "hash": type.getBaseTypeName() == "hash",
+        };
+    }
+
+    #! Gets the wildcard accessor completions after a field reference or an accessor
+    /** \c [*] is offered after a list and \c {*} after a hash; both are offered when the type is not known
+
+        @param before the text before the cursor
+        @param fields the fields of the record
+        @param prefix the text typed so far, which the wildcards must start with
+
+        @return the wildcard completion items
+
+        @since DataProvider 3.10
+    */
+    private list<hash<DpqlCompletionItem>> getWildcardCompletions(string before,
+            *hash<string, AbstractDataField> fields, string prefix) {
+        list<hash<DpqlCompletionItem>> items = ();
+        hash<string, bool> kinds = getWildcardKinds(before, fields);
+        if (kinds.list && (!expressions || expressions{DP_FUNC_LIST_WILDCARD})
+                && (!prefix || index(ListWildcardCompletion.label, prefix) == 0)) {
+            items += cast<hash<DpqlCompletionItem>>(ListWildcardCompletion);
+        }
+        if (kinds.hash && (!expressions || expressions{DP_FUNC_HASH_WILDCARD})
+                && (!prefix || index(HashWildcardCompletion.label, prefix) == 0)) {
+            items += cast<hash<DpqlCompletionItem>>(HashWildcardCompletion);
+        }
         return items;
     }
 
@@ -1522,8 +1603,9 @@ public class DpqlCompletionProvider {
                 if (depth == 0) {
                     # We've consumed the closing ], so content is bracket_start to pos-1
                     string content = byteSubstr(text, bracket_start, pos - 1 - bracket_start);
-                    # Simplified: treat as INDEX for type traversal
-                    accessors += {"type": DP_FUNC_INDEX, "content": content};
+                    # Simplified: treat as INDEX for type traversal; [*] gives each element as well
+                    accessors += {"type": trim(content) == "*" ? DP_FUNC_LIST_WILDCARD : DP_FUNC_INDEX,
+                        "content": content};
                 }
                 # If not closed, we're still inside this accessor - stop parsing
                 else {
@@ -1543,8 +1625,13 @@ public class DpqlCompletionProvider {
                 if (depth == 0) {
                     # Extract keys from content
                     string content = byteSubstr(text, brace_start, pos - 1 - brace_start);
-                    list<string> key_list = parseKeyList(content);
-                    accessors += {"type": DP_FUNC_KEY, "key_list": key_list};
+                    if (trim(content) == "*") {
+                        # {*}: each value of the hash
+                        accessors += {"type": DP_FUNC_HASH_WILDCARD};
+                    } else {
+                        list<string> key_list = parseKeyList(content);
+                        accessors += {"type": DP_FUNC_KEY, "key_list": key_list};
+                    }
                 }
                 # If not closed, we're still inside this accessor - stop parsing
                 else {
@@ -1568,6 +1655,8 @@ public class DpqlCompletionProvider {
         return {
             "field_name": field_name,
             "accessors": accessors,
+            # the byte offset where the field reference and its accessors end
+            "end": pos,
         };
     }
 
@@ -1638,9 +1727,20 @@ public class DpqlCompletionProvider {
 
         foreach hash<auto> acc in (accessors) {
             switch (acc.type) {
+                case DP_FUNC_HASH_WILDCARD: {
+                    # each value of a hash: the type of its values, if they all have the same type
+                    *AbstractDataProviderType value_type = current.getFields() ? NOTHING : current.getElementType();
+                    if (!value_type) {
+                        return NOTHING;
+                    }
+                    current = value_type;
+                    break;
+                }
+
+                case DP_FUNC_LIST_WILDCARD:
                 case DP_FUNC_INDEX:
                 case DP_FUNC_SLICE:
-                    # List index/slice access: get element type
+                    # List index/slice access, or each element: get element type
                     *AbstractDataProviderType elem = current.getElementType();
                     if (!elem) {
                         return NOTHING;  # Not a list type

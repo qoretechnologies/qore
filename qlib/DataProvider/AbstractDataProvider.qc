@@ -2235,12 +2235,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                             if (start < 0) start = 0;
                             if (end >= len) end = len - 1;
                             for (int j = start; j <= end; ++j) {
-                                result += value[j];
+                                push result, value[j];
                             }
                         } else {
                             int idx = item >= 0 ? item : len + item;
                             if (idx >= 0 && idx < len) {
-                                result += value[idx];
+                                push result, value[idx];
                             }
                         }
                     }

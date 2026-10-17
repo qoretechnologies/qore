@@ -108,6 +108,10 @@ public const DPQL_TOK_TEMPLATE = 39;
 public const DPQL_TOK_WHITESPACE = 40;
 #! Newline character
 public const DPQL_TOK_NEWLINE = 41;
+#! Wildcard in an accessor: the \c * of \c [*] and \c {*}
+/** @since DataProvider 3.10
+*/
+public const DPQL_TOK_WILDCARD = 42;
 #! End of input
 public const DPQL_TOK_EOF = 50;
 #! Error token (invalid input)
@@ -156,6 +160,7 @@ public const hash<string, string> DpqlTokenTypeNames = {
     DPQL_TOK_TEMPLATE: "template",
     DPQL_TOK_WHITESPACE: "whitespace",
     DPQL_TOK_NEWLINE: "newline",
+    DPQL_TOK_WILDCARD: "wildcard",
     DPQL_TOK_EOF: "eof",
     DPQL_TOK_ERROR: "error",
 };
@@ -609,6 +614,16 @@ public class DpqlTokenizer {
         if (c == "." && in_field_ref_context) {
             advance();
             return makeToken(DPQL_TOK_DOT, ".", start_line, start_column);
+        }
+
+        # A '*' alone in an index or key accessor is a wildcard, as in @orders[*] or @prices{*}; the field reference
+        # context is kept, as after the other accessor tokens
+        if (c == "*" && in_field_ref_context) {
+            string prev = prevNonWhitespaceChar();
+            if (prev == "[" || prev == "{") {
+                advance();
+                return makeToken(DPQL_TOK_WILDCARD, "*", start_line, start_column);
+            }
         }
 
         # Arithmetic operators: +, -, *, /, %

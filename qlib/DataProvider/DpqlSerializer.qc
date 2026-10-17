@@ -379,6 +379,11 @@ public class DpqlSerializer {
                 }
                 break;
 
+            case DP_FUNC_LIST_WILDCARD:
+            case DP_FUNC_HASH_WILDCARD:
+                result = serializeWildcard(exp);
+                break;
+
             case DP_FUNC_KEY:
                 # Render as sugar: base{keys...} only if all key args are literals
                 if (areKeyArgsLiteral(exp.args)) {
@@ -649,6 +654,144 @@ public class DpqlSerializer {
             return '@"' + field + '"';
         }
         return "@" + field;
+    }
+
+    #! Serializes a wildcard accessor as it is written: the source, \c [*] or \c {*}, and the accessors after it
+    /** An expression for each item that the accessor syntax cannot write is written with \c map, which is what the
+        wildcard means; this only happens with an expression that was not parsed from DPQL.
+
+        @throw DPQL-SERIALIZE-ERROR the expression applies to the item itself and cannot be written in DPQL
+
+        @since DataProvider 3.10
+    */
+    private string serializeWildcard(hash<DataProviderExpression> exp) {
+        if (exp.args.size() != 2) {
+            throw "DPQL-SERIALIZE-ERROR", sprintf("the wildcard accessor %y takes 2 arguments; the expression has %d",
+                exp.exp, exp.args.size());
+        }
+        *string body = serializeWildcardBody(exp.args[1], exp.exp);
+        if (exists body) {
+            return serializeArg(exp.args[0], DPQL_PREC_PRIMARY) + DpqlWildcardAccessors{exp.exp} + body;
+        }
+        if (exp.exp == DP_FUNC_LIST_WILDCARD && DpqlSerializer::usesWildcardItem(exp.args[1])) {
+            throw "DPQL-SERIALIZE-ERROR", sprintf("the expression for each item of the list wildcard %y cannot be "
+                "written in DPQL", exp.args[1]);
+        }
+        return "(" + serializePrefixOperator(DP_OP_MAP, (exp.args[1], exp.args[0])) + ")";
+    }
+
+    #! Returns True if an expression for each item of a list wildcard uses the item itself
+    /** The item of a nested list wildcard is that wildcard's own
+
+        @since DataProvider 3.10
+    */
+    private static bool usesWildcardItem(auto arg) {
+        if (!(arg instanceof hash<DataProviderExpression>)) {
+            return False;
+        }
+        if (arg.exp == DP_FUNC_WILDCARD_ITEM) {
+            return True;
+        }
+        if (arg.exp == DP_FUNC_LIST_WILDCARD) {
+            return arg.args ? DpqlSerializer::usesWildcardItem(arg.args[0]) : False;
+        }
+        foreach auto a in (arg.args) {
+            if (DpqlSerializer::usesWildcardItem(a)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns the accessors that follow a wildcard, or @ref nothing if they cannot be written as accessors
+    /** @param body the expression evaluated for each item
+        @param op the wildcard: @ref DP_FUNC_LIST_WILDCARD or @ref DP_FUNC_HASH_WILDCARD
+
+        @since DataProvider 3.10
+    */
+    private *string serializeWildcardBody(auto body, string op) {
+        if (body instanceof hash<DataProviderFieldReference>) {
+            return serializeWildcardFieldPath(body.field, op);
+        }
+        if (!(body instanceof hash<DataProviderExpression>)) {
+            return;
+        }
+        *string base;
+        switch (body.exp) {
+            case DP_FUNC_WILDCARD_ITEM:
+                return op == DP_FUNC_LIST_WILDCARD && !body.args ? "" : NOTHING;
+
+            case DP_FUNC_INDEX:
+                if (body.args.size() == 2 && isAccessorArgLiteral(body.args[1])
+                        && exists (base = serializeWildcardBody(body.args[0], op))) {
+                    return base + "[" + string(body.args[1]) + "]";
+                }
+                return;
+
+            case DP_FUNC_SLICE:
+                if (body.args.size() > 1 && areSliceArgsLiteral(body.args)
+                        && exists (base = serializeWildcardBody(body.args[0], op))) {
+                    return base + "[" + serializeSliceArgs(body.args) + "]";
+                }
+                return;
+
+            case DP_FUNC_KEY:
+                if (body.args.size() > 1 && areKeyArgsLiteral(body.args)
+                        && exists (base = serializeWildcardBody(body.args[0], op))) {
+                    return base + "{" + serializeKeyArgs(body.args) + "}";
+                }
+                return;
+
+            case DP_FUNC_LIST_WILDCARD:
+            case DP_FUNC_HASH_WILDCARD: {
+                if (body.args.size() != 2 || !exists (base = serializeWildcardBody(body.args[0], op))) {
+                    return;
+                }
+                *string inner = serializeWildcardBody(body.args[1], body.exp);
+                return exists inner ? base + DpqlWildcardAccessors{body.exp} + inner : NOTHING;
+            }
+        }
+    }
+
+    #! Returns the field path that the accessors after a wildcard start with, or @ref nothing
+    /** After \c [*] the path is written <tt>.name.name</tt>, or <tt>{"key"}</tt> for a single key that is not a
+        name; after \c {*} it is the path after \c value
+
+        @since DataProvider 3.10
+    */
+    private *string serializeWildcardFieldPath(string field, string op) {
+        list<string> path = map regex_subst($1, "\\\\.", ".", RE_Global), field.splitRegex("(?<!\\\\)\\.");
+        if (op == DP_FUNC_HASH_WILDCARD) {
+            if (path[0] !== "value") {
+                return;
+            }
+            splice path, 0, 1;
+        }
+        bool bare = True;
+        foreach string name in (path) {
+            if (!DpqlSerializer::isBareMemberName(name)) {
+                bare = False;
+                break;
+            }
+        }
+        if (bare) {
+            return path ? "." + path.join(".") : "";
+        }
+        if (op == DP_FUNC_LIST_WILDCARD && path.size() == 1) {
+            return "{" + serializeString(path[0]) + "}";
+        }
+    }
+
+    #! Returns True if a key can be written as <tt>.name</tt> after an accessor
+    /** @param name the key
+
+        @return True if the tokenizer reads the key as an identifier after a dot
+
+        @since DataProvider 3.10
+    */
+    private static bool isBareMemberName(string name) {
+        return name =~ /^[\p{L}_](?:[\p{L}\p{M}\p{N}_]|-[a-zA-Z])*$/
+            && !inlist(name.lwr(), ("true", "false", "null"));
     }
 
     #! Returns True if an accessor arg is a literal (not an expression)

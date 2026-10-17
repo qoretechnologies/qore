@@ -49,7 +49,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.9.1";
+    version = "3.10";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1024,6 +1024,8 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     - <tt>\@scores[0] &gt;= 90</tt> - list or string index accessor
     - <tt>\@scores[0..1]</tt> - list slice accessor
     - <tt>\@payload{region} == "EU"</tt> - hash key accessor
+    - <tt>\@orders[*].id</tt> and <tt>\@prices{*}</tt> - @ref dpql_wildcards "wildcard accessors": a value from
+      each item of a list or each value of a hash
 
     @par Expression Operators
     Operators that evaluate subexpressions in an operator-controlled context use Qore-style operator syntax
@@ -1032,6 +1034,71 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
       of the source list and optionally filters elements
     - <tt>hash_map \@name, \@age, \@users</tt> - evaluates key and value expressions against each
       element of the source list and returns a hash
+
+    @subsection dpql_wildcards Wildcard Accessors
+
+    The wildcard accessors \c [*] and \c {*} take a value from each item of a list and from each value of a hash.
+    A wildcard is the \c map operator written as an accessor: the accessors after it are the expression that
+    \c map evaluates for each item, and the wildcard evaluates exactly as that \c map expression does.
+
+    |!Wildcard|!Same as|!Result
+    |<tt>\@orders[*].id</tt>|<tt>map \@id, \@orders</tt>|the \c id of each order
+    |<tt>\@orders[*].customer.name</tt>|<tt>map \@customer.name, \@orders</tt>|the customer name of each order
+    |<tt>\@orders[*]{"order-id"}</tt>|<tt>map \@"order-id", \@orders</tt>|a key that is not a name
+    |<tt>\@orders[*].tags[0]</tt>|<tt>map \@tags[0], \@orders</tt>|the first tag of each order
+    |<tt>\@orders[*].items[*].sku</tt>|<tt>map (map \@sku, \@items), \@orders</tt>|a list with the list of SKUs of each order
+    |<tt>\@prices{*}</tt>|<tt>map \@value, \@prices</tt>|the values of the hash, in key order
+    |<tt>\@prices{*}.amount</tt>|<tt>map \@value.amount, \@prices</tt>|the \c amount of each value
+    |<tt>\@orders[*]</tt>|<tt>\@orders</tt>|the items of the list: the list itself
+    |<tt>\@matrix[*][0]</tt>|<tt>map \@value[0], \@matrix</tt>|the first element of each list
+
+    - after \c [*], a first accessor that names a field (<tt>.name</tt>, or <tt>{"key"}</tt> with one key) reads that
+      field of each item as <tt>\@name</tt> does in the body of \c map, and the <tt>.name</tt> steps right after it
+      are part of the same field reference, as in <tt>\@customer.name</tt>; ordinary accessors can follow
+      (<tt>\@orders[*].tags[0]</tt>, <tt>\@orders[*].customer{"name"}</tt>)
+    - after \c [*], any other accessor applies to the item itself, so <tt>\@matrix[*][0]</tt> is the first element
+      of each list in \c matrix; and a trailing \c [*] gives the items themselves: the list itself, or the
+      \c key / \c value records of the entries of a hash, as \c select gives them
+    - after \c {*}, the accessors apply to each value, which is \c \@value in the body of \c map; a trailing
+      \c {*} gives the values
+    - wildcards nest without flattening: each wildcard gives one list, so <tt>\@orders[*].items[*].sku</tt> is a
+      list of lists
+    - everything else is as \c map does it, with the same results and the same errors: an item that does not have
+      the field is an \c INVALID-OPERATION error, a source that is not a list or a hash (including no value) is a
+      \c DATA-PROVIDER-EXPRESSION-ERROR, and an empty list or hash gives an empty list; \c [*] over a hash goes
+      through its \c key / \c value entries (<tt>\@weights[*].key</tt> is the keys), and \c {*} over a list gives
+      the \c \@value of each element
+    - a quoted key is never a wildcard: <tt>\@data{"*"}</tt> is the key \c *
+    - a wildcard is kept as written when an expression is serialized
+      (@ref DataProvider::DataProvider::serializeDpqlExpression() "serializeDpqlExpression()"); its type
+      (@ref DataProvider::ExpressionTypes "ExpressionTypes") is a list of the type of the value taken from each item
+      when that is known (<tt>list&lt;int&gt;</tt> for <tt>\@orders[*].id</tt> when \c id is an \c int field),
+      and completion offers \c [*] after a list and \c {*} after a hash
+
+    In a @ref DataProvider::DataProviderExpression "DataProviderExpression", a wildcard is a
+    @ref DataProvider::DP_FUNC_LIST_WILDCARD "DP_FUNC_LIST_WILDCARD" or
+    @ref DataProvider::DP_FUNC_HASH_WILDCARD "DP_FUNC_HASH_WILDCARD" expression whose arguments are the source and
+    the expression evaluated for each item, as the body of \c map; accessors that apply to the item itself start
+    from @ref DataProvider::DP_FUNC_WILDCARD_ITEM "DP_FUNC_WILDCARD_ITEM".
+
+    @par Example
+    @code{.py}
+hash<auto> rec = {
+    "orders": (
+        {"id": 1, "items": ({"sku": "a"}, {"sku": "b"})},
+        {"id": 2, "items": ({"sku": "c"},)},
+    ),
+};
+# (1, 2)
+auto ids = AbstractDataProvider::evalGenericExpressionValue(rec,
+    DataProvider::parseDpqlExpression("@orders[*].id"));
+# (("a", "b"), ("c",))
+auto skus = AbstractDataProvider::evalGenericExpressionValue(rec,
+    DataProvider::parseDpqlExpression("@orders[*].items[*].sku"));
+# True
+auto has_2 = AbstractDataProvider::evalGenericExpressionValue(rec,
+    DataProvider::parseDpqlExpression('listContains(@orders[*].id, 2)'));
+    @endcode
 
     @subsection dpql_examples DPQL Examples
 
@@ -1388,6 +1455,23 @@ fetch
     expose first-class actions that take it.
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_10 DataProvider v3.10
+    - added the DPQL @ref dpql_wildcards "wildcard accessors" \c [*] and \c {*}, which take a value from each item
+      of a list or each value of a hash: <tt>\@orders[*].id</tt> is <tt>map \@id, \@orders</tt>,
+      <tt>\@prices{*}.amount</tt> is <tt>map \@value.amount, \@prices</tt>, and <tt>\@orders[*].items[*].sku</tt>
+      is a list of lists; they are parsed, evaluated, typed, serialized as written and offered by completion
+      (@ref DataProvider::DP_FUNC_LIST_WILDCARD "DP_FUNC_LIST_WILDCARD",
+      @ref DataProvider::DP_FUNC_HASH_WILDCARD "DP_FUNC_HASH_WILDCARD",
+      @ref DataProvider::DP_FUNC_WILDCARD_ITEM "DP_FUNC_WILDCARD_ITEM", \c DPQL_TOK_WILDCARD)
+    - \c map, \c select, \c take, \c drop, \c takewhile, \c takeuntil and slice accessors (<tt>\@x[0..1]</tt>)
+      keep an element that is a list as one element: <tt>map \@items, \@orders</tt> gives a list with the list of
+      items of each order, and <tt>\@matrix[0..1]</tt> the first two rows; they flattened such elements into the
+      result, so that \c take also counted their elements
+    - DPQL validation
+      (@ref DataProvider::DataProvider::validateDpqlExpression() "validateDpqlExpression()") no longer reports the
+      fields of the items in the body and filter of \c map, the key, value and filter of \c hash_map and the
+      predicates of the streaming operators as unknown fields of the record
 
     @subsection dataprovider_v3_9_1 DataProvider v3.9.1
     - a bracketed DPQL template value (<tt>$context:{...}</tt>) is no longer cut short at a brace that is escaped

@@ -2531,6 +2531,9 @@ while (*binary chunk = input.read(65536)) {
         directory once; multilingual embedding population uses one index per domain population
       - added 67 generic DPQL expressions (arithmetic, string, type/encoding/crypto, regex, date/time,
         collection, serialization) and streaming-style operators (\c select, \c first, \c take, etc.)
+      - added the DPQL @ref dpql_wildcards "wildcard accessors" \c [*] and \c {*}, which take a value from each
+        item of a list or each value of a hash as \c map does: <tt>\@orders[*].id</tt> is
+        <tt>map \@id, \@orders</tt>, and <tt>\@orders[*].items[*].sku</tt> is a list of lists
       - added HTTP/3 debug tracking, context-sensitive action filtering, and \c amqp factory registration
       - watch data providers can restore and durably persist provider-owned delivery checkpoints,
         allowing integrations to preserve at-least-once event delivery across process restarts

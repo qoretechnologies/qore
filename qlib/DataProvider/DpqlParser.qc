@@ -55,6 +55,15 @@ const hash<auto> DpqlPrefixOperatorSpecs = {
     DP_OP_TAKEUNTIL: {"min": 2, "max": 2},
 };
 
+#! The wildcard accessor expressions, which are written as accessors and not as function calls
+/** @since DataProvider 3.10
+*/
+const hash<string, string> DpqlWildcardAccessors = {
+    DP_FUNC_LIST_WILDCARD: "[*]",
+    DP_FUNC_HASH_WILDCARD: "{*}",
+    DP_FUNC_WILDCARD_ITEM: "",
+};
+
 #! The result of comparing a value with itself, by comparison operator
 const hash<string, bool> DpqlSelfComparisonResults = {
     DP_SEARCH_OP_EQ: True,
@@ -544,11 +553,46 @@ public class DpqlParser {
         return exp_name;
     }
 
+    #! Returns True if an argument of an expression is evaluated for each item of a source, not on the record
+    /** The body and the filter of \c map, the key, value and filter of \c hash_map, the predicates of the
+        streaming operators and the expression after a wildcard accessor refer to the fields of each item, so they
+        are not validated with the fields of the record
+
+        @since DataProvider 3.10
+    */
+    private static bool isItemScopedArg(hash<DataProviderExpression> exp, int pos) {
+        switch (exp.exp) {
+            case DP_OP_MAP:
+                return pos == 0 || pos == 2;
+            case DP_OP_HASH_MAP:
+                return pos != 2;
+            case DP_OP_SELECT:
+                return pos == 1;
+            case DP_OP_FIRST:
+            case DP_OP_ANY:
+            case DP_OP_COUNT:
+                # the one-argument form is the source
+                return exp.args.size() == 2 && pos == 0;
+            case DP_OP_ALL:
+            case DP_OP_TAKEWHILE:
+            case DP_OP_TAKEUNTIL:
+                return pos == 0;
+            case DP_FUNC_LIST_WILDCARD:
+            case DP_FUNC_HASH_WILDCARD:
+                return pos == 1;
+        }
+        return False;
+    }
+
     #! Recursively validates an expression
     private validateExprRecursive(hash<DataProviderExpression> exp,
             hash<string, AbstractDataField> fields, reference<list<hash<DpqlDiagnostic>>> diags) {
         # Validate each argument
         foreach auto arg in (exp.args) {
+            # an argument evaluated for each item of a source refers to the fields of the item
+            if (DpqlParser::isItemScopedArg(exp, $#)) {
+                continue;
+            }
             if (arg.typeCode() == NT_HASH) {
                 if (arg.hasKey("field")) {
                     # Field reference - validate field exists
@@ -1410,11 +1454,23 @@ public class DpqlParser {
             hash<DpqlTokenInfo> tok = peek();
 
             if (tok.type == DPQL_TOK_LBRACKET) {
-                # Index or slice accessor: [...]
-                result = parseIndexAccessor(result);
+                # Index or slice accessor: [...], or the list wildcard [*]
+                hash<DpqlTokenInfo> lbracket = nextToken();  # consume [
+                skipWhitespace();
+                if (!atEnd() && peek().type == DPQL_TOK_WILDCARD) {
+                    # the wildcard's item expression takes the rest of the accessor chain
+                    return parseWildcard(result, lbracket, DP_FUNC_LIST_WILDCARD);
+                }
+                result = parseIndexAccessor(result, lbracket);
             } else if (tok.type == DPQL_TOK_LBRACE) {
-                # Key accessor: {...}
-                result = parseKeyAccessor(result);
+                # Key accessor: {...}, or the hash wildcard {*}
+                hash<DpqlTokenInfo> lbrace = nextToken();  # consume {
+                skipWhitespace();
+                if (!atEnd() && peek().type == DPQL_TOK_WILDCARD) {
+                    # the wildcard's value expression takes the rest of the accessor chain
+                    return parseWildcard(result, lbrace, DP_FUNC_HASH_WILDCARD);
+                }
+                result = parseKeyAccessor(result, lbrace);
             } else if (tok.type == DPQL_TOK_DOT) {
                 # Member access after accessor: .identifier
                 nextToken();  # consume .
@@ -1450,12 +1506,169 @@ public class DpqlParser {
         return result;
     }
 
+    #! Parses a wildcard accessor (\c [*] or \c {*}) and the accessors after it
+    /** The wildcard is \c map written as an accessor: the accessors after it are the expression evaluated for each
+        item of the source, which is the expression before the wildcard:
+        - <tt>source[*]</tt>: a first step that names a field (<tt>.name</tt>, <tt>.\@name</tt> or a single
+          <tt>{"key"}</tt>) is a field reference of the item, as in the body of \c map, with the following
+          <tt>.name</tt> steps (<tt>\@orders[*].customer.name</tt> is <tt>map \@customer.name, \@orders</tt>);
+          other accessors apply to the item itself (@ref DP_FUNC_WILDCARD_ITEM), and so does a trailing \c [*]
+        - <tt>source{*}</tt>: the accessors apply to \c \@value (<tt>\@prices{*}.amount</tt> is
+          <tt>map \@value.amount, \@prices</tt>)
+
+        @param source the expression before the wildcard
+        @param open_tok the opening bracket or brace, which has been read; the next token is the \c *
+        @param op @ref DP_FUNC_LIST_WILDCARD or @ref DP_FUNC_HASH_WILDCARD
+
+        @return the wildcard expression, which takes the rest of the accessor chain
+
+        @since DataProvider 3.10
+    */
+    private hash<DataProviderExpression> parseWildcard(auto source, hash<DpqlTokenInfo> open_tok, string op) {
+        bool list_wildcard = op == DP_FUNC_LIST_WILDCARD;
+        string close = list_wildcard ? "]" : "}";
+        string code = list_wildcard ? "DPQL-E022" : "DPQL-E024";
+        nextToken();  # consume *
+        skipWhitespace();
+        if (atEnd() || peek().type == DPQL_TOK_EOF) {
+            addError(sprintf("Unclosed %s accessor, expected '%s'", list_wildcard ? "index" : "key", close), code,
+                open_tok);
+            throw "DPQL-PARSE-ERROR", sprintf("Unclosed %s accessor", list_wildcard ? "index" : "key");
+        }
+        hash<DpqlTokenInfo> tok = peek();
+        if (tok.type != (list_wildcard ? DPQL_TOK_RBRACKET : DPQL_TOK_RBRACE)) {
+            addError(sprintf("Expected '%s' after '*': the wildcard %s is written alone, without %s", close,
+                list_wildcard ? "[*]" : "{*}", list_wildcard ? "indexes" : "keys"), code, tok);
+            throw "DPQL-PARSE-ERROR", sprintf("Expected '%s' after '*'", close);
+        }
+        nextToken();  # consume ] or }
+
+        auto body = list_wildcard
+            ? parseListWildcardBody()
+            # the accessors after {*} apply to @value, as in the body of map
+            : parseWildcardFieldPath("value");
+        return <DataProviderExpression>{
+            "exp": op,
+            "args": (source, body),
+        };
+    }
+
+    #! Parses the accessors after \c [*]: the expression evaluated for each item
+    /** @since DataProvider 3.10
+    */
+    private auto parseListWildcardBody() {
+        hash<DataProviderExpression> item = <DataProviderExpression>{
+            "exp": DP_FUNC_WILDCARD_ITEM,
+            "args": (),
+        };
+        skipWhitespace();
+        if (atEnd()) {
+            return item;
+        }
+        hash<DpqlTokenInfo> tok = peek();
+        if (tok.type == DPQL_TOK_DOT) {
+            # a field of the item, as in the body of map: @orders[*].id is map @id, @orders
+            nextToken();  # consume .
+            skipWhitespace();
+            if (atEnd()) {
+                addError("Expected identifier after '.'", "DPQL-E020", tok);
+                throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
+            }
+            hash<DpqlTokenInfo> id_tok = peek();
+            if (id_tok.type == DPQL_TOK_IDENTIFIER) {
+                nextToken();
+                return parseWildcardFieldPath(id_tok.value);
+            }
+            if (id_tok.type == DPQL_TOK_FIELD) {
+                nextToken();
+                if (id_tok.value.size() > 1 && id_tok.value[1] == '"') {
+                    # a quoted name is one key, as with {"key"}
+                    return parseAccessorChain(<DataProviderFieldReference>{
+                        "field": DpqlParser::escapeFieldPathKey(unescapeString(substr(id_tok.value, 2, -1))),
+                    });
+                }
+                return parseWildcardFieldPath(substr(id_tok.value, 1));
+            }
+            addError("Expected identifier after '.'", "DPQL-E020", id_tok);
+            throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
+        }
+        if (tok.type == DPQL_TOK_LBRACE) {
+            hash<DpqlTokenInfo> lbrace = nextToken();  # consume {
+            skipWhitespace();
+            if (!atEnd() && peek().type == DPQL_TOK_WILDCARD) {
+                return parseWildcard(item, lbrace, DP_FUNC_HASH_WILDCARD);
+            }
+            hash<DataProviderExpression> key_exp = parseKeyAccessor(item, lbrace);
+            if (key_exp.args.size() == 2) {
+                # a single key is a field of the item: @orders[*]{"order-id"} is map @"order-id", @orders
+                return parseAccessorChain(<DataProviderFieldReference>{
+                    "field": DpqlParser::escapeFieldPathKey(key_exp.args[1]),
+                });
+            }
+            # several keys apply to the item itself
+            return parseAccessorChain(key_exp);
+        }
+        # any other accessor applies to the item itself, as does a trailing [*]
+        return parseAccessorChain(item);
+    }
+
+    #! Parses the field path that the accessors after a wildcard start with, and the accessors after it
+    /** The <tt>.name</tt> steps that follow are part of the field reference, as in <tt>\@customer.name</tt>; the
+        accessor chain continues after them.
+
+        @param path the first part of the path
+
+        @since DataProvider 3.10
+    */
+    private auto parseWildcardFieldPath(string path) {
+        while (True) {
+            skipWhitespace();
+            if (atEnd() || peek().type != DPQL_TOK_DOT) {
+                break;
+            }
+            hash<DpqlTokenInfo> dot = nextToken();  # consume .
+            skipWhitespace();
+            if (atEnd()) {
+                addError("Expected identifier after '.'", "DPQL-E020", dot);
+                throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
+            }
+            hash<DpqlTokenInfo> id_tok = peek();
+            if (id_tok.type == DPQL_TOK_IDENTIFIER) {
+                nextToken();
+                path += "." + id_tok.value;
+                continue;
+            }
+            if (id_tok.type == DPQL_TOK_FIELD) {
+                # member access after a field reference, as in parseAccessorChain()
+                nextToken();
+                return parseAccessorChain(<DataProviderExpression>{
+                    "exp": DP_FUNC_KEY,
+                    "args": (<DataProviderFieldReference>{"field": path}, substr(id_tok.value, 1)),
+                });
+            }
+            addError("Expected identifier after '.'", "DPQL-E020", id_tok);
+            throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
+        }
+        return parseAccessorChain(<DataProviderFieldReference>{"field": path});
+    }
+
+    #! Returns a key as one step of a field reference path: its dots are escaped
+    /** @param key the key
+
+        @return the key with each dot escaped, so that the path reads it as one key
+
+        @since DataProvider 3.10
+    */
+    private static string escapeFieldPathKey(string key) {
+        return replace(key, ".", "\\.");
+    }
+
     #! Parses index accessor: [n], [n..m], [n,m,p], [n..m,p], [2..], [..5]
     /** @param base the base expression to index into
+        @param lbracket the opening bracket, which has been read
         @return a DP_FUNC_INDEX or DP_FUNC_SLICE expression node
     */
-    private hash<DataProviderExpression> parseIndexAccessor(auto base) {
-        hash<DpqlTokenInfo> lbracket = nextToken();  # consume [
+    private hash<DataProviderExpression> parseIndexAccessor(auto base, hash<DpqlTokenInfo> lbracket) {
         skipWhitespace();
 
         list<auto> items = ();
@@ -1491,6 +1704,11 @@ public class DpqlParser {
                 }
             }
             first = False;
+
+            if (tok.type == DPQL_TOK_OP_MULTIPLY || tok.type == DPQL_TOK_WILDCARD) {
+                addError("The wildcard [*] is written alone, without indexes", "DPQL-E022", tok);
+                throw "DPQL-PARSE-ERROR", "Wildcard combined with indexes";
+            }
 
             # Parse index item: int or range
             items += parseIndexItem();
@@ -1589,10 +1807,10 @@ public class DpqlParser {
 
     #! Parses key accessor: {key}, {"key"}, {key1, key2}
     /** @param base the base expression to apply key access to
+        @param lbrace the opening brace, which has been read
         @return a DP_FUNC_KEY expression node
     */
-    private hash<DataProviderExpression> parseKeyAccessor(auto base) {
-        hash<DpqlTokenInfo> lbrace = nextToken();  # consume {
+    private hash<DataProviderExpression> parseKeyAccessor(auto base, hash<DpqlTokenInfo> lbrace) {
         skipWhitespace();
 
         list<string> key_list = ();
@@ -1628,6 +1846,11 @@ public class DpqlParser {
                 }
             }
             first = False;
+
+            if (tok.type == DPQL_TOK_OP_MULTIPLY || tok.type == DPQL_TOK_WILDCARD) {
+                addError("The wildcard {*} is written alone, without keys", "DPQL-E024", tok);
+                throw "DPQL-PARSE-ERROR", "Wildcard combined with keys";
+            }
 
             key_list += parseKeyName();
         }
@@ -1773,6 +1996,15 @@ public class DpqlParser {
         # 1. Try symbol→name lookup (new symbol-based syntax)
         # 2. Fall back to direct expression map key lookup (backward compat)
         string name = resolveExpressionName(token_name);
+
+        *string accessor = DpqlWildcardAccessors{name};
+        if (exists accessor) {
+            addError(accessor
+                ? sprintf("'%s' is written as the accessor %s, as in @orders%s.id", token_name, accessor, accessor)
+                : sprintf("'%s' is the item of a [*] wildcard and is not written in DPQL", token_name),
+                "DPQL-E001", name_tok);
+            throw "DPQL-PARSE-ERROR", "Wildcard accessor written as a function call";
+        }
 
         expect(DPQL_TOK_LPAREN, "'('");
         skipWhitespace();

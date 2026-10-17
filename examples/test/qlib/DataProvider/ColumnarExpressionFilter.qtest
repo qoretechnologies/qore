@@ -52,6 +52,7 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         addTestCase("float columns compared with numbers", \floatNumberComparisonFilters());
         addTestCase("string \"0\" as a condition", \stringZeroConditionFilters());
         addTestCase("contains an empty string", \emptySubstringFilters());
+        addTestCase("slices and wildcards of list values", \listValueAccessorFilters());
 
         set_return_value(main());
     }
@@ -455,5 +456,25 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
             "contains an empty string with another condition");
         assertShapeFilterIds(DataProvider::parseDpqlExpression('contains(@name, "")'), (1, 2, 3, 4),
             "contains an empty string in a list column");
+    }
+
+    #! A slice keeps the lists in a list value as elements; a wildcard is evaluated for each row
+    private listValueAccessorFilters() {
+        DataFrame::DataFrame df({
+            "id": new buffer<int64>((1, 2)),
+            "rows": (((1, 2), (3, 4), (9, 9)), ((5, 6), (7, 8))),
+        });
+        # the second row of the slice is (3, 4) in the first record and (7, 8) in the second
+        assertEq((1,), dataframeIds(ColumnarExpressionFilter::filterDataFrame(df,
+            DataProvider::parseDpqlExpression('@rows[0..1][1][0] == 3'))));
+        assertEq((2,), dataframeIds(ColumnarExpressionFilter::filterDataFrame(df,
+            DataProvider::parseDpqlExpression('@rows[0, 1][1][1] == 8'))));
+        assertEq((1,), dataframeIds(ColumnarExpressionFilter::filterDataFrame(df,
+            DataProvider::parseDpqlExpression('@rows[1..][1] == (9, 9)'))));
+        # the second element of each row
+        assertEq((2,), dataframeIds(ColumnarExpressionFilter::filterDataFrame(df,
+            DataProvider::parseDpqlExpression('@rows[*][1] == (6, 8)'))));
+        assertEq((1,), dataframeIds(ColumnarExpressionFilter::filterDataFrame(df,
+            DataProvider::parseDpqlExpression('listContains(@rows[*][0], 9)'))));
     }
 }
