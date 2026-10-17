@@ -15888,3 +15888,133 @@ Full samples, artifact hashes, candidate patch, source-proof review, both trials
 all qualification logs, exact rollback, disassembly, profiles and the complete
 audit-changes checklist are in
 `results-aot-closure-signature-proof-rejected-macos-arm64.json`.
+
+## Optimized branch, develop and Java checkpoint after list/closure work (2026-10-17)
+
+Feature `dcdb7548b` versus develop `14f418ea7` and warmed Temurin 25.0.2+10 / JMH 1.37,
+all in one fresh interleaved epoch. Develop is merged into the feature branch.
+Both Qore runtimes use matching Release `-O3 -DNDEBUG`, LLVM 22.1.8, SDK,
+dependency and SCU settings, allocation tracking off; each compiles its own
+`qcc -O3` executables. Feature uses the restored, qualified `906a1d5cf` binaries: the
+subsequent `dcdb7548b` commit only adds tests/docs/evidence. Every qualified runtime
+source and binary hash is verified unchanged. Develop was independently rebuilt.
+
+All 37 microbenchmarks and four mixed workloads, three fixed Qore layouts
+(default, reverse, shuffle-487), five processes per layout, three warmups and
+three 300 ms measurement windows; count 4096, seed 7. Randomized interleaved
+workload/fork blocks and runtime/layout order use seed 136283. Every micro block
+also has a fresh Java fork. All 1415 jobs / 4245 windows are retained. Qore values
+are the median of three layout medians of five process means; Java is the median
+of five fork means. No best-layout selection or ratios across measurement epochs.
+
+These are whole-workload ns/element, not isolated call latency. Direct/final
+targets permit inlining; dynamic/callback Java targets have verified `DONT_INLINE`
+hints. Ownership, allocation and compiler semantics differ. No cross-Program
+calls or new general IR/JIT throughput measurements are included.
+
+|!Workload|!Develop AOT ns/element|!Feature AOT ns/element|!Java JIT ns/element|!Develop / feature time|!Feature / Java time
+|arithmetic|7.137|1.554|1.001|4.592x|1.553x
+|direct_call|7.179|1.553|0.992|4.621x|1.566x
+|method_call|7.303|1.619|0.975|4.510x|1.661x
+|indirect_call|229.710|6.815|1.717|33.705x|3.970x
+|polymorphic_call|315.349|22.823|2.613|13.817x|8.733x
+|polymorphic_expression_call|135.140|10.605|2.621|12.743x|4.047x
+|monomorphic_call|11.972|3.530|1.726|3.392x|2.045x
+|optional_method_call|209.118|10.732|1.713|19.485x|6.265x
+|polymorphic_float_call|340.257|23.396|2.663|14.543x|8.786x
+|polymorphic_float_expression_call|157.421|10.851|2.662|14.507x|4.077x
+|monomorphic_float_call|12.062|3.513|1.713|3.434x|2.050x
+|optional_float_method_call|212.881|10.891|1.721|19.546x|6.328x
+|boxed_float_method_call|248.453|20.005|2.653|12.420x|7.540x
+|dynamic_int_result_call|200.182|10.766|3.187|18.594x|3.378x
+|dynamic_int_result_fallback|455.841|21.804|3.018|20.906x|7.224x
+|boxed_int_method_call|226.107|16.551|2.621|13.661x|6.315x
+|boxed_int_method_fallback|276.022|31.718|2.634|8.703x|12.043x
+|boxed_float_method_fallback|323.533|32.655|2.644|9.908x|12.348x
+|boxed_int_method_effect|378.812|89.590|1.910|4.228x|46.901x
+|dynamic_float_result_call|218.602|11.823|3.394|18.490x|3.483x
+|indirect_wide|275.496|6.768|1.733|40.705x|3.906x
+|indirect_float|233.661|6.710|1.716|34.822x|3.911x
+|indirect_int_result|201.942|6.329|1.926|31.907x|3.287x
+|indirect_float_result|205.649|7.400|2.804|27.790x|2.639x
+|indirect_tagged_float|281.783|6.875|1.694|40.984x|4.058x
+|indirect_branch_float|242.716|6.779|1.702|35.806x|3.983x
+|indirect_affine|230.909|6.869|1.683|33.618x|4.082x
+|indirect_affine_wide|275.567|6.800|1.686|40.527x|4.033x
+|indirect_branch_int|230.259|6.826|1.729|33.731x|3.947x
+|dispatch_control|7.404|1.634|1.024|4.532x|1.595x
+|list_read|8.672|2.816|0.291|3.080x|9.683x
+|list_build|108.195|26.546|2.638|4.076x|10.061x
+|list_mutate|208.369|199.473|4.192|1.045x|47.583x
+|temporary_list|142.602|1.636|1.256|87.182x|1.302x
+|temporary_hash|329.401|333.837|16.107|0.987x|20.726x
+|closure_call|141.612|19.487|1.722|7.267x|11.320x
+|closure_capture|162.064|25.639|1.801|6.321x|14.235x
+
+Direct/final workloads improve 4.62x/4.51x over develop but take 1.57x/1.66x
+Java time. Direct is near the Qore arithmetic control, so the entire gap is not
+call overhead. Stable native methods take 2.05x Java time, typed callbacks 3.97x,
+plain/captured closures 11.32x/14.24x. The effectful boxed-integer method still
+takes 46.90x Java time despite a 4.23x develop speedup; read-only fast paths do
+not make every method category fast. Same-Program optimization is useful,
+but neither general Java parity nor a global performance ceiling is established.
+
+List construction is 75.46% faster (4.08x) than develop, though still 10.06x Java
+time. List mutation improves only 4.27% and remains 47.58x Java. The 87.18x
+temporary-list develop improvement is a scalarizable two-element workload,
+not a claim about arbitrary dynamic-list performance.
+
+### Mixed processing and adverse results
+
+|!Workload|!Develop ms / 4096 records|!Feature ms / 4096 records|!Speedup|!Elapsed-time change
+|csv_report|4.493|3.907|1.150x|-13.04%
+|object_orders|8.856|7.714|1.148x|-12.90%
+|callback_pipeline|1.237|0.352|3.519x|-71.58%
+|text_index|7.118|5.580|1.276x|-21.61%
+
+Input generation, startup and compilation are excluded; processing, temporary
+allocation, aggregation and formatting are included. These synthetic CPU
+workloads are not production applications. No single overall Qore score,
+external I/O result or Java mixed-workload comparison is inferred.
+
+List-mutation layout changes are -4.71%, -4.72%, -3.76%. Temporary hashes remain
+1.35% slower overall: default +2.56%, reverse +0.39%, shuffle-487 +0.94%. All
+adverse measurements are retained. None of 123 feature/develop layout pairs
+has disjoint adverse observed fork-mean ranges, but overlapping ranges do not
+prove non-regression, and these ranges are not confidence intervals.
+
+### Qualification and next optimization
+
+The restored Release qualification passed 57 files / 89 cases / 10799 assertions,
+64 qmods, HTTP regressions (10 cases / 30 assertions), offline LLM argument tests
+(4 / 23), thread/cancellation tests (22 / 110), and 555 references in each IR/AOT
+mode. Abrupt socket-drop is skipped in Release. Matching restored Debug results
+are in the preceding rejected-signature report, not newly rerun for this checkpoint.
+Both runtimes and all AOT layouts pass 555 micro / 60 mixed reference cases;
+Java passes 555. Loader and actual fixed symbol-order checks pass. This is not
+a full-suite, sanitizer, cross-platform or general IR/JIT speed qualification.
+
+Separate untimed profiles show that `listMutate` still pays for generic push,
+type filtering, local publication and generic lvalue compound navigation, whereas
+`listBuild` uses native integer pushes. Next inspect whether later indexed mutation
+unnecessarily prevents proof of fresh ownership during the earlier construction
+loop. This is a hypothesis, not an established compiler cause or percentage-cost
+breakdown. Then investigate native RuntimeConfig snapshot/context handling and
+effectful method calls. Preserve COW, reference/alias lifetime, evaluation order,
+exceptions, cancellation and observability; do not retry the rejected signature
+shortcut unchanged or select favorable layouts.
+
+The first develop build guard rejected an unchanged directory symlink before
+creating a worktree or running a build; its original driver and failure record
+are retained. The guard now explicitly checks directory symlinks against the
+qualified revision. The initial timing verification wrote its final artifact,
+but its terminal tool response was truncated. An explicit successful replay
+recomputed every result and required equality with that artifact; no timing was
+rerun or discarded and no original exit status was invented.
+
+No task-owned builds/tests/profiles/evidence analysis overlapped timing. Host
+background load, frequency and thermals were not controlled. Full raw outputs,
+JMH data, all windows, exact revisions/hashes, qualified-binary provenance,
+profiles, reproducible drivers and all 62 audit items are retained in
+`results-aot-post-closure-checkpoint-macos-arm64.json`. Java parity and a justified
+global performance ceiling remain open.

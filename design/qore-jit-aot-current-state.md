@@ -3124,3 +3124,40 @@ native and IR/AOT reference checks. This does not establish full-suite or
 cross-platform qualification, fresh Java/develop ratios, or a global ceiling.
 Next: refresh the matched optimized branch/develop/Java checkpoint, then choose
 a distinct AOT-first target from remaining live admission/context/capture costs.
+
+## Optimized post-list/closure checkpoint (2026-10-17)
+
+One fresh interleaved epoch compares feature `dcdb7548b`, merged develop
+`14f418ea7` and warmed Temurin 25.0.2+10 / JMH 1.37. Matching Release
+`-O3 -DNDEBUG`, LLVM 22.1.8, qcc `-O3`, allocation tracking off. Feature uses
+the restored, qualified `906a1d5cf` binaries; the later commit only added
+tests/docs/evidence, and runtime source and artifact identities are verified.
+All 37 microbenchmarks, four mixed workloads, three fixed layouts, five forks
+and 4245 windows are retained. No best-layout selection or cross-epoch ratios.
+
+Direct/final workloads improve 4.62x/4.51x over develop but take 1.57x/1.66x
+Java time; direct is near its own arithmetic control. Stable native methods
+are 2.05x Java, typed callbacks 3.97x, plain/captured closures 11.32x/14.24x.
+The effectful boxed method remains 46.90x Java. Whole-workload costs are not
+isolated call latency; cross-Program calls are not measured.
+
+List construction improves 4.08x over develop but remains 10.06x Java. List
+mutation improves 4.27% but remains 47.58x Java. Mixed CSV/object/callback/text
+processing improves 1.150x/1.148x/3.519x/1.276x. Temporary hashes are still
+1.35% slower overall; all three layout medians are adverse. No disjoint
+adverse observed fork ranges, but overlap does not prove non-regression.
+
+The unchanged Release runtime qualification covers 57 files / 89 cases /
+10799 assertions plus HTTP, offline LLM, cancellation/thread and IR/AOT
+reference checks. Every benchmark layout and Java also passes its reference
+grid. Methodology, full tables, provenance/replay limitations and raw evidence
+are in `bench/runtime-comparison/RESULTS.md` and
+`results-aot-post-closure-checkpoint-macos-arm64.json` there.
+
+Untimed profiles distinguish generic push/coercion/publication in
+`listMutate` from the specialized `listBuild` path. Next establish whether
+later lvalue mutation unnecessarily blocks earlier fresh-list construction,
+then improve indexed mutation with exact semantics. Native RuntimeConfig
+snapshot/context and effectful method overhead remain followups. No new
+full-suite, sanitizer, cross-platform or general IR/JIT speed claim. Java
+parity and a justified global performance ceiling remain open.
