@@ -1469,11 +1469,12 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "name": DP_FUNC_FORMAT_NUMBER,
             "display_name": "format_number",
             "short_desc": "Formats a number as a string",
-            "desc": "Formats a number as a string with configurable separators and precision",
+            "desc": "Formats a number as a string with configurable separators and precision; an argument that "
+                "is missing or has no value takes its default",
             "symbol": "format_number()",
             "groups": "Data Manipulation",
             "args": (DataProviderSignatureAnyType, DataProviderSignatureOptionalStringType,
-                DataProviderSignatureStringType, DataProviderSignatureIntType),
+                DataProviderSignatureOptionalStringType, DataProviderSignatureOptionalIntType),
             "arg_info": (
                 <DataProviderArgInfo>{
                     "display_name": "Number",
@@ -1483,19 +1484,23 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 <DataProviderArgInfo>{
                     "display_name": "Thousands Separator",
                     "short_desc": "Thousands separator (default: ',')",
-                    "desc": "The thousands separator character; default: `,`",
+                    "desc": "The thousands separator: a single character, or `?` for no thousands separator; a "
+                        "longer string raises a `FORMAT-NUMBER-ERROR`; default: `,`",
                     "default_value": ",",
                 },
                 <DataProviderArgInfo>{
                     "display_name": "Decimal Separator",
                     "short_desc": "Decimal separator (default: '.')",
-                    "desc": "The decimal separator character; default: `.`",
+                    "desc": "The decimal separator: a single character, or a `FORMAT-NUMBER-ERROR` is raised; with "
+                        "a precision of `0` there is no decimal separator, and this argument is not evaluated; "
+                        "default: `.`",
                     "default_value": ".",
                 },
                 <DataProviderArgInfo>{
                     "display_name": "Precision",
                     "short_desc": "Digits after decimal (default: 2)",
-                    "desc": "Number of digits after the decimal point; default: `2`",
+                    "desc": "Number of digits after the decimal point; a negative value raises a "
+                        "`FORMAT-NUMBER-ERROR`; default: `2`",
                     "default_value": 2,
                 },
             ),
@@ -1503,11 +1508,24 @@ public const hash<auto> ExtendedExpressionImplementations = {
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             auto n = dp_eval_arg(rec, exp, 0, tc);
-            *string ts = dp_eval_arg(rec, exp, 1, tc);
-            int dec = dp_eval_arg(rec, exp, 3, tc);
+            # an argument that is missing or has no value takes its default, as in Qorus
+            *string ts = dp_eval_arg(rec, exp, 1, tc) ?? ",";
+            if (ts.val() && ts.length() > 1) {
+                throw "FORMAT-NUMBER-ERROR", sprintf("The thousands separator %y has length %d; this must be a "
+                    "single-character string (i.e. with length = 1)", ts, ts.length());
+            }
+            int dec = dp_eval_arg(rec, exp, 3, tc) ?? 2;
+            if (dec < 0) {
+                throw "FORMAT-NUMBER-ERROR", sprintf("Negative value (%d) provided for the number of decimals when "
+                    "formatting number %y; the number of decimals must be >= 0", dec, n);
+            }
             string ds;
             if (dec > 0) {
-                ds = dp_eval_arg(rec, exp, 2, tc);
+                ds = dp_eval_arg(rec, exp, 2, tc) ?? ".";
+                if (ds.length() != 1) {
+                    throw "FORMAT-NUMBER-ERROR", sprintf("The decimal separator %y has length %d; this must be a "
+                        "single-character string (i.e. with length = 1)", ds, ds.length());
+                }
             } else {
                 ds = ".";
             }

@@ -1517,6 +1517,13 @@ fetch
       \c || or \c &&: its elements were taken for separate arguments, so that <tt>coalesce(\@a, (1, 2))</tt> had
       three arguments and <tt>map \@value * 2, (1, 2)</tt> failed with an internal parser error; the list is one
       argument
+    - \c format_number applies the defaults it documents to an argument that is missing or has no value, as
+      Qorus does: the thousands separator \c ",", the decimal separator \c "." and \c 2 decimals, so
+      <tt>format_number(\@n)</tt> gives <tt>1,234.50</tt> for \c 1234.5; with fewer than four arguments it
+      raised \c RUNTIME-TYPE-ERROR.  <b>Behavior change</b>: a thousands separator with no value is \c ","; it
+      gave no thousands separator, which is written \c "?".  A separator that is not a single character and a
+      negative precision raise \c FORMAT-NUMBER-ERROR; they gave wrong text such as <tt>1a234a568</tt>.  The
+      decimal separator and precision arguments are typed as optional, so \c null passes validation
 
     @subsection dataprovider_v3_10_2 DataProvider v3.10.2
     - the editor token spans of @ref DataProvider::DpqlActionSession "DpqlActionSession" (\c dpql-get-tokens and

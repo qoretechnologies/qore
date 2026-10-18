@@ -61,6 +61,7 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         addTestCase("type conversion tests", \typeConversionTests());
         addTestCase("encoding tests", \encodingTests());
         addTestCase("format tests", \formatTests());
+        addTestCase("format_number defaults and validation", \formatNumberDefaultsTests());
         addTestCase("size/length tests", \sizeLengthTests());
         addTestCase("regex tests", \regexTests());
         addTestCase("crypto tests", \cryptoTests());
@@ -268,7 +269,55 @@ class DataProviderExpressionsTest inherits QUnit::Test {
 
         # format number
         assertEq("1,234.56", eval_expr("format_number", (1234.56, ",", ".", 2)));
-        assertEq("1234", eval_expr("format_number", (1234, NOTHING, ".", 0)));
+        # no thousands separator is "?"; a missing thousands separator is the default ","
+        assertEq("1234", eval_expr("format_number", (1234, "?", ".", 0)));
+        assertEq("1,234", eval_expr("format_number", (1234, NOTHING, ".", 0)));
+    }
+
+    #! format_number applies the defaults it documents to a missing or null argument and validates its separators
+    #! and precision, as Qorus does
+    formatNumberDefaultsTests() {
+        hash<auto> rec = {"n": 1234567.891, "neg": -0.5, "none": NOTHING};
+        code<auto(string)> dpql = auto sub (string text) {
+            return AbstractDataProvider::evalGenericExpressionValue(rec, DataProvider::parseDpqlExpression(text));
+        };
+        # the defaults: thousands separator ",", decimal separator ".", 2 decimals
+        assertEq("1,234,567.89", dpql('format_number(@n)'));
+        assertEq("1,234,567.89", dpql('format_number(@n, ",")'));
+        assertEq("1,234,567.89", dpql('format_number(@n, ",", ".")'));
+        assertEq("1,234,567.89", dpql('format_number(@n, null, null, null)'));
+        assertEq("1,234,567.89", dpql('format_number(@n, @none, @none, @none)'));
+        assertEq("1,234,567.89", eval_expr("format_number", (1234567.891,)));
+        assertEq("-0.50", dpql('format_number(@neg)'));
+        # each argument given
+        assertEq("1.234.567,891", dpql('format_number(@n, ".", ",", 3)'));
+        assertEq("1234567.9", dpql('format_number(@n, "?", ".", 1)'));
+        # a separator is one character, also one that takes several bytes
+        assertEq("1\u2019234\u2019567,89", dpql("format_number(@n, \"\u2019\", \",\")"));
+        assertEq("-0,5", dpql('format_number(@neg, ".", ",", 1)'));
+        # with 0 decimals there is no decimal separator, and it is not evaluated
+        assertEq("1,234,568", dpql('format_number(@n, ",", ".", 0)'));
+        assertEq("1,234,568", dpql('format_number(@n, ",", "..", 0)'));
+
+        # separators are single characters and the precision is not negative
+        assertThrows("FORMAT-NUMBER-ERROR", "thousands separator \"ab\" has length 2", dpql, 'format_number(@n, "ab")');
+        assertThrows("FORMAT-NUMBER-ERROR", "decimal separator \"..\" has length 2", dpql,
+            'format_number(@n, ",", "..")');
+        assertThrows("FORMAT-NUMBER-ERROR", "decimal separator \"\" has length 0", dpql,
+            'format_number(@n, ",", "", 2)');
+        assertThrows("FORMAT-NUMBER-ERROR", "Negative value \\(-1\\)", dpql, 'format_number(@n, ",", ".", -1)');
+
+        # the optional arguments are typed as optional: null passes validation
+        hash<string, AbstractDataField> fields = {
+            "n": new QoreDataField("n", "n", AbstractDataProviderType::get("float")),
+        };
+        assertEq((), map $1.message, DataProvider::validateDpqlExpression('format_number(@n, null, null, null)',
+            fields));
+        assertEq((), map $1.message, DataProvider::validateDpqlExpression('format_number(@n)', fields));
+        AbstractDataProvider::verifyExpression(ER_Field, DataProviderGenericExpressions, LC_All,
+            AbstractDataProviderTypeMap."string",
+            DataProvider::parseDpqlExpression('format_number(@n, null, null, null)'), fields);
+        assertEq(1, AbstractDataProvider::getRequiredArgCount(DataProviderGenericExpressions.format_number));
     }
 
     sizeLengthTests() {

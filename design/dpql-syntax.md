@@ -325,7 +325,12 @@ get_second(@created)         # Second (0-59)
 # Date formatting
 format_date(@created, "YYYY-MM-DD")
 format_number(@price, ",", ".", 2)
+format_number(@price)        # The same: missing or null arguments take the defaults "," "." 2
+format_number(@price, "?")   # "?": no thousands separator
 ```
+
+`format_number` separators are single characters and its precision is not negative; anything
+else raises `FORMAT-NUMBER-ERROR`.  With a precision of `0` there is no decimal separator.
 
 ### Collection and Streaming Operators
 
