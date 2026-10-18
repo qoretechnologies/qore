@@ -1490,6 +1490,10 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_11 DataProvider v3.11
+    - added the private method \c readLocationGrid() to
+      @ref DataProvider::AbstractTabularProfileDataProvider "AbstractTabularProfileDataProvider", which a profile
+      provider whose reader streams its input overrides to read a location as a stream, so that the content of a
+      large file is not held in memory; by default it reads the content with \c readLocation()
     - the body, filter, key, value and predicate expressions of \c map, \c hash_map, \c select, \c first, \c any,
       \c all, \c count, \c takewhile and \c takeuntil, and the expression after a wildcard, are evaluated with the
       current item as \c item, its zero-based position as \c index and the size of the source as \c size in the

@@ -40,6 +40,27 @@ class PipeProfileDataProvider inherits AbstractTabularProfileDataProvider {
     }
 }
 
+#! A profile provider that reads a location itself, as a streaming reader does; readLocation() is not used for it
+class StreamingPipeProfileDataProvider inherits PipeProfileDataProvider {
+    public {
+        #! the locations and row limits read with readLocationGrid()
+        list<hash<auto>> location_reads = ();
+    }
+
+    private hash<TabularWorkbookGrid> readLocationGrid(string location, int max_rows) {
+        push location_reads, {"location": location, "max_rows": max_rows};
+        if (!files{location}) {
+            throw "LOCATION-ERROR", location;
+        }
+        StreamReader reader(new BinaryInputStream(files{location}));
+        return readGrid(reader.readBinary(-1), max_rows);
+    }
+
+    private binary readLocation(string location) {
+        throw "UNEXPECTED-READ", location;
+    }
+}
+
 #! Tests DataProvider::TabularProfiler with the layouts of hand-maintained supply chain spreadsheets
 public class TabularProfilerTest inherits QUnit::Test {
     constructor() : Test("TabularProfilerTest", "1.0") {
@@ -65,6 +86,7 @@ public class TabularProfilerTest inherits QUnit::Test {
         addTestCase("profiles match their data type", \dataType());
         addTestCase("untyped grids from format readers", \gridFromHash());
         addTestCase("profile action base class", \profileProvider());
+        addTestCase("profile action reading a location itself", \profileLocationGrid());
         set_return_value(main());
     }
 
@@ -651,6 +673,27 @@ public class TabularProfilerTest inherits QUnit::Test {
         assertThrows("LOCATION-ERROR", \prov.doRequest(), {"path": "file:///missing"});
         assertEq("TabularProfileRequest", prov.getRequestType().getName());
         assertEq("TabularWorkbookProfile", prov.getResponseType().getName());
+    }
+
+    #! A path is read with readLocationGrid(), which a provider reading its input as a stream overrides; data in the
+    #! request is read with readGrid()
+    profileLocationGrid() {
+        StreamingPipeProfileDataProvider prov();
+        prov.files."file:///stock.pipe" = binary("SKU|Qty\nA|5\nB|6");
+        hash<auto> profile = prov.doRequest({"path": "file:///stock.pipe", "max_rows": 2});
+        assertEq(({"location": "file:///stock.pipe", "max_rows": 2},), prov.location_reads);
+        assertEq(3, profile.sheets[0].row_count);
+        assertEq(("string", "int"), (map $1.type, profile.sheets[0].columns));
+
+        profile = prov.doRequest({"data": binary("SKU|Qty\nA|5")});
+        assertEq(1, prov.location_reads.size(), "data is not read from a location");
+        assertEq(1, profile.sheets[0].header_row);
+
+        # the request is checked before the location is read
+        assertThrows("TABULAR-PROFILE-ERROR", "max_rows", \prov.doRequest(), {"path": "file:///stock.pipe",
+            "max_rows": 0});
+        assertEq(1, prov.location_reads.size());
+        assertThrows("LOCATION-ERROR", \prov.doRequest(), {"path": "file:///missing"});
     }
 
     private hash<TabularSheetProfile> profileOne(list<list<auto>> rows) {
