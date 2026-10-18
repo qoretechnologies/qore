@@ -788,15 +788,17 @@ private:
     DLLLOCAL QoreHashNode* dispatchStreamingEnd(ExceptionSink* xsink);
     DLLLOCAL void resetResponseState(ExceptionSink* xsink);
 
-    DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
+    DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink, QoreValue arg = QoreValue());
 
     //! Sets the error of the operation with additional keys for the error information hash
     /** @param err the error code
         @param desc the error description
         @param extra additional keys for the error information hash; the keys are copied
         @param xsink for Qore-language exceptions
+        @param arg the underlying exception argument, referenced into the error information hash when present
     */
-    DLLLOCAL void setError(const char* err, const char* desc, const QoreHashNode* extra, ExceptionSink* xsink);
+    DLLLOCAL void setError(const char* err, const char* desc, const QoreHashNode* extra, ExceptionSink* xsink,
+        QoreValue arg = QoreValue());
 
     //! Fails the response if a response body of the given size exceeds the maximum response body size
     /** @param size the size of the response body in bytes

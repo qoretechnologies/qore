@@ -10424,7 +10424,15 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, unsigned long e, i
             qs.ssl_err_str->deref();
             qs.ssl_err_str = nullptr;
         }
-        xsink->raiseException("SOCKET-SSL-ERROR", errstr.release());
+        // Preserve the verification result as data: callers must distinguish a refused certificate from a
+        // connection dropped during the handshake without parsing OpenSSL's diagnostic text.
+        if (ssl && ERR_GET_LIB(e) == ERR_LIB_SSL && ERR_GET_REASON(e) == SSL_R_CERTIFICATE_VERIFY_FAILED) {
+            ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+            arg->setKeyValue("ssl_verify_error", static_cast<int64>(SSL_get_verify_result(ssl)), xsink);
+            xsink->raiseExceptionArg("SOCKET-SSL-ERROR", arg.release(), errstr.release());
+        } else {
+            xsink->raiseException("SOCKET-SSL-ERROR", errstr.release());
+        }
         // There used to be a connection-reset close here, guarded by
         // "e == SSL_ERROR_SYSCALL && sock_get_error() == ECONNRESET".  It could never run: `e` is
         // a packed ERR_get_error() code in this branch while SSL_ERROR_SYSCALL (5) belongs to the

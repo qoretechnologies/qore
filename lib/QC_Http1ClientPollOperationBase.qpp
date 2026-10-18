@@ -300,7 +300,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
             *desc_str ? desc_str->c_str() : "?",
             target_host.c_str(), target_port);
         setError(*err_str ? err_str->c_str() : "HTTP1-CONNECT-ERROR",
-            *desc_str ? desc_str->c_str() : "TCP connection failed", xsink);
+            *desc_str ? desc_str->c_str() : "TCP connection failed", xsink, poll_xsink.getExceptionArg());
         poll_xsink.clear();
         return nullptr;
     }
@@ -358,7 +358,8 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProxySslUpgrade(ExceptionSink*
         QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
         SimpleRefHolder<QoreStringNode> desc(new QoreStringNode("TLS connection to the proxy failed: "));
         desc->concat(*desc_str ? desc_str->c_str() : "unknown error");
-        setError(*err_str ? err_str->c_str() : "HTTP1-SSL-ERROR", desc->c_str(), xsink);
+        setError(*err_str ? err_str->c_str() : "HTTP1-SSL-ERROR", desc->c_str(), xsink,
+            poll_xsink.getExceptionArg());
         poll_xsink.clear();
         return nullptr;
     }
@@ -541,7 +542,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsin
         QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
         QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
         setError(*err_str ? err_str->c_str() : "HTTP1-SSL-ERROR",
-            *desc_str ? desc_str->c_str() : "SSL upgrade failed", xsink);
+            *desc_str ? desc_str->c_str() : "SSL upgrade failed", xsink, poll_xsink.getExceptionArg());
         poll_xsink.clear();
         return nullptr;
     }
@@ -2677,18 +2678,21 @@ int Http1ClientPollOperationPriv::checkResponseBodySize(int64_t size, const char
 }
 
 void Http1ClientPollOperationPriv::setError(const char* err, const char* desc,
-        ExceptionSink* xsink) {
-    setError(err, desc, nullptr, xsink);
+        ExceptionSink* xsink, QoreValue arg) {
+    setError(err, desc, nullptr, xsink, arg);
 }
 
 void Http1ClientPollOperationPriv::setError(const char* err, const char* desc, const QoreHashNode* extra,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, QoreValue arg) {
     {
         AutoLocker al(stream_lock);
         if (!error_info) {
             error_info = new QoreHashNode(autoTypeInfo);
             error_info->setKeyValue("err", new QoreStringNode(err), xsink);
             error_info->setKeyValue("desc", new QoreStringNode(desc), xsink);
+            if (!arg.isNothing()) {
+                error_info->setKeyValue("arg", arg.refSelf(), xsink);
+            }
             if (extra) {
                 ConstHashIterator hi(extra);
                 while (hi.next()) {

@@ -85,6 +85,11 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         addTestCase("like operator tests", \likeTests());
         addTestCase("empty substring tests", \emptySubstringTests());
         addTestCase("field paths through values that are not hashes", \fieldPathTests());
+        addTestCase("item context: map, hash_map and the streaming operators", \itemContextOperatorTests());
+        addTestCase("item context: wildcards", \itemContextWildcardTests());
+        addTestCase("item context: hash sources", \itemContextHashTests());
+        addTestCase("item context: nested operators", \itemContextNestingTests());
+        addTestCase("item context: caller values and errors", \itemContextCallerTests());
         set_return_value(main());
     }
 
@@ -902,6 +907,154 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         hash<auto> rec = {"h": {"p": {"x": {"y": 1}}, "q": {"x": 5}, "r": {"x": NOTHING}}};
         assertEq((1, NOTHING, NOTHING), eval_dpql("@h{*}.x.y", rec));
         assertEq(eval_dpql("map @value.x.y, @h", rec), eval_dpql("@h{*}.x.y", rec));
+    }
+
+    #! Registers a template callback that resolves $local:<path> in the template context, as Qorus does
+    static registerLocalTemplateCallback() {
+        AbstractDataProvider::clearTemplateCallbacks();
+        if (!AbstractDataProvider::setTemplateCallbacks(auto sub (string ctx, string value, *hash<auto> tc) {
+            if (ctx != "local") {
+                throw "TEMPLATE-RESOLUTION-ERROR", sprintf("unsupported context %y", ctx);
+            }
+            auto v = tc;
+            foreach string key in (value.split(".")) {
+                if (v.typeCode() != NT_HASH || !v.hasKey(key)) {
+                    throw "TEMPLATE-RESOLUTION-ERROR", sprintf("no value for $local:%s", value);
+                }
+                v = v{key};
+            }
+            return v;
+        })) {
+            throw "TEST-ERROR", "cannot register the template callback";
+        }
+    }
+
+    #! The record that the item context tests use
+    const ItemContextRec = {
+        "l": ("a", "b", "c"),
+        "h": {"x": 1, "y": 2},
+        "o": ({"n": (1, 2)}, {"n": (3,)}),
+    };
+
+    #! Evaluates DPQL on the item context record with a template context
+    static auto evalItemContext(string dpql, *hash<auto> tc) {
+        return AbstractDataProvider::evalGenericExpressionValue(ItemContextRec, DataProvider::parseDpqlExpression(dpql),
+            tc);
+    }
+
+    #! the body, filter, key, value and predicates see $local:item, $local:index and $local:size
+    itemContextOperatorTests() {
+        DataProviderExpressionsTest::registerLocalTemplateCallback();
+        on_exit AbstractDataProvider::clearTemplateCallbacks();
+        code<auto(string, *hash<auto>)> ev = \DataProviderExpressionsTest::evalItemContext();
+
+        # map: the body and the filter
+        assertEq(("a:0/3", "b:1/3", "c:2/3"), ev('map concat($local:item, ":", $local:index, "/", $local:size), @l'));
+        assertEq(("a", "c"), ev('map $local:item, @l, $local:index != 1'));
+        # the predicates of the streaming operators
+        assertEq(("b", "c"), ev('select @l, $local:index > 0'));
+        assertEq("b", ev('first $local:item == "b", @l'));
+        assertTrue(ev('any $local:index == 2, @l'));
+        assertFalse(ev('any $local:index == 3, @l'));
+        assertTrue(ev('all $local:size == 3, @l'));
+        assertEq(2, ev('count $local:item != "b", @l'));
+        assertEq(("a", "b"), ev('takewhile $local:index < 2, @l'));
+        assertEq(("a",), ev('takeuntil $local:item == "b", @l'));
+        # hash_map: the key, the value and the filter
+        assertEq({"a": 0, "c": 2}, ev('hash_map $local:item, $local:index, @l, $local:item != "b"'));
+    }
+
+    #! the expression after a wildcard sees the item context too
+    itemContextWildcardTests() {
+        DataProviderExpressionsTest::registerLocalTemplateCallback();
+        on_exit AbstractDataProvider::clearTemplateCallbacks();
+
+        # the wildcards are map: a hand-built item expression sees the item too
+        assertEq((0, 1, 2), AbstractDataProvider::evalGenericExpressionValue(ItemContextRec, <DataProviderExpression>{
+            "exp": DP_FUNC_LIST_WILDCARD,
+            "args": (<DataProviderFieldReference>{"field": "l"},
+                <DataProviderTemplateReference>{"tmpl_context": "local", "tmpl_value": "index",
+                    "raw": "$local:index"}),
+        }));
+        assertEq((2, 2), AbstractDataProvider::evalGenericExpressionValue(ItemContextRec, <DataProviderExpression>{
+            "exp": DP_FUNC_HASH_WILDCARD,
+            "args": (<DataProviderFieldReference>{"field": "h"},
+                <DataProviderTemplateReference>{"tmpl_context": "local", "tmpl_value": "size",
+                    "raw": "$local:size"}),
+        }));
+        assertEq(("a0", "b1", "c2"), AbstractDataProvider::evalGenericExpressionValue(ItemContextRec, <DataProviderExpression>{
+            "exp": DP_FUNC_LIST_WILDCARD,
+            "args": (<DataProviderFieldReference>{"field": "l"}, <DataProviderExpression>{
+                "exp": "concat",
+                "args": (
+                    <DataProviderTemplateReference>{"tmpl_context": "local", "tmpl_value": "item",
+                        "raw": "$local:item"},
+                    <DataProviderTemplateReference>{"tmpl_context": "local", "tmpl_value": "index",
+                        "raw": "$local:index"},
+                ),
+            }),
+        }));
+        # accessors on the item itself (@m[*][$local:index]): the diagonal
+        assertEq((1, 4), AbstractDataProvider::evalGenericExpressionValue({"m": ((1, 2), (3, 4))},
+            <DataProviderExpression>{
+                "exp": DP_FUNC_LIST_WILDCARD,
+                "args": (<DataProviderFieldReference>{"field": "m"}, <DataProviderExpression>{
+                    "exp": DP_FUNC_INDEX,
+                    "args": (<DataProviderExpression>{"exp": DP_FUNC_WILDCARD_ITEM, "args": ()},
+                        <DataProviderTemplateReference>{"tmpl_context": "local", "tmpl_value": "index",
+                            "raw": "$local:index"}),
+                }),
+            }));
+    }
+
+    #! for a hash source, the item is the key/value entry
+    itemContextHashTests() {
+        DataProviderExpressionsTest::registerLocalTemplateCallback();
+        on_exit AbstractDataProvider::clearTemplateCallbacks();
+        code<auto(string, *hash<auto>)> ev = \DataProviderExpressionsTest::evalItemContext();
+
+        # a hash source: the item is the key/value entry
+        assertEq(({"key": "x", "value": 1}, {"key": "y", "value": 2}), ev('map $local:item, @h'));
+        assertEq(("x0/2", "y1/2"), ev('map concat($local:item.key, $local:index, "/", $local:size), @h'));
+        assertEq(("y",), ev('map $local:item.key, @h, $local:item.value > 1'));
+    }
+
+    #! a nested operator shadows the outer item context while it runs
+    itemContextNestingTests() {
+        DataProviderExpressionsTest::registerLocalTemplateCallback();
+        on_exit AbstractDataProvider::clearTemplateCallbacks();
+        code<auto(string, *hash<auto>)> ev = \DataProviderExpressionsTest::evalItemContext();
+
+        # nesting: the inner operator's values shadow the outer ones, which are back once it is done
+        assertEq(((10, 21), (30,)), ev('map (map $local:item * 10 + $local:index, @n), @o'));
+        assertEq(("2-0", "1-1"), ev('map concat((count $local:index >= 0, @n), "-", $local:index), @o'));
+        assertEq(((2, 2), (1,)), ev('map (map $local:size, @n), @o'));
+    }
+
+    #! the caller's template context values stay visible and unchanged
+    itemContextCallerTests() {
+        DataProviderExpressionsTest::registerLocalTemplateCallback();
+        on_exit AbstractDataProvider::clearTemplateCallbacks();
+        code<auto(string, *hash<auto>)> ev = \DataProviderExpressionsTest::evalItemContext();
+
+        # values that the caller set stay visible, except item, index and size
+        hash<auto> tc = {"suffix": "!", "item": "caller", "index": -1, "size": 99};
+        assertEq(("a!", "b!", "c!"), ev('map concat($local:item, $local:suffix), @l', tc));
+        assertEq((0, 1, 2), ev('map $local:index, @l', tc));
+        assertEq("2caller", ev('concat((count $local:index > 0, @l), $local:item)', tc));
+        # the source and the count of take are evaluated with the caller's values
+        assertEq(("x", "y"), ev('map $local:item, $local:items', tc + {"items": ("x", "y")}));
+        assertEq(("a",), ev('take $local:size - 98, @l', tc));
+
+        # an error in the body: the caller's values are unchanged afterwards
+        assertThrows("DIVISION-BY-ZERO", sub () { ev('map 1 / ($local:index - 1), @l', tc); });
+        assertEq({"suffix": "!", "item": "caller", "index": -1, "size": 99}, tc);
+        assertEq("caller-1", ev('concat($local:item, $local:index)', tc));
+        assertThrows("DIVISION-BY-ZERO", sub () { ev('map (map 1 / $local:index, @n), @o', tc); });
+        assertEq("caller-1", ev('concat($local:item, $local:index)', tc));
+
+        # outside of an operator there is no item
+        assertThrows("TEMPLATE-RESOLUTION-ERROR", "no value for \\$local:item", ev, ('$local:item',));
     }
 
     #! an empty string is contained in every string, as in Qorus expressions and other languages

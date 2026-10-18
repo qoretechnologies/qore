@@ -4,6 +4,12 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    HttpClientIo and RestClientIo report certificate verification failures from HTTP/1.1 and HTTP/2 requests immediately,
+    preserving OpenSSL's certificate verification reason. A refused certificate is no longer retried as a transient
+    connection failure, which could delay the call and replace the original reason with a connection timeout.
+    This also applies to automatic protocol selection with HTTP/3 disabled. Connections interrupted during the
+    handshake can still be retried.
+
     LLM streaming requests accept a @ref QoreLlmUtils::LlmCancellation "LlmCancellation" token in
     @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation". Cancelling the token
     closes an in-flight OpenAI-compatible, Anthropic, Gemini/Vertex AI, or Bedrock stream without polling and
@@ -2537,6 +2543,9 @@ while (*binary chunk = input.read(65536)) {
       - added the DPQL @ref dpql_wildcards "wildcard accessors" \c [*] and \c {*}, which take a value from each
         item of a list or each value of a hash as \c map does: <tt>\@orders[*].id</tt> is
         <tt>map \@id, \@orders</tt>, and <tt>\@orders[*].items[*].sku</tt> is a list of lists
+      - the body, filter and predicate expressions of \c map and the other DPQL streaming operators see the
+        current item, its position and the size of the source as <tt>$local:item</tt>, <tt>$local:index</tt> and
+        <tt>$local:size</tt> in the template context (@ref dpql_item_context)
       - added HTTP/3 debug tracking, context-sensitive action filtering, and \c amqp factory registration
       - watch data providers can restore and durably persist provider-owned delivery checkpoints,
         allowing integrations to preserve at-least-once event delivery across process restarts

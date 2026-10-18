@@ -217,6 +217,32 @@ hash<auto> sub dp_stream_hash_record(string key, auto value) {
     return {"key": key, "value": value};
 }
 
+#! Returns the template context that an item-scoped argument is evaluated with
+/** The body, filter, key, value and predicate expressions of the streaming operators and the expression after a
+    wildcard (the arguments that @ref DpqlParser::isItemScopedArg() reports) are evaluated with the current item
+    as \c item, its zero-based position as \c index and the size of the source as \c size in the template
+    context, so that <tt>$local:item</tt>, <tt>$local:index</tt> and <tt>$local:size</tt> refer to them; the other
+    values of the caller's template context are kept.  The context is a new hash for each item, so a nested
+    operator's values are not seen after it is done and the caller's context is never changed, also when an
+    expression raises an error.
+
+    @param tc the caller's template context
+    @param item the item: a list element, or the \c key / \c value entry of a hash
+    @param index the zero-based position of the item in the source
+    @param size the number of items in the source
+
+    @return the template context for the item
+
+    @since DataProvider 3.11
+*/
+hash<auto> sub dp_item_context(*hash<auto> tc, auto item, int index, int size) {
+    return (tc ?? {}) + {
+        "item": item,
+        "index": index,
+        "size": size,
+    };
+}
+
 #! Evaluates an optional streaming predicate against an iteration record
 bool sub dp_stream_accept(hash<auto> iter_rec, *auto predicate, *hash<auto> tc) {
     return !exists predicate || AbstractDataProvider::evalGenericExpressionValue(iter_rec, predicate, tc).toBool();
@@ -257,24 +283,30 @@ int sub dp_stream_non_negative_count(string op, auto value) {
 list<auto> sub dp_map_source(auto source, auto body, *auto filter, *hash<auto> tc) {
     list<auto> result = ();
     switch (source.typeCode()) {
-        case NT_LIST:
+        case NT_LIST: {
+            int size = source.size();
             foreach auto elem in (cast<list>(source)) {
                 hash<auto> iter_rec = dp_stream_list_record(elem);
-                if (!dp_stream_accept(iter_rec, filter, tc)) {
+                hash<auto> item_tc = dp_item_context(tc, elem, $#, size);
+                if (!dp_stream_accept(iter_rec, filter, item_tc)) {
                     continue;
                 }
-                push result, AbstractDataProvider::evalGenericExpressionValue(iter_rec, body, tc);
+                push result, AbstractDataProvider::evalGenericExpressionValue(iter_rec, body, item_tc);
             }
             break;
-        case NT_HASH:
+        }
+        case NT_HASH: {
+            int size = source.size();
             foreach string key in (cast<hash>(source).keys()) {
                 hash<auto> iter_rec = dp_stream_hash_record(key, source{key});
-                if (!dp_stream_accept(iter_rec, filter, tc)) {
+                hash<auto> item_tc = dp_item_context(tc, iter_rec, $#, size);
+                if (!dp_stream_accept(iter_rec, filter, item_tc)) {
                     continue;
                 }
-                push result, AbstractDataProvider::evalGenericExpressionValue(iter_rec, body, tc);
+                push result, AbstractDataProvider::evalGenericExpressionValue(iter_rec, body, item_tc);
             }
             break;
+        }
         default:
             dp_stream_source_error(DP_OP_MAP, source);
     }
@@ -334,22 +366,28 @@ list<auto> sub dp_wildcard_items(auto source, auto body, *hash<auto> tc) {
     bool item_only = body instanceof hash<DataProviderExpression> && body.exp == DP_FUNC_WILDCARD_ITEM;
     list<auto> result = ();
     switch (source.typeCode()) {
-        case NT_LIST:
+        case NT_LIST: {
             if (item_only) {
                 return source;
             }
+            int size = source.size();
             foreach auto elem in (cast<list>(source)) {
-                push result, AbstractDataProvider::evalGenericExpressionValue({DpWildcardItemKey: elem}, body, tc);
+                push result, AbstractDataProvider::evalGenericExpressionValue({DpWildcardItemKey: elem}, body,
+                    dp_item_context(tc, elem, $#, size));
             }
             break;
-        case NT_HASH:
+        }
+        case NT_HASH: {
+            int size = source.size();
             foreach string key in (cast<hash>(source).keys()) {
                 hash<auto> item = dp_stream_hash_record(key, source{key});
                 push result, item_only
                     ? item
-                    : AbstractDataProvider::evalGenericExpressionValue({DpWildcardItemKey: item}, body, tc);
+                    : AbstractDataProvider::evalGenericExpressionValue({DpWildcardItemKey: item}, body,
+                        dp_item_context(tc, item, $#, size));
             }
             break;
+        }
         default:
             dp_stream_source_error(DP_OP_MAP, source);
     }
@@ -3198,7 +3236,8 @@ public const hash<auto> ExtendedExpressionImplementations = {
             switch (source.typeCode()) {
                 case NT_LIST:
                     foreach auto elem in (cast<list>(source)) {
-                        if (dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                        if (dp_stream_accept(dp_stream_list_record(elem), predicate,
+                                dp_item_context(tc, elem, $#, source.size()))) {
                             push result, elem;
                         }
                     }
@@ -3206,7 +3245,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 case NT_HASH:
                     foreach string key in (cast<hash>(source).keys()) {
                         hash<auto> pair = dp_stream_hash_record(key, source{key});
-                        if (dp_stream_accept(pair, predicate, tc)) {
+                        if (dp_stream_accept(pair, predicate, dp_item_context(tc, pair, $#, source.size()))) {
                             push result, pair;
                         }
                     }
@@ -3257,7 +3296,8 @@ public const hash<auto> ExtendedExpressionImplementations = {
             switch (source.typeCode()) {
                 case NT_LIST:
                     foreach auto elem in (cast<list>(source)) {
-                        if (dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                        if (!exists predicate || dp_stream_accept(dp_stream_list_record(elem), predicate,
+                                dp_item_context(tc, elem, $#, source.size()))) {
                             return elem;
                         }
                     }
@@ -3265,7 +3305,8 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 case NT_HASH:
                     foreach string key in (cast<hash>(source).keys()) {
                         hash<auto> pair = dp_stream_hash_record(key, source{key});
-                        if (dp_stream_accept(pair, predicate, tc)) {
+                        if (!exists predicate
+                                || dp_stream_accept(pair, predicate, dp_item_context(tc, pair, $#, source.size()))) {
                             return pair;
                         }
                     }
@@ -3315,7 +3356,8 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 case NT_LIST:
                     foreach auto elem in (cast<list>(source)) {
                         if (exists predicate) {
-                            if (dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                            if (dp_stream_accept(dp_stream_list_record(elem), predicate,
+                                    dp_item_context(tc, elem, $#, source.size()))) {
                                 return True;
                             }
                         } else if (elem.toBool()) {
@@ -3327,7 +3369,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                     foreach string key in (cast<hash>(source).keys()) {
                         hash<auto> pair = dp_stream_hash_record(key, source{key});
                         if (exists predicate) {
-                            if (dp_stream_accept(pair, predicate, tc)) {
+                            if (dp_stream_accept(pair, predicate, dp_item_context(tc, pair, $#, source.size()))) {
                                 return True;
                             }
                         } else if (pair.value.toBool()) {
@@ -3372,14 +3414,16 @@ public const hash<auto> ExtendedExpressionImplementations = {
             switch (source.typeCode()) {
                 case NT_LIST:
                     foreach auto elem in (cast<list>(source)) {
-                        if (!dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                        if (!dp_stream_accept(dp_stream_list_record(elem), predicate,
+                                dp_item_context(tc, elem, $#, source.size()))) {
                             return False;
                         }
                     }
                     return True;
                 case NT_HASH:
                     foreach string key in (cast<hash>(source).keys()) {
-                        if (!dp_stream_accept(dp_stream_hash_record(key, source{key}), predicate, tc)) {
+                        hash<auto> pair = dp_stream_hash_record(key, source{key});
+                        if (!dp_stream_accept(pair, predicate, dp_item_context(tc, pair, $#, source.size()))) {
                             return False;
                         }
                     }
@@ -3432,7 +3476,8 @@ public const hash<auto> ExtendedExpressionImplementations = {
                         return source.size();
                     }
                     foreach auto elem in (cast<list>(source)) {
-                        if (dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                        if (dp_stream_accept(dp_stream_list_record(elem), predicate,
+                                dp_item_context(tc, elem, $#, source.size()))) {
                             ++count;
                         }
                     }
@@ -3442,7 +3487,8 @@ public const hash<auto> ExtendedExpressionImplementations = {
                         return source.size();
                     }
                     foreach string key in (cast<hash>(source).keys()) {
-                        if (dp_stream_accept(dp_stream_hash_record(key, source{key}), predicate, tc)) {
+                        hash<auto> pair = dp_stream_hash_record(key, source{key});
+                        if (dp_stream_accept(pair, predicate, dp_item_context(tc, pair, $#, source.size()))) {
                             ++count;
                         }
                     }
@@ -3598,7 +3644,8 @@ public const hash<auto> ExtendedExpressionImplementations = {
             switch (source.typeCode()) {
                 case NT_LIST:
                     foreach auto elem in (cast<list>(source)) {
-                        if (!dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                        if (!dp_stream_accept(dp_stream_list_record(elem), predicate,
+                                dp_item_context(tc, elem, $#, source.size()))) {
                             break;
                         }
                         push result, elem;
@@ -3607,7 +3654,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 case NT_HASH:
                     foreach string key in (cast<hash>(source).keys()) {
                         hash<auto> pair = dp_stream_hash_record(key, source{key});
-                        if (!dp_stream_accept(pair, predicate, tc)) {
+                        if (!dp_stream_accept(pair, predicate, dp_item_context(tc, pair, $#, source.size()))) {
                             break;
                         }
                         push result, pair;
@@ -3653,7 +3700,8 @@ public const hash<auto> ExtendedExpressionImplementations = {
             switch (source.typeCode()) {
                 case NT_LIST:
                     foreach auto elem in (cast<list>(source)) {
-                        if (dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                        if (dp_stream_accept(dp_stream_list_record(elem), predicate,
+                                dp_item_context(tc, elem, $#, source.size()))) {
                             break;
                         }
                         push result, elem;
@@ -3662,7 +3710,7 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 case NT_HASH:
                     foreach string key in (cast<hash>(source).keys()) {
                         hash<auto> pair = dp_stream_hash_record(key, source{key});
-                        if (dp_stream_accept(pair, predicate, tc)) {
+                        if (dp_stream_accept(pair, predicate, dp_item_context(tc, pair, $#, source.size()))) {
                             break;
                         }
                         push result, pair;
@@ -3728,22 +3776,24 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 case NT_LIST:
                     foreach auto elem in (cast<list>(source)) {
                         hash<auto> iter_rec = dp_stream_list_record(elem);
-                        if (!dp_stream_accept(iter_rec, filter, tc)) {
+                        hash<auto> item_tc = dp_item_context(tc, elem, $#, source.size());
+                        if (!dp_stream_accept(iter_rec, filter, item_tc)) {
                             continue;
                         }
-                        auto k = AbstractDataProvider::evalGenericExpressionValue(iter_rec, key_expr, tc);
-                        auto v = AbstractDataProvider::evalGenericExpressionValue(iter_rec, val_expr, tc);
+                        auto k = AbstractDataProvider::evalGenericExpressionValue(iter_rec, key_expr, item_tc);
+                        auto v = AbstractDataProvider::evalGenericExpressionValue(iter_rec, val_expr, item_tc);
                         result{k} = v;
                     }
                     break;
                 case NT_HASH:
                     foreach string key in (cast<hash>(source).keys()) {
                         hash<auto> iter_rec = dp_stream_hash_record(key, source{key});
-                        if (!dp_stream_accept(iter_rec, filter, tc)) {
+                        hash<auto> item_tc = dp_item_context(tc, iter_rec, $#, source.size());
+                        if (!dp_stream_accept(iter_rec, filter, item_tc)) {
                             continue;
                         }
-                        auto k = AbstractDataProvider::evalGenericExpressionValue(iter_rec, key_expr, tc);
-                        auto v = AbstractDataProvider::evalGenericExpressionValue(iter_rec, val_expr, tc);
+                        auto k = AbstractDataProvider::evalGenericExpressionValue(iter_rec, key_expr, item_tc);
+                        auto v = AbstractDataProvider::evalGenericExpressionValue(iter_rec, val_expr, item_tc);
                         result{k} = v;
                     }
                     break;

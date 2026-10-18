@@ -108,6 +108,8 @@ class DpqlActionSessionTest inherits QUnit::Test {
         addTestCase("dpql-validate with override", \testValidateOverride());
         addTestCase("dpql-completions with override", \testCompletionsOverride());
         addTestCase("dpql-get-tokens", \testTokenize());
+        addTestCase("dpql-get-tokens operator and punctuation types", \testTokenTypes());
+        addTestCase("dpql-get-tokens word types by position", \testWordTokenTypes());
         addTestCase("dpql-format invalid", \testFormatInvalid());
         addTestCase("dpql-serialize", \testSerialize());
         addTestCase("schema-aware key completions", \testSchemaAwareKeyCompletions());
@@ -255,6 +257,83 @@ class DpqlActionSessionTest inherits QUnit::Test {
             "fields": getFieldInfo(),
         });
         assertTrue(result.completions.size() > 0, "Override fields should be used for completions");
+    }
+
+    #! Every operator token is an "operator" span and every bracket, brace, parenthesis, comma and dot is
+    #! "punctuation"; none is an "identifier", which editors show as a function
+    testTokenTypes() {
+        DataProvider::DpqlActionSession session = newSession();
+        string text = '@a[0..1]{b}.c + 1 - 2 * 3 / 4 % 5 == "x" && !(@d != null) || @e =~ /r/ && @f !~ /s/ '
+            '&& @g[*] < 1 && @h <= 2 && @i > 3 && @j >= 4 && upr(@k, 1) == $static:x';
+        list<hash<auto>> spans = session.handleAction("dpql-get-tokens", {"text": text}).tokens;
+        # the type of each span, by its text; the two * (multiplication and wildcard) are both operators
+        hash<string, list<string>> types = {};
+        foreach hash<auto> span in (spans) {
+            types{span.text} += (span.type,);
+        }
+        foreach string op in (("..", "+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">=", "&&", "||", "!",
+                "=~", "!~")) {
+            assertTrue(types.hasKey(op), sprintf("the expression has %y", op));
+            assertEq((map "operator", types{op}), types{op}, sprintf("%y is an operator", op));
+        }
+        assertEq(("operator", "operator"), types."*", "multiplication and the wildcard");
+        foreach string p in (("[", "]", "{", "}", ".", "(", ")", ",")) {
+            assertTrue(types.hasKey(p), sprintf("the expression has %y", p));
+            assertEq((map "punctuation", types{p}), types{p}, sprintf("%y is punctuation", p));
+        }
+        # the other tokens keep their types
+        assertEq(("field",), types."@a");
+        assertEq(("number",), types."0");
+        assertEq(("string",), types."\"x\"");
+        assertEq(("keyword",), types."null");
+        assertEq(("string",), types."/r/");
+        assertEq(("variable",), types."$static:x");
+        assertEq(("identifier",), types.upr);
+        # no operator or punctuation token is an identifier
+        assertEq((), (map $1.text, spans, $1.type == "identifier" && $1.text !~ /^[[:alpha:]_]/));
+    }
+
+    #! Returns the span types of the words of an expression, in order, as "word:type"
+    private list<string> wordTypes(DataProvider::DpqlActionSession session, string text) {
+        return map $1.text + ":" + $1.type, session.handleAction("dpql-get-tokens", {"text": text}).tokens,
+            $1.text =~ /^[[:alpha:]_"0-9]/ && $1.text !~ /^[0-9]+$/ || $1.text =~ /^"/;
+    }
+
+    #! A word's span type is what it is where it is: a key, an operator, a function or a value
+    testWordTokenTypes() {
+        DataProvider::DpqlActionSession session = newSession();
+        # member and key names are fields, also when spelled like an operator
+        assertEq(("map:field", "map:field", "omq:string"), wordTypes(session, '@x{map}.map == omq'));
+        # (@x.select is one field token; a member after an accessor is a word)
+        assertEq(("select:field", "select:operator"), wordTypes(session, '@x[0].select == select @l, @v'));
+        assertEq(("b:field",), wordTypes(session, '@a[*].b'));
+        assertEq(("\"k\":field", "c:field"), wordTypes(session, '@x{"k", c} == 1'));
+        list<hash<auto>> spans = session.handleAction("dpql-get-tokens", {"text": '@x{"k", 2}[1] == 3'}).tokens;
+        assertEq(("\"k\":field", "2:field", "1:number", "3:number"),
+            (map $1.text + ":" + $1.type, spans, $1.type == "field" && $1.text !~ /^@/ || $1.type == "number"));
+        # prefix operators, with or without a parenthesized first argument
+        assertEq(("map:operator",), wordTypes(session, 'map @id, @orders'));
+        assertEq(("count:operator",), wordTypes(session, 'count @l > 1'));
+        assertEq(("first:operator",), wordTypes(session, 'first(@a)'));
+        assertEq(("hash_map:operator", "takewhile:operator"),
+            wordTypes(session, 'hash_map @k, @v, takewhile @ok, @rows'));
+        # word operators
+        assertEq(("between:operator", "and:operator"), wordTypes(session, '@y between 1 and 2'));
+        assertEq(("not:operator", "in:operator", "a:string", "b:string"), wordTypes(session, '@z not in (a, b)'));
+        assertEq(("not:operator", "between:operator", "and:operator"),
+            wordTypes(session, '@z not between 1 and 2'));
+        assertEq(("in:operator", "c:string"), wordTypes(session, '@w in (c)'));
+        assertEq(("like:operator", "\"a%\":string"), wordTypes(session, '@k like "a%"'));
+        assertEq(("listContains:operator",), wordTypes(session, '@t listContains 1'));
+        # functions keep their type, also an operator written as a call
+        assertEq(("upr:identifier", "\"N\":string"), wordTypes(session, 'upr(@n) == "N"'));
+        assertEq(("listContains:identifier",), wordTypes(session, 'listContains(@u, 1)'));
+        # unquoted values are strings, also where a word could be an operator elsewhere
+        assertEq(("omq:string",), wordTypes(session, '@domain == omq'));
+        assertEq(("in:string",), wordTypes(session, '@x == in'));
+        assertEq(("concat:identifier", "between:string", "and:string"), wordTypes(session, 'concat(between, and)'));
+        # keywords and fields are unchanged
+        assertEq(("true:keyword", "null:keyword"), wordTypes(session, '@d == true && @e != null'));
     }
 
     testTokenize() {
