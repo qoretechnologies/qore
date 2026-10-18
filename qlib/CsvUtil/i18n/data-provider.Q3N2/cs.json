@@ -1126,6 +1126,210 @@
         "app.Q3N2.action.d3JpdGU.option.d3JpdGVfaGVhZGVycw.desc": {
           "source": "Set to `false` to suppress the output of headers; the default is `true`, meaning to output headers if they are present",
           "message": "Nastavte na `false` pro potlačení výstupu záhlaví; výchozí hodnota je `true`, což znamená vypsat záhlaví, pokud existují"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create CSV Data",
+          "message": "Vytvořit data CSV"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create CSV data from records and return it as bytes",
+          "message": "Vytvořit data CSV ze záznamů a vrátit je jako bajty"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Creates CSV data from the records given to the action and returns it as bytes with the number of records, for example to attach the data to an email, upload it with another action, or store it; no file is written.\n\nThe data is written as RFC 4180 CSV data by default, in the encoding of the `encoding` option (UTF-8 by default), with a header row from `headers` unless `write_headers` is `false`.",
+          "message": "Vytvoří data CSV ze záznamů předaných akci a vrátí je jako bajty spolu s počtem záznamů, například pro připojení dat k e-mailu, jejich nahrání jinou akcí nebo uložení; nezapisuje se žádný soubor.\n\nData se ve výchozím nastavení zapisují jako data CSV podle RFC 4180 v kódování volby `encoding` (výchozí UTF-8) s řádkem záhlaví z `headers`, pokud `write_headers` není `false`."
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Header Names",
+          "message": "Názvy záhlaví"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of field / header names for the data output",
+          "message": "Seznam názvů polí / záhlaví pro výstup dat"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of field / header names for the data output",
+          "message": "Seznam názvů polí / záhlaví pro výstup dat"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.YmxvY2s.display_name": {
+          "source": "Block Size",
+          "message": "Velikost bloku"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.YmxvY2s.short_desc": {
+          "source": "The block size when generating bulk output",
+          "message": "Velikost bloku při generování hromadného výstupu"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.YmxvY2s.desc": {
+          "source": "The block size when generating bulk output",
+          "message": "Velikost bloku při generování hromadného výstupu"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZGF0YW1hcA.display_name": {
+          "source": "Output Field Name Map",
+          "message": "Mapa názvů výstupních polí"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZGF0YW1hcA.short_desc": {
+          "source": "Maps data key names to output field names",
+          "message": "Mapuje názvy datových klíčů na názvy výstupních polí"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZGF0YW1hcA.desc": {
+          "source": "Sets a hash mapping actual data key names to the output field names, for use in case the data field names differ; does not have to include every data or output key; keys not present will be assumed to be mapped 1:1",
+          "message": "Nastaví hash mapující skutečné názvy datových klíčů na názvy výstupních polí pro případ, že se názvy datových polí liší; nemusí obsahovat každý datový nebo výstupní klíč; u neuvedených klíčů se předpokládá mapování 1:1"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Formát data"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value output formatting",
+          "message": "Výchozí maska pro formátování výstupních hodnot data"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default mask for date value output formatting; see [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) for more information",
+          "message": "Výchozí maska pro formátování výstupních hodnot data; více informací viz [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting)"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Kódování znaků"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The output character encoding",
+          "message": "Kódování výstupních znaků"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.desc": {
+          "source": "The output character encoding for the data",
+          "message": "Výstupní kódování znaků pro data"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Znaky konce řádku"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Znaky konce řádku nebo záznamu"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZW9s.desc": {
+          "source": "The end of line / record character(s); if not present, the current platform standard will be used",
+          "message": "Znaky konce řádku nebo záznamu; pokud nejsou zadány, použije se výchozí standard platformy"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZmllbGRz.display_name": {
+          "source": "Field Descriptions",
+          "message": "Popisy polí"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZmllbGRz.short_desc": {
+          "source": "A hash describing the CSV fields to output",
+          "message": "Hash popisující pole CSV pro výstup"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZmllbGRz.desc": {
+          "source": "A hash describing the CSV fields to output. Keys are field names, values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `mask`: for `date`, `int`, `float`, or `number` types, a mask that the value is written with, such as `DD.MM.YYYY`, `hh:mm AM`, `#.##0,00` or `€#,##0.00`, so that a file is written exactly as the mask describes and read back with the same mask as the same values; cannot be given with `format`; see [ValueMask](https://qoretechnologies.com/manual/qorus/current/qore/modules/ValueMask/html/index.html) for the masks\n- `timezone`: for `date` types only, the time zone region whose wall-clock time the dates of the field are written in; overrides the `timezone` option\n- `header`: the header text of the field, if not the field name",
+          "message": "Hash popisující pole CSV pro výstup. Klíče jsou názvy polí, hodnoty jsou [typy polí](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) nebo hash s následujícími klíči:\n- `type`: [řetězec typu pole](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: pro typy `date` [formát data](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); pro typy `int`, `float` nebo `number` formátovací řetězec čísla: *<oddělovač_tisíců>*[*<desetinný_oddělovač>*[*<desetinná_místa>*]] (např. `\".,3\"` = tisíce `.`, desetinné `,`, 3 desetinná místa)\n- `mask`: pro typy `date`, `int`, `float` nebo `number` maska, se kterou se hodnota zapisuje, například `DD.MM.YYYY`, `hh:mm AM`, `#.##0,00` nebo `€#,##0.00`, aby byl soubor zapsán přesně tak, jak maska popisuje, a se stejnou maskou se načetl zpět jako tytéž hodnoty; nelze zadat současně s `format`; masky viz [ValueMask](https://qoretechnologies.com/manual/qorus/current/qore/modules/ValueMask/html/index.html)\n- `timezone`: pouze pro typy `date`, oblast časového pásma, v jehož místním čase se data pole zapisují; má přednost před volbou `timezone`\n- `header`: text záhlaví pole, pokud to není název pole"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
+          "source": "Enforce Header Order",
+          "message": "Vynutit pořadí záhlaví"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the output data will be reordered in the order of headers",
+          "message": "Pokud má hodnotu true, výstupní data se seřadí podle pořadí záhlaví"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.aGVhZGVyX3Jlb3JkZXI.desc": {
+          "source": "If `true` (the default) then if `headers` are provided, then data fields are reordered to follow headers",
+          "message": "Pokud je `true` (výchozí) a jsou zadány `headers`, datová pole se přeuspořádají podle záhlaví"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Output Number Format",
+          "message": "Formát výstupního čísla"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default output format for 'int', 'float', and 'number' fields",
+          "message": "Výchozí výstupní formát pro pole 'int', 'float' a 'number'"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default output format for `int`, `float`, and `number` fields; it is a number format string with 1 to 3 fields as follows: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; ex: `\".,3\"` (= `.` for the thousands separator, `,` for the decimal separator, and 3 digits after the decimal place)",
+          "message": "Výchozí výstupní formát pro pole `int`, `float` a `number`; jedná se o formátovací řetězec čísla s 1 až 3 poli následovně: *<oddělovač_tisíců>*[*<desetinný_oddělovač>*[*<desetinná_místa>*]]; např.: `\".,3\"` (= `.` pro oddělovač tisíců, `,` pro desetinný oddělovač a 3 číslice za desetinnou čárkou)"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.b3B0aW1hbF9xdW90ZXM.display_name": {
+          "source": "Optimal Quotes",
+          "message": "Optimální uvozovky"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.b3B0aW1hbF9xdW90ZXM.short_desc": {
+          "source": "Quote output fields only when necessary",
+          "message": "Uvozovat výstupní pole pouze v případě potřeby"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.b3B0aW1hbF9xdW90ZXM.desc": {
+          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting: if they contain the quote character, the separator, the end of line, a carriage return or a line feed, or start or end with white space; the default is `true`",
+          "message": "Nastavte na `false` pro zakázání optimálního uvádění v uvozovkách; pokud je optimální uvádění v uvozovkách zakázáno, všechna pole jsou v uvozovkách bez ohledu na typ či obsah, pokud je povoleno, pak jsou v uvozovkách pouze pole, která to vyžadují: obsahují uvozovku, oddělovač, konec řádku, návrat vozíku nebo odřádkování, nebo začínají či končí bílým znakem; výchozí hodnota je `true`"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGU.display_name": {
+          "source": "Quote Char(s)",
+          "message": "Uvozovací znaky"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGU.short_desc": {
+          "source": "The quote character(s)",
+          "message": "Uvozovací znaky"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGU.desc": {
+          "source": "The quote character to quote fields (default: `\"`)",
+          "message": "Znak uvozovek pro uzavírání polí (výchozí: `\"`)"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "Únikové znaky pro uvozovky"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "The escape character(s) written before a quote in a field",
+          "message": "Únikové znaky zapisované před uvozovku v poli"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) written before a `quote` character in a quoted field.\n\nBy default (an empty value), a quote is escaped by doubling it, as in RFC 4180 CSV files, which spreadsheet programs and the CSV reader read by default.  Set to `\\` only for a consumer that expects quotes escaped with a backslash (`\\\"`); the CSV reader reads such files with its `quote_escape` option set to `\\`.",
+          "message": "Únikové znaky zapisované před znak `quote` v poli v uvozovkách.\n\nVe výchozím nastavení (prázdná hodnota) se uvozovka uvádí zdvojením, jako v souborech CSV podle RFC 4180, které tabulkové procesory a čtečka CSV ve výchozím nastavení čtou.  Na `\\` nastavte pouze pro příjemce, který očekává uvozovky uvedené zpětným lomítkem (`\\\"`); čtečka CSV takové soubory čte s volbou `quote_escape` nastavenou na `\\`."
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.c2VwYXJhdG9y.display_name": {
+          "source": "Field Separator",
+          "message": "Oddělovač polí"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator character(s)",
+          "message": "Znaky oddělovače polí"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.c2VwYXJhdG9y.desc": {
+          "source": "The string separating fields in the output data (default: `,`)",
+          "message": "Řetězec oddělující pole ve výstupních datech (výchozí: `,`)"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "Časové pásmo"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.dGltZXpvbmU.short_desc": {
+          "source": "The time zone whose wall-clock time dates are written in",
+          "message": "Časové pásmo, v jehož místním čase se zapisují data"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.dGltZXpvbmU.desc": {
+          "source": "The time zone region (such as `Europe/Prague` or `America/New_York`) whose wall-clock time dates are written in, so that a reader that reads the file in this time zone reads the same points in time; a field's `timezone` attribute overrides it.  If not given, dates are written in their own time zone, and dates written with a `mask` in the current time zone",
+          "message": "Oblast časového pásma (například `Europe/Prague` nebo `America/New_York`), v jehož místním čase se zapisují data, aby čtenář, který soubor čte v tomto časovém pásmu, načetl tytéž okamžiky; atribut `timezone` pole má před ní přednost.  Pokud není zadána, data se zapisují ve svém vlastním časovém pásmu a data zapisovaná s maskou (`mask`) v aktuálním časovém pásmu"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.dmVyaWZ5X2NvbHVtbnM.display_name": {
+          "source": "Verify Columns",
+          "message": "Ověřit sloupce"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
+          "source": "Verifies input data to ensure it has the expected structure",
+          "message": "Ověří vstupní data a zajistí, že mají očekávanou strukturu"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.dmVyaWZ5X2NvbHVtbnM.desc": {
+          "source": "If `true` (the default is `false`) then if a line is parsed with a different column count than other lines, a `CSVFILEWRITER-DATA-ERROR` exception is thrown.\n\nNote that enabling this option will incurr a performance penalty",
+          "message": "Pokud je `true` (výchozí je `false`), pak pokud je zpracován řádek s jiným počtem sloupců než ostatní řádky, je vyvolána výjimka `CSVFILEWRITER-DATA-ERROR`.\n\nUpozorňujeme, že povolení této možnosti může mít dopad na výkon"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.d3JpdGVfaGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Výstupní záhlaví"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.d3JpdGVfaGVhZGVycw.short_desc": {
+          "source": "Include headers as the first output record",
+          "message": "Zahrnout záhlaví jako první výstupní záznam"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.d3JpdGVfaGVhZGVycw.desc": {
+          "source": "Set to `false` to suppress the output of headers; the default is `true`, meaning to output headers if they are present",
+          "message": "Nastavte na `false` pro potlačení výstupu záhlaví; výchozí hodnota je `true`, což znamená vypsat záhlaví, pokud existují"
         }
       }
     }

@@ -27,7 +27,22 @@
 
 #! the CsvUtil namespace. All classes used in the CsvUtil module should be inside this namespace
 public namespace CsvUtil {
-#! Provides a data provider for reading CSV files
+#! Provides a data provider for writing CSV files and data
+/** The records created with the data provider are written to the output location of the \c path option, to the
+    output stream of the \c stream option, or, with neither option, to CSV data in memory that
+    @ref DataProvider::AbstractDataProvider::finishCreate() "finishCreate()" returns, as the \c write-data action
+    does.
+
+    @par Example
+    @code{.py}
+# create a CSV attachment from order lines
+CsvWriteDataProvider prov({"headers": ("sku", "qty"), "encoding": "WINDOWS-1252"});
+prov.createRecord({"sku": "A-1", "qty": 5});
+prov.createRecord({"sku": "B-2", "qty": 7});
+hash<GeneratedDataInfo> csv = prov.finishCreate();
+# csv.data: the bytes of "sku,qty\nA-1,5\nB-2,7\n" in WINDOWS-1252; csv.record_count: 2
+    @endcode
+*/
 public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
@@ -217,6 +232,15 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
 
         #! stable object name for path-backed providers
         *string object_name;
+
+        #! the stream of the output location given with the \c path option, closed by finishCreate()
+        *OutputStream location_stream;
+
+        #! the stream that the CSV data is generated in if there is no \c path or \c stream option
+        *BinaryOutputStream data_stream;
+
+        #! the number of records written
+        int created = 0;
     }
 
     #! Creates the CsvWriteDataProvider with the output path and optionally an option hash
@@ -254,16 +278,17 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
                     "the other");
             }
             object_name = copts.path;
-            writer = new CsvWriter(FileLocationHandler::getOutputStreamForLocation(copts.path),
-                copts{CsvGenerationOptionList});
+            location_stream = FileLocationHandler::getOutputStreamForLocation(copts.path);
+            writer = new CsvWriter(location_stream, copts{CsvGenerationOptionList});
             return;
         }
         if (copts.stream) {
             writer = new CsvWriter(copts.stream, copts{CsvGenerationOptionList});
             return;
         }
-        # create a dummy stream output object
-        writer = new CsvWriter(new StringOutputStream(), copts{CsvGenerationOptionList});
+        # the CSV data is generated in memory and returned by finishCreate()
+        data_stream = new BinaryOutputStream();
+        writer = new CsvWriter(data_stream, copts{CsvGenerationOptionList});
     }
 
     #! Returns the description of the record type, if any
@@ -279,7 +304,38 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
     */
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
         writer.writeLine(rec);
+        ++created;
         return rec;
+    }
+
+    #! Completes the create operations
+    /** If the data provider was created with neither a \c path nor a \c stream option, returns the CSV data
+        generated from the records created with it; the data is in the encoding of the \c encoding option, and the
+        data returned is no longer kept by the data provider.
+
+        If it was created with a \c path option, closes the output location, so an error writing the data to the
+        location, such as an upload to a remote location that fails, is raised here.
+
+        @return the generated CSV data and the number of records in it, if there is no \c path or \c stream
+        option; otherwise no value is returned
+
+        @since %CsvUtil 1.12
+    */
+    private *hash<GeneratedDataInfo> finishCreateImpl() {
+        if (data_stream) {
+            return <GeneratedDataInfo>{
+                "data": data_stream.getData(),
+                "record_count": created,
+            };
+        }
+        if (location_stream) {
+            OutputStream stream = remove location_stream;
+            stream.close();
+            # an output location with background I/O reports its errors when the I/O is complete
+            if (stream instanceof FileLocationHandler::OutputStreamWrapper) {
+                cast<FileLocationHandler::OutputStreamWrapper>(stream).waitForIo();
+            }
+        }
     }
 
     #! Returns data provider static info

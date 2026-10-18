@@ -154,6 +154,32 @@ module CsvUtil {
                 }
             ),
         });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CsvUtil::AppName,
+            "path": "/",
+            "action": "write-data",
+            "display_name": "Create CSV Data",
+            "short_desc": "Create CSV data from records and return it as bytes",
+            "desc": "Creates CSV data from the records given to the action and returns it as bytes with the number "
+                "of records, for example to attach the data to an email, upload it with another action, or store "
+                "it; no file is written.\n\n"
+                "The data is written as RFC 4180 CSV data by default, in the encoding of the `encoding` option "
+                "(UTF-8 by default), with a header row from `headers` unless `write_headers` is `false`.",
+            "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
+            "cls": "CsvUtil::CsvWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                CsvWriteDataProvider::ConstructorOptions{"headers",}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                CsvWriteDataProvider::ConstructorOptions - ("path", "stream", "headers"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
     };
 }
 
@@ -401,6 +427,15 @@ while (i.next()) {
     @section csvutil_relnotes Release Notes
 
     @subsection csvutil_v1_12 Version 1.12
+    - added the \c write-data action, which returns the CSV data created from the records given to it and the
+      number of records (@ref DataProvider::GeneratedDataInfo "GeneratedDataInfo") instead of writing a file;
+      @ref CsvUtil::CsvWriteDataProvider "CsvWriteDataProvider" returns the data from
+      @ref DataProvider::AbstractDataProvider::finishCreate() "finishCreate()" when it has no \c path or \c stream
+      option, where it discarded the data
+    - the write data provider closes its output location in
+      @ref DataProvider::AbstractDataProvider::finishCreate() "finishCreate()", so an error writing to a location,
+      such as a failed upload to a remote location, is raised to the caller instead of being lost when the data
+      provider is destroyed
     - the writers write in the character encoding of their \c "encoding" option, as documented: the file and
       stream writers and the write data provider wrote the text in the default encoding (normally UTF-8) whatever
       the option, and @ref CsvUtil::CsvStringWriter::getContent() "CsvStringWriter::getContent()" returned it in the

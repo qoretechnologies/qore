@@ -1126,6 +1126,210 @@
         "app.Q3N2.action.d3JpdGU.option.d3JpdGVfaGVhZGVycw.desc": {
           "source": "Set to `false` to suppress the output of headers; the default is `true`, meaning to output headers if they are present",
           "message": "Définissez sur `false` pour supprimer la sortie des en-têtes ; la valeur par défaut est `true`, ce qui signifie que les en-têtes sont générés s'ils sont présents"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create CSV Data",
+          "message": "Créer des données CSV"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create CSV data from records and return it as bytes",
+          "message": "Créer des données CSV à partir d'enregistrements et les renvoyer sous forme d'octets"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Creates CSV data from the records given to the action and returns it as bytes with the number of records, for example to attach the data to an email, upload it with another action, or store it; no file is written.\n\nThe data is written as RFC 4180 CSV data by default, in the encoding of the `encoding` option (UTF-8 by default), with a header row from `headers` unless `write_headers` is `false`.",
+          "message": "Crée des données CSV à partir des enregistrements fournis à l'action et les renvoie sous forme d'octets avec le nombre d'enregistrements, par exemple pour joindre les données à un e-mail, les téléverser avec une autre action ou les stocker ; aucun fichier n'est écrit.\n\nLes données sont écrites par défaut comme des données CSV RFC 4180, dans l'encodage de l'option `encoding` (UTF-8 par défaut), avec une ligne d'en-tête issue de `headers`, sauf si `write_headers` vaut `false`."
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Header Names",
+          "message": "Noms d'en-tête"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of field / header names for the data output",
+          "message": "Liste des noms de champs / d'en-têtes pour la sortie des données"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of field / header names for the data output",
+          "message": "Liste des noms de champs / d'en-têtes pour la sortie des données"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.YmxvY2s.display_name": {
+          "source": "Block Size",
+          "message": "Taille du bloc"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.YmxvY2s.short_desc": {
+          "source": "The block size when generating bulk output",
+          "message": "La taille du bloc lors de la génération de sorties en masse"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.YmxvY2s.desc": {
+          "source": "The block size when generating bulk output",
+          "message": "La taille du bloc lors de la génération de sorties en masse"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZGF0YW1hcA.display_name": {
+          "source": "Output Field Name Map",
+          "message": "Mappage des noms de champs de sortie"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZGF0YW1hcA.short_desc": {
+          "source": "Maps data key names to output field names",
+          "message": "Mappe les noms de clés de données vers les noms de champs de sortie"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZGF0YW1hcA.desc": {
+          "source": "Sets a hash mapping actual data key names to the output field names, for use in case the data field names differ; does not have to include every data or output key; keys not present will be assumed to be mapped 1:1",
+          "message": "Définit un hash mappant les noms réels des clés de données vers les noms des champs de sortie, à utiliser si les noms des champs de données diffèrent ; ne nécessite pas d'inclure chaque clé de données ou de sortie ; les clés non présentes seront supposées mappées 1:1"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Format de date"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value output formatting",
+          "message": "Le masque par défaut pour le formatage des valeurs de date en sortie"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default mask for date value output formatting; see [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) for more information",
+          "message": "Le masque par défaut pour le formatage de sortie des valeurs de date ; consultez [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) pour plus d'informations"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Encodage de caractères"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The output character encoding",
+          "message": "L'encodage des caractères en sortie"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.desc": {
+          "source": "The output character encoding for the data",
+          "message": "L'encodage des caractères en sortie pour les données"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Caractères de fin de ligne"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Le ou les caractères de fin de ligne / d'enregistrement"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZW9s.desc": {
+          "source": "The end of line / record character(s); if not present, the current platform standard will be used",
+          "message": "Caractères de fin de ligne ou d'enregistrement ; par défaut selon la plateforme"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZmllbGRz.display_name": {
+          "source": "Field Descriptions",
+          "message": "Descriptions des champs"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZmllbGRz.short_desc": {
+          "source": "A hash describing the CSV fields to output",
+          "message": "Un hash décrivant les champs CSV à générer en sortie"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.ZmllbGRz.desc": {
+          "source": "A hash describing the CSV fields to output. Keys are field names, values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `mask`: for `date`, `int`, `float`, or `number` types, a mask that the value is written with, such as `DD.MM.YYYY`, `hh:mm AM`, `#.##0,00` or `€#,##0.00`, so that a file is written exactly as the mask describes and read back with the same mask as the same values; cannot be given with `format`; see [ValueMask](https://qoretechnologies.com/manual/qorus/current/qore/modules/ValueMask/html/index.html) for the masks\n- `timezone`: for `date` types only, the time zone region whose wall-clock time the dates of the field are written in; overrides the `timezone` option\n- `header`: the header text of the field, if not the field name",
+          "message": "Un hash décrivant les champs CSV à générer en sortie. Les clés sont les noms de champ, les valeurs sont des [types de champ](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) ou un hash contenant les clés suivantes :\n- `type` : une [chaîne de type de champ](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format` : pour les types `date`, un [format de date](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) ; pour les types `int`, `float` ou `number`, une chaîne de format numérique : *<séparateur_milliers>*[*<séparateur_décimal>*[*<décimales>*]] (par ex. `\".,3\"` = séparateur de milliers `.`, séparateur décimal `,`, 3 décimales)\n- `mask` : pour les types `date`, `int`, `float` ou `number`, un masque avec lequel la valeur est écrite, par exemple `DD.MM.YYYY`, `hh:mm AM`, `#.##0,00` ou `€#,##0.00`, afin que le fichier soit écrit exactement comme le décrit le masque et relu avec le même masque comme les mêmes valeurs ; ne peut pas être indiqué avec `format` ; voir [ValueMask](https://qoretechnologies.com/manual/qorus/current/qore/modules/ValueMask/html/index.html) pour les masques\n- `timezone` : pour les types `date` uniquement, la région de fuseau horaire dans l'heure locale de laquelle les dates du champ sont écrites ; prioritaire sur l'option `timezone`\n- `header` : le texte d'en-tête du champ, s'il ne s'agit pas du nom du champ"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
+          "source": "Enforce Header Order",
+          "message": "Appliquer l'ordre des en-têtes"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the output data will be reordered in the order of headers",
+          "message": "Si true, les données de sortie sont réordonnées selon l'ordre des en-têtes"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.aGVhZGVyX3Jlb3JkZXI.desc": {
+          "source": "If `true` (the default) then if `headers` are provided, then data fields are reordered to follow headers",
+          "message": "Si `true` (valeur par défaut) et si `headers` sont fournis, les champs de données sont réorganisés pour suivre les en-têtes"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Output Number Format",
+          "message": "Format numérique de sortie"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default output format for 'int', 'float', and 'number' fields",
+          "message": "Le format de sortie par défaut pour les champs 'int', 'float' et 'number'"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default output format for `int`, `float`, and `number` fields; it is a number format string with 1 to 3 fields as follows: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; ex: `\".,3\"` (= `.` for the thousands separator, `,` for the decimal separator, and 3 digits after the decimal place)",
+          "message": "Le format de sortie par défaut pour les champs `int`, `float` et `number` ; il s'agit d'une chaîne de format numérique comportant 1 à 3 champs comme suit : *<séparateur_milliers>*[*<séparateur_décimal>*[*<décimales>*]] ; ex. : `\".,3\"` (= `.` pour le séparateur de milliers, `,` pour le séparateur décimal, et 3 chiffres après la virgule)"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.b3B0aW1hbF9xdW90ZXM.display_name": {
+          "source": "Optimal Quotes",
+          "message": "Guillemets optimaux"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.b3B0aW1hbF9xdW90ZXM.short_desc": {
+          "source": "Quote output fields only when necessary",
+          "message": "Mettre les champs de sortie entre guillemets uniquement si nécessaire"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.b3B0aW1hbF9xdW90ZXM.desc": {
+          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting: if they contain the quote character, the separator, the end of line, a carriage return or a line feed, or start or end with white space; the default is `true`",
+          "message": "Définissez sur `false` pour désactiver les guillemets optimaux ; lorsque les guillemets optimaux sont désactivés, tous les champs sont entourés de guillemets, indépendamment de leur type ou contenu ; lorsqu'ils sont activés, les champs sont entourés de guillemets uniquement si nécessaire : s'ils contiennent le caractère guillemet, le séparateur, la fin de ligne, un retour chariot ou un saut de ligne, ou s'ils commencent ou se terminent par une espace ; la valeur par défaut est `true`"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGU.display_name": {
+          "source": "Quote Char(s)",
+          "message": "Caractères de citation"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGU.short_desc": {
+          "source": "The quote character(s)",
+          "message": "Le ou les caractères de guillemet"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGU.desc": {
+          "source": "The quote character to quote fields (default: `\"`)",
+          "message": "Le caractère de guillemet pour délimiter les champs (par défaut : `\"`)"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "Caractères d'échappement de citation"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "The escape character(s) written before a quote in a field",
+          "message": "Le ou les caractères d'échappement écrits devant un guillemet dans un champ"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) written before a `quote` character in a quoted field.\n\nBy default (an empty value), a quote is escaped by doubling it, as in RFC 4180 CSV files, which spreadsheet programs and the CSV reader read by default.  Set to `\\` only for a consumer that expects quotes escaped with a backslash (`\\\"`); the CSV reader reads such files with its `quote_escape` option set to `\\`.",
+          "message": "Le ou les caractères d'échappement écrits devant un caractère `quote` dans un champ entre guillemets.\n\nPar défaut (une valeur vide), un guillemet est échappé en le doublant, comme dans les fichiers CSV RFC 4180, que les tableurs et le lecteur CSV lisent par défaut.  Définissez sur `\\` uniquement pour un destinataire qui attend des guillemets échappés par une barre oblique inverse (`\\\"`) ; le lecteur CSV lit ces fichiers avec son option `quote_escape` définie sur `\\`."
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.c2VwYXJhdG9y.display_name": {
+          "source": "Field Separator",
+          "message": "Séparateur de champs"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator character(s)",
+          "message": "Le ou les caractères séparateurs de champs"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.c2VwYXJhdG9y.desc": {
+          "source": "The string separating fields in the output data (default: `,`)",
+          "message": "La chaîne séparant les champs dans les données de sortie (par défaut : `,`)"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "Fuseau horaire"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.dGltZXpvbmU.short_desc": {
+          "source": "The time zone whose wall-clock time dates are written in",
+          "message": "Le fuseau horaire dans l'heure locale duquel les dates sont écrites"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.dGltZXpvbmU.desc": {
+          "source": "The time zone region (such as `Europe/Prague` or `America/New_York`) whose wall-clock time dates are written in, so that a reader that reads the file in this time zone reads the same points in time; a field's `timezone` attribute overrides it.  If not given, dates are written in their own time zone, and dates written with a `mask` in the current time zone",
+          "message": "La région de fuseau horaire (par exemple `Europe/Prague` ou `America/New_York`) dans l'heure locale de laquelle les dates sont écrites, afin qu'un lecteur qui lit le fichier dans ce fuseau horaire lise les mêmes instants ; l'attribut `timezone` d'un champ est prioritaire.  S'il n'est pas indiqué, les dates sont écrites dans leur propre fuseau horaire, et les dates écrites avec un masque (`mask`) dans le fuseau horaire actuel"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.dmVyaWZ5X2NvbHVtbnM.display_name": {
+          "source": "Verify Columns",
+          "message": "Vérifier les colonnes"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
+          "source": "Verifies input data to ensure it has the expected structure",
+          "message": "Vérifie les données d'entrée pour s'assurer qu'elles ont la structure attendue"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.dmVyaWZ5X2NvbHVtbnM.desc": {
+          "source": "If `true` (the default is `false`) then if a line is parsed with a different column count than other lines, a `CSVFILEWRITER-DATA-ERROR` exception is thrown.\n\nNote that enabling this option will incurr a performance penalty",
+          "message": "Si `true` (la valeur par défaut est `false`), alors si une ligne est analysée avec un nombre de colonnes différent des autres lignes, une exception `CSVFILEWRITER-DATA-ERROR` est levée.\n\nNotez que l'activation de cette option aura un impact sur les performances"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.d3JpdGVfaGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "En-têtes de sortie"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.d3JpdGVfaGVhZGVycw.short_desc": {
+          "source": "Include headers as the first output record",
+          "message": "Inclure les en-têtes comme premier enregistrement de sortie"
+        },
+        "app.Q3N2.action.d3JpdGUtZGF0YQ.option.d3JpdGVfaGVhZGVycw.desc": {
+          "source": "Set to `false` to suppress the output of headers; the default is `true`, meaning to output headers if they are present",
+          "message": "Définissez sur `false` pour supprimer la sortie des en-têtes ; la valeur par défaut est `true`, ce qui signifie que les en-têtes sont générés s'ils sont présents"
         }
       }
     }

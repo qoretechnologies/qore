@@ -1,0 +1,127 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires CsvUtil
+
+%exec-class CsvWriteDataTest
+
+#! Tests the write-data action, which returns the CSV data generated from the records created with it
+class CsvWriteDataTest inherits QUnit::Test {
+    public {
+        #! the records written
+        const Records = (
+            {"sku": "A-1", "name": "Widget, large", "qty": 5},
+            {"sku": "B-2", "name": "Gadget \"mini\"", "qty": 7},
+            {"sku": "C-3", "name": "Gizmo", "qty": 12},
+        );
+
+        #! the CSV data of the records
+        const Csv = "sku,name,qty\nA-1,\"Widget, large\",5\nB-2,\"Gadget \"\"mini\"\"\",7\nC-3,Gizmo,12\n";
+    }
+
+    constructor() : Test("CsvWriteDataTest", "1.0", \ARGV) {
+        addTestCase("action registration", \testRegistration());
+        addTestCase("the action returns the generated data", \testWriteData());
+        addTestCase("records created in bulk", \testBulk());
+        addTestCase("the encoding option", \testEncoding());
+        addTestCase("no records", \testNoRecords());
+        addTestCase("the read-data action reads the data back", \testReadBack());
+        addTestCase("a path or stream is completed and no data is returned", \testDestination());
+        set_return_value(main());
+    }
+
+    #! Returns the data provider of the write-data action
+    private AbstractDataProvider getProvider(*hash<auto> opts) {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(CsvUtil::AppName, "write-data");
+        hash<auto> options = {"headers": ("sku", "name", "qty")} + opts;
+        return DataProviderActionCatalog::getDataProviderForAction(action, \options);
+    }
+
+    testRegistration() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(CsvUtil::AppName, "write-data");
+        assertEq(DPAT_CREATE, action.action_code);
+        assertEq(DPAD_CREATE_OUTPUT, action.output_data_type);
+        assertEq("GeneratedDataOutput", action.output_type.getName());
+        # the data is generated in memory: no output location
+        assertFalse(action.options.hasKey("path"));
+        assertFalse(action.options.hasKey("stream"));
+        foreach string opt in ("headers", "separator", "quote", "quote_escape", "encoding", "eol", "write_headers") {
+            assertTrue(action.options.hasKey(opt), opt);
+        }
+        assertTrue(action.options.headers.preselected);
+    }
+
+    testWriteData() {
+        AbstractDataProvider prov = getProvider();
+        map prov.createRecord($1), Records;
+        hash<GeneratedDataInfo> output = prov.finishCreate();
+        assertEq(binary(Csv), output.data);
+        assertEq(3, output.record_count);
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(CsvUtil::AppName, "write-data");
+        assertEq(output, action.output_type.acceptsValue(output));
+    }
+
+    testBulk() {
+        AbstractDataProvider prov = getProvider();
+        prov.createRecordsBulk({
+            "sku": (map $1.sku, Records),
+            "name": (map $1.name, Records),
+            "qty": (map $1.qty, Records),
+        });
+        hash<GeneratedDataInfo> output = prov.finishCreate();
+        assertEq(binary(Csv), output.data);
+        assertEq(3, output.record_count);
+    }
+
+    testEncoding() {
+        foreach string enc in ("ISO-8859-1", "UTF-16LE") {
+            AbstractDataProvider prov = getProvider({"encoding": enc, "separator": ";"});
+            prov.createRecord({"sku": "Ä-1", "name": "Größe", "qty": 1});
+            hash<GeneratedDataInfo> output = prov.finishCreate();
+            assertEq(binary(convert_encoding("sku;name;qty\nÄ-1;Größe;1\n", enc)), output.data, enc);
+            assertEq(1, output.record_count, enc);
+        }
+    }
+
+    testNoRecords() {
+        hash<GeneratedDataInfo> output = getProvider().finishCreate();
+        assertEq(binary("sku,name,qty\n"), output.data);
+        assertEq(0, output.record_count);
+        output = getProvider({"write_headers": False}).finishCreate();
+        assertEq(binary(), output.data);
+        assertEq(0, output.record_count);
+    }
+
+    testReadBack() {
+        AbstractDataProvider prov = getProvider({"eol": "\r\n"});
+        map prov.createRecord($1), Records;
+        binary data = prov.finishCreate().data;
+
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(CsvUtil::AppName, "read-data");
+        hash<auto> options = {"data": data, "header_names": True, "fields": {"qty": "int"}};
+        AbstractDataProvider reader = DataProviderActionCatalog::getDataProviderForAction(action, \options);
+        assertEq(Records, (map $1, reader.searchRecords()));
+    }
+
+    testDestination() {
+        string path = tmp_location() + "/csv-write-data-" + get_random_string(8) + ".csv";
+        on_exit unlink(path);
+        CsvWriteDataProvider prov({"path": path, "headers": ("sku", "name", "qty")});
+        map prov.createRecord($1), Records;
+        assertEq(NOTHING, prov.finishCreate());
+        # the file is complete while the data provider still exists
+        assertEq(Csv, ReadOnlyFile::readTextFile(path));
+
+        BinaryOutputStream out();
+        prov = new CsvWriteDataProvider({"stream": out, "headers": ("sku", "name", "qty")});
+        map prov.createRecord($1), Records;
+        assertEq(NOTHING, prov.finishCreate());
+        assertEq(binary(Csv), out.getData());
+    }
+}
