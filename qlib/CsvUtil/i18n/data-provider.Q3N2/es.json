@@ -311,6 +311,18 @@
           "source": "Single quote / apostrophe (`'`)",
           "message": "Comilla simple / apóstrofo (`'`)"
         },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "Caracteres de escape de comillas"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "Characters before a quote that make it part of a field, for older files",
+          "message": "Caracteres antes de una comilla que la convierten en parte de un campo, para archivos antiguos"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) before a `quote` character in a quoted field that make it part of the field's text, in addition to doubling it.\n\nBy default, a quote in a quoted field is only escaped by doubling it, as in RFC 4180 CSV files that spreadsheet programs and most applications write, and a backslash is an ordinary character, so `\"C:\\data\\\"` is read as `C:\\data\\`.\n\nSet to `\\` to read files that escape quotes with a backslash (`\\\"`), such as files written by Qore's CSV writer before CsvUtil 1.12 with its default `quote_escape`.",
+          "message": "El carácter o los caracteres de escape antes de un carácter `quote` en un campo entrecomillado que lo convierten en parte del texto del campo, además de duplicarlo.\n\nDe forma predeterminada, una comilla en un campo entrecomillado solo se escapa duplicándola, como en los archivos CSV RFC 4180 que escriben las hojas de cálculo y la mayoría de las aplicaciones, y una barra invertida es un carácter normal, por lo que `\"C:\\data\\\"` se lee como `C:\\data\\`.\n\nEstablézcalo en `\\` para leer archivos que escapan las comillas con una barra invertida (`\\\"`), como los archivos escritos por el escritor CSV de Qore antes de CsvUtil 1.12 con su valor predeterminado de `quote_escape`."
+        },
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
           "message": "Separador de campos"
@@ -687,6 +699,18 @@
           "source": "Single quote / apostrophe (`'`)",
           "message": "Comilla simple / apóstrofo (`'`)"
         },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "Caracteres de escape de comillas"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "Characters before a quote that make it part of a field, for older files",
+          "message": "Caracteres antes de una comilla que la convierten en parte de un campo, para archivos antiguos"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) before a `quote` character in a quoted field that make it part of the field's text, in addition to doubling it.\n\nBy default, a quote in a quoted field is only escaped by doubling it, as in RFC 4180 CSV files that spreadsheet programs and most applications write, and a backslash is an ordinary character, so `\"C:\\data\\\"` is read as `C:\\data\\`.\n\nSet to `\\` to read files that escape quotes with a backslash (`\\\"`), such as files written by Qore's CSV writer before CsvUtil 1.12 with its default `quote_escape`.",
+          "message": "El carácter o los caracteres de escape antes de un carácter `quote` en un campo entrecomillado que lo convierten en parte del texto del campo, además de duplicarlo.\n\nDe forma predeterminada, una comilla en un campo entrecomillado solo se escapa duplicándola, como en los archivos CSV RFC 4180 que escriben las hojas de cálculo y la mayoría de las aplicaciones, y una barra invertida es un carácter normal, por lo que `\"C:\\data\\\"` se lee como `C:\\data\\`.\n\nEstablézcalo en `\\` para leer archivos que escapan las comillas con una barra invertida (`\\\"`), como los archivos escritos por el escritor CSV de Qore antes de CsvUtil 1.12 con su valor predeterminado de `quote_escape`."
+        },
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
           "message": "Separador de campos"
@@ -1028,8 +1052,8 @@
           "message": "Entrecomillar campos de salida solo cuando sea necesario"
         },
         "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.desc": {
-          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting (i.e. they contain a quote or separator character); the default is `true`",
-          "message": "Establézcalo en `false` para deshabilitar el entrecomillado óptimo; cuando el entrecomillado óptimo está deshabilitado, todos los campos se entrecomillan independientemente del tipo o contenido; cuando está habilitado, los campos se entrecomillan solo si requieren entrecomillado (es decir, contienen un carácter de comilla o separador); el valor predeterminado es `true`"
+          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting: if they contain the quote character, the separator, the end of line, a carriage return or a line feed, or start or end with white space; the default is `true`",
+          "message": "Establézcalo en `false` para deshabilitar el entrecomillado óptimo; cuando el entrecomillado óptimo está deshabilitado, todos los campos se entrecomillan independientemente del tipo o contenido; cuando está habilitado, los campos se entrecomillan solo si lo requieren: si contienen el carácter de comilla, el separador, el fin de línea, un retorno de carro o un salto de línea, o si empiezan o terminan con espacios en blanco; el valor predeterminado es `true`"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGU.display_name": {
           "source": "Quote Char(s)",
@@ -1048,12 +1072,12 @@
           "message": "Caracteres de escape de comillas"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.short_desc": {
-          "source": "The escape character(s) for quotes in a field",
-          "message": "El carácter o caracteres de escape para comillas en un campo"
+          "source": "The escape character(s) written before a quote in a field",
+          "message": "El carácter o los caracteres de escape que se escriben antes de una comilla en un campo"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.desc": {
-          "source": "The escape character(s) used for `quote` (default: `\\`)",
-          "message": "El carácter o caracteres de escape utilizados para `quote` (predeterminado: `\\`)"
+          "source": "The escape character(s) written before a `quote` character in a quoted field.\n\nBy default (an empty value), a quote is escaped by doubling it, as in RFC 4180 CSV files, which spreadsheet programs and the CSV reader read by default.  Set to `\\` only for a consumer that expects quotes escaped with a backslash (`\\\"`); the CSV reader reads such files with its `quote_escape` option set to `\\`.",
+          "message": "El carácter o los caracteres de escape que se escriben antes de un carácter `quote` en un campo entrecomillado.\n\nDe forma predeterminada (un valor vacío), una comilla se escapa duplicándola, como en los archivos CSV RFC 4180, que las hojas de cálculo y el lector CSV leen de forma predeterminada.  Establézcalo en `\\` solo para un destinatario que espere comillas escapadas con una barra invertida (`\\\"`); el lector CSV lee estos archivos con su opción `quote_escape` establecida en `\\`."
         },
         "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",

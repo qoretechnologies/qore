@@ -269,6 +269,35 @@ while (i.next())
     @ref CsvUtil::CsvProfiler "CsvProfiler" follows the same rule: it reports the mark and reads the data as the
     readers do.
 
+    @section csvutil_rfc4180 Quoting and RFC 4180
+
+    The writers and the readers follow RFC 4180 by default, so every value written is read back unchanged:
+    - a field is quoted with the \c "quote" character (default \c '"') if it contains the quote character, the
+      separator, the end of line, a carriage return or a line feed, or if it starts or ends with white space; with
+      the \c "optimal_quotes" writer option set to @ref False "False", every field is quoted
+    - a quote character in a quoted field is escaped by doubling it: <tt>"say ""hi"""</tt> is the field
+      <tt>say "hi"</tt>
+    - a backslash is an ordinary character: <tt>"C:\\data\\"</tt> is the field <tt>C:\\data\\</tt>
+    - line breaks in a quoted field are part of the field, as they are in the data
+
+    Files that escape a quote in a field with a backslash (<tt>\\"</tt>), such as files written by %CsvUtil before
+    1.12 with the writers' default \c "quote_escape" option, are read with the \c "quote_escape" option of the
+    iterators and the read data provider set to \c '\\'; the writers write such files with their \c "quote_escape"
+    option set to \c '\\'.
+
+    @code{.py}
+# write values that need quoting and read them back unchanged
+CsvStringWriter w({"headers": ("id", "note")});
+w.writeLine((1, "say \"hi\", then\nleave "));
+string csv = w.getContent();
+# csv: id,note\n1,"say ""hi"", then\nleave "\n
+list<hash<auto>> recs = map $1, new CsvDataIterator(csv, {"header_names": True});
+# recs: ({"id": "1", "note": "say \"hi\", then\nleave "},)
+
+# read a file written with backslash-escaped quotes
+CsvFileIterator i("legacy.csv", {"header_names": True, "quote_escape": "\\"});
+    @endcode
+
     @section csvutil_multitype Multi-type support
 
     The %CsvUtil module supports multi-type records, meaning that different input lines may have different structures, and input record type
@@ -372,6 +401,23 @@ while (i.next()) {
     @section csvutil_relnotes Release Notes
 
     @subsection csvutil_v1_12 Version 1.12
+    - CSV files are written and read as RFC 4180 CSV data by default, so every value written is read back
+      unchanged (see @ref csvutil_rfc4180):
+      - the writers escape a quote in a quoted field by doubling it: the \c "quote_escape" option is empty by
+        default, which means the quote character itself, where it was a backslash
+      - the writers quote fields containing a carriage return, a line feed or the end of line, or starting or
+        ending with white space, which the readers strip from unquoted fields; such values were written unquoted
+        and read back as other records or without their white space
+      - the writers quote fields with the \c "quote" character; fields were quoted with \c '"' whatever the
+        \c "quote" option
+      - the iterators and the read data provider take a \c "quote_escape" option; by default a backslash is an
+        ordinary character, so a field such as <tt>"C:\\data\\"</tt> is read as <tt>C:\\data\\</tt>, where it
+        raised \c SPLIT-ERROR; files written with a backslash as the quote escape (the writers' default before
+        this version) are read with \c "quote_escape" set to \c '\\'
+      - a field of escaped quotes (ex: <tt>""""</tt>, one quote character) is read, where it raised
+        \c SPLIT-ERROR, a field whose value starts with a line break is read as one field, and line breaks in
+        fields are read as they are in the data, where \c "\r\n" and \c "\r" were read as \c "\n" when line ends
+        are detected automatically
     - the new \c "mask" attribute of a field description reads and writes a \c "date", \c "int", \c "float" or
       \c "number" field with a mask of the @ref valuemaskintro "ValueMask" module, such as \c "DD.MM.YYYY",
       \c "hh:mm AM" or \c "#.##0,00 €", in the iterators, the writers and the data providers, so that a file is

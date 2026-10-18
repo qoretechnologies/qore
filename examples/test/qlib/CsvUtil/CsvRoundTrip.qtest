@@ -1,0 +1,165 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires CsvUtil
+
+%exec-class CsvRoundTripTest
+
+#! Tests that every CsvUtil writer writes RFC 4180 CSV that every CsvUtil reader reads back unchanged
+/** Values written with the default options of a writer must be read back as the same values with the default options
+    of a reader: quotes in a quoted field are doubled, and fields containing the quote, the separator, a line break, or
+    leading or trailing white space (which a reader strips from unquoted fields) are quoted, with the configured quote
+    character.  A backslash is an ordinary character.
+*/
+public class CsvRoundTripTest inherits QUnit::Test {
+    public {
+        #! values that need quoting or that contain characters a CSV reader or writer could treat specially
+        const Values = (
+            "plain",
+            "x\"y",
+            "\"quoted\"",
+            "a,b",
+            "line1\nline2",
+            "\nstarts with a line break",
+            "ends with a line break\n",
+            "crlf\r\nline2",
+            "cr\rline2",
+            " padded ",
+            "back\\slash",
+            "C:\\dir\\",
+            "both \\\" here",
+            "\\\"",
+            "it's",
+            "a;b",
+            "",
+        );
+
+        #! the writer and reader options of each case
+        const Cases = {
+            "default options": {},
+            "all fields quoted": {"write": {"optimal_quotes": False}},
+            "CRLF line ends": {"write": {"eol": "\r\n"}},
+            "single quotes and semicolons": {
+                "write": {"quote": "'", "separator": ";"},
+                "read": {"quote": "'", "separator": ";"},
+            },
+        };
+    }
+
+    constructor() : Test("CsvRoundTripTest", "1.0", \ARGV) {
+        addTestCase("writer: RFC 4180 quoting", \testWriterRfc());
+        addTestCase("writer: the configured quote character", \testWriterQuoteOption());
+        addTestCase("reader: RFC 4180 input", \testReaderRfc());
+        addTestCase("round trip: CsvStringWriter and CsvDataIterator", \testStringRoundTrip());
+        addTestCase("round trip: CsvFileWriter and CsvFileIterator", \testFileRoundTrip());
+        addTestCase("round trip: CsvWriter and CsvIterator streams", \testStreamRoundTrip());
+        addTestCase("round trip: CSV data providers", \testDataProviderRoundTrip());
+        set_return_value(main());
+    }
+
+    #! The default writer doubles quotes and quotes every field that a reader would otherwise read differently
+    testWriterRfc() {
+        list<string> row = ("plain", "x\"y", "a,b", "l1\nl2", "c\rx", " pad ", "back\\slash", "both \\\" here", "");
+        CsvStringWriter w({"write_headers": False});
+        assertEq("plain,\"x\"\"y\",\"a,b\",\"l1\nl2\",\"c\rx\",\" pad \",back\\slash,\"both \\\"\" here\",\n",
+            w.write((row,)));
+
+        # all fields quoted
+        w = new CsvStringWriter({"write_headers": False, "optimal_quotes": False});
+        assertEq("\"plain\",\"x\"\"y\",\"a,b\",\"l1\nl2\",\"c\rx\",\" pad \",\"back\\slash\",\"both \\\"\" here\","
+            "\"\"\n", w.write((row,)));
+
+        # the write data provider documents the RFC 4180 default: no escape, so the quote is doubled
+        hash<auto> opt = CsvWriteDataProvider::ConstructorOptions.quote_escape;
+        assertEq("", opt.default_value);
+        # and the same for the reader
+        assertEq("", CsvReadDataProvider::ConstructorOptions.quote_escape.default_value);
+    }
+
+    #! The quote option gives the character that quotes fields and is doubled in them
+    testWriterQuoteOption() {
+        CsvStringWriter w({"write_headers": False, "quote": "'", "separator": ";"});
+        assertEq("'it''s';'a;b';say \"hi\";plain\n", w.write((("it's", "a;b", "say \"hi\"", "plain"),)));
+        w = new CsvStringWriter({"write_headers": False, "quote": "'", "separator": ";", "optimal_quotes": False});
+        assertEq("'it''s';'a;b';'say \"hi\"';'plain'\n", w.write((("it's", "a;b", "say \"hi\"", "plain"),)));
+    }
+
+    #! RFC 4180 data is read as written: a backslash before a quote is an ordinary character
+    testReaderRfc() {
+        hash<string, list<string>> cases = {
+            "\"C:\\dir\\\",1\n": ("C:\\dir\\", "1"),
+            "\"a\\\"\"b\",1\n": ("a\\\"b", "1"),
+            "\"x\"\"y\",1\n": ("x\"y", "1"),
+            "\"\nx\",1\n": ("\nx", "1"),
+            "\"x\r\ny\",1\r\n": ("x\r\ny", "1"),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            list<hash<auto>> recs = map $1, new CsvDataIterator("v,n\n" + i.key, {"header_names": True});
+            assertEq(({"v": i.value[0], "n": i.value[1]},), recs, sprintf("%y", i.key));
+        }
+    }
+
+    testStringRoundTrip() {
+        foreach hash<auto> c in (Cases.pairIterator()) {
+            CsvStringWriter w({"headers": ("id", "v")} + c.value.write);
+            map w.writeLine(($#, $1)), Values;
+            string csv = w.getContent();
+            assertRoundTrip(c.key, csv, map $1, new CsvDataIterator(csv, {"header_names": True} + c.value.read));
+        }
+    }
+
+    testFileRoundTrip() {
+        string path = tmp_location() + "/csv-round-trip-" + get_random_string(8) + ".csv";
+        on_exit unlink(path);
+        foreach hash<auto> c in (Cases.pairIterator()) {
+            {
+                CsvFileWriter w(path, {"headers": ("id", "v")} + c.value.write);
+                map w.writeLine(($#, $1)), Values;
+            }
+            assertRoundTrip(c.key, ReadOnlyFile::readTextFile(path),
+                map $1, new CsvFileIterator(path, {"header_names": True} + c.value.read));
+        }
+    }
+
+    testStreamRoundTrip() {
+        foreach hash<auto> c in (Cases.pairIterator()) {
+            StringOutputStream out();
+            {
+                CsvWriter w(out, {"headers": ("id", "v")} + c.value.write);
+                map w.writeLine(($#, $1)), Values;
+            }
+            string csv = out.getData();
+            assertRoundTrip(c.key, csv,
+                map $1, new CsvIterator(new StringInputStream(csv), "UTF-8", {"header_names": True} + c.value.read));
+        }
+    }
+
+    testDataProviderRoundTrip() {
+        foreach hash<auto> c in (Cases.pairIterator()) {
+            StringOutputStream out();
+            {
+                CsvWriteDataProvider w(out, {"headers": ("id", "v")} + c.value.write);
+                map w.createRecord({"id": $#, "v": $1}), Values;
+            }
+            string csv = out.getData();
+            CsvReadDataProvider r({"data": csv, "header_names": True} + c.value.read);
+            assertRoundTrip(c.key, csv, map $1, r.searchRecords());
+        }
+    }
+
+    #! Asserts that the records read are the values written
+    /** An empty string is an empty field, which is read as no value
+    */
+    private assertRoundTrip(string label, string csv, list<hash<auto>> recs) {
+        assertEq(Values.size(), recs.size(), sprintf("%s: one record per value in %y", label, csv));
+        foreach string v in (Values) {
+            assertEq(v.val() ? v : NOTHING, recs[$#].v, sprintf("%s: value %d %y in %y", label, $#, v, csv));
+        }
+    }
+}

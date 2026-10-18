@@ -20,9 +20,10 @@ public class CsvReadOptionMetadataTest inherits QUnit::Test {
     public {
         #! Input that every option with a default changes when it is given another value
         /** header line, an empty line, whitespace around unquoted and inside quoted fields, a non-ASCII value, a
-            `;` and a `'` that only count as a separator and quote when chosen, and a short row
+            `;` and a `'` that only count as a separator and quote when chosen, a short row, and a quoted field with
+            a backslash before a doubled quote, which is only an escaped quote when a backslash is the quote escape
         */
-        const Sample = binary("Name,City;Code\n\n  Müller , \"Plzeň \",'7';x\nBob,Brno\n");
+        const Sample = binary("Name,City;Code\n\n  Müller , \"Plzeň \",'7';x\nBob,Brno\n\"x\\\"\"y\",z\n");
 
         #! A value other than the default for each option with a default, which the sample must react to
         const OtherValues = {
@@ -32,6 +33,7 @@ public class CsvReadOptionMetadataTest inherits QUnit::Test {
             "ignore_empty": False,
             "ignore_whitespace": False,
             "quote": "'",
+            "quote_escape": "\\",
             "separator": ";",
             "verify_columns": True,
         };
@@ -87,10 +89,10 @@ public class CsvReadOptionMetadataTest inherits QUnit::Test {
 
         # every option with a default in the reader code declares it
         assertEq(("encoding", "header_lines", "header_names", "header_reorder", "ignore_empty", "ignore_whitespace",
-            "quote", "separator", "tolwr", "verify_columns"),
+            "quote", "quote_escape", "separator", "tolwr", "verify_columns"),
             sort(keys (map {$1.key: True}, CsvReadDataProvider::ConstructorOptions.pairIterator(),
                 exists $1.value.default_value)));
-        assertEq(10, checked);
+        assertEq(11, checked);
     }
 
     private interactionTest() {

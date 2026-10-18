@@ -311,6 +311,18 @@
           "source": "Single quote / apostrophe (`'`)",
           "message": "Einfaches Anführungszeichen / Apostroph (`'`)"
         },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "Escape-Zeichen für Anführungszeichen"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "Characters before a quote that make it part of a field, for older files",
+          "message": "Zeichen vor einem Anführungszeichen, die es zum Teil eines Felds machen, für ältere Dateien"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) before a `quote` character in a quoted field that make it part of the field's text, in addition to doubling it.\n\nBy default, a quote in a quoted field is only escaped by doubling it, as in RFC 4180 CSV files that spreadsheet programs and most applications write, and a backslash is an ordinary character, so `\"C:\\data\\\"` is read as `C:\\data\\`.\n\nSet to `\\` to read files that escape quotes with a backslash (`\\\"`), such as files written by Qore's CSV writer before CsvUtil 1.12 with its default `quote_escape`.",
+          "message": "Das/die Escape-Zeichen vor einem `quote`-Zeichen in einem Feld in Anführungszeichen, die es zusätzlich zur Verdopplung zum Teil des Feldtexts machen.\n\nStandardmäßig wird ein Anführungszeichen in einem Feld in Anführungszeichen nur durch Verdopplung maskiert, wie in RFC-4180-CSV-Dateien, die Tabellenkalkulationen und die meisten Anwendungen schreiben, und ein Backslash ist ein gewöhnliches Zeichen, sodass `\"C:\\data\\\"` als `C:\\data\\` gelesen wird.\n\nAuf `\\` setzen, um Dateien zu lesen, die Anführungszeichen mit einem Backslash maskieren (`\\\"`), etwa Dateien, die der CSV-Writer von Qore vor CsvUtil 1.12 mit seinem Standardwert für `quote_escape` geschrieben hat."
+        },
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
           "message": "Feldtrennzeichen"
@@ -687,6 +699,18 @@
           "source": "Single quote / apostrophe (`'`)",
           "message": "Einfaches Anführungszeichen / Apostroph (`'`)"
         },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "Escape-Zeichen für Anführungszeichen"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "Characters before a quote that make it part of a field, for older files",
+          "message": "Zeichen vor einem Anführungszeichen, die es zum Teil eines Felds machen, für ältere Dateien"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) before a `quote` character in a quoted field that make it part of the field's text, in addition to doubling it.\n\nBy default, a quote in a quoted field is only escaped by doubling it, as in RFC 4180 CSV files that spreadsheet programs and most applications write, and a backslash is an ordinary character, so `\"C:\\data\\\"` is read as `C:\\data\\`.\n\nSet to `\\` to read files that escape quotes with a backslash (`\\\"`), such as files written by Qore's CSV writer before CsvUtil 1.12 with its default `quote_escape`.",
+          "message": "Das/die Escape-Zeichen vor einem `quote`-Zeichen in einem Feld in Anführungszeichen, die es zusätzlich zur Verdopplung zum Teil des Feldtexts machen.\n\nStandardmäßig wird ein Anführungszeichen in einem Feld in Anführungszeichen nur durch Verdopplung maskiert, wie in RFC-4180-CSV-Dateien, die Tabellenkalkulationen und die meisten Anwendungen schreiben, und ein Backslash ist ein gewöhnliches Zeichen, sodass `\"C:\\data\\\"` als `C:\\data\\` gelesen wird.\n\nAuf `\\` setzen, um Dateien zu lesen, die Anführungszeichen mit einem Backslash maskieren (`\\\"`), etwa Dateien, die der CSV-Writer von Qore vor CsvUtil 1.12 mit seinem Standardwert für `quote_escape` geschrieben hat."
+        },
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
           "message": "Feldtrennzeichen"
@@ -1028,8 +1052,8 @@
           "message": "Ausgabefelder nur bei Bedarf in Anführungszeichen setzen"
         },
         "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.desc": {
-          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting (i.e. they contain a quote or separator character); the default is `true`",
-          "message": "Auf `false` setzen, um optimales Quoting zu deaktivieren; wenn optimales Quoting deaktiviert ist, werden alle Felder unabhängig von Typ oder Inhalt in Anführungszeichen gesetzt; wenn es aktiviert ist, werden Felder nur dann in Anführungszeichen gesetzt, wenn dies erforderlich ist (d. h. sie enthalten ein Anführungs- oder Trennzeichen); der Standardwert ist `true`"
+          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting: if they contain the quote character, the separator, the end of line, a carriage return or a line feed, or start or end with white space; the default is `true`",
+          "message": "Auf `false` setzen, um optimales Quoting zu deaktivieren; wenn optimales Quoting deaktiviert ist, werden alle Felder unabhängig von Typ oder Inhalt in Anführungszeichen gesetzt; wenn es aktiviert ist, werden Felder nur dann in Anführungszeichen gesetzt, wenn dies erforderlich ist: wenn sie das Anführungszeichen, das Trennzeichen, das Zeilenende, einen Wagenrücklauf oder einen Zeilenvorschub enthalten oder mit Leerraum beginnen oder enden; der Standardwert ist `true`"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGU.display_name": {
           "source": "Quote Char(s)",
@@ -1048,12 +1072,12 @@
           "message": "Escape-Zeichen für Anführungszeichen"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.short_desc": {
-          "source": "The escape character(s) for quotes in a field",
-          "message": "Das/die Escape-Zeichen für Anführungszeichen in einem Feld"
+          "source": "The escape character(s) written before a quote in a field",
+          "message": "Das/die Escape-Zeichen, die vor ein Anführungszeichen in einem Feld geschrieben werden"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.desc": {
-          "source": "The escape character(s) used for `quote` (default: `\\`)",
-          "message": "Das/die Escape-Zeichen für `quote` (Standard: `\\`)"
+          "source": "The escape character(s) written before a `quote` character in a quoted field.\n\nBy default (an empty value), a quote is escaped by doubling it, as in RFC 4180 CSV files, which spreadsheet programs and the CSV reader read by default.  Set to `\\` only for a consumer that expects quotes escaped with a backslash (`\\\"`); the CSV reader reads such files with its `quote_escape` option set to `\\`.",
+          "message": "Das/die Escape-Zeichen, die vor ein `quote`-Zeichen in einem Feld in Anführungszeichen geschrieben werden.\n\nStandardmäßig (ein leerer Wert) wird ein Anführungszeichen durch Verdopplung maskiert, wie in RFC-4180-CSV-Dateien, die Tabellenkalkulationen und der CSV-Reader standardmäßig lesen.  Nur dann auf `\\` setzen, wenn ein Empfänger mit einem Backslash maskierte Anführungszeichen (`\\\"`) erwartet; der CSV-Reader liest solche Dateien, wenn seine Option `quote_escape` auf `\\` gesetzt ist."
         },
         "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",

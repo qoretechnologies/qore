@@ -311,6 +311,18 @@
           "source": "Single quote / apostrophe (`'`)",
           "message": "Virgoletta singola / apostrofo (`'`)"
         },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "Carattere/i di escape delle virgolette"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "Characters before a quote that make it part of a field, for older files",
+          "message": "Caratteri prima di una virgoletta che la rendono parte di un campo, per file meno recenti"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) before a `quote` character in a quoted field that make it part of the field's text, in addition to doubling it.\n\nBy default, a quote in a quoted field is only escaped by doubling it, as in RFC 4180 CSV files that spreadsheet programs and most applications write, and a backslash is an ordinary character, so `\"C:\\data\\\"` is read as `C:\\data\\`.\n\nSet to `\\` to read files that escape quotes with a backslash (`\\\"`), such as files written by Qore's CSV writer before CsvUtil 1.12 with its default `quote_escape`.",
+          "message": "Il carattere o i caratteri di escape prima di un carattere `quote` in un campo tra virgolette che lo rendono parte del testo del campo, oltre al raddoppio.\n\nPer impostazione predefinita, una virgoletta in un campo tra virgolette viene sottoposta a escape solo raddoppiandola, come nei file CSV RFC 4180 scritti dai fogli di calcolo e dalla maggior parte delle applicazioni, e una barra rovesciata è un carattere normale, quindi `\"C:\\data\\\"` viene letto come `C:\\data\\`.\n\nImpostare su `\\` per leggere file che sottopongono a escape le virgolette con una barra rovesciata (`\\\"`), come i file scritti dal writer CSV di Qore prima di CsvUtil 1.12 con il suo valore predefinito di `quote_escape`."
+        },
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
           "message": "Separatore di campo"
@@ -687,6 +699,18 @@
           "source": "Single quote / apostrophe (`'`)",
           "message": "Virgoletta singola / apostrofo (`'`)"
         },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "Carattere/i di escape delle virgolette"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "Characters before a quote that make it part of a field, for older files",
+          "message": "Caratteri prima di una virgoletta che la rendono parte di un campo, per file meno recenti"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) before a `quote` character in a quoted field that make it part of the field's text, in addition to doubling it.\n\nBy default, a quote in a quoted field is only escaped by doubling it, as in RFC 4180 CSV files that spreadsheet programs and most applications write, and a backslash is an ordinary character, so `\"C:\\data\\\"` is read as `C:\\data\\`.\n\nSet to `\\` to read files that escape quotes with a backslash (`\\\"`), such as files written by Qore's CSV writer before CsvUtil 1.12 with its default `quote_escape`.",
+          "message": "Il carattere o i caratteri di escape prima di un carattere `quote` in un campo tra virgolette che lo rendono parte del testo del campo, oltre al raddoppio.\n\nPer impostazione predefinita, una virgoletta in un campo tra virgolette viene sottoposta a escape solo raddoppiandola, come nei file CSV RFC 4180 scritti dai fogli di calcolo e dalla maggior parte delle applicazioni, e una barra rovesciata è un carattere normale, quindi `\"C:\\data\\\"` viene letto come `C:\\data\\`.\n\nImpostare su `\\` per leggere file che sottopongono a escape le virgolette con una barra rovesciata (`\\\"`), come i file scritti dal writer CSV di Qore prima di CsvUtil 1.12 con il suo valore predefinito di `quote_escape`."
+        },
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
           "message": "Separatore di campo"
@@ -1028,8 +1052,8 @@
           "message": "Racchiudi i campi di output tra virgolette solo quando necessario"
         },
         "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.desc": {
-          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting (i.e. they contain a quote or separator character); the default is `true`",
-          "message": "Impostare su `false` per disabilitare il quoting ottimale; quando il quoting ottimale è disabilitato, tutti i campi vengono racchiusi tra virgolette indipendentemente dal tipo o dal contenuto; quando è abilitato, i campi vengono racchiusi tra virgolette solo se necessario (ovvero se contengono virgolette o un carattere separatore); il valore predefinito è `true`"
+          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting: if they contain the quote character, the separator, the end of line, a carriage return or a line feed, or start or end with white space; the default is `true`",
+          "message": "Impostare su `false` per disabilitare il quoting ottimale; quando il quoting ottimale è disabilitato, tutti i campi vengono racchiusi tra virgolette indipendentemente dal tipo o dal contenuto; quando è abilitato, i campi vengono racchiusi tra virgolette solo se necessario: se contengono il carattere virgoletta, il separatore, il fine riga, un ritorno a capo o un avanzamento riga, oppure se iniziano o terminano con spazi; il valore predefinito è `true`"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGU.display_name": {
           "source": "Quote Char(s)",
@@ -1048,12 +1072,12 @@
           "message": "Carattere/i di escape delle virgolette"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.short_desc": {
-          "source": "The escape character(s) for quotes in a field",
-          "message": "I caratteri di escape per le virgolette in un campo"
+          "source": "The escape character(s) written before a quote in a field",
+          "message": "Il carattere o i caratteri di escape scritti prima di una virgoletta in un campo"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.desc": {
-          "source": "The escape character(s) used for `quote` (default: `\\`)",
-          "message": "I caratteri di escape utilizzati per `quote` (predefinito: `\\`)"
+          "source": "The escape character(s) written before a `quote` character in a quoted field.\n\nBy default (an empty value), a quote is escaped by doubling it, as in RFC 4180 CSV files, which spreadsheet programs and the CSV reader read by default.  Set to `\\` only for a consumer that expects quotes escaped with a backslash (`\\\"`); the CSV reader reads such files with its `quote_escape` option set to `\\`.",
+          "message": "Il carattere o i caratteri di escape scritti prima di un carattere `quote` in un campo tra virgolette.\n\nPer impostazione predefinita (un valore vuoto), una virgoletta viene sottoposta a escape raddoppiandola, come nei file CSV RFC 4180, che i fogli di calcolo e il lettore CSV leggono per impostazione predefinita.  Impostare su `\\` solo per un destinatario che si aspetta virgolette sottoposte a escape con una barra rovesciata (`\\\"`); il lettore CSV legge questi file con l'opzione `quote_escape` impostata su `\\`."
         },
         "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",

@@ -9,6 +9,14 @@
     \c api-key, \c password or \c auth, are no longer exposed in the exception information, request information or
     logs of the @ref restclientintro "RestClient" and @ref restclientiointro "RestClientIo" modules.
 
+    <b>CSV files are RFC 4180 by default</b>: the @ref csvutilintro "CsvUtil" writers escape a quote in a quoted
+    field by doubling it, as spreadsheet programs and most applications do, instead of with a backslash, and quote
+    fields containing a line break or starting or ending with white space, so that every value is read back as it
+    was written.  The readers read a backslash as an ordinary character, so a field such as <tt>"C:\\data\\"</tt> is
+    read as <tt>C:\\data\\</tt> instead of failing.  Files written by earlier versions with the default
+    \c quote_escape option contain <tt>\\"</tt> for a quote in a field; read them with the new reader option
+    <tt>quote_escape: "\\\\"</tt>, or write the old format with the writer option <tt>quote_escape: "\\\\"</tt>.
+
     Quoted fields are split correctly by @ref Qore::AbstractLineIterator::getSplitLine() and
     @ref Qore::<string>::split(string, string, bool, bool, string) "<string>::split()": a field of escaped quotes,
     such as <tt>""""</tt> (one quote character), is read instead of raising \c SPLIT-ERROR; a field whose value

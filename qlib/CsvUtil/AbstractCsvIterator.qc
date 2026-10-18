@@ -46,7 +46,8 @@ public namespace CsvUtil {
         |\c "ignore_empty"|\c bool|if @ref True "True" (the default) then empty lines will be ignored; this option is processed with @ref Qore::parse_boolean() "parse_boolean()"
         |\c "ignore_whitespace"|\c bool|if @ref True "True" (the default) then leading and trailing whitespace will be stripped from non-quoted fields; this option is processed with @ref Qore::parse_boolean() "parse_boolean()"
         |\c "number_format"|@ref string_type "string"|the default format for \c "int", \c "float", and \c "number" fields as a string giving the thousands separator character (\c "?" for none) optionally followed by a different decimal separator character and, for output, the number of decimals (ex: \c ".," for continental-European-style numbers); an \c "int" value with the decimal separator is invalid
-        |\c "quote"|@ref string_type "string"|the field quote character (default: \c '\"')
+        |\c "quote"|@ref string_type "string"|the field quote character (default: \c '\"'); a quote character in a quoted field is escaped by doubling it, as in RFC 4180 CSV data
+        |\c "quote_escape"|@ref string_type "string"|the escape character(s) before a \c "quote" character in a quoted field that make it part of the field's text, in addition to doubling it; if not given or an empty string (the default), or if it is the quote character itself, a quote character in a quoted field is only escaped by doubling it and a backslash is an ordinary character, as in RFC 4180 CSV data; set to \c '\\' for data written by %CsvUtil before 1.12 with its default \c "quote_escape" (@since %CsvUtil 1.12)
         |\c "separator"|@ref string_type "string"|the string separating the fields in the file (default: \c ",")
         |\c "timezone"|@ref string_type "string"|the timezone to use when parsing dates (will be passed to @ref Qore::TimeZone::constructor())
         |\c "tolwr"|\c bool|if @ref True "True" then all header names will be converted to lower case letters
@@ -134,6 +135,7 @@ public namespace CsvUtil {
                 "ignore_whitespace": C_OPT1|C_OPT2,
                 "number_format": C_OPT1|C_OPT2,
                 "quote": C_OPT1|C_OPT2,
+                "quote_escape": C_OPT1|C_OPT2,
                 "separator": C_OPT1|C_OPT2,
                 "timezone": C_OPT1|C_OPT2,
                 "tolwr": C_OPT1|C_OPT2,
@@ -146,6 +148,9 @@ public namespace CsvUtil {
 
             # field content delimiter
             string quote = "\"";
+
+            # the escape of a quote character in a quoted field in addition to doubling it; empty for RFC 4180 data
+            string quote_escape = "";
 
             # number of header lines
             softint headerLines = 0;
@@ -251,7 +256,8 @@ public namespace CsvUtil {
         #! Returns configuration information about the object
         hash<auto> getInfo() {
             return self{
-                "separator", "quote", "headerLines", "headerNames", "ignoreEmptyLines", "ignoreWhitespace",
+                "separator", "quote", "quote_escape", "headerLines", "headerNames", "ignoreEmptyLines",
+                "ignoreWhitespace",
                 "checkElementCounts", "extendedRecord", "compat_force_empty_string", "read_ahead",
             } + (timezone
                 ? {
@@ -275,6 +281,7 @@ public namespace CsvUtil {
                     }
                     case "date_format":
                     case "quote":
+                    case "quote_escape":
                     case "separator":
                     case "eol":
                     case "number_format": {
@@ -585,6 +592,21 @@ string quote = i.getQuote();
             return quote;
         }
 
+        #! Returns the escape of a quote character in a quoted field, in addition to doubling it
+        /** @par Example:
+            @code{.py}
+string quote_escape = i.getQuoteEscape();
+            @endcode
+
+            @return the \c "quote_escape" option; an empty string (the default) if a quote character in a quoted field
+            is only escaped by doubling it, as in RFC 4180 CSV data
+
+            @since %CsvUtil 1.12
+         */
+        string getQuoteEscape() {
+            return quote_escape;
+        }
+
         #! Returns the description of the record type, if any
         *hash<string, AbstractDataField> getRecordType() {
             return CsvHelper::getRecordType();
@@ -672,7 +694,7 @@ while (i.next()) {
             @since %CsvUtil 1.6.3
         */
         list<*string> getRawLineValues() {
-            return getRawLine().split(separator, quote, ignoreWhitespace);
+            return getRawLine().split(separator, quote, ignoreWhitespace, False, quote_escape);
         }
 
         #! Returns the value without the separators of the given number format, so that its digits can be checked
@@ -831,7 +853,7 @@ while (i.next()) {
 
         #! Read line split by separator/quote into list
         private list<*string> getLineAndSplit() {
-            return lineIterator.getSplitLine(separator, quote, eol, ignoreWhitespace);
+            return lineIterator.getSplitLine(separator, quote, eol, ignoreWhitespace, quote_escape);
         }
 
         #! Identify a fixed-length line type using identifyTypeImpl(); may be overridden if necessary.

@@ -311,6 +311,18 @@
           "source": "Single quote / apostrophe (`'`)",
           "message": "單引號 / 撇號（`'`）"
         },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "引號跳脫字元"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "Characters before a quote that make it part of a field, for older files",
+          "message": "引號前使其成為欄位一部分的字元，適用於較舊的檔案"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) before a `quote` character in a quoted field that make it part of the field's text, in addition to doubling it.\n\nBy default, a quote in a quoted field is only escaped by doubling it, as in RFC 4180 CSV files that spreadsheet programs and most applications write, and a backslash is an ordinary character, so `\"C:\\data\\\"` is read as `C:\\data\\`.\n\nSet to `\\` to read files that escape quotes with a backslash (`\\\"`), such as files written by Qore's CSV writer before CsvUtil 1.12 with its default `quote_escape`.",
+          "message": "以引號括住的欄位中 `quote` 字元前面的跳脫字元，除了重複引號之外，也會使該引號成為欄位文字的一部分。\n\n預設情況下，以引號括住的欄位中的引號只能以重複引號跳脫，與試算表程式和大多數應用程式寫入的 RFC 4180 CSV 檔案相同，而反斜線是一般字元，因此 `\"C:\\data\\\"` 會讀取為 `C:\\data\\`。\n\n設為 `\\` 可讀取以反斜線跳脫引號（`\\\"`）的檔案，例如 CsvUtil 1.12 之前的 Qore CSV 寫入器以其預設 `quote_escape` 寫入的檔案。"
+        },
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
           "message": "欄位分隔符號"
@@ -687,6 +699,18 @@
           "source": "Single quote / apostrophe (`'`)",
           "message": "單引號 / 撇號（`'`）"
         },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "引號跳脫字元"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "Characters before a quote that make it part of a field, for older files",
+          "message": "引號前使其成為欄位一部分的字元，適用於較舊的檔案"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) before a `quote` character in a quoted field that make it part of the field's text, in addition to doubling it.\n\nBy default, a quote in a quoted field is only escaped by doubling it, as in RFC 4180 CSV files that spreadsheet programs and most applications write, and a backslash is an ordinary character, so `\"C:\\data\\\"` is read as `C:\\data\\`.\n\nSet to `\\` to read files that escape quotes with a backslash (`\\\"`), such as files written by Qore's CSV writer before CsvUtil 1.12 with its default `quote_escape`.",
+          "message": "以引號括住的欄位中 `quote` 字元前面的跳脫字元，除了重複引號之外，也會使該引號成為欄位文字的一部分。\n\n預設情況下，以引號括住的欄位中的引號只能以重複引號跳脫，與試算表程式和大多數應用程式寫入的 RFC 4180 CSV 檔案相同，而反斜線是一般字元，因此 `\"C:\\data\\\"` 會讀取為 `C:\\data\\`。\n\n設為 `\\` 可讀取以反斜線跳脫引號（`\\\"`）的檔案，例如 CsvUtil 1.12 之前的 Qore CSV 寫入器以其預設 `quote_escape` 寫入的檔案。"
+        },
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
           "message": "欄位分隔符號"
@@ -1028,8 +1052,8 @@
           "message": "僅在必要時為輸出欄位加上引號"
         },
         "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.desc": {
-          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting (i.e. they contain a quote or separator character); the default is `true`",
-          "message": "設為 `false` 可停用最佳引號處理；停用最佳引號處理時，無論類型或內容為何，所有欄位都會加上引號；啟用時，僅在欄位需要加引號（即包含引號或分隔字元）時才會加上引號；預設值為 `true`"
+          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting: if they contain the quote character, the separator, the end of line, a carriage return or a line feed, or start or end with white space; the default is `true`",
+          "message": "設為 `false` 可停用最佳引號處理；停用最佳引號處理時，無論類型或內容為何，所有欄位都會加上引號；啟用時，僅在欄位需要加引號（即包含引號字元、分隔字元、行尾、歸位字元或換行字元，或以空白開頭或結尾）時才會加上引號；預設值為 `true`"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGU.display_name": {
           "source": "Quote Char(s)",
@@ -1048,12 +1072,12 @@
           "message": "引號跳脫字元"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.short_desc": {
-          "source": "The escape character(s) for quotes in a field",
-          "message": "欄位中引號的跳脫字元"
+          "source": "The escape character(s) written before a quote in a field",
+          "message": "寫入欄位中引號前面的跳脫字元"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.desc": {
-          "source": "The escape character(s) used for `quote` (default: `\\`)",
-          "message": "用於 `quote` 的跳脫字元（預設值：`\\`）"
+          "source": "The escape character(s) written before a `quote` character in a quoted field.\n\nBy default (an empty value), a quote is escaped by doubling it, as in RFC 4180 CSV files, which spreadsheet programs and the CSV reader read by default.  Set to `\\` only for a consumer that expects quotes escaped with a backslash (`\\\"`); the CSV reader reads such files with its `quote_escape` option set to `\\`.",
+          "message": "寫入以引號括住的欄位中 `quote` 字元前面的跳脫字元。\n\n預設情況下（空白值），引號以重複引號跳脫，與試算表程式和 CSV 讀取器預設讀取的 RFC 4180 CSV 檔案相同。  僅在接收端預期以反斜線跳脫的引號（`\\\"`）時才設為 `\\`；CSV 讀取器在其 `quote_escape` 選項設為 `\\` 時會讀取此類檔案。"
         },
         "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",

@@ -148,7 +148,8 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
                 "type": AbstractDataProviderType::get(SoftBoolType),
                 "desc": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are "
                     "quoted regardless of type or content, when it is enabled, then fields are quoted only if they "
-                    "require quoting (i.e. they contain a quote or separator character); the default is `true`",
+                    "require quoting: if they contain the quote character, the separator, the end of line, a "
+                    "carriage return or a line feed, or start or end with white space; the default is `true`",
                 "default_value": True,
             },
             "quote": <DataProviderOptionInfo>{
@@ -160,10 +161,15 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
             },
             "quote_escape": <DataProviderOptionInfo>{
                 "display_name": "Quote Escape Char(s)",
-                "short_desc": "The escape character(s) for quotes in a field",
+                "short_desc": "The escape character(s) written before a quote in a field",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "The escape character(s) used for `quote` (default: `\\`)",
-                "default_value": "\\",
+                "desc": "The escape character(s) written before a `quote` character in a quoted field.\n\n"
+                    "By default (an empty value), a quote is escaped by doubling it, as in RFC 4180 CSV files, which "
+                    "spreadsheet programs and the CSV reader read by default.  Set to `\\` only for a consumer that "
+                    "expects quotes escaped with a backslash (`\\\"`); the CSV reader reads such files with its "
+                    "`quote_escape` option set to `\\`.",
+                "default_value": "",
+                "example_value": "\\",
             },
             "separator": <DataProviderOptionInfo>{
                 "display_name": "Field Separator",

@@ -311,6 +311,18 @@
           "source": "Single quote / apostrophe (`'`)",
           "message": "Guillemet simple / apostrophe (`'`)"
         },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "Caractères d'échappement de citation"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "Characters before a quote that make it part of a field, for older files",
+          "message": "Caractères placés devant un guillemet qui en font une partie du champ, pour les fichiers plus anciens"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) before a `quote` character in a quoted field that make it part of the field's text, in addition to doubling it.\n\nBy default, a quote in a quoted field is only escaped by doubling it, as in RFC 4180 CSV files that spreadsheet programs and most applications write, and a backslash is an ordinary character, so `\"C:\\data\\\"` is read as `C:\\data\\`.\n\nSet to `\\` to read files that escape quotes with a backslash (`\\\"`), such as files written by Qore's CSV writer before CsvUtil 1.12 with its default `quote_escape`.",
+          "message": "Le ou les caractères d'échappement placés devant un caractère `quote` dans un champ entre guillemets qui en font une partie du texte du champ, en plus du doublement.\n\nPar défaut, un guillemet dans un champ entre guillemets n'est échappé qu'en le doublant, comme dans les fichiers CSV RFC 4180 qu'écrivent les tableurs et la plupart des applications, et une barre oblique inverse est un caractère ordinaire, de sorte que `\"C:\\data\\\"` est lu comme `C:\\data\\`.\n\nDéfinissez sur `\\` pour lire les fichiers qui échappent les guillemets par une barre oblique inverse (`\\\"`), comme les fichiers écrits par le rédacteur CSV de Qore avant CsvUtil 1.12 avec sa valeur par défaut de `quote_escape`."
+        },
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
           "message": "Séparateur de champs"
@@ -687,6 +699,18 @@
           "source": "Single quote / apostrophe (`'`)",
           "message": "Guillemet simple / apostrophe (`'`)"
         },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "Caractères d'échappement de citation"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "Characters before a quote that make it part of a field, for older files",
+          "message": "Caractères placés devant un guillemet qui en font une partie du champ, pour les fichiers plus anciens"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) before a `quote` character in a quoted field that make it part of the field's text, in addition to doubling it.\n\nBy default, a quote in a quoted field is only escaped by doubling it, as in RFC 4180 CSV files that spreadsheet programs and most applications write, and a backslash is an ordinary character, so `\"C:\\data\\\"` is read as `C:\\data\\`.\n\nSet to `\\` to read files that escape quotes with a backslash (`\\\"`), such as files written by Qore's CSV writer before CsvUtil 1.12 with its default `quote_escape`.",
+          "message": "Le ou les caractères d'échappement placés devant un caractère `quote` dans un champ entre guillemets qui en font une partie du texte du champ, en plus du doublement.\n\nPar défaut, un guillemet dans un champ entre guillemets n'est échappé qu'en le doublant, comme dans les fichiers CSV RFC 4180 qu'écrivent les tableurs et la plupart des applications, et une barre oblique inverse est un caractère ordinaire, de sorte que `\"C:\\data\\\"` est lu comme `C:\\data\\`.\n\nDéfinissez sur `\\` pour lire les fichiers qui échappent les guillemets par une barre oblique inverse (`\\\"`), comme les fichiers écrits par le rédacteur CSV de Qore avant CsvUtil 1.12 avec sa valeur par défaut de `quote_escape`."
+        },
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
           "message": "Séparateur de champs"
@@ -1028,8 +1052,8 @@
           "message": "Mettre les champs de sortie entre guillemets uniquement si nécessaire"
         },
         "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.desc": {
-          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting (i.e. they contain a quote or separator character); the default is `true`",
-          "message": "Définissez sur `false` pour désactiver les guillemets optimaux ; lorsque les guillemets optimaux sont désactivés, tous les champs sont entourés de guillemets, indépendamment de leur type ou contenu ; lorsqu'ils sont activés, les champs sont entourés de guillemets uniquement si nécessaire (c'est-à-dire s'ils contiennent un guillemet ou un caractère séparateur) ; la valeur par défaut est `true`"
+          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting: if they contain the quote character, the separator, the end of line, a carriage return or a line feed, or start or end with white space; the default is `true`",
+          "message": "Définissez sur `false` pour désactiver les guillemets optimaux ; lorsque les guillemets optimaux sont désactivés, tous les champs sont entourés de guillemets, indépendamment de leur type ou contenu ; lorsqu'ils sont activés, les champs sont entourés de guillemets uniquement si nécessaire : s'ils contiennent le caractère guillemet, le séparateur, la fin de ligne, un retour chariot ou un saut de ligne, ou s'ils commencent ou se terminent par une espace ; la valeur par défaut est `true`"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGU.display_name": {
           "source": "Quote Char(s)",
@@ -1048,12 +1072,12 @@
           "message": "Caractères d'échappement de citation"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.short_desc": {
-          "source": "The escape character(s) for quotes in a field",
-          "message": "Caractères d'échappement pour les guillemets dans un champ"
+          "source": "The escape character(s) written before a quote in a field",
+          "message": "Le ou les caractères d'échappement écrits devant un guillemet dans un champ"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.desc": {
-          "source": "The escape character(s) used for `quote` (default: `\\`)",
-          "message": "Caractères d'échappement pour `quote` (défaut : `\\`)"
+          "source": "The escape character(s) written before a `quote` character in a quoted field.\n\nBy default (an empty value), a quote is escaped by doubling it, as in RFC 4180 CSV files, which spreadsheet programs and the CSV reader read by default.  Set to `\\` only for a consumer that expects quotes escaped with a backslash (`\\\"`); the CSV reader reads such files with its `quote_escape` option set to `\\`.",
+          "message": "Le ou les caractères d'échappement écrits devant un caractère `quote` dans un champ entre guillemets.\n\nPar défaut (une valeur vide), un guillemet est échappé en le doublant, comme dans les fichiers CSV RFC 4180, que les tableurs et le lecteur CSV lisent par défaut.  Définissez sur `\\` uniquement pour un destinataire qui attend des guillemets échappés par une barre oblique inverse (`\\\"`) ; le lecteur CSV lit ces fichiers avec son option `quote_escape` définie sur `\\`."
         },
         "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.display_name": {
           "source": "Field Separator",
