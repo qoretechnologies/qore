@@ -3,7 +3,8 @@
 
 %modern
 %enable-debug
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 %exec-class ZstdFinishTest
 
 class FailingZstdInput inherits InputStream {

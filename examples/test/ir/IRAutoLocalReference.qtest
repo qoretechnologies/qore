@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 
 #! Regression test: a local or parameter declared "auto" can hold a reference at runtime.

@@ -4,6 +4,7 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 
 # Shared implicit map arguments must survive every use, including calls that
