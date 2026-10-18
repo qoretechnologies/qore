@@ -17906,3 +17906,168 @@ A retained improvement requires a fresh matched optimized feature/develop/Java
 checkpoint, with synchronization and optimizer restrictions explicit. Subsequent
 loop sink-check work is a separate hypothesis and must preserve every language-loop
 cancellation checkpoint. No Java parity or global performance ceiling is established.
+
+
+## Optimized post-getter feature, develop and Java checkpoint
+
+Feature `bdac4c284` versus merged develop `12cbac529` and fresh warmed Java/JMH.
+Both Qore runtimes use matched Release `-O3 -DNDEBUG`, with each runtime's own
+`qcc -O3` output. Exact compiler, LLVM, JDK/JMH, source and binary identities are
+in `results-aot-post-admitted-getter-checkpoint-macos-arm64.json`.
+
+All 37 microbenchmarks, four mixed workloads and 14 Qore getter/control probes;
+three fixed Qore layouts, five forks, three warmup and three measured 300 ms
+windows, 4096 items, seed 7, block/order seed 136409. Java uses five fresh JVM
+forks per benchmark, interleaved with Qore, including six new getter controls.
+All 1865 jobs / 5595 measured windows are retained. Qore aggregates are medians
+of three layout medians of five process means; Java aggregates are medians of
+five fork means. No favorable-layout selection or cross-epoch ratio.
+
+Values are whole-workload ns/item, not isolated call latency. Direct/final Java
+inlining is allowed; existing dynamic/callback restrictions remain documented.
+These same-Program workloads do not measure cross-QoreProgram boundaries.
+
+|!Workload|!Develop AOT ns/item|!Feature AOT ns/item|!Java JIT ns/item|!Develop / feature time|!Feature / Java time
+|arithmetic|7.127|1.549|1.017|4.601x|1.523x
+|direct_call|7.020|1.537|0.935|4.568x|1.643x
+|method_call|7.162|1.602|0.974|4.471x|1.644x
+|indirect_call|226.670|6.732|1.716|33.673x|3.923x
+|polymorphic_call|302.104|22.307|2.529|13.543x|8.819x
+|polymorphic_expression_call|132.521|10.643|2.611|12.451x|4.077x
+|monomorphic_call|12.784|3.493|1.685|3.659x|2.074x
+|optional_method_call|205.487|10.568|1.708|19.444x|6.189x
+|polymorphic_float_call|334.176|23.254|2.639|14.371x|8.811x
+|polymorphic_float_expression_call|148.068|10.669|2.553|13.879x|4.179x
+|monomorphic_float_call|13.112|3.491|1.700|3.756x|2.053x
+|optional_float_method_call|210.404|10.740|1.693|19.590x|6.343x
+|boxed_float_method_call|242.074|19.614|2.627|12.342x|7.466x
+|dynamic_int_result_call|198.939|10.585|3.160|18.794x|3.350x
+|dynamic_int_result_fallback|447.865|21.811|3.025|20.534x|7.210x
+|boxed_int_method_call|214.141|15.464|2.527|13.848x|6.120x
+|boxed_int_method_fallback|261.128|30.727|2.550|8.498x|12.049x
+|boxed_float_method_fallback|314.020|32.324|2.624|9.715x|12.317x
+|boxed_int_method_effect|375.858|88.003|1.868|4.271x|47.102x
+|dynamic_float_result_call|213.823|11.707|3.352|18.265x|3.492x
+|indirect_wide|266.030|6.547|1.679|40.635x|3.899x
+|indirect_float|224.496|6.423|1.649|34.952x|3.896x
+|indirect_int_result|199.465|6.194|1.935|32.205x|3.200x
+|indirect_float_result|198.984|7.147|2.843|27.843x|2.514x
+|indirect_tagged_float|270.205|6.622|1.627|40.802x|4.070x
+|indirect_branch_float|239.393|6.678|1.671|35.847x|3.996x
+|indirect_affine|228.049|6.735|1.681|33.862x|4.005x
+|indirect_affine_wide|276.001|6.791|1.671|40.644x|4.063x
+|indirect_branch_int|227.856|6.748|1.710|33.764x|3.946x
+|dispatch_control|7.292|1.602|1.020|4.552x|1.570x
+|list_read|8.678|2.828|0.294|3.069x|9.632x
+|list_build|102.285|25.520|2.600|4.008x|9.815x
+|list_mutate|204.815|185.701|4.192|1.103x|44.303x
+|temporary_list|140.535|1.609|1.254|87.329x|1.283x
+|temporary_hash|325.286|335.190|16.194|0.970x|20.698x
+|closure_call|137.158|17.871|1.712|7.675x|10.438x
+|closure_capture|159.791|23.925|1.767|6.679x|13.541x
+
+### Getter and fallback workloads
+
+|!Workload|!Develop AOT ns/item|!Feature AOT ns/item|!Time change
+|object_loop|612.372|166.515|-72.808%
+|object_short|1487.548|1079.443|-27.435%
+|float_loop|626.254|166.789|-73.367%
+|float_short|1548.918|1083.401|-30.054%
+|string_loop|513.549|366.318|-28.669%
+|string_short|1356.417|1234.786|-8.967%
+|effect_loop|743.740|347.829|-53.232%
+|effect_short|1628.087|1240.757|-23.791%
+|two_read_loop|691.146|371.721|-46.217%
+|two_read_short|1539.541|1250.145|-18.798%
+|default_loop|864.776|683.602|-20.950%
+|default_short|1750.043|1616.765|-7.616%
+|string_result_loop|693.332|432.768|-37.581%
+|string_result_short|1611.523|1372.732|-14.818%
+
+The two getter loops rotate three same-class receivers constructed per operation,
+read twice with an identity callback between reads, and accumulate integer results.
+Qore uses `auto` receivers, name-based case routing and one `call_function` entry
+per 4096-item operation; Java uses statically typed final classes and direct loop
+entry. Those setup/dispatch differences are included, not subtracted away.
+The plain Java case is optimizer-friendly. Boundary controls prevent getter and
+callback inlining. Read-lock controls additionally use a standard nonfair Java
+read/write lock per receiver; this is not Qore's member lock or an equivalent
+implementation of Qore dynamic lookup/deletion, context, frames and cancellation.
+Do not equate a ratio against the locked control with Java parity.
+
+|!Workload|!Java control|!Java ns/item|!Feature / Java time|!Java allocated bytes/item
+|object_loop|plain|0.897|185.679x|0.000020
+|object_loop|boundary|3.296|50.514x|0.017653
+|object_loop|read-lock|8.606|19.349x|0.105663
+|float_loop|plain|0.915|182.275x|0.000020
+|float_loop|boundary|3.777|44.159x|0.017663
+|float_loop|read-lock|8.289|20.122x|0.105656
+
+No Java equivalent is claimed for the short `call_function` forms or the twelve
+other getter/control probes. Allocation statistics describe the actual JVM runs,
+not retained memory. Compiler diagnostics are separate and excluded from timings.
+
+### Mixed processing
+
+|!Workload|!Develop ms / 4096 records|!Feature ms / 4096 records|!Speedup|!Time change
+|csv_report|4.366|3.809|1.146x|-12.756%
+|object_orders|8.113|7.204|1.126x|-11.207%
+|callback_pipeline|1.225|0.342|3.585x|-72.109%
+|text_index|6.970|5.477|1.273x|-21.419%
+
+Input generation/startup/compilation are excluded; parsing, transformation,
+temporary allocation, aggregation and formatting are included. These are synthetic
+processing workloads, not application throughput or Java mixed-workload comparisons.
+
+### Every adverse Qore layout
+
+|!Workload|!Layout|!Feature time change vs develop|!Disjoint adverse observed ranges
+|temporary_hash|default|+3.341%|yes
+|temporary_hash|reverse|+3.506%|no
+|temporary_hash|shuffle-487|+3.045%|no
+
+Every smaller loss is preserved. Overlapping observed fork-mean ranges do not
+prove non-regression, and these ranges are not confidence intervals. Host load,
+frequency and thermals are uncontrolled. The individual getter optimization's
+benefit is established by its separate matched before/after experiment, not by
+subtracting historical results from this branch/develop checkpoint.
+
+One earlier campaign stopped at its environment guard before any timed sample:
+the macOS Python launcher prepended `MANPATH` again for its child. Reusing the
+actual interpreter preserves the exact environment fingerprint; the guard was
+not weakened. That failed preflight, original driver and fresh preparation are
+preserved separately. No timed sample was discarded or retried.
+
+### Qualification, diagnostics and next work
+
+Fresh merged Release and Debug each pass 69 core files / 112 cases / 17595
+assertions, including the getter's 1053 assertions, plus lvalue/DGC, HTTP,
+offline LLM, thread, native/reference and merged DataProvider coverage. All
+64 owned qmods are rebuilt and their Release aliases restored; unrelated links
+are unchanged. Each comparison executable passes its micro555/mixed60/probe168
+reference grid; Java passes 555 existing and 72 getter checks. Loaded-library
+identity, optimized build settings and every fixed symbol order are verified.
+The report contains exact per-suite counts and full child exit/log provenance.
+This is selected macOS arm64 coverage, not full-suite/sanitizer certification.
+
+Fast same-Program workloads are substantially improved over develop, but not at Java parity. Direct and method work are 1.537 and 1.602 ns/item versus Java 0.935 and 0.974 (both about 1.64x Java time); monomorphic 3.493 versus 1.685 (2.07x), indirect 6.732 versus 1.716 (3.92x), polymorphic 22.307 versus 2.529 (8.82x), and capturing closure 23.925 versus 1.767 (13.54x). These include their loop work, and the documented Java dynamic/callback no-inline controls remain in place.
+
+The dynamic integer and float getter loops fall from develop 612.372/626.254 to feature 166.515/166.789 ns/item, reductions of 72.808/73.367% for the entire branch. Plain Java is 0.897/0.915; boundary controls 3.296/3.777; read-lock controls 8.606/8.289 ns/item. All remain faster than Qore, despite the retained getter improvement. The controls differ in dispatch, locking, observable frames and lifetime semantics; none establishes an equivalent implementation or a hardware lower bound. Do not attribute the whole branch/develop improvement to the latest getter change alone.
+
+CSV report, object orders, callback pipeline and text index use 12.756%, 11.207%, 72.109% and 21.419% less time than develop respectively. These four synthetic processing mixes show broader impact, not one universal application-performance score. List mutation improves 9.332% but remains 44.30x the Java workload time; it is still an important execution bottleneck.
+
+Temporary hash is the sole aggregate or layout loss in this 55-workload checkpoint: 325.286 to 335.190 ns/item, +3.045%. All three layout medians are slower (+3.341%, +3.506%, +3.045%); default observed fork-mean ranges are disjoint, while reverse and shuffle ranges overlap. Preserve this regression for follow-up; the checkpoint does not attribute its cause or dismiss it as noise. Observed ranges are not confidence intervals.
+
+Ten serial untimed profiles retain all raw samples. Feature getter traces enter the admitted helper and typed companion, with live member lookup/read locking, RuntimeConfig acquisition, observable frame work, receiver reloads and ownership cleanup still present. Feature polymorphic traces show native dispatch plus checked receiver/local-slot setup and reference bookkeeping. Capturing closures retain live capture lookup/read locking and native frame work. List mutation retains generic path navigation, compound assignment, local access and value cleanup. Waiting signal-thread samples are not hot-path CPU work; sample counts are not cycles or isolated call latency.
+
+The new Java controls passed 72 result checks and 1200 independent cross-reference cases. Bytecode review confirms identical normalized loop structure across plain/boundary/locked forms and finally-protected read-lock release. Compiler logs confirm plain getter/callback inlining, preserved boundary hints, and all six loop bodies reaching level4 during the first diagnostic warmup. Those instrumented durations are excluded; this does not guarantee identical compilation histories in every subsequent JVM fork.
+
+The next separate experiment is explicit RuntimeConfig threading through ordinary AOT dispatch, reusing a live same-thread view already acquired by generated callers where possible. Preserve legacy helper ABIs, full live dispatch keys, selected variants, debugger/body readiness, object validity, exception/ownership cleanup, cancellation and reader-safe stack publication; legacy fallback snapshot refresh remains. Measure register pressure, cold/miss paths and broad controls. TLS is one remaining cost, not a demonstrated explanation for the entire Java gap.
+
+The only development failure was a premeasurement environment guard: nested macOS Python launching prepended MANPATH. No timed job ran. Exact-interpreter reuse preserved every environment key/value/order, the fingerprint guard was unchanged, and a fresh prepared matrix passed. The failed preflight, original driver hash and all subsequent successful results are retained. No measured sample was discarded or retried.
+
+The full audit-changes checklist and independent raw-result replay must pass
+before this evidence is committed. Subsequent RuntimeConfig threading is a
+separate before/after experiment: reuse a live same-thread view, preserve live
+Program/class/parse-option and fallback semantics, and measure broad controls.
+No Java parity or justified global performance ceiling is established.

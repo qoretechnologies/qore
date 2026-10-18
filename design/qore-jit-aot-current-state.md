@@ -3519,3 +3519,19 @@ exact alias restoration. See RESULTS and `results-aot-zero-arg-getter-admitted-m
 provenance, diagnostics, limitations and the complete audit. A retained improvement
 needs fresh matched optimized feature/develop/Java measurements. No fresh Java ratio
 or global performance ceiling is claimed here.
+
+
+## Optimized post-getter checkpoint
+
+Fresh matched feature `bdac4c284`, merged develop `12cbac529` and warmed Java/JMH:
+55 Qore workloads, 37 existing Java microbenchmarks and six separately labelled
+getter controls; all 5595 windows retained across three fixed Qore layouts and
+five forks. Both runtimes are Release `-O3 -DNDEBUG` with qcc `-O3`.
+
+See RESULTS and `results-aot-post-admitted-getter-checkpoint-macos-arm64.json`
+for every call/container/mixed result, loss, qualification and audit. Getter
+plain-Java, non-inlined and read-lock controls have explicit semantic limits;
+ratios are whole-workload costs, not isolated call latency or parity evidence.
+Next investigate reuse of the caller's already-acquired live RuntimeConfig in
+ordinary dispatch, with separate correctness and before/after measurements.
+No global performance ceiling is established.
