@@ -17574,3 +17574,157 @@ separate compile-time proof/check removal or caller-native continuation/context 
 optimized feature/develop/Java checkpoint; getter comparisons must explicitly match
 field synchronization before presenting Java ratios. Do not retry a rejected
 candidate unchanged.
+
+
+## Rejected first-use native scalar-call control caching (post-5a2017418)
+
+Boxed integer method calls: 16.223 -> 16.748 ns/item (+3.237% time). Boxed floating method calls: 19.963 -> 20.946 ns/item (+4.927% time). The candidate is rejected; complete candidate sources/modes are archived and production is independently restored/requalified. Failed targets: screen/boxed_int_method_call/aggregate +3.237%, screen/boxed_int_method_call/default +3.375%, screen/boxed_int_method_call/reverse +3.282%, screen/boxed_int_method_call/shuffle-487 +2.861%, screen/boxed_float_method_call/aggregate +4.927%, screen/boxed_float_method_call/default +6.475%, screen/boxed_float_method_call/reverse +4.654%, screen/boxed_float_method_call/shuffle-487 +6.111%.
+
+Release `-O3 -DNDEBUG`, qcc `-O3`, LLVM 22.1.8. Separately qualified frozen runtimes;
+23 micro, 4 mixed and 14 probe workloads; 4096 items/seed 7, three warmup and three
+measured 300 ms windows; default/reverse/shuffle-487 fixed layouts. Three-fork screen
+order 136395 and independent five-fork confirmation order 136397 when both targets
+pass. All 2214 measured windows are retained without pooling or rescue.
+No task-owned build/test/profile/read/analysis overlaps timing. Host load, frequency
+and thermals are uncontrolled; observed fork-mean ranges are not confidence intervals.
+Values are whole-workload ns/item, not isolated call latency or fresh Java ratios.
+
+|!Workload|!Screen before|!Screen candidate|!Change
+|arithmetic|1.573|1.558|-0.928%
+|direct_call|1.573|1.552|-1.291%
+|method_call|1.624|1.619|-0.306%
+|indirect_call|6.870|6.780|-1.314%
+|polymorphic_call|23.441|23.528|+0.371%
+|monomorphic_call|3.539|3.559|+0.577%
+|optional_method_call|10.833|11.113|+2.582%
+|boxed_int_method_effect|91.979|90.382|-1.736%
+|boxed_int_method_fallback|31.311|31.643|+1.061%
+|closure_call|17.998|17.876|-0.676%
+|closure_capture|25.141|24.927|-0.850%
+|indirect_wide|6.888|6.828|-0.862%
+|indirect_float|6.843|6.815|-0.415%
+|list_read|2.768|2.850|+2.973%
+|list_build|26.984|27.022|+0.141%
+|list_mutate|190.556|187.199|-1.762%
+|temporary_list|1.670|1.654|-0.917%
+|temporary_hash|339.002|338.079|-0.272%
+|boxed_int_method_call|16.223|16.748|+3.237%
+|boxed_float_method_call|19.963|20.946|+4.927%
+|boxed_float_method_fallback|32.788|33.794|+3.069%
+|dynamic_int_result_call|11.075|11.247|+1.553%
+|dynamic_float_result_call|12.032|12.072|+0.331%
+|csv_report|972.203|979.039|+0.703%
+|object_orders|1915.323|1916.950|+0.085%
+|callback_pipeline|84.940|86.018|+1.269%
+|text_index|1348.157|1364.642|+1.223%
+|object_loop|284.775|284.884|+0.038%
+|object_short|1223.589|1220.133|-0.282%
+|float_loop|336.458|334.054|-0.715%
+|float_short|1262.561|1254.031|-0.676%
+|string_loop|382.359|377.314|-1.319%
+|string_short|1266.551|1262.000|-0.359%
+|effect_loop|355.328|342.202|-3.694%
+|effect_short|1309.267|1299.469|-0.748%
+|two_read_loop|388.750|392.619|+0.995%
+|two_read_short|1324.471|1327.331|+0.216%
+|default_loop|683.662|696.702|+1.907%
+|default_short|1672.453|1649.637|-1.364%
+|string_result_loop|414.180|419.014|+1.167%
+|string_result_short|1379.595|1398.111|+1.342%
+
+Both boxed-call targets must improve at least 2% in aggregate and improve every fixed
+layout in each epoch. Reject a non-target kernel/layout at least 3% slower with
+observed disjoint ranges in both epochs. All smaller losses remain reported too.
+
+|!Epoch|!Workload|!Layout|!Change|!Before observed range|!Candidate observed range|!Disjoint adverse
+|screen|indirect_call|shuffle-487|+3.025%|6.628 to 6.990|6.787 to 6.911|False
+|screen|list_read|reverse|+4.386%|2.700 to 2.952|2.719 to 2.904|False
+|screen|temporary_list|shuffle-487|+4.328%|1.661 to 1.676|1.643 to 1.759|False
+|screen|temporary_hash|default|+4.861%|328.283 to 334.700|341.040 to 355.154|True
+|screen|boxed_int_method_call|default|+3.375%|16.226 to 16.751|16.570 to 17.772|False
+|screen|boxed_int_method_call|reverse|+3.282%|16.147 to 16.776|16.156 to 16.953|False
+|screen|boxed_int_method_call|shuffle-487|+2.861%|15.961 to 16.387|16.204 to 17.063|False
+|screen|boxed_float_method_call|default|+6.475%|19.949 to 20.385|20.986 to 21.609|True
+|screen|boxed_float_method_call|reverse|+4.654%|19.651 to 20.193|20.843 to 21.232|True
+|screen|boxed_float_method_call|shuffle-487|+6.111%|19.611 to 19.863|20.889 to 21.060|True
+|screen|boxed_float_method_fallback|default|+4.766%|32.495 to 33.379|34.240 to 34.411|True
+|screen|boxed_float_method_fallback|reverse|+3.306%|32.282 to 32.773|33.237 to 34.303|True
+|screen|dynamic_int_result_call|default|+3.083%|10.873 to 12.172|11.311 to 11.887|False
+|screen|dynamic_int_result_call|shuffle-487|+5.180%|10.644 to 11.504|11.235 to 11.846|False
+|screen|float_loop|default|+5.037%|314.963 to 333.936|323.165 to 356.246|False
+|screen|default_loop|shuffle-487|+3.703%|678.574 to 729.751|702.259 to 736.309|False
+|screen|string_result_loop|shuffle-487|+3.746%|402.940 to 422.168|416.698 to 426.971|False
+
+### Contract and diagnostics
+
+Five original first-use controls retain distinct template/call-site scope, exact getenv expressions, short-circuit order and presence semantics. A constinit typed atomic state supplies the hot result; outlined initialization retains the original C++ local-static guard, exception retry and immutable result. No caller/compiler/PIC/AOT-context layout, dispatch-key, live-body, Program, debugger, stack, context, ownership or locking change. Acquire/release publication preserves initializer visibility; racing first callers publish only the same successful value.
+
+Each call-site/template instance keeps independent first-use initialization.
+The original local-static initialization guard and immutable result remain on the
+cold path. A separate typed atomic state is published with release/acquire ordering.
+No environment value is observed earlier at binding or compilation, and empty or
+`"0"` disabling values still count as present. The added static state and outlined
+code are not free; linked file/section sizes are recorded separately, not presented
+as heap-allocation or cache measurements.
+
+Generated-code review covers 207 common functions and 0 new functions.
+Post-timing runtime review covers 24 disassemblies; pre-timing
+inspection also records all four unary entry versions and sixteen separate cold
+initializers. Fourteen serial untimed samples cover integer/floating boxed calls,
+their ordinary fallbacks, effectful integer calls, closures and monomorphic calls.
+Instruction and sample counts are not dynamic costs or causal allocations of time.
+
+The fixed three-fork screen rejects the candidate: boxed integer16.222507922550->16.747640414271ns/item (+3.237061% time), boxed float19.962669002259->20.946258325133ns/item (+4.927143%). Both targets worsen in all three layouts instead of meeting the required2% aggregate gain/every-layout improvement. All2214windows remain; no confirmation or rescue run was performed.
+
+Target per-layout changes are integer default+3.374750%, reverse+3.282127%, shuffle+2.861266%; float default+6.475373%, reverse+4.653862%, shuffle+6.110584%. The three integer observed fork ranges overlap; all three float ranges are disjoint adverse. These observed ranges are not confidence intervals. The fixed target gate fails regardless; this is not a statistically certified universal slowdown.
+
+Non-target disjoint adverse screen pairs at least3% include temporary_hash/default+4.861451%, boxed_float_method_fallback/default+4.765893% and reverse+3.305578%. No repeated adverse pair can be claimed from a single epoch. Every smaller loss and apparent gain is also retained in the41-workload table, not pooled into a success claim.
+
+All207 common generated functions (150micro,29mixed,28probe) have identical normalized relocatable instructions; none is added or removed. Caller/compiler source and PIC/AOT-context layout are unchanged. Runtime review records24disassemblies. Ordinary name/fast/dot dispatch, auto-local assignment and four member-read helpers retain their instruction counts and call-target multisets; that is not a claim of identical addresses or timing.
+
+Unary runtime entry instruction counts change intv1477->464, intv2487->474, floatv1444->445 and floatv2460->458, with no padding in those four entry disassemblies. v1 frames remain0x140 and v2 frames0x170. Direct-plus-indirect call-site counts remain21/22/19/20 respectively. Cold-initializer disassemblies can contain trailing udf padding, so earlier approximate row counts there are not executable work. None of these static counts gives dynamic cycles.
+
+RCpc-aware supplementary inspection confirms a single acquire state load per visited control, distinct initialization guards and release publication for16 cold cache instances; both matched-fallback lambdas also use the same state path. Enabled expression bodies may be compiler-merged without merging cache state or first-use scope. The new enabled path branches over a cold block where the old guard/value path fell through. Branch/code placement is a possible investigation, not an established cause or permission for layout/padding search; the tested candidate is rejected unchanged.
+
+All14 serial untimed samples finish successfully. Boxed targets sample the unary helpers, generated loops, stack checks/publication and auto-local result assignment; float also samples result conversion. No QoreNativeControlCache initializer appears in these sampled stacks. Absence from samples does not prove zero cold cost. Fallback-labelled workloads currently sample admitted synchronized scalar-member paths, including live member lookup/hash comparison and read-lock operations; they must not be described as exclusively ordinary dispatch. Effectful calls retain local/reference/locking work. Closure and monomorphic controls keep their established routes. Profiles are diagnostics, not benchmark windows or isolated-cost estimates.
+
+Linked file size21104160->21106240bytes (+2080), text section13815188->13816124 (+936), BSS113072->113088 (+16), exception table+8 and unwind info+32. Rounded segment total remains22118400bytes. These are static linked-size observations, not heap allocations, cold-start measurements or a causal explanation for timing.
+
+Candidate Release and Debug each pass69core files/109cases/16548assertions, plus mergedDP126cases/3909assertions, selected integration/lvalue/native/reference coverage and64owned qmods. Six strippedO0/O3 inspection compiles and control-presence reference runs pass. These establish selected correctness coverage, not full-suite/sanitizer/cross-platform certification. Source restoration and fresh restored qualification are required before publication/commit.
+
+Continue with separately planned positive getter admission inside an already-matched ordinary route, without shared PIC growth or speculative caller rewrites. The cancellation guide explicitly preserves every language-loop iteration checkpoint; any separate clean-sink optimization must keep that contract, incoming pending exceptions/thread_exit, cleanup and handler behavior. The earlier chunked-polling draft is not permission to reduce checkpoint frequency. No fresh Java/develop ratio, Java parity or global performance ceiling is established.
+
+### Qualification and audit
+
+baseline_release: 68 files / 108 cases / 16542 assertions; baseline_debug: 68 files / 108 cases / 16542 assertions; candidate_release: 69 files / 109 cases / 16548 assertions; candidate_debug: 69 files / 109 cases / 16548 assertions; restored_release: 68 files / 108 cases / 16542 assertions; restored_debug: 68 files / 108 cases / 16542 assertions.
+
+The added standalone native fixture checks independent first use, true/false
+persistence, enclosing-template scopes, exception retry and 32 concurrent threads
+performing 100 publication checks each at both O0/O3. It does not initialize Qore
+thread state or remove runtime cancellation checks. Candidate QUnit coverage adds
+one case/six assertions; existing context, debugger, stack, signature and ordinary
+fallback tests remain. Six stripped O0/O3 micro/mixed/probe executables pass references;
+empty/`"0"`/`"1"` native-continuation controls are exercised separately at runtime.
+
+All qualified runtimes rebuild 64 owned qmods and include the four newly merged
+DataProvider/DPQL suites: 126 cases / 3909 assertions. Each also runs 13 lvalue/DGC suites
+(82 cases, 1330 Release or 2663 Debug assertions), HTTP 10/30, offline LLM 4/23, threads 22/110,
+and 555 IR plus 555 AOT references. Debug runs 1985 native checks per bounded-pair mode
+and the abrupt-drop test. Exactly 64 Release qmod aliases are restored; unrelated
+links are preserved. Baseline AST/O0/O3 probes pass 168 references each and the independent
+oracle covers 12600 cases. All 18 measurement executables validate actual loaded runtimes.
+
+The full 62-item audit in `results-aot-native-control-cache-rejected-macos-arm64.json` independently replays samples, orders,
+references, decisions and source/artifact identities; checks generated/runtime code,
+benchmark runners/oracles, strict Qore tables and diff hygiene. Commit only after
+that audit passes. This is selected macOS arm64 validation, not full-suite, sanitizer
+or cross-platform certification. Cold-start, heap-memory, compile-time, cross-Program
+and application-wide speedups are not inferred from these measurements.
+
+A retained change requires a fresh matched optimized feature/develop/Java checkpoint.
+Separate follow-on hypotheses include positive getter admission inside an already
+matched ordinary route and proved-clean sink handling that retains every language-loop
+cancellation checkpoint. The arithmetic and direct
+call control loops already inline the step operation; whole-loop cost is not residual
+call latency. Those hypotheses remain unimplemented here. No Java parity or justified
+global performance ceiling is established.

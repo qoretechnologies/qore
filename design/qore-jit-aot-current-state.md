@@ -3478,3 +3478,25 @@ The context grew from 880 to 896 bytes but both use a 896-byte allocator bucket
 on this host; metadata compaction is not selected on a bucket-growth hypothesis. A retained
 change requires fresh matched optimized feature/develop/Java measurements. No fresh
 Java ratio or global performance ceiling is established by this AOT experiment.
+
+
+## Rejected first-use native scalar-call control caching (post-5a2017418)
+
+Boxed integer method calls: 16.223 -> 16.748 ns/item (+3.237% time). Boxed floating method calls: 19.963 -> 20.946 ns/item (+4.927% time). The candidate is rejected; complete candidate sources/modes are archived and production is independently restored/requalified. Failed targets: screen/boxed_int_method_call/aggregate +3.237%, screen/boxed_int_method_call/default +3.375%, screen/boxed_int_method_call/reverse +3.282%, screen/boxed_int_method_call/shuffle-487 +2.861%, screen/boxed_float_method_call/aggregate +4.927%, screen/boxed_float_method_call/default +6.475%, screen/boxed_float_method_call/reverse +4.654%, screen/boxed_float_method_call/shuffle-487 +6.111%.
+
+All 2214 optimized windows across 41 workloads/three fixed layouts are retained.
+The candidate changes only five first-use control caches inside existing scalar
+native method dispatch. Exact environment scope/presence and C++ one-time/retry
+semantics remain; a typed atomic state avoids repeated hot guard/value loads.
+Compiler/caller conventions, PIC/AOT-context layout, live call guards, observable
+context, ownership and locking remain unchanged. Static state/outlined code do add
+footprint; section sizes are diagnostics, not heap or latency measurements.
+
+Baseline and candidate Release/Debug qualification includes merged DPQL coverage,
+core/context/native checks, lvalue/DGC/integrations, references and 64 qmods. See
+RESULTS and `results-aot-native-control-cache-rejected-macos-arm64.json` for all gains/losses, source/artifact provenance,
+standalone concurrency tests, raw diagnostics and the full 62-item audit.
+A retained improvement requires fresh matched optimized feature/develop/Java numbers.
+Positive already-matched getter admission and proved-clean sink handling with unchanged
+per-iteration cancellation checks remain
+separate hypotheses. No Java parity or global performance ceiling is claimed.
