@@ -693,6 +693,17 @@ public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureListType =
     "type_code": ST_Any,
 };
 
+#! Data provider signature list type that also accepts @ref nothing and any other value, as a soft list does
+/** A value that is not a list is a list with that value; @ref nothing is an empty list
+
+    @since %DataProvider 3.11
+*/
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalSoftListType
+        = <DataProviderSignatureTypeInfo>{
+    "type": new SoftListDataType("*softlist<auto>", AutoType, True),
+    "type_code": ST_Any,
+};
+
 #! Data provider signature bool type
 public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureBoolType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."bool",

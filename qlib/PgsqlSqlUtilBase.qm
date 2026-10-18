@@ -37,7 +37,7 @@
 # enable all warnings
 
 module PgsqlSqlUtilBase {
-    version = "1.18";
+    version = "1.19";
     desc = "base user module for working with PostgreSQL SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -213,6 +213,12 @@ $function$
     @ref SqlUtil::AbstractDatabase::getAlignFunctionSql() "AbstractDatabase::getAlignFunctionSql()" for example.
 
     @section pgsql_relnotes Release Notes
+
+    @subsection pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - Added the size of the current schema (\c current_schema(): the first existing schema of the connection's
+      \c search_path; see @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
+      "AbstractDatabase::getCurrentSchemaPhysicalSize()"), which measures only that schema's relations instead of
+      the whole database with \c pg_database_size().
 
     @subsection pgsqlsqlutilbasev118 PgsqlSqlUtilBase v1.18
     - Added offline table rewrite transactions that limit only lock waits on PostgreSQL 17 and later,
@@ -2146,22 +2152,45 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
 
     #! @ref SqlUtil::AbstractDatabase::getSchemaPhysicalSize()
     private int getSchemaPhysicalSizeImpl(string schema) {
+        *hash<auto> row = ds.selectRow(getNamespaceSizeSql("%v"), schema);
+        if (!row) {
+            throw "SCHEMA-NOT-FOUND", sprintf("PostgreSQL schema %y does not exist", schema);
+        }
+        return row.size_bytes;
+    }
+
+    #! @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
+    /** The current schema is \c current_schema(): the first existing schema in the connection's \c search_path;
+        it is determined in the same statement that measures it
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    private int getCurrentSchemaPhysicalSizeImpl() {
+        # no row: no schema in the search_path exists
+        return ds.selectRow(getNamespaceSizeSql("current_schema()")).size_bytes ?? GET_PHYSICAL_DB_SIZE_NOVAL;
+    }
+
+    #! Returns the SQL that measures the physical size of one schema, given by a SQL expression
+    /** @param schema_expr the SQL expression giving the schema name, such as a placeholder or \c current_schema()
+
+        @return a select statement giving \c size_bytes for the schema, or no row if the schema does not exist
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    private static string getNamespaceSizeSql(string schema_expr) {
         # Enumerate only storage roots in the requested namespace.  pg_total_relation_size() already includes
         # every table/materialized-view index and its TOAST relation and index.  Enumerating relkind 'i', 'I',
         # or the pg_toast namespace separately would therefore double count storage.  Partitioned roots have no
-        # storage; each physical leaf is relkind 'r' and is counted independently.
-        *hash<auto> row = ds.selectRow("select coalesce(sum(case "
+        # storage; each physical leaf is relkind 'r' and is counted independently.  Only the relations of the
+        # namespace are measured, whatever the size of other schemas or of the database.
+        return "select coalesce(sum(case "
             "when c.relkind in ('r', 'm') then pg_catalog.pg_total_relation_size(c.oid) "
             "when c.relkind = 'S' then pg_catalog.pg_relation_size(c.oid) "
             "else 0 end), 0)::bigint as size_bytes "
             "from pg_catalog.pg_namespace n "
             "left join pg_catalog.pg_class c on c.relnamespace = n.oid "
             "and c.relkind in ('r', 'm', 'S') "
-            "where n.nspname = %v group by n.oid", schema);
-        if (!row) {
-            throw "SCHEMA-NOT-FOUND", sprintf("PostgreSQL schema %y does not exist", schema);
-        }
-        return row.size_bytes;
+            "where n.nspname = " + schema_expr + " group by n.oid";
     }
 
     #! tries to execute a command so that if an error occurs the current transaction status is not lost

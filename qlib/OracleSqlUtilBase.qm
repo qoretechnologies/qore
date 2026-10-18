@@ -274,6 +274,9 @@ hash schema = (
     @section ora_relnotes Release Notes
 
     @subsection oracle17 OracleSqlUtilBase v1.7
+    - added the size of the current schema (see @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
+      "AbstractDatabase::getCurrentSchemaPhysicalSize()"): the segments of the user's own schema, or, when the
+      session's current schema is another one, that schema's segments if the user can read \c dba_segments
     - fixed an ordered \c forupdate select with \c limit or \c offset so that its cost no longer grows with the
       size of the table: the rows of the page were selected with a <tt>rowid in (subquery)</tt> predicate, which
       the optimizer could execute as a full scan of the table or of an index, and a plan chosen while the table
@@ -2139,6 +2142,32 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     #! @ref SqlUtil::AbstractDatabase.getPhysicalSize()
     private int getPhysicalSizeImpl() {
         return ds.selectRow("select sum(bytes) as val from user_segments").val ?? GET_PHYSICAL_DB_SIZE_NOVAL;
+    }
+
+    #! @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
+    /** The current schema is the user's own schema, whose segments are in \c user_segments; when the session's
+        current schema has been changed to another one, that schema's segments are read from \c dba_segments, and
+        \c -1 is returned if the user cannot read it
+
+        @since OracleSqlUtilBase 1.7
+    */
+    private int getCurrentSchemaPhysicalSizeImpl() {
+        hash<auto> row = ds.selectRow("select sys_context('USERENV', 'CURRENT_SCHEMA') as current_schema, "
+            "user as login_user, (select nvl(sum(bytes), 0) from user_segments) as val from dual");
+        if (row.current_schema == row.login_user) {
+            return row.val;
+        }
+        try {
+            return ds.selectRow("select nvl(sum(bytes), 0) as val from dba_segments where owner = %v",
+                row.current_schema).val;
+        } catch (hash<ExceptionInfo> ex) {
+            # ORA-00942 (table or view does not exist) or ORA-01031 (insufficient privileges): dba_segments needs a
+            # privilege that the user does not have, so the schema cannot be measured
+            if (inlist(ex.arg.alterr, ("OCI-00942", "OCI-01031")) || ex.desc =~ /ORA-0(0942|1031)\b/) {
+                return GET_PHYSICAL_DB_SIZE_NOVAL;
+            }
+            rethrow;
+        }
     }
 
     private oracleErrorCallback(int ac, string type, string name, *string table, *string new_name, *string info, string sql, hash<ExceptionInfo> ex) {

@@ -9,6 +9,7 @@
 class RestDiagnosticsTest inherits QUnit::Test {
     constructor() : Test("REST diagnostics credential redaction", "1.0") {
         addTestCase("nested errors redact headers and echoed credentials", \redactionTest());
+        addTestCase("headers named like credentials and declared headers are sensitive", \sensitiveNameTest());
         set_return_value(main());
     }
     private redactionTest() {
@@ -22,5 +23,66 @@ class RestDiagnosticsTest inherits QUnit::Test {
         assertEq("<redacted>", safe.errors[0].AUTHORIZATION);
         assertEq(binary("<redacted>"), safe.raw);
         assertEq("Bearer rejected-secret", headers.Authorization, "redaction cannot mutate authentication state");
+    }
+
+    private sensitiveNameTest() {
+        # names that contain token, secret, api-key or apikey, password or auth, in any case
+        foreach string name in (("X-Custom-Token", "Qorus-Token", "TOKEN", "X-Client-Secret", "X-Goog-Api-Key",
+                "X-ApiKey", "X-Password", "X-Auth-User", "Proxy-Authorization", "WWW-Authenticate",
+                "Authorization", "Cookie", "Set-Cookie", "X-Key", "Ocp-Apim-Subscription-Key")) {
+            assertTrue(RestDiagnostics::isSensitiveHeader(name), name);
+        }
+        # other names
+        foreach string name in (("Accept", "Content-Type", "X-Request-Id", "User-Agent", "X-Service-Key", "Keep-Alive",
+                "Retry-After", "X-RateLimit-Remaining", "X-Keyword")) {
+            assertFalse(RestDiagnostics::isSensitiveHeader(name), name);
+        }
+        # a name declared by a client
+        hash<string, bool> extra = RestDiagnostics::normalizeHeaderNames(("X-Service-Key", "x-other"));
+        assertEq({"x-service-key": True, "x-other": True}, extra);
+        assertTrue(RestDiagnostics::isSensitiveHeader("X-SERVICE-KEY", extra));
+        assertFalse(RestDiagnostics::isSensitiveHeader("X-Request-Id", extra));
+        assertThrows("SENSITIVE-HEADER-ERROR", \RestDiagnostics::normalizeHeaderNames(), ("",));
+        assertThrows("SENSITIVE-HEADER-ERROR", \RestDiagnostics::normalizeHeaderNames(), (1,));
+
+        # headers
+        assertEq({"Qorus-Token": "<redacted>", "X-Service-Key": "<redacted>", "X-Request-Id": "r", "Accept": "a"},
+            RestDiagnostics::headers({"Qorus-Token": "qorus-secret", "X-Service-Key": "service-secret",
+                "X-Request-Id": "r", "Accept": "a"}, extra));
+        assertEq({"X-Service-Key": "service-secret"}, RestDiagnostics::headers({"X-Service-Key": "service-secret"}),
+            "a header is not sensitive unless its name or the client says so");
+
+        # in a diagnostic value: header keys at any depth, and echoed request credentials in every string
+        hash<auto> sent = {"Qorus-Token": "qorus-secret", "X-Service-Key": "service-secret", "X-Request-Id": "rid"};
+        auto safe = RestDiagnostics::redact({
+            "err": "REST-RESPONSE-ERROR",
+            "desc": "HTTP 404 for qorus-secret",
+            "arg": {
+                "status_code": 404,
+                "headers": {"x-echo-token": "qorus-secret", "x-request-id": "rid", "x-oauth-scopes": "repo"},
+                "request_headers": sent,
+                # a body keeps keys that are data, also when they look like header names
+                "body": {"author": "bob", "max_tokens": 10, "message": "bad key service-secret",
+                    "authorization": "Bearer leaked"},
+            },
+        }, sent, extra);
+        assertEq("HTTP 404 for <redacted>", safe.desc);
+        assertEq(404, safe.arg.status_code);
+        assertEq("<redacted>", safe.arg.headers."x-echo-token");
+        assertEq("<redacted>", safe.arg.headers."x-oauth-scopes");
+        assertEq("rid", safe.arg.headers."x-request-id");
+        assertEq({"Qorus-Token": "<redacted>", "X-Service-Key": "<redacted>", "X-Request-Id": "rid"},
+            safe.arg.request_headers);
+        assertEq("bob", safe.arg.body.author);
+        assertEq(10, safe.arg.body.max_tokens);
+        assertEq("bad key <redacted>", safe.arg.body.message);
+        assertEq("<redacted>", safe.arg.body.authorization, "a body key named as a known credential header");
+
+        # a very short value is not replaced in text, where it would replace unrelated characters; its header is
+        assertEq({"X-Token-Count": "<redacted>", "msg": "HTTP 404 received"},
+            RestDiagnostics::redact({"X-Token-Count": "4", "msg": "HTTP 404 received"}, {"X-Token-Count": "4"}));
+        # the credential of a header with a scheme is replaced on its own too
+        assertEq("rejected <redacted>", RestDiagnostics::redact("rejected custom-credential",
+            {"X-Custom-Token": "Custom custom-credential"}));
     }
 }

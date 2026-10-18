@@ -4,6 +4,11 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    <b>Security</b>: credential headers, including headers a client declares sensitive with the new
+    \c sensitive_headers option or \c addSensitiveHeaders() and headers whose names contain \c token, \c secret,
+    \c api-key, \c password or \c auth, are no longer exposed in the exception information, request information or
+    logs of the @ref restclientintro "RestClient" and @ref restclientiointro "RestClientIo" modules.
+
     HttpClientIo and RestClientIo report certificate verification failures from HTTP/1.1 and HTTP/2 requests immediately,
     preserving OpenSSL's certificate verification reason. A refused certificate is no longer retried as a transient
     connection failure, which could delay the call and replace the original reason with a connection timeout.
@@ -3056,6 +3061,10 @@ while (*binary chunk = input.read(65536)) {
         and quoted column names kept their quotes
 
     - @ref sqlutilintro "SqlUtil" module
+      - added @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
+        "AbstractDatabase::getCurrentSchemaPhysicalSize()", the physical size of the schema that unqualified names
+        resolve to on the connection, measured without the cost of measuring the whole database, for PostgreSQL,
+        Oracle, MySQL/MariaDB and SQL Server
       - fixed reconstructing SQLite table descriptions with primary keys, which prevented unrelated field
         changes such as renaming a data-provider field
       - added driver-native bulk-load capability discovery and begin/rows/end dispatch hooks to
