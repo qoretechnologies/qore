@@ -143,6 +143,16 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - <b>security</b>: a credential sent in a header with a name of its own, such as \c Qorus-Token, no longer appears
+      in exception arguments, the request information (\c info) of a failed request or debug messages, nor where
+      a server echoes it in an error: headers whose names contain \c token, \c secret, \c api-key or \c apikey,
+      \c password or \c auth are redacted besides the known authentication headers, and a client can declare
+      further sensitive headers with the new \c sensitive_headers option and
+      @ref RestClient::RestClient::addSensitiveHeaders() "RestClient::addSensitiveHeaders()"; the header given by
+      \c token_api_key_header is sensitive as well (see @ref RestClient::RestDiagnostics "RestDiagnostics"); added
+      @ref RestClient::RestClient::getSensitiveHeaders() "getSensitiveHeaders()",
+      @ref RestClient::RestClient::getSafeHeaders() "getSafeHeaders()" and
+      @ref RestClient::RestClient::getSafeDiagnostic() "getSafeDiagnostic()"
     - the debug message of a failed OAuth2 token request no longer contains the request body (with the client secret, a
       refresh token, a password or an authorization code) and gives the request headers with their credentials redacted;
       the ping debug message gives the URL without its password
@@ -418,55 +428,156 @@ printf("%Y\n", ans.body);
 #! the RestClient namespace contains all the objects in the RestClient module
 public namespace RestClient {
 #! Removes authentication headers and echoed credentials from diagnostic values
+/** A request is reported with the headers that were sent, and a response with the headers that were received, in
+    exception arguments, request information and log messages.  A credential is not diagnostic information: a header
+    value copied into an exception ends up in log files, bug reports and ticket attachments, and a token that reaches
+    any of those has to be treated as compromised.
+
+    A header is sensitive, and its value is replaced by \c "<redacted>" while its name is kept, if its name (without
+    regard to case, as HTTP header names are case-insensitive):
+    - is one of @ref SensitiveHeaders, or
+    - contains \c token, \c secret, \c api-key or \c apikey, \c password or \c auth (@ref SensitiveHeaderPattern),
+      such as \c X-Custom-Token, \c Qorus-Token, \c X-Client-Secret and \c X-Auth-User, or
+    - is declared sensitive by the client: with the \c sensitive_headers option of
+      @ref RestClient::RestClient::constructor() "RestClient" and @ref restclientiointro "RestClientIo", or
+      with \c addSensitiveHeaders() of either class
+
+    The value of a sensitive request header is also replaced wherever a server echoes it, in strings and binary values
+    of any depth, such as an error message or a response body.  Over-redacting a diagnostic is harmless; a
+    credential in one is not.
+
+    @since RestClient 2.7 the name pattern and the header names declared by a client
+*/
 public class RestDiagnostics {
     public {
+        #! Header names that are always sensitive, in lower case
         const SensitiveHeaders = {"authorization": True, "proxy-authorization": True, "cookie": True,
             "set-cookie": True, "x-api-key": True, "api-key": True, "apikey": True, "x-auth-token": True,
             "x-amz-security-token": True, "unstructured-api-key": True, "ocp-apim-subscription-key": True,
             "x-key": True};
+
+        #! Header names matching this pattern, without regard to case, are sensitive
+        /** @since RestClient 2.7
+        */
+        const SensitiveHeaderPattern = "token|secret|api-?key|password|auth";
+
+        #! Keys whose values are message bodies, whose keys are not header names
+        /** In a body, only the keys named in @ref SensitiveHeaders or declared by the client are redacted: a body key
+            such as \c author or \c max_tokens is data that a caller may read from an error, not a header.
+
+            @since RestClient 2.7
+        */
+        const BodyKeys = {"body": True, "deserialized_body": True, "response_body_raw": True, "request_body": True,
+            "response-body": True, "response-body-raw": True};
+
+        #! Shortest echoed value that is replaced in strings
+        /** A shorter value, such as a flag in a header matching @ref SensitiveHeaderPattern, would replace unrelated
+            text in a diagnostic; the header itself is still redacted.
+
+            @since RestClient 2.7
+        */
+        const MinimumEchoedSecretLength = 4;
     }
+
+    #! Returns True if a header is sensitive
+    /** @param name the header name, in any case
+        @param extra lower-case names of further sensitive headers declared by a client; see
+        @ref normalizeHeaderNames()
+
+        @return @ref True if the header's value must not appear in a diagnostic
+
+        @since RestClient 2.7
+    */
+    static bool isSensitiveHeader(string name, *hash<string, bool> extra) {
+        string lname = name.lwr();
+        return SensitiveHeaders{lname} || extra{lname} || (lname =~ /token|secret|api-?key|password|auth/);
+    }
+
+    #! Returns a set of lower-case header names
+    /** @param names the header names, in any case
+
+        @return a hash with each name in lower case as a key
+
+        @throw SENSITIVE-HEADER-ERROR a name is not a non-empty string
+
+        @since RestClient 2.7
+    */
+    static hash<string, bool> normalizeHeaderNames(softlist<auto> names) {
+        hash<string, bool> rv = {};
+        foreach auto name in (names) {
+            if (name.typeCode() != NT_STRING || !name.val()) {
+                throw "SENSITIVE-HEADER-ERROR", sprintf("a sensitive header name must be a non-empty string; got %y",
+                    name);
+            }
+            rv{name.lwr()} = True;
+        }
+        return rv;
+    }
+
     #! Returns a copy of headers suitable for diagnostics
     /** @param headers HTTP headers
-        @return headers with credential values replaced
+        @param extra lower-case names of further sensitive headers declared by a client
+
+        @return headers with the values of sensitive headers (see @ref isSensitiveHeader()) replaced by
+        \c "<redacted>"
+
+        @since RestClient 2.7 the \a extra parameter, and headers matching @ref SensitiveHeaderPattern are redacted
     */
-    static *hash<auto> headers(*hash<auto> headers) {
+    static *hash<auto> headers(*hash<auto> headers, *hash<string, bool> extra) {
         if (!exists headers) { return headers; }
-        return map {$1.key: SensitiveHeaders{$1.key.lwr()} ? "<redacted>" : $1.value}, headers.pairIterator();
+        return map {$1.key: RestDiagnostics::isSensitiveHeader($1.key, extra) ? "<redacted>" : $1.value},
+            headers.pairIterator();
     }
-    #! Redacts known request credentials wherever a server echoes them in an error
-    /** @param value diagnostic value
+
+    #! Redacts sensitive headers and echoed request credentials wherever they appear in a diagnostic value
+    /** @param value diagnostic value, such as an exception hash or request information
         @param request_headers headers actually sent, used only to identify secrets
-        @return sanitized diagnostic value, retaining HTTP status and structured metadata
+        @param extra lower-case names of further sensitive headers declared by a client
+
+        @return sanitized diagnostic value, retaining HTTP status and structured metadata: the values of keys that
+        are sensitive header names are replaced (outside of message bodies, also those matching
+        @ref SensitiveHeaderPattern), and the values of sensitive request headers are replaced in every string
+
+        @since RestClient 2.7 the \a extra parameter, and headers matching @ref SensitiveHeaderPattern are redacted
     */
-    static auto redact(auto value, *hash<auto> request_headers) {
+    static auto redact(auto value, *hash<auto> request_headers, *hash<string, bool> extra) {
         list<string> secrets = ();
         foreach hash<auto> item in (request_headers.pairIterator()) {
-            if (!SensitiveHeaders{item.key.lwr()}) { continue; }
+            if (!RestDiagnostics::isSensitiveHeader(item.key, extra)) { continue; }
             softlist<auto> parts = item.value;
             foreach auto part in (parts) {
-                if (part.typeCode() != NT_STRING || !part.val()) { continue; }
+                if (part.typeCode() != NT_STRING || part.length() < MinimumEchoedSecretLength) { continue; }
                 push secrets, part;
-                if (inlist(item.key.lwr(), ("authorization", "proxy-authorization")) && part =~ /^\S+\s+\S+/) {
+                if (part =~ /^\S+\s+\S+/) {
+                    # the credential of a header given with a scheme, such as "Bearer <token>"
                     string credential = part;
                     credential =~ s/^\S+\s+//;
-                    push secrets, credential;
+                    if (credential.length() >= MinimumEchoedSecretLength) {
+                        push secrets, credential;
+                    }
                 }
             }
         }
-        return redactIntern(value, secrets, 0);
+        return redactIntern(value, secrets, 0, extra, False);
     }
-    private static auto redactIntern(auto value, list<string> secrets, int depth) {
+
+    private static auto redactIntern(auto value, list<string> secrets, int depth, *hash<string, bool> extra,
+            bool in_body) {
         if (depth > 32) { return "<diagnostic nesting omitted>"; }
         switch (value.typeCode()) {
             case NT_HASH: {
                 hash<auto!> result = {};
                 foreach hash<auto> item in (value.pairIterator()) {
-                    result{item.key} = SensitiveHeaders{item.key.lwr()} ? "<redacted>"
-                        : redactIntern(item.value, secrets, depth + 1);
+                    string lkey = item.key.lwr();
+                    bool sensitive = in_body
+                        ? (SensitiveHeaders{lkey} || extra{lkey})
+                        : RestDiagnostics::isSensitiveHeader(item.key, extra);
+                    result{item.key} = sensitive ? "<redacted>"
+                        : redactIntern(item.value, secrets, depth + 1, extra, in_body || BodyKeys{lkey});
                 }
                 return result;
             }
-            case NT_LIST: return map redactIntern($1, secrets, depth + 1), value;
+            case NT_LIST: return map redactIntern($1, secrets, depth + 1, extra, in_body), value;
             case NT_STRING: case NT_BINARY: {
                 bool binary_value = value.typeCode() == NT_BINARY;
                 string result = binary_value ? binary_to_string(value, "ISO-8859-1") : value;
@@ -1122,6 +1233,13 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         */
         hash<auto> saved_opts;
 
+        #! Lower-case names of further sensitive headers declared for this client
+        /** See @ref RestClient::RestDiagnostics "RestDiagnostics"
+
+            @since %RestClient 2.7
+        */
+        hash<string, bool> sensitive_headers = {};
+
         # headers to send with every request
         hash<auto> headers;
         # data serialization code
@@ -1326,6 +1444,9 @@ RestClient rest({"url": "http://localhost:8001/rest"});
           of processed
         - \c rest_body_auth_error_check: A hash to check all deserialized bodies in 200 OK server responses for
           authentication errors
+        - \c sensitive_headers: a list of names of further headers whose values are credentials, matched without regard
+          to case; their values never appear in exception arguments or log messages (see
+          @ref RestClient::RestDiagnostics "RestDiagnostics" and @ref addSensitiveHeaders())
         - \c send_encoding: a @ref EncodingSupport "send data encoding option" or the value \c "auto" which means
           to use automatic encoding; if not present defaults to no content-encoding on sent message bodies (note
           that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over
@@ -1461,8 +1582,13 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         if (opts.oauth2_scope_separator_char) {
             oauth2_scope_separator_char = opts.oauth2_scope_separator_char;
         }
+        if (exists opts.sensitive_headers) {
+            sensitive_headers = RestDiagnostics::normalizeHeaderNames(opts.sensitive_headers);
+        }
         if (opts.token_api_key_header) {
             token_api_key_header = opts.token_api_key_header;
+            # the header that carries the token is a credential
+            sensitive_headers{token_api_key_header.lwr()} = True;
         }
         if (opts.rest_body_auth_error_check) {
             rest_body_auth_error_check = opts.rest_body_auth_error_check;
@@ -1726,6 +1852,68 @@ hash<auto> h = rest.getDefaultHeaders();
     */
     hash<auto> getConstructorOptions() {
         return saved_opts;
+    }
+
+    #! Declares further headers as sensitive: their values never appear in exception arguments or log messages
+    /** Headers named in @ref RestClient::RestDiagnostics::SensitiveHeaders "SensitiveHeaders" and headers whose names
+        match @ref RestClient::RestDiagnostics::SensitiveHeaderPattern "SensitiveHeaderPattern" are always sensitive;
+        this declares headers with other names, such as a service's own authentication header.  The value of a
+        sensitive header is replaced by \c "<redacted>" wherever the client reports request or response headers, and
+        the value of a sensitive request header wherever a server echoes it in an error.
+
+        @par Example:
+        @code{.py}
+rest.addSensitiveHeaders("Qorus-Token");
+        @endcode
+
+        @param names the header names; matched without regard to case
+
+        @throw SENSITIVE-HEADER-ERROR a name is not a non-empty string
+
+        @note the \c sensitive_headers constructor option declares sensitive headers when the client is created
+
+        @see @ref getSensitiveHeaders()
+
+        @since %RestClient 2.7
+    */
+    addSensitiveHeaders(softlist<auto> names) {
+        sensitive_headers += RestDiagnostics::normalizeHeaderNames(names);
+    }
+
+    #! Returns the names of the headers declared sensitive for this client
+    /** @return the lower-case names of the headers declared with the \c sensitive_headers constructor option, the
+        \c token_api_key_header option and @ref addSensitiveHeaders(); headers that are always sensitive (see
+        @ref RestClient::RestDiagnostics "RestDiagnostics") are not included
+
+        @since %RestClient 2.7
+    */
+    list<string> getSensitiveHeaders() {
+        return keys sensitive_headers;
+    }
+
+    #! Returns headers with the values of sensitive headers replaced by \c "<redacted>", for diagnostics
+    /** @param hdr the headers
+
+        @return the headers with the values of sensitive headers, including those declared for this client, replaced
+        by \c "<redacted>"
+
+        @since %RestClient 2.7
+    */
+    *hash<auto> getSafeHeaders(*hash<auto> hdr) {
+        return RestDiagnostics::headers(hdr, sensitive_headers);
+    }
+
+    #! Returns a value with sensitive headers and echoed request credentials redacted, for diagnostics
+    /** @param value the diagnostic value, such as an exception hash
+        @param request_headers the request headers whose sensitive values must be removed wherever they appear
+
+        @return the value redacted as by @ref RestClient::RestDiagnostics::redact() "RestDiagnostics::redact()",
+        including the headers declared for this client
+
+        @since %RestClient 2.7
+    */
+    auto getSafeDiagnostic(auto value, *hash<auto> request_headers) {
+        return RestDiagnostics::redact(value, request_headers, sensitive_headers);
     }
 
     #! replaces default headers
@@ -2168,7 +2356,12 @@ hash<auto> ans = rest.del("/orders/1");
             client via the \c token / \c token_type options so the child does not re-login.
     */
     AbstractRestClient copyWithUrl(string new_url) {
-        hash<auto> opts = saved_opts + {"url": new_url};
+        # values of any type are added below, so the hash is not narrowed to the type of the saved options
+        hash<auto!> opts = saved_opts + {"url": new_url};
+        # the copy keeps the headers declared sensitive, also those declared after this client was created
+        if (sensitive_headers) {
+            opts.sensitive_headers = keys sensitive_headers;
+        }
         # Inherit the parent's current token if one is set
         if (token.val()) {
             opts.token = token;
@@ -3369,8 +3562,8 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         # request headers are logged with their credentials redacted
         on_error debug("OAuth2: POST to %y failed: %s: %s request: %y headers: %y response: %y headers: %y body: %y",
             get_masked_url(real_url ?? url), $1.err, $1.desc, info."request-uri",
-            RestDiagnostics::headers(info.headers), info."response-uri", info."response-headers-raw",
-            info."response-body");
+            RestDiagnostics::headers(info.headers, sensitive_headers), info."response-uri",
+            RestDiagnostics::headers(info."response-headers-raw", sensitive_headers), info."response-body");
 
         # get auth headers
         *hash<auto> hdr = getOAuth2AuthHeaders();
@@ -3630,8 +3823,8 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type, *string shdr,
             *code signer, *bool no_auth_retry, *int max_response_bytes) {
         on_error {
-            hash<auto> safe = RestDiagnostics::redact($1, hdr);
-            info = RestDiagnostics::redact(info, hdr);
+            hash<auto> safe = RestDiagnostics::redact($1, hdr, sensitive_headers);
+            info = RestDiagnostics::redact(info, hdr, sensitive_headers);
             rethrow safe.err, safe.desc, safe.arg;
         }
         hash<auto> h;
@@ -3659,11 +3852,13 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                         "body": body,
                         "hdr": hdr - shdr,
                     });
-                    debug("sending (signed) %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), RestDiagnostics::headers(hdr));
+                    debug("sending (signed) %y: path: %y body: %d bytes hdr: %y", m, path, body.size(),
+                        RestDiagnostics::headers(hdr, sensitive_headers));
                 }
                 # in case of any "signer" and "shdr" args, the request could be signed twice
                 signRequest(m, path, body, \hdr);
-                debug("sending %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), RestDiagnostics::headers(hdr));
+                debug("sending %y: path: %y body: %d bytes hdr: %y", m, path, body.size(),
+                    RestDiagnostics::headers(hdr, sensitive_headers));
                 h = max_response_bytes
                     ? sendWithResponseLimit(body, m, path, hdr, \info, max_response_bytes)
                     : send(body, m, path, hdr, False, \info);
@@ -3686,7 +3881,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 }
             } catch (hash<ExceptionInfo> ex) {
                 error("RestClient sent: %y received: %y err: %s: %s", info."request-uri", info."response-uri", ex.err,
-                    RestDiagnostics::redact(ex.desc, hdr));
+                    RestDiagnostics::redact(ex.desc, hdr, sensitive_headers));
                 info."response-code" = info."response-headers".status_code;
                 if (negotiate_retry && info."response-code" == 401
                         && tryNegotiateAuthRetry(info."response-headers", \hdr, \negotiate_context)) {
@@ -6085,7 +6280,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
 
         string http_version = real_opts.http_version ?? "auto";
         rc.debug("RestConnecton ping: start ping: %s %y path: %y http_version: %y hdr: %y", method, rc.getSafeURL(),
-            path, http_version, RestDiagnostics::headers(headers));
+            path, http_version, rc.getSafeHeaders(headers));
         state = SPS_REST_PING;
         poller = rc.startPollSendRecv(method, path, body, headers);
     }
@@ -6213,8 +6408,8 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation<auto>
     *hash<SocketPollInfo> continuePoll() {
         AutoLock al(m);
         on_error {
-            hash<auto> safe = RestDiagnostics::redact($1, hdr);
-            info = RestDiagnostics::redact(info, hdr);
+            hash<auto> safe = rc.getSafeDiagnostic($1, hdr);
+            info = rc.getSafeDiagnostic(info, hdr);
             rethrow safe.err, safe.desc, safe.arg;
         }
         while (True) {

@@ -78,6 +78,46 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Collects the messages logged to it
+class TestLogAppender inherits LoggerAppenderWithLayout {
+    private {
+        list<string> lines = ();
+        Mutex lck();
+    }
+
+    constructor() : LoggerAppenderWithLayout("test", new LoggerLayoutPattern("%m%n")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            lck.lock();
+            on_exit lck.unlock();
+            lines += params;
+        }
+    }
+
+    string getText() {
+        lck.lock();
+        on_exit lck.unlock();
+        return lines.join("");
+    }
+}
+
+#! Answers 404 and echoes the credentials of the request, as a careless server may
+class NotFoundEchoHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(404, make_json({
+            "error": sprintf("unknown token %s for key %s", hdr."x-custom-token", hdr."x-service-key"),
+            "request_id": hdr."x-request-id",
+        }), {
+            "Content-Type": MimeTypeJson,
+            "X-Echo-Token": hdr."x-custom-token" ?? "none",
+            "X-Request-Id": hdr."x-request-id" ?? "none",
+        });
+    }
+}
+
 #! Serves a fixed string and counts the requests it served
 /** Lets a test assert that a request actually reached this server rather than another one.
 */
@@ -224,6 +264,8 @@ public class Main inherits QUnit::Test {
         addTestCase("pool with options", \testPoolWithOptions());
         addTestCase("pool concurrent", \testPoolConcurrent());
         addTestCase("Accept header lists each media type once", \testAcceptHeaderUnique());
+        addTestCase("custom and declared credential headers are redacted from errors",
+            \testCustomCredentialRedaction());
 
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
@@ -252,11 +294,93 @@ public class Main inherits QUnit::Test {
         m_http.setHandler("/api_yaml", "/api_yaml", MimeTypeYaml, new SimpleStringHandler(MimeTypeYaml, VALUE_YAML.input));
         m_http.setHandler("/api_bin", "/api_bin", MimeTypeOctetStream, new SimpleStringHandler(MimeTypeOctetStream));
         m_http.setHandler("/swagger", "/swagger", MimeTypeYaml, new SimpleStringHandler(MimeTypeYaml, Main::getSwaggerSchema()));
+        m_http.setHandler("/notfound-echo", "/notfound-echo", MimeTypeJson, new NotFoundEchoHandler());
         port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
     }
 
     tearDown() {
         delete m_http;
+    }
+
+    #! A credential in a header with a name of its own, as Qorus's Qorus-Token, must not reach an exception, the
+    #! request information or a log message: a 404 from such a service printed a live token into an agent's output
+    testCustomCredentialRedaction() {
+        hash<string, string> secrets = {
+            # matched by name
+            "X-Custom-Token": "custom-token-value-1",
+            "Qorus-Token": "qorus-token-value-2",
+            # matched only because the client declares it
+            "X-Service-Key": "service-key-value-3",
+        };
+        hash<auto> hdr = secrets + {"X-Request-Id": "request-id-value-4"};
+
+        # debug messages are captured, as they log the headers that are sent
+        TestLogAppender log_appender();
+        Logger log("redaction", LoggerLevel::getLevelDebug());
+        log.addAppender(log_appender);
+        RestClient rest({"url": "http://localhost:" + port, "sensitive_headers": ("x-service-key",),
+            "logger": log}, True);
+        assertEq(("x-service-key",), rest.getSensitiveHeaders());
+        hash<auto> info;
+        try {
+            rest.get("/notfound-echo", NOTHING, \info, hdr);
+            fail("a 404 response must throw");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(404, ex.arg.status_code);
+            string all = sprintf("%N", ex);
+            string info_str = sprintf("%N", info);
+            string log_str = log_appender.getText();
+            foreach hash<auto> i in (secrets.pairIterator()) {
+                assertEq(-1, all.find(i.value), sprintf("%s does not appear in the exception", i.key));
+                assertEq(-1, info_str.find(i.value), sprintf("%s does not appear in the request information", i.key));
+                assertEq(-1, log_str.find(i.value), sprintf("%s does not appear in the log", i.key));
+                assertEq("<redacted>", info.headers{i.key}, sprintf("%s is redacted", i.key));
+            }
+            # the headers that are not credentials are still shown
+            assertEq("request-id-value-4", info.headers."X-Request-Id");
+            assertNeq(-1, log_str.find("request-id-value-4"), "the log shows the headers that are not credentials");
+            assertEq("request-id-value-4", ex.arg."x-request-id");
+            assertEq("<redacted>", ex.arg."x-echo-token");
+            assertNeq(-1, all.find("unknown token <redacted> for key <redacted>"));
+        }
+
+        # a header declared after the client is created, in any case
+        RestClient late({"url": "http://localhost:" + port}, True);
+        late.addSensitiveHeaders("X-SERVICE-KEY");
+        assertEq(("x-service-key",), late.getSensitiveHeaders());
+        try {
+            late.get("/notfound-echo", NOTHING, \info, hdr);
+            fail("a 404 response must throw");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(-1, (sprintf("%N", ex) + sprintf("%N", info)).find("service-key-value-3"));
+            assertEq("request-id-value-4", info.headers."X-Request-Id");
+        }
+        # a copy keeps the declared headers
+        RestClient copy = cast<RestClient>(late.copyWithUrl("http://localhost:" + port));
+        assertEq(("x-service-key",), copy.getSensitiveHeaders());
+
+        # without the declaration, a header whose name is not a credential is not redacted
+        RestClient undeclared({"url": "http://localhost:" + port}, True);
+        try {
+            undeclared.get("/notfound-echo", NOTHING, \info, hdr);
+            fail("a 404 response must throw");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("service-key-value-3", info.headers."X-Service-Key");
+            assertEq("<redacted>", info.headers."Qorus-Token");
+        }
+
+        # the token_api_key_header is a credential
+        RestClient api_key({"url": "http://localhost:" + port, "token": "api-key-token-value",
+            "token_api_key_header": "X-Shop-Access"}, True);
+        assertEq(("x-shop-access",), api_key.getSensitiveHeaders());
+        assertEq({"X-Shop-Access": "<redacted>", "X-Request-Id": "r"},
+            api_key.getSafeHeaders({"X-Shop-Access": "api-key-token-value", "X-Request-Id": "r"}));
+
+        # invalid names are rejected
+        assertThrows("SENSITIVE-HEADER-ERROR", \rest.addSensitiveHeaders(), ("",));
+        assertThrows("SENSITIVE-HEADER-ERROR", sub () {
+            RestClient bad({"url": "http://localhost:" + port, "sensitive_headers": (1,)}, True);
+        });
     }
 
     serializationTest() {

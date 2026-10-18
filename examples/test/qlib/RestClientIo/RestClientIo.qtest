@@ -139,6 +139,21 @@ class EchoHeadersHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that answers 404 and echoes the credentials of the request, as a careless server may
+class NotFoundEchoHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(404, make_json({
+            "error": sprintf("unknown token %s for key %s", hdr."x-custom-token", hdr."x-service-key"),
+            "received": hdr{"x-custom-token", "qorus-token", "x-service-key", "x-request-id"},
+        }), {
+            "Content-Type": MimeTypeJson,
+            "X-Echo-Token": hdr."x-custom-token" ?? "none",
+            "X-Echo-Service-Key": hdr."x-service-key" ?? "none",
+            "X-Request-Id": hdr."x-request-id" ?? "none",
+        });
+    }
+}
+
 #! Handler that returns errors for testing error_passthru
 class ErrorHandler inherits AbstractHttpRequestHandler {
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -670,6 +685,8 @@ class RestClientIoTest inherits QUnit::Test {
             \testGetConstructorOptions());
         addTestCase("credentials are redacted in reported request headers",
             \testCredentialRedaction());
+        addTestCase("custom and declared credential headers are redacted from errors",
+            \testCustomCredentialRedaction());
         addTestCase("restDoRawRequest sends pre-serialized body as-is",
             \testRestDoRawRequest());
         addTestCase("Accept header lists each media type once", \testAcceptHeaderUnique());
@@ -692,6 +709,7 @@ class RestClientIoTest inherits QUnit::Test {
         server = new HttpServer(http_opts);
         server.setHandler("/api", "/api", MimeTypeJson, new JsonEchoHandler());
         server.setHandler("/error", "/error", MimeTypeJson, new ErrorHandler());
+        server.setHandler("/notfound-echo", "/notfound-echo", MimeTypeJson, new NotFoundEchoHandler());
         server.setHandler("/html", "/html", "text/html", new HtmlHandler());
         server.setHandler("/echo", "/echo", MimeTypeJson, new EchoHeadersHandler());
         server.setHandler("/binary", "/binary", MimeTypeOctetStream, new BinaryHandler());
@@ -2536,6 +2554,111 @@ class RestClientIoTest inherits QUnit::Test {
                 "Accept": "application/json",
             }));
         assertNothing(RestClientIo::RestClientIo::redactHeaders());
+    }
+
+    #! A credential in a header with a name of its own, as Qorus's Qorus-Token, must not reach an exception either:
+    #! a 404 from such a service printed a live token into an agent's output
+    testCustomCredentialRedaction() {
+        hash<string, string> secrets = {
+            # matched by name: the name contains "token"
+            "X-Custom-Token": "custom-token-value-1",
+            "Qorus-Token": "qorus-token-value-2",
+            # matched only because the client declares it
+            "X-Service-Key": "service-key-value-3",
+        };
+        hash<auto> hdr = secrets + {"X-Request-Id": "request-id-value-4"};
+
+        RestClientIo::RestClientIo strict = createClient({
+            "error_passthru": False,
+            "sensitive_headers": ("x-service-key",),
+        });
+        on_exit strict.close();
+        assertEq(("x-service-key",), strict.getSensitiveHeaders());
+        try {
+            strict.restGet("/notfound-echo", hdr);
+            fail("a 404 response must throw");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            string all = sprintf("%N", ex);
+            # header names are reported in lower case
+            hash<auto> sent = RestClientIoTest::lowerKeys(ex.arg.request_headers);
+            foreach hash<auto> i in (secrets.pairIterator()) {
+                assertEq(-1, all.find(i.value), sprintf("%s does not appear in the exception", i.key));
+                assertEq("<redacted>", sent{i.key.lwr()}, sprintf("%s is redacted", i.key));
+            }
+            # the names of the redacted headers, and the headers that are not credentials, are still shown
+            assertEq("request-id-value-4", sent."x-request-id");
+            assertEq("request-id-value-4", ex.arg.headers."x-request-id");
+            assertEq("<redacted>", ex.arg.headers."x-echo-token");
+            assertEq("<redacted>", ex.arg.headers."x-echo-service-key");
+            # the body keeps its structure; the echoed values are replaced
+            assertEq("unknown token <redacted> for key <redacted>", ex.arg.body.error);
+            assertEq("request-id-value-4", ex.arg.body.received."x-request-id");
+            assertEq("<redacted>", ex.arg.body.received."qorus-token");
+        }
+
+        # a header declared after the client is created, in any case
+        RestClientIo::RestClientIo late = createClient({"error_passthru": False});
+        on_exit late.close();
+        late.addSensitiveHeaders("X-SERVICE-KEY");
+        assertEq(("x-service-key",), late.getSensitiveHeaders());
+        try {
+            late.restGet("/notfound-echo", hdr);
+            fail("a 404 response must throw");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(-1, sprintf("%N", ex).find("service-key-value-3"));
+            assertEq("request-id-value-4", RestClientIoTest::lowerKeys(ex.arg.request_headers)."x-request-id");
+        }
+
+        # a response passed through reports the headers that were sent the same way
+        RestClientIo::RestClientIo passthru = createClient({"sensitive_headers": "X-Service-Key"});
+        on_exit passthru.close();
+        hash<RestClient::RestResponseInfo> resp = passthru.restGet("/notfound-echo", hdr);
+        assertEq(404, resp.status_code);
+        hash<auto> sent = RestClientIoTest::lowerKeys(resp.request_headers);
+        foreach string name in (keys secrets) {
+            assertEq("<redacted>", sent{name.lwr()}, name);
+        }
+        assertEq("request-id-value-4", sent."x-request-id");
+
+        # without the declaration, a header whose name is not a credential is not redacted
+        RestClientIo::RestClientIo undeclared = createClient({"error_passthru": False});
+        on_exit undeclared.close();
+        try {
+            undeclared.restGet("/notfound-echo", hdr);
+            fail("a 404 response must throw");
+        } catch (hash<ExceptionInfo> ex) {
+            hash<auto> sent = RestClientIoTest::lowerKeys(ex.arg.request_headers);
+            assertEq("service-key-value-3", sent."x-service-key");
+            assertEq("<redacted>", sent."qorus-token");
+            assertEq(-1, sprintf("%N", ex).find("qorus-token-value-2"));
+        }
+
+        # a copy keeps the declared headers, also those declared later
+        RestClientIo::RestClientIo copy = cast<RestClientIo::RestClientIo>(late.copyWithUrl(
+            sprintf("https://127.0.0.1:%d", port)));
+        on_exit copy.close();
+        assertEq(("x-service-key",), copy.getSensitiveHeaders());
+
+        # the token_api_key_header is a credential
+        RestClientIo::RestClientIo api_key = createClient({"token": "api-key-token-value",
+            "token_api_key_header": "X-Shop-Access"});
+        on_exit api_key.close();
+        assertEq(("x-shop-access",), api_key.getSensitiveHeaders());
+        assertEq({"X-Shop-Access": "<redacted>", "X-Request-Id": "r"},
+            api_key.getSafeHeaders({"X-Shop-Access": "api-key-token-value", "X-Request-Id": "r"}));
+
+        # invalid names are rejected
+        assertThrows("SENSITIVE-HEADER-ERROR", \strict.addSensitiveHeaders(), ("",));
+        assertThrows("SENSITIVE-HEADER-ERROR", sub () {
+            createClient({"sensitive_headers": (1,)});
+        });
+    }
+
+    #! Returns a hash with its keys in lower case
+    static hash<auto> lowerKeys(*hash<auto> h) {
+        return map {$1.key.lwr(): $1.value}, h.pairIterator();
     }
 
     testBasicAuthClear() {

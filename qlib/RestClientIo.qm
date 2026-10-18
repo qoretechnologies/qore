@@ -180,6 +180,14 @@ resp = rc.restGet("/api/data");
     @section restclientio_relnotes Release Notes
 
     @subsection restclientio_v1_0 Version 1.0
+    - <b>security</b>: a credential sent in a header with a name of its own, such as \c Qorus-Token, no longer appears
+      in the \c request_headers and \c headers of a \c REST-RESPONSE-ERROR exception or of a
+      @ref RestClient::RestResponseInfo "RestResponseInfo", nor where a server echoes it in an error: headers whose
+      names contain \c token, \c secret, \c api-key or \c apikey, \c password or \c auth are redacted besides the
+      known authentication headers, and a client can declare further sensitive headers with the new
+      \c sensitive_headers option and @ref RestClientIo::RestClientIo::addSensitiveHeaders() "addSensitiveHeaders()";
+      the header given by \c token_api_key_header is sensitive as well (see @ref RestClient::RestDiagnostics
+      "RestDiagnostics")
     - added reusable opt-in RestRetryPolicy and inherited request methods, with Retry-After, bounded
       jittered backoff, cancellation, and safe retry observers (issue 5475)
     - RestRetryOptions::attempt_timeout bounds one attempt, so a stalled attempt is retried within the budget
@@ -563,6 +571,9 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c send_encoding: send encoding (compression) format (e.g., \c "gzip")
         - \c headers: additional default headers to send with each request; these override the
           built-in defaults (\c Accept and \c User-Agent)
+        - \c sensitive_headers: a list of names of further headers whose values are credentials, matched without
+          regard to case; their values never appear in exception arguments, reported request headers or log
+          messages (see @ref RestClient::RestDiagnostics "RestDiagnostics" and @ref addSensitiveHeaders())
         - \c token: authentication token
         - \c token_type: authentication token type (default: \c "Bearer")
         - \c cookie: an optional cookie value (e.g., \c "name=value" or \c "n1=v1; n2=v2") sent
@@ -860,6 +871,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             #! Header name for sending the token as an API key (lowercased); NOTHING to use standard Authorization
             *string token_api_key_header_val;
 
+            #! Lower-case names of further sensitive headers declared for this client (protected by config_lock)
+            /** See @ref RestClient::RestDiagnostics "RestDiagnostics"
+
+                @since RestClientIo 1.0
+            */
+            hash<string, bool> sensitive_headers = {};
+
             #! Key/value pattern that marks a 200-OK body as an auth failure (triggers token refresh)
             *hash<auto> rest_body_auth_error_check;
 
@@ -928,6 +946,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 bearer token or API key that reaches any of those has to be treated as compromised.
 
                 Matched without regard to case, as HTTP header names are case-insensitive.
+
+                Headers whose names contain \c token, \c secret, \c api-key or \c apikey, \c password or \c auth,
+                and headers declared with the \c sensitive_headers option or @ref addSensitiveHeaders(), are
+                sensitive as well; see @ref RestClient::RestDiagnostics "RestDiagnostics", which applies these rules
+                wherever this client reports headers.
 
                 @since RestClientIo 1.1
             */
@@ -1089,6 +1112,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "allow_any_response": True,
                 # Headers
                 "headers": True,
+                "sensitive_headers": True,
                 # REST schema validator
                 "validator": True,
                 "swagger": True,
@@ -1254,9 +1278,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 setSendEncoding(opts.send_encoding);
             }
 
+            if (exists opts.sensitive_headers) {
+                sensitive_headers = RestClient::RestDiagnostics::normalizeHeaderNames(opts.sensitive_headers);
+            }
+
             # Must be set before setToken() so it routes the initial token correctly
             if (opts.token_api_key_header.val()) {
                 token_api_key_header_val = opts.token_api_key_header.lwr();
+                # the header that carries the token is a credential
+                sensitive_headers{token_api_key_header_val} = True;
             }
 
             if (opts.rest_body_auth_error_check) {
@@ -1538,10 +1568,18 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 remains caller-owned.
         */
         RestClient::AbstractRestClient copyWithUrl(string new_url) {
-            hash<auto> opts = saved_opts + {
+            # values of any type are added below, so the hash is not narrowed to the type of the saved options
+            hash<auto!> opts = saved_opts + {
                 "url": new_url,
                 "skip_login": True,
             };
+            # the copy keeps the headers declared sensitive, also those declared after this client was created
+            {
+                AutoReadLock al(config_lock);
+                if (sensitive_headers) {
+                    opts.sensitive_headers = keys sensitive_headers;
+                }
+            }
             # Inherit the parent's current token (acquired via initial login or
             # a prior refresh) so the copy doesn't fire a duplicate OAuth2 login
             {
@@ -3608,15 +3646,89 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
 
         #! Returns the given request headers with credential values removed
         /** @param hdr the headers that were sent
+            @param extra lower-case names of further sensitive headers declared for a client
 
-            @return the headers with the value of every header named in @ref SensitiveRequestHeaders
-            replaced by \c "<redacted>"; the header names are kept, because knowing that a request
-            carried authorization is diagnostic while the credential itself is not
+            @return the headers with the value of every sensitive header (see
+            @ref RestClient::RestDiagnostics "RestDiagnostics") replaced by \c "<redacted>"; the header names are kept,
+            because knowing that a request carried authorization is diagnostic while the credential itself is not
 
             @since RestClientIo 1.1
         */
-        static *hash<auto> redactHeaders(*hash<auto> hdr) {
-            return RestClient::RestDiagnostics::headers(hdr);
+        static *hash<auto> redactHeaders(*hash<auto> hdr, *hash<string, bool> extra) {
+            return RestClient::RestDiagnostics::headers(hdr, extra);
+        }
+
+        #! Declares further headers as sensitive: their values never appear in exception arguments or log messages
+        /** Headers named in @ref RestClient::RestDiagnostics::SensitiveHeaders "SensitiveHeaders" and headers whose
+            names match @ref RestClient::RestDiagnostics::SensitiveHeaderPattern "SensitiveHeaderPattern" are always
+            sensitive; this declares headers with other names, such as a service's own authentication header.  The
+            value of a sensitive header is replaced by \c "<redacted>" wherever the client reports request or response
+            headers (\c request_headers and \c headers of @ref RestClient::RestResponseInfo "RestResponseInfo", also
+            in the argument of a \c REST-RESPONSE-ERROR exception), and the value of a sensitive request header
+            wherever a server echoes it in an error.
+
+            @par Example:
+            @code{.py}
+rest.addSensitiveHeaders("Qorus-Token");
+            @endcode
+
+            @param names the header names; matched without regard to case
+
+            @throw SENSITIVE-HEADER-ERROR a name is not a non-empty string
+
+            @note the \c sensitive_headers constructor option declares sensitive headers when the client is created
+
+            @see @ref getSensitiveHeaders()
+
+            @since RestClientIo 1.0
+        */
+        addSensitiveHeaders(softlist<auto> names) {
+            hash<string, bool> h = RestClient::RestDiagnostics::normalizeHeaderNames(names);
+            AutoWriteLock al(config_lock);
+            sensitive_headers += h;
+        }
+
+        #! Returns the names of the headers declared sensitive for this client
+        /** @return the lower-case names of the headers declared with the \c sensitive_headers constructor option,
+            the \c token_api_key_header option and @ref addSensitiveHeaders(); headers that are always sensitive (see
+            @ref RestClient::RestDiagnostics "RestDiagnostics") are not included
+
+            @since RestClientIo 1.0
+        */
+        list<string> getSensitiveHeaders() {
+            AutoReadLock al(config_lock);
+            return keys sensitive_headers;
+        }
+
+        #! Returns headers with the values of sensitive headers replaced by \c "<redacted>", for diagnostics
+        /** @param hdr the headers
+
+            @return the headers with the values of sensitive headers, including those declared for this client,
+            replaced by \c "<redacted>"
+
+            @since RestClientIo 1.0
+        */
+        *hash<auto> getSafeHeaders(*hash<auto> hdr) {
+            return RestClient::RestDiagnostics::headers(hdr, getSensitiveHeaderSet());
+        }
+
+        #! Returns a value with sensitive headers and echoed request credentials redacted, for diagnostics
+        /** @param value the diagnostic value, such as an exception hash
+            @param request_headers the request headers whose sensitive values must be removed wherever they appear
+
+            @return the value redacted as by @ref RestClient::RestDiagnostics::redact() "RestDiagnostics::redact()",
+            including the headers declared for this client
+
+            @since RestClientIo 1.0
+        */
+        auto getSafeDiagnostic(auto value, *hash<auto> request_headers) {
+            return RestClient::RestDiagnostics::redact(value, request_headers, getSensitiveHeaderSet());
+        }
+
+        #! Returns the set of lower-case header names declared sensitive for this client
+        private hash<string, bool> getSensitiveHeaderSet() {
+            AutoReadLock al(config_lock);
+            return sensitive_headers;
         }
 
         #! Internal: deserializes a raw HTTP response into a RestResponseInfo hash
@@ -3636,8 +3748,9 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         private hash<RestClient::RestResponseInfo> buildResponse(hash<auto> raw,
                 bool req_error_passthru, bool req_allow_any_response, string method,
                 string path, *hash<auto> request_headers, *data request_body) {
+            hash<string, bool> extra = getSensitiveHeaderSet();
             on_error {
-                hash<auto> safe = RestClient::RestDiagnostics::redact($1, request_headers);
+                hash<auto> safe = RestClient::RestDiagnostics::redact($1, request_headers, extra);
                 rethrow safe.err, safe.desc, safe.arg;
             }
             @assert(raw.hasKey("status_code"));
@@ -3709,7 +3822,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                         "response_body_raw": response_body_raw,
                         "request_method": method,
                         "request_path": path,
-                        "request_headers": RestClientIo::redactHeaders(request_headers),
+                        "request_headers": RestClientIo::redactHeaders(request_headers, extra),
                         "request_body": request_body,
                         "protocol": raw.protocol,
                         "status_message": raw.status_message,
@@ -3726,7 +3839,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                 "response_body_raw": response_body_raw,
                 "request_method": method,
                 "request_path": path,
-                "request_headers": RestClientIo::redactHeaders(request_headers),
+                "request_headers": RestClientIo::redactHeaders(request_headers, extra),
                 "request_body": request_body,
                 "protocol": raw.protocol,
                 "status_message": raw.status_message,
@@ -3789,6 +3902,12 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                 string method, string path, hash<auto> request_headers,
                 *data request_body, auto first_data, *hash<auto> response,
                 *timeout response_timeout, *date deadline = NOTHING) {
+            # the response headers of an error, and any credential of the request echoed in it, are redacted
+            hash<string, bool> extra = getSensitiveHeaderSet();
+            on_error {
+                hash<auto> safe = RestClient::RestDiagnostics::redact($1, request_headers, extra);
+                rethrow safe.err, safe.desc, safe.arg;
+            }
             if (response && response.status_code) {
                 hash<auto> raw_response;
                 raw_response += response;
@@ -3824,7 +3943,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                             "response_body_raw": body,
                             "request_method": method,
                             "request_path": path,
-                            "request_headers": RestClientIo::redactHeaders(request_headers),
+                            "request_headers": RestClientIo::redactHeaders(request_headers, extra),
                             "request_body": request_body,
                             "protocol": raw_response.protocol,
                             "status_message": raw_response.status_message,
@@ -6324,7 +6443,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         rcio.raiseSseObservableResponseError(raw, method, path, hdr,
             request_body, request_allow_any_response);
         throw "REST-RESPONSE-ERROR",
-            sprintf("HTTP %d response received", raw.status_code), raw;
+            sprintf("HTTP %d response received", raw.status_code), rcio.getSafeDiagnostic(raw, hdr);
     }
 
     private fail(hash<ExceptionInfo> ex) {
