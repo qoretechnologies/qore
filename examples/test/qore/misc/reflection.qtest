@@ -1856,7 +1856,7 @@ class ReflectionTest inherits QUnit::Test {
             ("stream_reader", "line_separator", "trim_line"));
         assertNamedConstructorVariantCount("DataLineIterator", ("source", "line_separator", "trim_line"));
         assertNamedClassMethodVariantCount("AbstractLineIterator", "getSplitLine",
-            ("separator", "quote", "line_separator", "trim_unquoted"));
+            ("separator", "quote", "line_separator", "trim_unquoted", "quote_escape"));
         assertNamedConstructorVariantCount("StringSplitIterator", ("source", "separator"));
         assertNamedConstructorVariantCount("StringRegexSplitIterator",
             ("source", "separator_pattern", "options", "with_separator"));
@@ -1971,7 +1971,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedPseudoMethodVariantCount(StringPseudoClass, "split",
             ("separator", "with_separator", "keep_trailing_empty"));
         assertNamedPseudoMethodVariantCount(StringPseudoClass, "split",
-            ("separator", "quote", "trim_unquoted", "keep_trailing_empty"));
+            ("separator", "quote", "trim_unquoted", "keep_trailing_empty", "quote_escape"));
         assertNamedPseudoMethodVariantCount(StringPseudoClass, "splitString", ("separator",));
         assertNamedPseudoMethodVariantCount(StringPseudoClass, "splitLinesRegex",
             ("separator_pattern", "options", "with_separator"));

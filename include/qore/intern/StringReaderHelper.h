@@ -138,12 +138,14 @@ public:
         (for terminals)
         @param my_read a function object that reads bytes; see f_read_t
         @param xsink for Qore-language exceptions
+        @param found_eol if not null, set to the end-of-line marker that ended the line in \c UTF-8, or to an empty
+        string if the line ended at the end of the text
 
         @return the line read in \a enc, or nullptr at the end of the text or if an exception was raised; the caller
         owns the reference returned
     */
     DLLLOCAL QoreStringNode* readLine(const QoreEncoding* enc, const std::string& eol, bool trim, bool cr_lookahead,
-            f_read_t my_read, ExceptionSink* xsink);
+            f_read_t my_read, ExceptionSink* xsink, std::string* found_eol = nullptr);
 
 private:
     //! the conversion from the encoding to UTF-8, which keeps the shift state; null until text is read

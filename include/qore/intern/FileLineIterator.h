@@ -41,7 +41,7 @@
 /**
  * @brief Private data for the Qore::FileLineIterator class.
  */
-class FileLineIterator : public QoreIteratorBase {
+class FileLineIterator : public QoreIteratorBase, public QoreLineTerminatorSource {
 public:
     DLLLOCAL FileLineIterator(ExceptionSink* xsink, const QoreStringNode* name, const QoreEncoding* enc = QCS_DEFAULT,
         const QoreStringNode* n_eol = 0, bool n_trim = true, int flags = 0) :
@@ -81,6 +81,10 @@ public:
         return src->getValue();
     }
 
+    DLLLOCAL const std::string& getRemovedLineTerminator() const override {
+        return src ? src->getRemovedLineTerminator() : noLineTerminator();
+    }
+
     DLLLOCAL bool valid() {
         return src->valid();
     }
@@ -115,14 +119,14 @@ public:
         return fis->getFile().isTty();
     }
 
-    DLLLOCAL virtual void deref() {
+    DLLLOCAL virtual void deref() override {
         if (ROdereference())
             delete this;
     }
 
-    DLLLOCAL virtual const char* getName() const { return "FileLineIterator"; }
+    DLLLOCAL virtual const char* getName() const override { return "FileLineIterator"; }
 
-    DLLLOCAL virtual const QoreTypeInfo* getElementType() const {
+    DLLLOCAL virtual const QoreTypeInfo* getElementType() const override {
         return stringTypeInfo;
     }
 

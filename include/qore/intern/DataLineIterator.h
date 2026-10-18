@@ -41,7 +41,7 @@
 /**
  * @brief Private data for the Qore::DataLineIterator class.
  */
-class DataLineIterator : public QoreIteratorBase {
+class DataLineIterator : public QoreIteratorBase, public QoreLineTerminatorSource {
 public:
     DLLLOCAL DataLineIterator(ExceptionSink* xsink, const QoreStringNode* n_str,
             const QoreStringNode* n_eol = nullptr, bool n_trim = true) :
@@ -77,6 +77,10 @@ public:
         return src->getValue();
     }
 
+    DLLLOCAL const std::string& getRemovedLineTerminator() const override {
+        return src ? src->getRemovedLineTerminator() : noLineTerminator();
+    }
+
     DLLLOCAL bool valid() {
         return src->valid();
     }
@@ -95,14 +99,14 @@ public:
         return src->getEncoding();
     }
 
-    DLLLOCAL virtual void deref() {
+    DLLLOCAL virtual void deref() override {
         if (ROdereference())
             delete this;
     }
 
-    DLLLOCAL virtual const char* getName() const { return "DataLineIterator"; }
+    DLLLOCAL virtual const char* getName() const override { return "DataLineIterator"; }
 
-    DLLLOCAL virtual const QoreTypeInfo* getElementType() const {
+    DLLLOCAL virtual const QoreTypeInfo* getElementType() const override {
         return stringTypeInfo;
     }
 

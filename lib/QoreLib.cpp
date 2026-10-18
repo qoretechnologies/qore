@@ -3686,7 +3686,10 @@ QoreStringNode* QoreStatefulTextDecoder::readChars(const QoreEncoding* enc, int6
 }
 
 QoreStringNode* QoreStatefulTextDecoder::readLine(const QoreEncoding* enc, const std::string& eol, bool trim,
-        bool cr_lookahead, f_read_t my_read, ExceptionSink* xsink) {
+        bool cr_lookahead, f_read_t my_read, ExceptionSink* xsink, std::string* found_eol) {
+    if (found_eol) {
+        found_eol->clear();
+    }
     if (open(enc, xsink)) {
         return nullptr;
     }
@@ -3734,6 +3737,9 @@ QoreStringNode* QoreStatefulTextDecoder::readLine(const QoreEncoding* enc, const
             }
         } else {
             continue;
+        }
+        if (found_eol) {
+            found_eol->assign(line, line.size() - eol_len, eol_len);
         }
         if (trim) {
             line.resize(line.size() - eol_len);

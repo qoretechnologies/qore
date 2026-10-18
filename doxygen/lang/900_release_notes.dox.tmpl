@@ -9,6 +9,16 @@
     \c api-key, \c password or \c auth, are no longer exposed in the exception information, request information or
     logs of the @ref restclientintro "RestClient" and @ref restclientiointro "RestClientIo" modules.
 
+    Quoted fields are split correctly by @ref Qore::AbstractLineIterator::getSplitLine() and
+    @ref Qore::<string>::split(string, string, bool, bool, string) "<string>::split()": a field of escaped quotes,
+    such as <tt>""""</tt> (one quote character), is read instead of raising \c SPLIT-ERROR; a field whose value
+    starts with a line break is no longer split into two records; the line breaks in a field read from a
+    @ref Qore::DataLineIterator "DataLineIterator", @ref Qore::FileLineIterator "FileLineIterator" or
+    @ref Qore::InputStreamLineIterator "InputStreamLineIterator" are kept as they are in the data, where a
+    \c "\r\n" or \c "\r" was read as \c "\n" when line ends are detected automatically; and a field without its
+    closing quote raises \c SPLIT-ERROR when splitting a string, where its text was silently returned.  The new
+    \c quote_escape parameter selects RFC 4180 splitting, where a backslash is an ordinary character.
+
     HttpClientIo and RestClientIo report certificate verification failures from HTTP/1.1 and HTTP/2 requests immediately,
     preserving OpenSSL's certificate verification reason. A refused certificate is no longer retried as a transient
     connection failure, which could delay the call and replace the original reason with a connection timeout.

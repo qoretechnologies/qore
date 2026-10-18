@@ -61,6 +61,14 @@ public:
         return enc;
     }
 
+    //! Returns the end-of-line marker that ended the last line read, in UTF-8
+    /** @return the marker, whether or not it was trimmed from the line; an empty string if the last line ended at the
+        end of the stream or no line was read
+    */
+    DLLLOCAL const std::string& getLineTerminator() const {
+        return line_terminator;
+    }
+
     DLLLOCAL InputStream* getInputStream() {
         return *in;
     }
@@ -207,13 +215,19 @@ private:
             }
             eol_utf8.assign(teol->c_str(), teol->size());
         }
-        return decoder.readLine(enc, eol_utf8, trim, true, getReadFunc(), xsink);
+        return decoder.readLine(enc, eol_utf8, trim, true, getReadFunc(), xsink, &line_terminator);
     }
 
     //! Reads one line ending with the given end-of-line marker; the byte order of the text is checked by the caller
     DLLLOCAL QoreStringNode* readLineEolIntern(const QoreString* eol, bool trim, ExceptionSink* xsink) {
         if (useDecoder(false)) {
             return readDecoderLine(eol, trim, xsink);
+        }
+        line_terminator.clear();
+        // the marker reported as the terminator of a line that ends with it
+        TempEncodingHelper eol_utf8(eol, QCS_UTF8, xsink);
+        if (*xsink) {
+            return nullptr;
         }
         // the byte order of a stream in the generic UTF-16 encoding (or a Unicode encoding created on the fly with
         // a byte order mark, ex: "UTF-32") is given by a byte order mark at its start; it must be known before the
@@ -286,6 +300,7 @@ private:
 
         // returns the complete line
         auto finish_line = [&]() -> QoreStringNode* {
+            line_terminator.assign(eol_utf8->c_str(), eol_utf8->size());
             if (trim) {
                 str->terminate(str->size() - eolsize);
             }
@@ -364,6 +379,7 @@ private:
         if (useDecoder(false)) {
             return readDecoderLine(nullptr, trim, xsink);
         }
+        line_terminator.clear();
         SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
 
         while (true) {
@@ -377,11 +393,13 @@ private:
             }
 
             if (c == '\n') {
+                line_terminator = "\n";
                 if (!trim) {
                     str->concat(c);
                 }
                 return str.release();
             } else if (c == '\r') {
+                line_terminator = "\r";
                 if (!trim) {
                     str->concat(c);
                 }
@@ -391,6 +409,10 @@ private:
                 }
                 if (p == '\n') {
                     readData(xsink, &c, 1);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    line_terminator = "\r\n";
                     if (!trim) {
                         str->concat((char)p);
                     }
@@ -554,6 +576,9 @@ protected:
 
     //! keeps the shift state of text in a stateful encoding between reads of characters
     QoreStatefulTextDecoder decoder;
+
+    //! the end-of-line marker that ended the last line read in UTF-8; empty if it ended at the end of the stream
+    std::string line_terminator;
 
     //! Makes the next bytes of the stream available without reading them, for the byte order check
     /** The unbuffered reader reads no bytes beyond the text it returns (the stream can be read directly between reads
