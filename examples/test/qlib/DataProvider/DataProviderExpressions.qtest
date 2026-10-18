@@ -292,6 +292,10 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         # each argument given
         assertEq("1.234.567,891", dpql('format_number(@n, ".", ",", 3)'));
         assertEq("1234567.9", dpql('format_number(@n, "?", ".", 1)'));
+        # an empty thousands separator means no thousands separator, as "?" does
+        assertEq("1234567.89", dpql('format_number(@n, "", ".", 2)'));
+        assertEq("1234567.89", eval_expr("format_number", (1234567.891, "", ".", 2)));
+        assertEq("1234568", dpql('format_number(@n, "", ".", 0)'));
         # a separator is one character, also one that takes several bytes
         assertEq("1\u2019234\u2019567,89", dpql("format_number(@n, \"\u2019\", \",\")"));
         assertEq("-0,5", dpql('format_number(@neg, ".", ",", 1)'));

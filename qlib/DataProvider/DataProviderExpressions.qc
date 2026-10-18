@@ -1484,8 +1484,8 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 <DataProviderArgInfo>{
                     "display_name": "Thousands Separator",
                     "short_desc": "Thousands separator (default: ',')",
-                    "desc": "The thousands separator: a single character, or `?` for no thousands separator; a "
-                        "longer string raises a `FORMAT-NUMBER-ERROR`; default: `,`",
+                    "desc": "The thousands separator: a single character, or `?` or an empty string for no "
+                        "thousands separator; a longer string raises a `FORMAT-NUMBER-ERROR`; default: `,`",
                     "default_value": ",",
                 },
                 <DataProviderArgInfo>{
@@ -1529,7 +1529,8 @@ public const hash<auto> ExtendedExpressionImplementations = {
             } else {
                 ds = ".";
             }
-            string fmt = sprintf("%s%s%d", ts ?? "?", ds, dec);
+            # no thousands separator is "?" in the format; an empty separator means no thousands separator
+            string fmt = sprintf("%s%s%d", ts.val() ? ts : "?", ds, dec);
             return format_number(fmt, n);
         },
     },

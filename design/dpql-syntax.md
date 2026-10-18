@@ -326,7 +326,7 @@ get_second(@created)         # Second (0-59)
 format_date(@created, "YYYY-MM-DD")
 format_number(@price, ",", ".", 2)
 format_number(@price)        # The same: missing or null arguments take the defaults "," "." 2
-format_number(@price, "?")   # "?": no thousands separator
+format_number(@price, "?")   # "?" or "": no thousands separator
 ```
 
 `format_number` separators are single characters and its precision is not negative; anything
