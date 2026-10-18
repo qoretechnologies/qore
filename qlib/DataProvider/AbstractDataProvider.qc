@@ -938,6 +938,26 @@ public hashdecl DataProviderExpressionBaseInfo {
     */
     bool supports_pushdown = True;
 
+    #! Whether the expression is internal: never offered for picking; drawn only inside the construct that makes it
+    /** An internal expression is part of the expression form of another construct and is never written or chosen
+        on its own.  A user interface does not offer it in a list of expressions to pick from or to wrap an
+        expression in, and DPQL completion does not offer it; it is drawn only as part of the construct that makes
+        it.  It is still a valid expression: it is parsed, evaluated, typed and serialized as part of that
+        construct, and its \c role still gives the contexts where the construct can be used.
+
+        @ref DP_FUNC_WILDCARD_ITEM is internal: it is the item of a list wildcard (\c [*]), which the accessors after
+        the wildcard start from when they do not start with a field, as in <tt>\@matrix[*][0]</tt>; the wildcards
+        themselves (@ref DP_FUNC_LIST_WILDCARD and @ref DP_FUNC_HASH_WILDCARD) are not internal.
+
+        Expression info serialized as data (@ref DataProvider::DataProvider::getInfoAsData() "getInfoAsData()",
+        @ref DataProvider::DataProvider::getIndexedInfo() "getIndexedInfo()", the \c expressions of
+        @ref DataProvider::DpqlActionSession "DpqlActionSession") carries it as the boolean \c internal key of each
+        expression, which is \c true only for an internal expression.
+
+        @since %DataProvider 3.11
+    */
+    bool internal = False;
+
     #! Any template to render the expression
     /** Placeholders are:
         - $symbol: the expression symbol

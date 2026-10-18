@@ -360,38 +360,16 @@ public class DpqlSerializer {
                 break;
 
             case DP_FUNC_INDEX:
-                # Render as sugar: base[n] only if index arg is a literal
-                if (isAccessorArgLiteral(exp.args[1])) {
-                    result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY)
-                        + "[" + string(exp.args[1]) + "]";
-                } else {
-                    result = serializeFunctionCall(op, exp.args);
-                }
-                break;
-
             case DP_FUNC_SLICE:
-                # Render as sugar: base[items...] only if all args are literals/ranges
-                if (areSliceArgsLiteral(exp.args)) {
-                    result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY)
-                        + "[" + serializeSliceArgs(exp.args) + "]";
-                } else {
-                    result = serializeFunctionCall(op, exp.args);
-                }
+            case DP_FUNC_KEY:
+                # Render as sugar (base[n], base[items...], base.name, base{keys...}) if the accessor can be written
+                # as one; otherwise as a call
+                result = serializeAccessors(exp) ?? serializeFunctionCall(op, exp.args);
                 break;
 
             case DP_FUNC_LIST_WILDCARD:
             case DP_FUNC_HASH_WILDCARD:
                 result = serializeWildcard(exp);
-                break;
-
-            case DP_FUNC_KEY:
-                # Render as sugar: base{keys...} only if all key args are literals
-                if (areKeyArgsLiteral(exp.args)) {
-                    result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY)
-                        + "{" + serializeKeyArgs(exp.args) + "}";
-                } else {
-                    result = serializeFunctionCall(op, exp.args);
-                }
                 break;
 
             default:
@@ -738,7 +716,9 @@ public class DpqlSerializer {
             case DP_FUNC_KEY:
                 if (body.args.size() > 1 && areKeyArgsLiteral(body.args)
                         && exists (base = serializeWildcardBody(body.args[0], op))) {
-                    return base + "{" + serializeKeyArgs(body.args) + "}";
+                    # the base is written as accessors; after an accessor of the item, .name is a key too
+                    return base + serializeKeyAccessor(body, body.args[0] instanceof hash<DataProviderExpression>
+                        && inlist(body.args[0].exp, (DP_FUNC_INDEX, DP_FUNC_SLICE, DP_FUNC_KEY)));
                 }
                 return;
 
@@ -794,11 +774,23 @@ public class DpqlSerializer {
             && !DpqlKeywordIdentifiers{name.lwr()};
     }
 
-    #! Returns True if an accessor arg is a literal (not an expression)
+    #! Returns True if an accessor arg is a literal: a value or a range, not an expression or a reference
+    /** An accessor whose args are literals is written as an accessor (<tt>[0]</tt>, <tt>[1..3]</tt>,
+        <tt>{key}</tt>); one with an expression, a field reference or a template reference among its args is written
+        as a call (<tt>index(\@items, \@i)</tt>)
+
+        @param arg an index, range or key of an accessor
+
+        @return @ref True if the arg is written as it is in an accessor
+
+        @since DataProvider 3.11 a field or template reference is not a literal
+    */
     private bool isAccessorArgLiteral(auto arg) {
         if (arg.typeCode() == NT_HASH) {
-            # Range specs (start/end keys) are literals; expression hashes have "exp" key
-            return !arg.hasKey("exp");
+            # a range is the only hash that is a literal: it has only the start and end keys; expressions (with
+            # "exp") and field and template references are not literals
+            return arg instanceof hash<DataProviderRangeSpec>
+                || (arg && !(map 1, keys arg, $1 != "start" && $1 != "end"));
         }
         return True;
     }
@@ -837,6 +829,105 @@ public class DpqlSerializer {
             }
         }
         return parts.join(",");
+    }
+
+    #! Serializes the key accessor of a DP_FUNC_KEY expression whose keys are literals, without its base
+    /** A single key that is a name, after an accessor, is written <tt>.name</tt>, as the parser reads
+        <tt>.name</tt> after an accessor (<tt>\@create.items[0].id</tt>); other keys are written <tt>{key}</tt>,
+        quoted if they are not bare keys (<tt>{"a b"}</tt>).
+
+        After a field reference, a key is always written <tt>{key}</tt>: <tt>\@a.b</tt> is the field \c a.b, not the
+        key \c b of the field \c a, so that the expression is parsed back as it is.
+
+        @param exp a DP_FUNC_KEY expression whose keys (args[1..]) are literals
+        @param after_accessor @ref True if the base of the key is written as an accessor
+
+        @return the accessor: <tt>.name</tt> or <tt>{keys}</tt>
+
+        @since DataProvider 3.11
+    */
+    private string serializeKeyAccessor(hash<DataProviderExpression> exp, bool after_accessor) {
+        if (after_accessor && exp.args.size() == 2 && exp.args[1].typeCode() == NT_STRING
+                && DpqlSerializer::isBareMemberName(exp.args[1])) {
+            return "." + exp.args[1];
+        }
+        return "{" + serializeKeyArgs(exp.args) + "}";
+    }
+
+    #! Returns an accessor written as accessors after its value, or @ref nothing if it cannot be written so
+    /** An accessor (@ref DP_FUNC_INDEX, @ref DP_FUNC_SLICE, @ref DP_FUNC_KEY) is written as one (<tt>[0]</tt>,
+        <tt>[1..3]</tt>, <tt>.name</tt>, <tt>{key}</tt>) when its indexes or keys are literals and its value is a
+        field reference or another accessor written as one: the parser reads accessors only there.  After any other
+        value (a wildcard, a template reference, a literal, a call or an operation), and with an index or key that
+        is not a literal, it is written as a call (<tt>index(\@orders[*].id, 0)</tt>,
+        <tt>index(\@items, \@i)</tt>), so that it is parsed back as it is.
+
+        @param exp an accessor expression
+
+        @return the accessor chain, starting with its field reference, or @ref nothing
+
+        @since DataProvider 3.11
+    */
+    private *string serializeAccessors(hash<DataProviderExpression> exp) {
+        if (!exp.args) {
+            return;
+        }
+        *string base = serializeAccessorBase(exp.args[0]);
+        if (!exists base) {
+            return;
+        }
+        switch (exp.exp) {
+            case DP_FUNC_INDEX:
+                if (exp.args.size() == 2 && isAccessorArgLiteral(exp.args[1])) {
+                    return base + "[" + string(exp.args[1]) + "]";
+                }
+                return;
+
+            case DP_FUNC_SLICE:
+                if (exp.args.size() > 1 && areSliceArgsLiteral(exp.args)) {
+                    return base + "[" + serializeSliceArgs(exp.args) + "]";
+                }
+                return;
+
+            case DP_FUNC_KEY:
+                if (exp.args.size() > 1 && areKeyArgsLiteral(exp.args)) {
+                    # after an accessor, the parser reads .name as a key
+                    return base + serializeKeyAccessor(exp, exp.args[0] instanceof hash<DataProviderExpression>
+                        && exp.args[0].exp != DP_EXPR_VALUE);
+                }
+                return;
+        }
+    }
+
+    #! Returns the value of an accessor if accessors can be written after it, or @ref nothing
+    /** Accessors are written after a field reference (also a field reference written alone, which is written as the
+        field reference) and after accessors written as accessors
+
+        @param arg the value of an accessor (its first argument)
+
+        @return the value as written before accessors, or @ref nothing if accessors cannot be written after it
+
+        @since DataProvider 3.11
+    */
+    private *string serializeAccessorBase(auto arg) {
+        if (arg instanceof hash<DataProviderFieldReference>) {
+            return serializeFieldRef(arg);
+        }
+        if (!(arg instanceof hash<DataProviderExpression>)) {
+            return;
+        }
+        switch (arg.exp) {
+            case DP_EXPR_VALUE:
+                if (arg.args.size() == 1 && arg.args[0] instanceof hash<DataProviderFieldReference>) {
+                    return serializeFieldRef(arg.args[0]);
+                }
+                return;
+
+            case DP_FUNC_INDEX:
+            case DP_FUNC_SLICE:
+            case DP_FUNC_KEY:
+                return serializeAccessors(arg);
+        }
     }
 
     #! Serializes key arguments from a DP_FUNC_KEY expression (args[1..])

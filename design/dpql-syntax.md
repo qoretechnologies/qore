@@ -115,6 +115,15 @@ Access hash member (equivalent to single-key operator):
 @user.address.city       # Nested access
 ```
 
+After an accessor, `.name` is a key (`@data[0].name` is `key(@data[0], "name")`); right
+after `@field`, the dot continues the field name (`@record.name` is the field `record.name`).
+The serializer writes accessors as they are read: a single key that is a name after an
+accessor as `.name` (`@data[0]{name}` is written `@data[0].name`), any other key in braces
+(`{"a b"}`, `{"true"}`, `{a, b}`), a key of a field reference in braces (`@record{name}`), and
+an accessor whose index or key is not a literal, or whose value is not a field reference or
+another accessor (a wildcard, a template reference, a call, an operation), as a call
+(`index(@items, @i)`, `index(@orders[*].id, 0)`).
+
 ### Chained Operators
 
 Field reference operators can be chained:
@@ -152,7 +161,9 @@ wildcard.
 Expression form (`DataProviderExpression`): `list_wildcard` / `hash_wildcard` with the source
 and the per-item expression as arguments (the per-item expression is the body of `map`; the
 `.name` steps after `[*]`/`{*}` form one field reference such as `customer.name` or
-`value.amount`); accessors on the item itself start from the zero-argument `wildcard_item`.
+`value.amount`); accessors on the item itself start from the zero-argument `wildcard_item`,
+which is `internal` in the expression catalog (`DataProviderExpressionBaseInfo::internal`):
+it is never offered for picking and is drawn only inside the wildcard that makes it.
 The tokenizer gives the `*` its own token type (`DPQL_TOK_WILDCARD`), the serializer writes a
 wildcard back as written, the expression type is `list<T>` when the type of each value is known,
 and completion offers `[*]` after a list and `{*}` after a hash.

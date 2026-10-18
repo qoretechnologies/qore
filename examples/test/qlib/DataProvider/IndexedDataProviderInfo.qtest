@@ -19,6 +19,7 @@ public class IndexedDataProviderInfoTest inherits QUnit::Test {
         addTestCase("a round trip keeps the info", \roundTrip());
         addTestCase("empty and unset members are kept", \emptyAndUnsetMembers());
         addTestCase("a type that cannot be described without its provider is not restored", \unrestorableType());
+        addTestCase("the internal flag of an expression is kept", \internalExpression());
         set_return_value(main());
     }
 
@@ -186,5 +187,32 @@ public class IndexedDataProviderInfoTest inherits QUnit::Test {
             "path": "qore-test/unregistered/type",
         };
         assertThrows("TYPE-ERROR", \DataProvider::restoreIndexedInfo(), indexed);
+    }
+
+    #! An internal expression is internal in the index, in its JSON form and when it is restored
+    internalExpression() {
+        hash<DataProviderInfo> info = <DataProviderInfo>{
+            "name": "test",
+            "display_name": "Test",
+            "type": "QoreTestDataProvider",
+            "expressions": DataProviderGenericExpressions{"==", "wildcard_item"},
+        };
+        hash<IndexedDataProviderInfo> indexed = DataProvider::getIndexedInfo(info);
+        assertTrue(indexed.expressions.wildcard_item.internal);
+        assertFalse(indexed.expressions."==".internal);
+
+        hash<auto> parsed = parse_json(make_json(indexed));
+        assertEq(True, parsed.expressions.wildcard_item.internal);
+        assertEq(False, parsed.expressions."==".internal);
+
+        hash<DataProviderInfo> restored = DataProvider::restoreIndexedInfo(indexed);
+        assertTrue(restored.expressions.wildcard_item.internal);
+        assertFalse(restored.expressions."==".internal);
+
+        # an expression from an index written before the flag existed is not internal
+        hash<auto> old = map {$1.key: $1.value}, indexed.expressions.wildcard_item.pairIterator(),
+            $1.key != "internal";
+        assertFalse(old.hasKey("internal"));
+        assertEq(False, cast<hash<IndexedDataProviderExpressionInfo>>(old).internal);
     }
 }

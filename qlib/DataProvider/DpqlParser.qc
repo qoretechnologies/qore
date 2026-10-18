@@ -883,7 +883,8 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             }
             nextToken();  # consume ||
             skipWhitespace();
-            args += parseAndExpr();
+            # push, so that a list literal operand stays one operand
+            push args, parseAndExpr();
             skipWhitespace();
         }
 
@@ -914,7 +915,8 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             }
             nextToken();  # consume &&
             skipWhitespace();
-            args += parseUnaryExpr();
+            # push, so that a list literal operand stays one operand
+            push args, parseUnaryExpr();
             skipWhitespace();
         }
 
@@ -2120,7 +2122,8 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             }
 
             hash<DpqlTokenInfo> start_tok = peek();
-            args += parseOrExpr();
+            # push, so that a list literal argument stays one argument
+            push args, parseOrExpr();
             arg_tokens += start_tok;
             skipWhitespace();
 
@@ -2377,9 +2380,9 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
     private list<auto> parseArgList(reference<list<hash<DpqlTokenInfo>>> arg_tokens) {
         list<auto> args = ();
 
-        # First argument
+        # First argument; pushed, so that a list literal argument stays one argument
         hash<DpqlTokenInfo> start_tok = peek();
-        args += parseOrExpr();
+        push args, parseOrExpr();
         arg_tokens += start_tok;
         skipWhitespace();
 
@@ -2388,7 +2391,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             nextToken();  # consume comma
             skipWhitespace();
             start_tok = peek();
-            args += parseOrExpr();
+            push args, parseOrExpr();
             arg_tokens += start_tok;
             skipWhitespace();
         }

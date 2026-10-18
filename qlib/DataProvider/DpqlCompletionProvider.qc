@@ -927,7 +927,7 @@ public class DpqlCompletionProvider {
     /** Returns completions for provider-specific operators that have \c groups containing
         "Comparison", \c type = DET_Operator, and exactly 2 args. These are rendered as
         infix operators in DPQL (e.g. \c \@field \c like \c "pattern") rather than function
-        calls.
+        calls.  @ref DataProvider::DataProviderExpressionBaseInfo::internal "Internal" expressions are not offered.
 
         @param prefix the current prefix to filter by
         @param filter_expressions optional expression map to filter by (for search context)
@@ -935,6 +935,7 @@ public class DpqlCompletionProvider {
         @return a list of completion items for infix comparison operators
 
         @since DataProvider 3.4
+        @since DataProvider 3.11 internal expressions are not offered
     */
     private list<hash<DpqlCompletionItem>> getInfixComparisonCompletions(string prefix,
             *hash<string, hash<DataProviderExpressionInfo>> filter_expressions) {
@@ -960,6 +961,10 @@ public class DpqlCompletionProvider {
                 continue;
             }
             hash<DataProviderExpressionInfo> info = expressions{ename};
+            # an internal expression is never offered
+            if (info.internal) {
+                continue;
+            }
             # Only infix comparison operators with exactly 2 args
             if (info.type != DET_Operator || !inlist("Comparison", info.groups)
                     || info.args.size() != 2) {
@@ -1161,13 +1166,15 @@ public class DpqlCompletionProvider {
           \c between) — these are operators invoked as \c name(args...) in DPQL text
 
         Excludes operators with symbolic names (\c ==, \c &&, \c !) which are handled
-        separately by \c getOperatorCompletions().
+        separately by \c getOperatorCompletions(), and
+        @ref DataProvider::DataProviderExpressionBaseInfo::internal "internal" expressions, which are never offered.
 
         @param prefix the current prefix to filter by
         @param filter_expressions optional expression map to filter by; when set, only functions
             present in this map are offered (search context filtering)
 
         @since DataProvider 3.4 added filter_expressions parameter
+        @since DataProvider 3.11 internal expressions are not offered
     */
     private list<hash<DpqlCompletionItem>> getFunctionCompletions(string prefix,
             *hash<string, hash<DataProviderExpressionInfo>> filter_expressions) {
@@ -1181,6 +1188,10 @@ public class DpqlCompletionProvider {
 
         foreach string ename in (keys expressions) {
             hash<DataProviderExpressionInfo> info = expressions{ename};
+            # an internal expression is never offered
+            if (info.internal) {
+                continue;
+            }
             # In search context, skip functions not supported by the server
             if (filter_expressions && !filter_expressions{ename}) {
                 continue;

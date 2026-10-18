@@ -110,10 +110,17 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
                         },
                         "create_options": {},
                         "expressions": {
-                            "==": DataProviderGenericExpressions."==" + {
+                            # written as an index written before the internal flag existed: without it
+                            "==": (map {$1.key: $1.value}, DataProviderGenericExpressions."==".pairIterator(),
+                                $1.key != "internal") + {
                                 "args": (map $1 + {"type": $1.type.getBaseTypeName()},
                                     DataProviderGenericExpressions."==".args),
                                 "return_type": DataProviderGenericExpressions."==".return_type.getBaseTypeName(),
+                            },
+                            "wildcard_item": DataProviderGenericExpressions.wildcard_item + {
+                                "args": (),
+                                "return_type":
+                                    DataProviderGenericExpressions.wildcard_item.return_type.getBaseTypeName(),
                             },
                         },
                         "events": {
@@ -222,6 +229,10 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         assertEq(DataProviderGenericExpressions."==".args[0].type_code, eq.args[0].type_code);
         assertEq("hash<DataTypeInfo>", eq.return_type_info.fullType());
         assertEq("bool", eq.return_type_info.base_type);
+        # an internal expression stays internal; one indexed without the flag is not internal
+        assertEq(True, info.expressions.wildcard_item.internal);
+        assertEq(False, eq.internal);
+        assertEq(True, parse_json(make_json(action)).data_provider_info.expressions.wildcard_item.internal);
 
         assertEq("hash<IndexedDataProviderMessageInfo>", info.events.changed.fullType());
         assertEq("hash", info.events.changed.type_info.base_type);
@@ -231,6 +242,8 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         assertEq("int", restored.search_options.limit.type[0].getName());
         assertEq(5, restored.search_options.limit.type[0].acceptsValue(5));
         assertEq("bool", restored.expressions."==".return_type.getBaseTypeName());
+        assertEq(True, restored.expressions.wildcard_item.internal);
+        assertEq(False, restored.expressions."==".internal);
         assertEq("hash", restored.events.changed.type.getBaseTypeName());
     }
 
