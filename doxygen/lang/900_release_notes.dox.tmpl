@@ -4,10 +4,11 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
-    HttpClientIo and RestClientIo report TLS handshake errors from HTTP/1.1 and HTTP/2 requests immediately,
+    HttpClientIo and RestClientIo report certificate verification failures from HTTP/1.1 and HTTP/2 requests immediately,
     preserving OpenSSL's certificate verification reason. A refused certificate is no longer retried as a transient
     connection failure, which could delay the call and replace the original reason with a connection timeout.
-    This also applies to automatic protocol selection with HTTP/3 disabled.
+    This also applies to automatic protocol selection with HTTP/3 disabled. Connections interrupted during the
+    handshake can still be retried.
 
     LLM streaming requests accept a @ref QoreLlmUtils::LlmCancellation "LlmCancellation" token in
     @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation". Cancelling the token

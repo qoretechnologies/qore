@@ -710,7 +710,8 @@ private:
     DLLLOCAL void startProxyConnect(ExceptionSink* xsink);
     DLLLOCAL void startMultiplex(ExceptionSink* xsink);
 
-    DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
+    //! Records the error, retaining the underlying exception argument when present
+    DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink, QoreValue arg = QoreValue());
     DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void fireReadyCallback(ExceptionSink* xsink);
 

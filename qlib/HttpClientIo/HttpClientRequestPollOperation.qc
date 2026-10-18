@@ -342,7 +342,7 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
 
         @throw HTTPCLIENT-TIMEOUT the response was not received in time
         @throw HTTPCLIENT-CONNECT-ERROR the connection could not be established
-        @throw SOCKET-SSL-ERROR the TLS handshake failed; certificate refusals are not retried
+        @throw SOCKET-SSL-ERROR certificate verification failed; certificate refusals are not retried
         @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED the maximum number of redirects was exceeded
         @throw HTTP-CLIENT-REDIRECT-ERROR a redirect cannot be followed
         @throw HTTP-CLIENT-UNKNOWN-PROTOCOL a redirect location has an unsupported scheme
@@ -836,9 +836,9 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
             return;
         }
         *hash<auto> err = conn.getPollOperation().getError();
-        # TLS errors are terminal, as in HttpClientConnection::waitForReady(). A later attempt must not replace
+        # Certificate refusals are terminal, as in HttpClientConnection::waitForReady(). A retry must not replace
         # a certificate refusal with a timeout or another connection's error.
-        if (err.err == "SOCKET-SSL-ERROR") {
+        if (err.err == "SOCKET-SSL-ERROR" && err.arg.typeCode() == NT_HASH && err.arg.ssl_verify_error) {
             throw err.err, err.desc, err;
         }
         # a proxy authentication challenge of a CONNECT request is answered once with a new connection

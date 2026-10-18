@@ -587,7 +587,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         passed as the exception argument so callers can dispatch on the real
         protocol-level error code (e.g. \c HTTP2-ALPN-ERROR) instead of parsing
         it back out of the description string
-        @throw SOCKET-SSL-ERROR the TLS handshake failed; the original error is preserved so a certificate refusal
+        @throw SOCKET-SSL-ERROR certificate verification failed; the original reason is preserved and the refusal
         is not retried as a transient connection failure
     */
     bool waitForReady(timeout timeout_ms = 30s) {
@@ -596,7 +596,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
 
         if (self.isClosed()) {
             *hash<auto> err = getPollOperation().getError();
-            if (err.err == "SOCKET-SSL-ERROR") {
+            if (err.err == "SOCKET-SSL-ERROR" && err.arg.typeCode() == NT_HASH && err.arg.ssl_verify_error) {
                 throw err.err, err.desc, err;
             }
             throw "HTTPCLIENT-CONNECT-ERROR",

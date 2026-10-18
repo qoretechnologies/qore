@@ -231,7 +231,14 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         # the default CAs do not include the test CA
         Socket s();
         s.setSslVerifyMode(SSL_VERIFY_PEER);
-        assertThrows("SOCKET-SSL-ERROR", \s.connectSSL(), ("localhost:" + good_port, 10s));
+        try {
+            s.connectSSL("localhost:" + good_port, 10s);
+            fail("the private CA must not be trusted by default");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-SSL-ERROR", ex.err);
+            assertEq(NT_INT, ex.arg.ssl_verify_error.typeCode());
+            assertGt(0, ex.arg.ssl_verify_error);
+        }
 
         # a CA file
         s = new Socket();
@@ -494,6 +501,8 @@ WKEuKQ7xuGuAiIESuSDBsSg=
             fail(msg + ": no exception raised");
         } catch (hash<ExceptionInfo> ex) {
             assertEq("SOCKET-SSL-ERROR", ex.err, msg);
+            assertEq(NT_INT, ex.arg.arg.ssl_verify_error.typeCode(), msg);
+            assertGt(0, ex.arg.arg.ssl_verify_error, msg);
             assertRegex("certificate verify failed", ex.desc, msg);
             assertRegex(trusted ? (host == "localhost" ? "hostname mismatch" : "IP address mismatch")
                 : "unable to get local issuer certificate", ex.desc, msg);

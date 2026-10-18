@@ -315,7 +315,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         bool stop;
         background sub () {
             on_exit done.dec();
-            # answers the TLS handshake with an HTTP error response, as a plain HTTP proxy does
+            # answers each TLS handshake with an HTTP error response, including connection retries
             while (!stop) {
                 *Socket s = plain.accept(100ms);
                 if (!s) {
@@ -332,7 +332,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
             plain.close();
         }
         proxy = sprintf("https://127.0.0.1:%d", plain.getSocketInfo().port);
-        assertThrows("SOCKET-SSL-ERROR", "TLS connection to the proxy failed", \ioGet(), (url, proxy, "h1"));
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", "TLS connection to the proxy failed", \ioGet(), (url, proxy, "h1"));
     }
 
     shutdownTest() {

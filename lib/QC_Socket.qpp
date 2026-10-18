@@ -2035,6 +2035,10 @@ const SSL_VERIFY_NONE = SSL_VERIFY_NONE;
     terminated with an alert message containing the reason for the verification failure. If no server
     certificate is sent, because an anonymous cipher is used, @ref Qore::SSL_VERIFY_PEER is ignored.
 
+    @note Since %Qore 3.0, a local certificate verification failure raises \c SOCKET-SSL-ERROR with a hash
+    exception argument containing \c ssl_verify_error, the numeric OpenSSL certificate verification result.
+    This distinguishes a refused certificate from an interrupted handshake without parsing the error description.
+
     @see
     - @ref Qore::SSL_VERIFY_FAIL_IF_NO_PEER_CERT
     - @ref Qore::SSL_VERIFY_CLIENT_ONCE
