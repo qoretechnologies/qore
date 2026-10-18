@@ -146,6 +146,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("an accessor after any other value is serialized as a call", \accessorCallFormTests());
         addTestCase("serialization is a fixed point over the expressions of the DPQL tests",
             \serializationFixedPointTests());
+        addTestCase("a list literal operand is one operand", \listLiteralOperandTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -8936,5 +8937,57 @@ public class DpqlTest inherits QUnit::Test {
         assertGt(250, fixed_points);
         # the corpus has members after accessors
         assertGt(10, members);
+    }
+
+    listLiteralOperandTests() {
+        hash<DataProviderFieldReference> a = <DataProviderFieldReference>{"field": "a"};
+        hash<DataProviderFieldReference> b = <DataProviderFieldReference>{"field": "b"};
+        # the arguments of a call
+        assertEq(<DataProviderExpression>{"exp": "f", "args": ((1, 2),)},
+            DataProvider::parseDpqlExpression('f((1,2))'));
+        assertEq(<DataProviderExpression>{"exp": DP_FUNC_COALESCE, "args": (a, (1, 2))},
+            DataProvider::parseDpqlExpression('coalesce(@a, (1,2))'));
+        assertEq(<DataProviderExpression>{"exp": DP_FUNC_COALESCE, "args": ((1, 2), 0)},
+            DataProvider::parseDpqlExpression('coalesce((1,2), 0)'));
+        assertEq(<DataProviderExpression>{"exp": DP_FUNC_INDEX, "args": ((1, 2), 0)},
+            DataProvider::parseDpqlExpression('index((1,2), 0)'));
+        # the operands of || and &&
+        assertEq(<DataProviderExpression>{"exp": DP_OP_OR, "args": (a, (1, 2))},
+            DataProvider::parseDpqlExpression('@a || (1,2)'));
+        assertEq(<DataProviderExpression>{"exp": DP_OP_AND, "args": (a, (1, 2), b)},
+            DataProvider::parseDpqlExpression('@a && (1,2) && @b'));
+        # the arguments of a prefix operator
+        assertEq(<DataProviderExpression>{"exp": DP_OP_MAP, "args": (<DataProviderExpression>{
+            "exp": DP_OP_MULT,
+            "args": (<DataProviderFieldReference>{"field": "value"}, 2),
+        }, (1, 2))}, DataProvider::parseDpqlExpression('map @value * 2, (1, 2)'));
+
+        # they evaluate with the list as one value
+        assertEq((1, 2), evalDpql('coalesce(@a, (1,2))', {"a": NOTHING}));
+        assertEq((1, 2), evalDpql('coalesce((1,2), 0)'));
+        assertEq(2, evalDpql('index((1,2), 1)'));
+        assertEq((2, 4), evalDpql('map @value * 2, (1, 2)'));
+        # and are serialized as they are written
+        foreach string dpql in ('coalesce(@a, (1,2))', 'index((1,2), 0)', 'map @value * 2, (1,2)', '@a || (1,2)') {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql);
+            string text = DataProvider::serializeDpqlExpression(exp);
+            assertEq(dpql, text);
+            assertEq(exp, DataProvider::parseDpqlExpression(text), dpql);
+        }
+
+        # validation checks the type of the list, and reports no internal error
+        hash<string, AbstractDataField> fields = {
+            "a": new QoreDataField("a", "a", AbstractDataProviderType::get("*list<int>")),
+        };
+        assertEq((), map $1.message, DataProvider::validateDpqlExpression('coalesce(@a, (1,2))', fields));
+        assertEq((), map $1.message, DataProvider::validateDpqlExpression('map @value * 2, (1, 2)', fields));
+        assertEq(("Argument 'String Value' of 'substr' has type 'list<auto>', expected 'string'",),
+            map $1.message, DataProvider::validateDpqlExpression('substr((1,2), 0)', fields));
+        assertEq(("Argument 'Start' of 'substr' has type 'list<auto>', expected 'int'",),
+            map $1.message, DataProvider::validateDpqlExpression('substr("abc", (1,2))', fields));
+
+        # the values of in are a list of values, as before
+        assertEq(<DataProviderExpression>{"exp": DP_SEARCH_OP_IN, "args": (a, 1, 2)},
+            DataProvider::parseDpqlExpression('@a in (1, 2)'));
     }
 }

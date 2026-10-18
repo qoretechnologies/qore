@@ -1513,6 +1513,10 @@ fetch
       (<tt>(\@a + \@b){c}</tt>), or, for a wildcard, that parsed as another expression
       (<tt>\@orders[*].a[0]</tt> for the first list of the wildcard's results); it is written as a call
       (<tt>index(\@orders[*].a, 0)</tt>)
+    - fixed DPQL parsing of a list literal as an argument of a call or a prefix operator, or as an operand of
+      \c || or \c &&: its elements were taken for separate arguments, so that <tt>coalesce(\@a, (1, 2))</tt> had
+      three arguments and <tt>map \@value * 2, (1, 2)</tt> failed with an internal parser error; the list is one
+      argument
 
     @subsection dataprovider_v3_10_2 DataProvider v3.10.2
     - the editor token spans of @ref DataProvider::DpqlActionSession "DpqlActionSession" (\c dpql-get-tokens and
