@@ -65,6 +65,10 @@ module RestClientIo {
     %RestClientIo uses the @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"
     for multiplexed connections — multiple concurrent requests share connections without serialization.
 
+    TLS handshake errors from HTTP/1.1 and HTTP/2 requests raise \c SOCKET-SSL-ERROR with the original diagnostic,
+    including the certificate verification reason. Synchronous and asynchronous requests do not retry these errors.
+    This also applies to automatic protocol selection with HTTP/3 disabled.
+
     @par Example
     @code{.py}
 %requires RestClientIo
@@ -5277,10 +5281,15 @@ class RestClientIoAsyncConnector {
         if (!conn || !failed(conn) || mgr.isUnresolvedRaceLeg(conn)) {
             return;
         }
+        *hash<auto> err = conn.getPollOperation().getError();
+        # Match the synchronous connection wait: TLS handshake errors must reach the caller before any retry
+        # can replace the certificate verification reason with a timeout.
+        if (err.err == "SOCKET-SSL-ERROR") {
+            throw err.err, err.desc, err;
+        }
         if (++failures <= mgr.getMaxRequestRetries()) {
             return;
         }
-        *hash<auto> err = conn.getPollOperation().getError();
         throw "HTTPCLIENT-CONNECT-ERROR",
             sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown"), err;
     }

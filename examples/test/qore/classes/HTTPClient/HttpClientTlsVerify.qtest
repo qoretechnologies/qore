@@ -176,6 +176,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         addTestCase("HTTP/3 clock step back", \http3ClockStepBackTest());
         addTestCase("HttpClientIo CA options", \httpClientIoTest());
         addTestCase("RestClientIo CA options", \restClientIoTest());
+        addTestCase("TCP certificate failures are not retried", \certificateFailureTest());
         addTestCase("HTTPClient option errors", \optionErrorTest());
         set_return_value(main());
     }
@@ -433,6 +434,90 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         hash<RestResponseInfo> resp = rest.restGet("/");
         assertEq(200, resp.status_code);
         assertNeq("h3", resp.protocol);
+    }
+
+    #! A refused TLS handshake must end the call, even if a second connection would never answer
+    certificateFailureTest() {
+        foreach string protocol in ("auto", "h1", "h2") {
+            foreach string host in ("localhost", "127.0.0.1") {
+                foreach bool trusted in (False, True) {
+                    foreach string api in ("REST", "REST async", "HTTP", "HTTP async") {
+                        singleCertificateFailure(protocol, host, trusted, api);
+                    }
+                }
+            }
+        }
+    }
+
+    private singleCertificateFailure(string protocol, string host, bool trusted, string api) {
+        string msg = sprintf("%s %s trusted=%y %s", protocol, host, trusted, api);
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        listener.setCertificate(trusted ? WrongHostCert : GoodCert);
+        listener.setPrivateKey(trusted ? WrongHostKey : GoodKey);
+        Counter finished(1);
+        background acceptRejectedCertificate(listener, finished);
+        on_exit {
+            listener.close();
+            finished.waitForZero(15s);
+        }
+        string url = sprintf("https://%s:%d", host, listener.getSocketInfo().port);
+        RestClientIo rest({
+            "url": url,
+            "protocol": protocol,
+            "ssl_verify_cert": True,
+            "ssl_ca_file": trusted ? ca_file : NOTHING,
+            "enable_http3": False,
+            "connect_timeout": 10s,
+            "timeout": 20s,
+            "data": "text",
+        });
+        on_exit rest.close();
+        HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
+        date started = now_us();
+        try {
+            switch (api) {
+                case "REST":
+                    rest.restGet("/");
+                    break;
+                case "REST async":
+                    rest.restGetAsync("/").get(25s);
+                    break;
+                case "HTTP":
+                    mgr.request(url, "GET", "/");
+                    break;
+                case "HTTP async":
+                    mgr.requestAsync(url, "GET", "/").get(25s);
+                    break;
+            }
+            fail(msg + ": no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-SSL-ERROR", ex.err, msg);
+            assertRegex("certificate verify failed", ex.desc, msg);
+            assertRegex(trusted ? (host == "localhost" ? "hostname mismatch" : "IP address mismatch")
+                : "unable to get local issuer certificate", ex.desc, msg);
+            assertLt(5000, (now_us() - started).durationMilliseconds(), msg + ": prompt refusal");
+        }
+        # The rejected first handshake was the only TCP connection, regardless of the default retry budget.
+        finished.waitForZero(15s);
+        *Socket retry = listener.accept(1ms);
+        if (retry) {
+            retry.close();
+        }
+        assertNothing(retry, msg + ": no second connection");
+    }
+
+    private acceptRejectedCertificate(Socket listener, Counter finished) {
+        on_exit finished.dec();
+        try {
+            *Socket peer = listener.acceptSSL(10s);
+            if (peer) {
+                peer.close();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Leave the listener open, but do not answer a second handshake. A retry must not hide the TLS error.
+        }
     }
 
     optionErrorTest() {

@@ -587,6 +587,8 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         passed as the exception argument so callers can dispatch on the real
         protocol-level error code (e.g. \c HTTP2-ALPN-ERROR) instead of parsing
         it back out of the description string
+        @throw SOCKET-SSL-ERROR the TLS handshake failed; the original error is preserved so a certificate refusal
+        is not retried as a transient connection failure
     */
     bool waitForReady(timeout timeout_ms = 30s) {
         log(LoggerLevel::DEBUG, "waitForReady() timeout=%y", timeout_ms);
@@ -594,6 +596,9 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
 
         if (self.isClosed()) {
             *hash<auto> err = getPollOperation().getError();
+            if (err.err == "SOCKET-SSL-ERROR") {
+                throw err.err, err.desc, err;
+            }
             throw "HTTPCLIENT-CONNECT-ERROR",
                 sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown"),
                 err;
