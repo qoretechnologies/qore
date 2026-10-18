@@ -1099,7 +1099,9 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     @ref DataProvider::DP_FUNC_LIST_WILDCARD "DP_FUNC_LIST_WILDCARD" or
     @ref DataProvider::DP_FUNC_HASH_WILDCARD "DP_FUNC_HASH_WILDCARD" expression whose arguments are the source and
     the expression evaluated for each item, as the body of \c map; accessors that apply to the item itself start
-    from @ref DataProvider::DP_FUNC_WILDCARD_ITEM "DP_FUNC_WILDCARD_ITEM".
+    from @ref DataProvider::DP_FUNC_WILDCARD_ITEM "DP_FUNC_WILDCARD_ITEM".  \c DP_FUNC_WILDCARD_ITEM is
+    @ref DataProvider::DataProviderExpressionBaseInfo::internal "internal" in the expression catalog: it is never
+    offered for picking and is drawn only inside the wildcard that makes it.
 
     @par Example
     @code{.py}
@@ -1484,6 +1486,11 @@ fetch
       (see @ref dpql_item_context); for a hash source, the item is the \c key / \c value entry; a nested
       operator's values replace the outer ones while it is evaluated, and the caller's other template context
       values stay available
+    - added @ref DataProvider::DataProviderExpressionBaseInfo::internal "internal" to the expression info, which
+      marks an expression that is never offered for picking and is drawn only inside the construct that makes it;
+      it is set for @ref DataProvider::DP_FUNC_WILDCARD_ITEM "DP_FUNC_WILDCARD_ITEM", the item of a list
+      wildcard, so that user interfaces can leave it out of their lists of expressions; DPQL completion does not
+      offer internal expressions
 
     @subsection dataprovider_v3_10_2 DataProvider v3.10.2
     - the editor token spans of @ref DataProvider::DpqlActionSession "DpqlActionSession" (\c dpql-get-tokens and

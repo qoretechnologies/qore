@@ -29,6 +29,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires DataProvider
+%requires json
 
 %exec-class DpqlWildcardTest
 
@@ -91,6 +92,10 @@ class DpqlWildcardTest inherits QUnit::Test {
         addTestCase("validation", \validationTests());
         addTestCase("completion", \completionTests());
         addTestCase("editor token spans", \tokenSpanTests());
+        addTestCase("catalog: the wildcard item is internal", \catalogInternalTests());
+        addTestCase("catalog: the internal flag changes no parse, evaluation or serialization",
+            \internalUnchangedTests());
+        addTestCase("completion: internal expressions are not offered", \internalCompletionTests());
         set_return_value(main());
     }
 
@@ -766,5 +771,172 @@ class DpqlWildcardTest inherits QUnit::Test {
         list<hash<auto>> spans = map $1, rv.tokens, $1.text == "*";
         assertEq(1, spans.size());
         assertEq("operator", spans[0].type);
+    }
+
+    #! The item of a list wildcard is the one internal expression of the catalog, as it is exported to user interfaces
+    catalogInternalTests() {
+        hash<string, hash<DataProviderExpressionInfo>> catalog = dp_get_all_expression_info();
+        assertTrue(catalog{WildcardItem}.internal);
+        # it is the only internal expression
+        assertEq((WildcardItem,), (map $1.key, catalog.pairIterator(), $1.value.internal));
+        # the wildcards that make it and the ordinary operations are not internal; nor are the expressions that
+        # stand for an operand written alone (value, template) or the accessors that are written as calls too
+        foreach string name in (ListWildcard, HashWildcard, DP_OP_MAP, DP_OP_SELECT, DP_SEARCH_OP_EQ, DP_OP_AND,
+                DP_OP_PLUS, DP_FUNC_INDEX, DP_FUNC_KEY, DP_FUNC_SLICE, DP_EXPR_VALUE, DP_EXPR_TEMPLATE) {
+            assertEq(False, catalog{name}.internal, name);
+        }
+        # an expression declared without the flag is not internal
+        assertEq(False, (<DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "name": "f",
+            "display_name": "f",
+            "short_desc": "f",
+            "desc": "f",
+            "symbol": "f()",
+            "args": (),
+            "return_type": AbstractDataProviderTypeMap."any",
+        }).internal);
+        # the flag says nothing about the contexts where it can be used
+        assertEq(ER_All, catalog{WildcardItem}.role);
+
+        # the catalog as data and as JSON, as user interfaces read it
+        hash<auto> data = DataProvider::getInfoAsData({"expressions": catalog}).expressions;
+        assertEq(True, data{WildcardItem}.internal);
+        assertEq((WildcardItem,), (map $1.key, data.pairIterator(), $1.value.internal));
+        hash<auto> json = parse_json(make_json(data{WildcardItem, ListWildcard, HashWildcard, DP_OP_MAP}));
+        assertEq(True, json{WildcardItem}.internal);
+        assertEq(False, json{ListWildcard}.internal);
+        assertEq(False, json{HashWildcard}.internal);
+        assertEq(False, json{DP_OP_MAP}.internal);
+        assertEq("bool", json{WildcardItem}.internal.type());
+
+        # the expressions of a DPQL session, which editors read
+        DpqlActionSession session({"base_expressions": catalog});
+        hash<auto> ctx = session.handleAction("dpql-set-context", {"provider": "null{}"});
+        assertEq(True, ctx.expressions{WildcardItem}.internal);
+        assertEq(False, ctx.expressions{ListWildcard}.internal);
+        assertEq(False, ctx.expressions{HashWildcard}.internal);
+        json = parse_json(make_json(ctx.expressions{WildcardItem, ListWildcard}));
+        assertEq(True, json{WildcardItem}.internal);
+        assertEq(False, json{ListWildcard}.internal);
+    }
+
+    #! The internal flag is metadata for user interfaces: the wildcards parse, evaluate, type, verify and serialize as
+    #! they do without it
+    internalUnchangedTests() {
+        hash<string, hash<DataProviderExpressionInfo>> catalog = dp_get_all_expression_info();
+        hash<string, hash<DataProviderExpressionInfo>> unflagged = catalog;
+        unflagged{WildcardItem}.internal = False;
+        assertTrue(catalog{WildcardItem}.internal);
+        assertFalse(unflagged{WildcardItem}.internal);
+
+        # the item of the wildcard is still made by the parser
+        assertEq(<DataProviderExpression>{
+            "exp": ListWildcard,
+            "args": (DpqlWildcardTest::ref("matrix"), <DataProviderExpression>{
+                "exp": DP_FUNC_INDEX,
+                "args": (DpqlWildcardTest::item(), 0),
+            }),
+        }, DataProvider::parseDpqlExpression('@matrix[*][0]', catalog));
+        assertEq(<DataProviderExpression>{
+            "exp": ListWildcard,
+            "args": (DpqlWildcardTest::ref("nums"), DpqlWildcardTest::item()),
+        }, DataProvider::parseDpqlExpression('@nums[*]', catalog));
+
+        foreach string dpql in ('@matrix[*][0]', '@matrix[*][0..1]', '@nums[*]', '@orders[*].id',
+                '@orders[*].items[*].sku', '@prices{*}', '@prices{*}.amount', '@orders[*]{id, tags}',
+                '@weights[*]', '@matrix[*][*]', '@orders[*].id == (1,2)') {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql, catalog);
+            # the same parse with and without the flag
+            assertEq(DataProvider::parseDpqlExpression(dpql, unflagged), exp, dpql);
+            # serialized as written
+            assertEq(dpql, DataProvider::serializeDpqlExpression(exp, catalog), dpql);
+            assertEq(dpql, DataProvider::serializeDpqlExpression(exp, unflagged), dpql);
+            # the same type
+            assertEq(ExpressionTypes::getType(exp, NOTHING, unflagged).getName(),
+                ExpressionTypes::getType(exp, NOTHING, catalog).getName(), dpql);
+        }
+        # the results of the item
+        assertEq((1, 3, 5), DpqlWildcardTest::eval('@matrix[*][0]'));
+        assertEq((1, 2, 3), DpqlWildcardTest::eval('@nums[*]'));
+        assertEq((10, 20), DpqlWildcardTest::eval('@prices{*}.amount'));
+        # an expression with the item is a valid expression in all roles
+        foreach int role in (ER_Field, ER_Search) {
+            AbstractDataProvider::verifyExpression(role, catalog, LC_All, AbstractDataProviderTypeMap."any",
+                DataProvider::parseDpqlExpression('@matrix[*][0]', catalog));
+        }
+        # DPQL validation reports nothing for it
+        hash<string, AbstractDataField> fields = {
+            "matrix": new QoreDataField("matrix", "matrix", AbstractDataProviderType::get("list<list<int>>")),
+        };
+        assertEq((), map $1.message, DataProvider::validateDpqlExpression('@matrix[*][0]', fields, catalog),
+            $1.severity == "error");
+        assertEq("list<int>", ExpressionTypes::getType(DataProvider::parseDpqlExpression('@matrix[*][0]', catalog),
+            fields, catalog).getName());
+        # it is still not written in DPQL, nor evaluated outside of a wildcard
+        assertThrows("DPQL-PARSE-ERROR", "not written in DPQL", \DataProvider::parseDpqlExpression(),
+            ('wildcard_item()', catalog));
+        assertThrows("INVALID-OPERATION", "item of a \\[\\*\\] wildcard",
+            \AbstractDataProvider::evalGenericExpressionValue(), ({}, DpqlWildcardTest::item()));
+    }
+
+    #! DPQL completion never offers an internal expression, whatever its name or syntax
+    internalCompletionTests() {
+        hash<string, hash<DataProviderExpressionInfo>> exps = {
+            "public_fn": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "public_fn",
+                "display_name": "public function",
+                "short_desc": "a function that is offered",
+                "desc": "a function that is offered",
+                "symbol": "public_fn()",
+                "args": (DataProviderSignatureAnyType,),
+                "return_type": AbstractDataProviderTypeMap."any",
+            },
+            "public_op": <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": "public_op",
+                "display_name": "public comparison",
+                "short_desc": "an infix comparison that is offered",
+                "desc": "an infix comparison that is offered",
+                "symbol": "publicop",
+                "groups": "Comparison",
+                "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                "return_type": AbstractDataProviderTypeMap."bool",
+            },
+        };
+        exps.internal_fn = cast<hash<DataProviderExpressionInfo>>(exps.public_fn + {
+            "name": "internal_fn",
+            "symbol": "internal_fn()",
+            "internal": True,
+        });
+        exps.internal_op = cast<hash<DataProviderExpressionInfo>>(exps.public_op + {
+            "name": "internal_op",
+            "symbol": "internalop",
+            "internal": True,
+        });
+        hash<string, AbstractDataField> fields = {
+            "x": new QoreDataField("x", "x", AbstractDataProviderType::get("int")),
+        };
+        code<list<string>(string)> labels = list<string> sub (string text) {
+            return map $1.label, DataProvider::getDpqlCompletions(text, text.size(), fields, exps);
+        };
+        # functions
+        list<string> start = labels('');
+        assertTrue(inlist("public_fn", start));
+        assertFalse(inlist("internal_fn", start));
+        assertEq(("public_fn",), labels('public_'));
+        assertEq((), labels('internal_'));
+        # infix comparisons after an operand
+        list<string> after = labels('@x ');
+        assertTrue(inlist("publicop", after));
+        assertFalse(inlist("internalop", after));
+        # in a search, with the server expressions
+        list<string> search = map $1.label, DataProvider::getDpqlCompletionsWithSearchContext('@x ', 3, fields, exps,
+            NOTHING, exps);
+        assertTrue(inlist("publicop", search));
+        assertFalse(inlist("internalop", search));
+        # an internal expression is still parsed by its name
+        assertEq("internal_fn", DataProvider::parseDpqlExpression('internal_fn(1)', exps).exp);
     }
 }

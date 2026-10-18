@@ -3189,6 +3189,8 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 "it is only valid in a list wildcard and is not written in DPQL",
             "symbol": "",
             "groups": "Data Manipulation",
+            # only ever made by a list wildcard ([*]), so it is never offered for picking
+            "internal": True,
             "args": (),
             "return_type": AbstractDataProviderTypeMap."any",
         },

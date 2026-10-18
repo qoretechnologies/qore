@@ -152,7 +152,9 @@ wildcard.
 Expression form (`DataProviderExpression`): `list_wildcard` / `hash_wildcard` with the source
 and the per-item expression as arguments (the per-item expression is the body of `map`; the
 `.name` steps after `[*]`/`{*}` form one field reference such as `customer.name` or
-`value.amount`); accessors on the item itself start from the zero-argument `wildcard_item`.
+`value.amount`); accessors on the item itself start from the zero-argument `wildcard_item`,
+which is `internal` in the expression catalog (`DataProviderExpressionBaseInfo::internal`):
+it is never offered for picking and is drawn only inside the wildcard that makes it.
 The tokenizer gives the `*` its own token type (`DPQL_TOK_WILDCARD`), the serializer writes a
 wildcard back as written, the expression type is `list<T>` when the type of each value is known,
 and completion offers `[*]` after a list and `{*}` after a hash.
