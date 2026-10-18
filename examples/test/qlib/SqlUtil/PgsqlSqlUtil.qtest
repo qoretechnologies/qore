@@ -466,6 +466,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("PK not backed by non-unique index", \pkNonUniqueIndexTest());
             addTestCase("drop PK constraint without backing index", \dropPkConstraintNoBackingIndexTest());
             addTestCase("schema physical size", \schemaPhysicalSizeTest());
+            addTestCase("current schema physical size", \currentSchemaPhysicalSizeTest());
         }
 
         set_return_value(main());
@@ -570,6 +571,76 @@ class PgsqlTest inherits SqlTestBase {
         assertThrows("SCHEMA-NOT-FOUND", "the schema name cannot be empty", sub () {
             db.getSchemaPhysicalSize("");
         });
+    }
+
+    #! The current schema's physical size is the size of the schema that unqualified names resolve to: the first
+    #! existing schema of the connection's search_path, and only that schema
+    private currentSchemaPhysicalSizeTest() {
+        # a connection of its own, as its search_path is changed
+        Datasource ds(m_options.connstr);
+        ds.open();
+        Database db(ds);
+        string cur = sprintf("sqlutil_cur_size_%d", getpid());
+        string other = sprintf("sqlutil_cur_size_other_%d", getpid());
+        string empty = sprintf("sqlutil_cur_size_empty_%d", getpid());
+
+        code cleanup = sub () {
+            on_error ds.rollback();
+            ds.exec("reset search_path");
+            map ds.exec(sprintf("drop schema if exists %s cascade", $1)), (cur, other, empty);
+            ds.commit();
+        };
+        cleanup();
+        on_exit cleanup();
+
+        on_error ds.rollback();
+        map ds.exec(sprintf("create schema %s", $1)), (cur, other, empty);
+        ds.exec(sprintf("create table %s.items (id bigint primary key, payload text)", cur));
+        ds.exec(sprintf("insert into %s.items select g, repeat(md5(g::text), 20) from generate_series(1, 200) g",
+            cur));
+        ds.exec(sprintf("create sequence %s.item_seq", cur));
+        ds.exec(sprintf("create table %s.items (id bigint primary key, payload text)", other));
+        ds.commit();
+
+        # the default search_path: the size of the schema that current_schema() names
+        *string default_schema = ds.selectRow("select current_schema() as s").s;
+        if (default_schema) {
+            assertEq(db.getSchemaPhysicalSize(default_schema), db.getCurrentSchemaPhysicalSize(),
+                "the default search_path measures current_schema()");
+        } else {
+            assertEq(-1, db.getCurrentSchemaPhysicalSize(), "no schema of the default search_path exists");
+        }
+
+        # a non-default search_path: the first schema that exists is the current schema
+        ds.exec(sprintf("set search_path to %s, %s", cur, other));
+        int cur_size = db.getSchemaPhysicalSize(cur);
+        assertGt(0, cur_size);
+        assertEq(cur_size, db.getCurrentSchemaPhysicalSize(), "the first schema of the search_path is measured");
+        ds.exec(sprintf("set search_path to sqlutil_cur_size_missing_%d, %s", getpid(), cur));
+        assertEq(cur_size, db.getCurrentSchemaPhysicalSize(), "a schema that does not exist is skipped");
+        ds.exec(sprintf("set search_path to %s", other));
+        assertEq(db.getSchemaPhysicalSize(other), db.getCurrentSchemaPhysicalSize(),
+            "another search_path measures another schema");
+        ds.exec(sprintf("set search_path to %s", empty));
+        assertEq(0, db.getCurrentSchemaPhysicalSize(), "an empty schema has no physical storage");
+        ds.exec(sprintf("set search_path to sqlutil_cur_size_missing_%d", getpid()));
+        assertEq(-1, db.getCurrentSchemaPhysicalSize(), "no schema of the search_path exists");
+        ds.rollback();
+
+        # the measurement does not include, and does not grow with, the storage of other schemas, unlike the
+        # size of the whole database
+        ds.exec(sprintf("set search_path to %s", cur));
+        int before_db = db.getPhysicalSize();
+        int before_other = db.getSchemaPhysicalSize(other);
+        ds.exec(sprintf("insert into %s.items select g, repeat(md5(g::text), 100) from generate_series(1, 2000) g",
+            other));
+        map ds.exec(sprintf("create table %s.extra_%d (id bigint primary key, v text)", other, $1)), xrange(20);
+        ds.commit();
+        assertGt(before_other, db.getSchemaPhysicalSize(other), "the other schema grew");
+        assertGt(before_db, db.getPhysicalSize(), "the database grew");
+        assertEq(cur_size, db.getCurrentSchemaPhysicalSize(), "the current schema's size does not change");
+        assertEq(db.getSchemaPhysicalSize(cur), db.getCurrentSchemaPhysicalSize());
+        ds.rollback();
     }
 
     #! a primary key must only be backed by a unique index

@@ -42,7 +42,7 @@
 # enable all warnings
 
 module SqlUtil {
-    version = "3.10.0";
+    version = "3.11.0";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -119,6 +119,12 @@ module SqlUtil {
       bodies
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
+
+    @subsection sqlutilv3_11_0 SqlUtil v3.11.0
+    - Added @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
+      "AbstractDatabase::getCurrentSchemaPhysicalSize()", which measures the physical size of the schema that
+      unqualified names resolve to on the connection, without the cost of measuring the whole database, on
+      PostgreSQL, Oracle, MySQL/MariaDB and SQL Server.
 
     @subsection sqlutilv3_10_0 SqlUtil v3.10.0
     - Added an offline table rewrite transaction that limits only lock waits, for single schema statements

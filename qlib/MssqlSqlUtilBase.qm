@@ -114,6 +114,8 @@ module MssqlSqlUtilBase {
     instead (under the \c "driver" and \c "Mssql" keys for schemas supporting multiple databases).
 
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
+    - added the size of the default schema of the connection's user (\c SCHEMA_NAME(); see
+      @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize() "AbstractDatabase::getCurrentSchemaPhysicalSize()")
     - added temporary-table support (\c "#"-prefixed local temporary tables); see
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
     - fixed column renaming; \c sp_rename was called with an \c "@objtype" of \c "COLUMNS", which the server
@@ -1189,6 +1191,23 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
                                 from sys.master_files f
                                 inner join sys.databases d on d.database_id = f.database_id
                                 where d.name = %v", dbname).val ?? GET_PHYSICAL_DB_SIZE_NOVAL;
+    }
+
+    #! @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
+    /** The current schema is the default schema of the connection's user (\c SCHEMA_NAME()); its size is the space
+        reserved by the in-row, LOB and row-overflow allocation units of the partitions of its objects
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    private int getCurrentSchemaPhysicalSizeImpl() {
+        hash<auto> row = ds.selectRow("select schema_name() as current_schema,
+                                (select coalesce(sum(cast(a.total_pages as bigint)), 0) * 8192
+                                    from sys.allocation_units a
+                                    inner join sys.partitions p on a.container_id = case
+                                        when a.type in (1, 3) then p.hobt_id else p.partition_id end
+                                    inner join sys.objects o on o.object_id = p.object_id
+                                    where o.schema_id = schema_id()) as val");
+        return exists row.current_schema ? row.val.toInt() : GET_PHYSICAL_DB_SIZE_NOVAL;
     }
 
     #! tries to execute a command so that if an error occurs the current transaction status is not lost

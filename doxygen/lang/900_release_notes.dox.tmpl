@@ -3058,6 +3058,10 @@ while (*binary chunk = input.read(65536)) {
         and quoted column names kept their quotes
 
     - @ref sqlutilintro "SqlUtil" module
+      - added @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
+        "AbstractDatabase::getCurrentSchemaPhysicalSize()", the physical size of the schema that unqualified names
+        resolve to on the connection, measured without the cost of measuring the whole database, for PostgreSQL,
+        Oracle, MySQL/MariaDB and SQL Server
       - fixed reconstructing SQLite table descriptions with primary keys, which prevented unrelated field
         changes such as renaming a data-provider field
       - added driver-native bulk-load capability discovery and begin/rows/end dispatch hooks to

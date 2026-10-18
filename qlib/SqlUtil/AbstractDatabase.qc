@@ -1502,6 +1502,40 @@ string sql = t.getSqlFromList(list);
         return getSchemaPhysicalSizeImpl(schema);
     }
 
+    #! Get the physical size in bytes of the schema that unqualified names resolve to on this connection
+    /** This is the schema in which the connection finds the tables, views and other objects that are named without
+        a schema; it measures the same storage as @ref getSchemaPhysicalSize() for that schema.  Unlike
+        @ref getPhysicalSize(), which measures the whole database and can be expensive on a large one, only the
+        current schema is measured.
+
+        The current schema is:
+        - PostgreSQL: the first existing schema in the connection's \c search_path (\c current_schema()), so the
+          login role's \c search_path is respected
+        - Oracle: the schema of the user that the connection is logged in as; when the session's current schema
+          has been changed to another one (<tt>alter session set current_schema</tt>), that schema is measured if
+          the user can read \c dba_segments, otherwise \c -1 is returned
+        - MySQL and MariaDB: the current database (\c database())
+        - Microsoft SQL Server: the default schema of the connection's user (\c SCHEMA_NAME())
+
+        @return the size of the current schema in bytes, \c 0 for an empty schema, or \c -1 when the driver does
+        not support measuring the current schema or the connection has no current schema
+
+        @note as with the other physical size methods, the value is determined by the database's own accounting of
+        its storage (pages, extents or segments); on MySQL and MariaDB it comes from table statistics, which the
+        server may cache
+
+        @par Example
+        @code
+        Database db(datasource);
+        int bytes = db.getCurrentSchemaPhysicalSize();
+        @endcode
+
+        @since %SqlUtil 3.11.0
+    */
+    int getCurrentSchemaPhysicalSize() {
+        return getCurrentSchemaPhysicalSizeImpl();
+    }
+
     #! Returns @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
     /** @return @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
 
@@ -1707,6 +1741,17 @@ string sql = t.getSqlFromList(list);
         @since %SqlUtil 3.2.0
     */
     private int getSchemaPhysicalSizeImpl(string schema) {
+        return GET_PHYSICAL_DB_SIZE_NOVAL;
+    }
+
+    #! returns the physical size of the current schema; reimplement in drivers that can determine it
+    /** the default implementation returns \c -1
+
+        @see @ref getCurrentSchemaPhysicalSize()
+
+        @since %SqlUtil 3.11.0
+    */
+    private int getCurrentSchemaPhysicalSizeImpl() {
         return GET_PHYSICAL_DB_SIZE_NOVAL;
     }
 

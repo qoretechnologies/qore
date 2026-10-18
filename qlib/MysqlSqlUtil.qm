@@ -102,6 +102,8 @@ module MysqlSqlUtil {
     @section mysql_relnotes Release Notes
 
     @subsection mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - added the size of the current database (\c database(); see
+      @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize() "AbstractDatabase::getCurrentSchemaPhysicalSize()")
     - added temporary-table support (\c "create temporary table"); see
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
     - fixed numeric column comparison; an assignment was used in place of a comparison, so comparing two numeric
@@ -1342,6 +1344,20 @@ end";
             return ds.selectRow("select sum(data_length + index_length) as val
                                     from information_schema.tables
                                     where table_schema = %v", dbname).val ?? GET_PHYSICAL_DB_SIZE_NOVAL;
+        }
+
+        #! @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
+        /** The current schema is the current database (\c database()), which is determined in the same statement
+            that measures it; with no current database, \c -1 is returned
+
+            @since MysqlSqlUtil 1.6
+        */
+        private int getCurrentSchemaPhysicalSizeImpl() {
+            hash<auto> row = ds.selectRow("select database() as current_db,
+                                    (select coalesce(sum(data_length + index_length), 0)
+                                        from information_schema.tables
+                                        where table_schema = database()) as val");
+            return exists row.current_db ? row.val.toInt() : GET_PHYSICAL_DB_SIZE_NOVAL;
         }
     }
 
