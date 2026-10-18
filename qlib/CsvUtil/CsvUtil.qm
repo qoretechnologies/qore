@@ -401,6 +401,10 @@ while (i.next()) {
     @section csvutil_relnotes Release Notes
 
     @subsection csvutil_v1_12 Version 1.12
+    - the writers write in the character encoding of their \c "encoding" option, as documented: the file and
+      stream writers and the write data provider wrote the text in the default encoding (normally UTF-8) whatever
+      the option, and @ref CsvUtil::CsvStringWriter::getContent() "CsvStringWriter::getContent()" returned it in the
+      default encoding
     - CSV files are written and read as RFC 4180 CSV data by default, so every value written is read back
       unchanged (see @ref csvutil_rfc4180):
       - the writers escape a quote in a quoted field by doubling it: the \c "quote_escape" option is empty by

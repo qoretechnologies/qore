@@ -60,6 +60,8 @@ public namespace CsvUtil {
         }
 
         private initContent() {
+            # the content is in the output encoding, as the lines added to it are
+            content = convert_encoding("", encoding);
             writeHeaders();
         }
 
