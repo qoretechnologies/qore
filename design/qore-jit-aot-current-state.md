@@ -3535,3 +3535,13 @@ ratios are whole-workload costs, not isolated call latency or parity evidence.
 Next investigate reuse of the caller's already-acquired live RuntimeConfig in
 ordinary dispatch, with separate correctness and before/after measurements.
 No global performance ceiling is established.
+
+
+## Rejected explicit RuntimeConfig for ordinary AOT dispatch (post-bf4b4ebdd)
+
+Integer getter loop: 163.871324 -> 156.566027 ns/item (-4.457947% time).
+Floating getter loop: 171.850485 -> 166.210816 ns/item (-3.281730% time).
+
+Rejected by conservative manual review despite passing the original mechanical rule: repeated monomorphic and side-effecting method losses are not dismissed because ranges overlap. Candidate sources archived and production restored/requalified. All 7920 optimized windows and every loss are preserved across 55 workloads / three fixed layouts. This is matched branch before/after, not fresh Java/develop or isolated-call timing.
+
+The experiment tested passing an explicit borrowed live view through ordinary AOT dispatch, retaining old ABIs, complete live guards, fallback snapshots, argument ownership, cancellation and observable frames. See RESULTS and `results-aot-ordinary-dispatch-runtime-config-rejected-macos-arm64.json` for all results, qualification, diagnostics and audit. Next separately investigate immutable signature proof at admission. Java parity and a global ceiling remain unestablished.

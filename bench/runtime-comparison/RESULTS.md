@@ -18071,3 +18071,93 @@ before this evidence is committed. Subsequent RuntimeConfig threading is a
 separate before/after experiment: reuse a live same-thread view, preserve live
 Program/class/parse-option and fallback semantics, and measure broad controls.
 No Java parity or justified global performance ceiling is established.
+
+
+## Rejected explicit RuntimeConfig for ordinary AOT dispatch (post-bf4b4ebdd)
+
+The candidate is rejected after conservative manual review despite passing the original mechanical rule. The getter targets improve, but monomorphic-call aggregate time increases 5.430%/5.251% in screen/confirmation and the side-effecting method loop increases 3.132%/8.782%. The original rule/result is unchanged and preserved separately; overlapping observed ranges do not establish non-regression. Production changes and the two new fixture files are restored/removed only after archival, followed by fresh Release/Debug qualification.
+
+This is a matched before/after experiment against the merged branch at `bf4b4ebddfb8f778527d81ac3f514ddeb0e9d27a`, not a new develop/Java comparison. Both runtimes use Release `-O3 -DNDEBUG` and qcc `-O3`. The matrix contains 55 workloads (37 micro, 4 mixed, 14 getter/control), three fixed layouts, 4096 items/seed7, three warmup and three measured 300ms windows per job. The three-fork screen and five-fork confirmation retain all 7920 windows separately, without pooling.
+
+Each table value is the median of the three layout medians of fork means, in ns/item; percentage is change in elapsed time (negative is faster). These are whole-workload costs, not isolated call latency or production throughput.
+
+|!Workload|!Screen before|!Screen candidate|!Screen time change|!Confirm before|!Confirm candidate|!Confirm time change
+|arithmetic|1.540706|1.542730|+0.131388%|1.539917|1.536197|-0.241554%
+|direct_call|1.539501|1.551324|+0.767926%|1.517661|1.538180|+1.352020%
+|method_call|1.604371|1.600595|-0.235386%|1.587506|1.601129|+0.858099%
+|indirect_call|6.851179|6.730492|-1.761547%|6.740660|6.528349|-3.149709%
+|polymorphic_call|23.289586|22.997658|-1.253467%|22.084365|22.277162|+0.873004%
+|polymorphic_expression_call|10.754027|10.655732|-0.914028%|10.695457|10.370904|-3.034498%
+|monomorphic_call|3.531513|3.723274|+5.430013%|3.418696|3.598221|+5.251279%
+|optional_method_call|10.676322|10.638820|-0.351265%|10.328819|10.267497|-0.593696%
+|polymorphic_float_call|23.401488|23.323615|-0.332769%|22.758558|23.029226|+1.189301%
+|polymorphic_float_expression_call|10.869887|11.019616|+1.377471%|10.775545|10.847578|+0.668480%
+|monomorphic_float_call|3.524785|3.569443|+1.266954%|3.487284|3.471817|-0.443507%
+|optional_float_method_call|10.887018|11.003441|+1.069370%|10.738252|10.789408|+0.476388%
+|boxed_float_method_call|19.988173|20.103549|+0.577221%|19.665535|19.697887|+0.164511%
+|dynamic_int_result_call|10.679298|10.447301|-2.172401%|10.660143|10.453804|-1.935609%
+|dynamic_int_result_fallback|21.910992|21.851721|-0.270506%|21.844953|21.626131|-1.001705%
+|boxed_int_method_call|15.955533|16.347925|+2.459287%|15.483530|15.711755|+1.473988%
+|boxed_int_method_fallback|31.752303|31.379808|-1.173128%|29.888473|29.797631|-0.303935%
+|boxed_float_method_fallback|33.146358|32.820737|-0.982374%|32.384844|32.813640|+1.324064%
+|boxed_int_method_effect|89.458405|89.409313|-0.054878%|86.805020|85.426358|-1.588229%
+|dynamic_float_result_call|11.830291|11.958617|+1.084725%|11.729240|11.945683|+1.845333%
+|indirect_wide|6.722785|6.828048|+1.565774%|6.748015|6.733551|-0.214347%
+|indirect_float|6.700350|6.676320|-0.358640%|6.605634|6.601974|-0.055400%
+|indirect_int_result|6.367970|6.143609|-3.523264%|6.107523|6.096825|-0.175164%
+|indirect_float_result|7.376807|7.418101|+0.559771%|7.315706|7.186362|-1.768036%
+|indirect_tagged_float|6.780868|6.776694|-0.061552%|6.788989|6.822171|+0.488770%
+|indirect_branch_float|6.784069|6.825462|+0.610155%|6.522164|6.619930|+1.498980%
+|indirect_affine|6.903411|6.892198|-0.162427%|6.741286|6.673188|-1.010155%
+|indirect_affine_wide|6.837476|6.716772|-1.765332%|6.744910|6.749963|+0.074918%
+|indirect_branch_int|6.885757|6.857005|-0.417564%|6.794109|6.732330|-0.909293%
+|dispatch_control|1.642162|1.646653|+0.273440%|1.615748|1.612656|-0.191325%
+|list_read|2.760981|2.723684|-1.350891%|2.682646|2.664743|-0.667354%
+|list_build|26.608346|26.706573|+0.369160%|26.392876|26.220229|-0.654141%
+|list_mutate|186.442322|186.647475|+0.110036%|183.559691|181.795955|-0.960852%
+|temporary_list|1.637289|1.628581|-0.531907%|1.606647|1.594665|-0.745746%
+|temporary_hash|336.238898|336.147093|-0.027304%|321.475306|320.956101|-0.161507%
+|closure_call|17.998919|17.705386|-1.630833%|17.399759|17.127430|-1.565127%
+|closure_capture|24.419464|23.933656|-1.989431%|23.614288|23.316212|-1.262270%
+|csv_report|976.298504|956.177225|-2.060976%|930.552383|923.251933|-0.784529%
+|object_orders|1902.082916|1907.760751|+0.298506%|1802.706587|1767.927890|-1.929249%
+|callback_pipeline|83.650736|83.471165|-0.214667%|80.704714|80.725898|+0.026248%
+|text_index|1336.637423|1339.817921|+0.237948%|1291.906440|1300.872624|+0.694027%
+|object_loop|168.487871|161.863904|-3.931421%|163.871324|156.566027|-4.457947%
+|object_short|1068.253261|1061.395723|-0.641939%|1055.761733|1061.516850|+0.545115%
+|float_loop|178.672577|171.103588|-4.236235%|171.850485|166.210816|-3.281730%
+|float_short|1071.762367|1078.208323|+0.601435%|1087.168934|1098.094553|+1.004961%
+|string_loop|371.770456|379.628047|+2.113560%|361.835786|359.176133|-0.735044%
+|string_short|1247.455696|1237.764922|-0.776843%|1231.990560|1231.975640|-0.001211%
+|effect_loop|357.287368|368.479226|+3.132453%|339.504833|369.320330|+8.782054%
+|effect_short|1311.075515|1291.646679|-1.481901%|1257.467502|1270.984869|+1.074967%
+|two_read_loop|398.443393|408.197612|+2.448082%|395.363125|397.244986|+0.475983%
+|two_read_short|1296.802186|1320.079366|+1.794968%|1283.006247|1304.029116|+1.638563%
+|default_loop|708.928671|708.670427|-0.036427%|676.234184|701.420175|+3.724448%
+|default_short|1618.321516|1651.992664|+2.080622%|1572.041371|1611.579735|+2.515097%
+|string_result_loop|439.207650|452.619362|+3.053615%|449.347270|454.312535|+1.104995%
+|string_result_short|1374.233712|1393.631898|+1.411564%|1336.407999|1336.734947|+0.024465%
+
+### Retention rule and adverse results
+
+Both integer and floating getter-loop targets must use at least 2% less aggregate time and improve in every fixed layout in both epochs. Reject a non-target workload/layout that is at least 3% slower with disjoint observed fork-mean ranges in both epochs. Reverse and shuffle487 orders are fixed from the new baseline default symbols and shared exactly with the candidate; there is no alignment search, dropped window or rescue epoch.
+
+Screen: 25 aggregate losses and 78 adverse workload/layout comparisons. Largest layout loss: `string_result_loop`, `reverse`, +6.743950%. Every loss and observed fork range is retained in the raw report.
+
+Confirmation: 26 aggregate losses and 81 adverse workload/layout comparisons. Largest layout loss: `effect_loop`, `reverse`, +13.873874%. Every loss and observed fork range is retained in the raw report.
+
+Repeated adverse comparisons meeting the original broad-regression rule: none.
+
+Observed ranges are not confidence intervals; overlapping ranges do not establish non-regression. All adverse confirmation comparisons have overlapping ranges, some very wide; no outliers were removed. The manual rejection is a conservative engineering judgment, not a new statistical test or proof that the candidate alone caused each slowdown. Host frequency, thermals and unrelated load are uncontrolled. No task-owned builds, tests, profiles or source analysis overlapped timing.
+
+### Implementation and qualification
+
+The candidate threads a borrowed live native RuntimeConfig through versioned ordinary AOT helpers. Callers reuse an existing non-null fast view or acquire a separate nullable view once at logical entry; final lowering coalesces an earlier ordinary acquisition with a later-encountered callback acquisition only when same-block ordering proves dominance. Legacy exports remain. No Program/class/options snapshot is substituted for live state. Complete dispatch keys, private access, signature/body/readiness/debugger guards, live member locks, logical frames, argument ownership, fallback snapshot refresh and per-iteration cancellation remain.
+
+Fresh baseline Release/Debug each pass 69 core files / 112 cases / 17,595 assertions; candidate each passes 70 / 115 / 17,825, including 230 new assertions. Fresh restored Release/Debug each pass the original 69 / 112 / 17,595 after candidate removal. Qualification also includes 13 lvalue/DGC suites, local HTTP/REST, 7 merged DataProvider suites, offline LLM, thread cancellation, 555 IR + 555 AOT reference checks and 1985 Debug native checks in each enabled/disabled mode. All 64 owned qmods are rebuilt and their Release aliases restored, with unrelated links unchanged. The filtered REST checks execute one selected case per module; QUnit summary totals include skipped cases. No external database suite was run. This is selected macOS arm64 coverage, not full-suite/sanitizer/cross-platform certification.
+
+Actual legacy baseline executables are checked against the candidate runtime separately from timing. Optimized LLVM/assembly inspection verifies versioned dispatch selection and shared-view propagation; static code evidence is not a per-helper latency estimate or sole-cause proof. The fixture covers borrowed/object/consuming and throwing forms, fallbacks, traversal-order-independent acquisition reuse, and registration/teardown lifetimes.
+
+Development records preserve the baseline REST output-format harness failure, unsupported numbered patch-hunk formatting before source application, a prematurely started qualification cancelled before application, and the new fixture's `bool(...)` parse error corrected to logical conversion. The corrected fixture passes 230 assertions; final Release/Debug qualification is fresh. An initial inspection summary incorrectly counted zero instructions because its address parser omitted Mach-O colons; that summary is invalid and archived. The corrected parser requires positive counts, and all 118 raw assembly/symbol outputs match between inspection attempts. No timed samples were discarded or retried.
+
+See `results-aot-ordinary-dispatch-runtime-config-rejected-macos-arm64.json` for all raw windows, hashes, commands, logs, failed attempts, code/layout diagnostics, the independent replay and complete 62-item audit. No new Java ratio or global performance ceiling is established. The next separate hypothesis is moving immutable zero-argument signature/return-family proof into existing generic admission, without widening native eligibility or changing live guards, binding readiness, locks or frames.
