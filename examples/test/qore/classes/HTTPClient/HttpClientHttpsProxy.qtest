@@ -292,7 +292,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
                 sprintf("https://127.0.0.1:%d", https_proxy.getPort())) {
             assertThrows("SOCKET-SSL-ERROR", \httpClientGet(), (url, proxy, "1.1"), proxy);
             foreach string proto in ("h1", "h2") {
-                assertThrows("HTTPCLIENT-CONNECT-ERROR", "hostname mismatch.*other|hostname mismatch", \ioGet(),
+                assertThrows("SOCKET-SSL-ERROR", "hostname mismatch.*other|hostname mismatch", \ioGet(),
                     (url, proxy, proto), proxy + " " + proto);
             }
         }
@@ -302,7 +302,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         assertThrows("SOCKET-SSL-ERROR", "TLS connection to the proxy failed.*mismatch", \httpClientGet(),
             (url, proxy, "1.1"));
         foreach string proto in ("h1", "h2") {
-            assertThrows("HTTPCLIENT-CONNECT-ERROR", "TLS connection to the proxy failed.*mismatch",
+            assertThrows("SOCKET-SSL-ERROR", "TLS connection to the proxy failed.*mismatch",
                 \ioGet(), (url, proxy, proto), proto);
         }
         # ... unless all certificates are accepted
@@ -315,8 +315,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         bool stop;
         background sub () {
             on_exit done.dec();
-            # answers the TLS handshake with an HTTP error response, as a plain HTTP proxy does; the client retries
-            # a failed connection, so every connection is answered
+            # answers the TLS handshake with an HTTP error response, as a plain HTTP proxy does
             while (!stop) {
                 *Socket s = plain.accept(100ms);
                 if (!s) {
@@ -333,7 +332,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
             plain.close();
         }
         proxy = sprintf("https://127.0.0.1:%d", plain.getSocketInfo().port);
-        assertThrows("HTTPCLIENT-CONNECT-ERROR", "TLS connection to the proxy failed", \ioGet(), (url, proxy, "h1"));
+        assertThrows("SOCKET-SSL-ERROR", "TLS connection to the proxy failed", \ioGet(), (url, proxy, "h1"));
     }
 
     shutdownTest() {
