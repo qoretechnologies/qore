@@ -3500,3 +3500,22 @@ A retained improvement requires fresh matched optimized feature/develop/Java num
 Positive already-matched getter admission and proved-clean sink handling with unchanged
 per-iteration cancellation checks remain
 separate hypotheses. No Java parity or global performance ceiling is claimed.
+
+
+## Retained zero-argument scalar getters through admitted ordinary dispatch (post-18880ba81)
+
+Integer getter loop: 284.205 -> 168.731 ns/item (-40.631% time). Floating getter loop: 330.261 -> 175.215 ns/item (-46.947% time). The candidate passes both target epochs and the fixed broad-regression gate.
+
+All 5904 optimized windows across 41 workloads and three fixed layouts are
+preserved. Positive compiler-published zero-argument bindings are attempted inside
+already-matched ordinary fast dispatch. No generated caller rewrite or shared PIC
+growth; exact live guards, eager context, synchronized reads and reader-safe frames
+remain. RuntimeConfig is passed within the invocation, but this path still acquires
+it through the current runtime view. No lock elision or member-value cache.
+
+Release/Debug qualification includes core/getter, merged DPQL/local HTTPS,
+lvalue/DGC, native/reference and integration coverage, with 64 rebuilt qmods and
+exact alias restoration. See RESULTS and `results-aot-zero-arg-getter-admitted-macos-arm64.json` for all gains/losses,
+provenance, diagnostics, limitations and the complete audit. A retained improvement
+needs fresh matched optimized feature/develop/Java measurements. No fresh Java ratio
+or global performance ceiling is claimed here.

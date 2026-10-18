@@ -1,0 +1,221 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ZeroArgScalarGetterTest
+
+class ZeroArgScalarGetterTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("zero-argument scalar getter AOT entries", "1.0", \ARGV) {
+        addTestCase("live scalar reads and fallback", \check());
+        addTestCase("debugger and concurrent frame readers", \checkObservation());
+        addTestCase("concurrent member replacement", \checkWriters());
+        addTestCase("native admission and exact-body publication", \checkNative());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTZeroArgScalarGetter.qr";
+        string expected = "zero-arg-getter: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-zero-getter-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ",
+                "QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1 ",
+                "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ",
+                "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ",
+                "QORE_DISABLE_AOT_ZERO_ARG_GETTER=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool enabled = prefix.find("SCALAR_MEMBER_ENTRY") < 0 && prefix.find("ZERO_ARG_GETTER") < 0;
+                foreach string name in (("Int", "Override", "Public", "Float", "InternalFloat", "Reference")) {
+                    assertEq(enabled, regex(ir, "call void @qore_rt_bind_getter_[^\n]*ZeroGetter" + name
+                        + "__read"), name + prefix + level);
+                }
+                foreach string name in (("Effect", "TwoReads", "Constant", "ExplicitSelf", "Default", "Argv",
+                        "Throw", "Unary", "Synchronized", "StringResult", "DefaultThrow")) {
+                    assertFalse(regex(ir, "call void @qore_rt_bind_getter_[^\n]*ZeroGetter" + name
+                        + "__read"), "ordinary body " + name);
+                }
+                assertTrue(!regex(ir, "qore_rt_dot_eval_zero_arg_getter_aot_v1")
+                    && regex(ir, "(call|invoke) i64 @qore_rt_dot_eval_(object_)?method_direct_aot"),
+                    "ordinary caller selection " + prefix + level);
+                # The existing unary ABI remains independent of the new control.
+                assertEq(prefix.find("SCALAR_MEMBER_ENTRY") < 0,
+                    regex(ir, "call void @qore_rt_bind_member_int_v1[^\n]*ZeroGetterUnary__read"));
+                foreach string runtime in (("", "QORE_DISABLE_AOT_ZERO_ARG_GETTER=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
+                        "QORE_DISABLE_AOT_GENERIC_METHOD_ADMISSION_CACHE=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_PARAM_BINDING_CACHE=1 ",
+                        "QORE_DISABLE_AOT_RESOLVED_METHOD_CACHE=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+    private string change(string source, string before, string after) {
+        assertTrue(source.find(before) >= 0, before);
+        return replace(source, before, after);
+    }
+    private write(string path, string source) {
+        File file();
+        file.open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        file.write(source);
+        file.close();
+    }
+    private checkObservation() {
+        TmpDir dir("qore-zero-getter-observation-");
+        foreach string name in (("AOTNativeMethodDebugger", "AOTNativeMethodFrameReaders")) {
+            bool readers = name.endsWith("FrameReaders");
+            string source = File::readTextFile(get_script_dir() + "/" + name + ".qr");
+            list<string> classes = readers ? ("NativeReaderA", "NativeReaderB")
+                : ("NativeDebugBase", "NativeDebugDerived", "NativeDebugLateDerived");
+            for (int i = 0; i < classes.size(); ++i) {
+                string declaration = "class " + classes[i]
+                    + (i ? " inherits " + classes[0] : "") + " {";
+                string value = string(i == 2 ? 23 : 17 + 2 * i);
+                # Keep source line numbers used by the debugger and frame reader.
+                source = change(source, declaration, declaration + " private:internal { int delta = " + value + "; }");
+                source = change(source, readers ? "return (value + " + value + ") & 65535;"
+                    : "return value + " + value + ";", "return delta;");
+            }
+            source = change(source, "next(int value)", "next()");
+            if (readers) {
+                source = change(source, "forward(int value)", "forward()");
+                source = change(source, "self.next(value)", "self.next()");
+                source = change(source, "value = receiver.forward(value);", "value += receiver.forward();");
+                source = change(source, "value = receiver.next(value);", "value += receiver.next();");
+                source = change(source, "8192", "73728");
+                source = change(source, "12288", "77824");
+            } else {
+                source = change(source, "receiver.next(value)", "receiver.next()");
+                source = change(source, "i + 19", "19");
+                source = change(source, "i + 23", "23");
+            }
+            string fixture = dir.path + "/" + name + ".qr";
+            write(fixture, source);
+            string expected = readers ? "native-method-frame-readers: ok\n" : "native-method-debugger: ok\n";
+            assertEq(expected, run((qore, "--exec-mode=ast", fixture)), name + " AST");
+            foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+                foreach string level in (("-O0", "-O3")) {
+                    string executable = dir.path + "/fixture";
+                    string ir = run((qcc, level, "--strip-source", "-o", executable, fixture),
+                        prefix + "QORE_DUMP_LLVM_IR=1 ");
+                    foreach string cls in (classes) {
+                        assertRegex("call void @qore_rt_bind_getter_int_v1[^\n]*" + cls + "__next", ir);
+                    }
+                    foreach string runtime in (("", "QORE_DISABLE_AOT_ZERO_ARG_GETTER=1 ",
+                            "QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1 ")) {
+                        assertEq(expected, run((executable,), runtime), name + prefix + level + runtime);
+                    }
+                }
+            }
+        }
+    }
+    private checkWriters() {
+        TmpDir dir("qore-zero-getter-writers-");
+        string source = File::readTextFile(get_script_dir() + "/AOTScalarMemberThreads.qr");
+        source = change(source, "next(int value)", "next()");
+        source = change(source, "next(float value)", "next()");
+        source = change(source, "return value + delta;", "return delta;");
+        source = change(source, "return value + internal_delta;", "return internal_delta;");
+        source = change(source, "receiver.next(value)", "receiver.next()");
+        source = change(source, "!= 18", "!= 17");
+        source = change(source, "1125899906842625", "1125899906842624");
+        source = change(source, "!= 1.5", "!= 0.5");
+        string fixture = dir.path + "/writers.qr";
+        write(fixture, source);
+        string expected = "scalar-member-threads: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            foreach bool internal in ((False, True)) {
+                list<string> extra = internal ? ("internal",) : ();
+                assertEq(expected, run((qore, "--exec-mode=" + mode, fixture) + extra), mode);
+            }
+        }
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, fixture),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                assertRegex("call void @qore_rt_bind_getter_int_v1[^\n]*ScalarMemberThreadInt__next", ir);
+                assertRegex("call void @qore_rt_bind_getter_float_v1[^\n]*ScalarMemberThreadFloat__next", ir);
+                foreach string runtime in (("", "QORE_DISABLE_AOT_ZERO_ARG_GETTER=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                    assertEq(expected, run((executable, "internal"), runtime), prefix + level + runtime + " internal");
+                }
+            }
+        }
+    }
+    private checkNative() {
+        TmpDir dir("qore-zero-getter-native-");
+        string source = dir.path + "/probe.qr";
+        write(source, "%modern\nclass ZeroNativeInt { public { auto value = 17; } int read() { return value + 1; } }\n"
+            "class ZeroNativeFloat { public { auto value = 0.5; } float read() { return value + 0.25; } }\n"
+            "object sub makeInt() { return new ZeroNativeInt(); }\n"
+            "object sub makeFloat() { return new ZeroNativeFloat(); }\n"
+            "auto sub zeroNativeCall(auto receiver) { return receiver.read(); }\n");
+        string control = dir.path + "/control.qr";
+        write(control, "%modern\nint sub zeroGetterControl() { return 23; }\n");
+        string root = get_script_dir() + "/../../..";
+        string executable = dir.path + "/native";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-pthread", "-g", "-DHAVE_UNIX_CONFIG_H",
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir,
+            get_script_dir() + "/aot_zero_arg_scalar_getter.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", executable);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) { push args, target[0]; }
+        foreach string level in (("-O0", "-O3")) {
+            foreach string compile_env in (("", "QORE_AOT_EH=1 ")) {
+                run((qcc, level, "-c", "--strip-source", "--batch-script-aggregate=ZERO_ARG_GETTER",
+                    "--script-aggregate-native-registers", "--batch-script-aggregate-output=" + dir.path + "/aggregate.qo",
+                    "--output-dir=" + dir.path, source, control), compile_env);
+                list<string> objects = glob(dir.path + "/*.qo");
+                assertEq(3, objects.size(), "two native inputs plus aggregate");
+                run(args + objects);
+                foreach string prefix in (("", "QORE_DISABLE_AOT_ZERO_ARG_GETTER=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
+                        "QORE_DISABLE_AOT_GENERIC_METHOD_ADMISSION_CACHE=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_PARAM_BINDING_CACHE=1 ",
+                        "QORE_DISABLE_AOT_RESOLVED_METHOD_CACHE=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY=1 ")) {
+                    assertEq("zero-arg-getter-native: ok\n", run((executable,), prefix), compile_env + level + prefix);
+                }
+            }
+        }
+    }
+}

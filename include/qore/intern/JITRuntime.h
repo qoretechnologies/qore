@@ -1071,6 +1071,46 @@ void qore_rt_bind_member_float_v1(QoreAOTContext* ctx,
     double (*entry)(double, QoreObject*, const qore_class_private*, RuntimeConfig*, int*,
         QoreAOTContext*, ExceptionSink*));
 
+//! Publish a zero-argument read-only integer getter for the exact normal body.
+/** @param ctx runtime-owned method context
+    @param normal normal body identity, rechecked at dispatch
+    @param entry companion borrowing receiver/class/RuntimeConfig; accepted zero requests effect-free fallback
+    @return No value; the first valid binding remains installed.
+    @throw None This function does not throw or raise a Qore exception.
+    @note Null or mismatched inputs are a no-op. Release publication transfers no
+    ownership and caches no receiver or member value. Readers must still check
+    the current body and admission contract before invoking the companion.
+
+    @par Example
+    Publish a compiled account-balance getter when its normal body first executes:
+    @code{.cpp}
+    qore_rt_bind_getter_int_v1(ctx, normal_body, balance_getter);
+    @endcode
+*/
+void qore_rt_bind_getter_int_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(QoreObject*, const qore_class_private*, RuntimeConfig*, int*, QoreAOTContext*, ExceptionSink*));
+
+//! Publish a zero-argument floating getter under the same exact-body contract.
+/** @param ctx runtime-owned method context
+    @param normal normal body identity, rechecked at dispatch
+    @param entry companion borrowing receiver/class/RuntimeConfig; accepted zero requests effect-free fallback
+    @return No value; the first valid binding remains installed.
+    @throw None This function does not throw or raise a Qore exception.
+    @note Null or mismatched inputs are a no-op. Release publication transfers no
+    ownership and caches no receiver or member value. Runtime float controls and
+    current body/admission checks remain authoritative when invoking the entry.
+
+    @par Example
+    Publish a compiled temperature getter when its normal body first executes:
+    @code{.cpp}
+    qore_rt_bind_getter_float_v1(ctx, normal_body, temperature_getter);
+    @endcode
+*/
+void qore_rt_bind_getter_float_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    double (*entry)(QoreObject*, const qore_class_private*, RuntimeConfig*, int*, QoreAOTContext*, ExceptionSink*));
+
 struct QoreAOTEffectMemberIntEntryV1;
 //! Publish an immutable update-prefix/continuation pair for the exact normal AOT body.
 //! @param ctx method context

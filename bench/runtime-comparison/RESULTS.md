@@ -17728,3 +17728,181 @@ cancellation checkpoint. The arithmetic and direct
 call control loops already inline the step operation; whole-loop cost is not residual
 call latency. Those hypotheses remain unimplemented here. No Java parity or justified
 global performance ceiling is established.
+
+
+## Retained zero-argument scalar getters through admitted ordinary dispatch (post-18880ba81)
+
+Integer getter loop: 284.205 -> 168.731 ns/item (-40.631% time). Floating getter loop: 330.261 -> 175.215 ns/item (-46.947% time). The candidate passes both target epochs and the fixed broad-regression gate.
+
+Release `-O3 -DNDEBUG` and qcc `-O3`; separately qualified frozen before/candidate
+artifacts. All 23 micro workloads, 4 mixed workloads and 14 getter/control probes
+are retained across default, reverse and shuffle-487 layouts. Each invocation uses
+4096 items, seed 7, three warmup and three measured 300 ms windows. The screen uses
+three forks/order 136399; an independent five-fork confirmation/order 136401 follows
+only when the screen targets pass. All 5904 measured windows are preserved.
+No task-owned build, test, profile, read, analysis or edit overlaps timing.
+
+Values are whole-workload ns/item, not isolated call latency. The getter probes
+include two receiver calls, a callback and setup; short variants also include
+ordinary `call_function` dispatch. Host load, frequency and thermals are uncontrolled.
+Observed fork-mean ranges are not confidence intervals. No fresh Java/develop ratio
+is inferred from this before/after experiment.
+
+|!Workload|!Screen before|!Screen candidate|!Time change|!Confirmation before|!Confirmation candidate|!Time change
+|arithmetic|1.543|1.546|+0.195%|1.545|1.539|-0.387%
+|direct_call|1.554|1.494|-3.872%|1.550|1.548|-0.088%
+|method_call|1.615|1.637|+1.343%|1.607|1.601|-0.388%
+|indirect_call|6.785|6.868|+1.222%|6.727|6.792|+0.978%
+|polymorphic_call|22.769|22.849|+0.349%|23.019|23.094|+0.324%
+|monomorphic_call|3.468|3.508|+1.177%|3.567|3.537|-0.867%
+|optional_method_call|10.621|10.687|+0.628%|10.678|10.643|-0.329%
+|boxed_int_method_effect|89.866|89.175|-0.769%|88.750|89.329|+0.653%
+|boxed_int_method_fallback|31.742|31.654|-0.276%|31.071|31.480|+1.315%
+|closure_call|18.125|18.240|+0.637%|18.237|18.166|-0.388%
+|closure_capture|23.684|23.822|+0.583%|24.069|24.274|+0.854%
+|indirect_wide|6.820|6.784|-0.526%|6.774|6.926|+2.254%
+|indirect_float|6.602|6.569|-0.503%|6.594|6.603|+0.139%
+|list_read|2.779|2.725|-1.946%|2.845|2.793|-1.802%
+|list_build|26.001|26.270|+1.036%|26.530|26.579|+0.185%
+|list_mutate|186.987|187.005|+0.010%|188.210|187.521|-0.366%
+|temporary_list|1.602|1.586|-1.000%|1.623|1.621|-0.158%
+|temporary_hash|326.286|327.191|+0.277%|334.927|333.489|-0.429%
+|boxed_int_method_call|16.019|15.977|-0.266%|16.159|16.136|-0.146%
+|boxed_float_method_call|19.716|19.982|+1.351%|19.912|20.022|+0.554%
+|boxed_float_method_fallback|32.439|32.769|+1.018%|32.774|32.744|-0.090%
+|dynamic_int_result_call|10.459|10.632|+1.655%|10.759|10.743|-0.149%
+|dynamic_float_result_call|11.744|11.788|+0.376%|11.783|11.833|+0.429%
+|csv_report|941.917|951.139|+0.979%|970.834|972.336|+0.155%
+|object_orders|1837.732|1876.749|+2.123%|1872.342|1885.843|+0.721%
+|callback_pipeline|83.903|84.400|+0.592%|83.441|83.505|+0.077%
+|text_index|1331.395|1335.574|+0.314%|1351.364|1345.858|-0.407%
+|object_loop|281.970|169.226|-39.984%|284.205|168.731|-40.631%
+|object_short|1202.174|1081.639|-10.026%|1200.888|1066.376|-11.201%
+|float_loop|326.246|175.251|-46.283%|330.261|175.215|-46.947%
+|float_short|1261.180|1086.918|-13.817%|1260.239|1094.197|-13.175%
+|string_loop|375.974|370.592|-1.432%|374.156|372.701|-0.389%
+|string_short|1231.817|1251.121|+1.567%|1261.112|1253.604|-0.595%
+|effect_loop|365.095|349.292|-4.329%|350.611|341.152|-2.698%
+|effect_short|1256.031|1244.701|-0.902%|1278.084|1263.986|-1.103%
+|two_read_loop|388.482|384.614|-0.996%|401.476|391.111|-2.582%
+|two_read_short|1324.659|1318.820|-0.441%|1306.423|1325.834|+1.486%
+|default_loop|721.820|695.214|-3.686%|692.421|688.181|-0.612%
+|default_short|1623.042|1608.009|-0.926%|1624.512|1644.655|+1.240%
+|string_result_loop|434.558|433.746|-0.187%|434.522|448.346|+3.181%
+|string_result_short|1368.792|1377.787|+0.657%|1365.471|1357.317|-0.597%
+
+Both targets must improve at least 2% in aggregate and improve every fixed layout
+in both epochs. A non-target workload/layout at least 3% slower with disjoint
+observed ranges in both epochs rejects the candidate. Every smaller loss is also
+preserved. No pooling, rescue epoch, best-layout selection or alignment search.
+
+|!Epoch|!Workload|!Layout|!Time change|!Before observed range|!Candidate observed range|!Disjoint adverse
+|screen|indirect_call|default|+4.504%|6.563 to 6.749|6.918 to 6.952|True
+|screen|monomorphic_call|default|+3.907%|3.360 to 3.486|3.382 to 3.596|False
+|screen|temporary_hash|reverse|+3.054%|311.031 to 342.101|331.540 to 337.162|False
+|screen|callback_pipeline|default|+3.219%|81.385 to 82.324|83.122 to 85.257|True
+|screen|object_loop|default|-39.627%|279.726 to 284.031|168.644 to 172.021|False
+|screen|object_loop|reverse|-40.078%|279.059 to 284.970|168.833 to 170.741|False
+|screen|object_loop|shuffle-487|-38.822%|280.247 to 284.976|169.895 to 172.672|False
+|screen|float_loop|default|-47.106%|303.917 to 353.103|169.779 to 177.338|False
+|screen|float_loop|reverse|-45.751%|318.055 to 349.129|172.141 to 177.099|False
+|screen|float_loop|shuffle-487|-47.631%|313.158 to 353.818|169.362 to 182.181|False
+|screen|two_read_loop|reverse|+3.970%|369.308 to 375.199|365.770 to 387.876|False
+|screen|string_result_loop|shuffle-487|+4.594%|411.898 to 438.330|424.662 to 454.394|False
+|confirmation|indirect_wide|default|+3.154%|6.592 to 6.853|6.898 to 7.040|True
+|confirmation|object_loop|default|-39.653%|277.618 to 281.415|167.314 to 170.072|False
+|confirmation|object_loop|reverse|-42.114%|277.216 to 298.284|166.647 to 169.938|False
+|confirmation|object_loop|shuffle-487|-40.035%|278.313 to 304.066|169.415 to 177.954|False
+|confirmation|float_loop|default|-47.227%|311.892 to 366.148|172.346 to 178.976|False
+|confirmation|float_loop|reverse|-45.885%|309.786 to 349.211|171.894 to 185.071|False
+|confirmation|float_loop|shuffle-487|-47.670%|311.832 to 342.672|172.357 to 177.479|False
+|confirmation|string_result_loop|default|+3.021%|427.510 to 460.687|440.314 to 469.816|False
+|confirmation|string_result_loop|reverse|+4.246%|424.926 to 443.725|437.656 to 462.687|False
+|confirmation|string_result_loop|shuffle-487|+3.181%|427.398 to 463.936|429.278 to 471.741|False
+
+### Contract and diagnostics
+
+Append-only six-pointer zero-argument strict int/float getter companions with unchanged shared PIC layout and generated caller selection. Reuse a full-key-matched generic admission inside existing ordinary fast dispatch; only a positive exact-body getter binding enters the outlined native helper. Generic admission alone is not native authorization. Preserve current body/readiness/Program/debugger/stack/signature guards, eager object/defining-class context, synchronized live member reads, boxing and reader-safe frame teardown before existing ordinary fallback. RuntimeConfig is acquired only after positive admission and passed explicitly within the invocation; this route still has TLS acquisition. No public speculative caller helper, second PIC scan, negative binding cache, unary-witness widening, member-value caching or lock elision.
+
+The implementation is limited to four runtime/compiler files and three fixtures.
+The shared PIC and generated caller selection are unchanged. Unsupported or
+unpublished getters avoid the outlined native frame; absent bindings are not cached
+negatively because ordinary execution can publish them later. Default-argument
+methods do not meet the zero-declared-parameter admission. Static, copy,
+parameterized, debugger and cross-Program routes retain their existing behavior.
+
+Generated-code review covers 207 common functions and 2 new companions;
+normal getter bodies need binder calls, so identical source selection is not a
+claim that all machine instructions remain identical. Runtime review records
+21 disassemblies. Fourteen serial untimed profiles cover
+getter targets and default, string-result, two-read, boxed-float and monomorphic
+controls. Footprint observations are separate from timing. Static instruction and
+sample counts are not isolated costs or causal allocations of time.
+
+All 207 common default-layout relocatable functions were compared, with local branch destinations rebased and constants/registers/external symbols retained. Exactly 203 are normalized-instruction-identical. The micro main has one changed immediate; the probe main has one changed immediate. The two ordinary getter bodies add their exact-body binder and corresponding register/branch changes. All 29 mixed functions and the probe workload callers remain identical under this comparison. Only two functions are added: independent integer and float getter companions; no function is removed. Static identity does not establish identical placement or timing, and no adverse timing was excluded on this basis.
+
+Both new companions receive six pointers with a typed scalar return. Actual optimized assembly retains the explicit RuntimeConfig stack guard, exactly one prehashed live scalar-member-read helper, and accepted=0 on a representation miss. There is no generic self-member load or speculative public caller helper in either companion. The ordinary getter remains available for fallback, including conversion and ownership handling.
+
+The 21 runtime disassemblies include both versions of name dispatch, ordinary fast dispatch, dot dispatch, float unary dispatch, auto-local assignment, and four scalar-read helpers, plus the new invocation and two binders. Positive-binding acquire loads occur only after ordinary admission. The invocation retains exact body/readiness, zero-arity and strict-return checks, obtains RuntimeConfig after admission, installs actual defining-class/object context and a reader-safe logical frame, and tears that state down before effect-free fallback. Large integer boxing, floating representation, sink ownership, QoreJITException handling and stack guards remain. The binders use first-valid release CAS; the raw LSE opcode in the disassembly is not treated as a missing instruction. The ordinary dot/unary/local/read routes retain their corresponding helper calls; this is not a claim that all runtime machine code is identical.
+
+Fourteen untimed before/candidate profiles completed successfully. The candidate integer and float probe profiles enter the admitted getter helper. Default-argument profiles still show default preparation/allocation, string-result profiles retain generic dispatch and string conversion, and two-read profiles retain generic member lookup. Boxed-float profiles remain dominated by the existing unary helper/caller and local assignment; monomorphic profiles remain dominated by the generated workload loop. Sampling is diagnostic only: these counts are not isolated call costs, causal cycle savings, or additional benchmark measurements.
+
+The size probe measured QoreAOTContext 880 to 896 bytes, with both requests in the current macOS 896-byte malloc_good_size bucket. The shared PIC entry remains 240 bytes with alignment 8. This establishes neither zero memory cost nor a cache-effect explanation for any timing change.
+
+The independent 5-fork confirmation measured integer getter workload 284.2049278366459 to 168.7309940244433 ns/item (-40.630518%), float 330.2612373687563 to 175.2148939673726 (-46.946576%), integer short 1200.88766828618 to 1066.3755849939614 (-11.201055%), and float short 1260.2385434169832 to 1094.197198177312 (-13.175390%). The two loop targets are faster in every layout in both epochs. These workloads include two receiver calls, a callback and setup/loop costs; they are not single-call latencies.
+
+All 5904 measured windows and smaller or single-epoch losses are retained. There is no repeated same-workload/same-layout adverse result meeting the frozen 3% plus disjoint observed fork-mean-range gate. Single-epoch qualifying losses remain: screen indirect/default +4.504364%, screen callback-pipeline/default +3.218793%, and confirmation indirect-wide/default +3.154075%. Confirmation string-result aggregate is +3.181453%, versus screen -0.186883%; this is not erased or described as zero regression. Observed ranges are not confidence intervals.
+
+Actual source review found no required change to the frozen candidate: bounded compile-time proof, eager receiver/class context, exact normal-body publication, unchanged unary contract, existing live synchronized representation/deletion checks, and reader-safe teardown are retained. Release and Debug qualification and control/reference runs passed at the recorded source identities. The final automated 62-item audit is still a separate required step before commit.
+
+This is an AOT-only new companion path. RuntimeConfig is passed explicitly inside the accepted invocation, but its acquisition and the ordinary dispatch TLS reads remain. No fresh Java/develop ratio or global performance ceiling is claimed. Next: a matched optimized feature/develop/Java checkpoint, followed by a separately measured experiment threading the already-acquired live RuntimeConfig through ordinary dispatch, preserving cross-Program and fallback behavior.
+
+### Qualification and audit
+
+|!Build|!Core files|!Core cases|!Core assertions
+|baseline_release|68|108|16542
+|baseline_debug|68|108|16542
+|candidate_release|69|112|17595
+|candidate_debug|69|112|17595
+
+Candidate coverage adds four cases and 1053 assertions. It tests native adapter
+hits, wrong/unready/unpublished bindings, exact body identity, first publication,
+representation misses, wide integers and float specials, inherited/private context,
+deleted receivers, stack overflow/restoration, cross-Program exclusion and epochs.
+Debugger events, frame readers and concurrent member replacement remain covered.
+O0/O3, exception handling, split compilation and disabling controls are exercised.
+The structural checks require ordinary caller selection and absence of the old
+public speculative getter helper; a correct result via fallback alone is not enough.
+
+Each qualified build rebuilds 64 owned qmods. Merged upstream coverage is recorded
+separately, including the additional DPQL session and local HTTPS suites:
+
+|!Merged integration suite|!Release cases/assertions|!Debug cases/assertions
+|DataProvider-ColumnarExpressionFilter|19 / 96|19 / 96
+|DataProvider-DataProviderExpressions|35 / 377|35 / 377
+|DataProvider-Dpql|62 / 3083|62 / 3083
+|DataProvider-DpqlWildcard|15 / 385|15 / 385
+|DataProvider-DpqlActionSession|23 / 152|23 / 152
+|HTTPClient-HttpClientTlsVerify|9 / 402|9 / 405
+|HTTPClient-HttpClientHttpsProxy|6 / 98|6 / 98
+
+Other coverage includes 13 lvalue/DGC suites (82 cases; 1330 Release or 2663 Debug
+assertions), HTTP 10/30, offline LLM 4/23, threads 22/110 and 555 references each
+for IR and AOT. Debug runs 1985 native checks per bounded-pair mode and the
+abrupt-drop test. Exactly 64 Release aliases are restored; unrelated links remain
+unchanged. Baseline AST/stripped O0/stripped O3 probes pass 168 references each;
+the independent oracle covers 12600 cases. All 18 measurement executables validate
+their reference results and actual loaded runtime.
+
+The full 62-item audit in `results-aot-zero-arg-getter-admitted-macos-arm64.json` independently replays every measured
+window, order, reference, decision and source/artifact identity, plus generated and
+runtime code comparisons. Runner/oracle tests, strict Qore tables and diff hygiene
+must pass before committing. Actual failures and incomplete development runs are
+not represented as successful qualification. This is selected macOS arm64 validation,
+not full-suite, sanitizer or cross-platform certification. No cold-start,
+compile-time, memory-cost, cross-Program or application-wide speedup is inferred.
+
+A retained improvement requires a fresh matched optimized feature/develop/Java
+checkpoint, with synchronization and optimizer restrictions explicit. Subsequent
+loop sink-check work is a separate hypothesis and must preserve every language-loop
+cancellation checkpoint. No Java parity or global performance ceiling is established.

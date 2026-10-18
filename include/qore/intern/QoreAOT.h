@@ -461,6 +461,16 @@ struct QoreAOTContext {
     //! Append-only; v1 retains its eager object/class/self context and all existing field offsets.
     std::atomic<NativeIntUnaryClosureEntry> native_int_unary_closure_entry_v2{nullptr};
 
+    //! Append-only zero-argument, read-only scalar getter contract, independent of unary member entries.
+    //! Receiver/class/RuntimeConfig are borrowed for this invocation; accepted zero requests effect-free fallback.
+    //! Exactly one synchronized member read, no reentry or effects; published only by the exact normal body.
+    using ScalarGetterIntEntryV1 = int64_t (*)(QoreObject*, const qore_class_private*, RuntimeConfig*,
+        int*, QoreAOTContext*, ExceptionSink*);
+    using ScalarGetterFloatEntryV1 = double (*)(QoreObject*, const qore_class_private*, RuntimeConfig*,
+        int*, QoreAOTContext*, ExceptionSink*);
+    std::atomic<ScalarGetterIntEntryV1> scalar_getter_int_entry_v1{nullptr};
+    std::atomic<ScalarGetterFloatEntryV1> scalar_getter_float_entry_v1{nullptr};
+
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
     ~QoreAOTContext();

@@ -1010,21 +1010,25 @@ static bool isAOTReceiverIntForwarder(const QoreIRFunction& ir, const UserVarian
 //! Unsupported bodies retain their ordinary entry; declarations alone never authorize a native read.
 static bool isAOTScalarMemberEligible(const QoreIRFunction& ir, const UserVariantBase* uvb,
         const QoreMethod* method, const AbstractQoreFunctionVariant* variant, bool& internal_member,
-        unsigned first_instruction = 0) {
+        unsigned first_instruction = 0, bool getter = false) {
     internal_member = false;
+    // A getter shares the bounded read-only expression proof, never the unary ABI or effect prefix.
+    if (getter && (first_instruction || std::getenv("QORE_DISABLE_AOT_ZERO_ARG_GETTER"))) {
+        return false;
+    }
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
     if ((!first_instruction && std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY"))
             || !method || method->isStatic() || !sig
             || !isAOTFastMethodCallEligible(variant) || !isAOTFastEntryEligible(&ir, uvb)
             || ir.has_opaque_ast_local_access || ir.has_explicit_self_local_access
             || !ir.all_body_locals.empty() || ir.blocks.size() != 1
-            || ir.blocks[0]->instructions.size() > 64 || sig->numParams() != 1
+            || ir.blocks[0]->instructions.size() > 64 || sig->numParams() != (getter ? 0u : 1u)
             || sig->needsTypeParameterSubstitution()) {
         return false;
     }
-    const bool floating = sig->getParamTypeInfo(0) == floatTypeInfo;
+    const bool floating = (getter ? sig->getReturnTypeInfo() : sig->getParamTypeInfo(0)) == floatTypeInfo;
     const QoreTypeInfo* type = floating ? floatTypeInfo : bigIntTypeInfo;
-    if (sig->getParamTypeInfo(0) != type || sig->getReturnTypeInfo() != type) {
+    if ((!getter && sig->getParamTypeInfo(0) != type) || sig->getReturnTypeInfo() != type) {
         return false;
     }
     std::unordered_set<uint32_t> scalars;
@@ -1036,7 +1040,7 @@ static bool isAOTScalarMemberEligible(const QoreIRFunction& ir, const UserVarian
         switch (inst->opcode) {
             case QoreIROpcode::LoadLocal: {
                 const auto* load = static_cast<const QoreIRLocalInstruction*>(inst.get());
-                if (load->local != sig->lv[0] || load->is_ref || load->is_closure
+                if (getter || load->local != sig->lv[0] || load->is_ref || load->is_closure
                         || load->mode != AssignmentMode::Normal) {
                     return false;
                 }
@@ -21470,21 +21474,33 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
                     llvm::Function* scalar_member_entry = nullptr;
                     bool scalar_member_internal = false;
+                    bool scalar_getter = false;
                     if (method_ok && !metadata_only && !fn_outliner.active()
-                            && isAOTScalarMemberEligible(*ir_func, uvb, meth, variant, scalar_member_internal)) {
+                            && (isAOTScalarMemberEligible(*ir_func, uvb, meth, variant, scalar_member_internal)
+                                || (scalar_getter = isAOTScalarMemberEligible(*ir_func, uvb, meth, variant,
+                                    scalar_member_internal, 0, true)))) {
                         const UserSignature* sig = uvb->getUserSignature();
-                        bool floating = sig->getParamTypeInfo(0) == floatTypeInfo;
+                        bool floating = sig->getReturnTypeInfo() == floatTypeInfo;
                         auto* scalar_ty = floating ? llvm::Type::getDoubleTy(ctx) : llvm::Type::getInt64Ty(ctx);
                         auto* ptr_ty = llvm::PointerType::get(ctx, 0);
-                        std::string name = ir_func->name + (floating ? "_member_float_v1" : "_member_int_v1");
+                        std::string name = ir_func->name + (scalar_getter
+                            ? (floating ? "_getter_float_v1" : "_getter_int_v1")
+                            : (floating ? "_member_float_v1" : "_member_int_v1"));
+                        std::vector<llvm::Type*> entry_args{ptr_ty, ptr_ty, ptr_ty, ptr_ty, ptr_ty, ptr_ty};
+                        if (!scalar_getter) {
+                            entry_args.insert(entry_args.begin(), scalar_ty);
+                        }
                         scalar_member_entry = llvm::Function::Create(llvm::FunctionType::get(scalar_ty,
-                            {scalar_ty, ptr_ty, ptr_ty, ptr_ty, ptr_ty, ptr_ty, ptr_ty}, false),
+                            entry_args, false),
                             llvm::Function::ExternalLinkage, name, module);
                         scalar_member_entry->setVisibility(llvm::GlobalValue::HiddenVisibility);
-                        std::unordered_map<const void*, llvm::Value*> params{
-                            {sig->lv[0], scalar_member_entry->getArg(0)}};
-                        std::unordered_map<const void*, BatchCalleeParamKind> kinds{
-                            {sig->lv[0], floating ? BatchCalleeParamKind::NativeFloat : BatchCalleeParamKind::NativeInt}};
+                        std::unordered_map<const void*, llvm::Value*> params;
+                        std::unordered_map<const void*, BatchCalleeParamKind> kinds;
+                        if (!scalar_getter) {
+                            params.emplace(sig->lv[0], scalar_member_entry->getArg(0));
+                            kinds.emplace(sig->lv[0], floating
+                                ? BatchCalleeParamKind::NativeFloat : BatchCalleeParamKind::NativeInt);
+                        }
                         QoreIRToLLVM member_lowerer(ctx);
                         member_lowerer.setAOTMode(&slots);
                         member_lowerer.setSharedDebugInfo(&di_builder, di_cu);
@@ -21493,9 +21509,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         member_lowerer.setFastEntryMode(name, &params, &kinds, nullptr,
                             floating ? BatchCalleeReturnKind::NativeFloat : BatchCalleeReturnKind::NativeInt,
                             sig->getReturnTypeInfo());
-                        member_lowerer.setScalarMemberEntry(scalar_member_entry->getArg(1),
-                            scalar_member_entry->getArg(2), scalar_member_entry->getArg(3),
-                            scalar_member_entry->getArg(4), scalar_member_internal
+                        unsigned receiver_arg = scalar_getter ? 0 : 1;
+                        member_lowerer.setScalarMemberEntry(scalar_member_entry->getArg(receiver_arg),
+                            scalar_member_entry->getArg(receiver_arg + 1), scalar_member_entry->getArg(receiver_arg + 2),
+                            scalar_member_entry->getArg(receiver_arg + 3), scalar_member_internal
                                 && !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT"));
                         member_lowerer.setAOTLocTableBase(static_cast<int32_t>(aot_locs_local.size()));
                         std::string member_error;
@@ -21518,8 +21535,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         llvm::Function* normal = module.getFunction(ir_func->name);
                         llvm::IRBuilder<> bind_builder(&normal->getEntryBlock(),
                             normal->getEntryBlock().getFirstInsertionPt());
-                        auto bind = module.getOrInsertFunction(floating
-                                ? "qore_rt_bind_member_float_v1" : "qore_rt_bind_member_int_v1",
+                        auto bind = module.getOrInsertFunction(scalar_getter
+                                ? (floating ? "qore_rt_bind_getter_float_v1" : "qore_rt_bind_getter_int_v1")
+                                : (floating ? "qore_rt_bind_member_float_v1" : "qore_rt_bind_member_int_v1"),
                             llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
                                 {ptr_ty, ptr_ty, ptr_ty}, false));
                         bind_builder.CreateCall(bind, {normal->getArg(0), normal, scalar_member_entry});

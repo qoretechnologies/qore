@@ -514,6 +514,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_bind_closure_int_unary_v2) },
     { "qore_rt_bind_member_int_v1", reinterpret_cast<void*>(&qore_rt_bind_member_int_v1) },
     { "qore_rt_bind_member_float_v1", reinterpret_cast<void*>(&qore_rt_bind_member_float_v1) },
+    { "qore_rt_bind_getter_int_v1", reinterpret_cast<void*>(&qore_rt_bind_getter_int_v1) },
+    { "qore_rt_bind_getter_float_v1", reinterpret_cast<void*>(&qore_rt_bind_getter_float_v1) },
     { "qore_rt_bind_effect_member_int_v1", reinterpret_cast<void*>(&qore_rt_bind_effect_member_int_v1) },
     { "qore_rt_try_update_member_int_v1", reinterpret_cast<void*>(&qore_rt_try_update_member_int_v1) },
     { "qore_rt_try_update_member_int_prehashed_v1",
@@ -10570,6 +10572,30 @@ extern "C" DLLEXPORT int qore_rt_try_load_member_int_v1(QoreObject* object, cons
         && qore_object_private::get(*object)->tryReadScalarMember(name, class_ctx, result, nullptr);
 }
 
+extern "C" DLLEXPORT void qore_rt_bind_getter_int_v1(QoreAOTContext* ctx,
+        uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), QoreAOTContext::ScalarGetterIntEntryV1 entry) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_ZERO_ARG_GETTER")
+        && !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
+    if (enabled && ctx && normal && entry && ctx->pc_loc_fn == normal
+            && !ctx->scalar_getter_int_entry_v1.load(std::memory_order_relaxed)) {
+        QoreAOTContext::ScalarGetterIntEntryV1 expected = nullptr;
+        ctx->scalar_getter_int_entry_v1.compare_exchange_strong(expected, entry,
+            std::memory_order_release, std::memory_order_relaxed);
+    }
+}
+
+extern "C" DLLEXPORT void qore_rt_bind_getter_float_v1(QoreAOTContext* ctx,
+        uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), QoreAOTContext::ScalarGetterFloatEntryV1 entry) {
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_ZERO_ARG_GETTER")
+        && !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
+    if (enabled && ctx && normal && entry && ctx->pc_loc_fn == normal
+            && !ctx->scalar_getter_float_entry_v1.load(std::memory_order_relaxed)) {
+        QoreAOTContext::ScalarGetterFloatEntryV1 expected = nullptr;
+        ctx->scalar_getter_float_entry_v1.compare_exchange_strong(expected, entry,
+            std::memory_order_release, std::memory_order_relaxed);
+    }
+}
+
 extern "C" DLLEXPORT void qore_rt_bind_effect_member_int_v1(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), const QoreAOTEffectMemberIntEntryV1* entries) {
     static const bool enabled = !std::getenv("QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY")
@@ -18268,6 +18294,85 @@ static QORE_ALWAYS_INLINE bool try_dispatch_native_method(QoreObject* object,
     return false;
 }
 
+// Called only for a positive getter binding after the ordinary dispatcher has
+// matched the complete PIC key and checked the live receiver, method eligibility,
+// execution Program and debugger state. Generic admission is not a native proof:
+// the exact published companion and current body/readiness checks below are still
+// required. Do not construct an observable frame on an unsupported ordinary call.
+static __attribute__((noinline)) bool qore_rt_try_admitted_zero_arg_getter(
+        QoreObject* object, const QoreAOTMethodDispatchCacheEntry& cached,
+        const UserVariantBase* uvb, QoreAOTContext* ctx,
+        QoreAOTContext::ScalarGetterIntEntryV1 integer_entry,
+        QoreAOTContext::ScalarGetterFloatEntryV1 float_entry,
+        ExceptionSink* xsink, uint64_t& result) {
+    assert(cached.generic_fast_uvb == uvb && cached.generic_scalar_params && !cached.nargs);
+    assert(ctx && (integer_entry || float_entry));
+    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_ZERO_ARG_GETTER")
+        && !std::getenv("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY")
+        && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")
+        && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE")
+        && !std::getenv("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE")
+        && !std::getenv("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY");
+    if (!enabled || !uvb->hasCachedAOT()
+            || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
+            || !ctx->pc_loc_map_attached.load(std::memory_order_acquire) || ctx->uses_argv
+            || (cached.receiver_type_info
+                && QoreTypeInfo::getParameterizedClassType(cached.receiver_type_info))) {
+        return false;
+    }
+    const UserSignature* sig = uvb->getUserSignature();
+    const auto* type = sig->getReturnTypeInfo();
+    const bool floating = type == floatTypeInfo;
+    if (sig->numParams() || sig->needsTypeParameterSubstitution()
+            || (type != bigIntTypeInfo && !floating)) {
+        return false;
+    }
+    static const bool float_enabled = !std::getenv("QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY")
+        && !std::getenv("QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY");
+    if (floating) {
+        if (!float_enabled || !float_entry) {
+            return false;
+        }
+        integer_entry = nullptr;
+    } else {
+        if (!integer_entry) {
+            return false;
+        }
+        float_entry = nullptr;
+    }
+    // The ordinary dispatcher has no explicit RuntimeConfig argument. Acquire
+    // one view only after positive admission; do not claim this route has no TLS
+    // acquisition. The companion and frame receive that same explicit view.
+    RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+    result = toBits(QoreValue());
+    if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
+        return true;
+    }
+    const auto* defining_class = static_cast<const MethodVariantBase*>(cached.variant)->getClassPriv();
+    int accepted = 1;
+    QoreValue value;
+    {
+        RuntimeConfigNativeObjectHelper context(rc, object, defining_class);
+        QoreNativeMethodStackLocation<false, true> frame(rc, cached, uvb, ctx->pgm, xsink);
+        if (!*xsink) {
+            try {
+                value = float_entry != nullptr
+                    ? QoreValue(float_entry(object, defining_class, &rc, &accepted, ctx, xsink))
+                    : QoreValue(integer_entry(object, defining_class, &rc, &accepted, ctx, xsink));
+            } catch (const QoreJITException&) {
+                // The sink owns the exception; frame/context teardown remains RAII.
+            }
+        }
+    }
+    // Reader-safe teardown precedes fallback, which can replace the PIC owner.
+    if (!accepted || *xsink) {
+        value.discard(xsink);
+        return static_cast<bool>(*xsink);
+    }
+    result = toBits(value);
+    return true;
+}
+
 // Dispatch a method call on a QoreObject with pre-evaluated args.
 static bool try_dispatch_forwarded_int_leaf(QoreObject* object,
     const QoreAOTMethodDispatchCacheEntry& outer, QoreAOTContext* outer_ctx,
@@ -18316,6 +18421,22 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
             "already been deleted", qc->getName(), method->getName());
         result = toBits(QoreValue());
         return true;
+    }
+    // The caller already matched the full PIC key. Missing/default-argument and
+    // unsupported bindings retain the ordinary path without a second PIC scan.
+    if (!nargs && native_cache && native_cache->generic_fast_uvb == uvb
+            && native_cache->generic_scalar_params && caller_pgm && caller_pgm == exec_pgm
+            && caller_pgm == o->getProgram()) {
+        QoreAOTContext* getter_ctx = uvb->getCachedAOTContext();
+        if (getter_ctx && getter_ctx->pgm == caller_pgm) {
+            auto integer_entry = getter_ctx->scalar_getter_int_entry_v1.load(std::memory_order_acquire);
+            auto float_entry = getter_ctx->scalar_getter_float_entry_v1.load(std::memory_order_acquire);
+            if ((integer_entry || float_entry)
+                    && qore_rt_try_admitted_zero_arg_getter(o, *native_cache, uvb, getter_ctx,
+                        integer_entry, float_entry, xsink, result)) {
+                return true;
+            }
+        }
     }
     if (native_cache && native_cache->native_scalar_uvb == uvb) {
         QoreAOTContext* outer_ctx = uvb->getCachedAOTContext();
