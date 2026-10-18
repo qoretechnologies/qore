@@ -2540,6 +2540,9 @@ while (*binary chunk = input.read(65536)) {
       - added the DPQL @ref dpql_wildcards "wildcard accessors" \c [*] and \c {*}, which take a value from each
         item of a list or each value of a hash as \c map does: <tt>\@orders[*].id</tt> is
         <tt>map \@id, \@orders</tt>, and <tt>\@orders[*].items[*].sku</tt> is a list of lists
+      - the body, filter and predicate expressions of \c map and the other DPQL streaming operators see the
+        current item, its position and the size of the source as <tt>$local:item</tt>, <tt>$local:index</tt> and
+        <tt>$local:size</tt> in the template context (@ref dpql_item_context)
       - added HTTP/3 debug tracking, context-sensitive action filtering, and \c amqp factory registration
       - watch data providers can restore and durably persist provider-owned delivery checkpoints,
         allowing integrations to preserve at-least-once event delivery across process restarts

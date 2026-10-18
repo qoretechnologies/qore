@@ -380,6 +380,13 @@ For hash sources, `select`, `first`, `take`, `drop`, `takewhile`, and `takeuntil
 `true` for an empty source. Each item or body result is one element of the result, also when it
 is a list: `map @items, @orders` is a list of lists, and so is a slice of a list of lists.
 
+While a body, filter, key, value or predicate (or the expression after a wildcard) is evaluated,
+the template context holds the current item as `item`, its zero-based position as `index` and the
+source size as `size` (`$local:item`, `$local:index`, `$local:size` where the template callback reads
+`$local` from the template context, as Qorus does); a hash source's item is its `key`/`value` entry.
+Each item gets a new context hash (`dp_item_context()`), so a nested operator shadows the outer values
+only while it runs, the caller's other values stay visible, and nothing needs restoring after an error.
+
 The field references in a body, filter or predicate (and after a wildcard) are fields of each
 item, not of the record. Code that collects or validates the fields of a record must skip those
 arguments with `DpqlParser::isItemScopedArg(exp, pos)` rather than keep its own operator table;

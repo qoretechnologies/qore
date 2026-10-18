@@ -49,7 +49,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.10.2";
+    version = "3.11";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1035,6 +1035,26 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     - <tt>hash_map \@name, \@age, \@users</tt> - evaluates key and value expressions against each
       element of the source list and returns a hash
 
+    @anchor dpql_item_context
+    @par The Current Item In The Template Context
+    The body, filter, key, value and predicate expressions of these operators (\c map, \c hash_map, \c select,
+    \c first, \c any, \c all, \c count, \c takewhile, \c takeuntil) and the expression after a
+    @ref dpql_wildcards "wildcard" are evaluated for each item of the source; they are the arguments that
+    @ref DataProvider::DpqlParser::isItemScopedArg() "DpqlParser::isItemScopedArg()" reports.  While they are
+    evaluated, the template context holds the current item as \c item, its zero-based position in the source as
+    \c index and the number of items in the source as \c size, so that a template callback that resolves
+    \c $local values from the template context (as Qorus does) gives <tt>$local:item</tt>, <tt>$local:index</tt>
+    and <tt>$local:size</tt>:
+    - <tt>map concat($local:index, ":", $local:item), \@tags</tt> - each tag with its position
+    - <tt>select \@rows, $local:index < $local:size - 1</tt> - all rows but the last
+    - <tt>hash_map $local:item.key, $local:index, \@weights</tt> - for a hash source, the item is the \c key /
+      \c value entry
+
+    A nested operator's values replace the outer ones while it is evaluated, and the outer values are back once it
+    is done.  The other values of the caller's template context stay available; the caller's template context is
+    never changed, also when an expression raises an error.  Other arguments, such as the source and the count of
+    \c take, are evaluated with the caller's template context.
+
     @subsection dpql_wildcards Wildcard Accessors
 
     The wildcard accessors \c [*] and \c {*} take a value from each item of a list and from each value of a hash.
@@ -1455,6 +1475,15 @@ fetch
     expose first-class actions that take it.
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_11 DataProvider v3.11
+    - the body, filter, key, value and predicate expressions of \c map, \c hash_map, \c select, \c first, \c any,
+      \c all, \c count, \c takewhile and \c takeuntil, and the expression after a wildcard, are evaluated with the
+      current item as \c item, its zero-based position as \c index and the size of the source as \c size in the
+      template context, so that <tt>$local:item</tt>, <tt>$local:index</tt> and <tt>$local:size</tt> refer to them
+      (see @ref dpql_item_context); for a hash source, the item is the \c key / \c value entry; a nested
+      operator's values replace the outer ones while it is evaluated, and the caller's other template context
+      values stay available
 
     @subsection dataprovider_v3_10_2 DataProvider v3.10.2
     - the editor token spans of @ref DataProvider::DpqlActionSession "DpqlActionSession" (\c dpql-get-tokens and
