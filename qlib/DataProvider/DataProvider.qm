@@ -1461,6 +1461,11 @@ fetch
       \c dpql-parse in the \c token-span format) give the arithmetic operators (\c +, \c -, \c *, \c /, \c %),
       \c !~, the range \c .. and the wildcard \c * the type \c operator, and brackets, braces and the dot of a
       member access the type \c punctuation; they had the type \c identifier, which editors show as a function
+    - those editor token spans type a word by where it is: a member or key name (<tt>\@a[*].b</tt>,
+      <tt>\@x{map}</tt>, and the string and number keys of a key accessor) is a \c field, a word operator
+      (\c between, \c and, \c in, \c not in, \c like and the other infix comparisons) and a prefix operator
+      (\c map, \c select, \c count, ...) is an \c operator, an unquoted value (\c omq in
+      <tt>\@domain == omq</tt>) is a \c string, and only the name of a function call stays an \c identifier
 
     @subsection dataprovider_v3_10_1 DataProvider v3.10.1
     - <b>behavior change</b>: a field reference whose path goes through a value that is not a hash or an object

@@ -67,13 +67,13 @@ The categories are deliberately few, and several DPQL token types collapse into 
 
 | Category | Source token types |
 |---|---|
-| `field` | `DPQL_TOK_FIELD` |
-| `identifier` | `DPQL_TOK_IDENTIFIER`, and any unmapped type |
+| `field` | `DPQL_TOK_FIELD`; a word after a dot or in a key accessor (`b` in `@a[*].b`, `map` in `@x{map}`), and the string and number keys of a key accessor (`@x{"k", 2}`) |
+| `identifier` | a word that names a function call (`upr` in `upr(@n)`, also `listContains(...)`), and any unmapped type |
 | `keyword` | `DPQL_TOK_BOOLEAN`, `DPQL_TOK_NULL` |
-| `string` | `DPQL_TOK_STRING`, `DPQL_TOK_REGEX` |
-| `number` | `DPQL_TOK_NUMBER` |
+| `string` | `DPQL_TOK_STRING`, `DPQL_TOK_REGEX`; an unquoted value (`omq` in `@domain == omq`) |
+| `number` | `DPQL_TOK_NUMBER` (not a key) |
 | `constant` | `DPQL_TOK_DATE`, `DPQL_TOK_BINARY`, `DPQL_TOK_LIST`, `DPQL_TOK_HASH` |
-| `operator` | every `DPQL_TOK_OP_*` (comparison, logical, regex match and arithmetic), `DPQL_TOK_RANGE` (`..`), `DPQL_TOK_WILDCARD` (the `*` of `[*]` / `{*}`) |
+| `operator` | every `DPQL_TOK_OP_*` (comparison, logical, regex match and arithmetic), `DPQL_TOK_RANGE` (`..`), `DPQL_TOK_WILDCARD` (the `*` of `[*]` / `{*}`); the word operators after an operand (`between`, `and`, `in`, `not` before `in`/`between`, and infix comparisons such as `like`), and the prefix operators (`map`, `select`, `count`, ...), also with a parenthesized first argument |
 | `punctuation` | `DPQL_TOK_LPAREN`, `DPQL_TOK_RPAREN`, `DPQL_TOK_COMMA`, `DPQL_TOK_LBRACKET`, `DPQL_TOK_RBRACKET`, `DPQL_TOK_LBRACE`, `DPQL_TOK_RBRACE`, `DPQL_TOK_DOT` |
 | `variable` | `DPQL_TOK_TEMPLATE` |
 | `error` | `DPQL_TOK_ERROR` |
@@ -82,6 +82,12 @@ Collapsing is the design, not a shortcut: a client themes a small fixed vocabula
 type maps into an existing category rather than forcing every client to learn it. `mapTokenType()`
 returns `identifier` for anything unmapped, so an unrecognised token renders plainly instead of
 throwing.
+
+A word (`DPQL_TOK_IDENTIFIER`) is typed by where it is, as the parser reads it (`getSpanTypes()`): the
+tokenizer gives keys, word operators, prefix operators, function names and unquoted values the same token
+type. DPQL has no word forms of `&&`, `||` and `!`; `and` and `not` are operators only in `between ... and`
+and `not in` / `not between`, and are unquoted values elsewhere, as `in` is in `@x == in`. The raw `dpql`
+token format is unchanged.
 
 Adding a DPQL token type therefore means adding a `mapTokenType()` case — otherwise it silently renders
 as an identifier, which editors show as a function (the arithmetic operators, `!~`, `..`, brackets,

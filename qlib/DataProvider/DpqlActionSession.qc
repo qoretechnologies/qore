@@ -597,7 +597,127 @@ public class DpqlActionSession {
         if (token_format == "dpql") {
             return tokens;
         }
-        return map toTokenSpan($1), tokens, shouldEmitToken($1);
+        list<hash<DpqlTokenInfo>> emitted = map $1, tokens, shouldEmitToken($1);
+        list<string> types = getSpanTypes(emitted);
+        return map toTokenSpan($1, types[$#]), emitted;
+    }
+
+    #! Returns the span type of each token: by its token type, and for a word by where it is
+    /** A word (@ref DPQL_TOK_IDENTIFIER) is typed as the parser reads it:
+        - after a dot or in a key accessor (<tt>\@a[*].b</tt>, <tt>\@x{map}</tt>): \c field, as are the string and
+          number keys of a key accessor (<tt>\@x{"k", 2}</tt>)
+        - after an operand: \c operator for \c between, \c in, \c and, \c not before \c in or \c between, and an
+          infix comparison operator of the expressions (ex: \c like)
+        - in a value position: \c operator for a prefix operator (ex: \c map, \c count, \c first), \c identifier for
+          the name of a function call (ex: \c upr), and \c string for an unquoted value (ex: \c omq in
+          <tt>\@domain == omq</tt>)
+
+        @param tokens the tokens, without whitespace
+
+        @return the span type of each token
+
+        @since DataProvider 3.10.2
+    */
+    private list<string> getSpanTypes(list<hash<DpqlTokenInfo>> tokens) {
+        hash<string, hash<DataProviderExpressionInfo>> expmap = expressions ?? DataProviderGenericExpressions;
+        # the expression names by lowercase DPQL symbol, as the parser resolves a word
+        hash<string, string> symbols;
+        foreach hash<auto> i in (expmap.pairIterator()) {
+            string sym = i.value.symbol;
+            if (sym) {
+                symbols{regex_subst(sym, "\\(\\)$", "").lwr()} = i.key;
+            }
+        }
+
+        list<string> types = ();
+        # True after a complete operand, where a word is an infix operator
+        bool after_operand = False;
+        # the open parentheses, brackets and braces; a brace is always a key accessor (a hash literal is one token)
+        list<int> open = ();
+        for (int i = 0; i < tokens.size(); ++i) {
+            hash<DpqlTokenInfo> tok = tokens[i];
+            string type = mapTokenType(tok.type);
+            bool in_key_accessor = open && open.last() == DPQL_TOK_LBRACE;
+            switch (tok.type) {
+                case DPQL_TOK_IDENTIFIER: {
+                    string word = tok.value.lwr();
+                    *string name = symbols{word} ?? (expmap{tok.value} ? tok.value : NOTHING);
+                    *hash<DpqlTokenInfo> next = tokens[i + 1];
+                    if (in_key_accessor || (i && tokens[i - 1].type == DPQL_TOK_DOT)) {
+                        # a member or key name
+                        type = "field";
+                        after_operand = True;
+                    } else if (after_operand) {
+                        if (word == "between" || word == "in" || word == "and"
+                                || (word == "not" && next.type == DPQL_TOK_IDENTIFIER
+                                    && (next.value.lwr() == "in" || next.value.lwr() == "between"))) {
+                            type = "operator";
+                            # "not" is followed by the operator it negates
+                            after_operand = word == "not";
+                        } else if (name && expmap{name}.type == DET_Operator && inlist("Comparison", expmap{name}.groups)
+                                && expmap{name}.args.size() >= 2) {
+                            # an infix comparison operator such as "like"
+                            type = "operator";
+                            after_operand = False;
+                        } else {
+                            after_operand = False;
+                        }
+                    } else if (DpqlPrefixOperatorSpecs{name ?? word}) {
+                        # a prefix operator such as map, also with a parenthesized first argument
+                        type = "operator";
+                    } else if (next.type == DPQL_TOK_LPAREN) {
+                        # the name of a function call
+                        type = "identifier";
+                    } else {
+                        # an unquoted value
+                        type = "string";
+                        after_operand = True;
+                    }
+                    break;
+                }
+
+                case DPQL_TOK_STRING:
+                case DPQL_TOK_NUMBER:
+                    if (in_key_accessor) {
+                        type = "field";
+                    }
+                    after_operand = True;
+                    break;
+
+                case DPQL_TOK_LPAREN:
+                case DPQL_TOK_LBRACKET:
+                case DPQL_TOK_LBRACE:
+                    push open, tok.type;
+                    after_operand = False;
+                    break;
+
+                case DPQL_TOK_RPAREN:
+                case DPQL_TOK_RBRACKET:
+                case DPQL_TOK_RBRACE:
+                    pop open;
+                    after_operand = True;
+                    break;
+
+                case DPQL_TOK_FIELD:
+                case DPQL_TOK_BOOLEAN:
+                case DPQL_TOK_NULL:
+                case DPQL_TOK_DATE:
+                case DPQL_TOK_BINARY:
+                case DPQL_TOK_LIST:
+                case DPQL_TOK_HASH:
+                case DPQL_TOK_REGEX:
+                case DPQL_TOK_TEMPLATE:
+                    after_operand = True;
+                    break;
+
+                default:
+                    # operators, commas, dots, the range and the wildcard are followed by a value
+                    after_operand = False;
+                    break;
+            }
+            push types, type;
+        }
+        return types;
     }
 
     private bool shouldEmitToken(hash<DpqlTokenInfo> tok) {
@@ -607,9 +727,9 @@ public class DpqlActionSession {
         return True;
     }
 
-    private hash<auto> toTokenSpan(hash<DpqlTokenInfo> tok) {
+    private hash<auto> toTokenSpan(hash<DpqlTokenInfo> tok, string type) {
         return {
-            "type": mapTokenType(tok.type),
+            "type": type,
             "start": {
                 "row": tok.line - 1,
                 "column": tok.column - 1,
