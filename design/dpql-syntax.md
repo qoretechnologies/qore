@@ -115,6 +115,15 @@ Access hash member (equivalent to single-key operator):
 @user.address.city       # Nested access
 ```
 
+After an accessor, `.name` is a key (`@data[0].name` is `key(@data[0], "name")`); right
+after `@field`, the dot continues the field name (`@record.name` is the field `record.name`).
+The serializer writes accessors as they are read: a single key that is a name after an
+accessor as `.name` (`@data[0]{name}` is written `@data[0].name`), any other key in braces
+(`{"a b"}`, `{"true"}`, `{a, b}`), a key of a field reference in braces (`@record{name}`), and
+an accessor whose index or key is not a literal, or whose value is not a field reference or
+another accessor (a wildcard, a template reference, a call, an operation), as a call
+(`index(@items, @i)`, `index(@orders[*].id, 0)`).
+
 ### Chained Operators
 
 Field reference operators can be chained:

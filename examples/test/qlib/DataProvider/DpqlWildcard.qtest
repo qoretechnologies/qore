@@ -570,7 +570,7 @@ class DpqlWildcardTest inherits QUnit::Test {
             '@prices{*}[0]': '@prices{*}[0]',
             '@prices{*}{*}': '@prices{*}{*}',
             '@prices{*}[*]': '@prices{*}[*]',
-            '@orders[0].items[*].sku': '@orders[0]{items}[*].sku',
+            '@orders[0].items[*].sku': '@orders[0].items[*].sku',
             '@orders[*].in': '@orders[*].in',
             '@orders[*].größe': '@orders[*].größe',
             '@orders[*].id == (1, 2)': '@orders[*].id == (1,2)',

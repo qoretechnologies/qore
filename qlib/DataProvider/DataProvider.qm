@@ -1024,6 +1024,7 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     - <tt>\@scores[0] &gt;= 90</tt> - list or string index accessor
     - <tt>\@scores[0..1]</tt> - list slice accessor
     - <tt>\@payload{region} == "EU"</tt> - hash key accessor
+    - <tt>\@items[0].id</tt> - a member after an accessor: the key \c id of the first item
     - <tt>\@orders[*].id</tt> and <tt>\@prices{*}</tt> - @ref dpql_wildcards "wildcard accessors": a value from
       each item of a list or each value of a hash
 
@@ -1225,6 +1226,16 @@ hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name == "
 string dpql = DataProvider::serializeDpqlExpression(exp);
 # Result: '@name == "John" && @age > 18'
     @endcode
+
+    Accessors are written as they are read:
+    - a single key that is a name, after an accessor, is written as a member: <tt>\@items[0]{id}</tt> and
+      <tt>\@items[0].id</tt> are both written <tt>\@items[0].id</tt>; other keys keep their braces, quoted when
+      they are not names (<tt>\@items[0]{"order id"}</tt>, <tt>\@items[0]{"true"}</tt>, <tt>\@items[0]{a, b}</tt>)
+    - a key of a field reference keeps its braces (<tt>\@record{id}</tt>), since <tt>\@record.id</tt> is the field
+      <tt>record.id</tt>
+    - an accessor whose index or key is not a literal (<tt>index(\@items, \@i)</tt>), or that applies to a value
+      that is not a field reference or another accessor, such as a wildcard (<tt>index(\@orders[*].id, 0)</tt>), a
+      template reference, a call or an operation, is written as a call
 
     @subsection dpql_diagnostics Error Handling and Diagnostics
 
@@ -1491,6 +1502,17 @@ fetch
       it is set for @ref DataProvider::DP_FUNC_WILDCARD_ITEM "DP_FUNC_WILDCARD_ITEM", the item of a list
       wildcard, so that user interfaces can leave it out of their lists of expressions; DPQL completion does not
       offer internal expressions
+    - DPQL serialization (@ref DataProvider::DataProvider::serializeDpqlExpression() "serializeDpqlExpression()")
+      writes a single key that is a name, after an accessor, as the member that it is read from:
+      <tt>\@create.items[0].id</tt> is written as it is; it was written <tt>\@create.items[0]{id}</tt> (see
+      @ref dpql_round_trip)
+    - fixed DPQL serialization of an accessor whose index or key is a field or template reference
+      (<tt>index(\@items, \@i)</tt>), which raised \c RUNTIME-OVERLOAD-ERROR; it is written as a call
+    - fixed DPQL serialization of an accessor of a value after which DPQL does not read accessors: a wildcard, a
+      template reference, a literal, a call or an operation; it was written as an accessor that did not parse
+      (<tt>(\@a + \@b){c}</tt>), or, for a wildcard, that parsed as another expression
+      (<tt>\@orders[*].a[0]</tt> for the first list of the wildcard's results); it is written as a call
+      (<tt>index(\@orders[*].a, 0)</tt>)
 
     @subsection dataprovider_v3_10_2 DataProvider v3.10.2
     - the editor token spans of @ref DataProvider::DpqlActionSession "DpqlActionSession" (\c dpql-get-tokens and
