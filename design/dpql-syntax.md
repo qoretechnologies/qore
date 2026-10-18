@@ -213,6 +213,27 @@ Use parentheses to override:
 @status not in ("deleted", "archived")
 ```
 
+### findIn
+
+`findIn(value, list, location)` returns the first element of `list` whose value at `location` equals
+`value`; without a location, or when no element matches by location, it returns `value` if it is an
+element of the list, otherwise no value.  It gives the same results as Qorus's `findIn`:
+
+```dpql
+findIn(2, @orders, "id")              # the order whose id is 2
+findIn(2, (1, 2, 3), "id")            # 2: no element has an id, but 2 is an element
+findIn("vip", @orders, "tags[-1]")    # the order whose last tag is "vip"
+findIn(2, @rows, "a\\.b")              # reads the key "a.b"
+findIn(1, @rows, "'a b'")             # reads the key "a b" (also written a\\ b)
+findIn((1, 2), @rows, "o.v")          # o is a list of hashes: the list of their v values
+findIn(1, null)                       # no list: no value
+```
+
+The location is a dot-separated path; `\\.` is a dot in a key, `[n]` or `[-n]` after a key reads an
+element of a list, quotes around a key or `\\ ` give a key with a space, and a key that reads a list of
+more than one hash before the last step gives the list of the values that the rest of the path reads in
+each of them.
+
 ## Range Operators
 
 ```dpql

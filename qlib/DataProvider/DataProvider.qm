@@ -1526,6 +1526,22 @@ fetch
       not a single character and a negative precision raise \c FORMAT-NUMBER-ERROR; they gave wrong text such as
       <tt>1a234a568</tt>.  The decimal separator and precision arguments are typed as optional, so \c null passes
       validation
+    - <b>behavior change</b>: \c findIn gives the results that Qorus's \c findIn gives:
+      -# when no element matches by location, the value itself is returned if it is an element of the list:
+         <tt>findIn(2, (1, 2, 3), "id")</tt> is \c 2; it was no value
+      -# an escaped dot is part of a key: <tt>findIn(2, ({"a.b": 2},), "a\\.b")</tt> finds the element; a location
+         with \c "\\." found nothing unless a key ended with a backslash
+      -# <tt>[n]</tt> or <tt>[-n]</tt> after a key reads an element of a list: <tt>findIn("y", ({"tags": ("x", "y")},),
+         "tags[-1]")</tt> finds the element; it read a key named \c "tags[-1]"
+      -# a key in quotes, or with \c "\\ " for a space, is the key without the quotes or with the space:
+         <tt>findIn(1, ({"a b": 1},), "'a b'")</tt> finds the element; it read a key named \c "'a b'"
+      -# a key that reads a list of more than one hash before the last step gives the list of the values read in
+         each hash: <tt>findIn((1, 2), ({"o": ({"v": 1}, {"v": 2})},), "o.v")</tt> finds the element; it found
+         nothing
+      .
+      The list argument accepts no value (which finds nothing) and any other value, as a soft list
+      (@ref DataProvider::DataProviderSignatureOptionalSoftListType "DataProviderSignatureOptionalSoftListType"),
+      so <tt>findIn(1, null)</tt> passes validation
 
     @subsection dataprovider_v3_10_2 DataProvider v3.10.2
     - the editor token spans of @ref DataProvider::DpqlActionSession "DpqlActionSession" (\c dpql-get-tokens and

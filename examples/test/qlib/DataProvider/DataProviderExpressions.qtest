@@ -75,6 +75,7 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         addTestCase("alias tests", \aliasTests());
         addTestCase("between fix tests", \betweenFixTests());
         addTestCase("findIn fix tests", \findInFixTests());
+        addTestCase("findIn: the same results as Qorus", \findInQorusTests());
         addTestCase("duration function tests", \durationTests());
         addTestCase("date extraction tests", \dateExtractionTests());
         addTestCase("null handling tests", \nullHandlingTests());
@@ -564,6 +565,78 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         # without dot-path, returns the value itself
         assertEq(2, eval_expr("findIn", (2, (1, 2, 3))));
         assertEq(NOTHING, eval_expr("findIn", (99, (1, 2, 3))));
+    }
+
+    #! findIn gives the results that Qorus's findIn gives: the location grammar of Qorus (dots with "\." escapes, a
+    #! trailing [n] or [-n] offset in each step, quoted steps, "\ " for a space, and steps through lists of hashes) and
+    #! the value itself when no element matches by location; each case is a value, a list, a location and the result
+    findInQorusTests() {
+        list<list<auto>> cases = (
+            # without a location
+            ("b", ("a", "b", "c"), NOTHING, "b"),
+            ("z", ("a", "b", "c"), NOTHING, NOTHING),
+            # by location
+            (2, ({"id": 1}, {"id": 2}), "id", {"id": 2}),
+            (99, ({"id": 1}, {"id": 2}), "id", NOTHING),
+            # the value itself, where no element matches by location
+            (2, (1, 2, 3), "id", 2),
+            ("b", ({"id": "a"}, "b"), "id", "b"),
+            # nested steps
+            (2, ({"a": {"b": 1}}, {"a": {"b": 2}}), "a.b", {"a": {"b": 2}}),
+            # an escaped dot is part of the key
+            (2, ({"a.b": 2},), "a\\.b", {"a.b": 2}),
+            # offsets
+            ("x", ({"tags": ("x", "y")},), "tags[0]", {"tags": ("x", "y")}),
+            ("y", ({"tags": ("x", "y")},), "tags[-1]", {"tags": ("x", "y")}),
+            ("x", ({"tags[0]": "x"},), "tags[0]", NOTHING),
+            # quoted steps and escaped spaces
+            (1, ({"a b": 1},), "'a b'", {"a b": 1}),
+            (1, ({"a b": 1},), "a\\ b", {"a b": 1}),
+            (1, ({"'a'": 1},), "'a'", NOTHING),
+            # a step through a list of hashes gives the list of values
+            ((1, 2), ({"o": ({"v": 1}, {"v": 2})},), "o.v", {"o": ({"v": 1}, {"v": 2})}),
+            (1, ({"o": ({"v": 1}, {"v": 2})},), "o.v", NOTHING),
+            (1, ({"o": ({"v": 1},)},), "o.v", NOTHING),
+            # an element without the key
+            (NOTHING, ({"id": 1}, {"x": 2}), "id", {"x": 2}),
+            # no list
+            (1, NOTHING, NOTHING, NOTHING),
+            (1, NOTHING, "id", NOTHING),
+            # an empty location is no location
+            (1, ({"id": 1},), "", NOTHING),
+            ({"id": 1}, ({"id": 1},), "", {"id": 1}),
+        );
+        foreach list<auto> c in (cases) {
+            list<auto> args = ();
+            push args, c[0];
+            push args, c[1];
+            if (exists c[2]) {
+                push args, c[2];
+            }
+            auto result = eval_expr("findIn", args);
+            assertEq(c[3], result, sprintf("findIn(%y, %y, %y)", c[0], c[1], c[2]));
+        }
+
+        # the same in DPQL text, also with no list
+        hash<auto> rec = {
+            "orders": ({"id": 1, "tags": ("new", "vip")}, {"id": 2, "tags": ("old",)}, 7),
+            "none": NOTHING,
+        };
+        code<auto(string)> dpql = auto sub (string text) {
+            return AbstractDataProvider::evalGenericExpressionValue(rec, DataProvider::parseDpqlExpression(text));
+        };
+        assertEq({"id": 2, "tags": ("old",)}, dpql('findIn("old", @orders, "tags[0]")'));
+        assertEq({"id": 1, "tags": ("new", "vip")}, dpql('findIn("vip", @orders, "tags[-1]")'));
+        assertEq(7, dpql('findIn(7, @orders, "id")'));
+        assertEq(NOTHING, dpql('findIn(1, @none)'));
+        # a list that may have no value passes validation
+        hash<string, AbstractDataField> fields = {
+            "none": new QoreDataField("none", "none", AbstractDataProviderType::get("*list<auto>")),
+        };
+        assertEq((), map $1.message, DataProvider::validateDpqlExpression('findIn(1, @none)', fields),
+            $1.severity == "error");
+        assertEq((), map $1.message, DataProvider::validateDpqlExpression('findIn(1, null)', fields),
+            $1.severity == "error");
     }
 
     durationTests() {

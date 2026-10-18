@@ -45,6 +45,105 @@ auto sub dp_eval_arg(hash<auto> rec, hash<DataProviderExpression> exp, int index
     return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[index], template_context);
 }
 
+#! Returns the steps of a findIn location
+/** The location is the grammar of Qorus's findIn: steps separated by dots, where an escaped dot (\c "\.") is part of
+    a step, and each step may end with an offset in a list (\c "[n]", negative from the end)
+
+    @param str the location, such as \c "account.id" or \c "tags[0]"
+
+    @return a list of steps, each with the \c key to read and an optional \c offset
+
+    @since %DataProvider 3.11
+*/
+list<hash<auto>> sub dp_find_in_location(string str) {
+    list<hash<auto>> rv = ();
+    list<string> steps = str.split(".");
+    for (int i = 0; i < steps.size(); ++i) {
+        # a step that ends in a backslash continues with the next one: the dot was escaped
+        if ((i < (steps.size() - 1)) && (steps[i] =~ /\\$/)) {
+            splice steps[i], -1;
+            steps[i] += "." + (extract steps, i + 1, 1)[0];
+            --i;
+            continue;
+        }
+        *string offset = (steps[i] =~ x/[^\\]?\[(-?[0-9]+)\]$/)[0];
+        if (exists offset) {
+            steps[i] =~ s/\[-?[0-9]+\]$//;
+        }
+        rv += {
+            "key": steps[i],
+            "offset": exists offset ? offset.toInt() : NOTHING,
+        };
+    }
+    return rv;
+}
+
+#! Returns the value at a findIn location in an element, as Qorus's findIn reads it
+/** - a step with a key reads that key of a hash; a quoted key (\c 'a b' or \c "a b") loses its quotes, and
+      \c "\ " is a space
+    - a step with an offset reads that element of a list
+    - a step without an offset that reads a list of more than one hash, before the last step, gives the list of the
+      values that the rest of the location reads in each hash
+
+    @param value the element
+    @param steps the steps returned by dp_find_in_location()
+    @param expanded set to @ref True if the value is the list of the values read in a list of hashes
+
+    @return the value, or @ref nothing if the location does not exist in the element
+
+    @since %DataProvider 3.11
+*/
+auto sub dp_find_in_value(auto value, list<hash<auto>> steps, *reference<bool> expanded) {
+    auto v = value;
+    foreach hash<auto> step in (steps) {
+        if (step.key.val()) {
+            string key = step.key;
+            if ((key =~ /^'.*'$/) || (key =~ /^".*"$/)) {
+                splice key, 0, 1;
+                splice key, -1;
+            }
+            if (key =~ /\\ /) {
+                key =~ s/\\ / /g;
+            }
+            if (!exists v) {
+                return;
+            }
+            int type = v.typeCode();
+            if (type != NT_HASH && type != NT_LIST) {
+                return;
+            }
+            if (type == NT_HASH && !v.hasKey(key)) {
+                return;
+            }
+            v = v{key};
+            if (!exists v) {
+                return;
+            }
+        }
+        if (exists step.offset) {
+            if (v.typeCode() != NT_LIST) {
+                return;
+            }
+            v = step.offset < 0 ? v[v.lsize() + step.offset] : v[step.offset];
+        } else if (v.lsize() > 1 && v[0].typeCode() == NT_HASH && $# < (steps.size() - 1)) {
+            list<hash<auto>> rest = steps[($# + 1)..];
+            list<auto> rv = ();
+            foreach auto item in (v) {
+                bool item_expanded;
+                auto result = dp_find_in_value(item, rest, \item_expanded);
+                if (item_expanded) {
+                    rv += result;
+                } else {
+                    push rv, result;
+                }
+            }
+            expanded = True;
+            return rv;
+        }
+    }
+    return v;
+}
+
 #! Returns locale-sensitive string predicate options from an argument value, if present
 *hash<auto> sub dp_get_string_predicate_locale_options(auto value, string op) {
     if (!exists value || value.typeCode() != NT_HASH) {
@@ -927,12 +1026,19 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "name": DP_OP_FIND_IN,
             "display_name": "find in",
             "short_desc": "Finds a value in a list/hash by dot-notation path",
-            "desc": "Searches for a value in a list; the optional third argument provides a dot-notation path "
-                "into list elements for comparison. Returns the matching element or `NOTHING`",
+            "desc": "Searches for a value in a list and returns the first matching element, or `NOTHING`; the "
+                "optional third argument gives the location of the value in each element, and an element "
+                "matches when the value at that location is the value searched for.  When no element matches by "
+                "location, the value itself is returned if it is an element of the list.\n\n"
+                "The location is a dot-notation path: `account.id` reads the key `id` of the key `account`; "
+                "`\\.` is a dot in a key (`a\\.b` reads the key `a.b`), `[n]` after a key reads an element of "
+                "a list (`tags[0]`, and `tags[-1]` for the last one), a key in quotes (`'a b'`) or with `\\ ` "
+                "(`a\\ b`) has a space, and a key that reads a list of hashes before the last step gives the "
+                "list of the values that the rest of the path reads in each of them",
             "symbol": "findIn",
             "render_template": "findIn($arg[0], $arg[1], $arg[2])",
             "groups": "Comparison",
-            "args": (DataProviderSignatureAnyType, DataProviderSignatureListType,
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureOptionalSoftListType,
                 DataProviderSignatureOptionalStringType),
             "arg_info": (
                 <DataProviderArgInfo>{
@@ -943,12 +1049,15 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 <DataProviderArgInfo>{
                     "display_name": "List",
                     "short_desc": "The list to search in",
-                    "desc": "The list to search in",
+                    "desc": "The list to search in; no value finds nothing, and a value that is not a list is a "
+                        "list with that value",
                 },
                 <DataProviderArgInfo>{
                     "display_name": "Value Location",
                     "short_desc": "Dot-notation path to the value in list elements",
-                    "desc": "The location of the value in the list elements in dot notation",
+                    "desc": "The location of the value in the list elements in dot notation: `.` separates keys, "
+                        "`\\.` is a dot in a key, `[n]` or `[-n]` after a key reads an element of a list, and a "
+                        "key in quotes or with `\\ ` has a space",
                     "example_value": "account.id",
                 },
             ),
@@ -957,25 +1066,17 @@ public const hash<auto> ExtendedExpressionImplementations = {
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             auto val = dp_eval_arg(rec, exp, 0, tc);
             softlist<auto> l = dp_eval_arg(rec, exp, 1, tc);
+            # the same results as Qorus's findIn
             if (exp.args[2].val()) {
                 string loc = dp_eval_arg(rec, exp, 2, tc);
-                list<string> path = loc.split(".");
+                list<hash<auto>> steps = dp_find_in_location(loc);
                 foreach auto e in (l) {
-                    auto v = e;
-                    foreach string p in (path) {
-                        if (v.typeCode() == NT_HASH) {
-                            v = v{p};
-                        } else {
-                            v = NOTHING;
-                            break;
-                        }
-                    }
-                    if (v == val) {
+                    if (dp_find_in_value(e, steps) == val) {
                         return e;
                     }
                 }
-                return NOTHING;
             }
+            # the value itself, also when no element matches by location
             return inlist(val, l) ? val : NOTHING;
         },
     },
