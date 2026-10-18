@@ -108,6 +108,7 @@ class DpqlActionSessionTest inherits QUnit::Test {
         addTestCase("dpql-validate with override", \testValidateOverride());
         addTestCase("dpql-completions with override", \testCompletionsOverride());
         addTestCase("dpql-get-tokens", \testTokenize());
+        addTestCase("dpql-get-tokens operator and punctuation types", \testTokenTypes());
         addTestCase("dpql-format invalid", \testFormatInvalid());
         addTestCase("dpql-serialize", \testSerialize());
         addTestCase("schema-aware key completions", \testSchemaAwareKeyCompletions());
@@ -255,6 +256,40 @@ class DpqlActionSessionTest inherits QUnit::Test {
             "fields": getFieldInfo(),
         });
         assertTrue(result.completions.size() > 0, "Override fields should be used for completions");
+    }
+
+    #! Every operator token is an "operator" span and every bracket, brace, parenthesis, comma and dot is
+    #! "punctuation"; none is an "identifier", which editors show as a function
+    testTokenTypes() {
+        DataProvider::DpqlActionSession session = newSession();
+        string text = '@a[0..1]{b}.c + 1 - 2 * 3 / 4 % 5 == "x" && !(@d != null) || @e =~ /r/ && @f !~ /s/ '
+            '&& @g[*] < 1 && @h <= 2 && @i > 3 && @j >= 4 && upr(@k, 1) == $static:x';
+        list<hash<auto>> spans = session.handleAction("dpql-get-tokens", {"text": text}).tokens;
+        # the type of each span, by its text; the two * (multiplication and wildcard) are both operators
+        hash<string, list<string>> types = {};
+        foreach hash<auto> span in (spans) {
+            types{span.text} += (span.type,);
+        }
+        foreach string op in (("..", "+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">=", "&&", "||", "!",
+                "=~", "!~")) {
+            assertTrue(types.hasKey(op), sprintf("the expression has %y", op));
+            assertEq((map "operator", types{op}), types{op}, sprintf("%y is an operator", op));
+        }
+        assertEq(("operator", "operator"), types."*", "multiplication and the wildcard");
+        foreach string p in (("[", "]", "{", "}", ".", "(", ")", ",")) {
+            assertTrue(types.hasKey(p), sprintf("the expression has %y", p));
+            assertEq((map "punctuation", types{p}), types{p}, sprintf("%y is punctuation", p));
+        }
+        # the other tokens keep their types
+        assertEq(("field",), types."@a");
+        assertEq(("number",), types."0");
+        assertEq(("string",), types."\"x\"");
+        assertEq(("keyword",), types."null");
+        assertEq(("string",), types."/r/");
+        assertEq(("variable",), types."$static:x");
+        assertEq(("identifier",), types.upr);
+        # no operator or punctuation token is an identifier
+        assertEq((), (map $1.text, spans, $1.type == "identifier" && $1.text !~ /^[[:alpha:]_]/));
     }
 
     testTokenize() {

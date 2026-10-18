@@ -49,7 +49,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.10.1";
+    version = "3.10.2";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1455,6 +1455,12 @@ fetch
     expose first-class actions that take it.
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_10_2 DataProvider v3.10.2
+    - the editor token spans of @ref DataProvider::DpqlActionSession "DpqlActionSession" (\c dpql-get-tokens and
+      \c dpql-parse in the \c token-span format) give the arithmetic operators (\c +, \c -, \c *, \c /, \c %),
+      \c !~, the range \c .. and the wildcard \c * the type \c operator, and brackets, braces and the dot of a
+      member access the type \c punctuation; they had the type \c identifier, which editors show as a function
 
     @subsection dataprovider_v3_10_1 DataProvider v3.10.1
     - <b>behavior change</b>: a field reference whose path goes through a value that is not a hash or an object

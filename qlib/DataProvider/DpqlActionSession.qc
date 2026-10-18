@@ -644,11 +644,24 @@ public class DpqlActionSession {
             case DPQL_TOK_OP_OR: return "operator";
             case DPQL_TOK_OP_NOT: return "operator";
             case DPQL_TOK_OP_REGEX: return "operator";
+            case DPQL_TOK_OP_NMATCH: return "operator";
+            case DPQL_TOK_OP_PLUS: return "operator";
+            case DPQL_TOK_OP_MINUS: return "operator";
+            case DPQL_TOK_OP_MULTIPLY: return "operator";
+            case DPQL_TOK_OP_DIVIDE: return "operator";
+            case DPQL_TOK_OP_MOD: return "operator";
+            case DPQL_TOK_RANGE: return "operator";
+            # the * of the wildcard accessors [*] and {*}
             case DPQL_TOK_WILDCARD: return "operator";
             case DPQL_TOK_REGEX: return "string";
             case DPQL_TOK_LPAREN: return "punctuation";
             case DPQL_TOK_RPAREN: return "punctuation";
             case DPQL_TOK_COMMA: return "punctuation";
+            case DPQL_TOK_LBRACKET: return "punctuation";
+            case DPQL_TOK_RBRACKET: return "punctuation";
+            case DPQL_TOK_LBRACE: return "punctuation";
+            case DPQL_TOK_RBRACE: return "punctuation";
+            case DPQL_TOK_DOT: return "punctuation";
             case DPQL_TOK_TEMPLATE: return "variable";
             case DPQL_TOK_ERROR: return "error";
         }

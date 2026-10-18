@@ -73,8 +73,8 @@ The categories are deliberately few, and several DPQL token types collapse into 
 | `string` | `DPQL_TOK_STRING`, `DPQL_TOK_REGEX` |
 | `number` | `DPQL_TOK_NUMBER` |
 | `constant` | `DPQL_TOK_DATE`, `DPQL_TOK_BINARY`, `DPQL_TOK_LIST`, `DPQL_TOK_HASH` |
-| `operator` | every `DPQL_TOK_OP_*` |
-| `punctuation` | `DPQL_TOK_LPAREN`, `DPQL_TOK_RPAREN`, `DPQL_TOK_COMMA` |
+| `operator` | every `DPQL_TOK_OP_*` (comparison, logical, regex match and arithmetic), `DPQL_TOK_RANGE` (`..`), `DPQL_TOK_WILDCARD` (the `*` of `[*]` / `{*}`) |
+| `punctuation` | `DPQL_TOK_LPAREN`, `DPQL_TOK_RPAREN`, `DPQL_TOK_COMMA`, `DPQL_TOK_LBRACKET`, `DPQL_TOK_RBRACKET`, `DPQL_TOK_LBRACE`, `DPQL_TOK_RBRACE`, `DPQL_TOK_DOT` |
 | `variable` | `DPQL_TOK_TEMPLATE` |
 | `error` | `DPQL_TOK_ERROR` |
 
@@ -84,7 +84,9 @@ returns `identifier` for anything unmapped, so an unrecognised token renders pla
 throwing.
 
 Adding a DPQL token type therefore means adding a `mapTokenType()` case — otherwise it silently renders
-as an identifier.
+as an identifier, which editors show as a function (the arithmetic operators, `!~`, `..`, brackets,
+braces and the dot did until DataProvider 3.10.2); `DpqlActionSession.qtest` checks the span type of
+every operator and punctuation token.
 
 ## Documenting the WebSocket surface
 
