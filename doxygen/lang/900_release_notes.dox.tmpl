@@ -17,6 +17,15 @@
     \c quote_escape option contain <tt>\\"</tt> for a quote in a field; read them with the new reader option
     <tt>quote_escape: "\\\\"</tt>, or write the old format with the writer option <tt>quote_escape: "\\\\"</tt>.
 
+    Lines of text in a character encoding that is not ASCII-compatible, such as UTF-16 (the "Unicode text" that
+    spreadsheet programs export) or UTF-32, end at \c "\r\n", \c "\n" or \c "\r" when they are read with
+    @ref Qore::StreamReader::readLine() "StreamReader::readLine()", a
+    @ref Qore::BufferedStreamReader "BufferedStreamReader" or an
+    @ref Qore::InputStreamLineIterator "InputStreamLineIterator" without an end-of-line marker, as in other
+    encodings.  Only \c "\n" ended a line, so each line of a file with Windows line ends kept a \c "\r", and a
+    CSV file with a quoted field at the end of a line could not be read with the @ref csvutilintro "CsvUtil"
+    iterators.
+
     Quoted fields are split correctly by @ref Qore::AbstractLineIterator::getSplitLine() and
     @ref Qore::<string>::split(string, string, bool, bool, string) "<string>::split()": a field of escaped quotes,
     such as <tt>""""</tt> (one quote character), is read instead of raising \c SPLIT-ERROR; a field whose value

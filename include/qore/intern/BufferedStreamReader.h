@@ -180,6 +180,26 @@ private:
       return static_cast<unsigned char>(buf[0]);
    }
 
+   //! Copies the next bytes of the stream to a buffer without reading them: they stay in the buffer
+   /** @return the number of bytes copied, which is less than \a len at the end of the stream, or -1 if an exception
+       was raised
+   */
+   DLLLOCAL virtual qore_offset_t peekData(char* dest, size_t len, ExceptionSink* xsink) override {
+      assert(len <= bufCapacity);
+      while (bufCount < len) {
+         int64 rc = fillBuffer(len - bufCount, xsink);
+         if (*xsink) {
+            return -1;
+         }
+         if (!rc) {
+            break;
+         }
+      }
+      size_t rv = QORE_MIN(len, bufCount);
+      memcpy(dest, buf, rv);
+      return rv;
+   }
+
    //! returns 0 = no data read (end of stream or error), > 0 = number of bytes read, increments bufCount
    DLLLOCAL int64 fillBuffer(size_t bytes, ExceptionSink* xsink) {
       assert(bytes);

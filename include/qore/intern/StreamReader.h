@@ -160,6 +160,10 @@ public:
             return nullptr;
         }
         if (!eol && !enc->isAsciiCompat()) {
+            // "\r\n", "\n" and "\r" end a line, in the code units of the encoding
+            if (!qore_encoding_private::isStateful(enc)) {
+                return checkByteOrderAfter(readLineWideIntern(trim, xsink), xsink);
+            }
             QoreString nl("\n");
             return checkByteOrderAfter(readLineEolIntern(&nl, trim, xsink), xsink);
         }
@@ -218,8 +222,138 @@ private:
         return decoder.readLine(enc, eol_utf8, trim, true, getReadFunc(), xsink, &line_terminator);
     }
 
+    //! Sets the code units of a carriage return and a line feed in the encoding of the stream, if not set already
+    /** @return the width of the code units, or 0 if they cannot be read as units of the same width (the caller then
+        ends lines with a line feed only), or -1 if an exception was raised
+    */
+    DLLLOCAL int setWideLineEnds(ExceptionSink* xsink) {
+        if (wide_enc == enc) {
+            return (int)wide_cr.size();
+        }
+        QoreString cr("\r", QCS_UTF8);
+        QoreString lf("\n", QCS_UTF8);
+        TempEncodingHelper tcr(&cr, enc, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        TempEncodingHelper tlf(&lf, enc, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        tcr.removeBom();
+        tlf.removeBom();
+        wide_enc = enc;
+        if (tcr->size() != tlf->size() || tcr->size() != enc->getMinCharWidth() || tcr->size() > 4) {
+            wide_cr.clear();
+            wide_lf.clear();
+            return 0;
+        }
+        wide_cr.assign(tcr->c_str(), tcr->size());
+        wide_lf.assign(tlf->c_str(), tlf->size());
+        return (int)wide_cr.size();
+    }
+
+    //! Reads one line of text in an encoding that is not ASCII-compatible, ending with "\r\n", "\n" or "\r"
+    /** The text is read in code units of the width of the encoding's smallest character (2 bytes in UTF-16, 4 in
+        UTF-32), so that a character with the bytes of a line end in a code unit (ex: U+010A in UTF-16LE: 0a 01) is
+        not a line end.  After a carriage return, the next code unit is peeked to find a line feed; see peekData().
+        The byte order of the text is checked by the caller.
+    */
+    DLLLOCAL QoreStringNode* readLineWideIntern(bool trim, ExceptionSink* xsink) {
+        line_terminator.clear();
+        // the byte order of a stream in the generic UTF-16 encoding (or a Unicode encoding created on the fly with
+        // a byte order mark, ex: "UTF-32") is given by a byte order mark at its start
+        char start[4];
+        size_t start_len = 0;
+        if (enc == QCS_UTF16) {
+            if (resolveUtf16ByteOrder(start, start_len, xsink)) {
+                return nullptr;
+            }
+        } else if (!qore_encoding_private::get(*enc)->swapped_bom.empty()
+                && resolveByteOrder(start, start_len, xsink)) {
+            return nullptr;
+        }
+
+        int width = setWideLineEnds(xsink);
+        if (width < 0) {
+            return nullptr;
+        }
+        if (!width) {
+            // the line ends of the encoding are not code units of one width: a line feed ends the line
+            QoreString nl("\n");
+            SimpleRefHolder<QoreStringNode> rv(readLineEolIntern(&nl, trim, xsink, start, start_len));
+            return rv.release();
+        }
+        const size_t w = width;
+
+        SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
+        size_t start_pos = 0;
+        for (size_t i = 1; true; ++i) {
+            // a line can be arbitrarily long, so the read can be cancelled
+            if (!(i % 1024) && qore_check_cancel(xsink, "StreamReader line read")) {
+                return nullptr;
+            }
+            // the next code unit: the bytes read to resolve the byte order first
+            char unit[4];
+            size_t got = 0;
+            while (got < w && start_pos < start_len) {
+                unit[got++] = start[start_pos++];
+            }
+            if (got < w) {
+                qore_offset_t rc = readData(xsink, unit + got, w - got, false);
+                if (*xsink) {
+                    return nullptr;
+                }
+                got += rc;
+            }
+            if (got < w) {
+                // the end of the stream; incomplete code unit bytes are part of the line
+                if (got) {
+                    str->concat(unit, got);
+                }
+                return str->empty() ? nullptr : q_remove_bom(str.release(), enc);
+            }
+            if (!memcmp(unit, wide_lf.data(), w)) {
+                line_terminator = "\n";
+                if (!trim) {
+                    str->concat(unit, w);
+                }
+                return q_remove_bom(str.release(), enc);
+            }
+            if (!memcmp(unit, wide_cr.data(), w)) {
+                line_terminator = "\r";
+                if (!trim) {
+                    str->concat(unit, w);
+                }
+                assert(start_pos == start_len);
+                // a line feed after the carriage return is part of the line end
+                char next[4];
+                qore_offset_t rc = peekData(next, w, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (rc == (qore_offset_t)w && !memcmp(next, wide_lf.data(), w)) {
+                    readData(xsink, next, w);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    line_terminator = "\r\n";
+                    if (!trim) {
+                        str->concat(next, w);
+                    }
+                }
+                return q_remove_bom(str.release(), enc);
+            }
+            str->concat(unit, w);
+        }
+    }
+
     //! Reads one line ending with the given end-of-line marker; the byte order of the text is checked by the caller
-    DLLLOCAL QoreStringNode* readLineEolIntern(const QoreString* eol, bool trim, ExceptionSink* xsink) {
+    /** @param pre bytes already read that start the line, if any
+        @param pre_len the number of bytes in \a pre
+    */
+    DLLLOCAL QoreStringNode* readLineEolIntern(const QoreString* eol, bool trim, ExceptionSink* xsink,
+            const char* pre = nullptr, size_t pre_len = 0) {
         if (useDecoder(false)) {
             return readDecoderLine(eol, trim, xsink);
         }
@@ -234,7 +368,12 @@ private:
         // end-of-line marker is converted to the encoding of the stream
         char start[4];
         size_t start_len = 0;
-        if (enc == QCS_UTF16) {
+        if (pre_len) {
+            // the caller resolved the byte order with these bytes
+            assert(pre_len <= sizeof start);
+            memcpy(start, pre, pre_len);
+            start_len = pre_len;
+        } else if (enc == QCS_UTF16) {
             if (resolveUtf16ByteOrder(start, start_len, xsink)) {
                 return nullptr;
             }
@@ -580,6 +719,15 @@ protected:
     //! the end-of-line marker that ended the last line read in UTF-8; empty if it ended at the end of the stream
     std::string line_terminator;
 
+    //! the encoding of wide_cr and wide_lf
+    const QoreEncoding* wide_enc = nullptr;
+
+    //! a carriage return and a line feed in the code units of wide_enc; empty if they are not units of one width
+    std::string wide_cr, wide_lf;
+
+    //! bytes read ahead of the text returned by the unbuffered reader; see peekData()
+    std::string pending;
+
     //! Makes the next bytes of the stream available without reading them, for the byte order check
     /** The unbuffered reader reads no bytes beyond the text it returns (the stream can be read directly between reads
         of the reader), so it has no bytes to sample: the text it reads is checked before it is returned; see
@@ -770,6 +918,15 @@ private:
         assert(limit > 0);
         char* destPtr = static_cast<char*>(dest);
         size_t read = 0;
+        // bytes read ahead come first
+        if (!pending.empty()) {
+            read = QORE_MIN(limit, pending.size());
+            memcpy(destPtr, pending.data(), read);
+            pending.erase(0, read);
+            if (read == limit) {
+                return read;
+            }
+        }
         while (true) {
             int64 rc = in->read(destPtr + read, limit - read, xsink);
             if (*xsink)
@@ -798,7 +955,40 @@ private:
         @return the next byte available to be read, -1 indicates end of the stream, -2 indicates an error
     */
     virtual int64 peek(ExceptionSink* xsink) {
+        if (!pending.empty()) {
+            return static_cast<unsigned char>(pending[0]);
+        }
         return in->peek(xsink);
+    }
+
+    //! Copies the next bytes of the stream to a buffer without reading them
+    /** The unbuffered reader reads the bytes from the stream and keeps them for the next read of the reader, so the
+        stream is then ahead of the text returned by the reader by these bytes; this is only done after a carriage
+        return that ends a line of text in an encoding that is not ASCII-compatible, to find a line feed after it
+
+        @param dest the buffer
+        @param len the number of bytes to copy
+        @param xsink exception sink
+
+        @return the number of bytes copied, which is less than \a len at the end of the stream, or -1 if an exception
+        was raised
+    */
+    DLLLOCAL virtual qore_offset_t peekData(char* dest, size_t len, ExceptionSink* xsink) {
+        while (pending.size() < len) {
+            char buf[8];
+            assert(len - pending.size() <= sizeof buf);
+            int64 rc = in->read(buf, len - pending.size(), xsink);
+            if (*xsink) {
+                return -1;
+            }
+            if (!rc) {
+                break;
+            }
+            pending.append(buf, rc);
+        }
+        size_t rv = QORE_MIN(len, pending.size());
+        memcpy(dest, pending.data(), rv);
+        return rv;
     }
 };
 
