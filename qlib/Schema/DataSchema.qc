@@ -141,9 +141,10 @@ public class DataSchema inherits AbstractVersionedSchema {
 
     #! Returns the table definitions with auto_triggers expanded for the current driver
     /** Also extracts \c populate metadata from column definitions: for columns with
-        \c populate + \c notnull that are genuinely new (not already in the DB), the \c notnull
+        \c populate + \c notnull that are new in a table already in the DB, the \c notnull
         flag is temporarily stripped so DDL alignment adds them as nullable. The \c populate
-        expressions are stored in \c pending_populates for \c executePopulateBackfill().
+        expressions are stored in \c pending_populates for \c executePopulateBackfill().  A table that is not in the
+        DB yet has no rows to populate, so its columns are created as they are declared.
     */
     private *hash<auto> getTablesImpl() {
         if (!schema_data.tables) {
@@ -300,9 +301,10 @@ public class DataSchema inherits AbstractVersionedSchema {
     #! Extracts populate metadata and strips populate/notnull from genuinely new columns
     /** For each table that has columns with a \c populate attribute, this method:
         - snapshots the current DB columns (to detect which columns are genuinely new)
-        - for each populate column that is new: stores the populate info, strips \c notnull
-          (so DDL adds it nullable) and strips \c populate (not a GenericColumnInfo key)
-        - for columns that already exist: just strips \c populate
+        - for each populate column that is new in a table that is already in the DB: stores the populate info,
+          strips \c notnull (so DDL adds it nullable) and strips \c populate (not a GenericColumnInfo key)
+        - for columns that already exist, and for the columns of a table that is not in the DB yet, which has no
+          rows to populate: just strips \c populate, so the column is created as it is declared
 
         @param tables reference to the expanded tables hash (modified in place)
         @return a hash of populate metadata (table → column → info), or NOTHING if none
@@ -330,17 +332,11 @@ public class DataSchema inherits AbstractVersionedSchema {
                 continue;
             }
 
-            # snapshot the columns that currently exist in the DB for this table
-            hash<string, bool> existing_cols();
-            try {
-                SqlUtil::Table t(ds, table_name);
-                AbstractTable at = t.getTable();
-                if (at.checkExistence()) {
-                    existing_cols = map {$1: True}, at.describe().keys();
-                }
-            } catch () {
-                # table doesn't exist yet — no existing columns
-            }
+            # snapshot the columns that currently exist in the DB for this table; checkExistence() reports a table
+            # that is not in the DB, so an exception here is a real error
+            AbstractTable at = (new SqlUtil::Table(ds, table_name)).getTable();
+            bool table_exists = at.checkExistence();
+            hash<string, bool> existing_cols = table_exists ? map {$1: True}, at.describe().keys() : {};
 
             foreach hash<auto> cpair in (tpair.value.columns.pairIterator()) {
                 string col_name = cpair.key;
@@ -352,8 +348,9 @@ public class DataSchema inherits AbstractVersionedSchema {
                 # strip populate from the column def (not a GenericColumnInfo key)
                 delete tables{table_name}.columns{col_name}.populate;
 
-                if (existing_cols{col_name}) {
-                    # column already exists in the DB — skip populate, keep notnull as-is
+                if (!table_exists || existing_cols{col_name}) {
+                    # the column already exists in the DB, or its table is created with it and has no rows to
+                    # populate — skip populate, keep notnull as-is
                     continue;
                 }
 
@@ -381,9 +378,11 @@ public class DataSchema inherits AbstractVersionedSchema {
     /** For each table/column in \c pending_populates:
         1. Renders the populate expression to a SQL UPDATE
         2. Executes <tt>UPDATE ... SET col = &lt;expr&gt; WHERE col IS NULL</tt>
-        3. If the column was originally NOT NULL: \c ALTER TABLE ... ALTER COLUMN ... SET NOT NULL
+        3. If the column was originally NOT NULL: the column is made NOT NULL with the DDL of the database's
+           SqlUtil driver (@ref SqlUtil::AbstractColumn::getModifySql() "AbstractColumn::getModifySql()"); a
+           database that cannot change the column raises an exception, as SQLite before 3.53.0 does
 
-        @param table_cache the table cache from alignment
+        @param table_cache the template tables of the alignment, which declare the columns
         @param verbose the verbosity level
     */
     private executePopulateBackfill(SqlUtil::Tables table_cache, int verbose) {
@@ -413,11 +412,14 @@ public class DataSchema inherits AbstractVersionedSchema {
                         AbstractDatabase::AC_Update);
                 }
 
-                # re-apply NOT NULL if it was stripped
+                # re-apply NOT NULL if it was stripped: the column becomes the column the schema declares (the
+                # template that alignment added it from, with every driver-specific attribute), NOT NULL
                 if (pop_info.notnull) {
-                    string alter_sql = sprintf("alter table %s alter column %s set not null",
-                        table.getSqlName(), table.getColumnSqlName(col_name));
-                    ds.exec(alter_sql);
+                    AbstractColumn target = table_cache{table_name}.describe(){col_name}.copy();
+                    target.nullable = False;
+                    foreach string sql in (table.describe(){col_name}.getModifySql(table, target)) {
+                        ds.exec(sql);
+                    }
                     if (verbose > 0) {
                         info_callback(sprintf("  NOT NULL constraint applied to %s.%s",
                             table_name, col_name), AbstractDatabase::AC_Update);

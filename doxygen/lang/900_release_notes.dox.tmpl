@@ -3092,6 +3092,9 @@ while (*binary chunk = input.read(65536)) {
       - fixed passing a REST client in the \c snrestclient option, which always failed
 
     - @ref sqlite3sqlutilintro "Sqlite3SqlUtil" module
+      - a column's \c NOT \c NULL constraint can be set or dropped, as by table alignment, with SQLite 3.53.0 and
+        later; any other change to a column of an existing table still raises \c UNSUPPORTED, now with a
+        description of what SQLite cannot change (see @ref sqlite3_column_changes)
       - fixed tables reporting no primary key, so \c upsert() always failed
       - fixed duplicate-row detection never recognizing a duplicate key
       - fixed describing a table's indexes: automatic indexes failed, lower-case unique indexes were not unique,

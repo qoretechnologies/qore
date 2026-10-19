@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires SqlUtil
+%requires Sqlite3SqlUtil
+%requires QUnit
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class Sqlite3ColumnsTest
+
+#! Changing a column of an existing table on SQLite: only its NOT NULL constraint can change, from SQLite 3.53.0
+/** The SQL is tested for a SQLite library older and newer than 3.53.0 with a datasource that reports the version,
+    so each run covers both; the changes are also made in the SQLite library the sqlite3 module uses
+*/
+class Sqlite3ColumnsTest inherits QUnit::Test {
+    constructor() : Test("Sqlite3ColumnsTest", "1.0", \ARGV) {
+        addTestCase("a NOT NULL change is SQL from SQLite 3.53.0", \notNullSql());
+        addTestCase("a NOT NULL change before SQLite 3.53.0 is refused", \notNullOldSqlite());
+        addTestCase("other column changes are refused with every SQLite version", \otherChanges());
+        addTestCase("an unchanged column needs no SQL", \unchanged());
+        addTestCase("table alignment changes a NOT NULL constraint", \alignment());
+        addTestCase("the SQLite library changes a NOT NULL constraint", \liveChange());
+        set_return_value(main());
+    }
+
+    #! Returns an in-memory database with a table "t"; with a version, the datasource reports it as the SQLite version
+    private AbstractDatasource datasource(*string version) {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        AbstractDatasource ds = version
+            ? new VersionedDatasource("sqlite3:@:memory:", version)
+            : new Datasource("sqlite3:@:memory:");
+        ds.exec("create table t (id integer, code text, label text not null default 'none', \"order\" text)");
+        ds.commit();
+        return ds;
+    }
+
+    private notNullSql() {
+        foreach string version in (("3.53.0", "3.53.4", "4.0.0")) {
+            AbstractDatasource ds = datasource(version);
+            on_exit ds.rollback();
+            Sqlite3Table t(ds, "t");
+            assertEq(("alter table t alter column code set not null",),
+                t.getModifyColumnSql("code", {"native_type": "text"}, False), version);
+            assertEq(("alter table t alter column label drop not null",),
+                t.getModifyColumnSql("label", {"native_type": "text", "default_value": "'none'",
+                    "default_value_native": True}, True), version);
+            # a reserved word is quoted as SQLite requires it
+            assertEq(("alter table t alter column 'order' set not null",),
+                t.getModifyColumnSql("order", {"native_type": "text"}, False), version);
+        }
+    }
+
+    private notNullOldSqlite() {
+        foreach string version in (("3.52.0", "3.9.2")) {
+            AbstractDatasource ds = datasource(version);
+            on_exit ds.rollback();
+            Sqlite3Table t(ds, "t");
+            assertThrows("UNSUPPORTED", sprintf("cannot set the NOT NULL constraint of column \"code\" of table \"t\": "
+                "SQLite %s cannot change a column of an existing table; SQLite 3.53.0 or later is required", version),
+                \t.getModifyColumnSql(), ("code", {"native_type": "text"}, False));
+            assertThrows("UNSUPPORTED", sprintf("cannot drop the NOT NULL constraint of column \"label\" of table "
+                "\"t\": SQLite %s cannot change a column", version), \t.getModifyColumnSql(),
+                ("label", {"native_type": "text", "default_value": "'none'", "default_value_native": True}, True));
+        }
+    }
+
+    private otherChanges() {
+        foreach string version in (("3.52.0", "3.53.0")) {
+            AbstractDatasource ds = datasource(version);
+            on_exit ds.rollback();
+            Sqlite3Table t(ds, "t");
+            assertThrows("UNSUPPORTED", "cannot modify column \"code\" of table \"t\": SQLite cannot change the type "
+                "of a column of an existing table; it can change only its NOT NULL constraint",
+                \t.getModifyColumnSql(), ("code", {"native_type": "integer"}, False));
+            assertThrows("UNSUPPORTED", "SQLite cannot change the default value of a column",
+                \t.getModifyColumnSql(), ("code", {"native_type": "text", "default_value": "x"}));
+            assertThrows("UNSUPPORTED", "SQLite cannot change the type or default value of a column",
+                \t.getModifyColumnSql(), ("label", {"native_type": "integer"}, False));
+
+            Sqlite3Column current("value", "integer", "int", True, NOTHING);
+            Sqlite3Column changed("value", "integer", "int", False, NOTHING, True, True);
+            assertThrows("UNSUPPORTED", "SQLite cannot change the auto increment or primary key of a column",
+                \current.getModifySql(), (t, changed), "a key change is refused with a NOT NULL change");
+        }
+    }
+
+    private unchanged() {
+        AbstractDatasource ds = datasource("3.52.0");
+        on_exit ds.rollback();
+        Sqlite3Table t(ds, "t");
+        assertEq((), t.getModifyColumnSql("code", {"native_type": "text"}));
+        assertEq((), t.getModifyColumnSql("label", {"native_type": "text", "default_value": "'none'",
+            "default_value_native": True}, False));
+    }
+
+    private alignment() {
+        hash<auto> desc = {
+            "columns": {
+                "id": {"native_type": "integer"},
+                "code": {"native_type": "text", "notnull": True},
+                "label": {"native_type": "text", "notnull": True, "default_value": "'none'",
+                    "default_value_native": True},
+                "order": {"native_type": "text"},
+            },
+        };
+        AbstractDatasource ds = datasource("3.53.0");
+        on_exit ds.rollback();
+        Sqlite3Table t(ds, "t");
+        Sqlite3Table template(ds, "t");
+        template.setupTable(desc);
+        assertEq(("alter table t alter column code set not null",), t.getAlignSql(template));
+
+        AbstractDatasource old_ds = datasource("3.52.0");
+        on_exit old_ds.rollback();
+        Sqlite3Table old_t(old_ds, "t");
+        Sqlite3Table old_template(old_ds, "t");
+        old_template.setupTable(desc);
+        assertThrows("UNSUPPORTED", "SQLite 3.52.0 cannot change a column", \old_t.getAlignSql(), (old_template,));
+    }
+
+    private liveChange() {
+        AbstractDatasource ds = datasource();
+        on_exit ds.rollback();
+        string version = ds.getServerVersion();
+        Sqlite3Table t(ds, "t");
+        if (compare_version(version, SQLITE_ALTER_COLUMN_NOT_NULL_VERSION) < 0) {
+            assertThrows("UNSUPPORTED", sprintf("SQLite %s cannot change a column", version), \t.modifyColumn(),
+                ("code", {"native_type": "text"}, False));
+            return;
+        }
+
+        t.insert({"id": 1, "code": "a"});
+        t.modifyColumn("code", {"native_type": "text"}, False);
+        assertFalse(new Sqlite3Table(ds, "t").describe().code.nullable, version);
+        assertThrows("SQLITE3-EXEC", "NOT NULL constraint failed: t.code", \t.insert(), {"id": 2});
+
+        t.modifyColumn("label", {"native_type": "text", "default_value": "'none'", "default_value_native": True});
+        assertTrue(new Sqlite3Table(ds, "t").describe().label.nullable, version);
+        t.insert({"id": 2, "code": "b", "label": NULL});
+        assertEq(NULL, t.selectRow({"where": {"id": 2}}).label);
+
+        # rows that hold NULL cannot be made NOT NULL
+        assertThrows("SQLITE3-EXECRAW", "constraint failed", \t.modifyColumn(), ("label", {"native_type": "text", "default_value": "'none'",
+            "default_value_native": True}, False));
+    }
+}
+
+#! A datasource that reports a given server version, as a different SQLite library would
+class VersionedDatasource inherits Datasource {
+    private {
+        string version;
+    }
+
+    constructor(string connstr, string version) : Datasource(connstr) {
+        self.version = version;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+}

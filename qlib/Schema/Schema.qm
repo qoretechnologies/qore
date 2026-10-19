@@ -297,6 +297,14 @@ module Schema {
                 oracle: "DBMS_CRYPTO.HASH(UTL_RAW.CAST_TO_RAW(name), 4)"
     @endcode
 
+    A \c populate column is populated only when it is added to a table that is already in the database.  When the
+    alignment creates the table, as on a first install, the table has no rows, so the column is created as it is
+    declared, \c NOT \c NULL included.  A \c notnull column added to an existing table is made \c NOT \c NULL
+    after it is populated, with the DDL of the database's SqlUtil driver
+    (@ref SqlUtil::AbstractColumn::getModifySql() "AbstractColumn::getModifySql()"); SQLite can do this only from
+    SQLite 3.53.0 (see "Changing Columns" in the Sqlite3SqlUtil module), so with an older SQLite the alignment
+    raises \c UNSUPPORTED and is rolled back
+
     @par Example: Insert-only tables with auto-triggers
     @code{.yaml}
     tables:
@@ -928,7 +936,9 @@ module Schema {
 
     @subsection schema_v1_6_0 Schema Module v1.6.0
     - added \c populate attribute on column definitions for automatic backfill when adding new
-      columns to non-empty tables — automates the add-nullable → UPDATE → SET NOT NULL pattern;
+      columns to non-empty tables — automates the add-nullable → UPDATE → SET NOT NULL pattern, with the
+      \c NOT \c NULL DDL of the database's SqlUtil driver (SQLite: from 3.53.0); a populate column of a table that
+      the alignment creates is created as it is declared, since the table has no rows to populate;
       supports field references (\c {field: name}), literal values, DPQL expressions rendered
       to SQL via the driver's expression map, and per-driver raw SQL escape hatches
     - added \c text and \c float column type shorthands to @ref Schema::ColumnTypeMap

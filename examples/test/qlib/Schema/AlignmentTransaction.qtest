@@ -4,9 +4,14 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Schema
 %requires SqlUtil
+%requires Sqlite3SqlUtil
+%requires Util
 %requires QUnit
 %try-module sqlite3
 %define NO_SQLITE3
+%endtry
+%try-module pgsql
+%define NO_PGSQL
 %endtry
 %exec-class AlignmentTransactionTest
 
@@ -19,13 +24,22 @@ class AlignmentTransactionTest inherits QUnit::Test {
         addTestCase("independently committing migrations are rejected before mutation", \rejectCommittingMigrations());
         addTestCase("caller retains ownership after alignment failure", \failureOwnership());
         addTestCase("populate names its columns as the database requires", \populateColumnNames());
+        addTestCase("a populate NOT NULL column of a table created on a first install is NOT NULL",
+            \populateNotNullFirstInstall());
+        addTestCase("a populate NOT NULL column of a table created on an upgrade is NOT NULL",
+            \populateNotNullNewTable());
+        addTestCase("a populate NOT NULL column added to a SQLite table is NOT NULL from SQLite 3.53.0",
+            \populateNotNullExistingTable());
+        addTestCase("a populate NOT NULL column added to a PostgreSQL table is made NOT NULL",
+            \populateNotNullPgsql());
         set_return_value(main());
     }
-    private Datasource datasource() {
+    #! Returns an in-memory SQLite datasource; with a version, the datasource reports it as the SQLite version
+    private AbstractDatasource datasource(*string version) {
 %ifdef NO_SQLITE3
         testSkip("sqlite3 module unavailable");
 %endif
-        return new Datasource("sqlite3:@:memory:");
+        return version ? new VersionedDatasource("sqlite3:@:memory:", version) : new Datasource("sqlite3:@:memory:");
     }
     private hash<auto> definition() {
         return Schema::DataSchemaLoader::loadHash({
@@ -83,7 +97,7 @@ class AlignmentTransactionTest inherits QUnit::Test {
     #! words are quoted; the field of the populate expression is a field path, and a path of more than one key is
     #! refused
     private populateColumnNames() {
-        Datasource ds = datasource();
+        AbstractDatasource ds = datasource();
         on_exit ds.rollback();
         Schema::DataSchema v1(ds, populateDefinition("1.0", {}));
         v1.alignWithInfo(True, -1, False);
@@ -91,7 +105,8 @@ class AlignmentTransactionTest inherits QUnit::Test {
         ds.commit();
 
         # the new column "group" is populated from "order": both are reserved words
-        # (nullable: the NOT NULL that follows a backfill is not SQLite syntax)
+        # (nullable: a SQLite older than 3.53.0 cannot make a column of an existing table NOT NULL; see
+        # populateNotNullExistingTable())
         Schema::DataSchema v2(ds, populateDefinition("2.0", {"group": {"type": "text",
             "populate": {"field": "order"}}}));
         v2.alignWithInfo(True, -1, False);
@@ -104,11 +119,123 @@ class AlignmentTransactionTest inherits QUnit::Test {
             (True, -1, False));
     }
 
+    #! A table created by the alignment has no rows to populate: its populate NOT NULL columns are created NOT NULL
+    private populateNotNullFirstInstall() {
+        AbstractDatasource ds = datasource();
+        on_exit ds.rollback();
+        Schema::DataSchema v1(ds, populateDefinition("1.0", {"code": {"type": "text", "notnull": True,
+            "populate": {"field": "order"}}}));
+        v1.alignWithInfo(True, -1, False);
+        assertFalse(new SqlUtil::Table(ds, "inventory").describe().code.nullable);
+        assertThrows("SQLITE3-EXEC", "NOT NULL constraint failed: inventory.code", sub () {
+            new SqlUtil::Table(ds, "inventory").insert({"id": 1, "order": "first"});
+        });
+    }
+
+    #! An upgrade that adds a table creates its populate NOT NULL columns NOT NULL; it does not change a column of
+    #! the new table, which a SQLite older than 3.53.0 cannot do
+    private populateNotNullNewTable() {
+        foreach *string version in ((NOTHING, "3.52.0")) {
+            AbstractDatasource ds = datasource(version);
+            on_exit ds.rollback();
+            Schema::DataSchema v1(ds, populateDefinition("1.0", {}));
+            v1.alignWithInfo(True, -1, False);
+            new SqlUtil::Table(ds, "inventory").insert({"id": 1, "order": "first"});
+            ds.commit();
+
+            hash<auto> data = populateDefinition("2.0", {});
+            data.tables.inventory_audit = Schema::DataSchemaLoader::loadHash({
+                "schema": {"name": "audit", "version": "2.0"},
+                "tables": {"inventory_audit": {"columns": {"id": {"type": "int"},
+                    "code": {"type": "text", "notnull": True, "populate": "none"}}}},
+            }).tables.inventory_audit;
+            Schema::DataSchema v2(ds, data);
+            v2.alignWithInfo(True, -1, False);
+            assertFalse(new SqlUtil::Table(ds, "inventory_audit").describe().code.nullable,
+                sprintf("SQLite %s", ds.getServerVersion()));
+        }
+    }
+
+    #! A populate NOT NULL column added to a table with rows is made NOT NULL after it is populated, as SQLite 3.53.0
+    #! and later can do; an older SQLite cannot, so the alignment raises UNSUPPORTED and its transaction is rolled
+    #! back
+    private populateNotNullExistingTable() {
+        # the SQLite library's own version, then an older one
+        foreach *string version in ((NOTHING, "3.52.0")) {
+            AbstractDatasource ds = datasource(version);
+            on_exit ds.rollback();
+            Schema::DataSchema v1(ds, populateDefinition("1.0", {}));
+            v1.alignWithInfo(True, -1, False);
+            new SqlUtil::Table(ds, "inventory").insert({"id": 1, "order": "first"});
+            ds.commit();
+
+            Schema::DataSchema v2(ds, populateDefinition("2.0", {"code": {"type": "text", "notnull": True,
+                "populate": {"field": "order"}}}));
+            string server_version = ds.getServerVersion();
+            if (compare_version(server_version, SQLITE_ALTER_COLUMN_NOT_NULL_VERSION) >= 0) {
+                v2.alignWithInfo(True, -1, False);
+                AbstractTable t = new SqlUtil::Table(ds, "inventory").getTable();
+                assertFalse(t.describe().code.nullable, sprintf("SQLite %s", server_version));
+                assertEq("first", t.selectRow().code);
+                continue;
+            }
+            assertThrows("UNSUPPORTED", sprintf("cannot set the NOT NULL constraint of column \"code\" of table "
+                "\"inventory\": SQLite %s cannot change a column of an existing table; SQLite 3.53.0 or later is "
+                "required", server_version), \v2.alignWithInfo(), (True, -1, False));
+            assertEq(("id", "order"), new SqlUtil::Table(ds, "inventory").describe().keys(),
+                "the column added by the failed alignment is rolled back");
+        }
+    }
+
+    #! PostgreSQL makes the populated column NOT NULL with its own DDL, and keeps the column's default
+    private populateNotNullPgsql() {
+%ifdef NO_PGSQL
+        testSkip("pgsql module unavailable");
+%endif
+        *string connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!connstr) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not configured");
+        }
+        Datasource ds(connstr);
+        # the alignments run in the caller's transaction, and PostgreSQL DDL is transactional: nothing is left
+        on_exit ds.rollback();
+        string table = sprintf("qtest_populate_%d", getpid());
+        string version_table = table + "_version";
+        code definition = hash<auto> sub (string version, hash<auto> extra_columns) {
+            return Schema::DataSchemaLoader::loadHash({
+                "schema": {"name": table, "version": version, "version_table": version_table,
+                    "version_column": "version", "version_where": {"name": table}},
+                "tables": {
+                    version_table: {"columns": {"name": {"type": "text"}, "version": {"type": "text"}}},
+                    table: {"columns": {"id": {"type": "int"}, "order": {"type": "text"}} + extra_columns},
+                },
+            });
+        };
+
+        Schema::DataSchema v1(ds, definition("1.0", {}));
+        v1.alignWithInfoInTransaction(True, -1, False);
+        new SqlUtil::Table(ds, table).insert({"id": 1, "order": "first"});
+
+        Schema::DataSchema v2(ds, definition("2.0", {
+            "code": {"type": "text", "notnull": True, "populate": {"field": "order"}},
+            "label": {"type": "text", "notnull": True, "default_value": "none", "populate": "unused"},
+        }));
+        v2.alignWithInfoInTransaction(True, -1, False);
+        AbstractTable t = new SqlUtil::Table(ds, table).getTable();
+        assertFalse(t.describe().code.nullable);
+        assertFalse(t.describe().label.nullable);
+        assertEq({"code": "first", "label": "none"}, t.selectRow({"columns": ("code", "label"),
+            "where": {"id": 1}}));
+        # the default is the column's own: a row inserted without a label gets it
+        t.insert({"id": 2, "order": "second", "code": "c"});
+        assertEq("none", t.selectRow({"columns": "label", "where": {"id": 2}}).label);
+    }
+
     private bool existsTable(AbstractDatasource ds) {
         return new SqlUtil::Table(ds, "inventory").checkExistence();
     }
     private rollbackAlignment() {
-        Datasource ds = datasource(); on_exit ds.rollback();
+        AbstractDatasource ds = datasource(); on_exit ds.rollback();
         Schema::DataSchema schema(ds, definition());
         hash<auto> info = schema.alignWithInfoInTransaction(True, -1, False);
         assertTrue(info.val());
@@ -119,7 +246,7 @@ class AlignmentTransactionTest inherits QUnit::Test {
         assertFalse(existsTable(ds), "DDL and additional writes disappear on caller rollback");
     }
     private commitAlignment() {
-        Datasource ds = datasource(); on_exit ds.rollback();
+        AbstractDatasource ds = datasource(); on_exit ds.rollback();
         Schema::DataSchema schema(ds, definition());
         schema.alignWithInfoInTransaction(True, -1, False);
         new SqlUtil::Table(ds, "inventory").insert({"id": 1, "name": "Widget"});
@@ -128,7 +255,7 @@ class AlignmentTransactionTest inherits QUnit::Test {
         assertEq("Widget", new SqlUtil::Table(ds, "inventory").selectRow().name);
     }
     private defaultCommit() {
-        Datasource ds = datasource(); on_exit ds.rollback();
+        AbstractDatasource ds = datasource(); on_exit ds.rollback();
         Schema::DataSchema schema(ds, definition());
         schema.alignWithInfo(True, -1, False);
         ds.rollback();
@@ -137,7 +264,7 @@ class AlignmentTransactionTest inherits QUnit::Test {
     }
     private failureOwnership() {
         foreach bool managed in ((False, True)) {
-            Datasource ds = datasource(); on_exit ds.rollback();
+            AbstractDatasource ds = datasource(); on_exit ds.rollback();
             FailingTransactionSchema schema(ds, definition());
             if (managed) {
                 assertThrows("EXPECTED-ALIGNMENT-FAILURE", \schema.alignWithInfo(), (True, -1, False));
@@ -152,7 +279,7 @@ class AlignmentTransactionTest inherits QUnit::Test {
     private rejectCommittingMigrations() {
         foreach string action in (("sql", "script", "reconcile_table")) {
             foreach string phase in (("pre_align", "post_align")) {
-                Datasource ds = datasource(); on_exit ds.rollback();
+                AbstractDatasource ds = datasource(); on_exit ds.rollback();
                 hash<auto!> data = definition();
                 data.migrations = ({"version": "2.0", phase: ({"action": action},)},);
                 Schema::DataSchema schema(ds, data);
@@ -160,6 +287,21 @@ class AlignmentTransactionTest inherits QUnit::Test {
                 assertFalse(existsTable(ds), "unsafe migration is rejected before any alignment DDL");
             }
         }
+    }
+}
+
+#! A datasource that reports a given server version, as a different SQLite library would
+class VersionedDatasource inherits Datasource {
+    private {
+        string version;
+    }
+
+    constructor(string connstr, string version) : Datasource(connstr) {
+        self.version = version;
+    }
+
+    auto getServerVersion() {
+        return version;
     }
 }
 

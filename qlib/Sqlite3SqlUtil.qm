@@ -28,6 +28,9 @@
 # requires the SqlUtil module
 %requires SqlUtil >= 1.7.5
 
+# compare_version()
+%requires Util >= 1.0
+
 # don't use "$" signs for variables and class members, assume local variable scope
 %modern
 # a table holds its column, index, constraint and trigger descriptions with "@=" so that
@@ -85,9 +88,34 @@ module Sqlite3SqlUtil {
     |@ref SqlUtil::NUMERIC|\c real
     |@ref SqlUtil::VARCHAR|\c text
 
+    @subsection sqlite3_column_changes Changing Columns
+
+    SQLite can change only one thing about a column of an existing table: its \c NOT \c NULL constraint, and only from
+    SQLite 3.53.0 (@ref Sqlite3SqlUtil::SQLITE_ALTER_COLUMN_NOT_NULL_VERSION), with
+    <tt>ALTER TABLE ... ALTER COLUMN ... SET NOT NULL</tt> and <tt>... DROP NOT NULL</tt>.
+
+    So when a column of an existing table is modified, as by
+    @ref SqlUtil::AbstractTable::getModifyColumnSql() "AbstractTable::getModifyColumnSql()" or by aligning a table
+    to a template (@ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()"):
+    - a change of the \c NOT \c NULL constraint only is made with \c ALTER \c COLUMN when the SQLite library the
+      sqlite3 module uses is 3.53.0 or later; making a column \c NOT \c NULL fails if a row holds \c NULL in it
+    - with an older SQLite library, the same change raises \c UNSUPPORTED
+    - any other change, of the column's type, its default value, or whether it is an auto-increment or primary key
+      column, raises \c UNSUPPORTED with every SQLite version
+
+    The version that counts is the SQLite library's, as the datasource reports it
+    (@ref Qore::SQL::AbstractDatasource::getServerVersion() "AbstractDatasource::getServerVersion()"), not the
+    version of the \c sqlite3 module.  A change that raises \c UNSUPPORTED can only be made by creating the table
+    anew and copying its rows, which this module does not do.
+
     @section sqlite3_relnotes Release Notes
 
     @subsection sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
+    - a column's \c NOT \c NULL constraint can be set or dropped on SQLite 3.53.0 and later, as by
+      @ref SqlUtil::AbstractTable::getModifyColumnSql() "AbstractTable::getModifyColumnSql()" or table alignment;
+      every column change raised \c UNSUPPORTED before.  A change that SQLite cannot make, or a \c NOT \c NULL
+      change on an older SQLite, still raises \c UNSUPPORTED, now with a description of what cannot be changed;
+      see @ref sqlite3_column_changes
     - a select with the \c forupdate @ref select_option_hash "select option" now raises
       \c FORUPDATE-NOT-SUPPORTED, since SQLite cannot lock rows; it failed with an SQL syntax error before
     - fixed tables reporting no primary key, so \c upsert() always failed with \c UPSERT-ERROR; the primary key is
@@ -119,6 +147,12 @@ public namespace Sqlite3SqlUtil {
     public const SQLITE_CONSTRAINT_PRIMARYKEY = 1555;
     #! SQLite's extended result code for a unique constraint violation
     public const SQLITE_CONSTRAINT_UNIQUE = 2067;
+    #! The first SQLite version that can set or drop the \c NOT \c NULL constraint of a column of an existing table
+    /** @see @ref sqlite3_column_changes
+
+        @since Sqlite3SqlUtil 1.2
+    */
+    public const SQLITE_ALTER_COLUMN_NOT_NULL_VERSION = "3.53.0";
 
     #! returns a Sqlite3Table object corresponding to the arguments
     public Sqlite3Table sub get_table(AbstractDatasource nds, string nname, *hash<auto> opts) {
@@ -261,6 +295,9 @@ list<string> l = col.getAddColumnSql(t);
         #! returns a list of sql strings that can be used to modify the column to the new definition
         /** if the column definitions are identical then an empty list is returned
 
+            SQLite can change only the \c NOT \c NULL constraint of an existing column, and only from SQLite
+            3.53.0 (@ref SQLITE_ALTER_COLUMN_NOT_NULL_VERSION); see @ref sqlite3_column_changes
+
             @par Example:
             @code{.py}
 list l = col.getModifySql(t, newcol);
@@ -274,9 +311,48 @@ list l = col.getModifySql(t, newcol);
 
             @return a list of sql strings that can be used to modify the column to the new definition; if the column
             definitions are identical then an empty list is returned
+
+            @throw UNSUPPORTED the new definition changes the column's type, default value, comment, or whether it
+            is an auto-increment or primary key column, which SQLite cannot change; or it changes only the column's
+            \c NOT \c NULL constraint, and the SQLite library is older than 3.53.0
          */
         softlist<string> getModifySqlImpl(AbstractTable t, AbstractColumn col, *hash<auto> opt) {
-            throw "UNSUPPORTED";
+            Sqlite3Column c = cast<Sqlite3Column>(col);
+            list<string> changes;
+            if (native_type != c.native_type || size != c.size || (scale ?? 0) != (c.scale ?? 0)) {
+                changes += "type";
+            }
+            if (def_val != c.def_val) {
+                changes += "default value";
+            }
+            if (comment != c.comment) {
+                changes += "comment";
+            }
+            if (auto_increment != c.auto_increment) {
+                changes += "auto increment";
+            }
+            if (primary_key != c.primary_key) {
+                changes += "primary key";
+            }
+            if (changes) {
+                string what = changes.size() == 1
+                    ? changes[0]
+                    : join(", ", changes[0..changes.size() - 2]) + " or " + changes.last();
+                throw "UNSUPPORTED", sprintf("cannot modify column %y of table %y: SQLite cannot change the %s of a "
+                    "column of an existing table; it can change only its NOT NULL constraint", name, t.getName(),
+                    what);
+            }
+            if (nullable == c.nullable) {
+                return ();
+            }
+            string action = c.nullable ? "drop" : "set";
+            string version = t.getDatasource().getServerVersion();
+            if (compare_version(version, SQLITE_ALTER_COLUMN_NOT_NULL_VERSION) < 0) {
+                throw "UNSUPPORTED", sprintf("cannot %s the NOT NULL constraint of column %y of table %y: SQLite %s "
+                    "cannot change a column of an existing table; SQLite %s or later is required", action, name,
+                    t.getName(), version, SQLITE_ALTER_COLUMN_NOT_NULL_VERSION);
+            }
+            return sprintf("alter table %s alter column %s %s not null", t.getSqlName(), ddl_name, action);
         }
 
         #! returns a string that can be used to rename the column
