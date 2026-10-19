@@ -65,11 +65,16 @@ module PgsqlSqlUtilBase {
     PostgreSQL resolves an object name without a schema against the connection's \c search_path.  This module
     resolves such a name for tables, views, sequences, functions, and types in <tt>current_schema()</tt>, the first
     existing schema of the \c search_path (or \c "public" if the \c search_path names no existing schema); a name
-    of the form \c "schema.name" is resolved in the schema given.  The trigger functions of a table are the
-    functions that its triggers execute, named as the triggers name them: by the function name alone when the
-    \c search_path resolves it to the function, otherwise with its schema, with each identifier that needs it quoted
-    as PostgreSQL quotes it (ex: <tt>"my schema"."F"()</tt>).  The partitions of a table in
-    <tt>current_schema()</tt> are named by their names alone, as other objects there are.
+    of the form \c "schema.name" is resolved in the schema given.  The schema and the name can be double-quoted
+    identifiers, as in SQL, which can have any character, \c "." too, with a quote doubled
+    (ex: <tt>"my schema"."My Table"</tt>, <tt>"a.b"."c.d"</tt>, <tt>s."F"</tt>); a quoted identifier is looked up
+    without its quotes and with its case, an unquoted identifier is looked up as given.  A table is named in SQL as
+    its name gives it, and the schema that the \c search_path resolves a name without a schema to is quoted in SQL
+    if it needs quotes.  The trigger functions of a table are the functions that its triggers execute, also with
+    trigger arguments, named as the triggers name them: by the function name alone when the \c search_path resolves
+    it to the function, otherwise with its schema, with each identifier that needs it quoted as PostgreSQL quotes it
+    (ex: <tt>"my schema"."F"()</tt>).  The partitions of a table in <tt>current_schema()</tt> are named by their names
+    alone, as other objects there are.
 
     Like Oracle and MySQL, which list only the objects of the connection's own schema, the following methods
     list only the objects in the schemas of the connection's \c search_path (<tt>current_schemas(false)</tt>),
@@ -245,6 +250,13 @@ $function$
       function, and a trigger executing another function of a name differing only in case was not aligned
     - fixed a \c "(" in a quoted identifier of a function name (ex: <tt>"f(x"()</tt>) being read as the start of
       the arguments of the function
+    - fixed names given with double-quoted identifiers (ex: <tt>"my schema"."My Table"</tt>, <tt>"a.b"."c.d"</tt>,
+      <tt>s."F"</tt>) not being looked up in the schema they name, or not being found: tables, functions,
+      sequences, views, types, and partitions given such names are looked up without the quotes (see
+      @ref pgsql_schema_scope), and a table given such a name is named in SQL as given; the schema that the
+      \c search_path resolves a table name without a schema to is quoted in SQL if it needs quotes
+    - fixed the functions of triggers called with trigger arguments (ex: <tt>execute function f('x', 'a,b')</tt>)
+      not being read, so that they were missing from the SQL that creates, aligns, and drops the table
     - Added the size of the current schema (\c current_schema(): the first existing schema of the connection's
       \c search_path; see @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
       "AbstractDatabase::getCurrentSchemaPhysicalSize()"), which measures only that schema's relations instead of
@@ -524,15 +536,63 @@ string sub pgsql_lower_unquoted(string sql) {
     return rv;
 }
 
-# returns an identifier as PostgreSQL resolves it: a double-quoted identifier without its quotes and with each
-# doubled quote as one quote, an unquoted identifier in lower case
+# returns the name in the catalog of an identifier: a double-quoted identifier without its quotes and with each
+# doubled quote as one quote; an unquoted identifier is returned as given, as unquoted names are looked up as given
 string sub pgsql_unquote_identifier(string id) {
     if (id =~ /^"/) {
         return replace(id.substr(1, -1), "\"\"", "\"");
     }
-    id =~ tr/A-Z/a-z/;
     return id;
 }
+
+# returns an identifier for SQL as PostgreSQL's quote_ident() does: as given if it is lower case letters, digits and
+# underscores not starting with a digit and not a reserved word, otherwise in double quotes with each quote doubled
+string sub pgsql_quote_identifier(string id) {
+    if (id =~ /^[a-z_][a-z0-9_]*$/ && !PgsqlDatabase::PgsqlReservedWords{id}) {
+        return id;
+    }
+    return "\"" + replace(id, "\"", "\"\"") + "\"";
+}
+
+# the name of an object in the form "name" or "schema.name", as SQL gives it and as the catalog stores it
+hashdecl PgsqlObjectName {
+    # the schema in the catalog, if the name has one
+    *string schema;
+    # the schema as the name gives it, quoted if it is quoted
+    *string sql_schema;
+    # the name in the catalog
+    string name;
+    # the name as given, quoted if it is quoted
+    string sql_name;
+}
+
+# returns the schema and name of an object name in the form "name" or "schema.name"
+/* the schema is a double-quoted identifier, which can have any character, "." too, with a quote doubled
+   (ex: \c "\"my.schema\".t"), or an unquoted identifier of letters, digits and underscores; the name is the rest of
+   the argument after the schema and the ".", and is unquoted only if it is one double-quoted identifier, as a name
+   can be followed by an argument list (ex: \c "s.\"F\"(int)").  Unquoted identifiers are not folded to lower case,
+   as in previous versions.
+*/
+hash<PgsqlObjectName> sub pgsql_parse_object_name(string nname) {
+    hash<PgsqlObjectName> rv({"name": nname, "sql_name": nname});
+    *list<*string> l = (nname =~ x/^("(?:[^"]|"")*+"|\w+)\.((?:"|\w).*)$/s);
+    if (l) {
+        rv.sql_schema = l[0];
+        rv.schema = pgsql_unquote_identifier(l[0]);
+        rv.sql_name = rv.name = l[1];
+    }
+    if (rv.sql_name =~ /^"(?:[^"]|"")*+"$/) {
+        rv.name = pgsql_unquote_identifier(rv.sql_name);
+    }
+    return rv;
+}
+
+# matches the action statement of a trigger as PostgreSQL gives it, capturing the function as the trigger names it
+# (an unquoted or double-quoted identifier, optionally preceded by a schema as one) and the trigger arguments in
+# parentheses (string literals, separated by ", ", in which a quote is doubled)
+const PgsqlTriggerExecuteRegex = "^EXECUTE (?:PROCEDURE|FUNCTION) "
+    "((?:(?:\\w+|\"(?:[^\"]|\"\")++\")\\.)?(?:\\w+|\"(?:[^\"]|\"\")++\"))"
+    "(\\((?:'(?:[^']|'')*+'(?:, *'(?:[^']|'')*+')*+)?\\))$";
 
 # returns the schema, if any, and the name of an SQL name in the form "name" or "schema.name", where each part is an
 # identifier, unquoted or double-quoted as PostgreSQL quotes it (ex: \c "\"my schema\".\"F\"\"x\""), or NOTHING if
@@ -547,19 +607,6 @@ string sub pgsql_unquote_identifier(string id) {
         rv.schema = pgsql_unquote_identifier(parts[0]);
     }
     return rv;
-}
-
-sub parse_schema_name(string nname, reference<string> schema, reference<string> name,
-        string default_schema = "public") {
-    *string sstr = (nname =~ x/^(\w+)\.\w+/)[0];
-    if (sstr) {
-        schema = sstr;
-        splice nname, 0, schema.size() + 1;
-        name = nname;
-    } else {
-        schema = default_schema;
-        name = nname;
-    }
 }
 
 #! PostgreSQL savepoint helper
@@ -1684,14 +1731,14 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     *PgsqlType getType(string name) {
         # a name without a schema is looked up in current_schema(), as for tables; matching on the name alone
         # merged the attributes of the types of that name in every schema
-        string schema;
-        parse_schema_name(name, \schema, \name, get_pgsql_default_schema(ds));
+        hash<PgsqlObjectName> on = pgsql_parse_object_name(name);
         *hash qh = ds.select("select attname, pg_catalog.format_type(a.atttypid, a.atttypmod) type_def "
             "from pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace, pg_catalog.pg_attribute a "
             "where relkind = 'c' and attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped and relname = %v "
-            "and n.nspname = %v order by attnum", name, schema);
+            "and n.nspname = %v order by attnum", on.name, on.schema ?? get_pgsql_default_schema(ds));
         if (!qh.attname)
             return;
+        name = on.sql_name;
 
         string src = foldl $1 + ", " + $2, (map sprintf("%s %s", $1.attname, $1.type_def), qh.contextIterator());
 
@@ -1714,29 +1761,31 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         # resolves it.  Matching on relname alone searches every schema in the database, so with the same
         # sequence name present in another schema this reported a sequence that does not exist here and
         # then failed reading it -- or, where the read succeeded, described the WRONG schema's sequence
-        string schema;
-        parse_schema_name(name, \schema, \name, get_pgsql_default_schema(ds));
+        hash<PgsqlObjectName> on = pgsql_parse_object_name(name);
+        string schema = on.schema ?? get_pgsql_default_schema(ds);
 
         *hash<auto> row = ds.selectRow("select c.relname from pg_class c "
             "join pg_namespace n on n.oid = c.relnamespace "
-            "where c.relkind = 'S' and c.relname = %v and n.nspname = %v", name, schema);
+            "where c.relkind = 'S' and c.relname = %v and n.nspname = %v", on.name, schema);
         if (!row)
             return;
 
         # qualified, so it cannot resolve to a same-named sequence in another schema on the search path
-        row = ds.selectRow(sprintf("select * from %s.%s", schema, name));
-        return new PgsqlSequence(name, row.start, row.increment, row.max == 9223372036854775807 ? NOTHING : row.max);
+        row = ds.selectRow(sprintf("select * from %s.%s", on.sql_schema ?? pgsql_quote_identifier(schema),
+            pgsql_quote_identifier(on.name)));
+        return new PgsqlSequence(on.sql_name, row.start, row.increment,
+            row.max == 9223372036854775807 ? NOTHING : row.max);
     }
 
     private *AbstractView getViewImpl(string name) {
-        string schema;
-        parse_schema_name(name, \schema, \name, get_pgsql_default_schema(ds));
+        hash<PgsqlObjectName> on = pgsql_parse_object_name(name);
 
-        *hash<auto> row = ds.selectRow("select * from pg_views where schemaname = %v and viewname = %v", schema, name);
+        *hash<auto> row = ds.selectRow("select * from pg_views where schemaname = %v and viewname = %v",
+            on.schema ?? get_pgsql_default_schema(ds), on.name);
         if (!row)
             return;
 
-        return new PgsqlView(name, row.definition, row.schemaname, row.viewowner);
+        return new PgsqlView(on.sql_name, row.definition, row.schemaname, row.viewowner);
     }
 
     private PgsqlFunction makeFunctionImpl(string name, string src, *hash opts) {
@@ -1791,12 +1840,22 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         # a name without a schema is looked up in the schema the connection resolves unqualified names in, as for
         # tables, views and sequences; matching on the function name alone found the functions of every schema,
         # so the same function in two schemas was reported as two matches, or the other schema's was described
-        string schema;
-        parse_schema_name(name, \schema, \name, get_pgsql_default_schema(ds));
+        hash<PgsqlObjectName> on = pgsql_parse_object_name(name);
+        string schema = on.schema ?? get_pgsql_default_schema(ds);
+        # the function name, double-quoted or up to an argument list, and any argument list; a "(" in a quoted name
+        # is part of the name
+        *list<*string> fl = (on.sql_name =~ x/^("(?:[^"]|"")*+"|[^"(]+)(.*)$/s);
+        # a name followed by anything but an argument list names no function
+        if (!fl || (fl[1] && fl[1] !~ /^\(/)) {
+            return;
+        }
+        # the function name as given and in the catalog
+        string sql_fname = fl[0];
+        name = pgsql_unquote_identifier(sql_fname);
 
         *hash qh;
         # try to find a unique function without arguments
-        if (name !~ /\(/) {
+        if (!fl[1]) {
             qh = ds.select("select p.proname, t1.typname return_type, a.rolname procedure_owner, l.lanname lang, "
                 "prosrc body, pg_catalog.pg_get_functiondef(p.oid) hdr, "
                 "pg_catalog.pg_get_function_identity_arguments(p.oid) args, "
@@ -1807,13 +1866,16 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
             if (!qh.proname)
                 return;
             if (qh.proname.size() > 1)
-                throw "FUNCTION-ERROR", sprintf("found %d matches for function name %y: %y; use the full argument list in the name to match only function (ex: \"%s(%s)\"", qh.proname.size(), name, (foldl $1 + ", " + $2, (map sprintf("%s(%s)", name, $1.args), qh.contextIterator())), name, qh.args[0]);
+                throw "FUNCTION-ERROR", sprintf("found %d matches for function name %y: %y; use the full argument "
+                    "list in the name to match only function (ex: \"%s(%s)\"", qh.proname.size(), sql_fname,
+                    (foldl $1 + ", " + $2, (map sprintf("%s(%s)", sql_fname, $1.args), qh.contextIterator())),
+                    sql_fname, qh.args[0]);
             # assign first row to qh
             context (qh) qh = %%;
         } else {
-            string nc = name;
+            string nc = fl[1];
             *string args = PgsqlDatabase::getFunctionArgs("FUNCTION-ERROR", \nc);
-            nc = name.substr(0, name.find('('));
+            nc = name;
             # replace common type names with verbose type names as stored in PostgreSQL
             if (args) {
                 foreach hash<auto> h in (PgsqlTable::PgsqlNameMap.pairIterator()) {
@@ -1835,7 +1897,8 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
                 return;
         }
 
-        return PgsqlDatabase::processFunction(qh, native_case);
+        # the function is named as the argument names it, without its schema
+        return PgsqlDatabase::processFunction(qh + {"proname": sql_fname}, native_case);
     }
 
     private AbstractFunction getProcedureImpl(string name) {
@@ -3128,6 +3191,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         #! schema name for the table
         string schema;
 
+        #! the schema as the name of the table gives it, quoted if it is quoted; no value if the name has no schema
+        /** for SQL, the schema of a name without one is @ref schema quoted if it needs quotes
+        */
+        *string sql_schema;
+
         #! @ref True if the table was created with a name carrying no schema
         /** such a name is resolved with the connection's \c search_path, which may name any schema, so
             it cannot be recognized later by comparing @ref schema to \c "public"
@@ -3161,19 +3229,27 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     #! Creates the object from the arguments
     constructor(AbstractDatasource nds, string nname, *hash opts) : AbstractTable(nds, nname, opts) {
-        bool explicit_schema = (nname =~ x/^(\w+)\.\w+/)[0] ? True : False;
-        name_unqualified = !explicit_schema;
+        # see if there is a schema in the name, which can be quoted (ex: "\"my schema\".\"My Table\""); a name
+        # without one is resolved by the connection's search_path, which is not necessarily "public", so only
+        # query for it when it is needed
+        hash<PgsqlObjectName> on = pgsql_parse_object_name(nname);
+        name_unqualified = !exists on.schema;
+        schema = on.schema ?? get_pgsql_default_schema(nds);
+        sql_schema = on.sql_schema;
+        # the name for SQL, quoted if it is quoted; getRelationName() gives the name in the catalog
+        name = on.sql_name;
 
-        # see if there is a schema in the name; a name without one is resolved by the connection's
-        # search_path, which is not necessarily "public", so only query for it when it is needed
-        parse_schema_name(nname, \schema, \name,
-            explicit_schema ? "public" : get_pgsql_default_schema(nds));
-
-        resolveTemporaryTableSchema(!explicit_schema);
+        resolveTemporaryTableSchema(name_unqualified);
 
         # get table info
-        *hash<auto> row = ds.selectRow("select * from pg_tables where schemaname = %v and tablename = %v", schema, name);
+        *hash<auto> row = ds.selectRow("select * from pg_tables where schemaname = %v and tablename = %v", schema,
+            getRelationName());
         tablespace = row.tablespace ? row.tablespace : NOTHING;
+    }
+
+    #! returns the name of the table in the catalog: the name without its quotes if it is quoted
+    private string getRelationName() {
+        return name =~ /^"(?:[^"]|"")*+"$/ ? pgsql_unquote_identifier(name) : name;
     }
 
     #! returns the schema name
@@ -3934,8 +4010,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     #! returns the name of the table to be used in SQL (with a possible qualifiers for schema, etc)
+    /** the schema is given as the name of the table gives it, or quoted if it needs quotes
+    */
     string getSqlName() {
-        return schema + "." + name;
+        return (sql_schema ?? pgsql_quote_identifier(schema)) + "." + name;
     }
 
     private hash getTableCreationOptions() {
@@ -3988,14 +4066,14 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         # pg_class directly so that partitioned tables are recognized as well
         *hash<auto> qh = ds.selectRow("select 1 as v from pg_catalog.pg_class c "
             "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) where n.nspname = %v and "
-            "c.relname = %v and c.relkind in ('r', 'p', 'm', 'f')", schema, name);
+            "c.relname = %v and c.relkind in ('r', 'p', 'm', 'f')", schema, getRelationName());
         if (qh) {
             return inDb = True;
         }
         if (resolveTemporaryTableSchema(True)) {
             qh = ds.selectRow("select 1 as v from pg_catalog.pg_class c "
                 "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) where n.nspname = %v and "
-                "c.relname = %v and c.relkind in ('r', 'p', 'm', 'f')", schema, name);
+                "c.relname = %v and c.relkind in ('r', 'p', 'm', 'f')", schema, getRelationName());
             if (qh) {
                 return inDb = True;
             }
@@ -4014,12 +4092,13 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "select n.nspname schemaname from pg_catalog.pg_class c "
             "join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
             "where c.relname = %v and c.relkind in ('r', 'p') "
-            "and c.relnamespace = pg_catalog.pg_my_temp_schema()", name);
+            "and c.relnamespace = pg_catalog.pg_my_temp_schema()", getRelationName());
         if (!row) {
             return False;
         }
 
         schema = row.schemaname;
+        delete sql_schema;
         return True;
     }
 
@@ -4039,7 +4118,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "and pgd.objsubid = c.ordinal_position) left join pg_catalog.pg_attribute pa on (st.relid = pa.attrelid and "
             "pa.attnum = c.ordinal_position and not pa.attisdropped) "
             "where table_schema = %v and table_name = %v order by ordinal_position", schema,
-            name);
+            getRelationName());
         if (!qh.column_name)
             throw "TABLE-ERROR", sprintf("cannot retrieve table information for table %y in %y", name, dsdesc);
 
@@ -4109,7 +4188,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "join pg_catalog.pg_class c1 on (c1.oid = i.indexrelid) "
             "left join pg_catalog.pg_tablespace ts on (ts.oid = c1.reltablespace) "
             "where c.oid = %v::regclass and i.indisprimary and i.indisvalid and not a.attisdropped "
-            "order by a.attnum", schema + "." + name);
+            "order by a.attnum", getSqlName());
         if (!qh.index_name) {
             return new PgsqlPrimaryKey();
         }
@@ -4151,7 +4230,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             # 'i' for ordinary indexes. Both are logical indexes on the table
             # and must round-trip through the portable SqlUtil API.
             "WHERE i.relkind in ('i', 'I') and n.nspname = %v and t.relnamespace = i.relnamespace "
-            "and t.relname = %v ORDER BY i.relname, a.attnum", schema, name);
+            "and t.relname = %v ORDER BY i.relname, a.attnum", schema, getRelationName());
 
         if (qh.index_name) {
             hash<auto> ih;
@@ -4406,7 +4485,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "att.attrelid = con.confrelid and att.attnum = con.child join pg_class cl on cl.oid = con.confrelid "
             "join pg_attribute att2 on att2.attrelid = con.conrelid and att2.attnum = con.parent "
             "join pg_namespace ns on cl.relnamespace = ns.oid "
-            "order by con.constraint_name, con.rn", name, schema);
+            "order by con.constraint_name, con.rn", getRelationName(), schema);
         if (qh.constraint_name) {
             hash<auto> ch;
             # a target is reported unqualified only when this connection resolves an unqualified name to
@@ -4472,7 +4551,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             left join pg_class t2 on c.confrelid = t2.oid
             join pg_catalog.pg_namespace n on n.oid = t.relnamespace
         where
-            c.contype = 'c' and n.nspname = %v and t.relname = %v", schema, name);
+            c.contype = 'c' and n.nspname = %v and t.relname = %v", schema, getRelationName());
         hash rv;
         foreach hash<auto> row in (qh.contextIterator()) {
             rv.(row.constraint_name) = new PgsqlCheckConstraint(row.constraint_name, row.consrc);
@@ -4485,7 +4564,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "join information_schema.key_column_usage kcu on (tc.table_schema = kcu.table_schema and "
             "tc.table_name = kcu.table_name and tc.constraint_name = kcu.constraint_name) where "
             "constraint_type = 'UNIQUE' and tc.table_schema = %v and tc.table_name = %v order by "
-            "ordinal_position", schema, name);
+            "ordinal_position", schema, getRelationName());
         delete rv;
         foreach hash<auto> row in (qh.contextIterator()) {
             reference<PgsqlUniqueConstraint> ch = \rv.(row.constraint_name);
@@ -4509,16 +4588,16 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
         # get trigger description
         *hash<auto> qh = ds.select("select * from information_schema.triggers where event_object_schema = %v and "
-            "event_object_table = %v", schema, name);
+            "event_object_table = %v", schema, getRelationName());
 
         # map trigger name -> the function it executes, as the trigger names it: PostgreSQL names the function
         # without its schema when the search_path resolves the name to it, otherwise with its schema, and quotes
-        # each identifier that needs quoting (ex: "EXECUTE FUNCTION \"my schema\".\"F\"()"); a function called with
-        # trigger arguments is not read
+        # each identifier that needs quoting (ex: "EXECUTE FUNCTION \"my schema\".\"F\"('x', 'a,b')"); the trigger
+        # arguments are string literals, which can have any character
         hash<string, string> tfh;
         foreach hash<auto> row in (qh.contextIterator()) {
-            *string f = (row.action_statement =~ x/EXECUTE (?:PROCEDURE|FUNCTION) (.+)\(\)$/)[0];
-            if (f && pgsql_parse_qualified_name(f)) {
+            *string f = regex_extract(row.action_statement, PgsqlTriggerExecuteRegex)[0];
+            if (f) {
                 tfh{row.trigger_name} = f;
             }
 
@@ -4572,7 +4651,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "join pg_catalog.pg_namespace n on n.oid = p.pronamespace "
                 "left join pg_type t1 on p.prorettype = t1.oid "
                 "left join pg_roles a on p.proowner = a.oid left join pg_language l on p.prolang = l.oid "
-                "where cn.nspname = %v and c.relname = %v and not tg.tgisinternal", schema, name);
+                "where cn.nspname = %v and c.relname = %v and not tg.tgisinternal", schema, getRelationName());
             hash<string, hash<auto>> trigger_functions = map {$1.trigger_name: $1}, qh.contextIterator();
 
             # create trigger function map; a trigger function is named as the trigger names it, so that the SQL
@@ -5003,7 +5082,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         }
         *hash<auto> parent = ds.selectRow("select c.oid::bigint as parent_oid from pg_catalog.pg_class c "
             "join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
-            "where n.nspname = %v and c.relname = %v and c.relkind = 'p'", schema, name);
+            "where n.nspname = %v and c.relname = %v and c.relkind = 'p'", schema, getRelationName());
         if (!parent || (exists cursor && cursor.parent_oid != parent.parent_oid)) {
             throw "PARTITION-CATALOG-ERROR", "partitioned parent is missing or the cursor belongs to another parent";
         }
@@ -5130,7 +5209,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private *hash<PartitionStrategy> getPartitionStrategyImpl() {
-        return getPgPartitionStrategyForRelation(schema, name, True);
+        return getPgPartitionStrategyForRelation(schema, getRelationName(), True);
     }
 
     private *hash<PartitionStrategy> getPgPartitionStrategyForRelation(string table_schema, string table_name,
@@ -5216,7 +5295,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private hash<string, PartitionInfo> getPartitionsImpl() {
         *PartitionStrategy strategy = getPartitionStrategyUnlocked();
-        return strategy ? getPgPartitionsForRelation(schema, name, strategy) : {};
+        return strategy ? getPgPartitionsForRelation(schema, getRelationName(), strategy) : {};
     }
 
     private hash<string, PartitionInfo> getPgPartitionsForRelation(string table_schema, string table_name,
@@ -5315,13 +5394,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private hash<auto> parsePartitionRelationName(string partition_name) {
-        hash<auto> rv;
-        bool explicit_schema = (partition_name =~ x/^(\w+)\.\w+/)[0] ? True : False;
-        parse_schema_name(partition_name, \rv.schema, \rv.name);
-        if (!explicit_schema) {
-            rv.schema = schema;
-        }
-        return rv;
+        # the schema and the name can be quoted; a name without a schema is in the table's schema
+        hash<PgsqlObjectName> on = pgsql_parse_object_name(partition_name);
+        return {"schema": on.schema ?? schema, "name": on.name};
     }
 
     private string getPartitionSqlName(hash<PartitionSpec> spec) {
@@ -5351,7 +5426,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "join pg_catalog.pg_class c on c.oid = i.inhrelid "
             "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
             "where pn.nspname = %v and p.relname = %v and cn.nspname = %v and c.relname = %v",
-            schema, name, rel.schema, rel.name);
+            schema, getRelationName(), rel.schema, rel.name);
         if (!row) {
             return;
         }
