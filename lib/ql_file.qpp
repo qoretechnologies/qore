@@ -841,6 +841,9 @@ if (!gl)
 
     @note a pattern containing a NUL character matches no file: @ref nothing is returned and errno() returns
     \c EINVAL; see @ref path_nul_characters
+
+    @note matches that the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow to be read are
+    left out of the list; see @ref sandbox_fs_listings
  */
 *list<string> glob(string pattern) [flags=NAMED_ARGS;dom=FILESYSTEM] {
     if (q_check_path(*pattern)) {
@@ -866,9 +869,14 @@ if (!gl)
             globfree(&globbuf);
             return QoreValue();
         }
-        if (smh && !smh->checkFilesystemAccess(globbuf.gl_pathv[i], QSEC_READ, xsink)) {
-            globfree(&globbuf);
-            return QoreValue();
+        // a match that the sandbox does not allow to be read is left out instead of failing the call
+        if (smh) {
+            ExceptionSink denied;
+            bool readable = smh->checkFilesystemAccess(globbuf.gl_pathv[i], QSEC_READ, &denied);
+            denied.clear();
+            if (!readable) {
+                continue;
+            }
         }
         l->push(new QoreStringNode(globbuf.gl_pathv[i]), xsink);
         if (*xsink) {
@@ -970,6 +978,9 @@ if (mkdir("/tmp/newdir", 0755)) {
 
     @note a path containing a NUL character names no file: -1 is returned and errno() returns \c EINVAL; see
     @ref path_nul_characters
+
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow the
+    directory, or with \a parents a parent directory that would be created, to be created
  */
 int mkdir(string path, softint mode = 0777, bool parents = False) [flags=NAMED_ARGS;dom=FILESYSTEM] {
     if (q_check_path(*path)) {
@@ -989,6 +1000,11 @@ int mkdir(string path, softint mode = 0777, bool parents = False) [flags=NAMED_A
             if (!errno) {
                 errno = EPERM;
             }
+            return -1;
+        }
+
+        // the sandbox policy must allow the directory and each parent directory created to be created
+        if (dir.checkCreatePolicy(xsink)) {
             return -1;
         }
 
@@ -1025,6 +1041,8 @@ mkdir_ex("/tmp/newdir", 0755);
 
     @throw DIR-CREATE-FAILURE the directory cannot be created
     @throw DIR-CREATE-FAILURE the path contains a NUL character; see @ref path_nul_characters
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow the
+    directory, or with \a parents a parent directory that would be created, to be created
  */
 nothing mkdir_ex(string path, softint mode = 0777, bool parents = False) [flags=NAMED_ARGS;dom=FILESYSTEM] {
     if (q_check_path(*path, "DIR-CREATE-FAILURE", xsink)) {

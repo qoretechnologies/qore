@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -160,6 +160,9 @@ public:
     /** @param mode the mode for any directoreis created
         @param xsink if errors occur, qore-language exception information is added here
         @return the number of directories created, -1 = error
+
+        @since %Qore 3.0 the @ref QoreSandboxManager "sandbox" filesystem policy is checked for each parent directory
+        created as well as for the directory itself
     */
     DLLEXPORT int create(int mode, ExceptionSink* xsink) const;
 
@@ -176,6 +179,28 @@ public:
     /** @return 0 = OK (path exists), non-zero = errno returned by opendir()
     */
     DLLEXPORT int checkPath() const;
+
+    //! returns 0 = OK (path exists), non-zero = errno returned by opendir(), -1 = the sandbox denies reading the path
+    /** @param xsink if the @ref QoreSandboxManager "sandbox" filesystem policy does not allow the directory to be
+        read, a \c FILESYSTEM-ACCESS-DENIED exception is raised here and -1 is returned
+
+        @return 0 = OK (path exists), non-zero = errno returned by opendir() or -1 if an exception was raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int checkPath(ExceptionSink* xsink) const;
+
+    //! checks that the sandbox filesystem policy, if any, allows the directory to be created
+    /** The directory itself and each parent directory that create() would create are checked for
+        \c QSEC_CREATE access.
+
+        @param xsink a \c FILESYSTEM-ACCESS-DENIED exception is raised here if the policy denies the access
+
+        @return 0 = OK, -1 = an exception was raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int checkCreatePolicy(ExceptionSink* xsink) const;
 
     //! returns the current directory name or 0 if none is set
     /** @return the current directory name or 0 if none is set
@@ -213,6 +238,15 @@ public:
         @return a typed list of the results
     */
     DLLEXPORT QoreListNode* list(ExceptionSink* xsink, int stat_filter, const QoreString* regex = nullptr, int regex_options = 0, bool full = false) const;
+
+    //! returns a list of the entries in the current directory that the sandbox policy allows to be read
+    /** Like list(), but the entries that the @ref QoreSandboxManager "sandbox" filesystem policy of the current
+        program, if any, does not allow to be read are left out of the list instead of being revealed
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL QoreListNode* listReadable(ExceptionSink* xsink, int stat_filter, const QoreString* regex = nullptr,
+            int regex_options = 0, bool full = false) const;
 
     //! returns a QoreListNode with directory status information
     /** @param xsink if an error occurs, the Qore-language exception info will be added here

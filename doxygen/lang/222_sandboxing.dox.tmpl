@@ -243,6 +243,37 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
 
     @since %Qore 3.0
 
+    @subsection sandbox_fs_listings Directory Listings and Created Directories
+
+    A listing does not reveal what the sandbox hides: the @ref Qore::Dir "Dir" listing methods
+    (@ref Qore::Dir::list() "Dir::list()", @ref Qore::Dir::listInfo() "Dir::listInfo()",
+    @ref Qore::Dir::listFiles() "Dir::listFiles()", @ref Qore::Dir::listDirs() "Dir::listDirs()" and
+    their variants) and @ref Qore::glob() "glob()" leave out the entries that the filesystem policy
+    does not allow to be read, such as an entry under a denied path or a symbolic link to a file
+    outside the allowed paths.  A listing of an allowed directory still succeeds; it only shows what
+    the program is allowed to read.
+
+    Creating a directory with its parent directories (@ref Qore::mkdir() "mkdir()" and
+    @ref Qore::mkdir_ex() "mkdir_ex()" with \a parents, and @ref Qore::Dir::create() "Dir::create()")
+    needs \c QSEC_CREATE access for the directory and for each parent directory that would be
+    created, so a rule for a directory does not allow its parent directories to be created.
+
+    @since %Qore 3.0
+
+    @subsection sandbox_fs_tz_regions Time Zone Regions
+
+    A time zone region (ex: \c "Europe/Prague") names a zoneinfo file under the zoneinfo directory of
+    the system, so a region with a \c ".." or an empty path component or a backslash, which could name
+    a file outside of the zoneinfo directory, raises \c TZINFO-ERROR; no region has such a component.
+    This applies to @ref Qore::TimeZone::constructor() "TimeZone::constructor()",
+    @ref Qore::TimeZone::setRegion() "TimeZone::setRegion()",
+    @ref Qore::Program::setTimeZoneRegion() "Program::setTimeZoneRegion()" and to deserialized dates.
+    A zoneinfo file given as an absolute path or a path starting with \c "." is a path: it is subject
+    to @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM", which refuses it without opening the file, and
+    to the filesystem policy.
+
+    @since %Qore 3.0
+
     @subsection sandbox_fs_allow_deny Allow and Deny Lists
 
     For more granular control, use allow and deny lists:

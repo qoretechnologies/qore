@@ -431,6 +431,15 @@ int QoreFile::chown(uid_t owner, gid_t group, ExceptionSink* xsink) {
         return -1;
     }
 
+    // changing the owner is a write to the file, whatever access it was opened with; the sandbox policy must allow
+    // it as for chown()
+    if (!priv->filename.empty()) {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (smh && !smh->checkFilesystemAccess(priv->filename.c_str(), QSEC_WRITE, xsink)) {
+            return -1;
+        }
+    }
+
     int rc = fchown(priv->fd, owner, group);
     if (rc)
         xsink->raiseErrnoException("FILE-CHOWN-ERROR", errno, "the chown(%d, %d) operation failed", owner, group);

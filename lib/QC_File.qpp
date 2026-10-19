@@ -978,6 +978,8 @@ f.chown(0, 0);
     @throw FILE-CHOWN-ERROR %File is not open or the chown operation failed
     @throw MISSING-FEATURE-ERROR this method is not supported on this platform; check Option::HAVE_UNIX_FILEMGT before calling this method to avoid this exception
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow
+    the file to be written
  */
 nothing File::chown(softint owner, softint group = -1) [flags=NAMED_ARGS] {
 #ifdef HAVE_CHOWN

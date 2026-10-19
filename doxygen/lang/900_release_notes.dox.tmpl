@@ -709,6 +709,32 @@
     q_check_no_nul() for other strings.
     @endparblock
 
+    @par Every Filesystem Entry Point Follows the Sandbox Filesystem Policy
+    @parblock
+    Some filesystem operations were not checked against the @ref sandboxing "sandbox" filesystem policy or the
+    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" parse option; they now are (see @ref sandbox_filesystem):
+    - @ref Qore::mkdir() "mkdir()" with \a parents made directories with no check at all, and
+      @ref Qore::mkdir_ex() "mkdir_ex()" with \a parents and @ref Qore::Dir::create() "Dir::create()" checked only
+      the directory itself; the directory and each parent directory that would be created now need \c QSEC_CREATE
+      access
+    - the static @ref Qore::ReadOnlyFile::stat() "ReadOnlyFile::stat()", \c lstat(), \c hstat(), \c hlstat() and
+      \c statvfs() methods (also called through @ref Qore::File "File") need \c QSEC_READ access, and
+      @ref Qore::Dir::stat() "Dir::stat()", @ref Qore::Dir::hstat() "Dir::hstat()",
+      @ref Qore::Dir::statvfs() "Dir::statvfs()" and @ref Qore::Dir::exists() "Dir::exists()" need \c QSEC_READ
+      access to the directory
+    - @ref Qore::Dir::removeFile() "Dir::removeFile()" needs \c QSEC_DELETE access to the file, and
+      @ref Qore::File::chown() "File::chown()" needs \c QSEC_WRITE access to the file, whatever access the file was
+      opened with
+    - the @ref Qore::Dir "Dir" listing methods and @ref Qore::glob() "glob()" leave out the entries that the policy
+      does not allow to be read, instead of listing them (\c Dir) or failing the whole call (\c glob()); see
+      @ref sandbox_fs_listings
+    - @ref Qore::TimeZone "TimeZone" objects created from a zoneinfo path and deserialized dates whose zone is a
+      zoneinfo path raised \c ILLEGAL-FILESYSTEM-ACCESS under @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" but
+      still opened the file; the file is no longer opened
+    - a time zone region with a \c ".." or an empty path component or a backslash, which could name a file outside of
+      the zoneinfo directory, raises \c TZINFO-ERROR; see @ref sandbox_fs_tz_regions
+    @endparblock
+
     @par Modules Export Only Their Own Declarations and Reexported Modules
     @parblock
     Constants, enums and their members, and typedefs that a module received from another module it imported with a

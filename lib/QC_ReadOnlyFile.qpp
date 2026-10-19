@@ -32,8 +32,15 @@
 #include <qore/Qore.h>
 #include "qore/intern/QC_File.h"
 #include "qore/intern/QC_Queue.h"
+#include <qore/QoreSandboxManager.h>
 
 #include <cerrno>
+
+// checks that the sandbox filesystem policy, if any, allows the status of the given path to be read
+static int check_static_stat_policy(const QoreString& path, ExceptionSink* xsink) {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    return smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink) ? -1 : 0;
+}
 
 /** @defgroup file_stat_constants File Stat Constants
     These are values that can be and'ed with the \c "mode" element of a file's status as returned by
@@ -1198,13 +1205,15 @@ int mode = ReadOnlyFile::stat(path)[2];
 
     @throw FILE-STAT-ERROR stat() call failed
     @throw FILE-STAT-ERROR the path contains a NUL character; see @ref path_nul_characters
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow
+    the path to be read
 
     @see @ref file_stat_constants
 
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
 static list<auto> ReadOnlyFile::stat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
-   if (q_check_path(*path, "FILE-STAT-ERROR", xsink)) {
+   if (q_check_path(*path, "FILE-STAT-ERROR", xsink) || check_static_stat_policy(*path, xsink)) {
       return QoreValue();
    }
    struct stat sbuf;
@@ -1229,6 +1238,8 @@ int mode = ReadOnlyFile::lstat(path)[2];
 
     @throw FILE-LSTAT-ERROR stat() call failed
     @throw FILE-LSTAT-ERROR the path contains a NUL character; see @ref path_nul_characters
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow
+    the path to be read
 
     @see lstat() for a similar function that does not throw exceptions when errors occur, but rather returns @ref nothing
     @see @ref file_stat_constants
@@ -1236,7 +1247,7 @@ int mode = ReadOnlyFile::lstat(path)[2];
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
 static list<auto> ReadOnlyFile::lstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
-   if (q_check_path(*path, "FILE-LSTAT-ERROR", xsink)) {
+   if (q_check_path(*path, "FILE-LSTAT-ERROR", xsink) || check_static_stat_policy(*path, xsink)) {
       return QoreValue();
    }
    struct stat sbuf;
@@ -1264,6 +1275,8 @@ hash<StatInfo> h = ReadOnlyFile::hstat(path);
 
     @throw FILE-HSTAT-ERROR stat() call failed
     @throw FILE-HSTAT-ERROR the path contains a NUL character; see @ref path_nul_characters
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow
+    the path to be read
 
     @see hstat() for a normal function returns @ref nothing instead of throwing an exception when errors occur
     @see @ref file_stat_constants
@@ -1271,7 +1284,7 @@ hash<StatInfo> h = ReadOnlyFile::hstat(path);
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
 static hash<StatInfo> ReadOnlyFile::hstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
-   if (q_check_path(*path, "FILE-HSTAT-ERROR", xsink)) {
+   if (q_check_path(*path, "FILE-HSTAT-ERROR", xsink) || check_static_stat_policy(*path, xsink)) {
       return QoreValue();
    }
    struct stat sbuf;
@@ -1296,6 +1309,8 @@ hash<StatInfo> h = ReadOnlyFile::hstat(path);
 
     @throw FILE-HSTAT-ERROR stat() call failed
     @throw FILE-HLSTAT-ERROR the path contains a NUL character; see @ref path_nul_characters
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow
+    the path to be read
 
     @see hstat() for a normal function returns @ref nothing instead of throwing an exception when errors occur
     @see @ref file_stat_constants
@@ -1303,7 +1318,7 @@ hash<StatInfo> h = ReadOnlyFile::hstat(path);
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
 static hash<StatInfo> ReadOnlyFile::hlstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
-   if (q_check_path(*path, "FILE-HLSTAT-ERROR", xsink)) {
+   if (q_check_path(*path, "FILE-HLSTAT-ERROR", xsink) || check_static_stat_policy(*path, xsink)) {
       return QoreValue();
    }
    struct stat sbuf;
@@ -1334,12 +1349,14 @@ hash<FilesystemInfo> h = ReadOnlyFile::statvfs(path);
     @throw FILE-STATVFS-ERROR statvfs() call failed
     @throw MISSING-FEATURE-ERROR this method is not supported on this platform; check Option::HAVE_STATVFS before calling this method to avoid this exception
     @throw FILE-STATVFS-ERROR the path contains a NUL character; see @ref path_nul_characters
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow
+    the path to be read
 
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
 static hash<FilesystemInfo> ReadOnlyFile::statvfs(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef Q_HAVE_STATVFS
-   if (q_check_path(*path, "FILE-STATVFS-ERROR", xsink)) {
+   if (q_check_path(*path, "FILE-STATVFS-ERROR", xsink) || check_static_stat_policy(*path, xsink)) {
       return QoreValue();
    }
    struct statvfs vfs;

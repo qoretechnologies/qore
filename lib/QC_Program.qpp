@@ -2319,9 +2319,11 @@ pgm.setTimeZoneRegion("Europe/Prague");
 
     @throw TZINFO-ERROR Unable to read zoneinfo file; invalid file magic; error parsing zoneinfo file, etc
     @throw TZINFO-ERROR the region contains a NUL character; see @ref path_nul_characters
+    @throw TZINFO-ERROR the region contains a \c ".." or empty path component or a backslash; see
+    @ref sandbox_fs_tz_regions
  */
 nothing Program::setTimeZoneRegion(string region) [flags=NAMED_ARGS] {
-    if (QoreTimeZoneManager::checkRegion(*region, xsink)) {
+    if (QoreTimeZoneManager::checkRegion(*region, false, xsink)) {
         return QoreValue();
     }
     const AbstractQoreZoneInfo *zone = QTZM.findLoadRegion(region->c_str(), xsink);

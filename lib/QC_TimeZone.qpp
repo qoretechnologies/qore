@@ -35,13 +35,14 @@
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 static void create_timezone_from_region(const QoreString& region, QoreObject& self, ExceptionSink* xsink) {
-    if (QoreTimeZoneManager::checkRegion(region, xsink)) {
+    bool is_path = (!region.empty() && region.c_str()[0] == '.') || q_absolute_path(region.c_str());
+    if (QoreTimeZoneManager::checkRegion(region, is_path, xsink)) {
         return;
     }
-    bool is_path = (!region.empty() && region.c_str()[0] == '.') || q_absolute_path(region.c_str());
     if (is_path && runtime_check_parse_option(PO_NO_FILESYSTEM)) {
         xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot create a TimeZone object from absolute path '%s' "
             "when sandboxing restriction PO_NO_FILESYSTEM is set", region.c_str());
+        return;
     }
     const AbstractQoreZoneInfo* zone = is_path
         ? QTZM.findLoadRegionFromPath(region.c_str(), xsink)
@@ -117,6 +118,8 @@ TimeZone tz(region: "Europe/Prague");
     @throw TZINFO-ERROR Unable to read zoneinfo file; invalid file magic; error parsing zoneinfo file, etc
     @throw ILLEGAL-FILESYSTEM-ACCESS thrown if a path was passed for \a region and the @ref Qore::PO_NO_FILESYSTEM sandboxing restriction is set
     @throw TZINFO-ERROR the region or path contains a NUL character; see @ref path_nul_characters
+    @throw TZINFO-ERROR the region (not a path) contains a \c ".." or empty path component or a backslash;
+    see @ref sandbox_fs_tz_regions
 
     @since %Qore 0.8.12 an absolute path to a zoneinfo file can be provided if the @ref Qore::PO_NO_FILESYSTEM sandboxing restriction is not in place (checked at runtime if an absolute path is passed)
  */
@@ -353,9 +356,11 @@ TimeZone::setRegion(region: "Europe/Prague");
     @endcode
 
     @throw TZINFO-ERROR the region contains a NUL character; see @ref path_nul_characters
+    @throw TZINFO-ERROR the region contains a \c ".." or empty path component or a backslash; see
+    @ref sandbox_fs_tz_regions
  */
 static nothing TimeZone::setRegion(string region) [dom=LOCALE_CONTROL;flags=NAMED_ARGS] {
-    if (QoreTimeZoneManager::checkRegion(*region, xsink)) {
+    if (QoreTimeZoneManager::checkRegion(*region, false, xsink)) {
         return QoreValue();
     }
     const AbstractQoreZoneInfo *zone = QTZM.findLoadRegion(region->getBuffer(), xsink);
