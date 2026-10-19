@@ -58,7 +58,9 @@ class PgsqlUpsertDiagnosticsTest inherits QUnit::Test {
         qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
         probe_path = normalize_dir(get_script_dir() + "/PgsqlUpsertDiagnosticsProbe.q");
 
-        foreach string form in ("source", "qmod") {
+        foreach string loop_form in ("source", "qmod") {
+            # a closure binds the variable, not its value: each test case gets a variable of its own form
+            string form = loop_form;
             addTestCase(form + " modules: process output and module form", sub () { outputTest(form); });
             addTestCase(form + " modules: rejected native upsert", sub () { constraintTest(form); });
             addTestCase(form + " modules: connection lost during native upsert",
