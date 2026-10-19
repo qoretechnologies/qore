@@ -4696,6 +4696,15 @@ while (*binary chunk = input.read(65536)) {
       reached: the reference taken on the object was never released after the \c THREAD-CREATION-FAILURE exception,
       so the object was never destroyed and its destructor never ran, and the @ref Qore::Program "Program" that it
       belongs to was never freed
+    - Fixed calling the methods implemented by the abstract classes
+      @ref Qore::SQL::AbstractDatasource "AbstractDatasource",
+      @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement",
+      @ref Qore::AbstractLineIterator "AbstractLineIterator" and
+      @ref Qore::AbstractPollOperation "AbstractPollOperation" on a subclass implemented in %Qore: they raised
+      \c OBJECT-INCOMPATIBLE, as such an object had no private data of the abstract class.  For example
+      @ref Qore::SQL::AbstractDatasource::getDriverRealName() "AbstractDatasource::getDriverRealName()" failed, so
+      the @ref sqlutilintro "SqlUtil" module could not be used with a datasource implemented in %Qore unless the
+      datasource implemented the method itself
     - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
       @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
       thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in

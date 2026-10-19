@@ -35,6 +35,27 @@
 */
 qclass AbstractSshClientIdentityProvider [arg=AbstractSshClientIdentityProviderData* p; ns=Qore::SshUtil];
 
+//! Creates the object
+/** This constructor is run for each subclass implemented in %Qore; it gives the object the private data of this
+    class, without which the methods implemented by this class could not be called on it.  It performs no other
+    action.
+
+    @since sshutil 1.0
+*/
+AbstractSshClientIdentityProvider::constructor() {
+    self->setPrivate(CID_ABSTRACTSSHCLIENTIDENTITYPROVIDER, new AbstractSshClientIdentityProviderData);
+}
+
+//! Copies the object
+/** This method is run when an object of a subclass implemented in %Qore is copied; it gives the copy the private
+    data of this class.  It performs no other action.
+
+    @since sshutil 1.0
+*/
+AbstractSshClientIdentityProvider::copy() {
+    self->setPrivate(CID_ABSTRACTSSHCLIENTIDENTITYPROVIDER, new AbstractSshClientIdentityProviderData);
+}
+
 //! Returns ordered client authentication candidates for the given context.
 /**
     @since sshutil 1.0

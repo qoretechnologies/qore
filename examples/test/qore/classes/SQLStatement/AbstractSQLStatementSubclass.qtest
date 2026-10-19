@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  AbstractSQLStatementSubclass.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AbstractSQLStatementSubclassTest
+
+#! a subclass of AbstractSQLStatement implemented in Qore, implementing only the abstract methods
+class MinimalStatement inherits AbstractSQLStatement {
+    public {
+        list<auto> fetch_args = ();
+    }
+
+    nothing prepare(string sql, ...) {
+    }
+
+    nothing prepareRaw(string sql) {
+    }
+
+    nothing bind(...) {
+    }
+
+    nothing bindArgs(softlist<auto> arguments) {
+    }
+
+    nothing bindPlaceholders(...) {
+    }
+
+    nothing bindPlaceholdersArgs(softlist<auto> arguments) {
+    }
+
+    nothing bindValues(...) {
+    }
+
+    nothing bindValuesArgs(softlist<auto> arguments) {
+    }
+
+    nothing exec(...) {
+    }
+
+    nothing execArgs(softlist<auto> arguments) {
+    }
+
+    int affectedRows() {
+        return 0;
+    }
+
+    hash<auto> getOutput() {
+        return {};
+    }
+
+    hash<auto> getOutputRows() {
+        return {};
+    }
+
+    nothing define() {
+    }
+
+    nothing close() {
+    }
+
+    nothing commit() {
+    }
+
+    nothing rollback() {
+    }
+
+    nothing beginTransaction() {
+    }
+
+    bool next() {
+        return False;
+    }
+
+    bool valid() {
+        return False;
+    }
+
+    *hash<auto> fetchRow() {
+    }
+
+    *hash<auto> getValue() {
+    }
+
+    list<auto> fetchRows(softint rows = -1) {
+        return ();
+    }
+
+    hash<auto> fetchColumns(softint rows = -1) {
+        push fetch_args, rows;
+        return {"id": (1, 2, 3)};
+    }
+
+    hash<auto> describe() {
+        return {};
+    }
+
+    *string getSQL() {
+    }
+
+    bool active() {
+        return False;
+    }
+
+    bool currentThreadInTransaction() {
+        return False;
+    }
+
+    auto memberGate(string key) {
+    }
+}
+
+class AbstractSQLStatementSubclassTest inherits QUnit::Test {
+    constructor() : QUnit::Test("AbstractSQLStatement subclass test", "1.0") {
+        addTestCase("the methods implemented by AbstractSQLStatement", \methodTest());
+        set_return_value(main());
+    }
+
+    # fetchColumnar(), implemented by AbstractSQLStatement, calls fetchColumns() of a subclass implemented in Qore
+    methodTest() {
+        MinimalStatement stmt();
+        ColumnarResult result = stmt.fetchColumnar(2);
+        assertEq((1, 2, 3), result.getColumn("id").toList(), "fetchColumnar() returns the values of fetchColumns()");
+        assertEq((2,), stmt.fetch_args, "fetchColumnar() passes the row count to fetchColumns()");
+
+        MinimalStatement copy = stmt.copy();
+        assertEq((1, 2, 3), copy.fetchColumnar().getColumn("id").toList(),
+            "a copy can call the methods implemented by AbstractSQLStatement");
+    }
+}

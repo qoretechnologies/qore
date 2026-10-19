@@ -34,7 +34,12 @@
 #include "qore/intern/QC_ColumnarResult.h"
 #include "qore/intern/SqlMutationContext.h"
 
-class AbstractDatasource {};
+// the private data of AbstractDatasource; it has no state, as the methods implemented by AbstractDatasource only use
+// the object, but a builtin method can only be called on an object with the private data of its class.  Datasource
+// and DatasourcePool provide their own private data for this class; a subclass implemented in Qore gets an object of
+// this class from the constructor
+class DLLLOCAL AbstractDatasource : public AbstractPrivateData {
+};
 
 DLLLOCAL extern QoreClass* QC_ABSTRACTSQLSTATEMENT;
 
@@ -63,6 +68,27 @@ static QoreObject* qore_abstract_datasource_vselect_columnar(QoreObject* self, c
 /**
  */
 qclass AbstractDatasource [dom=DATABASE; arg=AbstractDatasource* ds; ns=Qore::SQL];
+
+//! Creates the object
+/** This constructor is run for each subclass implemented in %Qore; it gives the object the private data of this
+    class, without which the methods implemented by this class could not be called on it.  It performs no other
+    action.
+
+    @since %Qore 3.0
+*/
+AbstractDatasource::constructor() {
+    self->setPrivate(CID_ABSTRACTDATASOURCE, new AbstractDatasource);
+}
+
+//! Copies the object
+/** This method is run when an object of a subclass implemented in %Qore is copied; it gives the copy the private
+    data of this class.  It performs no other action.
+
+    @since %Qore 3.0
+*/
+AbstractDatasource::copy() {
+    self->setPrivate(CID_ABSTRACTDATASOURCE, new AbstractDatasource);
+}
 
 //! Commits the current transaction and releases any thread resources associated with the transaction
 /**

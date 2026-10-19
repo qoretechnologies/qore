@@ -32,6 +32,16 @@
 
 %exec-class SshUtilTest
 
+#! a client identity provider implemented in Qore, implementing only the abstract method
+class TestClientIdentityProvider inherits SshUtil::AbstractSshClientIdentityProvider {
+    list<hash<SshUtil::SshClientIdentityCandidate>> getClientIdentityCandidates(hash<auto> ctxt) {
+        return (<SshUtil::SshClientIdentityCandidate>{
+            "kind": SshUtil::SshClientIdentityCandidateKind::Reference,
+            "reference": "key-1",
+        },);
+    }
+}
+
 class TestHostKeyStore inherits SshUtil::AbstractSshHostKeyStore {
     private hash<SshUtil::SshHostKeyDecisionInfo> makeDecision(
             enum<SshUtil::SshHostKeyDecision> decision,
@@ -63,6 +73,7 @@ public class SshUtilTest inherits QUnit::Test {
         addTestCase("string-backed enums and exception names", \testEnums());
         addTestCase("host normalization", \testHostNormalization());
         addTestCase("filesystem client identity provider", \testFilesystemClientIdentityProvider());
+        addTestCase("client identity provider implemented in Qore", \testClientIdentityProviderSubclass());
         addTestCase("filesystem server host-key provider", \testFilesystemServerHostKeyProvider());
         addTestCase("host-key store dispatch", \testHostKeyStoreDispatch());
         addTestCase("provider registry", \testProviderRegistry());
@@ -131,6 +142,19 @@ public class SshUtilTest inherits QUnit::Test {
         assertEq("[example.com\x00.trusted]:2222",
             SshUtil::format_known_hosts_host("Example.COM\x00.Trusted", 2222));
         assertEq("example.com\x00.trusted", SshUtil::format_known_hosts_host("Example.COM\x00.Trusted", 22));
+    }
+
+    # getPrivateKeyMaterial(), implemented by AbstractSshClientIdentityProvider, returns nothing for a provider
+    # implemented in Qore that does not implement it
+    testClientIdentityProviderSubclass() {
+        TestClientIdentityProvider provider();
+        list<hash<SshUtil::SshClientIdentityCandidate>> candidates =
+            provider.getClientIdentityCandidates(makeContext(SshUtil::SshProviderPurpose::ClientIdentity));
+        assertEq(NOTHING, provider.getPrivateKeyMaterial(makeContext(SshUtil::SshProviderPurpose::ClientIdentity),
+            candidates[0]), "getPrivateKeyMaterial() returns nothing by default");
+        TestClientIdentityProvider copy = provider.copy();
+        assertEq(NOTHING, copy.getPrivateKeyMaterial(makeContext(SshUtil::SshProviderPurpose::ClientIdentity),
+            candidates[0]), "a copy can call the methods implemented by AbstractSshClientIdentityProvider");
     }
 
     testFilesystemClientIdentityProvider() {

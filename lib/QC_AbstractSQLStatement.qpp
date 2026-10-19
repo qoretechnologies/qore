@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -49,7 +49,13 @@
 // In short: if SQL row iteration is a bottleneck, the answer is to fetch
 // rows in larger batches via selectRows()/fetchRows(), not to optimise
 // the iterator dispatch.
-class AbstractSQLStatement {};
+//
+// The private data of AbstractSQLStatement has no state, as the methods implemented by AbstractSQLStatement only use
+// the object, but a builtin method can only be called on an object with the private data of its class.
+// SQLStatement provides its own private data for this class; a subclass implemented in Qore gets an object of this
+// class from the constructor.
+class DLLLOCAL AbstractSQLStatement : public AbstractPrivateData {
+};
 
 static QoreObject* qore_abstract_sqlstatement_fetch_columnar(QoreObject* self, int rows, ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
@@ -76,6 +82,27 @@ qclass AbstractSQLStatement [
     ns=Qore::SQL;
     vparent=AbstractIterator<*hash<auto>>
 ];
+
+//! Creates the object
+/** This constructor is run for each subclass implemented in %Qore; it gives the object the private data of this
+    class, without which the methods implemented by this class could not be called on it.  It performs no other
+    action.
+
+    @since %Qore 3.0
+*/
+AbstractSQLStatement::constructor() {
+    self->setPrivate(CID_ABSTRACTSQLSTATEMENT, new AbstractSQLStatement);
+}
+
+//! Copies the object
+/** This method is run when an object of a subclass implemented in %Qore is copied; it gives the copy the private
+    data of this class.  It performs no other action.
+
+    @since %Qore 3.0
+*/
+AbstractSQLStatement::copy() {
+    self->setPrivate(CID_ABSTRACTSQLSTATEMENT, new AbstractSQLStatement);
+}
 
 //! Saves an SQL statement that will be prepared and executed later, along with optional arguments
 /** The statement is actually only prepared when used for the first time, this is so that SQLStatement objects created with DatasourcePool objects use the DatasourcePool more efficiently, as many drivers require the actual DB API prepare call to be made on the same connection as the connection the statement will be executed on as well.
