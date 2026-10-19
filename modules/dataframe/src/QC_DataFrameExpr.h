@@ -62,7 +62,7 @@ public:
         return column;
     }
 
-    DLLLOCAL QoreDataFrameRowMask* compare(const char* op, QoreValue value, ExceptionSink* xsink) const;
+    DLLLOCAL QoreDataFrameRowMask* compare(const std::string& op, QoreValue value, ExceptionSink* xsink) const;
     DLLLOCAL QoreListNode* values(ExceptionSink* xsink) const;
 
 private:

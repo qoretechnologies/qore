@@ -22,6 +22,11 @@
     - ML integration: toMatrix/toVector/fromMatrix for zero-overhead ML feeding
     - Thread-safe with cooperative cancellation support
 
+    String values and column names are kept whole, including any NUL characters: a NUL character is data, and it
+    is kept through every operation, CSV, Parquet and Arrow IPC, and conversion back to %Qore values.  A column name
+    with a NUL character cannot be a hash key, so the methods returning column names as hash keys (such as
+    @ref Qore::DataFrame::DataFrame::toRecords() "DataFrame::toRecords()") raise \c HASH-KEY-ERROR for one.
+
     To use this module, use \c "%requires dataframe" in your code.
 
     @section dataframeqlibmodules Qore User Modules

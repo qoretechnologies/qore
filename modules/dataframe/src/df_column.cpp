@@ -396,7 +396,7 @@ std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
                     col->null_mask[i] = 1;
                 } else {
                     QoreStringValueHelper str(v);
-                    col->str_data[i] = str->c_str();
+                    col->str_data[i] = dataFrameStdString(*str);
                 }
             }
             break;
@@ -577,7 +577,7 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                     return buildColumnData(values, ColumnType::STRING, xsink);
                 }
                 QoreStringValueHelper str(v);
-                col->str_data[i] = str->c_str();
+                col->str_data[i] = dataFrameStdString(*str);
                 break;
             }
 

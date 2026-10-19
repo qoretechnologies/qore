@@ -75,7 +75,7 @@ list<auto> ColumnRef::values() [flags=RET_VALUE_ONLY] {
     @endcode
 */
 RowMask ColumnRef::compare(string op, auto value) [flags=RET_VALUE_ONLY] {
-    return makeRowMaskObject(col->compare(op->c_str(), value, xsink), getProgram(), xsink);
+    return makeRowMaskObject(col->compare(dataFrameStdString(op), value, xsink), getProgram(), xsink);
 }
 
 //! A bitmap mask selecting DataFrame rows

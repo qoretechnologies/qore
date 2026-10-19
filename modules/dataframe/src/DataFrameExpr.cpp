@@ -139,7 +139,7 @@ QoreDataFrameColumnRef::~QoreDataFrameColumnRef() {
     }
 }
 
-QoreDataFrameRowMask* QoreDataFrameColumnRef::compare(const char* op, QoreValue value,
+QoreDataFrameRowMask* QoreDataFrameColumnRef::compare(const std::string& op, QoreValue value,
         ExceptionSink* xsink) const {
     std::vector<uint8_t> mask = df->compareColumnMask(column, op, value, xsink);
     if (*xsink) {

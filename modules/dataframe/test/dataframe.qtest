@@ -59,6 +59,21 @@ class MockDataFrameDatasource {
     }
 }
 
+#! a datasource that records the methods called on it
+class RecordingDatasource {
+    private {
+        list<string> calls = ();
+    }
+
+    auto methodGate(string method) {
+        push calls, method;
+    }
+
+    list<string> getCalls() {
+        return calls;
+    }
+}
+
 class DataFrameTest inherits QUnit::Test {
     constructor() : Test("DataFrameTest", "1.0", \ARGV) {
         addTestCase("constructionTest", \constructionTest());
@@ -104,6 +119,12 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("fillna() fills every form of a column", \fillnaStorageTest());
         addTestCase("concat() of the same DataFrames, also in other threads", \concatLockTest());
         addTestCase("withColumn() replaces a column in its position", \withColumnPositionTest());
+        addTestCase("NUL characters in cell values", \nulCellValueTest());
+        addTestCase("NUL characters in cell values in files", \nulCellValueFileTest());
+        addTestCase("NUL characters in column names", \nulColumnNameTest());
+        addTestCase("NUL characters in column names in files", \nulColumnNameFileTest());
+        addTestCase("NUL characters in struct field names and map keys", \nulNestedKeyTest());
+        addTestCase("null and NUL group and join keys", \nullKeyTest());
 
         set_return_value(main());
     }
@@ -3082,5 +3103,296 @@ sub invalid_dataframe_api() {
         assertEq((20,), replaced.getColumn("b"), "withColumn() finds the replaced column by its name");
         assertEq(("a", "b", "c", "d"), df.withColumn("d", (4,)).columnNames(), "withColumn() adds a new column last");
         assertEq(("a", "b", "c"), df.columnNames(), "withColumn() leaves the original DataFrame unchanged");
+    }
+
+    # a NUL character in a cell value is data: it is kept by every conversion and operation
+    nulCellValueTest() {
+        string v = "a\x00b";
+        assertEq(3, v.size(), "the test value has a NUL character");
+
+        # hash of lists, list of records (all strings, then a mixed column so that the types are inferred), a list
+        # whose type is inferred from a later value, and a string buffer
+        DataFrame::DataFrame df({"s": (v, "c"), "n": (1, 2)});
+        assertEq((v, "c"), df.getColumn("s"), "hash of lists keeps a NUL cell value");
+        DataFrame::DataFrame recs(({"s": v}, {"s": "c"}));
+        assertEq((v, "c"), recs.getColumn("s"), "records keep a NUL cell value");
+        DataFrame::DataFrame mixed(({"s": v, "x": 1}, {"s": "c", "x": "y"}));
+        assertEq((v, "c"), mixed.getColumn("s"), "records with inferred column types keep a NUL cell value");
+        DataFrame::DataFrame late({"s": (NOTHING, v)});
+        assertEq((NOTHING, v), late.getColumn("s"), "a column typed by a later value keeps a NUL cell value");
+        DataFrame::DataFrame buf({"s": new buffer<string>((v, "c"))});
+        assertEq((v, "c"), buf.getColumn("s"), "a string buffer keeps a NUL cell value");
+
+        # conversions back to Qore
+        assertEq({"s": v, "n": 1}, df.getRow(0), "getRow() keeps a NUL cell value");
+        assertEq(({"s": v, "n": 1}, {"s": "c", "n": 2}), df.toRecords(), "toRecords() keeps a NUL cell value");
+        assertEq({"s": (v, "c"), "n": (1, 2)}, df.toColumnHash(), "toColumnHash() keeps a NUL cell value");
+        assertEq((v, "c"), df["s"], "a column subscript keeps a NUL cell value");
+        assertEq((v, "c"), df.column("s").values(), "a column reference keeps a NUL cell value");
+        assertEq((v, "c"), df.toColumnarResult().getColumn("s").toList(),
+            "toColumnarResult() keeps a NUL cell value");
+        assertEq("DataFrame(2 rows x 2 cols)\ns\tn\n" + v + "\t1\nc\t2\n", df.toString(),
+            "toString() shows a NUL cell value");
+        DataFrame::DataFrame auto_df({"a": (v, {"x": 1})});
+        assertEq("auto", auto_df.dtypes()[0], "a column with a string and a hash has values of any type");
+        assertEq(v, auto_df.getColumn("a")[0], "a column of any type keeps a NUL value");
+        string auto_text = "DataFrame(2 rows x 1 cols)\na\n" + v + "\n";
+        assertEq(auto_text, auto_df.toString().substr(0, auto_text.length()),
+            "toString() shows a NUL value of any type");
+        DataFrame::DataFrame converted({"s": (1, v)});
+        assertEq(("1", v), converted.getColumn("s"), "a column converted to strings keeps a NUL cell value");
+
+        # new values
+        df.addColumn("t", ("x", v));
+        assertEq(("x", v), df.getColumn("t"), "addColumn() keeps a NUL cell value");
+        assertEq((v, v), df.withColumn("u", (v, v)).getColumn("u"), "withColumn() keeps a NUL cell value");
+        DataFrame::DataFrame nulls({"s": ("x", NOTHING)});
+        assertEq(("x", v), nulls.fillna(v).getColumn("s"), "fillna() fills with a NUL value");
+
+        # operations comparing values: the value with a NUL character differs from the part before it
+        DataFrame::DataFrame cmp({"s": ("a", v, "b", "a")});
+        assertEq((v,), cmp.filter("s", "==", v).getColumn("s"), "filter() == matches a NUL value exactly");
+        assertEq(("a", "b", "a"), cmp.filter("s", "!=", v).getColumn("s"), "filter() != excludes only the NUL value");
+        assertEq((v,), cmp.filter("s", "in", (v,)).getColumn("s"), "filter() in matches a NUL value exactly");
+        assertEq((v,), cmp.filter("s", "startswith", v).getColumn("s"),
+            "filter() startswith compares the whole NUL value");
+        assertEq((v,), cmp[cmp.column("s") == v]["s"], "a column comparison matches a NUL value exactly");
+        assertEq((v,), cmp.filter(cmp.column("s").compare("==", v))["s"],
+            "ColumnRef::compare() matches a NUL value exactly");
+        assertEq(3, cmp.nunique("s"), "nunique() counts a NUL value as a value of its own");
+        DataFrame::DataFrame counts = cmp.valueCounts("s", sort_desc: True);
+        assertEq(("a", v, "b"), counts.getColumn("s"), "valueCounts() counts a NUL value as a value of its own");
+        assertEq((2, 1, 1), counts.getColumn("count"), "valueCounts() counts each value");
+        assertEq(("a", "a", v, "b"), cmp.sortBy(("s",)).getColumn("s"),
+            "sortBy() sorts a NUL value after the part before it");
+
+        # vertical concatenation
+        DataFrame::DataFrame more({"s": ("d", v)});
+        assertEq((v, "c", "d", v), DataFrame::DataFrame::concat((recs, more)).getColumn("s"),
+            "concat() keeps a NUL cell value");
+    }
+
+    # a NUL character in a cell value is kept by CSV, Parquet and Arrow IPC writes and reads
+    nulCellValueFileTest() {
+        string v = "a\x00b";
+        DataFrame::DataFrame df({"s": (v, "c"), "n": (1, 2)});
+        string base = tmp_location() + "/df_nul_" + string(getpid());
+        on_exit {
+            unlink(base + ".csv");
+            unlink(base + ".parquet");
+        }
+
+        df.writeCSV(base + ".csv");
+        assertEq((v, "c"), DataFrame::DataFrame::readCSV(base + ".csv").getColumn("s"),
+            "a CSV write and read keep a NUL cell value");
+        df.writeParquet(base + ".parquet");
+        assertEq((v, "c"), DataFrame::DataFrame::readParquet(base + ".parquet").getColumn("s"),
+            "a Parquet write and read keep a NUL cell value");
+        assertEq((v, "c"), DataFrame::DataFrame::fromArrowIpc(df.toArrowIpc()).getColumn("s"),
+            "an Arrow IPC write and read keep a NUL cell value");
+
+        # files written by pyarrow (see data/gen-nul-fixtures.py)
+        string data = get_script_dir() + "/data/";
+        assertEq(("a", v, "b"), DataFrame::DataFrame::readParquet(data + "nul_strings.parquet").getColumn("plain"),
+            "a Parquet read keeps a NUL cell value");
+        assertEq(("a", v, "b"), DataFrame::DataFrame::fromArrowIpc(ReadOnlyFile::readBinaryFile(
+            data + "nul_strings.arrow")).getColumn("plain"), "an Arrow IPC read keeps a NUL cell value");
+        # with one row per row group, the statistics of the row group with the NUL value must not exclude it
+        DataFrame::DataFrame filtered = DataFrame::DataFrame::readParquet(data + "nul_strings.parquet",
+            <DataFrame::ParquetReadOptions>{
+                "columns": ("plain",),
+                "filters": ({"column": "plain", "op": "==", "value": v},),
+            });
+        assertEq((v,), filtered.getColumn("plain"), "a Parquet filter matches a NUL value exactly");
+
+        # a decimal column read from Parquet has values of any type, so fillna() can put a string in it; a string
+        # with a NUL character is not a decimal number, rather than the number before the NUL character
+        ColumnarResult decimal_columns = ColumnarResult::fromColumnHash({"d": (1.25n, NOTHING)},
+            {"d": {"native_type": "decimal(18,2)"}});
+        DataFrame::DataFrame decimal_source = DataFrame::DataFrame::fromColumnarResult(decimal_columns);
+        decimal_source.writeParquet(base + "-decimal-1.parquet");
+        on_exit {
+            unlink(base + "-decimal-1.parquet");
+            unlink(base + "-decimal-2.parquet");
+        }
+        DataFrame::DataFrame decimal_df = DataFrame::DataFrame::readParquet(base + "-decimal-1.parquet");
+        DataFrame::DataFrame decimal_filled = decimal_df.fillna("1.5\x00junk");
+        assertThrows("DATAFRAME-IO-ERROR", "decimal128", \decimal_filled.writeParquet(), (base + "-decimal-2.parquet",),
+            "a string with a NUL character is not written as the decimal number before the NUL character");
+    }
+
+    # a NUL character in a column name is kept by the DataFrame; it is refused only where the name becomes a hash key
+    nulColumnNameTest() {
+        string name = "v\x00w";
+        DataFrame::DataFrame df({"k": ("x", "y", "x"), "a": (1, 2, 3)});
+        df.addColumn(name, (10, 20, 30));
+        assertEq(("k", "a", name), df.columnNames(), "addColumn() keeps a NUL column name");
+        assertEq((10, 20, 30), df.getColumn(name), "getColumn() finds a NUL column name");
+        assertThrows("DATAFRAME-COLUMN-ERROR", \df.getColumn(), ("v",),
+            "the part of a NUL column name before the NUL names no column");
+        df.addColumn("v", (7, 8, 9));
+        assertEq((10, 20, 30), df.getColumn(name), "a NUL column name and the part before the NUL are two columns");
+        assertEq((7, 8, 9), df.getColumn("v"), "the column named by the part before the NUL is another column");
+        assertEq((10, 20, 30), df[name], "a column subscript finds a NUL column name");
+        assertEq((10, 20, 30), df.column(name).values(), "a column reference finds a NUL column name");
+        assertEq((10.0, 20.0, 30.0), df.toVector(name), "toVector() finds a NUL column name");
+        assertEq(((10.0,), (20.0,), (30.0,)), df.toMatrix((name,)), "toMatrix() finds a NUL column name");
+        assertEq((name,), df.select((name,)).columnNames(), "select() keeps a NUL column name");
+        assertEq((30, 20, 10), df.sortBy((name,), (False,)).getColumn(name), "sortBy() sorts by a NUL column name");
+        assertEq((20,), df.filter(name, "==", 20).getColumn(name), "filter() finds a NUL column name");
+        assertEq((10.0, 30.0, 60.0), (map $1.toFloat(), df.cumSum(name)), "cumSum() finds a NUL column name");
+        assertEq((NOTHING, 10, 20), df.lag(name), "lag() finds a NUL column name");
+        assertEq((1, 1, 2), df.rowNumber({"partition_by": ("k",), "order_by": (name,)}),
+            "rowNumber() orders by a NUL column name");
+        assertEq((1, 1, 1), df.rowNumber({"partition_by": (name,)}), "rowNumber() partitions by a NUL column name");
+        DataFrame::DataFrame replaced = df.withColumn(name, (1, 2, 3));
+        assertEq(("k", "a", name, "v"), replaced.columnNames(), "withColumn() replaces a NUL column name");
+        assertEq((1, 2, 3), replaced.getColumn(name), "withColumn() replaces the values of the NUL column");
+
+        DataFrame::DataFrame renamed = df.select(("a",));
+        renamed.renameColumn("a", "b\x00c");
+        assertEq(("b\x00c",), renamed.columnNames(), "renameColumn() keeps a NUL column name");
+        renamed.dropColumn("b\x00c");
+        assertEq(0, renamed.numCols(), "dropColumn() finds a NUL column name");
+
+        # a NUL column name cannot be a hash key
+        assertThrows("HASH-KEY-ERROR", \df.toRecords(), NOTHING, "toRecords() refuses a NUL column name");
+        assertThrows("HASH-KEY-ERROR", \df.getRow(), (0,), "getRow() refuses a NUL column name");
+        assertThrows("HASH-KEY-ERROR", sub () { auto unused = df[0]; }, NOTHING,
+            "a row subscript refuses a NUL column name");
+        assertThrows("HASH-KEY-ERROR", \df.toColumnHash(), NOTHING, "toColumnHash() refuses a NUL column name");
+        assertThrows("HASH-KEY-ERROR", \df.toColumnarResult(), NOTHING,
+            "toColumnarResult() refuses a NUL column name");
+        RecordingDatasource ds();
+        assertThrows("HASH-KEY-ERROR", \df.toTable(), (ds, "t"), "toTable() refuses a NUL column name");
+        assertEq((), ds.getCalls(), "toTable() refuses a NUL column name before using the datasource");
+
+        # grouped sum() and mean() return a DataFrame, so they keep a NUL column name
+        DataFrame::DataFrame sums = df.groupBy(("k",)).sum();
+        assertEq(("k", "a", name, "v"), sums.columnNames(), "grouped sum() keeps a NUL column name");
+        assertEq((40.0, 20.0), sums.getColumn(name), "grouped sum() sums the NUL column");
+        assertEq((16.0, 8.0), sums.getColumn("v"), "grouped sum() sums the column named by the part before the NUL");
+        DataFrame::DataFrame means = df.groupBy(("k",)).mean();
+        assertEq((20.0, 20.0), means.getColumn(name), "grouped mean() averages the NUL column");
+        # a group column with a NUL name
+        DataFrame::DataFrame by_nul = df.groupBy((name,)).count();
+        assertEq((name, "count"), by_nul.columnNames(), "groupBy() groups by a NUL column name");
+
+        # names made from options and values
+        assertEq(("k", "n\x00m"), df.valueCounts("k", count_name: "n\x00m").columnNames(),
+            "valueCounts() keeps a NUL count column name");
+        DataFrame::DataFrame long_df({"id": (1, 2), "metric": ("p\x00q", "r"), "val": (1.5, 2.5)});
+        assertEq(("id", "p\x00q", "r"), long_df.pivot("id", "metric", "val").columnNames(),
+            "pivot() keeps a NUL value as a column name");
+        DataFrame::DataFrame wide({"id": (1,)});
+        wide.addColumn(name, (5,));
+        DataFrame::DataFrame melted = wide.melt(("id",), NOTHING, "var\x00name", "val\x00ue");
+        assertEq(("id", "var\x00name", "val\x00ue"), melted.columnNames(), "melt() keeps NUL column names");
+        assertEq((name,), melted.getColumn("var\x00name"), "melt() keeps a NUL column name as a value");
+        assertEq(("x", name), DataFrame::DataFrame::fromMatrix(((1, 2),), ("x", name)).columnNames(),
+            "fromMatrix() keeps a NUL column name");
+
+        # joins on a NUL key column
+        DataFrame::DataFrame left();
+        left.addColumn(name, (1, 2));
+        left.addColumn("l", ("a", "b"));
+        DataFrame::DataFrame right();
+        right.addColumn(name, (2, 3));
+        right.addColumn("r", ("c", "d"));
+        DataFrame::DataFrame joined = left.join(right, (name,));
+        assertEq((name, "l", "r"), joined.columnNames(), "join() keeps a NUL key column name");
+        assertEq((2,), joined.getColumn(name), "join() joins on a NUL key column name");
+    }
+
+    # a NUL character in a column name is kept by CSV, Parquet and Arrow IPC writes and reads
+    nulColumnNameFileTest() {
+        string name = "v\x00w";
+        DataFrame::DataFrame df();
+        df.addColumn(name, (1, 2));
+        df.addColumn("s", ("x", "y"));
+        string base = tmp_location() + "/df_nul_name_" + string(getpid());
+        on_exit {
+            unlink(base + ".csv");
+            unlink(base + ".parquet");
+        }
+
+        df.writeCSV(base + ".csv");
+        assertEq((name, "s"), DataFrame::DataFrame::readCSV(base + ".csv").columnNames(),
+            "a CSV write and read keep a NUL column name");
+        df.writeParquet(base + ".parquet");
+        assertEq((name, "s"), DataFrame::DataFrame::readParquet(base + ".parquet").columnNames(),
+            "a Parquet write and read keep a NUL column name");
+        assertEq((1, 2), DataFrame::DataFrame::readParquet(base + ".parquet",
+            <DataFrame::ParquetReadOptions>{"columns": (name,)}).getColumn(name),
+            "a Parquet read selects a NUL column name");
+        assertEq((name, "s"), DataFrame::DataFrame::fromArrowIpc(df.toArrowIpc()).columnNames(),
+            "an Arrow IPC write and read keep a NUL column name");
+
+        string data = get_script_dir() + "/data/";
+        assertEq(("na\x00me", "plain"), DataFrame::DataFrame::readParquet(data + "nul_strings.parquet").columnNames(),
+            "a Parquet read keeps a NUL column name");
+        assertEq(("v\x00w", "x", "y"), DataFrame::DataFrame::readParquet(data + "nul_strings.parquet")
+            .getColumn("na\x00me"), "a Parquet read keeps the values of a NUL column name");
+    }
+
+    # struct field names and map keys with a NUL character cannot be hash keys
+    nulNestedKeyTest() {
+        string data = get_script_dir() + "/data/";
+        assertThrows("HASH-KEY-ERROR", \DataFrame::DataFrame::readParquet(), (data + "nul_struct.parquet",),
+            "a Parquet struct field name with a NUL character cannot be a hash key");
+        assertThrows("HASH-KEY-ERROR", \DataFrame::DataFrame::fromArrowIpc(),
+            (ReadOnlyFile::readBinaryFile(data + "nul_struct.arrow"),),
+            "an Arrow struct field name with a NUL character cannot be a hash key");
+        assertThrows("HASH-KEY-ERROR", \DataFrame::DataFrame::readParquet(), (data + "nul_map.parquet",),
+            "a Parquet map key with a NUL character cannot be a hash key");
+        assertThrows("HASH-KEY-ERROR", \DataFrame::DataFrame::fromArrowIpc(),
+            (ReadOnlyFile::readBinaryFile(data + "nul_map.arrow"),),
+            "an Arrow map key with a NUL character cannot be a hash key");
+
+        # a struct column with only null values keeps a field name with a NUL character in its schema; a hash value
+        # cannot have that field, so writing one is refused instead of writing the value of another key
+        DataFrame::DataFrame df = DataFrame::DataFrame::readParquet(data + "nul_struct_null.parquet");
+        assertEq((NOTHING, NOTHING), df.getColumn("st"), "a struct column with only null values can be read");
+        DataFrame::DataFrame filled = df.fillna({"a": 5});
+        string path = tmp_location() + "/df_nul_struct_" + string(getpid()) + ".parquet";
+        on_exit {
+            unlink(path);
+        }
+        assertThrows("HASH-KEY-ERROR", \filled.writeParquet(), (path,),
+            "a Parquet write cannot take the value of a struct field name with a NUL character from a hash");
+        assertThrows("HASH-KEY-ERROR", \filled.toArrowIpc(), NOTHING,
+            "an Arrow IPC write cannot take the value of a struct field name with a NUL character from a hash");
+        DataFrame::DataFrame arrow_df = DataFrame::DataFrame::fromArrowIpc(ReadOnlyFile::readBinaryFile(
+            data + "nul_struct_null.arrow"));
+        DataFrame::DataFrame arrow_filled = arrow_df.fillna({"a": 5});
+        assertThrows("HASH-KEY-ERROR", \arrow_filled.writeParquet(), (path,),
+            "a Parquet write of a struct column read from Arrow IPC cannot take the value of the NUL field name");
+    }
+
+    # a null value is not an empty string in a group or join key, and keys with NUL characters are compared whole
+    nullKeyTest() {
+        DataFrame::DataFrame df({"k": ("", NOTHING, "", NOTHING, "a\x00b", "a"), "v": (1, 2, 4, 8, 16, 32)});
+        DataFrame::DataFrame sums = df.groupBy(("k",)).sum();
+        assertEq(4, sums.numRows(), "groupBy() makes a group for null, the empty string, a NUL value and its prefix");
+        assertEq(("", NOTHING, "a\x00b", "a"), sums.getColumn("k"), "groupBy() keeps each group key");
+        assertEq((5.0, 10.0, 16.0, 32.0), sums.getColumn("v"), "groupBy() sums each group");
+
+        # two group columns: a value with the old separator character cannot make the key of two other values
+        DataFrame::DataFrame two({"a": ("x\x01", "x"), "b": ("y", "\x01y"), "v": (1, 2)});
+        assertEq(2, two.groupBy(("a", "b")).count().numRows(), "groupBy() keys of two columns are not ambiguous");
+
+        DataFrame::DataFrame left({"k": ("", NOTHING, "a\x00b"), "lv": (1, 2, 3)});
+        DataFrame::DataFrame right({"k": ("", "a"), "rv": (10, 20)});
+        DataFrame::DataFrame inner = left.join(right, ("k",), "inner");
+        assertEq(("",), inner.getColumn("k"), "an inner join does not match a null key with an empty string");
+        assertEq((10,), inner.getColumn("rv"), "an inner join matches the empty string key");
+        DataFrame::DataFrame left_join = left.join(right, ("k",), "left");
+        assertEq((1, 2, 3), left_join.getColumn("lv"), "a left join keeps all left rows");
+        assertEq((10, NOTHING, NOTHING), left_join.getColumn("rv"),
+            "a left join matches neither a null key nor a NUL key with another key");
+        DataFrame::DataFrame outer = left.join(right, ("k",), "outer");
+        assertEq(4, outer.numRows(), "an outer join has the matched row and each unmatched row");
+        assertEq((1, 2, 3, NOTHING), outer.getColumn("lv"), "an outer join keeps the unmatched left rows");
+        assertEq((10, NOTHING, NOTHING, 20), outer.getColumn("rv"), "an outer join keeps the unmatched right row");
     }
 }

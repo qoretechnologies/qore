@@ -197,7 +197,7 @@ static void storeRecordValue(ColumnData& data, int64_t i, QoreValue value) {
             break;
         case ColumnType::STRING: {
             QoreStringValueHelper str(value);
-            data.str_data[i] = str->c_str();
+            data.str_data[i] = dataFrameStdString(*str);
             break;
         }
         case ColumnType::BOOL:
@@ -927,6 +927,11 @@ QoreHashNode* QoreDataFrame::getRow(int64_t index, ExceptionSink* xsink) const {
         return nullptr;
     }
 
+    // the column names are the keys of the row; a name with a NUL character cannot be a key
+    if (checkDataFrameColumnKeys(columns, xsink)) {
+        return nullptr;
+    }
+
     ReferenceHolder<QoreHashNode> row(new QoreHashNode(autoTypeInfo), xsink);
     for (const auto& col : columns) {
         QoreValue v = col.data->getValueAt(index, xsink);
@@ -1117,9 +1122,16 @@ QoreListNode* QoreDataFrame::toRecords(ExceptionSink* xsink) const {
         return nullptr;
     }
     std::lock_guard<std::mutex> lk(mtx);
+    // the column names are the keys of each record; a name with a NUL character cannot be a key
+    if (checkDataFrameColumnKeys(columns, xsink)) {
+        return nullptr;
+    }
     ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
 
     for (int64_t i = 0; i < n_rows; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "converting DataFrame to records")) {
+            return nullptr;
+        }
         ReferenceHolder<QoreHashNode> row(new QoreHashNode(autoTypeInfo), xsink);
         for (const auto& col : columns) {
             QoreValue v = col.data->getValueAt(i, xsink);
@@ -1136,6 +1148,10 @@ QoreListNode* QoreDataFrame::toRecords(ExceptionSink* xsink) const {
 
 QoreHashNode* QoreDataFrame::toColumnHash(ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
+    // the column names are the keys of the hash; a name with a NUL character cannot be a key
+    if (checkDataFrameColumnKeys(columns, xsink)) {
+        return nullptr;
+    }
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
 
     for (const auto& col : columns) {
@@ -1154,6 +1170,11 @@ QoreColumnarResult* QoreDataFrame::toColumnarResult(ExceptionSink* xsink) const 
         return nullptr;
     }
     std::lock_guard<std::mutex> lk(mtx);
+    // a ColumnarResult names its columns with C strings, which are the keys of its records and column hashes; a name
+    // with a NUL character cannot be one
+    if (checkDataFrameColumnKeys(columns, xsink)) {
+        return nullptr;
+    }
     ReferenceHolder<QoreColumnarResult> result(new QoreColumnarResult, xsink);
 
     for (const auto& col : columns) {
@@ -1343,7 +1364,7 @@ QoreStringNode* QoreDataFrame::toString(int64_t max_rows, ExceptionSink* xsink) 
                         break;
                     case ColumnType::AUTO: {
                         QoreStringValueHelper sh(cd.auto_data[i]);
-                        oss << sh->c_str();
+                        oss.write(sh->c_str(), sh->size());
                         break;
                     }
                     default:
@@ -1788,7 +1809,7 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
                 break;
             case ColumnType::STRING: {
                 QoreStringValueHelper sh(value);
-                cmp_string = sh->c_str();
+                cmp_string = dataFrameStdString(*sh);
                 break;
             }
             case ColumnType::BOOL:
@@ -2263,7 +2284,7 @@ QoreDataFrame* QoreDataFrame::fillna(QoreValue value, ExceptionSink* xsink) cons
                         break;
                     case ColumnType::STRING: {
                         QoreStringValueHelper sh(value);
-                        new_data->str_data[i] = sh->c_str();
+                        new_data->str_data[i] = dataFrameStdString(*sh);
                         break;
                     }
                     case ColumnType::BOOL:

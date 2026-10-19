@@ -47,10 +47,9 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
     std::unordered_map<std::string, size_t> group_map;  // key_str → group index
     group_map.reserve(static_cast<size_t>(std::min<int64_t>(source_n_rows, 65536)));
 
+    // returns the value of a group column as a string; null values are distinguished from strings by the key
+    // components (see appendDataFrameKeyNull())
     auto get_key_value = [](const ColumnData& cd, int64_t row) -> std::string {
-        if (cd.isNull(row)) {
-            return "\x00NULL\x00";  // sentinel for null
-        }
         switch (cd.type) {
             case ColumnType::FLOAT64:
                 return std::to_string(cd.float_data(row));
@@ -64,7 +63,7 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
                 return std::to_string(cd.date_data[row]);
             case ColumnType::AUTO: {
                 QoreStringValueHelper sh(cd.auto_data[row]);
-                return sh->c_str();
+                return dataFrameStdString(*sh);
             }
             default:
                 return {};
@@ -75,16 +74,17 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
         if (r && !(r % 100) && qore_check_cancel(xsink, "building grouped DataFrame keys")) {
             return;
         }
-        // Build key string from group column values
+        // Build the key from the group column values; each value is a tagged component with its length, so that
+        // different value tuples always make different keys
         std::string key;
         for (const auto& gc : group_cols) {
             size_t ci = src_col_index.at(gc);
             const ColumnData& cd = *src_columns[ci].data;
-            std::string val = get_key_value(cd, r);
-            if (!key.empty()) {
-                key += "\x01";  // separator
+            if (cd.isNull(r)) {
+                appendDataFrameKeyNull(key);
+            } else {
+                appendDataFrameKeyValue(key, get_key_value(cd, r));
             }
-            key += val;
         }
 
         auto inserted = group_map.emplace(std::move(key), groups.size());
@@ -93,7 +93,8 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
             key_values.reserve(group_cols.size());
             for (const auto& gc : group_cols) {
                 size_t ci = src_col_index.at(gc);
-                key_values.push_back(get_key_value(*src_columns[ci].data, r));
+                const ColumnData& cd = *src_columns[ci].data;
+                key_values.push_back(cd.isNull(r) ? std::string() : get_key_value(cd, r));
             }
             groups.push_back({std::move(key_values), {r}});
         } else {
@@ -255,6 +256,37 @@ QoreDataFrame* QoreGroupedDataFrame::agg(const QoreHashNode* agg_spec,
     if (qore_check_cancel(xsink, "aggregating grouped DataFrame")) {
         return nullptr;
     }
+
+    std::vector<AggSpec> specs;
+    specs.reserve(agg_spec->size());
+    ConstHashIterator hi(agg_spec);
+    while (hi.next()) {
+        if (specs.size() && !(specs.size() % 100) && qore_check_cancel(xsink, "reading DataFrame aggregations")) {
+            return nullptr;
+        }
+        AggSpec spec;
+        spec.column = hi.getKey();
+
+        // Get function name(s)
+        QoreValue func_val = hi.get();
+        std::string func;
+        if (getDataFrameString(func_val, func)) {
+            spec.funcs.push_back(func);
+        } else if (func_val.getType() == NT_LIST) {
+            const QoreListNode* func_list = func_val.get<const QoreListNode>();
+            for (size_t i = 0; i < func_list->size(); ++i) {
+                if (getDataFrameString(func_list->retrieveEntry(i), func)) {
+                    spec.funcs.push_back(func);
+                }
+            }
+        }
+        specs.push_back(std::move(spec));
+    }
+
+    return aggSpecs(specs, xsink);
+}
+
+QoreDataFrame* QoreGroupedDataFrame::aggSpecs(const std::vector<AggSpec>& specs, ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
 
     int64_t n_groups = (int64_t)groups.size();
@@ -346,9 +378,13 @@ QoreDataFrame* QoreGroupedDataFrame::agg(const QoreHashNode* agg_spec,
     }
 
     // Apply aggregation functions per column
-    ConstHashIterator hi(agg_spec);
-    while (hi.next()) {
-        std::string col_name = hi.getKey();
+    for (size_t si = 0; si < specs.size(); ++si) {
+        if (si && !(si % 100) && qore_check_cancel(xsink, "aggregating grouped DataFrame columns")) {
+            delete df;
+            return nullptr;
+        }
+        const std::string& col_name = specs[si].column;
+        const std::vector<std::string>& funcs = specs[si].funcs;
         auto col_it = source_col_index.find(col_name);
         if (col_it == source_col_index.end()) {
             delete df;
@@ -357,21 +393,6 @@ QoreDataFrame* QoreGroupedDataFrame::agg(const QoreHashNode* agg_spec,
             return nullptr;
         }
         const ColumnData& src_cd = *source_columns[col_it->second].data;
-
-        // Get function name(s)
-        QoreValue func_val = hi.get();
-        std::vector<std::string> funcs;
-        std::string func;
-        if (getDataFrameString(func_val, func)) {
-            funcs.push_back(func);
-        } else if (func_val.getType() == NT_LIST) {
-            const QoreListNode* func_list = func_val.get<const QoreListNode>();
-            for (size_t i = 0; i < func_list->size(); ++i) {
-                if (getDataFrameString(func_list->retrieveEntry(i), func)) {
-                    funcs.push_back(func);
-                }
-            }
-        }
 
         for (const auto& func : funcs) {
             // Numeric aggregations → float64 result column
@@ -564,36 +585,49 @@ QoreDataFrame* QoreGroupedDataFrame::count(ExceptionSink* xsink) const {
     return df;
 }
 
-QoreDataFrame* QoreGroupedDataFrame::sum(ExceptionSink* xsink) const {
-    // Build agg_spec: all numeric columns → "sum"
-    ReferenceHolder<QoreHashNode> spec(new QoreHashNode(autoTypeInfo), xsink);
-    for (const auto& col : source_columns) {
+std::vector<QoreGroupedDataFrame::AggSpec> QoreGroupedDataFrame::numericSpecs(const char* func,
+        ExceptionSink* xsink) const {
+    // the specs are not a hash, because a column name may contain NUL characters, which a hash key cannot
+    std::vector<AggSpec> specs;
+    for (size_t i = 0; i < source_columns.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "selecting numeric DataFrame columns")) {
+            return {};
+        }
+        const Column& col = source_columns[i];
         // Skip group columns
         bool is_group = false;
         for (const auto& gc : group_col_names) {
-            if (col.name == gc) { is_group = true; break; }
+            if (col.name == gc) {
+                is_group = true;
+                break;
+            }
         }
-        if (is_group) { continue; }
+        if (is_group) {
+            continue;
+        }
         if (col.data->type == ColumnType::FLOAT64 || col.data->type == ColumnType::INT64) {
-            spec->setKeyValue(col.name.c_str(), new QoreStringNode("sum"), xsink);
+            specs.push_back({col.name, {func}});
         }
     }
-    return agg(*spec, xsink);
+    return specs;
+}
+
+QoreDataFrame* QoreGroupedDataFrame::sum(ExceptionSink* xsink) const {
+    // all numeric columns → "sum"
+    std::vector<AggSpec> specs = numericSpecs("sum", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return aggSpecs(specs, xsink);
 }
 
 QoreDataFrame* QoreGroupedDataFrame::mean(ExceptionSink* xsink) const {
-    ReferenceHolder<QoreHashNode> spec(new QoreHashNode(autoTypeInfo), xsink);
-    for (const auto& col : source_columns) {
-        bool is_group = false;
-        for (const auto& gc : group_col_names) {
-            if (col.name == gc) { is_group = true; break; }
-        }
-        if (is_group) { continue; }
-        if (col.data->type == ColumnType::FLOAT64 || col.data->type == ColumnType::INT64) {
-            spec->setKeyValue(col.name.c_str(), new QoreStringNode("mean"), xsink);
-        }
+    // all numeric columns → "mean"
+    std::vector<AggSpec> specs = numericSpecs("mean", xsink);
+    if (*xsink) {
+        return nullptr;
     }
-    return agg(*spec, xsink);
+    return aggSpecs(specs, xsink);
 }
 
 int64_t QoreGroupedDataFrame::numGroups() const {

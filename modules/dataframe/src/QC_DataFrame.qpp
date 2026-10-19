@@ -498,7 +498,7 @@ hash<DataFrameShape> DataFrame::shape() [flags=CONSTANT] {
     @throw DATAFRAME-COLUMN-ERROR if column not found
 */
 list<auto> DataFrame::getColumn(string name) [flags=RET_VALUE_ONLY] {
-    return df->getColumn(name->c_str(), xsink);
+    return df->getColumn(dataFrameStdString(name), xsink);
 }
 
 //! Returns a column's values as a dense buffer
@@ -519,12 +519,13 @@ list<auto> DataFrame::getColumn(string name) [flags=RET_VALUE_ONLY] {
     represented as a dense buffer
 */
 auto DataFrame::getColumnBuffer(string name) [flags=RET_VALUE_ONLY] {
-    return df->getColumnBuffer(name->c_str(), xsink);
+    return df->getColumnBuffer(dataFrameStdString(name), xsink);
 }
 
 //! Returns a row as a hash
 /** @param index the zero-based row index
     @throw DATAFRAME-INDEX-ERROR if index out of range
+    @throw HASH-KEY-ERROR a column name has a NUL character, which a hash key cannot contain
 */
 hash<auto> DataFrame::getRow(int index) [flags=RET_VALUE_ONLY] {
     return df->getRow(index, xsink);
@@ -548,7 +549,7 @@ ColumnRef DataFrame::column(string name) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_COLUMNREF, getProgram()), xsink);
-    obj->setPrivate(CID_COLUMNREF, new QoreDataFrameColumnRef(referenced_df, name->c_str()));
+    obj->setPrivate(CID_COLUMNREF, new QoreDataFrameColumnRef(referenced_df, dataFrameStdString(name)));
     return obj.release();
 }
 
@@ -634,7 +635,7 @@ list<auto> DataFrame::toMatrix(*list<string> columns) [flags=RET_VALUE_ONLY] {
     @throw DATAFRAME-ERROR if the column is not numeric
 */
 list<auto> DataFrame::toVector(string column) [flags=RET_VALUE_ONLY] {
-    return df->toVector(column->c_str(), xsink);
+    return df->toVector(dataFrameStdString(column), xsink);
 }
 
 //! Creates a DataFrame from a numeric matrix and column names
@@ -686,7 +687,7 @@ static DataFrame DataFrame::fromMatrix(list<auto> matrix, *list<string> column_n
 
 */
 DataFrame DataFrame::join(DataFrame[QoreDataFrame] other, list<string> on, *string how) [flags=RET_VALUE_ONLY] {
-    std::string how_str = how ? how->c_str() : "inner";
+    std::string how_str = how ? dataFrameStdString(how) : "inner";
     QoreDataFrame* result = df->join(*other, on, how_str, xsink);
     if (!result) {
         return QoreValue();
@@ -717,7 +718,7 @@ GroupedDataFrame DataFrame::groupBy(list<string> columns) [flags=RET_VALUE_ONLY]
         QoreValue v = columns->retrieveEntry(i);
         if (v.getType() == NT_STRING) {
             QoreStringValueHelper s(v);
-            col_names.push_back(s->c_str());
+            col_names.push_back(dataFrameStdString(*s));
         }
     }
     QoreGroupedDataFrame* gdf_result = new QoreGroupedDataFrame(df, col_names, xsink);
@@ -773,7 +774,7 @@ DataFrame DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
 
 */
 DataFrame DataFrame::filter(string column, string op, auto value) [flags=RET_VALUE_ONLY] {
-    QoreDataFrame* result = df->filter(column->c_str(), op->c_str(), value, xsink);
+    QoreDataFrame* result = df->filter(dataFrameStdString(column), dataFrameStdString(op), value, xsink);
     if (!result) {
         return QoreValue();
     }
@@ -949,7 +950,8 @@ DataFrame DataFrame::dropna() [flags=RET_VALUE_ONLY] {
 */
 DataFrame DataFrame::valueCounts(string column, bool dropna = True, bool sort_desc = False,
         string count_name = "count") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    QoreDataFrame* result = df->valueCounts(column->c_str(), dropna, sort_desc, count_name->c_str(), xsink);
+    QoreDataFrame* result = df->valueCounts(dataFrameStdString(column), dropna, sort_desc,
+        dataFrameStdString(count_name), xsink);
     if (!result) {
         return QoreValue();
     }
@@ -971,11 +973,13 @@ DataFrame DataFrame::valueCounts(string column, bool dropna = True, bool sort_de
     @throw DATAFRAME-COLUMN-ERROR if the column is not found
 */
 int DataFrame::nunique(string column, bool dropna = True) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    return df->nunique(column->c_str(), dropna, xsink);
+    return df->nunique(dataFrameStdString(column), dropna, xsink);
 }
 
 //! Converts the DataFrame to a list of record hashes
 /** @return list<hash<auto>> where each element is one row
+
+    @throw HASH-KEY-ERROR a column name has a NUL character, which a hash key cannot contain
 */
 list<hash<auto>> DataFrame::toRecords() [flags=RET_VALUE_ONLY] {
     return df->toRecords(xsink);
@@ -983,6 +987,8 @@ list<hash<auto>> DataFrame::toRecords() [flags=RET_VALUE_ONLY] {
 
 //! Converts the DataFrame to a hash of column lists
 /** @return hash<auto> where keys are column names, values are lists
+
+    @throw HASH-KEY-ERROR a column name has a NUL character, which a hash key cannot contain
 */
 hash<auto> DataFrame::toColumnHash() [flags=RET_VALUE_ONLY] {
     return df->toColumnHash(xsink);
@@ -1000,6 +1006,9 @@ hash<auto> DataFrame::toColumnHash() [flags=RET_VALUE_ONLY] {
     ColumnarResult result = df.toColumnarResult();
     buffer<int64> ids = result.getColumn("id");
     @endcode
+
+    @throw HASH-KEY-ERROR a column name has a NUL character; a ColumnarResult column name is the key of its records
+    and column hashes, which cannot contain one
 */
 auto DataFrame::toColumnarResult() [flags=RET_VALUE_ONLY] {
     return qore_columnar_result_to_object(df->toColumnarResult(xsink), xsink);
@@ -1087,7 +1096,7 @@ string DataFrame::toString(int max_rows = 10) [flags=RET_VALUE_ONLY] {
     @throw DATAFRAME-COLUMN-ERROR if column already exists or row count mismatch
 */
 nothing DataFrame::addColumn(string name, list<auto> data) {
-    df->addColumn(name->c_str(), data, xsink);
+    df->addColumn(dataFrameStdString(name), data, xsink);
 }
 
 //! Removes a column from the DataFrame (in-place)
@@ -1095,7 +1104,7 @@ nothing DataFrame::addColumn(string name, list<auto> data) {
     @throw DATAFRAME-COLUMN-ERROR if column not found
 */
 nothing DataFrame::dropColumn(string name) {
-    df->dropColumn(name->c_str(), xsink);
+    df->dropColumn(dataFrameStdString(name), xsink);
 }
 
 //! Renames a column (in-place)
@@ -1104,7 +1113,7 @@ nothing DataFrame::dropColumn(string name) {
     @throw DATAFRAME-COLUMN-ERROR if old column not found or new name already exists
 */
 nothing DataFrame::renameColumn(string old_name, string new_name) {
-    df->renameColumn(old_name->c_str(), new_name->c_str(), xsink);
+    df->renameColumn(dataFrameStdString(old_name), dataFrameStdString(new_name), xsink);
 }
 
 //! Reads a CSV file into a new DataFrame
@@ -1464,11 +1473,14 @@ nothing DataFrame::writeParquet(string path, *hash<ParquetWriteOptions> options)
     @endcode
 
     @throw DATAFRAME-DB-ERROR if the INSERT fails
+    @throw HASH-KEY-ERROR a column name has a NUL character, which the hash keys of the column batches and the table
+    description cannot contain
 */
 nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [dom=DATABASE] {
     if (qore_check_cancel(xsink, "writing DataFrame to table")) {
         return QoreValue();
     }
+
 
     int64_t n_rows_val = df->numRows();
     int64_t n_cols_val = df->numCols();
@@ -1496,6 +1508,10 @@ nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [d
     {
         std::lock_guard<std::mutex> lk(df->getMutex());
         columns = df->getColumns();
+    }
+    // the column names are the keys of the column batches and of the table description
+    if (checkDataFrameColumnKeys(columns, xsink)) {
+        return QoreValue();
     }
 
     int rc = qdfTryGenericBulkInsert(getProgram(), ds, table_name->c_str(), options,
@@ -1534,7 +1550,7 @@ nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [d
     @throw DATAFRAME-COLUMN-ERROR if the number of values is not the number of rows
 */
 DataFrame DataFrame::withColumn(string name, list<auto> data) [flags=RET_VALUE_ONLY] {
-    QoreDataFrame* result = df->withColumn(name->c_str(), data, xsink);
+    QoreDataFrame* result = df->withColumn(dataFrameStdString(name), data, xsink);
     if (!result) {
         return QoreValue();
     }
@@ -1558,9 +1574,9 @@ DataFrame DataFrame::withColumn(string name, list<auto> data) [flags=RET_VALUE_O
 
 */
 DataFrame DataFrame::pivot(string index_col, string columns_col, string values_col, *string agg_func) [flags=RET_VALUE_ONLY] {
-    std::string func = agg_func ? agg_func->c_str() : "sum";
-    QoreDataFrame* result = df->pivot(index_col->c_str(), columns_col->c_str(),
-        values_col->c_str(), func, xsink);
+    std::string func = agg_func ? dataFrameStdString(agg_func) : "sum";
+    QoreDataFrame* result = df->pivot(dataFrameStdString(index_col), dataFrameStdString(columns_col),
+        dataFrameStdString(values_col), func, xsink);
     if (!result) {
         return QoreValue();
     }
@@ -1583,8 +1599,8 @@ DataFrame DataFrame::pivot(string index_col, string columns_col, string values_c
 
 */
 DataFrame DataFrame::melt(list<string> id_vars, *list<string> value_vars, *string var_name, *string value_name) [flags=RET_VALUE_ONLY] {
-    std::string vn = var_name ? var_name->c_str() : "variable";
-    std::string val_n = value_name ? value_name->c_str() : "value";
+    std::string vn = var_name ? dataFrameStdString(var_name) : "variable";
+    std::string val_n = value_name ? dataFrameStdString(value_name) : "value";
     QoreDataFrame* result = df->melt(id_vars, value_vars, vn, val_n, xsink);
     if (!result) {
         return QoreValue();
@@ -1618,7 +1634,7 @@ list<int> DataFrame::rowNumber(*hash<auto> spec) [flags=RET_VALUE_ONLY] {
 
 */
 list<auto> DataFrame::lag(string column, int offset = 1, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
-    return df->lag(column->c_str(), offset, spec, xsink);
+    return df->lag(dataFrameStdString(column), offset, spec, xsink);
 }
 
 //! Returns next row's value within partitions (window function)
@@ -1630,7 +1646,7 @@ list<auto> DataFrame::lag(string column, int offset = 1, *hash<auto> spec) [flag
 
 */
 list<auto> DataFrame::lead(string column, int offset = 1, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
-    return df->lead(column->c_str(), offset, spec, xsink);
+    return df->lead(dataFrameStdString(column), offset, spec, xsink);
 }
 
 //! Returns cumulative sum within partitions (window function)
@@ -1640,7 +1656,7 @@ list<auto> DataFrame::lead(string column, int offset = 1, *hash<auto> spec) [fla
 
 */
 list<auto> DataFrame::cumSum(string column, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
-    return df->cumSum(column->c_str(), spec, xsink);
+    return df->cumSum(dataFrameStdString(column), spec, xsink);
 }
 
 //! Returns rolling mean within partitions (window function)
@@ -1651,5 +1667,5 @@ list<auto> DataFrame::cumSum(string column, *hash<auto> spec) [flags=RET_VALUE_O
 
 */
 list<auto> DataFrame::rollingMean(string column, int window_size, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
-    return df->rollingMean(column->c_str(), (int64_t)window_size, spec, xsink);
+    return df->rollingMean(dataFrameStdString(column), static_cast<int64_t>(window_size), spec, xsink);
 }

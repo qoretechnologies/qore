@@ -443,7 +443,7 @@ extern "C" DLLEXPORT uint64_t dataframe_subscript_column(uint64_t container_bits
         return dataframeBitsFromValue(QoreValue());
     }
     QoreStringValueHelper name(key);
-    QoreListNode* column = df->getColumn(name->c_str(), xsink);
+    QoreListNode* column = df->getColumn(dataFrameStdString(*name), xsink);
     return dataframeBitsFromValue(*xsink ? QoreValue() : QoreValue(column));
 }
 

@@ -36,8 +36,20 @@ public:
     DLLLOCAL QoreGroupedDataFrame(const QoreDataFrame* source,
         const std::vector<std::string>& group_cols, ExceptionSink* xsink);
 
+    //! The aggregation of one source column: the column name and the functions applied to it
+    struct AggSpec {
+        std::string column;              //!< the source column name, which may contain NUL characters
+        std::vector<std::string> funcs;  //!< the aggregation functions
+    };
+
     //! Aggregate with per-column function specs: {"col": "agg_func"}
     DLLLOCAL QoreDataFrame* agg(const QoreHashNode* agg_spec, ExceptionSink* xsink) const;
+
+    //! Aggregate with per-column function specs given in order
+    /** Unlike agg(), the column names are not hash keys, so they may contain NUL characters, as all DataFrame
+        column names may.
+    */
+    DLLLOCAL QoreDataFrame* aggSpecs(const std::vector<AggSpec>& specs, ExceptionSink* xsink) const;
 
     //! Count rows per group
     DLLLOCAL QoreDataFrame* count(ExceptionSink* xsink) const;
@@ -68,6 +80,9 @@ private:
 
     int64_t source_n_rows = 0;
     mutable std::mutex mtx;
+
+    //! Returns the specs applying the given function to each numeric column that is not a group column
+    DLLLOCAL std::vector<AggSpec> numericSpecs(const char* func, ExceptionSink* xsink) const;
 
     //! Helper: apply a single aggregation function to a column's values at given indices
     DLLLOCAL double aggregateNumeric(const ColumnData& cd,

@@ -16,6 +16,7 @@
 
 #include <Eigen/Dense>
 
+#include <cassert>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -42,15 +43,52 @@ enum class ExternalColumnKind : int {
 //! Returns the string name of a column type
 DLLLOCAL const char* columnTypeName(ColumnType type);
 
-//! Safely extracts a Qore string value, including short-string values.
+//! Returns a copy of all bytes of a Qore string, including any NUL characters
+/** A DataFrame cell value or name may contain NUL characters, so a Qore string is always copied with its length,
+    never as a C string, which would cut it at the first NUL character.
+*/
+static inline std::string dataFrameStdString(const QoreString* str) {
+    assert(str);
+    return std::string(str->c_str(), str->size());
+}
+
+//! Safely extracts a Qore string value, including short-string values and NUL characters.
 static inline bool getDataFrameString(QoreValue v, std::string& out) {
     if (v.getType() != NT_STRING) {
         return false;
     }
 
     QoreStringValueHelper str(v);
-    out = str->c_str();
+    out.assign(str->c_str(), str->size());
     return true;
+}
+
+//! Appends a null component to a key made of several values (a group or join key)
+/** Each component of a key is tagged, and a value component has its length, so that a key can be built from any
+    values without two different value tuples making the same key: a null value differs from an empty string, and
+    a value with a NUL or separator character cannot be confused with two values.
+*/
+static inline void appendDataFrameKeyNull(std::string& key) {
+    key += 'N';
+}
+
+//! Appends a value component to a key made of several values (a group or join key)
+/** @param key the key to append to
+    @param value the bytes of the value as a string, which may contain NUL characters
+    @param len the length of the value in bytes
+
+    @see appendDataFrameKeyNull()
+*/
+static inline void appendDataFrameKeyValue(std::string& key, const char* value, size_t len) {
+    key += 'V';
+    uint64_t n = len;
+    key.append(reinterpret_cast<const char*>(&n), sizeof(n));
+    key.append(value, len);
+}
+
+//! Appends a value component to a key made of several values (a group or join key)
+static inline void appendDataFrameKeyValue(std::string& key, const std::string& value) {
+    appendDataFrameKeyValue(key, value.data(), value.size());
 }
 
 //! Column data — immutable after construction (shared across DataFrames via shared_ptr)
@@ -136,10 +174,32 @@ struct ColumnData {
 };
 
 //! A named column with shared data
+/** A column name may contain NUL characters; it is kept with its length everywhere in the DataFrame.  A name with a
+    NUL character cannot be a hash key, so an operation that returns the column names as hash keys raises a
+    \c HASH-KEY-ERROR for it (see checkDataFrameColumnKeys()).
+*/
 struct Column {
     std::string name;
     std::shared_ptr<ColumnData> data;
 };
+
+//! Checks that the names of the given columns can be hash keys
+/** @param columns the columns whose names will be keys of a hash returned to the caller
+    @param xsink a \c HASH-KEY-ERROR is raised here for the first name with a NUL character
+
+    @return 0 if all names can be keys, -1 if an exception was raised
+*/
+static inline int checkDataFrameColumnKeys(const std::vector<Column>& columns, ExceptionSink* xsink) {
+    for (size_t i = 0; i < columns.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking DataFrame column names")) {
+            return -1;
+        }
+        if (QoreHashNode::checkKey(columns[i].name.data(), columns[i].name.size(), xsink)) {
+            return -1;
+        }
+    }
+    return 0;
+}
 
 //! Infer the column type from a list of Qore values
 DLLLOCAL ColumnType inferColumnType(const QoreListNode* values);
