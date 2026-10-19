@@ -1,0 +1,250 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires SqlUtil
+%requires PgsqlSqlUtil
+%requires QUnit
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class PgsqlSearchPathTest
+
+#! PostgreSQL introspection resolves an unqualified name in the schema of the connection's search_path
+/** The test creates a schema of its own for the run and sets it as the search_path of its connection (with
+    \c PGOPTIONS, before the connection is opened), and a decoy schema outside the search_path with objects of the
+    same names but other definitions; every object described or listed must be the run schema's.  Both schemas are
+    dropped when the test ends, also when it fails.
+*/
+class PgsqlSearchPathTest inherits QUnit::Test {
+    private {
+        #! the connection string; no value if no PostgreSQL database is configured
+        *string connstr;
+        #! the connection that creates and drops the schemas, opened with the default search_path
+        *Datasource admin;
+        #! the connection of the tests, whose search_path is the run schema
+        *Datasource ds;
+        #! the PGOPTIONS environment variable before the test set it
+        *string pgoptions;
+        string run_schema;
+        string decoy_schema;
+    }
+
+    constructor() : Test("PgsqlSearchPathTest", "1.0", \ARGV) {
+        addTestCase("the connection's schema is the run schema", \currentSchema());
+        addTestCase("functions are looked up in the search_path", \functions());
+        addTestCase("functions are listed from the search_path", \listFunctions());
+        addTestCase("types are looked up and listed in the search_path", \types());
+        addTestCase("tables, indexes and triggers are the run schema's", \tables());
+        addTestCase("partitions are named as in the run schema", \partitions());
+        addTestCase("sequences and views are the run schema's", \sequencesAndViews());
+
+        {
+            on_exit cleanup();
+            setup();
+            set_return_value(main());
+        }
+    }
+
+    #! returns a part of a schema name: lower case letters, digits and underscores
+    private static string namePart(string str, int max) {
+        str = str.lwr();
+        str =~ s/[^a-z0-9_]/_/g;
+        return str.substr(0, max);
+    }
+
+    private setup() {
+%ifdef NoPgsql
+        return;
+%endif
+        connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!connstr) {
+            return;
+        }
+        string tail = sprintf("%s_%d_%d", PgsqlSearchPathTest::namePart(gethostname(), 16), getpid(),
+            get_epoch_seconds(now_utc()));
+        run_schema = "qtest_searchpath_" + tail;
+        decoy_schema = "qtest_spdecoy_" + tail;
+
+        # the schemas are created and dropped with the default search_path
+        admin = new Datasource(connstr);
+        if (admin.getDriverName() != "pgsql") {
+            throw "PGSQL-ERROR", sprintf("cannot run the PostgreSQL tests with driver %y", admin.getDriverName());
+        }
+        admin.open();
+        {
+            on_error admin.rollback();
+            on_success admin.commit();
+            createObjects(run_schema, {
+                "columns": "id int not null primary key, name text",
+                "index_col": "name",
+                "seq": "start 1 increment 1",
+                "fn": "select 1",
+                "tfn": "new.name := 'run trigger'",
+                "type": "a int, b text",
+                "bound": "0) to (100",
+                "view": "select 1 as run_col",
+            });
+            # the decoy is created after the run schema, so a lookup across schemas finds it last
+            createObjects(decoy_schema, {
+                "columns": "id int not null, other_col text",
+                "index_col": "other_col",
+                "seq": "start 100 increment 5",
+                "fn": "select 2",
+                "tfn": "new.other_col := 'decoy trigger'",
+                "type": "x int",
+                "bound": "0) to (50",
+                "view": "select 2 as decoy_col",
+            });
+        }
+
+        # every connection of this process opened from now on has the run schema as its search_path
+        pgoptions = ENV.PGOPTIONS;
+        setenv("PGOPTIONS", (pgoptions ? pgoptions + " " : "") + "-c search_path=" + run_schema + ",public");
+        ds = new Datasource(connstr);
+        ds.open();
+    }
+
+    private createObjects(string schema, hash<auto> def) {
+        admin.exec(sprintf("create schema %s", schema));
+        admin.exec(sprintf("create table %s.sp_t (%s)", schema, def.columns));
+        admin.exec(sprintf("create index sp_t_ix on %s.sp_t (%s)", schema, def.index_col));
+        admin.exec(sprintf("create sequence %s.sp_seq %s", schema, def.seq));
+        admin.exec(sprintf("create function %s.sp_f() returns int language sql as '%s'", schema, def.fn));
+        admin.exec(sprintf("create function %s.sp_tf() returns trigger language plpgsql as "
+            "$$ begin %s; return new; end $$", schema, def.tfn));
+        admin.exec(sprintf("create trigger sp_trg before insert on %s.sp_t for each row execute function "
+            "%s.sp_tf()", schema, schema));
+        # an overload of the trigger function's name, so that the name alone does not identify a function
+        admin.exec(sprintf("create function %s.sp_tf(int) returns int language sql as 'select 1'", schema));
+        admin.exec(sprintf("create type %s.sp_type as (%s)", schema, def.type));
+        admin.exec(sprintf("create table %s.sp_p (id int not null, v text) partition by range (id)", schema));
+        admin.exec(sprintf("create table %s.sp_p1 partition of %s.sp_p for values from (%s)", schema, schema,
+            def.bound));
+        admin.exec(sprintf("create view %s.sp_v as %s", schema, def.view));
+    }
+
+    private cleanup() {
+        if (ds) {
+            ds.rollback();
+            ds.close();
+        }
+        if (pgoptions) {
+            setenv("PGOPTIONS", pgoptions);
+        } else {
+            unsetenv("PGOPTIONS");
+        }
+        if (admin) {
+            admin.rollback();
+            foreach string schema in ((run_schema, decoy_schema)) {
+                admin.exec(sprintf("drop schema if exists %s cascade", schema));
+            }
+            admin.commit();
+        }
+    }
+
+    private Datasource getDatasource() {
+        if (!ds) {
+            testSkip("no PostgreSQL database is configured (QORE_DB_CONNSTR_PGSQL)");
+        }
+        return ds;
+    }
+
+    private currentSchema() {
+        Datasource ds = getDatasource();
+        assertEq(run_schema, ds.selectRow("select current_schema() as s").s);
+    }
+
+    private functions() {
+        Datasource ds = getDatasource();
+        Database db(ds);
+        foreach string name in (("sp_f", "sp_f()")) {
+            *AbstractFunction f = db.getFunction(name);
+            assertEq(True, exists f, name);
+            assertRegex("select 1", f.src, name);
+            assertNRegex("select 2", f.src, name);
+        }
+        # a qualified name is looked up in its schema, also outside the search_path
+        *AbstractFunction decoy = db.getFunction(decoy_schema + ".sp_f");
+        assertEq(True, exists decoy);
+        assertRegex("select 2", decoy.src);
+        assertEq(True, exists db.getFunction(decoy_schema + ".sp_f()"));
+        # no such function in the run schema
+        assertNothing(db.getFunction("sp_no_such_function"));
+    }
+
+    private listFunctions() {
+        Datasource ds = getDatasource();
+        Database db(ds);
+        list<string> l = db.listFunctions();
+        assertEq(True, inlist("sp_f()", l), "the run schema's function is listed unqualified");
+        assertEq(True, inlist("sp_tf()", l), "the run schema's trigger function is listed unqualified");
+        assertEq(1, (select l, $1 == "sp_f()").size(), "the function is listed once");
+        assertEq((), (select l, $1.find(decoy_schema) >= 0), "no function outside the search_path is listed");
+        # every name listed is found
+        foreach string name in (select l, $1 =~ /^sp_/) {
+            assertEq(True, exists db.getFunction(name), name);
+        }
+    }
+
+    private types() {
+        Datasource ds = getDatasource();
+        Database db(ds);
+        auto t = db.getType("sp_type");
+        assertEq(True, exists t);
+        assertRegex("^a ", t.src);
+        assertNRegex("x int", t.src);
+        list<string> l = db.listTypes();
+        assertEq(1, (select l, $1 == "sp_type").size(), "the type is listed once, unqualified");
+        assertEq((), (select l, $1.find(decoy_schema) >= 0), "no type outside the search_path is listed");
+    }
+
+    private tables() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        Table t(ds, "sp_t");
+        AbstractTable table = t.getTable();
+        assertEq(("id", "name"), table.describe().keys());
+        hash<auto> indexes = map {$1.name: $1.columns.keys()}, table.getIndexes().iterator();
+        assertEq(("name",), indexes.sp_t_ix);
+        assertEq(("sp_trg",), table.getTriggers().keys());
+        # the trigger function is the run schema's
+        list<auto> sql = table.getCreateSql();
+        assertEq(1, (select sql, $1.typeCode() == NT_STRING && $1 =~ /run trigger/).size(), sprintf("%N", sql));
+        assertEq((), (select sql, $1.typeCode() == NT_STRING && $1 =~ /decoy trigger/), sprintf("%N", sql));
+        # and runs on an insert
+        t.insert({"id": 1});
+        assertEq("run trigger", t.selectRow({"where": {"id": 1}}).name);
+    }
+
+    private partitions() {
+        Datasource ds = getDatasource();
+        Table t(ds, "sp_p");
+        hash<string, PartitionInfo> ph = t.getTable().listPartitions();
+        assertEq(("sp_p1",), keys ph);
+        assertEq(run_schema, ph.sp_p1.schema);
+        # the name read back resolves to the same partition
+        assertEq("sp_p1", t.getTable().getPartition("sp_p1").name);
+        # a partition is not a table
+        list<string> tables = (new Database(ds)).listTables();
+        assertEq(True, inlist("sp_p", tables));
+        assertEq(False, inlist("sp_p1", tables));
+    }
+
+    private sequencesAndViews() {
+        Datasource ds = getDatasource();
+        Database db(ds);
+        *AbstractSequence seq = db.getSequence("sp_seq");
+        assertEq(1, seq.start.toInt());
+        assertEq(1, seq.increment.toInt());
+        *AbstractView v = db.getView("sp_v");
+        assertRegex("run_col", v.src);
+    }
+}

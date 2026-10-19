@@ -63,9 +63,11 @@ module PgsqlSqlUtilBase {
     @section pgsql_schema_scope Schema Scope of Object Names
 
     PostgreSQL resolves an object name without a schema against the connection's \c search_path.  This module
-    resolves such a name for tables, views, and sequences in <tt>current_schema()</tt>, the first existing
-    schema of the \c search_path (or \c "public" if the \c search_path names no existing schema); a name of
-    the form \c "schema.name" is resolved in the schema given.
+    resolves such a name for tables, views, sequences, functions, and types in <tt>current_schema()</tt>, the first
+    existing schema of the \c search_path (or \c "public" if the \c search_path names no existing schema); a name
+    of the form \c "schema.name" is resolved in the schema given.  The trigger functions of a table are the
+    functions that its triggers execute, and the partitions of a table in <tt>current_schema()</tt> are named by
+    their names alone, as other objects there are.
 
     Like Oracle and MySQL, which list only the objects of the connection's own schema, the following methods
     list only the objects in the schemas of the connection's \c search_path (<tt>current_schemas(false)</tt>),
@@ -76,7 +78,10 @@ module PgsqlSqlUtilBase {
       @ref SqlUtil::AbstractDatabase::viewIterator() "AbstractDatabase::viewIterator()"
     - @ref SqlUtil::AbstractDatabase::listSequences() "AbstractDatabase::listSequences()" and
       @ref SqlUtil::AbstractDatabase::sequenceIterator() "AbstractDatabase::sequenceIterator()"
+    - @ref SqlUtil::AbstractDatabase::listFunctions() "AbstractDatabase::listFunctions()" and
+      @ref SqlUtil::AbstractDatabase::functionIterator() "AbstractDatabase::functionIterator()"
     - @ref PgsqlSqlUtilBase::PgsqlDatabase::listMaterializedViews() "PgsqlDatabase::listMaterializedViews()"
+    - @ref PgsqlSqlUtilBase::PgsqlDatabase::listTypes() "PgsqlDatabase::listTypes()"
 
     An object in <tt>current_schema()</tt> is listed by its name alone, and an object in any other
     \c search_path schema as \c "schema.name", so that every name listed resolves to the object listed, and an
@@ -215,6 +220,20 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - fixed functions and types being looked up in every schema of the database instead of the schema that the
+      connection resolves unqualified names in (see @ref pgsql_schema_scope), as tables, views, and sequences are:
+      @ref SqlUtil::AbstractDatabase::getFunction() "getFunction()" reported the same function in two schemas as
+      two matches, @ref PgsqlSqlUtilBase::PgsqlDatabase::getType() "PgsqlDatabase::getType()" merged the attributes
+      of the types of a name in every schema, and a table's trigger functions were read from the functions of their
+      names in every schema, raising an error for a name with more than one function; a function or type name may
+      now be given as \c "schema.name"
+    - fixed @ref SqlUtil::AbstractDatabase::listFunctions() "listFunctions()" listing the functions of the
+      \c public schema only, and @ref PgsqlSqlUtilBase::PgsqlDatabase::listTypes() "PgsqlDatabase::listTypes()"
+      listing the types of every schema; both list the objects of the schemas of the connection's \c search_path,
+      named as tables are
+    - fixed the partitions of a table in a schema other than \c public being named with their schema, so that they
+      differed from the unqualified partition names of a template; a partition in <tt>current_schema()</tt> is named
+      by its name alone
     - Added the size of the current schema (\c current_schema(): the first existing schema of the connection's
       \c search_path; see @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
       "AbstractDatabase::getCurrentSchemaPhysicalSize()"), which measures only that schema's relations instead of
@@ -1609,7 +1628,14 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     *PgsqlType getType(string name) {
-        *hash qh = ds.select("select attname, pg_catalog.format_type(a.atttypid, a.atttypmod) type_def from pg_class c, pg_catalog.pg_attribute a where relkind = 'c' and attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped and relname = %v order by attnum", name);
+        # a name without a schema is looked up in current_schema(), as for tables; matching on the name alone
+        # merged the attributes of the types of that name in every schema
+        string schema;
+        parse_schema_name(name, \schema, \name, get_pgsql_default_schema(ds));
+        *hash qh = ds.select("select attname, pg_catalog.format_type(a.atttypid, a.atttypmod) type_def "
+            "from pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace, pg_catalog.pg_attribute a "
+            "where relkind = 'c' and attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped and relname = %v "
+            "and n.nspname = %v order by attnum", name, schema);
         if (!qh.attname)
             return;
 
@@ -1708,15 +1734,22 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     private *AbstractFunction getFunctionImpl(string name) {
+        # a name without a schema is looked up in the schema the connection resolves unqualified names in, as for
+        # tables, views and sequences; matching on the function name alone found the functions of every schema,
+        # so the same function in two schemas was reported as two matches, or the other schema's was described
+        string schema;
+        parse_schema_name(name, \schema, \name, get_pgsql_default_schema(ds));
+
         *hash qh;
         # try to find a unique function without arguments
         if (name !~ /\(/) {
             qh = ds.select("select p.proname, t1.typname return_type, a.rolname procedure_owner, l.lanname lang, "
-                "prosrc body, pg_catalog.pg_get_functiondef(proname::regproc) hdr, "
-                "pg_catalog.pg_get_function_identity_arguments(proname::regproc) args, "
+                "prosrc body, pg_catalog.pg_get_functiondef(p.oid) hdr, "
+                "pg_catalog.pg_get_function_identity_arguments(p.oid) args, "
                 "case provolatile when 'i' then 'IMMUTABLE' when 's' then 'STABLE' when 'v' then 'VOLATILE' end stability "
-                "from pg_proc p left join pg_type t1 on p.prorettype = t1.oid left join pg_roles a on p.proowner = a.oid "
-                "left join pg_language l on p.prolang = l.oid where proname = %v", name);
+                "from pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace "
+                "left join pg_type t1 on p.prorettype = t1.oid left join pg_roles a on p.proowner = a.oid "
+                "left join pg_language l on p.prolang = l.oid where p.proname = %v and n.nspname = %v", name, schema);
             if (!qh.proname)
                 return;
             if (qh.proname.size() > 1)
@@ -1736,7 +1769,14 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
                 args =~ s/ in / /ig;
             }
 
-            qh = ds.selectRow("select p.proname, t1.typname return_type, a.rolname procedure_owner, l.lanname lang, prosrc body, pg_catalog.pg_get_functiondef(p.oid) hdr, pg_catalog.pg_get_function_identity_arguments(p.oid) args, case provolatile when 'i' then 'IMMUTABLE' when 's' then 'STABLE' when 'v' then 'VOLATILE' end stability from pg_proc p left join pg_type t1 on p.prorettype = t1.oid left join pg_roles a on p.proowner = a.oid left join pg_language l on p.prolang = l.oid where proname = %v and pg_catalog.pg_get_function_identity_arguments(p.oid) = %v", nc, args);
+            qh = ds.selectRow("select p.proname, t1.typname return_type, a.rolname procedure_owner, l.lanname "
+                "lang, prosrc body, pg_catalog.pg_get_functiondef(p.oid) hdr, "
+                "pg_catalog.pg_get_function_identity_arguments(p.oid) args, case provolatile when 'i' then "
+                "'IMMUTABLE' when 's' then 'STABLE' when 'v' then 'VOLATILE' end stability from pg_proc p "
+                "join pg_catalog.pg_namespace n on n.oid = p.pronamespace "
+                "left join pg_type t1 on p.prorettype = t1.oid left join pg_roles a on p.proowner = a.oid "
+                "left join pg_language l on p.prolang = l.oid where p.proname = %v and n.nspname = %v and "
+                "pg_catalog.pg_get_function_identity_arguments(p.oid) = %v", nc, schema, args);
             if (!qh)
                 return;
         }
@@ -1956,17 +1996,22 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         return ds.select(sql).name ?? ();
     }
 
-    #! returns a list of string function names in the database
-    /** The function names will include arguments in parentheses after the names
+    #! returns a list of string function names in the schemas of the connection's \c search_path
+    /** The function names will include arguments in parentheses after the names; names are qualified as for
+        tables (see listTablesImpl()): a function in <tt>current_schema()</tt> is listed by its name alone, a
+        function in any other \c search_path schema as \c "schema.name(args)"
 
-        @return a list of string function names in the database
+        @return a list of string function names in the schemas of the connection's \c search_path
     */
     private list<string> listFunctionsImpl() {
-        string sql = "select n.nspname as schema, p.proname as name, pg_catalog.pg_get_function_result(p.oid) "
+        # the functions of the search_path schemas; this listed the functions of the "public" schema whatever the
+        # connection's search_path, so the functions of any other schema could not be listed
+        string sql = sprintf("select n.nspname as schema, %s as name, pg_catalog.pg_get_function_result(p.oid) "
             "as result_type, pg_catalog.pg_get_function_arguments(p.oid) as args,"
             " case when p.prokind = 'a' then 'agg' when p.prokind = 'w' then 'window' when p.prorettype = 'pg_catalog.trigger'::pg_catalog.regtype then 'trigger' else 'normal' end as type"
-            " from pg_catalog.pg_proc p left join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
-            " where n.nspname ~ '^(public)$' order by 1, 2, 4";
+            " from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+            " where n.nspname = any (current_schemas(false)) order by 1, 2, 4",
+            pgsql_relation_name_expr("n.nspname", "p.proname"));
         *hash qh = ds.select(sql);
 
         return map sprintf("%s(%s)", $1.name, $1.args), qh.contextIterator();
@@ -2025,9 +2070,19 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         return listMaterializedViews().iterator();
     }
 
-    #! returns a list of string type names in the database
+    #! returns a list of string type names in the schemas of the connection's \c search_path
+    /** Names are qualified as for tables (see @ref SqlUtil::AbstractDatabase::listTables() "listTables()"): a type
+        in <tt>current_schema()</tt> is listed by its name alone, a type in any other \c search_path schema as
+        \c "schema.name"
+
+        @return a list of string type names in the schemas of the connection's \c search_path
+    */
     list<string> listTypes() {
-        return ds.select("select user_defined_type_name as name from information_schema.user_defined_types order by 1").name;
+        # this listed the types of every schema in the database, so the same type name in two schemas was listed
+        # twice, unqualified
+        return ds.select(sprintf("select %s as name from information_schema.user_defined_types t "
+            "where t.user_defined_type_schema = any (current_schemas(false)) order by 1",
+            pgsql_relation_name_expr("t.user_defined_type_schema", "t.user_defined_type_name"))).name ?? ();
     }
 
     #! returns an iterator listing the string type names in the database
@@ -4443,13 +4498,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         if (fl) {
             hash<auto> fh;
             # also get trigger functions
-            qh = ds.select("select p.proname, t1.typname return_type, a.rolname procedure_owner, l.lanname lang, "
-                "prosrc body, pg_catalog.pg_get_functiondef(proname::regproc) hdr, "
-                "pg_catalog.pg_get_function_arguments(proname::regproc) args, "
+            # the functions that the table's triggers execute; matching on the function names alone found the
+            # functions of those names in every schema and with any arguments, and proname::regproc raised an error
+            # for a name with more than one function on the search_path
+            qh = ds.select("select distinct p.proname, t1.typname return_type, a.rolname procedure_owner, "
+                "l.lanname lang, prosrc body, pg_catalog.pg_get_functiondef(p.oid) hdr, "
+                "pg_catalog.pg_get_function_arguments(p.oid) args, "
                 "case provolatile when 'i' then 'IMMUTABLE' when 's' then 'STABLE' when 'v' then 'VOLATILE' end "
-                "stability from pg_proc p left join pg_type t1 on p.prorettype = t1.oid "
+                "stability from pg_catalog.pg_trigger tg join pg_proc p on p.oid = tg.tgfoid "
+                "left join pg_type t1 on p.prorettype = t1.oid "
                 "left join pg_roles a on p.proowner = a.oid left join pg_language l on p.prolang = l.oid "
-                "where proname in (%s)", (foldl $1 + "," + $2, (map sprintf("'%s'", $1), fl)));
+                "where tg.tgrelid = %v::regclass and not tg.tgisinternal and p.proname in (%s)",
+                getSqlName(), (foldl $1 + "," + $2, (map sprintf("'%s'", $1), fl)));
 
             # create trigger function map
             map fh{$1.proname + "()"} = PgsqlDatabase::processFunction($1 + ("trigger_name": tfh{$1.proname}),
@@ -4883,9 +4943,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "order by i.inhrelid limit %v", parent.parent_oid, after_oid, maximum_partitions + 1) ?? ();
         bool exhausted = rows.size() <= maximum_partitions;
         list<hash<PartitionCatalogEntry>> entries = ();
+        string default_schema = get_pgsql_default_schema(ds);
         foreach hash<auto> row in (rows) {
             if (entries.size() == maximum_partitions) { break; }
-            entries += hash<PartitionCatalogEntry>{"name": getCanonicalPartitionName(row.schema, row.relation_name),
+            entries += hash<PartitionCatalogEntry>{"name": getCanonicalPartitionName(row.schema, row.relation_name,
+                default_schema),
                 "schema": row.schema, "relation_name": row.relation_name,
                 "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
                 "driver": {"pgsql": {"parent_oid": parent.parent_oid, "relation_oid": row.relation_oid,
@@ -5105,8 +5167,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
         # build the partition list in the catalog (inhseqno) order first
         list<hash<PartitionInfo>> all = ();
+        string default_schema = get_pgsql_default_schema(ds);
         foreach hash<auto> row in (qh.contextIterator()) {
-            string pname = getCanonicalPartitionName(row.schema, row.relation_name);
+            string pname = getCanonicalPartitionName(row.schema, row.relation_name, default_schema);
             hash<PartitionInfo> info({
                 "name": pname,
                 "method": strategy.method,
@@ -5156,8 +5219,13 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return rv;
     }
 
-    private string getCanonicalPartitionName(string pschema, string pname) {
-        return pschema == "public" ? pname : sprintf("%s.%s", pschema, pname);
+    #! returns the name of a partition as it is resolved: by its name alone in the schema that the connection
+    #! resolves unqualified names in (@ref get_pgsql_default_schema()), as \c "schema.name" in any other
+    /** comparing the schema with \c "public" named every partition in another search_path schema with its schema,
+        so it differed from the unqualified partition names of a template
+    */
+    private string getCanonicalPartitionName(string pschema, string pname, string default_schema) {
+        return pschema == default_schema ? pname : sprintf("%s.%s", pschema, pname);
     }
 
     #! returns a schema-qualified, identifier-quoted SQL name for a partition relation
@@ -5216,7 +5284,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
         *PartitionStrategy strategy = getPartitionStrategyUnlocked();
         hash<PartitionInfo> info({
-            "name": getCanonicalPartitionName(row.schema, row.relation_name),
+            "name": getCanonicalPartitionName(row.schema, row.relation_name, get_pgsql_default_schema(ds)),
             "method": strategy ? strategy.method : "range",
             "columns": strategy ? strategy.columns : (),
             # listPartitions() applies typed-bound ordering that cannot be reproduced cheaply by a targeted query
@@ -5390,7 +5458,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     */
     private string getDetachedTableNameImpl(string partition_name) {
         hash<auto> rel = parsePartitionRelationName(partition_name);
-        return getCanonicalPartitionName(rel.schema, rel.name);
+        return getCanonicalPartitionName(rel.schema, rel.name, get_pgsql_default_schema(ds));
     }
 
     private string getPgPartitionBoundSql(hash<PartitionSpec> spec) {
