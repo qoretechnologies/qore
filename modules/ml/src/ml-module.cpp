@@ -149,6 +149,16 @@ QoreObject* makeMLModelObject(const std::string& algorithm, AbstractPrivateData*
     };
     for (const Entry& e : table) {
         if (algorithm == e.name) {
+            if (*e.cid == CID_MLPIPELINE) {
+                // the object's steps internal member takes over the references to the restored step objects
+                ReferenceHolder<QoreMLPipeline> pipeline(static_cast<QoreMLPipeline*>(priv), xsink);
+                ReferenceHolder<QoreObject> obj(new QoreObject(*e.cls, pgm), xsink);
+                if (pipeline->attach(*obj, xsink)) {
+                    return nullptr;
+                }
+                obj->setPrivate(*e.cid, pipeline.release());
+                return obj.release();
+            }
             QoreObject* obj = new QoreObject(*e.cls, pgm);
             obj->setPrivate(*e.cid, priv);
             return obj;

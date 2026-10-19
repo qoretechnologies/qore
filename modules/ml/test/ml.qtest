@@ -36,6 +36,29 @@
 
 %exec-class MlTest
 
+#! A StandardScaler step that refers back to the pipeline it is a step of, and counts its destruction
+class PipelineCycleScaler inherits ML::StandardScaler {
+    public {
+        static int destroyed = 0;
+        *ML::MLPipeline pipeline;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+#! A pipeline that counts its destruction
+class PipelineCycleCounted inherits ML::MLPipeline {
+    public {
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
 public class MlTest inherits QUnit::Test {
     constructor() : Test("MlTest", "1.0") {
         addTestCase("ml_get_capabilities", \capabilitiesTest());
@@ -408,6 +431,7 @@ public class MlTest inherits QUnit::Test {
             \pipelineSerializeTest());
         addTestCase("MLPipeline file save / load round-trip",
             \pipelineFileRoundTripTest());
+        addTestCase("MLPipeline step referencing its pipeline is collected", \pipelineStepCycleTest());
         # strings with NUL characters: data and names are kept whole
         addTestCase("NUL: class labels", \nulClassLabelTest());
         addTestCase("NUL: documents, feature and step names", \nulDocumentAndNameTest());
@@ -9430,6 +9454,50 @@ public class MlTest inherits QUnit::Test {
         list<hash<auto>> orig_pred = p.predictMatrix(((3.0,),));
         list<hash<auto>> rest_pred = rp.predictMatrix(((3.0,),));
         assertFloat(orig_pred[0].prediction, rest_pred[0].prediction, 1e-10);
+    }
+
+    pipelineStepCycleTest() {
+        # a step that refers to its pipeline makes a cycle through the pipeline's reference to the step, which the
+        # garbage collector must see to collect the cycle when both go out of scope
+        PipelineCycleScaler::destroyed = 0;
+        PipelineCycleCounted::destroyed = 0;
+        {
+            PipelineCycleCounted p();
+            PipelineCycleScaler s();
+            s.pipeline = p;
+            p.addStandardScaler("scale", s);
+            p.addLinearRegression("model", new ML::LinearRegression());
+            p.fitMatrixWithTarget(((1.0,), (2.0,), (3.0,)), (3.0, 5.0, 7.0));
+            assertEq(("scale", "model"), p.getStepNames());
+        }
+        assertEq(1, PipelineCycleScaler::destroyed, "step");
+        assertEq(1, PipelineCycleCounted::destroyed, "pipeline");
+
+        # a step that is still referenced elsewhere outlives its pipeline, and is released with its last reference
+        PipelineCycleScaler::destroyed = 0;
+        PipelineCycleCounted::destroyed = 0;
+        PipelineCycleScaler kept();
+        {
+            PipelineCycleCounted p();
+            p.addStandardScaler("scale", kept);
+        }
+        assertEq(1, PipelineCycleCounted::destroyed, "pipeline without a cycle");
+        assertEq(0, PipelineCycleScaler::destroyed, "step referenced elsewhere");
+        kept.fitMatrix(((1.0,), (3.0,)));
+        assertEq(((-1.0,), (1.0,)), kept.transformMatrix(((1.0,), (3.0,))));
+        delete kept;
+        assertEq(1, PipelineCycleScaler::destroyed, "step after its last reference");
+
+        # a pipeline restored from serialized data hands the steps it creates to its object in the same way
+        ML::MLPipeline p();
+        p.addStandardScaler("scale", new ML::StandardScaler());
+        p.addLinearRegression("model", new ML::LinearRegression());
+        p.fitMatrixWithTarget(((1.0,), (2.0,), (3.0,)), (3.0, 5.0, 7.0));
+        ML::MLPipeline restored = cast<ML::MLPipeline>(ML::ml_deserialize(ML::ml_serialize(p)));
+        assertEq(("scale", "model"), restored.getStepNames());
+        assertFloat(9.0, restored.predictMatrix(((4.0,),))[0].prediction, 1e-6);
+        restored.addStandardScaler("extra", new ML::StandardScaler());
+        assertEq(("scale", "model", "extra"), restored.getStepNames());
     }
 
     pipelineFileRoundTripTest() {

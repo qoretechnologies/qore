@@ -73,29 +73,55 @@ enum class PipelineStepType {
 struct PipelineStep {
     std::string name;
     PipelineStepType type;
-    QoreObject* obj;    //!< borrowed reference to the Qore object (caller owns)
+    //! the step object; see QoreMLPipeline for which reference keeps it
+    QoreObject* obj;
 };
 
 //! MLPipeline — chains preprocessors and an estimator into a single fit/predict unit
+/** While the MLPipeline object exists, the references to the step objects are held by its \c steps internal member,
+    where the deterministic garbage collector can follow them (see design/dgc.md, Pattern A), so that a cycle through a
+    step that refers to its pipeline is collected; the steps vector only points to them.  Before the private data is
+    attached to an object (when it is restored from serialized data) and after the object is destroyed (while a method
+    still references the private data), the private data holds the references itself.
+*/
 class QoreMLPipeline : public QoreMLModel {
 public:
     DLLLOCAL QoreMLPipeline() {}
 
-    //! destructor — release references to step objects
+    //! releases the references to the step objects if they are held here
     DLLLOCAL virtual void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
-            for (auto& step : steps) {
-                if (step.obj) {
-                    step.obj->deref(xsink);
-                    step.obj = nullptr;
+            if (owns_steps) {
+                for (auto& step : steps) {
+                    if (step.obj) {
+                        step.obj->deref(xsink);
+                        step.obj = nullptr;
+                    }
                 }
             }
             delete this;
         }
     }
 
+    //! Attaches the private data to its MLPipeline object, whose steps internal member takes over the references
+    /** @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int attach(QoreObject* self, ExceptionSink* xsink);
+
+    //! Called when the MLPipeline object is destroyed; takes over the references to the step objects
+    /** The steps internal member that references the step objects is released with the object, but the private data
+        can be referenced longer by a method still running
+    */
+    DLLLOCAL void destructor(ExceptionSink* xsink);
+
     //! Add a step to the pipeline
-    DLLLOCAL void addStep(const std::string& name, PipelineStepType type, QoreObject* obj);
+    /** @param self the MLPipeline object, whose steps internal member references the step object, or nullptr if the
+        private data is not yet attached to an object, in which case it references the step object itself
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int addStep(const std::string& name, PipelineStepType type, QoreObject* obj, QoreObject* self,
+        ExceptionSink* xsink);
 
     //! Fit all steps: transformers are fit+transform sequentially, estimator is fit last
     DLLLOCAL void fitMatrix(const MatrixXd& X, const VectorXd* y, ExceptionSink* xsink);
@@ -131,7 +157,12 @@ public:
 private:
     std::vector<PipelineStep> steps;
     bool fitted = false;
+    //! true if the references to the step objects are held here instead of by the object's steps member
+    bool owns_steps = true;
     mutable std::mutex mtx;
+
+    //! Sets the steps internal member of the MLPipeline object to the step objects; must be called with the lock held
+    DLLLOCAL int setStepsMember(QoreObject* self, ExceptionSink* xsink);
 
     //! Check if a step type is a transformer (not an estimator)
     DLLLOCAL static bool isTransformer(PipelineStepType type);
