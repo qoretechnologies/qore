@@ -14,4 +14,10 @@
 
     Logger interface deserialization restores its native callback adapter. Logger wrappers and
     schema objects inheriting the interface can be serialized repeatedly after restoration.
+
+    A @ref Qore::Logger::Logger "Logger" references its appenders where the garbage collector can follow the
+    references, so a cycle through an appender that references its logger is collected instead of being leaked with
+    the classes of its objects.  An event created by a logger references the logger:
+    @ref Qore::Logger::LoggerEvent::getLogger() "LoggerEvent::getLogger()" read freed memory for an event kept after
+    its logger was destroyed.
 */

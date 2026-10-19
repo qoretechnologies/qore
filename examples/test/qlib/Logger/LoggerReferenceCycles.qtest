@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The references between Logger objects and the objects they use are visible to the deterministic garbage collector,
+# so that a cycle through them is collected, and an event keeps the logger that created it.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+
+%exec-class LoggerReferenceCyclesTest
+
+#! an appender that counts its live instances and keeps the events posted to it
+class CountedAppender inherits LoggerAppenderWithLayout {
+    public {
+        #! any value, to make a cycle through the appender
+        auto ref;
+        #! the events posted
+        list<auto> events = ();
+    }
+
+    private {
+        Counter live;
+    }
+
+    constructor(Counter live) : LoggerAppenderWithLayout("counted", new LoggerLayoutPattern("%m")) {
+        self.live = live;
+        live.inc();
+    }
+
+    destructor() {
+        live.dec();
+    }
+
+    processEventImpl(int type, auto params) {
+    }
+
+    post(LoggerEvent event) {
+        events += event;
+    }
+}
+
+class LoggerReferenceCyclesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Logger reference cycles", "1.0", \ARGV) {
+        addTestCase("a cycle through a logger's appender is collected", \testAppenderCycle());
+        addTestCase("removed appenders are released", \testRemoveAppenders());
+        addTestCase("an event keeps the logger that created it", \testEventLogger());
+        addTestCase("a deleted logger keeps its appenders for its child loggers", \testDeletedLogger());
+        set_return_value(main());
+    }
+
+    testAppenderCycle() {
+        Counter live();
+        {
+            Logger logger("cycle", LoggerLevel::INFO);
+            CountedAppender appender(live);
+            # the appender references the logger, which references the appender
+            appender.ref = logger;
+            logger.addAppender(appender);
+            assertEq(1, logger.getAppenders().size());
+        }
+        assertEq(0, live.getCount(), "the cycle is collected");
+    }
+
+    testRemoveAppenders() {
+        Counter live();
+        Logger logger("remove", LoggerLevel::INFO);
+        logger.addAppender(new CountedAppender(live));
+        logger.addAppender(new CountedAppender(live));
+        CountedAppender kept(live);
+        logger.addAppender(kept);
+        assertEq(3, live.getCount());
+        logger.removeAppender(logger.getAppenders()[0]);
+        assertEq(2, live.getCount(), "a removed appender is released");
+        assertEq(2, logger.getAppenders().size());
+        logger.removeAllAppenders();
+        assertEq(1, live.getCount(), "the removed appenders are released, except one referenced elsewhere");
+        assertEq((), logger.getAppenders());
+    }
+
+    testEventLogger() {
+        Counter live();
+        {
+            CountedAppender appender(live);
+            {
+                Logger logger("short-lived", LoggerLevel::INFO);
+                logger.addAppender(appender);
+                appender.open();
+                logger.info("event");
+            }
+            # the logger is out of scope; the event kept by the appender still references it
+            assertEq(1, appender.events.size());
+            assertEq("short-lived", appender.events[0].getLogger().getName(), "the event's logger is alive");
+            # the appender keeps the event, which keeps the logger, which keeps the appender
+        }
+        assertEq(0, live.getCount(), "the cycle through the event is collected");
+    }
+
+    testDeletedLogger() {
+        Counter live();
+        Logger parent("parent", LoggerLevel::INFO);
+        CountedAppender appender(live);
+        parent.addAppender(appender);
+        appender.open();
+        Logger child("child", LoggerLevel::INFO);
+        child.setParent(parent);
+        child.info("before");
+        assertEq(1, appender.events.size(), "the parent's appender gets the child's event");
+        delete parent;
+        # the child still references the deleted parent, which still forwards the child's events to its appenders
+        child.info("after");
+        assertEq(2, appender.events.size(), "the deleted logger's appender gets the child's event");
+        remove appender;
+        remove child;
+        assertEq(0, live.getCount(), "the appender is released with the child");
+    }
+}

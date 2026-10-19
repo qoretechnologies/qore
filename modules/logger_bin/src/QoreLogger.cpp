@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -208,28 +208,61 @@ void QoreLogger::addAppender(ExceptionSink* xsink, const QoreObject* appender,
             return;
         }
     }
-    appenders.push_back(AppenderInfo(appender->objectRefSelf(), use_appender ? a.release() : nullptr));
+    // the reference to the appender object is held by the appenders internal member set below
+    appenders.push_back(AppenderInfo(const_cast<QoreObject*>(appender), use_appender ? a.release() : nullptr));
+    setAppenderMember(xsink);
+}
+
+void QoreLogger::setAppenderMember(ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> l(new QoreListNode(QC_LOGGERAPPENDER->getTypeInfo()), xsink);
+    for (auto& i : appenders) {
+        l->push(i.app->objectRefSelf(), xsink);
+    }
+    self->setMemberValue("appenders", QC_LOGGER, l.release(), xsink);
 }
 
 //! Removes the appender from the list
 void QoreLogger::removeAppender(ExceptionSink* xsink, const QoreObject* appender) {
-    QoreAutoRWWriteLocker awl(lock);
-    for (app_vec_t::iterator i = appenders.begin(), e = appenders.end(); i != e; ++i) {
-        if ((*i).app == appender) {
-            (*i).deref(xsink);
-            appenders.erase(i);
-            break;
+    // the appender is released after the lock, so that its destructor, if it runs, does not run with the lock held
+    ReferenceHolder<QoreObject> removed(xsink);
+    {
+        QoreAutoRWWriteLocker awl(lock);
+        for (app_vec_t::iterator i = appenders.begin(), e = appenders.end(); i != e; ++i) {
+            if ((*i).app == appender) {
+                removed = (*i).app->objectRefSelf();
+                (*i).deref(xsink, owns_apps);
+                appenders.erase(i);
+                setAppenderMember(xsink);
+                break;
+            }
         }
     }
 }
 
 //! Clears the appender list by removing all appenders
 void QoreLogger::removeAllAppenders(ExceptionSink* xsink) {
-    QoreAutoRWWriteLocker awl(lock);
-    for (auto& i : appenders) {
-        i.deref(xsink);
+    // the appenders are released after the lock, so that their destructors, if they run, do not run with the lock
+    // held
+    ValueHolder removed(xsink);
+    {
+        QoreAutoRWWriteLocker awl(lock);
+        removed = self->getReferencedMemberNoMethod("appenders", QC_LOGGER, xsink);
+        for (auto& i : appenders) {
+            i.deref(xsink, owns_apps);
+        }
+        appenders.clear();
+        setAppenderMember(xsink);
     }
-    appenders.clear();
+}
+
+void QoreLogger::destructor(ExceptionSink* xsink) {
+    QoreAutoRWWriteLocker awl(lock);
+    if (!owns_apps) {
+        for (auto& i : appenders) {
+            i.app->ref();
+        }
+        owns_apps = true;
+    }
 }
 
 //! Returns the appender list
@@ -360,6 +393,16 @@ void QoreLogger::setLevelIntern(ExceptionSink* xsink, ReferenceHolder<QoreObject
     self->setValue("currentLevel", level.release(), xsink);
 }
 
+QoreObject* QoreLogger::newEventObject(QoreLoggerEvent* ev, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> event(new QoreObject(QC_LOGGEREVENT, getProgram(), ev), xsink);
+    // the event references its logger with its logger internal member, as one made with the LoggerEvent constructor;
+    // its private data only keeps a pointer to the logger object
+    if (event->setMemberValue("logger", QC_LOGGEREVENT, self->objectRefSelf(), xsink)) {
+        return nullptr;
+    }
+    return event.release();
+}
+
 void QoreLogger::logIntern(ExceptionSink* xsink, const QoreLoggerLevel* level, const QoreStringNode* message,
         const QoreListNode* args, size_t offset, const QoreHashNode* location, bool check_throwable) {
     SimpleRefHolder<DateTimeNode> ts(DateTimeNode::makeNow());
@@ -385,7 +428,10 @@ void QoreLogger::logIntern(ExceptionSink* xsink, const QoreLoggerLevel* level, c
             ReferenceHolder<QoreLoggerEvent> ev(new QoreLoggerEvent(self, *name, nullptr, level, message, args,
                 offset, location, q_gettid(), timestamp, *throwable), xsink);
             ev->ref();
-            ReferenceHolder<QoreObject> event(new QoreObject(QC_LOGGEREVENT, getProgram(), *ev), xsink);
+            ReferenceHolder<QoreObject> event(newEventObject(*ev, xsink), xsink);
+            if (*xsink) {
+                return;
+            }
             callAppenders(xsink, *event, *ev);
             if (*xsink) {
                 return;
@@ -426,7 +472,10 @@ void QoreLogger::logIntern(ExceptionSink* xsink, const QoreLoggerLevel* level, c
         ReferenceHolder<QoreLoggerEvent> ev(new QoreLoggerEvent(self, *name, nullptr, level, message, args, offset,
             location, q_gettid(), timestamp, throwable), xsink);
         ev->ref();
-        ReferenceHolder<QoreObject> event(new QoreObject(QC_LOGGEREVENT, getProgram(), *ev), xsink);
+        ReferenceHolder<QoreObject> event(newEventObject(*ev, xsink), xsink);
+        if (*xsink) {
+            return;
+        }
         callAppenders(xsink, *event, *ev);
         if (*xsink) {
             return;
