@@ -151,8 +151,8 @@ QoreProtobufSchema::QoreProtobufSchema(const char* path, const char* proto_file,
         return;
     }
 
-    // Check sandbox filesystem restrictions before accessing disk
-    QoreSandboxManagerHelper smh;
+    // Check sandbox filesystem restrictions before accessing disk; a policy check honors an active policy barrier
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         if (!smh->checkFilesystemAccess(path, QSEC_READ, xsink)) {
             return;

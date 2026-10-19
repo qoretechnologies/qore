@@ -23,12 +23,11 @@
 */
 
 %modern
-%strict-args
-%require-types
-%enable-all-warnings
 
-%requires ../../../qlib/Util.qm
-%requires ../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires Util
+%requires QUnit
 %requires protobuf
 
 %exec-class ProtobufTest
@@ -63,8 +62,48 @@ class ProtobufTest inherits QUnit::Test {
         addTestCase("serializeByName", \serializeByNameTest());
         addTestCase("largeRepeated", \largeRepeatedTest());
         addTestCase("enumTypedField", \enumTypedFieldTest());
+        addTestCase("fileSchemaSandbox", \fileSchemaSandboxTest());
 
         set_return_value(main());
+    }
+
+    #! a .proto file is read on behalf of the calling program: its sandbox applies, and a policy barrier lifts it
+    fileSchemaSandboxTest() {
+        string dir = tmp_location() + DirSep + "qore-protobuf-sandbox-" + get_random_string(8);
+        mkdir(dir);
+        on_exit {
+            unlink(dir + DirSep + "probe.proto");
+            rmdir(dir);
+        }
+        File f();
+        f.open2(dir + DirSep + "probe.proto", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("syntax = \"proto3\";\nmessage Probe {\n  string name = 1;\n}\n");
+        f.close();
+
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(sm);
+        # the sandboxed program calls back out into trusted code
+        p.parse("auto sub run(code c, string path) { return c(path); }", "protobuf-sandbox-caller");
+
+        # code in this program, which has no sandbox manager, inherits the policy of the sandboxed caller
+        code plain = auto sub (string path) {
+            Protobuf::ProtobufSchema schema(path, "probe.proto");
+            return schema.messageTypes();
+        };
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \p.callFunction(), ("run", plain, dir),
+            "a .proto file outside the sandbox of the calling program is denied");
+
+        # a policy barrier stops the caller's policy from being inherited, as for core file access
+        code barriered = auto sub (string path) {
+            return SandboxManager::callWithSystemPolicy(auto sub (string path) {
+                Protobuf::ProtobufSchema schema(path, "probe.proto");
+                return schema.messageTypes();
+            }, path);
+        };
+        assertEq(("Probe",), p.callFunction("run", barriered, dir),
+            "a .proto file is readable inside a policy barrier");
     }
 
     stringSchemaTest() {
