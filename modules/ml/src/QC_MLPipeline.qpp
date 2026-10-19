@@ -85,7 +85,7 @@ nothing MLPipeline::addStandardScaler(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::STANDARD_SCALER,
+    pipeline->addStep(mlStdString(*name), PipelineStepType::STANDARD_SCALER,
         const_cast<QoreObject*>(obj));
 }
 
@@ -102,7 +102,7 @@ nothing MLPipeline::addMinMaxScaler(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::MINMAX_SCALER,
+    pipeline->addStep(mlStdString(*name), PipelineStepType::MINMAX_SCALER,
         const_cast<QoreObject*>(obj));
 }
 
@@ -119,7 +119,7 @@ nothing MLPipeline::addImputer(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::IMPUTER,
+    pipeline->addStep(mlStdString(*name), PipelineStepType::IMPUTER,
         const_cast<QoreObject*>(obj));
 }
 
@@ -136,7 +136,7 @@ nothing MLPipeline::addPCA(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::PCA,
+    pipeline->addStep(mlStdString(*name), PipelineStepType::PCA,
         const_cast<QoreObject*>(obj));
 }
 
@@ -153,7 +153,7 @@ nothing MLPipeline::addLinearRegression(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::LINEAR_REGRESSION,
+    pipeline->addStep(mlStdString(*name), PipelineStepType::LINEAR_REGRESSION,
         const_cast<QoreObject*>(obj));
 }
 
@@ -170,7 +170,7 @@ nothing MLPipeline::addKMeans(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::KMEANS,
+    pipeline->addStep(mlStdString(*name), PipelineStepType::KMEANS,
         const_cast<QoreObject*>(obj));
 }
 
@@ -187,7 +187,7 @@ nothing MLPipeline::addIsolationForest(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::ISOLATION_FOREST,
+    pipeline->addStep(mlStdString(*name), PipelineStepType::ISOLATION_FOREST,
         const_cast<QoreObject*>(obj));
 }
 
@@ -204,7 +204,7 @@ nothing MLPipeline::addLOF(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::LOF,
+    pipeline->addStep(mlStdString(*name), PipelineStepType::LOF,
         const_cast<QoreObject*>(obj));
 }
 
@@ -221,7 +221,7 @@ nothing MLPipeline::addGMM(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::GMM,
+    pipeline->addStep(mlStdString(*name), PipelineStepType::GMM,
         const_cast<QoreObject*>(obj));
 }
 
@@ -238,7 +238,7 @@ nothing MLPipeline::addLogisticRegression(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::LOGISTIC_REGRESSION,
+    pipeline->addStep(mlStdString(*name), PipelineStepType::LOGISTIC_REGRESSION,
         const_cast<QoreObject*>(obj));
 }
 
@@ -255,7 +255,7 @@ nothing MLPipeline::addKNNClassification(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::KNN_CLASSIFICATION,
+    pipeline->addStep(mlStdString(*name), PipelineStepType::KNN_CLASSIFICATION,
         const_cast<QoreObject*>(obj));
 }
 

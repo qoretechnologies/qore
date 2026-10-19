@@ -141,7 +141,7 @@ Lasso::copy() {
     @param data a list of hashes where each hash represents a record
     @param target_field the name of the field to predict
 
-    @throw ML-DATA-ERROR if data is empty or has no numeric fields
+    @throw ML-DATA-ERROR if data is empty or has no numeric fields, or the first record has no target field
     @throw ML-LASSO-ERROR if fitting fails
 */
 nothing Lasso::fit(list<hash<auto>> data, string target_field) {
@@ -156,12 +156,15 @@ nothing Lasso::fit(list<hash<auto>> data, string target_field) {
         return QoreValue();
     }
     const QoreHashNode* first_hash = first.get<const QoreHashNode>();
-    const char* target_str = target_field->c_str();
+    // the target is a field of the records; a name with a NUL character cannot be a hash key and names none
+    const std::string target = mlStdString(*target_field);
+    bool target_found = false;
 
     std::vector<std::string> feat_names;
     ConstHashIterator hi(first_hash);
     while (hi.next()) {
-        if (strcmp(hi.getKey(), target_str) == 0) {
+        if (target == hi.getKey()) {
+            target_found = true;
             continue;
         }
         QoreValue val = hi.get();
@@ -171,9 +174,15 @@ nothing Lasso::fit(list<hash<auto>> data, string target_field) {
         }
     }
 
+    if (!target_found) {
+        xsink->raiseException("ML-DATA-ERROR", "target field '%s' not found in the first data record",
+            target.c_str());
+        return QoreValue();
+    }
+
     if (feat_names.empty()) {
         xsink->raiseException("ML-DATA-ERROR", "no numeric feature fields found in data (excluding target '%s')",
-            target_str);
+            target.c_str());
         return QoreValue();
     }
 
@@ -193,12 +202,12 @@ nothing Lasso::fit(list<hash<auto>> data, string target_field) {
             QoreValue v = row->getKeyValue(feat_names[j].c_str());
             X(i, j) = v.getAsFloat();
         }
-        QoreValue target_v = row->getKeyValue(target_str);
+        QoreValue target_v = row->getKeyValue(target.c_str());
         y(i) = target_v.getAsFloat();
     }
 
     lasso->setFieldNames(feat_names);
-    lasso->setTargetField(target_str);
+    lasso->setTargetField(target);
     lasso->fit(X, y, xsink);
 }
 

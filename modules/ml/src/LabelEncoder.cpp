@@ -33,7 +33,7 @@ void QoreLabelEncoder::fit(const QoreListNode* values, ExceptionSink* xsink) {
             continue;
         }
         QoreStringValueHelper str(v);
-        unique.insert(str->c_str());
+        unique.insert(mlStdString(**str));
     }
 
     classes.assign(unique.begin(), unique.end());
@@ -62,7 +62,7 @@ QoreListNode* QoreLabelEncoder::transform(const QoreListNode* values,
             continue;
         }
         QoreStringValueHelper str(v);
-        auto it = class_to_label.find(str->c_str());
+        auto it = class_to_label.find(mlStdString(**str));
         if (it != class_to_label.end()) {
             result->push(it->second, xsink);
         } else {

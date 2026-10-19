@@ -1334,7 +1334,8 @@ ml_save_model(km, "/tmp/model.qml");
     @endcode
 
     @throw ML-SERIALIZE-ERROR if the model is not fitted
-    @throw FILE-ERROR if the file cannot be written
+    @throw FILE-OPEN2-ERROR if the file cannot be opened
+    @throw FILE-WRITE-ERROR if the file cannot be written
 */
 nothing ml_save_model(AbstractMLModel[QoreMLModel] model, string path, *hash<auto> options) [dom=FILESYSTEM] {
     // Reserved in the public signature; the current native format has no configurable options.
@@ -1373,7 +1374,8 @@ KMeans model = cast<KMeans>(ml_load_model("/tmp/model.qml"));
 
     @throw ML-DESERIALIZE-ERROR if the data is invalid, corrupted, or the algorithm tag
     is not registered
-    @throw FILE-ERROR if the file cannot be read
+    @throw FILE-OPEN2-ERROR if the file cannot be opened
+    @throw FILE-READ-ERROR if the file cannot be read
 */
 AbstractMLModel ml_load_model(string path) [dom=FILESYSTEM] {
     QoreFile f;

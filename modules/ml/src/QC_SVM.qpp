@@ -65,7 +65,7 @@ SVM::constructor(hash<auto> options) {
         v = options->getKeyValue("kernel");
         if (v.getType() == NT_STRING) {
             QoreStringValueHelper kernel_str(v);
-            kernel = kernel_str->c_str();
+            kernel = mlStdString(**kernel_str);
             if (kernel != "linear" && kernel != "rbf") {
                 xsink->raiseException("ML-SVM-ERROR",
                     "kernel must be 'linear' or 'rbf'; got '%s'", kernel.c_str());
@@ -100,7 +100,7 @@ nothing SVM::fit(list<hash<auto>> data, string target_field) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) { return QoreValue(); }
-    std::string target = target_field->c_str();
+    std::string target = mlStdString(*target_field);
     int target_idx = -1;
     for (size_t i = 0; i < field_names.size(); ++i) {
         if (field_names[i] == target) { target_idx = (int)i; break; }

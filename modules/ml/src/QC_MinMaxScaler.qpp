@@ -118,12 +118,17 @@ nothing MinMaxScaler::fitMatrix(list<list<float>> matrix) {
     @return a hash with scaled values in [feature_min, feature_max]
 
     @throw ML-MIN-MAX-SCALER-ERROR scaler not fitted or dimension mismatch
+    @throw HASH-KEY-ERROR if a field name of a restored model has a NUL character, so it cannot be a key of the result
 */
 hash<auto> MinMaxScaler::transform(hash<auto> record) {
     const std::vector<std::string>& field_names = scaler->getFieldNames();
     if (field_names.empty()) {
         xsink->raiseException("ML-MIN-MAX-SCALER-ERROR",
             "scaler was fitted with fitMatrix(); use transformMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    // the result is a hash keyed by the field names, and a field name with a NUL character cannot be a key
+    if (mlCheckFieldKeys(field_names, xsink)) {
         return QoreValue();
     }
     RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
@@ -205,12 +210,17 @@ list<auto> MinMaxScaler::transformMatrixColumns(list<list<float>> matrix) [flags
     @return a hash with original-scale values
 
     @throw ML-MIN-MAX-SCALER-ERROR scaler not fitted or dimension mismatch
+    @throw HASH-KEY-ERROR if a field name of a restored model has a NUL character, so it cannot be a key of the result
 */
 hash<auto> MinMaxScaler::inverseTransform(hash<auto> record) {
     const std::vector<std::string>& field_names = scaler->getFieldNames();
     if (field_names.empty()) {
         xsink->raiseException("ML-MIN-MAX-SCALER-ERROR",
             "scaler was fitted with fitMatrix(); use inverseTransformMatrix()");
+        return QoreValue();
+    }
+    // the result is a hash keyed by the field names, and a field name with a NUL character cannot be a key
+    if (mlCheckFieldKeys(field_names, xsink)) {
         return QoreValue();
     }
     RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);

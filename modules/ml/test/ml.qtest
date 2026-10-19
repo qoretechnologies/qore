@@ -407,6 +407,13 @@ public class MlTest inherits QUnit::Test {
             \pipelineSerializeTest());
         addTestCase("MLPipeline file save / load round-trip",
             \pipelineFileRoundTripTest());
+        # strings with NUL characters: data and names are kept whole
+        addTestCase("NUL: class labels", \nulClassLabelTest());
+        addTestCase("NUL: documents, feature and step names", \nulDocumentAndNameTest());
+        addTestCase("NUL: target fields", \nulTargetFieldTest());
+        addTestCase("NUL: option values", \nulOptionValueTest());
+        addTestCase("NUL: restored field names", \nulRestoredFieldNameTest());
+        addTestCase("NUL: ONNX string tensors and model data", \nulOnnxDataTest());
         set_return_value(main());
     }
 
@@ -9440,5 +9447,276 @@ public class MlTest inherits QUnit::Test {
         list<hash<auto>> orig_pred = p.predictMatrix(((3.0,),));
         list<hash<auto>> rest_pred = rp.predictMatrix(((3.0,),));
         assertFloat(orig_pred[0].prediction, rest_pred[0].prediction, 1e-10);
+    }
+
+    nulClassLabelTest() {
+        # class labels that differ only after a NUL character are different classes
+        ML::LabelEncoder le();
+        le.fit(("a\x00b", "a\x00c", "a", "a\x00b"));
+        assertEq(nulHex(("a", "a\x00b", "a\x00c")), nulHex(le.getClasses()));
+        assertEq((1, 2, 0, -1), le.transform(("a\x00b", "a\x00c", "a", "a\x00d")));
+        assertEq(nulHex(("a\x00b", "a\x00c", "a")), nulHex(le.inverseTransform((1, 2, 0))));
+
+        # and they survive serialization
+        ML::LabelEncoder restored = cast<ML::LabelEncoder>(ML::ml_deserialize(ML::ml_serialize(le)));
+        assertEq(nulHex(("a", "a\x00b", "a\x00c")), nulHex(restored.getClasses()));
+        assertEq((2, 1), restored.transform(("a\x00c", "a\x00b")));
+    }
+
+    nulDocumentAndNameTest() {
+        # the text after a NUL character is part of the document; the NUL character separates words
+        ML::TextFeatures tf({"mode": "count"});
+        tf.fit(("alpha\x00beta gamma",));
+        assertEq(("alpha", "beta", "gamma"), tf.getVocabulary());
+        assertEq(((1.0, 1.0, 0.0),), tf.transform(("beta\x00alpha",)));
+
+        # a feature name with a NUL character is not a supported feature
+        assertThrows("ML-DATETIMEFEATURES-ERROR", "unknown feature name", sub () {
+            ML::DateTimeFeatures dtf({"features": ("year\x00x",)});
+        });
+
+        # step names are kept whole, also through serialization
+        ML::MLPipeline p();
+        p.addStandardScaler("scale\x00a", new ML::StandardScaler());
+        p.addLinearRegression("model\x00b", new ML::LinearRegression());
+        assertEq(nulHex(("scale\x00a", "model\x00b")), nulHex(p.getStepNames()));
+        p.fitMatrixWithTarget(((1.0,), (2.0,), (3.0,), (4.0,)), (3.0, 5.0, 7.0, 9.0));
+        ML::MLPipeline rp = cast<ML::MLPipeline>(ML::ml_deserialize(ML::ml_serialize(p)));
+        assertEq(nulHex(("scale\x00a", "model\x00b")), nulHex(rp.getStepNames()));
+    }
+
+    nulTargetFieldTest() {
+        list<hash<auto>> data = (
+            {"x": 1.0, "w": 2.0, "y": 0},
+            {"x": 2.0, "w": 1.0, "y": 0},
+            {"x": 8.0, "w": 9.0, "y": 1},
+            {"x": 9.0, "w": 8.0, "y": 1},
+        );
+        # a target name with a NUL character names no field of the records; it is not cut to "y"
+        hash<string, code> fits = {
+            "ML-DATA-ERROR:LinearRegression": sub (string t) { ML::LinearRegression m(); m.fit(data, t); },
+            "ML-DATA-ERROR:Ridge": sub (string t) { ML::Ridge m(); m.fit(data, t); },
+            "ML-DATA-ERROR:Lasso": sub (string t) { ML::Lasso m(); m.fit(data, t); },
+            "ML-DATA-ERROR:ElasticNet": sub (string t) { ML::ElasticNet m(); m.fit(data, t); },
+            "ML-DATA-ERROR:LogisticRegression": sub (string t) { ML::LogisticRegression m(); m.fit(data, t); },
+            "ML-DATA-ERROR:KNN": sub (string t) { ML::KNN m({"k": 1}); m.fit(data, t); },
+            "ML-DECISION-TREE-ERROR:DecisionTree": sub (string t) {
+                ML::DecisionTree m({"task": "classification"});
+                m.fit(data, t);
+            },
+            "ML-RANDOM-FOREST-ERROR:RandomForest": sub (string t) {
+                ML::RandomForest m({"task": "classification", "n_trees": 2, "seed": 1});
+                m.fit(data, t);
+            },
+            "ML-GBT-ERROR:GradientBoostedTrees": sub (string t) {
+                ML::GradientBoostedTrees m({"task": "regression", "n_estimators": 2});
+                m.fit(data, t);
+            },
+            "ML-NAIVE-BAYES-ERROR:NaiveBayes": sub (string t) { ML::NaiveBayes m(); m.fit(data, t); },
+            "ML-SVM-ERROR:SVM": sub (string t) { ML::SVM m({}); m.fit(data, t); },
+        };
+        foreach hash<auto> i in (fits.pairIterator()) {
+            (*string err, *string cls) = (i.key =~ x/^([^:]+):(.+)$/);
+            assertThrows(err, "target field", i.value, ("y\x00z",), cls + ": NUL target");
+            # a target that is not a field of the records is an error, not a target of zeros
+            assertThrows(err, "target field", i.value, ("missing",), cls + ": missing target");
+            # the whole name trains the model
+            i.value("y");
+        }
+    }
+
+    nulOptionValueTest() {
+        # an option value with a NUL character is not the value before the NUL character
+        list<list<auto>> cases = (
+            ("ML-DBSCAN-ERROR", sub () { ML::DBSCAN m({"epsilon": 1.0, "min_points": 2, "metric": "cosine\x00x"}); }),
+            ("ML-KMEANS-ERROR", sub () { ML::KMeans m({"k": 2, "init": "random\x00x"}); }),
+            ("ML-HOLTWINTERS-ERROR", sub () { ML::HoltWinters m({"period": 4, "seasonal_type": "additive\x00x"}); }),
+            ("ML-SEASONAL-DECOMPOSITION-ERROR", sub () {
+                ML::SeasonalDecomposition m({"period": 4, "type": "additive\x00x"});
+            }),
+            ("ML-IMPUTER-ERROR", sub () { ML::Imputer m({"strategy": "mean\x00x"}); }),
+            ("ML-KNN-ERROR", sub () { ML::KNN m({"k": 1, "metric": "euclidean\x00x"}); }),
+            ("ML-KNN-ERROR", sub () { ML::KNN m({"k": 1, "task": "regression\x00x"}); }),
+            ("ML-KNN-ERROR", sub () { ML::KNN m({"k": 1, "weight_func": "distance\x00x"}); }),
+            ("ML-LOGISTIC-REGRESSION-ERROR", sub () { ML::LogisticRegression m({"penalty": "none\x00x"}); }),
+            ("ML-DECISION-TREE-ERROR", sub () { ML::DecisionTree m({"task": "regression\x00x"}); }),
+            ("ML-GMM-ERROR", sub () { ML::GMM m({"n_components": 2, "covariance_type": "diagonal\x00x"}); }),
+            ("ML-GBT-ERROR", sub () { ML::GradientBoostedTrees m({"task": "regression\x00x"}); }),
+            ("ML-RANDOM-FOREST-ERROR", sub () { ML::RandomForest m({"task": "regression\x00x"}); }),
+            ("ML-SVM-ERROR", sub () { ML::SVM m({"kernel": "rbf\x00x"}); }),
+            ("ML-TEXT-FEATURES-ERROR", sub () { ML::TextFeatures m({"mode": "count\x00x"}); }),
+            ("ML-TEXT-FEATURES-ERROR", sub () { ML::TextFeatures m({"tokenizer_mode": "whitespace\x00x"}); }),
+            ("ML-SELECT-K-BEST-ERROR", sub () {
+                ML::SelectKBest m({"k": 1, "score_func": "f_classif\x00x"});
+                m.fitMatrix(((1.0, 2.0), (2.0, 1.0), (8.0, 9.0), (9.0, 8.0)), (0, 0, 1, 1));
+            }),
+            ("ML-TENSOR-ERROR", sub () {
+                ML::Tensor hidden(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0)), shape: (1, 2, 2));
+                ML::Tensor mask(data: new buffer<int64>((1, 1)), shape: (1, 2));
+                hidden.poolTokenEmbeddings(mask, "mean\x00x");
+            }),
+        );
+        foreach list<auto> c in (cases) {
+            assertThrows(c[0], c[1], NOTHING, sprintf("case %d", $#));
+        }
+
+        # a device kind with a NUL character is not the device kind before the NUL character
+        ML::Tensor host(data: new buffer<float32>((1.0, 2.0)), shape: (2,));
+        assertEq("other", host.mockDevice("cuda\x00x", 0).deviceInfo().kind);
+
+        if (!ML::ml_get_capabilities().has_onnx) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-nul-");
+        ciWrite(tmp.path + "/model.onnx", ciSelfContainedModel());
+        hash<ML::OnnxSessionConfig> config = ciConfig();
+        config.content_identity = "required\x00x";
+        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", "invalid content_identity value", \ciConstruct(),
+            (tmp.path + "/model.onnx", config));
+        config = ciConfig();
+        config.load_model_format = "ONNX\x00x";
+        assertThrows("ML-ONNX-ERROR", "invalid load_model_format", \ciConstruct(), (tmp.path + "/model.onnx", config));
+        config = ciConfig();
+        config.save_model_format = "ONNX\x00x";
+        assertThrows("ML-ONNX-ERROR", "invalid save_model_format", \ciConstruct(), (tmp.path + "/model.onnx", config));
+    }
+
+    nulRestoredFieldNameTest() {
+        # a model restored with a field name that has a NUL character keeps the name; a hash returned with it as a
+        # key raises HASH-KEY-ERROR, and the name never finds the field named by the part before the NUL character
+        list<hash<auto>> data = ({"fieldnul1": 1.0, "other": 10.0}, {"fieldnul1": 3.0, "other": 30.0});
+        hash<string, object> models = {
+            "StandardScaler": new ML::StandardScaler(),
+            "MinMaxScaler": new ML::MinMaxScaler(),
+            "Imputer": new ML::Imputer(),
+        };
+        foreach hash<auto> i in (models.pairIterator()) {
+            i.value.fit(data);
+            ML::AbstractMLModel restored = ML::ml_deserialize(nulRenameField(ML::ml_serialize(i.value),
+                "fieldnul1", "field\x00ul1"));
+            assertEq(nulHex(("field\x00ul1", "other")), nulHex(restored.getFieldNames()), i.key);
+            auto m = restored;
+            assertThrows("HASH-KEY-ERROR", "NUL character", sub () { m.transform({"field": 2.0, "other": 20.0}); },
+                NOTHING, i.key + " transform");
+            if (i.key != "Imputer") {
+                assertThrows("HASH-KEY-ERROR", "NUL character", sub () {
+                    m.inverseTransform({"field": 0.0, "other": 0.0});
+                }, NOTHING, i.key + " inverseTransform");
+            }
+            # the matrix API does not use the names
+            assertEq(i.value.transformMatrix(((2.0, 20.0),)), m.transformMatrix(((2.0, 20.0),)), i.key);
+        }
+
+        ML::LinearRegression lr();
+        lr.fit(({"fieldnul1": 1.0, "y": 3.0}, {"fieldnul1": 2.0, "y": 5.0}, {"fieldnul1": 3.0, "y": 7.0}), "y");
+        ML::LinearRegression rlr = cast<ML::LinearRegression>(ML::ml_deserialize(nulRenameField(ML::ml_serialize(lr),
+            "fieldnul1", "field\x00ul1")));
+        assertEq(nulHex(("field\x00ul1",)), nulHex(rlr.getFieldNames()));
+        # the value of "field" is not the value of the feature
+        assertTrue(rlr.predict({"field": 100.0}).prediction.nanp());
+    }
+
+    nulOnnxDataTest() {
+        if (!ML::ml_get_capabilities().has_onnx) {
+            testSkip("ONNX Runtime not available");
+            return;
+        }
+        # string tensor elements are passed to and from ONNX Runtime whole
+        ML::OnnxModel model(nulIdentityModel(QoreOnnxExport::ONNX_STRING), ciConfig());
+        list<list<string>> data = (("a\x00b", "plain"), ("\x00", ""));
+        assertEq(nulHex(data), nulHex(model.run({"S": data}).T), "list input");
+        ML::Tensor t(data: data, dtype: "string");
+        assertEq(nulHex(data), nulHex(model.run({"S": t}).T), "Tensor input");
+        ML::OnnxIoBinding b = model.createBinding();
+        b.bindInput("S", data);
+        b.bindOutputs();
+        assertEq(nulHex(data), nulHex(b.run().T), "bound list input");
+        b.clearInputs();
+        b.bindInput("S", t);
+        assertEq(nulHex(data), nulHex(b.run().T), "bound Tensor input");
+
+        # an unsigned 64-bit value given as a string must be all digits
+        ML::OnnxModel umodel(nulIdentityModel(QoreOnnxExport::ONNX_UINT64), ciConfig());
+        assertEq(((12, 13),), umodel.run({"S": (("12", "13"),)}).T);
+        assertThrows("ML-ONNX-INFERENCE-ERROR", "not an unsigned decimal integer", sub () {
+            umodel.run({"S": (("12\x00x", "13"),)});
+        });
+
+        # a value declared in the model's external data must be all digits
+        FsUtil::TmpDir tmp("qore-ml-nul-");
+        ciWrite(tmp.path + "/weights.bin", ciFloatBytes(1.0));
+        hash<auto> ext = QoreOnnxExport::OnnxGraphBuilder::makeTensorExternal("B", (1,), QoreOnnxExport::ONNX_FLOAT,
+            "weights.bin", 0, 4);
+        ext.external_data[2].value = "4\x00junk";
+        ciWrite(tmp.path + "/model.onnx", QoreOnnxExport::OnnxGraphBuilder::serialize(
+            QoreOnnxExport::OnnxGraphBuilder::buildModel("qore-ml-nul-external",
+                (QoreOnnxExport::OnnxGraphBuilder::makeNode("Add", ("X", "B"), ("Y",)),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeInput("X", 1),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeOutput("Y", 1),), (ext,))));
+        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", "invalid length value", \ciConstruct(),
+            (tmp.path + "/model.onnx", ciConfig("required")));
+    }
+
+    #! Returns the value with each string replaced by the hex of its bytes
+    /** printf("%y") and the assertion failure output cut a string at a NUL character, so strings with NUL characters
+        are compared as hex, which shows them whole
+    */
+    private auto nulHex(auto v) {
+        switch (v.typeCode()) {
+            case NT_STRING:
+                return make_hex_string(binary(v));
+            case NT_LIST:
+                return map nulHex($1), v;
+        }
+        return v;
+    }
+
+    #! Builds an Identity model from input S to output T of the given element type, with 2 values per row
+    private binary nulIdentityModel(int elem_type) {
+        return QoreOnnxExport::OnnxGraphBuilder::serialize(
+            QoreOnnxExport::OnnxGraphBuilder::buildModel("qore-ml-nul-identity",
+                (QoreOnnxExport::OnnxGraphBuilder::makeNode("Identity", ("S",), ("T",)),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeInput("S", 2, elem_type),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeOutput("T", 2, elem_type),), ()));
+    }
+
+    #! Renames a field in a model serialized in the native format, which has the same length after renaming
+    private binary nulRenameField(binary blob, string from, string to) {
+        assertEq(from.size(), to.size());
+        # a name is stored as its length in 4 little-endian bytes followed by its bytes
+        string len_hex = sprintf("%02x000000", from.size());
+        string from_hex = len_hex + make_hex_string(binary(from));
+        string to_hex = len_hex + make_hex_string(binary(to));
+        # the bytes before the CRC, which is the last 4 bytes
+        string hex = make_hex_string(blob);
+        hex = hex.substr(0, hex.size() - 8);
+        int count = 0;
+        int pos = 0;
+        while ((pos = hex.find(from_hex, pos)) >= 0) {
+            # only whole bytes are names
+            if (!(pos % 2)) {
+                hex = hex.substr(0, pos) + to_hex + hex.substr(pos + to_hex.size());
+                ++count;
+            }
+            ++pos;
+        }
+        # the name is in the header and in the model state
+        assertEq(2, count, "field name occurrences");
+        binary body = parse_hex_string(hex);
+        int crc = nulCrc32(body);
+        return body + parse_hex_string(sprintf("%02x%02x%02x%02x", crc & 0xff, (crc >> 8) & 0xff,
+            (crc >> 16) & 0xff, (crc >> 24) & 0xff));
+    }
+
+    #! Returns the CRC-32 (polynomial 0xEDB88320) of the given bytes, as the native model format uses
+    private int nulCrc32(binary data) {
+        int crc = 0xffffffff;
+        for (int i = 0; i < data.size(); ++i) {
+            crc ^= data[i];
+            for (int j = 0; j < 8; ++j) {
+                crc = (crc & 1) ? ((crc >> 1) ^ 0xedb88320) : (crc >> 1);
+            }
+        }
+        return crc ^ 0xffffffff;
     }
 }

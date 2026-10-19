@@ -91,7 +91,7 @@ DecisionTree::constructor(hash<auto> options) {
         v = options->getKeyValue("task");
         if (v.getType() == NT_STRING) {
             QoreStringValueHelper task_str(v);
-            task = task_str->c_str();
+            task = mlStdString(**task_str);
             if (task != "classification" && task != "regression") {
                 xsink->raiseException("ML-DECISION-TREE-ERROR",
                     "task must be 'classification' or 'regression'; got '%s'",
@@ -102,7 +102,7 @@ DecisionTree::constructor(hash<auto> options) {
         v = options->getKeyValue("criterion");
         if (v.getType() == NT_STRING) {
             QoreStringValueHelper criterion_str(v);
-            criterion = criterion_str->c_str();
+            criterion = mlStdString(**criterion_str);
         }
         v = options->getKeyValue("seed");
         if (!v.isNullOrNothing()) {
@@ -156,7 +156,7 @@ nothing DecisionTree::fit(list<hash<auto>> data, string target_field) {
     }
 
     // Extract target column
-    std::string target = target_field->c_str();
+    std::string target = mlStdString(*target_field);
     int target_idx = -1;
     for (size_t i = 0; i < field_names.size(); ++i) {
         if (field_names[i] == target) {
@@ -323,5 +323,5 @@ list<auto> DecisionTree::getClasses() [flags=RET_VALUE_ONLY] {
 /** @return the task type string
 */
 string DecisionTree::getTask() [flags=CONSTANT] {
-    return new QoreStringNode(dt->getTask().c_str());
+    return new QoreStringNode(dt->getTask());
 }

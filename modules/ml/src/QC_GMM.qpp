@@ -106,7 +106,7 @@ GMM::constructor(hash<auto> options) {
     v = options->getKeyValue("covariance_type");
     if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
         QoreStringValueHelper ct(v);
-        covariance_type = ct->c_str();
+        covariance_type = mlStdString(**ct);
     }
 
     if (n_components < 1) {

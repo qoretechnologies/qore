@@ -33,6 +33,7 @@
 
 #include "QC_Tensor.h"
 #include "OnnxContentIdentity.h"
+#include "ml_common.h"
 
 #include <vector>
 #include <string>

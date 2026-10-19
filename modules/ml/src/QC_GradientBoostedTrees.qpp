@@ -101,7 +101,7 @@ GradientBoostedTrees::constructor(hash<auto> options) {
         v = options->getKeyValue("task");
         if (v.getType() == NT_STRING) {
             QoreStringValueHelper task_str(v);
-            task = task_str->c_str();
+            task = mlStdString(**task_str);
             if (task != "classification" && task != "regression") {
                 xsink->raiseException("ML-GBT-ERROR",
                     "task must be 'classification' or 'regression'");
@@ -138,7 +138,7 @@ nothing GradientBoostedTrees::fit(list<hash<auto>> data, string target_field) {
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) { return QoreValue(); }
 
-    std::string target = target_field->c_str();
+    std::string target = mlStdString(*target_field);
     int target_idx = -1;
     for (size_t i = 0; i < field_names.size(); ++i) {
         if (field_names[i] == target) { target_idx = (int)i; break; }
@@ -333,5 +333,5 @@ list<auto> GradientBoostedTrees::getClasses() [flags=RET_VALUE_ONLY] {
 /** @return the task type string
 */
 string GradientBoostedTrees::getTask() [flags=CONSTANT] {
-    return new QoreStringNode(gbt->getTask().c_str());
+    return new QoreStringNode(gbt->getTask());
 }

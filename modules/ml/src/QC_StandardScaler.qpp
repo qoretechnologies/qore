@@ -120,12 +120,17 @@ nothing StandardScaler::fitMatrix(list<list<float>> matrix) {
     @return a hash with the same field names and scaled values
 
     @throw ML-STANDARD-SCALER-ERROR scaler not fitted or dimension mismatch
+    @throw HASH-KEY-ERROR if a field name of a restored model has a NUL character, so it cannot be a key of the result
 */
 hash<auto> StandardScaler::transform(hash<auto> record) {
     const std::vector<std::string>& field_names = scaler->getFieldNames();
     if (field_names.empty()) {
         xsink->raiseException("ML-STANDARD-SCALER-ERROR",
             "scaler was fitted with fitMatrix(); use transformMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    // the result is a hash keyed by the field names, and a field name with a NUL character cannot be a key
+    if (mlCheckFieldKeys(field_names, xsink)) {
         return QoreValue();
     }
     RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
@@ -212,12 +217,17 @@ list<auto> StandardScaler::transformMatrixColumns(list<list<float>> matrix) {
     @return a hash with original-scale values
 
     @throw ML-STANDARD-SCALER-ERROR scaler not fitted or dimension mismatch
+    @throw HASH-KEY-ERROR if a field name of a restored model has a NUL character, so it cannot be a key of the result
 */
 hash<auto> StandardScaler::inverseTransform(hash<auto> record) {
     const std::vector<std::string>& field_names = scaler->getFieldNames();
     if (field_names.empty()) {
         xsink->raiseException("ML-STANDARD-SCALER-ERROR",
             "scaler was fitted with fitMatrix(); use inverseTransformMatrix()");
+        return QoreValue();
+    }
+    // the result is a hash keyed by the field names, and a field name with a NUL character cannot be a key
+    if (mlCheckFieldKeys(field_names, xsink)) {
         return QoreValue();
     }
     RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);

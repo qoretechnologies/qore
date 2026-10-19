@@ -44,7 +44,7 @@ DLLLOCAL QoreClass* initKMeansClass(QoreNamespace& ns);
 class QoreKMeans : public QoreMLModel {
 public:
     DLLLOCAL QoreKMeans(int k, int max_iterations, double tolerance, int64_t seed,
-        const char* init_method)
+        const std::string& init_method)
         : k(k), max_iterations(max_iterations), tolerance(tolerance),
           init_method(init_method) {
         if (seed == 0) {

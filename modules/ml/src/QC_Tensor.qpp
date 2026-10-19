@@ -28,6 +28,7 @@
 #include "qore/Qore.h"
 
 #include "QC_Tensor.h"
+#include "ml_common.h"
 
 #include <algorithm>
 #include <cmath>
@@ -360,7 +361,7 @@ static double qore_tensor_mask_value(const QoreBufferNode* mask, size_t idx, Exc
 
 template <typename T>
 static QoreTensor* qore_tensor_pool_embeddings_typed(const QoreTensor* embeddings, const QoreTensor* mask,
-        const char* strategy, ExceptionSink* xsink) {
+        const std::string& strategy, ExceptionSink* xsink) {
     const std::vector<int64_t>& shape = embeddings->getShape();
     size_t rows = static_cast<size_t>(shape[0]);
     size_t tokens = static_cast<size_t>(shape[1]);
@@ -371,12 +372,13 @@ static QoreTensor* qore_tensor_pool_embeddings_typed(const QoreTensor* embedding
     T* dst = static_cast<T*>((*output)->getRawData());
     const QoreBufferNode* mask_buffer = mask->getBuffer();
 
-    bool use_cls = !strcmp(strategy, "cls");
-    bool use_max = !strcmp(strategy, "max");
-    bool use_mean = !strcmp(strategy, "mean");
+    bool use_cls = strategy == "cls";
+    bool use_max = strategy == "max";
+    bool use_mean = strategy == "mean";
     if (!use_cls && !use_max && !use_mean) {
         xsink->raiseException("ML-TENSOR-ERROR",
-            "poolTokenEmbeddings() strategy must be \"mean\", \"max\", or \"cls\"; got \"%s\"", strategy);
+            "poolTokenEmbeddings() strategy must be \"mean\", \"max\", or \"cls\"; got \"%s\"",
+            strategy.c_str());
         return nullptr;
     }
 
@@ -786,7 +788,7 @@ Tensor Tensor::flatten() [flags=RET_VALUE_ONLY] {
 */
 Tensor Tensor::mockDevice(string device_kind = "cuda", int device_id = 0) [flags=RET_VALUE_ONLY] {
     ReferenceHolder<QoreTensor> holder(
-        qore_ml_make_mock_device_tensor(tensor, device_kind->c_str(), device_id, xsink), xsink);
+        qore_ml_make_mock_device_tensor(tensor, mlStdString(*device_kind), device_id, xsink), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -831,7 +833,7 @@ ML::Tensor dev = host.toDevice("cuda", 0);   # resident on GPU 0
 */
 Tensor Tensor::toDevice(string device_kind = "cuda", int device_id = 0) [flags=RET_VALUE_ONLY; dom=UNCONTROLLED_API] {
     ReferenceHolder<QoreTensor> holder(
-        qore_ml_make_device_tensor(tensor, device_kind->c_str(), device_id, xsink), xsink);
+        qore_ml_make_device_tensor(tensor, mlStdString(*device_kind), device_id, xsink), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1238,10 +1240,12 @@ Tensor Tensor::poolTokenEmbeddings(Tensor[QoreTensor] attention_mask, string str
     ReferenceHolder<QoreTensor> holder(xsink);
     switch (tensor->getElementType()) {
         case QoreBufferElementType::Float32:
-            holder = qore_tensor_pool_embeddings_typed<float>(tensor, *attention_mask, strategy->c_str(), xsink);
+            holder = qore_tensor_pool_embeddings_typed<float>(tensor, *attention_mask, mlStdString(*strategy),
+                xsink);
             break;
         case QoreBufferElementType::Float64:
-            holder = qore_tensor_pool_embeddings_typed<double>(tensor, *attention_mask, strategy->c_str(), xsink);
+            holder = qore_tensor_pool_embeddings_typed<double>(tensor, *attention_mask, mlStdString(*strategy),
+                xsink);
             break;
         default:
             assert(false);

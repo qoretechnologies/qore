@@ -93,14 +93,14 @@ RandomForest::constructor(hash<auto> options) {
         v = options->getKeyValue("max_features");
         if (v.getType() == NT_STRING) {
             QoreStringValueHelper str(v);
-            max_features = str->c_str();
+            max_features = mlStdString(**str);
         }
         v = options->getKeyValue("bootstrap");
         if (!v.isNullOrNothing()) { bootstrap = v.getAsBool(); }
         v = options->getKeyValue("task");
         if (v.getType() == NT_STRING) {
             QoreStringValueHelper str(v);
-            task = str->c_str();
+            task = mlStdString(**str);
             if (task != "classification" && task != "regression") {
                 xsink->raiseException("ML-RANDOM-FOREST-ERROR",
                     "task must be 'classification' or 'regression'; got '%s'",
@@ -111,7 +111,7 @@ RandomForest::constructor(hash<auto> options) {
         v = options->getKeyValue("criterion");
         if (v.getType() == NT_STRING) {
             QoreStringValueHelper str(v);
-            criterion = str->c_str();
+            criterion = mlStdString(**str);
         }
         v = options->getKeyValue("seed");
         if (!v.isNullOrNothing()) { seed = v.getAsBigInt(); }
@@ -142,7 +142,7 @@ nothing RandomForest::fit(list<hash<auto>> data, string target_field) {
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) { return QoreValue(); }
 
-    std::string target = target_field->c_str();
+    std::string target = mlStdString(*target_field);
     int target_idx = -1;
     for (size_t i = 0; i < field_names.size(); ++i) {
         if (field_names[i] == target) { target_idx = (int)i; break; }
@@ -301,5 +301,5 @@ list<auto> RandomForest::getClasses() [flags=RET_VALUE_ONLY] {
 /** @return the task type string
 */
 string RandomForest::getTask() [flags=CONSTANT] {
-    return new QoreStringNode(rf->getTask().c_str());
+    return new QoreStringNode(rf->getTask());
 }

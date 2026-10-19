@@ -354,7 +354,8 @@ bool parseExternalInt(const std::string& key, const std::string& value, int64_t&
     errno = 0;
     char* endptr = nullptr;
     const long long v = strtoll(value.c_str(), &endptr, 10);
-    if (errno || !endptr || *endptr || v < 0) {
+    // the whole value must be the number; a NUL character in the value would otherwise end it early
+    if (errno || !endptr || endptr != value.c_str() + value.size() || v < 0) {
         xsink->raiseException(ML_ONNX_CONTENT_IDENTITY_ERROR,
             "the ONNX model declares an invalid %s value '%s' for an external tensor data reference",
             key.c_str(), value.c_str());
@@ -840,10 +841,13 @@ bool applyCaptureFailure(OnnxContentIdentityMode mode, OnnxContentIdentity& iden
     if (*xsink) {
         const QoreValue err = xsink->getExceptionErr();
         const QoreValue desc = xsink->getExceptionDesc();
+        // the reason is copied with its length, so that it is not cut at a NUL character
         if (desc.getType() == NT_STRING) {
-            reason = desc.get<const QoreStringNode>()->c_str();
+            const QoreStringNode* str = desc.get<const QoreStringNode>();
+            reason.assign(str->c_str(), str->size());
         } else if (err.getType() == NT_STRING) {
-            reason = err.get<const QoreStringNode>()->c_str();
+            const QoreStringNode* str = err.get<const QoreStringNode>();
+            reason.assign(str->c_str(), str->size());
         }
         xsink->clear();
     }
@@ -1127,22 +1131,23 @@ bool parseOnnxContentIdentityMode(const QoreHashNode* config, OnnxContentIdentit
         return true;
     }
     QoreStringValueHelper str(val);
-    const char* value = str->c_str();
-    if (!strcmp(value, "disabled")) {
+    // the value is compared with its length, so that a NUL character cannot end it early
+    const std::string value(str->c_str(), str->size());
+    if (value == "disabled") {
         mode = OnnxContentIdentityMode::Disabled;
         return true;
     }
-    if (!strcmp(value, "best_effort")) {
+    if (value == "best_effort") {
         mode = OnnxContentIdentityMode::BestEffort;
         return true;
     }
-    if (!strcmp(value, "required")) {
+    if (value == "required") {
         mode = OnnxContentIdentityMode::Required;
         return true;
     }
     xsink->raiseException(ML_ONNX_CONTENT_IDENTITY_ERROR,
         "invalid content_identity value '%s'; expected \"disabled\", \"best_effort\" or "
-        "\"required\"", value);
+        "\"required\"", value.c_str());
     return false;
 }
 

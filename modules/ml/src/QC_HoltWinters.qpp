@@ -62,7 +62,7 @@ HoltWinters::constructor(hash<auto> options) {
     double alpha = 0.2;
     double beta = 0.1;
     double gamma = 0.3;
-    const char* seasonal_type = "additive";
+    std::string seasonal_type = "additive";
     bool damped = false;
     double phi = 0.9;
 
@@ -89,7 +89,7 @@ HoltWinters::constructor(hash<auto> options) {
     v = options->getKeyValue("seasonal_type");
     if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
         QoreStringValueHelper seasonal(v);
-        seasonal_type = seasonal->c_str();
+        seasonal_type = mlStdString(**seasonal);
     }
     v = options->getKeyValue("damped");
     if (!v.isNullOrNothing()) {
@@ -106,9 +106,9 @@ HoltWinters::constructor(hash<auto> options) {
         return;
     }
 
-    if (strcmp(seasonal_type, "additive") != 0 && strcmp(seasonal_type, "multiplicative") != 0) {
+    if (seasonal_type != "additive" && seasonal_type != "multiplicative") {
         xsink->raiseException("ML-HOLTWINTERS-ERROR",
-            "seasonal_type must be 'additive' or 'multiplicative'; got '%s'", seasonal_type);
+            "seasonal_type must be 'additive' or 'multiplicative'; got '%s'", seasonal_type.c_str());
         return;
     }
 

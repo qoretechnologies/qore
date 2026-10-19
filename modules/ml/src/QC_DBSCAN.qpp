@@ -54,7 +54,7 @@ qclass DBSCAN [arg=QoreDBSCAN* dbscan; ns=Qore::ML; flags=final];
 DBSCAN::constructor(hash<auto> options) {
     double epsilon = 0.0;
     int64 min_points = 5;
-    const char* metric = "euclidean";
+    std::string metric = "euclidean";
 
     QoreValue v = options->getKeyValue("epsilon");
     if (v.isNullOrNothing()) {
@@ -72,7 +72,7 @@ DBSCAN::constructor(hash<auto> options) {
     v = options->getKeyValue("metric");
     if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
         QoreStringValueHelper metric_str(v);
-        metric = metric_str->c_str();
+        metric = mlStdString(**metric_str);
     }
 
     if (epsilon <= 0.0) {
@@ -86,10 +86,10 @@ DBSCAN::constructor(hash<auto> options) {
         return;
     }
 
-    if (strcmp(metric, "euclidean") != 0 && strcmp(metric, "manhattan") != 0
-        && strcmp(metric, "cosine") != 0) {
+    if (metric != "euclidean" && metric != "manhattan"
+        && metric != "cosine") {
         xsink->raiseException("ML-DBSCAN-ERROR",
-            "metric must be 'euclidean', 'manhattan', or 'cosine'; got '%s'", metric);
+            "metric must be 'euclidean', 'manhattan', or 'cosine'; got '%s'", metric.c_str());
         return;
     }
 

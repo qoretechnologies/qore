@@ -82,7 +82,7 @@ LogisticRegression::constructor(*hash<auto> options) {
     int64 max_iterations = 100;
     double tolerance = 1e-4;
     double regularization_val = 1.0;
-    const char* penalty_str = "l2";
+    std::string penalty_str = "l2";
     bool fit_intercept = true;
     if (options) {
         QoreValue v;
@@ -105,7 +105,7 @@ LogisticRegression::constructor(*hash<auto> options) {
         v = options->getKeyValue("penalty");
         if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
             QoreStringValueHelper penalty(v);
-            penalty_str = penalty->c_str();
+            penalty_str = mlStdString(**penalty);
         }
         v = options->getKeyValue("fit_intercept");
         if (!v.isNullOrNothing()) {
@@ -133,9 +133,9 @@ LogisticRegression::constructor(*hash<auto> options) {
             "regularization must be >= 0; got %f", regularization_val);
         return;
     }
-    if (strcmp(penalty_str, "l2") != 0 && strcmp(penalty_str, "none") != 0) {
+    if (penalty_str != "l2" && penalty_str != "none") {
         xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
-            "penalty must be 'l2' or 'none'; got '%s'", penalty_str);
+            "penalty must be 'l2' or 'none'; got '%s'", penalty_str.c_str());
         return;
     }
     self->setPrivate(CID_LOGISTICREGRESSION,
@@ -162,7 +162,7 @@ LogisticRegression::copy() {
 clf.fit(training_data, "species");
     @endcode
 
-    @throw ML-DATA-ERROR if data is empty or has no numeric fields
+    @throw ML-DATA-ERROR if data is empty or has no numeric fields, or the first record has no target field
     @throw ML-LOGISTIC-REGRESSION-ERROR if fitting fails
 */
 nothing LogisticRegression::fit(list<hash<auto>> data, string target_field) {
@@ -178,13 +178,16 @@ nothing LogisticRegression::fit(list<hash<auto>> data, string target_field) {
         return QoreValue();
     }
     const QoreHashNode* first_hash = first.get<const QoreHashNode>();
-    const char* target_str = target_field->c_str();
+    // the target is a field of the records; a name with a NUL character cannot be a hash key and names none
+    const std::string target = mlStdString(*target_field);
+    bool target_found = false;
 
     // Collect numeric field names excluding target
     std::vector<std::string> feat_names;
     ConstHashIterator hi(first_hash);
     while (hi.next()) {
-        if (strcmp(hi.getKey(), target_str) == 0) {
+        if (target == hi.getKey()) {
+            target_found = true;
             continue;
         }
         QoreValue val = hi.get();
@@ -194,9 +197,15 @@ nothing LogisticRegression::fit(list<hash<auto>> data, string target_field) {
         }
     }
 
+    if (!target_found) {
+        xsink->raiseException("ML-DATA-ERROR", "target field '%s' not found in the first data record",
+            target.c_str());
+        return QoreValue();
+    }
+
     if (feat_names.empty()) {
         xsink->raiseException("ML-DATA-ERROR",
-            "no numeric feature fields found in data (excluding target '%s')", target_str);
+            "no numeric feature fields found in data (excluding target '%s')", target.c_str());
         return QoreValue();
     }
 
@@ -216,12 +225,12 @@ nothing LogisticRegression::fit(list<hash<auto>> data, string target_field) {
             QoreValue v = row->getKeyValue(feat_names[j].c_str());
             X(i, j) = v.getAsFloat();
         }
-        QoreValue target_v = row->getKeyValue(target_str);
+        QoreValue target_v = row->getKeyValue(target.c_str());
         y(i) = target_v.getAsFloat();
     }
 
     lr->setFieldNames(feat_names);
-    lr->setTargetField(target_str);
+    lr->setTargetField(target);
     lr->fit(X, y, xsink);
 }
 
@@ -289,10 +298,10 @@ nothing LogisticRegression::update(list<hash<auto>> data, float learning_rate) {
         }
         const QoreHashNode* row = row_val.get<const QoreHashNode>();
         for (size_t j = 0; j < n_cols; ++j) {
-            QoreValue v = row->getKeyValue(feat_names[j].c_str());
+            QoreValue v = mlRecordField(row, feat_names[j]);
             X(i, j) = v.getAsFloat();
         }
-        QoreValue target_v = row->getKeyValue(target_name.c_str());
+        QoreValue target_v = mlRecordField(row, target_name);
         y(i) = target_v.getAsFloat();
     }
 

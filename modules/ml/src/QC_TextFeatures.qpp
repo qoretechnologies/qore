@@ -66,10 +66,10 @@ TextFeatures::constructor(*hash<auto> options) {
                 return;
             }
             QoreStringValueHelper mode_str(v);
-            const char* m = mode_str->c_str();
-            if (strcmp(m, "tfidf") != 0 && strcmp(m, "count") != 0) {
+            std::string m = mlStdString(**mode_str);
+            if (m != "tfidf" && m != "count") {
                 xsink->raiseException("ML-TEXT-FEATURES-ERROR",
-                    "invalid mode '%s': must be 'tfidf' or 'count'", m);
+                    "invalid mode '%s': must be 'tfidf' or 'count'", m.c_str());
                 return;
             }
             mode = m;
@@ -103,10 +103,10 @@ TextFeatures::constructor(*hash<auto> options) {
                 return;
             }
             QoreStringValueHelper tokenizer_str(v);
-            const char* tm = tokenizer_str->c_str();
-            if (strcmp(tm, "whitespace") != 0 && strcmp(tm, "subword") != 0) {
+            std::string tm = mlStdString(**tokenizer_str);
+            if (tm != "whitespace" && tm != "subword") {
                 xsink->raiseException("ML-TEXT-FEATURES-ERROR",
-                    "invalid tokenizer_mode '%s': must be 'whitespace' or 'subword'", tm);
+                    "invalid tokenizer_mode '%s': must be 'whitespace' or 'subword'", tm.c_str());
                 return;
             }
             tokenizer_mode = tm;

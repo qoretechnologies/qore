@@ -44,7 +44,7 @@ DLLLOCAL QoreClass* initHoltWintersClass(QoreNamespace& ns);
 class QoreHoltWinters : public QoreMLModel {
 public:
     DLLLOCAL QoreHoltWinters(int period, double alpha, double beta, double gamma,
-        const char* seasonal_type, bool damped, double phi)
+        const std::string& seasonal_type, bool damped, double phi)
         : period(period), alpha(alpha), beta(beta), gamma(gamma),
           seasonal_type(seasonal_type), damped(damped), phi(phi) {
     }

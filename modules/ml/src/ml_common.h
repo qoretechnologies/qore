@@ -42,6 +42,34 @@ using MatrixXd = Eigen::MatrixXd;
 using VectorXd = Eigen::VectorXd;
 using RowVectorXd = Eigen::RowVectorXd;
 
+//! Returns the bytes of a Qore string as a std::string, including any NUL characters
+/** A Qore string has a length and can contain NUL characters, so copying it through \c c_str() alone would cut it
+    at the first NUL character; class labels, documents, names and option values are copied with this function.
+*/
+static inline std::string mlStdString(const QoreString& str) {
+    return std::string(str.c_str(), str.size());
+}
+
+//! Returns the value of a field of a record hash, or no value if the record has no such field
+/** A hash key cannot contain a NUL character, so a field name with a NUL character names no field of any record;
+    looking it up with QoreHashNode::getKeyValue(const char*) would cut the name at the NUL character and return the
+    value of another field.
+*/
+static inline QoreValue mlRecordField(const QoreHashNode* record, const std::string& name) {
+    if (name.find('\0') != std::string::npos) {
+        return QoreValue();
+    }
+    return record->getKeyValue(name.c_str());
+}
+
+//! Checks that each field name can be a key of a hash returned to the caller
+/** @param field_names the field names
+    @param xsink a \c HASH-KEY-ERROR exception is raised here for the first field name with a NUL character
+
+    @return 0 if each field name can be a key, -1 if an exception was raised
+*/
+DLLLOCAL int mlCheckFieldKeys(const std::vector<std::string>& field_names, ExceptionSink* xsink);
+
 //! Convert a Qore list of hashes to an Eigen matrix (rows = samples, columns = numeric fields)
 /** The field names are returned in the field_names output parameter.
     Only numeric fields (int, float) are included.
@@ -76,10 +104,14 @@ DLLLOCAL QoreBufferNode* qoreFloat64BufferFilled(size_t length, double value, Ex
     const char* context);
 
 //! Convert an Eigen row from a matrix to a Qore hash using given field names
+/** @throw HASH-KEY-ERROR if a field name has a NUL character
+*/
 DLLLOCAL QoreHashNode* eigenRowToQoreHash(const MatrixXd& matrix, Eigen::Index row,
-    const std::vector<std::string>& field_names);
+    const std::vector<std::string>& field_names, ExceptionSink* xsink);
 
 //! Convert a single Qore hash to an Eigen row vector using given field names
+/** A missing field and a field name with a NUL character, which names no field, give a NaN value.
+*/
 DLLLOCAL RowVectorXd qoreHashToRowVector(const QoreHashNode* hash,
     const std::vector<std::string>& field_names, ExceptionSink* xsink);
 

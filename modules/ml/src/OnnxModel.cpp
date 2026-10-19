@@ -413,13 +413,14 @@ int qoreValueToUInt64(QoreValue value, uint64_t max_value, const char* type_name
     if (value.getType() == NT_STRING) {
         QoreStringValueHelper str(value);
         const char* s = str->c_str();
-        if (!*s) {
+        if (!str->size()) {
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                 "%s tensor value is empty; expected an unsigned integer in the range 0..%llu",
                 type_name, static_cast<unsigned long long>(max_value));
             return -1;
         }
-        for (const char* p = s; *p; ++p) {
+        // every byte must be a digit; a NUL character would otherwise end the number early
+        for (const char* p = s, * e = s + str->size(); p < e; ++p) {
             if (*p < '0' || *p > '9') {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "%s tensor value '%s' is not an unsigned decimal integer in the range 0..%llu",
@@ -703,7 +704,6 @@ struct OnnxBoundOrtValue {
     std::unique_ptr<std::vector<uint64_t>> uint64s;
     std::unique_ptr<std::vector<uint8_t>> bool_bytes;
     std::unique_ptr<std::vector<std::string>> strings;
-    std::vector<const char*> string_ptrs;
 };
 
 QoreListNode* qore_ml_get_onnx_providers(ExceptionSink* xsink) {
@@ -792,7 +792,7 @@ static std::string getConfigStringValue(const QoreHashNode* config, const char* 
         return {};
     }
     QoreStringValueHelper str(val);
-    return str->c_str();
+    return mlStdString(**str);
 }
 
 static bool configValueIsOrt(const QoreHashNode* config, const char* key) {
@@ -1227,24 +1227,26 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
 
     QoreValue load_format_val = config->getKeyValue("load_model_format");
     if (!load_format_val.isNullOrNothing()) {
-        QoreStringValueHelper load_format(load_format_val);
-        if (!strcmp(load_format->c_str(), "ORT") || !strcmp(load_format->c_str(), "ort")) {
+        QoreStringValueHelper load_format_str(load_format_val);
+        const std::string load_format = mlStdString(**load_format_str);
+        if (load_format == "ORT" || load_format == "ort") {
             session_config_entries[kOrtSessionOptionsConfigLoadModelFormat] = "ORT";
-        } else if (strcmp(load_format->c_str(), "ONNX") && strcmp(load_format->c_str(), "onnx")) {
+        } else if (load_format != "ONNX" && load_format != "onnx") {
             xsink->raiseException("ML-ONNX-ERROR",
-                "invalid load_model_format '%s'; expected 'ONNX' or 'ORT'", load_format->c_str());
+                "invalid load_model_format '%s'; expected 'ONNX' or 'ORT'", load_format.c_str());
             return;
         }
     }
 
     QoreValue save_format_val = config->getKeyValue("save_model_format");
     if (!save_format_val.isNullOrNothing()) {
-        QoreStringValueHelper save_format(save_format_val);
-        if (!strcmp(save_format->c_str(), "ORT") || !strcmp(save_format->c_str(), "ort")) {
+        QoreStringValueHelper save_format_str(save_format_val);
+        const std::string save_format = mlStdString(**save_format_str);
+        if (save_format == "ORT" || save_format == "ort") {
             session_config_entries[kOrtSessionOptionsConfigSaveModelFormat] = "ORT";
-        } else if (strcmp(save_format->c_str(), "ONNX") && strcmp(save_format->c_str(), "onnx")) {
+        } else if (save_format != "ONNX" && save_format != "onnx") {
             xsink->raiseException("ML-ONNX-ERROR",
-                "invalid save_model_format '%s'; expected 'ONNX' or 'ORT'", save_format->c_str());
+                "invalid save_model_format '%s'; expected 'ONNX' or 'ORT'", save_format.c_str());
             return;
         }
     }
@@ -2458,6 +2460,35 @@ void QoreOnnxModel::flattenToBools(const QoreValue& val, std::vector<uint8_t>& o
     }
 }
 
+//! Creates a string tensor with the given elements, which may contain NUL characters
+/** Ort::Value::FillStringTensor() takes NUL-terminated strings and would cut each element at its first NUL
+    character, so each element is sized to its string and its bytes are copied.
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int makeOrtStringTensor(OrtAllocator* allocator, const std::vector<int64_t>& shape,
+        const std::vector<std::string>& strings, const std::string& tensor_name, Ort::Value& value,
+        ExceptionSink* xsink) {
+    try {
+        value = Ort::Value::CreateTensor(allocator, shape.data(), shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
+        for (size_t i = 0; i < strings.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "filling string tensor input")) {
+                return -1;
+            }
+            const std::string& str = strings[i];
+            char* buf = value.GetResizedStringTensorElementBuffer(i, str.size());
+            if (!str.empty()) {
+                memcpy(buf, str.data(), str.size());
+            }
+        }
+    } catch (const Ort::Exception& e) {
+        xsink->raiseException("ML-ONNX-INFERENCE-ERROR", "input tensor '%s': cannot create the string tensor: %s",
+            tensor_name.c_str(), e.what());
+        return -1;
+    }
+    return 0;
+}
+
 void QoreOnnxModel::flattenToStrings(const QoreValue& val, std::vector<std::string>& out,
         ExceptionSink* xsink) {
     if (val.getType() == NT_LIST) {
@@ -2473,7 +2504,7 @@ void QoreOnnxModel::flattenToStrings(const QoreValue& val, std::vector<std::stri
         }
     } else if (val.getType() == NT_STRING) {
         QoreStringValueHelper str(val);
-        out.push_back(str->c_str());
+        out.push_back(mlStdString(**str));
     } else {
         xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
             "string tensor value has type '%s'; expected string", val.getFullTypeName());
@@ -2903,7 +2934,6 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING: {
                 bound->strings = std::make_unique<std::vector<std::string>>();
                 bound->strings->reserve(direct_buffer->size());
-                bound->string_ptrs.reserve(direct_buffer->size());
                 for (size_t i = 0; i < direct_buffer->size(); ++i) {
                     if (i && !(i % 100) && qore_check_cancel(xsink, "converting string tensor input")) {
                         return nullptr;
@@ -2919,17 +2949,11 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
                         return nullptr;
                     }
                     QoreStringValueHelper str(*entry);
-                    bound->strings->push_back(str->c_str());
+                    bound->strings->push_back(mlStdString(**str));
                 }
-                for (size_t i = 0; i < bound->strings->size(); ++i) {
-                    if (i && !(i % 100) && qore_check_cancel(xsink, "preparing string tensor input")) {
-                        return nullptr;
-                    }
-                    bound->string_ptrs.push_back((*bound->strings)[i].c_str());
+                if (makeOrtStringTensor(allocator, bound->shape, *bound->strings, meta.name, bound->value, xsink)) {
+                    return nullptr;
                 }
-                bound->value = Ort::Value::CreateTensor(allocator, bound->shape.data(),
-                    bound->shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
-                bound->value.FillStringTensor(bound->string_ptrs.data(), bound->string_ptrs.size());
                 return bound;
             }
             default:
@@ -3155,16 +3179,9 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
                     meta.name.c_str(), total_elements, bound->strings->size());
                 return nullptr;
             }
-            bound->string_ptrs.reserve(bound->strings->size());
-            for (size_t i = 0; i < bound->strings->size(); ++i) {
-                if (i && !(i % 100) && qore_check_cancel(xsink, "preparing string tensor input")) {
-                    return nullptr;
-                }
-                bound->string_ptrs.push_back((*bound->strings)[i].c_str());
+            if (makeOrtStringTensor(allocator, bound->shape, *bound->strings, meta.name, bound->value, xsink)) {
+                return nullptr;
             }
-            bound->value = Ort::Value::CreateTensor(allocator, bound->shape.data(),
-                bound->shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
-            bound->value.FillStringTensor(bound->string_ptrs.data(), bound->string_ptrs.size());
             return bound;
         default:
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
@@ -4561,8 +4578,6 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                 case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING: {
                     std::vector<std::string> strings;
                     strings.reserve(direct_buffer->size());
-                    std::vector<const char*> raw;
-                    raw.reserve(direct_buffer->size());
                     for (size_t i = 0; i < direct_buffer->size(); ++i) {
                         if (i && !(i % 100) && qore_check_cancel(xsink, "converting string tensor input")) {
                             return nullptr;
@@ -4578,14 +4593,12 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                             return nullptr;
                         }
                         QoreStringValueHelper str(*entry);
-                        strings.push_back(str->c_str());
+                        strings.push_back(mlStdString(**str));
                     }
-                    for (const auto& str : strings) {
-                        raw.push_back(str.c_str());
+                    Ort::Value string_tensor{nullptr};
+                    if (makeOrtStringTensor(allocator, direct_shape, strings, meta.name, string_tensor, xsink)) {
+                        return nullptr;
                     }
-                    Ort::Value string_tensor = Ort::Value::CreateTensor(allocator, direct_shape.data(),
-                        direct_shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
-                    string_tensor.FillStringTensor(raw.data(), raw.size());
                     input_tensors.push_back(std::move(string_tensor));
                     break;
                 }
@@ -4893,14 +4906,10 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                         meta.name.c_str(), (long long)total_elements, strings.size());
                     return nullptr;
                 }
-                std::vector<const char*> raw;
-                raw.reserve(strings.size());
-                for (const auto& str : strings) {
-                    raw.push_back(str.c_str());
+                Ort::Value string_tensor{nullptr};
+                if (makeOrtStringTensor(allocator, shape, strings, meta.name, string_tensor, xsink)) {
+                    return nullptr;
                 }
-                Ort::Value string_tensor = Ort::Value::CreateTensor(allocator, shape.data(),
-                    shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
-                string_tensor.FillStringTensor(raw.data(), raw.size());
                 input_tensors.push_back(std::move(string_tensor));
                 break;
             }

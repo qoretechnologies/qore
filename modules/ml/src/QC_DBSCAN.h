@@ -41,7 +41,7 @@ DLLLOCAL QoreClass* initDBSCANClass(QoreNamespace& ns);
 //! DBSCAN clustering implementation class
 class QoreDBSCAN : public AbstractPrivateData {
 public:
-    DLLLOCAL QoreDBSCAN(double epsilon, int min_points, const char* metric)
+    DLLLOCAL QoreDBSCAN(double epsilon, int min_points, const std::string& metric)
         : epsilon(epsilon), min_points(min_points), metric(metric) {
     }
 

@@ -107,8 +107,8 @@ int mockDeviceCopyToHost(void* host_data, uint8_t* /*host_validity*/, size_t /*l
 }
 
 //! Maps a lower-case device-kind name to a QoreBufferDeviceKind for the mock helper.
-QoreBufferDeviceKind mockDeviceKindFromName(const char* name) {
-    std::string n = name ? name : "";
+QoreBufferDeviceKind mockDeviceKindFromName(const std::string& name) {
+    std::string n = name;
     for (char& c : n) {
         c = static_cast<char>((c >= 'A' && c <= 'Z') ? c - 'A' + 'a' : c);
     }
@@ -872,7 +872,7 @@ QoreObject* qore_ml_tensor_to_object(QoreTensor* tensor, QoreProgram* pgm, Excep
     return obj.release();
 }
 
-QoreTensor* qore_ml_make_mock_device_tensor(const QoreTensor* host, const char* device_kind,
+QoreTensor* qore_ml_make_mock_device_tensor(const QoreTensor* host, const std::string& device_kind,
         int64_t device_id, ExceptionSink* xsink) {
     const QoreBufferNode* host_buf = host->getBuffer();
     QoreBufferElementType et = host_buf->getElementType();
@@ -908,7 +908,7 @@ QoreTensor* qore_ml_make_mock_device_tensor(const QoreTensor* host, const char* 
     return new QoreTensor(dev_buf.release(), host->getShape());
 }
 
-QoreTensor* qore_ml_make_device_tensor(const QoreTensor* host, const char* device_kind,
+QoreTensor* qore_ml_make_device_tensor(const QoreTensor* host, const std::string& device_kind,
         int64_t device_id, ExceptionSink* xsink) {
     QoreBufferDeviceKind kind = mockDeviceKindFromName(device_kind);
     if (device_id < 0) {
@@ -931,7 +931,7 @@ QoreTensor* qore_ml_make_device_tensor(const QoreTensor* host, const char* devic
     if (kind != QoreBufferDeviceKind::Cuda) {
         xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
             "host->device upload is not implemented for the '%s' device kind in this build",
-            device_kind ? device_kind : "");
+            device_kind.c_str());
         return nullptr;
     }
 
@@ -1004,7 +1004,7 @@ QoreTensor* qore_ml_make_device_tensor(const QoreTensor* host, const char* devic
     xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
         "host->device upload to the '%s' device kind is not implemented in this build; "
         "only the 'metal' device kind is supported on this Apple Silicon ml build",
-        device_kind ? device_kind : "");
+        device_kind.c_str());
 #  else
     (void)kind;
     xsink->raiseException("ML-TENSOR-DEVICE-ERROR",
