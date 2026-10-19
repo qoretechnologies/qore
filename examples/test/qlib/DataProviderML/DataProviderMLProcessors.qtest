@@ -279,6 +279,8 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
 
         # RegistryModel tests
         addTestCase("registry-model - field parsing", \registryModelFieldParsing());
+        addTestCase("field options - a string is its comma-separated fields", \fieldListOptionStringForms());
+        addTestCase("onnx-model - fields and output names given as strings", \onnxModelFieldListStringForms());
         addTestCase("registry-model - ONNX package inference", \registryModelOnnxPackageInference());
         addTestCase("registry-model - ONNX regression task output",
             \registryModelOnnxRegressionPlanOutput());
@@ -4254,9 +4256,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         list<string> parsed = DataProvider::AbstractDataProvider::parseFieldList("x, y");
         assertEq(("x", "y"), parsed);
 
-        # Also test list input
+        # Also test list input: each element is one field, also one with a comma
         list<string> parsed2 = DataProvider::AbstractDataProvider::parseFieldList(("a,b", "c"));
-        assertEq(("a", "b", "c"), parsed2);
+        assertEq(("a,b", "c"), parsed2);
 
         # Verify the field parsing is used correctly in the processor constructor
         # by checking that it matches the pattern used by all other processors
@@ -4265,6 +4267,97 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq("feature_1", parsed3[0]);
         assertEq("feature_2", parsed3[1]);
         assertEq("target", parsed3[2]);
+    }
+
+    #! A list option of fields given as a comma-separated string reads the fields of the string: the processor
+    #! reads the same fields as when they are given in a list
+    fieldListOptionStringForms() {
+        list<hash<auto>> data = (
+            {"x": 0.0, "y": 0.0, "value": 1.0, "label": "low"},
+            {"x": 0.1, "y": 0.1, "value": 1.2, "label": "low"},
+            {"x": 0.2, "y": 0.0, "value": 1.4, "label": "low"},
+            {"x": 10.0, "y": 10.0, "value": 20.0, "label": "high"},
+            {"x": 10.1, "y": 10.1, "value": 20.2, "label": "high"},
+            {"x": 10.2, "y": 10.0, "value": 20.4, "label": "high"},
+        );
+        # the values each model reads from the records are the same for both forms, also for models with randomness
+        hash<string, hash<auto>> models = {
+            "DataProviderML::QoreDecisionTreeClassificationProcessor": {"target_field": "label", "window_size": 6},
+            "DataProviderML::QoreDecisionTreeRegressionProcessor": {"target_field": "value", "window_size": 6},
+            "DataProviderML::QoreGBTClassificationProcessor": {"target_field": "label", "window_size": 6},
+            "DataProviderML::QoreGBTRegressionProcessor": {"target_field": "value", "window_size": 6},
+            "DataProviderML::QoreKNNClassificationProcessor": {"target_field": "label", "window_size": 6, "k": 3},
+            "DataProviderML::QoreKNNRegressionProcessor": {"target_field": "value", "window_size": 6, "k": 3},
+            "DataProviderML::QoreRandomForestClassificationProcessor": {"target_field": "label", "window_size": 6},
+            "DataProviderML::QoreRandomForestRegressionProcessor": {"target_field": "value", "window_size": 6},
+        };
+        foreach hash<auto> i in (models.pairIterator()) {
+            list<auto> by_string = DataProviderMLProcessorsTest::readRecordValues(i.key, i.value + {"fields": "x, y"},
+                data);
+            list<auto> by_list = DataProviderMLProcessorsTest::readRecordValues(i.key, i.value + {"fields": ("x", "y")},
+                data);
+            assertEq(data.size(), by_list.size(), i.key);
+            assertEq(0.0, by_list[0].x, i.key);
+            assertEq(0.0, by_list[0].y, i.key);
+            assertEq(by_list, by_string, i.key);
+        }
+
+        # rolling-stats reads its fields in both forms
+        list<auto> by_string = DataProviderMLProcessorsTest::runProcessor("DataProviderML::QoreRollingStatsProcessor",
+            {"fields": "x, y", "statistics": ("mean", "max"), "window_size": 2}, data);
+        list<auto> by_list = DataProviderMLProcessorsTest::runProcessor("DataProviderML::QoreRollingStatsProcessor",
+            {"fields": ("x", "y"), "statistics": ("mean", "max"), "window_size": 2}, data);
+        assertEq(data.size(), by_list.size());
+        assertFloat(0.05, by_list[1].x_mean, 0.001);
+        assertFloat(0.1, by_list[1].y_max, 0.001);
+        assertEq(by_list, by_string);
+        # its statistics are allowed values, not fields: a comma-separated string is not one of them
+        assertThrows("OPTION-VALUE-ERROR", "does not accept element value \"mean, max\"",
+            \DataProviderMLProcessorsTest::runProcessor(), ("DataProviderML::QoreRollingStatsProcessor",
+                {"fields": "x", "statistics": "mean, max", "window_size": 2}, data));
+    }
+
+    #! The fields and the output names of the ONNX processor given as comma-separated strings are read as the lists of
+    #! them
+    onnxModelFieldListStringForms() {
+        if (skipSklearnOnnx()) {
+            return;
+        }
+        list<hash<auto>> data = (
+            {"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2},
+            {"sepal_length": 7.0, "sepal_width": 3.2, "petal_length": 4.7, "petal_width": 1.4},
+            {"sepal_length": 6.3, "sepal_width": 3.3, "petal_length": 6.0, "petal_width": 2.5},
+        );
+        list<auto> by_string = DataProviderMLProcessorsTest::runProcessor("DataProviderML::QoreOnnxModelProcessor", {
+            "model_path": getSklearnModelPath(),
+            "fields": "sepal_length, sepal_width, petal_length, petal_width",
+            "output_names": "label, probabilities",
+            "window_size": 3,
+        }, data);
+        list<auto> by_list = DataProviderMLProcessorsTest::runProcessor("DataProviderML::QoreOnnxModelProcessor", {
+            "model_path": getSklearnModelPath(),
+            "fields": ("sepal_length", "sepal_width", "petal_length", "petal_width"),
+            "output_names": ("label", "probabilities"),
+            "window_size": 3,
+        }, data);
+        assertEq(data.size(), by_list.size());
+        assertEq(by_list, by_string);
+    }
+
+    #! Runs the records through a new processor and returns its output
+    static list<auto> runProcessor(string cls, hash<auto> opts, list<hash<auto>> data) {
+        object proc = create_object(cls, opts);
+        list<auto> results = ();
+        foreach hash<auto> rec in (data) {
+            DataProviderMLProcessorsTest::collectResult(\results, proc.processRecord(rec));
+        }
+        DataProviderMLProcessorsTest::collectResult(\results, proc.flushRecords());
+        return results;
+    }
+
+    #! Runs the records through a new model processor and returns the record values of its events
+    static list<auto> readRecordValues(string cls, hash<auto> opts, list<hash<auto>> data) {
+        return map $1.record_values, DataProviderMLProcessorsTest::runProcessor(cls, opts, data);
     }
 
     registryModelOnnxPackageInference() {

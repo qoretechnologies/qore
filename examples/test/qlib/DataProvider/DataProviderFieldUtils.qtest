@@ -40,6 +40,7 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("parseFieldList - comma-separated string", \parseFieldListString());
         addTestCase("parseFieldList - list of strings", \parseFieldListList());
         addTestCase("parseFieldList - mixed list with commas", \parseFieldListMixed());
+        addTestCase("getFieldListOption - the string given or the checked value", \getFieldListOptionTest());
         addTestCase("parseFieldList - empty/whitespace handling", \parseFieldListEmpty());
         addTestCase("parseFieldList - single value", \parseFieldListSingle());
         addTestCase("parseFieldList - non-string input", \parseFieldListNonString());
@@ -110,9 +111,43 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
     }
 
     parseFieldListMixed() {
-        # list elements can themselves contain commas
-        list<string> result = AbstractDataProvider::parseFieldList(("a,b", "c"));
-        assertEq(("a", "b", "c"), result);
+        # each list element is one field, as it is given: a field name can have a comma
+        assertEq(("a,b", "c"), AbstractDataProvider::parseFieldList(("a,b", "c")));
+        assertEq(("Price, USD", "id"), AbstractDataProvider::parseFieldList(("Price, USD", "id")));
+        assertEq((" padded ",), AbstractDataProvider::parseFieldList((" padded ",)));
+        # empty elements and elements that are not strings are skipped
+        assertEq(("a",), AbstractDataProvider::parseFieldList(("", "a", 1)));
+        # a single string is still a comma-separated list
+        assertEq(("Price", "USD"), AbstractDataProvider::parseFieldList("Price, USD"));
+
+        # the processors read such a field as one key
+        hash<auto> rec = {"Price, USD": 2.5, "id": 1};
+        QoreRemoveFieldsProcessor rem({"fields": ("Price, USD",)});
+        assertEq({"id": 1}, rem.processRecord(rec));
+        QoreSelectFieldsProcessor sel({"fields": ("Price, USD",)});
+        assertEq({"Price, USD": 2.5}, sel.processRecord(rec));
+        QoreGroupByProcessor grp({"group_by": ("Price, USD",), "aggregates": "count()"});
+        grp.processRecord(rec);
+        assertEq(({"Price, USD": 2.5, "count": 1},), grp.flushRecords());
+    }
+
+    getFieldListOptionTest() {
+        # a single string is returned as it was given, not as the list of one string that the option type makes it
+        assertEq("Price, USD", AbstractDataProvider::getFieldListOption({"fields": "Price, USD"},
+            {"fields": ("Price, USD",)}, "fields"));
+        assertEq(("Price", "USD"), AbstractDataProvider::parseFieldList(
+            AbstractDataProvider::getFieldListOption({"fields": "Price, USD"}, {"fields": ("Price, USD",)}, "fields")));
+        # a list is returned as it was checked, and each element is one field
+        assertEq(("Price, USD",), AbstractDataProvider::getFieldListOption({"fields": ("Price, USD",)},
+            {"fields": ("Price, USD",)}, "fields"));
+        assertEq(("Price, USD",), AbstractDataProvider::parseFieldList(
+            AbstractDataProvider::getFieldListOption({"fields": ("Price, USD",)}, {"fields": ("Price, USD",)},
+                "fields")));
+        # an option that was not given is its checked value, such as its default
+        assertEq(("id",), AbstractDataProvider::getFieldListOption({"other": "x"}, {"fields": ("id",)}, "fields"));
+        # no options give no value
+        assertEq(NOTHING, AbstractDataProvider::getFieldListOption(NOTHING, NOTHING, "fields"));
+        assertEq(NOTHING, AbstractDataProvider::getFieldListOption({"fields": "a"}, NOTHING, "other"));
     }
 
     parseFieldListEmpty() {

@@ -149,7 +149,8 @@ public class QoreDBSCANClusteringProcessor inherits AbstractDataProviderMLProces
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
+        fields = DataProvider::AbstractDataProvider::parseFieldList(
+            DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         if (!fields) {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
         }

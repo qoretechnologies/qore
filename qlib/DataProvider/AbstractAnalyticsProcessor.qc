@@ -354,7 +354,8 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
     initAnalytics(hash<auto> options, hash<auto> constructor_options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", constructor_options, options);
         # parse field names (supports both comma-separated strings and lists)
-        fields = AbstractDataProvider::parseFieldList(copts.fields);
+        fields = AbstractDataProvider::parseFieldList(
+            AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         if (!fields) {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
         }

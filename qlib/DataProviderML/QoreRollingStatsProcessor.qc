@@ -142,7 +142,8 @@ public class QoreRollingStatsProcessor inherits AbstractDataProviderMLProcessor 
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
+        fields = DataProvider::AbstractDataProvider::parseFieldList(
+            DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         if (!fields) {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
         }
@@ -152,7 +153,8 @@ public class QoreRollingStatsProcessor inherits AbstractDataProviderMLProcessor 
                 sprintf("window_size must be >= 1; got %d", window_size);
         }
         if (copts.statistics) {
-            statistics = DataProvider::AbstractDataProvider::parseFieldList(copts.statistics);
+            statistics = DataProvider::AbstractDataProvider::parseFieldList(
+                DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "statistics"));
         }
         if (!statistics) {
             statistics = ("mean",);

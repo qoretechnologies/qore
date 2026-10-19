@@ -165,7 +165,8 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         # parse group_by fields
         if (copts.group_by.val()) {
-            group_by_fields = AbstractDataProvider::parseFieldList(copts.group_by);
+            group_by_fields = AbstractDataProvider::parseFieldList(
+                AbstractDataProvider::getFieldListOption(options, copts, "group_by"));
             AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "group_by", group_by_fields);
         } else {
             group_by_fields = ();

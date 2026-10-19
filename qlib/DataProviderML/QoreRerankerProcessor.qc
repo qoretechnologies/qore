@@ -269,7 +269,8 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
             "max_length": copts.max_length ?? 512,
         });
         if (exists copts.output_names) {
-            output_names = DataProvider::AbstractDataProvider::parseFieldList(copts.output_names);
+            output_names = DataProvider::AbstractDataProvider::parseFieldList(
+                DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "output_names"));
             if (!output_names) {
                 throw "CONSTRUCTOR-ERROR",
                     "output_names must contain at least one ONNX output tensor name; "

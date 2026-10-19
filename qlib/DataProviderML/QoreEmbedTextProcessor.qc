@@ -360,7 +360,8 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
         max_tokens = copts.max_tokens ?? 512;
         pooling_strategy = copts.pooling_strategy ?? "mean";
         if (exists copts.output_names) {
-            output_names = DataProvider::AbstractDataProvider::parseFieldList(copts.output_names);
+            output_names = DataProvider::AbstractDataProvider::parseFieldList(
+                DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "output_names"));
             if (!output_names) {
                 throw "CONSTRUCTOR-ERROR",
                     "output_names must contain at least one ONNX output tensor name; "

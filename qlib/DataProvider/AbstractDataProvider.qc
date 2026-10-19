@@ -9229,27 +9229,50 @@ hash<auto> rec = AbstractDataProvider::removeFieldValue({"order": {"id": 1, "Uni
         return rv;
     }
 
+    #! Returns the value given for a list option of fields, as it was given if it was a single string
+    /** A list option (such as a \c softlist<string> option) makes a single string given for it a list of one string
+        when the options are checked.  @ref parseFieldList() reads a single string as a comma-separated list of fields,
+        and each element of a list as one field, so the string is passed as it was given.
+
+        @param options the options as they were given
+        @param copts the options as they were checked
+        @param opt the name of the option
+
+        @return the single string given for the option, or its checked value
+
+        @par Example:
+        @code{.py}
+list<string> fields = AbstractDataProvider::parseFieldList(
+    AbstractDataProvider::getFieldListOption(options, copts, "fields"));
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static auto getFieldListOption(*hash<auto> options, *hash<auto> copts, string opt) {
+        auto given = options{opt};
+        return given.typeCode() == NT_STRING ? given : copts{opt};
+    }
+
     #! Parses a field list from either a comma-separated string or a list of strings
-    /** Provides backward compatibility for the transition from string to softlist\<string\> field options.
+    /** Provides backward compatibility for the transition from string to softlist\<string\> field options: a single
+        string is a comma-separated list of fields, each trimmed.  Each element of a list is one field, as it is
+        given, so that a field whose name has a comma (\c "Price, USD") can be given; empty elements and elements that
+        are not strings are skipped.
 
         @param fields a string with comma-separated field names or a list of strings
 
-        @return a list of trimmed, non-empty field name strings
+        @return a list of non-empty field name strings
 
         @since %DataProvider 3.4
+        @since %DataProvider 3.11 the elements of a list are not split on commas or trimmed
     */
     static list<string> parseFieldList(auto fields) {
         list<string> result = ();
         if (fields.typeCode() == NT_LIST) {
             foreach auto elem in (fields) {
-                if (elem.typeCode() == NT_STRING) {
-                    # split each element on commas for backward compat with comma-separated strings
-                    foreach string part in (elem.split(",")) {
-                        string trimmed = trim(part);
-                        if (trimmed.val()) {
-                            push result, trimmed;
-                        }
-                    }
+                # each element is one field, as it is given
+                if (elem.typeCode() == NT_STRING && elem != "") {
+                    push result, elem;
                 }
             }
         } else if (fields.typeCode() == NT_STRING) {

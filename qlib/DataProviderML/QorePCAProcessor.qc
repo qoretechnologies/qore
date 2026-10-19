@@ -151,7 +151,8 @@ public class QorePCAProcessor inherits AbstractDataProviderMLProcessor {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
+        fields = DataProvider::AbstractDataProvider::parseFieldList(
+            DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         if (fields.lsize() < 2) {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("at least 2 fields are required for PCA; got %d", fields.lsize());

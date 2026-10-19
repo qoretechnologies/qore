@@ -367,7 +367,8 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         model_name = copts.model_name;
         fields = ();
         if (exists copts.fields) {
-            fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
+            fields = DataProvider::AbstractDataProvider::parseFieldList(
+                DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         }
         if (exists copts.input_map) {
             input_map = QoreRegistryModelProcessor::parseInputMap(copts.input_map);
@@ -375,7 +376,8 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         }
         input_tensor = copts.input_tensor;
         if (exists copts.output_names) {
-            output_names = DataProvider::AbstractDataProvider::parseFieldList(copts.output_names);
+            output_names = DataProvider::AbstractDataProvider::parseFieldList(
+                DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "output_names"));
             if (!output_names) {
                 throw "CONSTRUCTOR-ERROR",
                     "output_names must contain at least one ONNX output tensor name; "

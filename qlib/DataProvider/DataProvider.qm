@@ -1548,6 +1548,12 @@ fetch
       references are written as before (<tt>$static:{x}</tt>); the new
       @ref DataProvider::DpqlSerializer::fieldReference() "DpqlSerializer::fieldReference()" and
       @ref DataProvider::DpqlSerializer::accessorForm() "DpqlSerializer::accessorForm()" give these forms
+    - each element of a list given for a list option of fields is one field, as it is given: a field whose name has
+      a comma (\c "Price, USD") can be given in a list; a single string is still a comma-separated list
+      (@ref DataProvider::AbstractDataProvider::parseFieldList() "AbstractDataProvider::parseFieldList()"); the
+      processors read the string given for such an option with the new
+      @ref DataProvider::AbstractDataProvider::getFieldListOption() "AbstractDataProvider::getFieldListOption()",
+      as the option type makes a single string a list of one string
     - added the private method \c readLocationGrid() to
       @ref DataProvider::AbstractTabularProfileDataProvider "AbstractTabularProfileDataProvider", which a profile
       provider whose reader streams its input overrides to read a location as a stream, so that the content of a

@@ -99,7 +99,8 @@ public class QoreCorrelationProcessor inherits AbstractDataProvider {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = AbstractDataProvider::parseFieldList(copts.fields);
+        fields = AbstractDataProvider::parseFieldList(
+            AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields);
         if (fields.lsize() < 2) {
             throw "CONSTRUCTOR-ERROR",
