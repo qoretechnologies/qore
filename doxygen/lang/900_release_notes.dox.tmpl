@@ -173,6 +173,13 @@
     reasoning tokens in a small output budget, and whether it rejects a forced tool choice
     (<tt>rejects_forced_tool_choice</tt>).
 
+    A chat request in the OpenAI format with a JSON-schema <tt>response_format</tt> now works with the
+    @ref anthropicrestclientintro "AnthropicRestClient" provider; Anthropic refused every such request with HTTP 400.
+    A schema that Anthropic's structured output can express within its limits is sent as structured output, with the
+    constraints Anthropic does not support (numeric ranges, <tt>maxItems</tt>, <tt>uniqueItems</tt>) moved into the
+    descriptions; a larger schema, or one with an open object, is stated in a system instruction, and the caller
+    validates the answer.
+
     AOT-compiled typed <tt>foreach</tt> loops now safely skip uninitialized or removed
     lists, matching the interpreter. A conditionally assigned list inside an outer
     loop could previously crash when no assignment occurred before iteration.
