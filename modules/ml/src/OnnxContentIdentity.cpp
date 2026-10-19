@@ -733,7 +733,8 @@ bool readAllBytes(int fd, size_t size, const char* what, const std::string& disp
 */
 bool readWholeFile(const char* path, const char* what, const std::string& display,
         std::vector<char>& out, ExceptionSink* xsink) {
-    QoreSandboxManagerHelper smh;
+    // a policy check honors an active policy barrier
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         if (!smh->checkFilesystemAccess(path, QSEC_READ, xsink)) {
             return false;
@@ -859,6 +860,32 @@ bool applyCaptureFailure(OnnxContentIdentityMode mode, OnnxContentIdentity& iden
     return true;
 }
 
+//! Completes a capture whose content has all been captured
+bool completeCapture(OnnxContentIdentityMode mode, OnnxContentIdentity& identity, ExceptionSink* xsink) {
+    identity.complete = true;
+    identity.finalize();
+    if (identity.getDigest().empty()) {
+        // finalize() could not compute the manifest digest
+        identity.complete = false;
+        if (mode == OnnxContentIdentityMode::Required) {
+            xsink->raiseException(ML_ONNX_CONTENT_IDENTITY_ERROR,
+                "a complete ONNX content identity was required but the identity manifest digest "
+                "could not be computed");
+            return false;
+        }
+        identity.discardCapture("the identity manifest digest could not be computed");
+    }
+    return true;
+}
+
+//! Returns true if model bytes are an ORT format model, as ONNX Runtime decides for bytes with no explicit format
+/** This is fbs::utils::IsOrtFormatModelBytes(): more than 8 bytes, with the flatbuffer file identifier \c "ORTM" at
+    offset 4.
+*/
+bool isOrtFormatModelBytes(const std::vector<char>& bytes) {
+    return bytes.size() > 8 && !memcmp(bytes.data() + 4, "ORTM", 4);
+}
+
 //! Captures model content identity from model bytes and a resolution base directory
 bool captureFromBytes(std::vector<char>&& model_bytes, const std::string& base_dir,
         const char* source, OnnxContentIdentityMode mode, OnnxContentIdentity& identity,
@@ -871,6 +898,15 @@ bool captureFromBytes(std::vector<char>&& model_bytes, const std::string& base_d
     if (!digestBytes(identity.model_bytes.data(), identity.model_bytes.size(),
             identity.model_digest, xsink)) {
         return applyCaptureFailure(mode, identity, xsink);
+    }
+
+    // an ORT format model cannot reference external data: ONNX Runtime loads its initializers without an external
+    // data reader and fails to load a tensor with external data (LoadInitializerOrtFormat() as called from
+    // onnxruntime/core/graph/graph.cc), so its bytes are all of its content; the session is loaded in the format
+    // decided here, so that ONNX Runtime reads the bytes as they were captured
+    if (isOrtFormatModelBytes(identity.model_bytes)) {
+        identity.ort_format = true;
+        return completeCapture(mode, identity, xsink);
     }
 
     std::vector<OnnxExternalTensorRef> refs;
@@ -987,20 +1023,7 @@ bool captureFromBytes(std::vector<char>&& model_bytes, const std::string& base_d
         return true;
     }
 
-    identity.complete = true;
-    identity.finalize();
-    if (identity.getDigest().empty()) {
-        // finalize() could not compute the manifest digest
-        identity.complete = false;
-        if (mode == OnnxContentIdentityMode::Required) {
-            xsink->raiseException(ML_ONNX_CONTENT_IDENTITY_ERROR,
-                "a complete ONNX content identity was required but the identity manifest digest "
-                "could not be computed");
-            return false;
-        }
-        identity.discardCapture("the identity manifest digest could not be computed");
-    }
-    return true;
+    return completeCapture(mode, identity, xsink);
 }
 }  // anonymous namespace
 
@@ -1012,6 +1035,7 @@ void OnnxContentIdentity::setUnknown(const std::string& reason) {
 
 void OnnxContentIdentity::discardCapture(const std::string& reason) {
     captured = false;
+    ort_format = false;
     model_bytes.clear();
     model_bytes.shrink_to_fit();
     model_digest.clear();

@@ -15,6 +15,41 @@
     implementations of common ML algorithms. Optional ONNX Runtime support allows running
     pre-trained models from frameworks like PyTorch, scikit-learn, and TensorFlow.
 
+    @section ml_onnx_sandbox ONNX Models in a Sandbox
+
+    Files read and written for ONNX models are accessed on behalf of the calling program, so they are subject to its
+    filesystem sandbox (@ref Qore::SandboxManager "SandboxManager"):
+    - a model file given to @ref Qore::ML::OnnxModel "OnnxModel", @ref Qore::ML::OnnxSessionPool "OnnxSessionPool"
+      or @ref Qore::ML::onnx_optimize_model() "onnx_optimize_model()" must be readable; with a sandbox, the content
+      identity capture (\c OnnxSessionConfig::content_identity) is always \c "required": the model and every
+      external tensor data file are read through the sandbox and given to ONNX Runtime from memory, and a model whose
+      external data ONNX Runtime would read by itself (from a subgraph, a function body, a node attribute or an
+      execution provider context binary) is refused with \c ML-ONNX-CONTENT-IDENTITY-ERROR
+    - the files ONNX Runtime writes - an optimized model (\c optimized_model_filepath,
+      @ref Qore::ML::OnnxModel::saveOptimized() "OnnxModel::saveOptimized()",
+      @ref Qore::ML::onnx_optimize_model() "onnx_optimize_model()") and a profile (\c profile_file_prefix, including
+      the default prefix used by \c enable_profiling) - must be writable
+    - the raw session config entries (\c OnnxSessionConfig::config) may only be ONNX Runtime options that name no file
+      (threading, allocator, optimizer and quantization options); the options that name a file are checked
+      (\c ep.context_file_path, \c session.collect_node_memory_stats_to_file,
+      \c session.node_partition_config_file, \c optimization.memory_optimizer_config,
+      \c session.optimized_model_external_initializers_file_name and
+      \c ep.context_model_external_initializers_file_name, the last two in the directory of the model written), the
+      flags that write a file the sandbox cannot check (\c ep.context_enable without \c ep.context_file_path,
+      \c session.debug_layout_transformation, \c session.save_external_prepacked_constant_initializers) may only be
+      off, and every other entry raises \c ML-ONNX-ERROR
+    - the run config entries of @ref Qore::ML::OnnxRunOptions "OnnxRunOptions" may only be ONNX Runtime run options
+      that name no file; any other entry, such as \c qnn.lora_config, raises \c ML-ONNX-RUN-OPTIONS-ERROR
+    - execution provider options may only be those listed by
+      @ref Qore::ML::ml_get_onnx_provider_options() "ml_get_onnx_provider_options()"; the TensorRT engine cache
+      directory (\c trt_engine_cache_path) is checked, and the engine cache may only be enabled when it names the
+      directory; any other option, such as one that names a library to load, raises \c ML-ONNX-PROVIDER-ERROR
+    - @ref Qore::ML::ml_save_model() "ml_save_model()" and @ref Qore::ML::ml_load_model() "ml_load_model()" open
+      their files like @ref Qore::File "File" does
+
+    A denied file raises \c FILESYSTEM-ACCESS-DENIED, and a path the sandbox cannot resolve raises
+    \c SANDBOX-PATH-ERROR.  Without a sandbox, nothing changes.
+
     @section mlqlibmodules Qore User Modules
 
     - @ref dataprovidermlintro "DataProviderML" — ML-based data pipeline processors wrapping the ml binary module

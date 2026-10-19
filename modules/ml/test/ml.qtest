@@ -189,6 +189,10 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel preallocated I/O binding", \onnxPreallocatedIoBindingTest());
         addTestCase("OnnxModel optimized ONNX artifact", \onnxOptimizedArtifactTest());
         addTestCase("OnnxModel ORT artifact", \onnxOrtArtifactTest());
+        addTestCase("ONNX model files respect the sandbox", \onnxSandboxFileTest());
+        addTestCase("ONNX file checks honor a policy barrier", \onnxSandboxPolicyBarrierTest());
+        addTestCase("ONNX model data is read through the sandbox", \onnxSandboxModelDataTest());
+        addTestCase("ONNX Runtime options respect the sandbox", \onnxSandboxOptionsTest());
         addTestCase("OnnxModel profiling and stats", \onnxProfilingStatsTest());
         addTestCase("OnnxModel multi-input tensor inference", \onnxMultiInputTensorInferenceTest());
         addTestCase("OnnxModel batch inference", \onnxBatchTest());
@@ -4601,6 +4605,304 @@ public class MlTest inherits QUnit::Test {
         ML::OnnxModel model(out.path, <ML::OnnxSessionConfig>{"providers": ()});
         hash<auto> result = model.run({"X": ((4.0,),)});
         assertFloat(9.0, result.Y[0], 1e-5);
+    }
+
+    #! Makes a program whose filesystem sandbox is rooted at \a allowed
+    private Program makeOnnxSandboxProgram(string allowed) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("
+%modern
+%requires ml
+
+*hash<ExceptionInfo> sub load(string path) {
+    try {
+        ML::OnnxModel m(path);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub load_config(string path, *hash<auto> config) {
+    try {
+        hash<ML::OnnxSessionConfig> cfg = <ML::OnnxSessionConfig>{\"providers\": ()};
+        if (config) {
+            foreach string key in (keys config) {
+                cfg{key} = config{key};
+            }
+        }
+        ML::OnnxModel m(path, cfg);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub load_pool(string path) {
+    try {
+        ML::OnnxSessionPool pool(path, <ML::OnnxSessionConfig>{\"providers\": ()});
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub optimize(string input, string output) {
+    try {
+        ML::onnx_optimize_model(input_path: input, output_path: output,
+            options: <ML::OnnxSessionConfig>{\"providers\": ()});
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub load_bytes(binary data) {
+    try {
+        ML::OnnxModel m(data);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+bool sub identity_complete(string path, *hash<auto> config) {
+    hash<ML::OnnxSessionConfig> cfg = <ML::OnnxSessionConfig>{\"providers\": ()};
+    if (config) {
+        foreach string key in (keys config) {
+            cfg{key} = config{key};
+        }
+    }
+    ML::OnnxModel m(path, cfg);
+    return m.getContentIdentity().complete;
+}
+
+*hash<ExceptionInfo> sub load_provider(string path, hash<auto> options) {
+    try {
+        ML::OnnxModel m(path, <ML::OnnxSessionConfig>{
+            \"providers\": (<ML::OnnxProviderConfig>{\"name\": \"CPU\", \"options\": options},),
+        });
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub run_options(hash<auto> config) {
+    try {
+        ML::OnnxRunOptions o({\"config\": config});
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub save_optimized(string path, string output) {
+    try {
+        ML::OnnxModel m(path, <ML::OnnxSessionConfig>{\"providers\": ()});
+        m.saveOptimized(output_path: output);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+        ", "ml_onnx_sandbox");
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(allowed);
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! ONNX model files and the files ONNX Runtime writes are subject to the sandbox of the calling program
+    onnxSandboxFileTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-sandbox-");
+        string allowed = tmp.path + "/allowed";
+        string outside = tmp.path + "/outside";
+        mkdir(allowed);
+        mkdir(outside);
+        binary model = ReadOnlyFile::readBinaryFile(getTestModelPath());
+        ciWrite(allowed + "/model.onnx", model);
+        ciWrite(outside + "/model.onnx", model);
+        Program p = makeOnnxSandboxProgram(allowed);
+
+        # a model inside the sandbox root is loaded
+        assertNothing(p.callFunction("load", allowed + "/model.onnx"), "a model inside the sandbox root is loaded");
+        assertNothing(p.callFunction("load_config", allowed + "/model.onnx"),
+            "a configured model inside the sandbox root is loaded");
+
+        # a model outside the sandbox root is denied by every constructor
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load", outside + "/model.onnx").err,
+            "OnnxModel cannot load a model outside the sandbox root");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", outside + "/model.onnx").err,
+            "a configured OnnxModel cannot load a model outside the sandbox root");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_pool", outside + "/model.onnx").err,
+            "OnnxSessionPool cannot load a model outside the sandbox root");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("optimize", outside + "/model.onnx",
+            allowed + "/optimized.onnx").err, "onnx_optimize_model() cannot read a model outside the sandbox root");
+
+        # files that ONNX Runtime writes outside the sandbox root are denied, and none is written
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("optimize", allowed + "/model.onnx",
+            outside + "/optimized.onnx").err, "onnx_optimize_model() cannot write outside the sandbox root");
+        assertFalse(is_file(outside + "/optimized.onnx"), "a denied optimization writes no file");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("save_optimized", allowed + "/model.onnx",
+            outside + "/saved.ort").err, "saveOptimized() cannot write outside the sandbox root");
+        assertFalse(is_file(outside + "/saved.ort"), "a denied saveOptimized() writes no file");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", allowed + "/model.onnx",
+            {"optimized_model_filepath": outside + "/session-optimized.onnx"}).err,
+            "optimized_model_filepath cannot name a file outside the sandbox root");
+        assertFalse(is_file(outside + "/session-optimized.onnx"), "a denied optimized model path writes no file");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", allowed + "/model.onnx",
+            {"profile_file_prefix": outside + "/profile"}).err,
+            "profile_file_prefix cannot name a file outside the sandbox root");
+        assertFalse(glob(outside + "/profile*").val(), "a denied profile prefix writes no profile");
+
+        # files inside the sandbox root are written
+        assertNothing(p.callFunction("optimize", allowed + "/model.onnx", allowed + "/optimized.onnx"),
+            "onnx_optimize_model() writes inside the sandbox root");
+        assertTrue(is_file(allowed + "/optimized.onnx"), "the optimized model is written inside the sandbox root");
+    }
+
+    #! the ONNX file checks are policy checks, so a policy barrier lifts the policy of a sandboxed caller
+    onnxSandboxPolicyBarrierTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(sm);
+        # the sandboxed program calls back out into trusted code
+        p.parse("auto sub run(code c, string path) { return c(path); }", "ml-barrier-caller");
+
+        # code in this program, which has no sandbox manager, inherits the policy of the sandboxed caller; content
+        # identity capture reads the model and its external data itself
+        code plain = auto sub (string path) {
+            ML::OnnxModel m(path, <ML::OnnxSessionConfig>{"providers": (), "content_identity": "required"});
+            return m.getContentIdentity().complete;
+        };
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \p.callFunction(), ("run", plain, getTestModelPath()),
+            "a model outside the sandbox of the calling program is denied");
+
+        code barriered = auto sub (string path) {
+            return SandboxManager::callWithSystemPolicy(plain, path);
+        };
+        assertTrue(p.callFunction("run", barriered, getTestModelPath()),
+            "a model is loaded and its content captured inside a policy barrier");
+    }
+
+    #! with a sandbox, ONNX Runtime is only given model and external data bytes that were read through the sandbox
+    onnxSandboxModelDataTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-sandbox-data-");
+        string allowed = tmp.path + "/allowed";
+        string outside = tmp.path + "/outside";
+        mkdir(allowed);
+        mkdir(outside);
+        Program p = makeOnnxSandboxProgram(allowed);
+
+        # external data that is a link to a file outside the sandbox root is denied, whatever the capture mode
+        ciWrite(outside + "/weights.bin", ciFloatBytes(2.0));
+        mkdir(allowed + "/linked");
+        symlink(outside + "/weights.bin", allowed + "/linked/weights.bin");
+        ciWrite(allowed + "/linked/model.onnx", ciExternalModel("weights.bin"));
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load", allowed + "/linked/model.onnx").err,
+            "external data outside the sandbox root is denied");
+        foreach string mode in (("disabled", "best_effort")) {
+            assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", allowed + "/linked/model.onnx",
+                {"content_identity": mode}).err,
+                sprintf("external data outside the sandbox root is denied with content_identity %y", mode));
+        }
+
+        # a model with external data inside the sandbox root is loaded, and its content is captured
+        ciWrite(allowed + "/weights.bin", ciFloatBytes(1.0));
+        ciWrite(allowed + "/model.onnx", ciExternalModel("weights.bin"));
+        assertNothing(p.callFunction("load", allowed + "/model.onnx"),
+            "a model with external data inside the sandbox root is loaded");
+        assertTrue(p.callFunction("identity_complete", allowed + "/model.onnx"),
+            "the content of a model loaded by a sandboxed program is captured");
+
+        # external data that ONNX Runtime would read by itself cannot be loaded by a sandboxed program
+        ciWrite(allowed + "/nested.onnx", ciNestedIfModel());
+        assertEq("ML-ONNX-CONTENT-IDENTITY-ERROR", p.callFunction("load", allowed + "/nested.onnx").err,
+            "external data that is not read through the sandbox is refused");
+
+        # an ORT format model cannot reference external data, so its bytes are all of its content
+        ML::OnnxModel source(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()});
+        source.saveOptimized(output_path: allowed + "/model.ort");
+        assertNothing(p.callFunction("load_config", allowed + "/model.ort", {"load_model_format": "ORT"}),
+            "an ORT format model inside the sandbox root is loaded");
+        assertTrue(p.callFunction("identity_complete", allowed + "/model.ort"),
+            "the content of an ORT format model is captured");
+        assertNothing(p.callFunction("load", allowed + "/model.ort"),
+            "an ORT format model is loaded without an explicit format");
+
+        # a model in memory is loaded
+        assertNothing(p.callFunction("load_bytes", ReadOnlyFile::readBinaryFile(getTestModelPath())),
+            "a model in memory is loaded by a sandboxed program");
+    }
+
+    #! with a sandbox, only ONNX Runtime options that name no file, or whose file is checked, may be set
+    onnxSandboxOptionsTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-sandbox-options-");
+        string allowed = tmp.path + "/allowed";
+        string outside = tmp.path + "/outside";
+        mkdir(allowed);
+        mkdir(outside);
+        string model = allowed + "/model.onnx";
+        ciWrite(model, ReadOnlyFile::readBinaryFile(getTestModelPath()));
+        Program p = makeOnnxSandboxProgram(allowed);
+
+        # options that only tune the session
+        assertNothing(p.callFunction("load_config", model, {"config": {"session.intra_op.allow_spinning": "0",
+            "ep.context_enable": "0"}}), "session options that name no file may be set");
+
+        # options that name a file outside the sandbox root
+        foreach string key in (("ep.context_file_path", "session.collect_node_memory_stats_to_file",
+                "optimization.memory_optimizer_config", "session.node_partition_config_file")) {
+            assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", model,
+                {"config": {key: outside + "/file"}}).err, sprintf("%y cannot name a file outside the sandbox root",
+                key));
+        }
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", model, {
+            "optimized_model_filepath": allowed + "/optimized.onnx",
+            "config": {"session.optimized_model_external_initializers_file_name": "../outside/weights.bin"},
+        }).err, "the external initializers of the optimized model cannot be written outside the sandbox root");
+        assertFalse(is_file(outside + "/weights.bin"), "no external initializers are written outside the root");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", model, {
+            "optimized_model_filepath": allowed + "/optimized.onnx",
+            "config": {"session.optimized_model_external_initializers_file_name": outside + "/weights.bin"},
+        }).err, "an absolute external initializers file name is checked as it is given");
+
+        # options that write a file the sandbox cannot check
+        *hash<ExceptionInfo> ex = p.callFunction("load_config", model,
+            {"config": {"session.debug_layout_transformation": "1"}});
+        assertEq("ML-ONNX-ERROR", ex.err, "a flag that dumps files cannot be set");
+        assertRegex("'session.debug_layout_transformation'", ex.desc, "the error names the option");
+        ex = p.callFunction("load_config", model, {"config": {"ep.context_enable": "1"}});
+        assertEq("ML-ONNX-ERROR", ex.err, "the EP context model cannot be written next to the model");
+        assertRegex("ep.context_file_path", ex.desc, "the error names the option that must name the file");
+
+        # options that the sandbox cannot check, and options ONNX Runtime does not define
+        foreach hash<auto> config in (
+                {"session.model_external_initializers_file_folder_path": allowed},
+                {"session.resource_cuda_partitioning_settings": "1024,stats.csv"},
+                {"qore.unknown_option": "1"},
+                ) {
+            ex = p.callFunction("load_config", model, {"config": config});
+            assertEq("ML-ONNX-ERROR", ex.err, sprintf("session option %y is refused", keys config));
+            assertRegex("cannot be set by a sandboxed program", ex.desc, "the error explains the refusal");
+        }
+
+        # run options
+        assertNothing(p.callFunction("run_options", {"gpu_graph_id": "0"}), "run options that name no file may be set");
+        ex = p.callFunction("run_options", {"qnn.lora_config": outside + "/lora.json"});
+        assertEq("ML-ONNX-RUN-OPTIONS-ERROR", ex.err, "a run option that names a file is refused");
+        assertRegex("'qnn.lora_config'", ex.desc, "the error names the run option");
+
+        # execution provider options
+        ex = p.callFunction("load_provider", model, {"backend_path": outside + "/libQnnHtp.so"});
+        assertEq("ML-ONNX-PROVIDER-ERROR", ex.err, "a provider option that loads a library is refused");
+        assertRegex("cannot be set by a sandboxed program", ex.desc, "the error explains the refusal");
     }
 
     onnxOrtArtifactTest() {

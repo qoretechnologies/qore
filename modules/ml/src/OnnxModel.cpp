@@ -34,6 +34,8 @@
 
 #include <onnxruntime_session_options_config_keys.h>
 
+#include <qore/QoreSandboxManager.h>
+
 #ifdef HAVE_CUDART
 #include <cuda_runtime_api.h>
 #endif
@@ -781,6 +783,249 @@ static std::unordered_map<std::string, std::string> hashToStringMap(const QoreHa
     return rv;
 }
 
+//! Checks that the sandbox of the calling program allows ONNX Runtime to access a path on its behalf
+/** @return true if the access is allowed or no sandbox is active, false if an exception was raised
+*/
+static bool onnxCheckSandboxPath(const char* path, int mode, ExceptionSink* xsink) {
+    // a policy check honors an active policy barrier
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    return !smh || smh->checkFilesystemAccess(path, mode, xsink);
+}
+
+//! Returns true if the calling program has a filesystem sandbox policy
+static bool onnxSandboxActive() {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    return static_cast<bool>(smh);
+}
+
+//! The ONNX Runtime session config entries a sandboxed program may set: none of them names a file or produces output
+/** These are the keys of \c onnxruntime_session_options_config_keys.h that only tune the session; the keys that
+    name files are in onnx_sandbox_session_config_paths or onnx_sandbox_session_config_flags, or are refused.
+*/
+static const std::unordered_set<std::string> onnx_sandbox_session_config_allowed = {
+    "session.disable_prepacking",
+    "session.use_env_allocators",
+    "session.load_model_format",
+    "session.save_model_format",
+    "session.set_denormal_as_zero",
+    "session.disable_quant_qdq",
+    "session.disable_double_qdq_remover",
+    "session.enable_quant_qdq_cleanup",
+    "optimization.enable_gelu_approximation",
+    "optimization.enable_cast_chain_elimination",
+    "session.disable_aot_function_inlining",
+    "optimization.enable_memory_probe_recompute_config",
+    "optimization.disable_specified_optimizers",
+    "session.graph_optimizations_loop_level",
+    "session.use_device_allocator_for_initializers",
+    "session.inter_op.allow_spinning",
+    "session.intra_op.allow_spinning",
+    "session.use_ort_model_bytes_directly",
+    "session.use_ort_model_bytes_for_initializers",
+    "session.qdqisint8allowed",
+    "session.x64quantprecision",
+    "optimization.minimal_build_optimizations",
+    "ep.nnapi.partitioning_stop_ops",
+    "session.dynamic_block_base",
+    "session.force_spinning_stop",
+    "session.strict_shape_type_inference",
+    "session.allow_released_opsets_only",
+    "session.intra_op_thread_affinities",
+    "session.disable_cpu_ep_fallback",
+    "session.optimized_model_external_initializers_min_size_in_bytes",
+    "ep.context_embed_mode",
+    "ep.context_node_name_prefix",
+    "ep.share_ep_contexts",
+    "ep.stop_share_ep_contexts",
+    "mlas.enable_gemm_fastmath_arm64_bfloat16",
+    "session.qdq_matmulnbits_accuracy_level",
+    "ep.dynamic.workload_type",
+    "session.disable_model_compile",
+    "session.fail_on_suboptimal_compiled_model",
+    "ep.dynamic.qnn_htp_performance_mode",
+};
+
+//! The ONNX Runtime session config entries that name a file, with the access ONNX Runtime needs to it
+static const std::unordered_map<std::string, int> onnx_sandbox_session_config_paths = {
+    {"ep.context_file_path", QSEC_WRITE | QSEC_CREATE},
+    {"session.collect_node_memory_stats_to_file", QSEC_WRITE | QSEC_CREATE},
+    {"session.node_partition_config_file", QSEC_READ},
+    {"optimization.memory_optimizer_config", QSEC_READ},
+    // file names in the directory of the optimized model and of the EP context model
+    {"session.optimized_model_external_initializers_file_name", QSEC_WRITE | QSEC_CREATE},
+    {"ep.context_model_external_initializers_file_name", QSEC_WRITE | QSEC_CREATE},
+};
+
+//! ONNX Runtime session config flags that write a file when they are set, with the entry that must name the file
+/** A flag without such an entry writes a file that the sandbox cannot check, so it may only be off. */
+static const std::unordered_map<std::string, const char*> onnx_sandbox_session_config_flags = {
+    // writes <model>_ctx.onnx next to the model when no file is named
+    {"ep.context_enable", "ep.context_file_path"},
+    // dumps models to post_layout_transform_step_<n>.onnx in the current directory
+    {"session.debug_layout_transformation", nullptr},
+    // writes the pre-packed initializers to an external data file
+    {"session.save_external_prepacked_constant_initializers", nullptr},
+};
+
+//! The ONNX Runtime run config entries a sandboxed program may set: none of them names a file
+static const std::unordered_set<std::string> onnx_sandbox_run_config_allowed = {
+    "memory.enable_memory_arena_shrinkage",
+    "disable_synchronize_execution_providers",
+    "qnn.htp_perf_mode",
+    "qnn.htp_perf_mode_post_run",
+    "qnn.rpc_control_latency",
+    "gpu_graph_id",
+};
+
+//! The execution provider options a sandboxed program may set, by canonical provider name
+/** These are the options documented by ML::ml_get_onnx_provider_options(); the TensorRT engine cache directory is
+    checked, and the engine cache may only be enabled when it names the directory.
+*/
+static const std::unordered_map<std::string, std::unordered_set<std::string>> onnx_sandbox_provider_options = {
+    {"CUDAExecutionProvider", {"device_id", "gpu_mem_limit", "arena_extend_strategy", "cudnn_conv_algo_search",
+        "do_copy_in_default_stream", "enable_cuda_graph"}},
+    {"TensorrtExecutionProvider", {"device_id", "trt_max_workspace_size", "trt_fp16_enable", "trt_int8_enable",
+        "trt_engine_cache_enable", "trt_engine_cache_path"}},
+    {"OpenVINOExecutionProvider", {"device_type", "precision"}},
+    {"DmlExecutionProvider", {"device_id"}},
+    {"ROCMExecutionProvider", {"device_id", "gpu_mem_limit"}},
+};
+
+//! Returns true if an ONNX Runtime flag value turns the flag off
+static bool onnxFlagIsOff(const std::string& value) {
+    std::string v = value;
+    std::transform(v.begin(), v.end(), v.begin(), [](unsigned char c) { return std::tolower(c); });
+    return v == "0" || v == "false";
+}
+
+//! Returns the directory of a file path, or "." for a file name without a directory
+static std::string onnxDirOf(const std::string& path) {
+    size_t slash = path.rfind('/');
+    if (slash == std::string::npos) {
+        return ".";
+    }
+    return slash ? path.substr(0, slash) : std::string("/");
+}
+
+//! Checks the ONNX Runtime session config entries of a sandboxed program
+/** @param entries the session config entries
+    @param optimized_path the optimized model path, or an empty string if there is none
+
+    @return true if the entries may be set, false if an exception was raised
+*/
+static bool onnxCheckSandboxSessionConfig(const std::unordered_map<std::string, std::string>& entries,
+        const std::string& optimized_path, ExceptionSink* xsink) {
+    size_t count = 0;
+    for (const auto& entry : entries) {
+        if (count && !(count % 100) && qore_check_cancel(xsink, "checking ONNX session config entries")) {
+            return false;
+        }
+        ++count;
+        const std::string& key = entry.first;
+        if (onnx_sandbox_session_config_allowed.find(key) != onnx_sandbox_session_config_allowed.end()) {
+            continue;
+        }
+        auto pi = onnx_sandbox_session_config_paths.find(key);
+        if (pi != onnx_sandbox_session_config_paths.end()) {
+            std::string path = entry.second;
+            // the external initializer file names are relative to the directory of the model that is written
+            // (ONNX Runtime refuses an absolute name, which is checked as it is given)
+            if (!path.empty() && path[0] != '/') {
+                if (key == "session.optimized_model_external_initializers_file_name") {
+                    path = onnxDirOf(optimized_path) + "/" + path;
+                } else if (key == "ep.context_model_external_initializers_file_name") {
+                    auto ci = entries.find("ep.context_file_path");
+                    path = onnxDirOf(ci == entries.end() ? std::string() : ci->second) + "/" + path;
+                }
+            }
+            if (!onnxCheckSandboxPath(path.c_str(), pi->second, xsink)) {
+                return false;
+            }
+            continue;
+        }
+        auto fi = onnx_sandbox_session_config_flags.find(key);
+        if (fi != onnx_sandbox_session_config_flags.end()) {
+            if (onnxFlagIsOff(entry.second) || (fi->second && entries.find(fi->second) != entries.end())) {
+                continue;
+            }
+            xsink->raiseException("ML-ONNX-ERROR", "ONNX session config entry '%s' cannot be enabled by a "
+                "sandboxed program%s%s%s: it makes ONNX Runtime write a file that the sandbox cannot check",
+                key.c_str(), fi->second ? " unless '" : "", fi->second ? fi->second : "",
+                fi->second ? "' names the file" : "");
+            return false;
+        }
+        xsink->raiseException("ML-ONNX-ERROR", "ONNX session config entry '%s' cannot be set by a sandboxed program: "
+            "only the ONNX Runtime options that do not name files, or whose files are checked, may be set",
+            key.c_str());
+        return false;
+    }
+    return true;
+}
+
+//! Checks the ONNX Runtime run config entries of a sandboxed program
+/** @return true if the entries may be set, false if an exception was raised
+*/
+static bool onnxCheckSandboxRunConfig(const std::unordered_map<std::string, std::string>& entries,
+        ExceptionSink* xsink) {
+    size_t count = 0;
+    for (const auto& entry : entries) {
+        if (count && !(count % 100) && qore_check_cancel(xsink, "checking ONNX run config entries")) {
+            return false;
+        }
+        ++count;
+        if (onnx_sandbox_run_config_allowed.find(entry.first) == onnx_sandbox_run_config_allowed.end()) {
+            xsink->raiseException("ML-ONNX-RUN-OPTIONS-ERROR", "ONNX run config entry '%s' cannot be set by a "
+                "sandboxed program: only the ONNX Runtime run options that do not name files may be set",
+                entry.first.c_str());
+            return false;
+        }
+    }
+    return true;
+}
+
+//! Checks the execution provider options of a sandboxed program
+/** @return true if the options may be set, false if an exception was raised
+*/
+static bool onnxCheckSandboxProviderOptions(const std::string& provider,
+        const std::unordered_map<std::string, std::string>& options, ExceptionSink* xsink) {
+    auto pi = onnx_sandbox_provider_options.find(provider);
+    size_t count = 0;
+    for (const auto& opt : options) {
+        if (count && !(count % 100) && qore_check_cancel(xsink, "checking ONNX execution provider options")) {
+            return false;
+        }
+        ++count;
+        if (pi == onnx_sandbox_provider_options.end() || pi->second.find(opt.first) == pi->second.end()) {
+            xsink->raiseException("ML-ONNX-PROVIDER-ERROR", "execution provider option '%s' of provider '%s' cannot "
+                "be set by a sandboxed program: only the options listed by ML::ml_get_onnx_provider_options() may be "
+                "set", opt.first.c_str(), provider.c_str());
+            return false;
+        }
+        if (opt.first == "trt_engine_cache_path") {
+            if (!onnxCheckSandboxPath(opt.second.c_str(), QSEC_READ | QSEC_WRITE | QSEC_CREATE, xsink)) {
+                return false;
+            }
+        } else if (opt.first == "trt_engine_cache_enable" && !onnxFlagIsOff(opt.second)
+                && options.find("trt_engine_cache_path") == options.end()) {
+            xsink->raiseException("ML-ONNX-PROVIDER-ERROR", "execution provider option 'trt_engine_cache_enable' "
+                "cannot be enabled by a sandboxed program unless 'trt_engine_cache_path' names the cache directory");
+            return false;
+        }
+    }
+    return true;
+}
+
+//! Makes content identity capture required when the calling program has a filesystem sandbox policy
+/** Content identity capture reads the model and its external data through the sandbox check and gives ONNX Runtime
+    the bytes it read; required capture refuses a model whose data ONNX Runtime would read by itself, so with a
+    sandbox, ONNX Runtime never reads a file that the sandbox did not allow.
+*/
+static void onnxSandboxIdentityMode(OnnxContentIdentityMode& mode) {
+    if (onnxSandboxActive()) {
+        mode = OnnxContentIdentityMode::Required;
+    }
+}
+
 static bool hasOrtSuffix(const char* path) {
     if (!path) {
         return false;
@@ -915,6 +1160,9 @@ QoreOnnxRunOptions::QoreOnnxRunOptions(const QoreHashNode* opts, ExceptionSink* 
         if (*xsink) {
             return;
         }
+        if (onnxSandboxActive() && !onnxCheckSandboxRunConfig(config_entries, xsink)) {
+            return;
+        }
         try {
             size_t count = 0;
             for (const auto& kv : config_entries) {
@@ -983,12 +1231,21 @@ QoreHashNode* QoreOnnxRunOptions::getInfo(ExceptionSink* xsink) const {
 QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
     : active_provider("CPUExecutionProvider") {
     source_model_path = model_path;
+    // the model is read on behalf of the calling program, so its sandbox must allow it
+    if (!onnxCheckSandboxPath(model_path, QSEC_READ, xsink)) {
+        return;
+    }
+    onnxSandboxIdentityMode(content_identity_mode);
     try {
         available_providers = getAvailableOnnxProviders();
         env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(1);
         autoDetectProvider(session_options);
+        if (!captureContentIdentity(model_path, nullptr, 0, xsink)) {
+            return;
+        }
+        applyCapturedExternalInitializers(session_options);
         createSession(makeSessionSource(model_path, nullptr, 0), session_options, nullptr, xsink);
         if (*xsink) {
             return;
@@ -1003,10 +1260,15 @@ QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
 QoreOnnxModel::QoreOnnxModel(const char* model_path, const QoreHashNode* config,
     ExceptionSink* xsink) : active_provider("CPUExecutionProvider") {
     source_model_path = model_path;
+    // the model is read on behalf of the calling program, so its sandbox must allow it
+    if (!onnxCheckSandboxPath(model_path, QSEC_READ, xsink)) {
+        return;
+    }
     source_load_model_format = getConfigStringValue(config, "load_model_format");
     if (!parseOnnxContentIdentityMode(config, content_identity_mode, xsink)) {
         return;
     }
+    onnxSandboxIdentityMode(content_identity_mode);
     try {
         available_providers = getAvailableOnnxProviders();
         Ort::SessionOptions session_options;
@@ -1032,12 +1294,17 @@ QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
     ExceptionSink* xsink) : active_provider("CPUExecutionProvider") {
     const char* data = static_cast<const char*>(model_data);
     source_model_data.assign(data, data + model_data_len);
+    onnxSandboxIdentityMode(content_identity_mode);
     try {
         available_providers = getAvailableOnnxProviders();
         env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(1);
         autoDetectProvider(session_options);
+        if (!captureContentIdentity(nullptr, model_data, model_data_len, xsink)) {
+            return;
+        }
+        applyCapturedExternalInitializers(session_options);
         // Ort::Session copies the buffer, so the caller's memory lifetime doesn't matter
         createSession(makeSessionSource(nullptr, model_data, model_data_len), session_options,
             nullptr, xsink);
@@ -1060,6 +1327,7 @@ QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
     if (!parseOnnxContentIdentityMode(config, content_identity_mode, xsink)) {
         return;
     }
+    onnxSandboxIdentityMode(content_identity_mode);
     try {
         available_providers = getAvailableOnnxProviders();
         Ort::SessionOptions session_options;
@@ -1199,6 +1467,10 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
             }
             prefix = profile_prefix->c_str();
         }
+        // ONNX Runtime writes the profile to a file named by the prefix and a time stamp
+        if (!onnxCheckSandboxPath(prefix.c_str(), QSEC_WRITE | QSEC_CREATE, xsink)) {
+            return;
+        }
         try {
             opts.EnableProfiling(prefix.c_str());
             {
@@ -1214,6 +1486,7 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
         }
     }
 
+    std::string optimized_path_str;
     QoreValue optimized_path_val = config->getKeyValue("optimized_model_filepath");
     if (!optimized_path_val.isNullOrNothing()) {
         QoreStringValueHelper optimized_path(optimized_path_val);
@@ -1226,7 +1499,12 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
         if (q_check_path(**optimized_path, "ML-ONNX-ERROR", xsink)) {
             return;
         }
+        // ONNX Runtime writes the optimized model on behalf of the calling program
+        if (!onnxCheckSandboxPath(optimized_path->c_str(), QSEC_WRITE | QSEC_CREATE, xsink)) {
+            return;
+        }
         opts.SetOptimizedModelFilePath(optimized_path->c_str());
+        optimized_path_str = optimized_path->c_str();
     }
 
     std::unordered_map<std::string, std::string> session_config_entries;
@@ -1278,6 +1556,11 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
                 "invalid save_model_format '%s'; expected 'ONNX' or 'ORT'", save_format.c_str());
             return;
         }
+    }
+
+    // ONNX Runtime accesses the files that session config entries name on behalf of the calling program
+    if (onnxSandboxActive() && !onnxCheckSandboxSessionConfig(session_config_entries, optimized_path_str, xsink)) {
+        return;
     }
 
     size_t count = 0;
@@ -1759,6 +2042,15 @@ OnnxSessionSource QoreOnnxModel::makeSessionSource(const char* model_path, const
 }
 
 void QoreOnnxModel::applyCapturedExternalInitializers(Ort::SessionOptions& opts) {
+    // the session reads the captured bytes in the format in which the capture read them; without an explicit format,
+    // ONNX Runtime would decide the format from the bytes, and an explicit format given by the caller could differ
+    if (content_identity.hasModelBytes()) {
+        const char* format = content_identity.isOrtFormat() ? "ORT" : "ONNX";
+        // ONNX Runtime logs a warning when an entry is replaced
+        if (opts.GetConfigEntryOrDefault(kOrtSessionOptionsConfigLoadModelFormat, "") != format) {
+            opts.AddConfigEntry(kOrtSessionOptionsConfigLoadModelFormat, format);
+        }
+    }
     if (content_identity.files.empty()) {
         return;
     }
@@ -1843,6 +2135,9 @@ void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNo
                 }
             }
             diag.options = provider_opts;
+            if (onnxSandboxActive() && !onnxCheckSandboxProviderOptions(provider_name, provider_opts, xsink)) {
+                return;
+            }
 
             if (!isProviderAvailable(provider_name)) {
                 xsink->raiseException("ML-ONNX-PROVIDER-ERROR",

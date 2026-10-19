@@ -55,6 +55,8 @@ qclass OnnxRunOptions [arg=QoreOnnxRunOptions* options; ns=Qore::ML; flags=final
     - \c config: hash of string config entries passed to ONNX Runtime
 
     @throw ML-ONNX-RUN-OPTIONS-ERROR if the options hash is invalid
+    @throw ML-ONNX-RUN-OPTIONS-ERROR with a sandbox, if a run config entry is not an ONNX Runtime run option that names
+    no file; see @ref ml_onnx_sandbox
 */
 OnnxRunOptions::constructor(*hash<auto> options) [flags=NAMED_ARGS] {
 #ifdef HAVE_ONNXRUNTIME
@@ -333,6 +335,11 @@ OnnxModel model("/path/to/model.onnx");
     @endcode
 
     @throw ML-ONNX-ERROR if the model cannot be loaded or the model path has a NUL character
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR with a sandbox, if the model has external data that ONNX Runtime would read
+    by itself; see @ref ml_onnx_sandbox
 */
 OnnxModel::constructor(string model_path) {
 #ifdef HAVE_ONNXRUNTIME
@@ -374,6 +381,15 @@ OnnxModel model("/path/to/model.onnx", config);
     @throw ML-ONNX-ERROR if the model cannot be loaded, config is invalid, or the model path has a NUL character
     @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
 
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR with a sandbox, if the model has external data that ONNX Runtime would read
+    by itself; see @ref ml_onnx_sandbox
+    @throw ML-ONNX-ERROR with a sandbox, if a session config entry names a file the sandbox cannot check; see
+    @ref ml_onnx_sandbox
+    @throw ML-ONNX-PROVIDER-ERROR with a sandbox, if an execution provider option is not one listed by
+    @ref Qore::ML::ml_get_onnx_provider_options() "ml_get_onnx_provider_options()"
 */
 OnnxModel::constructor(string model_path, hash<OnnxSessionConfig> options) {
 #ifdef HAVE_ONNXRUNTIME
@@ -412,6 +428,11 @@ OnnxModel model(bytes);
     @endcode
 
     @throw ML-ONNX-ERROR if the model bytes cannot be parsed
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR with a sandbox, if the model has external data that ONNX Runtime would read
+    by itself; see @ref ml_onnx_sandbox
 */
 OnnxModel::constructor(binary model_data) {
 #ifdef HAVE_ONNXRUNTIME
@@ -448,6 +469,15 @@ OnnxModel model(bytes, config);
 
     @throw ML-ONNX-ERROR if the model bytes cannot be parsed or config is invalid
     @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR with a sandbox, if the model has external data that ONNX Runtime would read
+    by itself; see @ref ml_onnx_sandbox
+    @throw ML-ONNX-ERROR with a sandbox, if a session config entry names a file the sandbox cannot check; see
+    @ref ml_onnx_sandbox
+    @throw ML-ONNX-PROVIDER-ERROR with a sandbox, if an execution provider option is not one listed by
+    @ref Qore::ML::ml_get_onnx_provider_options() "ml_get_onnx_provider_options()"
 */
 OnnxModel::constructor(binary model_data, hash<OnnxSessionConfig> options) {
 #ifdef HAVE_ONNXRUNTIME
@@ -545,6 +575,9 @@ OnnxModel optimized("/models/customer-score.ort",
 
     @throw ML-ONNX-ERROR if the optimized artifact cannot be written or the output path has a NUL character
     @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
 */
 hash<auto> OnnxModel::saveOptimized(string output_path,
         *hash<OnnxSessionConfig> options, bool ort_format = False)
@@ -947,6 +980,15 @@ qclass OnnxSessionPool [arg=QoreOnnxSessionPool* pool; ns=Qore::ML; flags=final;
 
     @throw ML-ONNX-POOL-ERROR if pool options are invalid
     @throw ML-ONNX-ERROR if any session cannot be created or the model path has a NUL character
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR with a sandbox, if the model has external data that ONNX Runtime would read
+    by itself; see @ref ml_onnx_sandbox
+    @throw ML-ONNX-ERROR with a sandbox, if a session config entry names a file the sandbox cannot check; see
+    @ref ml_onnx_sandbox
+    @throw ML-ONNX-PROVIDER-ERROR with a sandbox, if an execution provider option is not one listed by
+    @ref Qore::ML::ml_get_onnx_provider_options() "ml_get_onnx_provider_options()"
 */
 OnnxSessionPool::constructor(string model_path, *hash<OnnxSessionConfig> session_config,
         *hash<auto> pool_options) [flags=NAMED_ARGS] {

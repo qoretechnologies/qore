@@ -453,6 +453,29 @@ always describes the same instance that encodes, scores or infers — never a se
 constructed to answer the question. Tokenizer configuration and preprocessing/pooling policy are
 deliberately outside this identity and must be bound by the producer that applies them.
 
+### Sandboxing
+
+With a filesystem sandbox policy (`QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)`), ONNX Runtime may only
+touch files the sandbox allowed:
+
+- **Model bytes and external data**: every `QoreOnnxModel` constructor forces content identity capture to `Required`
+  (`onnxSandboxIdentityMode()`), so the model and each external data file are read by the checked `readWholeFile()`
+  and given to ONNX Runtime from memory (`AddExternalInitializersFromFilesInMemory()`). `best_effort` capture is not
+  enough: it discards a failed capture, including a sandbox denial, and lets ONNX Runtime load the path itself.
+  `applyCapturedExternalInitializers()` sets `session.load_model_format` to the format the capture read the bytes
+  in, because ONNX Runtime otherwise decides the format of in-memory bytes from an explicit entry or the `ORTM`
+  identifier (`InferenceSession::Load()`), which could differ. An ORT format model is complete from its bytes:
+  inference loads ORT format initializers without an external data reader (`LoadInitializerOrtFormat()` called from
+  `onnxruntime/core/graph/graph.cc`), so such a model cannot read external data.
+- **Option allow-lists** (`OnnxModel.cpp`): `onnx_sandbox_session_config_allowed` and
+  `onnx_sandbox_run_config_allowed` are the keys of `onnxruntime_session_options_config_keys.h` and
+  `onnxruntime_run_options_config_keys.h` (ONNX Runtime 1.23, API 23) that name no file and produce no output;
+  `onnx_sandbox_session_config_paths` are the keys that name a file, checked with the access ONNX Runtime needs;
+  `onnx_sandbox_session_config_flags` are flags that write a file, allowed only when off or when the file is named.
+  Provider options are limited to the documented `known_options`. Every other key is refused, so a key added by a
+  newer ONNX Runtime is refused until it is classified here: when upgrading ONNX Runtime, read the comments of every
+  new key in both headers and add it to the matching list.
+
 ## Tokenizer Module
 
 Separate binary module (`modules/tokenizer/`) providing HuggingFace-compatible text

@@ -505,14 +505,19 @@ hashdecl Qore::ML::OnnxSessionConfig {
     //! whether to enable ONNX Runtime profiling for this session
     *bool enable_profiling;
     //! profile file prefix passed to ONNX Runtime; setting this also enables profiling
+    /** With a sandbox, the sandbox must allow the profile to be written; see @ref ml_onnx_sandbox */
     *string profile_file_prefix;
     //! path where ONNX Runtime should save the optimized model while creating the session
+    /** With a sandbox, the sandbox must allow the file to be written; see @ref ml_onnx_sandbox */
     *string optimized_model_filepath;
     //! input model format for memory buffers or ambiguous paths: "ONNX" or "ORT"
     *string load_model_format;
     //! optimized model output format when optimized_model_filepath is set: "ONNX" or "ORT"
     *string save_model_format;
     //! raw ONNX Runtime session config entries; values are converted to strings
+    /** With a sandbox, only the entries that name no file may be set, and the files that entries name are checked;
+        see @ref ml_onnx_sandbox
+    */
     *hash<auto> config;
     //! device-buffer binding policy for GPU/accelerator execution providers
     *hash<OnnxDeviceBindingConfig> device_binding;
@@ -528,6 +533,10 @@ hashdecl Qore::ML::OnnxSessionConfig {
 
         Capturing content identity holds the model graph and all external tensor data in memory for
         the lifetime of the session, so it is disabled by default.
+
+        With a filesystem sandbox, capture is always \c "required", whatever this value is, so that ONNX Runtime
+        only reads model and external data bytes that the sandbox allowed; see @ref ml_onnx_sandbox.  The content
+        of an ORT format model is its bytes, as an ORT format model cannot have external data.
 
         @see @ref Qore::ML::OnnxModel::getContentIdentity()
     */
@@ -1023,6 +1032,15 @@ OnnxModel model("/models/customer-score.ort",
 
     @throw ML-ONNX-ERROR if the model cannot be optimized or a path has a NUL character
     @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR with a sandbox, if the model has external data that ONNX Runtime would read
+    by itself; see @ref ml_onnx_sandbox
+    @throw ML-ONNX-ERROR with a sandbox, if a session config entry names a file the sandbox cannot check; see
+    @ref ml_onnx_sandbox
+    @throw ML-ONNX-PROVIDER-ERROR with a sandbox, if an execution provider option is not one listed by
+    @ref Qore::ML::ml_get_onnx_provider_options() "ml_get_onnx_provider_options()"
 */
 hash<auto> onnx_optimize_model(string input_path, string output_path, *hash<auto> options, bool ort_format = False) [dom=FILESYSTEM; flags=NAMED_ARGS] {
 #ifdef HAVE_ONNXRUNTIME

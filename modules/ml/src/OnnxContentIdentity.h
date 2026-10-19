@@ -155,6 +155,11 @@ public:
         return captured && !model_bytes.empty();
     }
 
+    //! True when the captured model bytes are an ORT format model
+    DLLLOCAL bool isOrtFormat() const {
+        return ort_format;
+    }
+
     //! Returns the manifest digest, or an empty string when the identity is unknown
     DLLLOCAL const std::string& getDigest() const {
         return digest;
@@ -172,6 +177,8 @@ public:
     std::string unknown_reason;
     //! authoritative model bytes loaded into the session
     std::vector<char> model_bytes;
+    //! whether \a model_bytes are an ORT format model; the session is loaded in this format
+    bool ort_format = false;
     //! hex SHA-256 digest of \a model_bytes
     std::string model_digest;
     //! external data files captured in full
