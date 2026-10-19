@@ -4799,6 +4799,10 @@ while (*binary chunk = input.read(65536)) {
     - Fixed the TLS CA and certificate key files named by a connection string of the @ref mongodbintro "mongodb"
       module not being subject to the filesystem policy of a @ref sandboxing "sandbox": a sandboxed program could make
       the MongoDB driver read them outside the sandbox's allowed paths
+    - Fixed the trained data in an explicit data directory of the @ref ocrintro "ocr" module not being subject to the
+      filesystem policy of a @ref sandboxing "sandbox": a sandboxed program could make Tesseract read trained data
+      outside the sandbox's allowed paths, and trained data it wrote could make Tesseract read and write other files;
+      OCR with the system data directory no longer needs filesystem access rights
     - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
       @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
       thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in

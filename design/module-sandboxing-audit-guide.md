@@ -286,6 +286,12 @@ int myFileOperation(const char* path, ExceptionSink* xsink) {
    check it again wherever the library reads it again on behalf of a different caller (libmongoc reads the TLS files
    both when a client is created and for each connection); an argument that becomes part of a file name must not be
    able to contain a path character
+8. **Data files that carry configuration**: a data file the sandboxed code can write may configure the library that
+   loads it - Tesseract trained data carries a language configuration whose parameters can name further files to
+   read (`user_words_file`, sub-languages) or write (`tessedit_write_params_to_file`). Load such files through a
+   reader callback that checks each path and reads the bytes once, check the embedded configuration against an
+   allow-list derived from the official data (never a deny-list), parse it exactly as the library does, and hand
+   the library the checked bytes so the file cannot change between the check and the load
 
 ---
 

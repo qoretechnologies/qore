@@ -13,6 +13,15 @@
     - @ref Qore::Ocr::TesseractEngine "TesseractEngine" — Tesseract OCR
       engine wrapper
 
+    @section ocrsandboxing Sandboxing
+
+    OCR with the system data directory, used when no data directory is given to
+    @ref Qore::Ocr::TesseractEngine::constructor() "TesseractEngine::constructor()", needs no filesystem access rights,
+    so it is available to programs with the \c PO_NO_FILESYSTEM restriction.  An explicit data directory is read on
+    behalf of the calling program: it needs filesystem access rights, and with a filesystem sandbox, each trained data
+    file Tesseract loads must be allowed by the sandbox and may only configure layout, segmentation and recognition
+    parameters, so that trained data cannot make Tesseract read or write any other file.
+
     @section ocrqlibmodules Qore User Modules
 
     - @ref qoreocrutilsintro "QoreOcrUtils" — OCR support with native Tesseract and HTTP backends, plus scanned PDF detection
