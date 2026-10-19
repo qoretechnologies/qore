@@ -5293,6 +5293,18 @@ void QoreOnnxSessionPool::release(size_t index) {
     cv.notify_one();
 }
 
+QoreObject* QoreOnnxSessionPool::acquireSession(QoreProgram* pgm, ExceptionSink* xsink) {
+    std::unique_ptr<Lease> lease = acquire(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    // the lease object references the pool, and returns the session when it is released or destroyed
+    ReferenceHolder<QoreOnnxSessionLease> holder(new QoreOnnxSessionLease(this, std::move(lease)), xsink);
+    QoreObject* obj = new QoreObject(QC_ONNXSESSIONLEASE, pgm);
+    obj->setPrivate(CID_ONNXSESSIONLEASE, holder.release());
+    return obj;
+}
+
 void QoreOnnxSessionPool::recordRun(size_t batch_items) {
     std::lock_guard<std::mutex> lock(mutex);
     ++total_runs;

@@ -53,10 +53,12 @@ DLLEXPORT extern qore_classid_t CID_ONNXMODEL;
 DLLEXPORT extern qore_classid_t CID_ONNXRUNOPTIONS;
 DLLEXPORT extern qore_classid_t CID_ONNXIOBINDING;
 DLLEXPORT extern qore_classid_t CID_ONNXSESSIONPOOL;
+DLLEXPORT extern qore_classid_t CID_ONNXSESSIONLEASE;
 DLLLOCAL extern QoreClass* QC_ONNXMODEL;
 DLLLOCAL extern QoreClass* QC_ONNXRUNOPTIONS;
 DLLLOCAL extern QoreClass* QC_ONNXIOBINDING;
 DLLLOCAL extern QoreClass* QC_ONNXSESSIONPOOL;
+DLLLOCAL extern QoreClass* QC_ONNXSESSIONLEASE;
 
 // ONNX hashdecls (defined by the qpp-generated registration code in ql_ml.cpp)
 extern const TypedHashDecl* hashdeclOnnxTensorInfo;
@@ -70,10 +72,12 @@ DLLLOCAL void preinitOnnxModelClass();
 DLLLOCAL void preinitOnnxRunOptionsClass();
 DLLLOCAL void preinitOnnxIoBindingClass();
 DLLLOCAL void preinitOnnxSessionPoolClass();
+DLLLOCAL void preinitOnnxSessionLeaseClass();
 DLLLOCAL QoreClass* initOnnxModelClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initOnnxRunOptionsClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initOnnxIoBindingClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initOnnxSessionPoolClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initOnnxSessionLeaseClass(QoreNamespace& ns);
 
 #ifdef HAVE_ONNXRUNTIME
 
@@ -658,8 +662,12 @@ private:
         ExceptionSink* xsink) const;
 };
 
+class QoreOnnxSessionLease;
+
 //! Bounded pool of immutable ONNX Runtime sessions
 class QoreOnnxSessionPool : public AbstractPrivateData {
+    friend class QoreOnnxSessionLease;
+
 public:
     DLLLOCAL QoreOnnxSessionPool(const char* model_path, const QoreHashNode* session_config,
         const QoreHashNode* pool_options, ExceptionSink* xsink);
@@ -691,6 +699,12 @@ public:
     DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink* xsink);
     DLLLOCAL QoreListNode* getInputInfo(ExceptionSink* xsink);
     DLLLOCAL QoreListNode* getOutputInfo(ExceptionSink* xsink);
+
+    //! Acquires a session under the rules of run() and returns an OnnxSessionLease object holding it
+    /** @return the OnnxSessionLease object, or nullptr if an exception was raised (backpressure, timeout,
+        cancellation, or a pool without sessions)
+    */
+    DLLLOCAL QoreObject* acquireSession(QoreProgram* pgm, ExceptionSink* xsink);
 
     //! Returns the content identity shared by every session in the pool
     /** Each pooled session loads the model independently, so the pool can only report an identity
@@ -798,6 +812,60 @@ private:
     DLLLOCAL static void dynamicRunAsyncThread(ExceptionSink* xsink, void* arg);
 };
 
+//! A session of an OnnxSessionPool held by the caller until it is released
+/** The session counts against the pool's capacity while it is held.  The lease references the pool, so the pool
+    remains valid while the lease exists.  release() can be called from any thread and any number of times; only
+    the first call returns the session to the pool, and the final dereference releases it if it is still held.
+*/
+class QoreOnnxSessionLease : public AbstractPrivateData {
+public:
+    //! Takes over a session acquired from the pool and references the pool
+    DLLLOCAL QoreOnnxSessionLease(QoreOnnxSessionPool* pool, std::unique_ptr<QoreOnnxSessionPool::Lease> lease)
+            : pool(pool), lease(std::move(lease)) {
+        pool->ref();
+    }
+
+    //! Returns the session to the pool if it is still held
+    DLLLOCAL void release() {
+        std::unique_ptr<QoreOnnxSessionPool::Lease> held;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            held = std::move(lease);
+        }
+        // the session is returned to the pool outside the lock, when the lease is destroyed here
+    }
+
+    //! Returns true if the session is still held
+    DLLLOCAL bool isHeld() const {
+        std::lock_guard<std::mutex> lock(mutex);
+        return static_cast<bool>(lease);
+    }
+
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            release();
+            pool->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual void deref() override {
+        if (ROdereference()) {
+            release();
+            pool->deref();
+            delete this;
+        }
+    }
+
+private:
+    //! the pool, referenced by the lease
+    QoreOnnxSessionPool* pool;
+    //! the held session; empty once released
+    std::unique_ptr<QoreOnnxSessionPool::Lease> lease;
+    //! serializes release() and isHeld()
+    mutable std::mutex mutex;
+};
+
 #else // !HAVE_ONNXRUNTIME
 
 //! Stub class — always defined so the OnnxModel Qore class compiles without ONNX Runtime.
@@ -884,6 +952,13 @@ public:
     DLLLOCAL QoreHashNode* getContentIdentity(ExceptionSink*) const { return nullptr; }
     DLLLOCAL QoreListNode* getInputInfo(ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreListNode* getOutputInfo(ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreObject* acquireSession(QoreProgram*, ExceptionSink*) { return nullptr; }
+};
+
+class QoreOnnxSessionLease : public AbstractPrivateData {
+public:
+    DLLLOCAL void release() {}
+    DLLLOCAL bool isHeld() const { return false; }
 };
 
 #endif // HAVE_ONNXRUNTIME

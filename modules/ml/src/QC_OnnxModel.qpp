@@ -774,6 +774,88 @@ hash<auto> OnnxModel::getEffectiveProviderReport() [flags=RET_VALUE_ONLY] {
     return model->getEffectiveProviderReport(xsink);
 }
 
+//! A session of an @ref OnnxSessionPool held by the caller until it is released
+/** An OnnxSessionLease holds one session of an @ref OnnxSessionPool from @ref OnnxSessionPool::acquireSession()
+    until release() is called or the object is destroyed (deleted, or its last reference goes out of scope).
+
+    While it is held, the session counts against the pool's capacity (\c max_sessions and
+    \c max_concurrent_runs) exactly like a running inference: other callers of the pool's \c run*() methods and of
+    @ref OnnxSessionPool::acquireSession() "acquireSession()" wait for a session within \c queue_depth and
+    \c timeout_ms, or are rejected with \c ML-ONNX-POOL-BACKPRESSURE or \c ML-ONNX-POOL-TIMEOUT.  A lease does not
+    count as a run in the pool's statistics, but it is included in \c active_runs while it is held.
+
+    Use a lease to take capacity out of service for a time, for example to quiesce a pool before maintenance, or to
+    make the pool's backpressure and timeout behavior deterministic in tests.
+
+    @par Thread Safety
+    A lease can be released from any thread, and release() can be called any number of times; only the first call
+    returns the session to the pool.  The lease references its pool, so the pool's sessions remain valid while a
+    lease exists, even if the @ref OnnxSessionPool object itself is deleted first.
+
+    @par Example:
+    @code{.py}
+ML::OnnxSessionPool pool("/models/customer-score.onnx", <ML::OnnxSessionConfig>{"providers": ()},
+    {"max_sessions": 1, "queue_depth": 0});
+
+ML::OnnxSessionLease lease = pool.acquireSession();
+# the only session is held, so other callers are rejected with ML-ONNX-POOL-BACKPRESSURE
+try {
+    pool.run({"X": ((42.0,),)});
+} catch (hash<ExceptionInfo> ex) {
+    printf("%s: %s\n", ex.err, ex.desc);
+}
+lease.release();
+# the session is available again
+hash<auto> out = pool.run({"X": ((42.0,),)});
+    @endcode
+
+    @since ml 3.0
+*/
+qclass OnnxSessionLease [arg=QoreOnnxSessionLease* lease; ns=Qore::ML; flags=final];
+
+//! Throws an exception; leases are created with OnnxSessionPool::acquireSession()
+/** @throw ML-ONNX-POOL-ERROR OnnxSessionLease objects must be created with OnnxSessionPool::acquireSession()
+*/
+OnnxSessionLease::constructor() {
+    xsink->raiseException("ML-ONNX-POOL-ERROR",
+        "OnnxSessionLease objects must be created with OnnxSessionPool::acquireSession()");
+}
+
+//! Throws an exception; leases cannot be copied
+/** @throw COPY-ERROR OnnxSessionLease objects cannot be copied
+*/
+OnnxSessionLease::copy() {
+    xsink->raiseException("COPY-ERROR", "OnnxSessionLease objects cannot be copied");
+}
+
+//! Returns the session to its pool
+/** After the first call, the lease no longer holds a session and later calls do nothing.  Destroying the lease
+    object also returns the session.
+
+    @par Example:
+    @code{.py}
+ML::OnnxSessionLease lease = pool.acquireSession();
+on_exit lease.release();
+    @endcode
+*/
+nothing OnnxSessionLease::release() {
+    lease->release();
+}
+
+//! Returns @ref True if the lease still holds its session
+/** @return @ref True until release() is called
+
+    @par Example:
+    @code{.py}
+if (lease.isHeld()) {
+    lease.release();
+}
+    @endcode
+*/
+bool OnnxSessionLease::isHeld() [flags=CONSTANT] {
+    return lease->isHeld();
+}
+
 //! Bounded pool of immutable ONNX Runtime sessions
 /** OnnxSessionPool keeps multiple @ref OnnxModel sessions ready for concurrent
     inference. It is intended for service workloads where requests arrive from
@@ -792,6 +874,9 @@ hash<auto> OnnxModel::getEffectiveProviderReport() [flags=RET_VALUE_ONLY] {
     - \c dynamic_batch_wait_ms: maximum time runAsync() waits for other callers
       so requests can be coalesced into one ordered batch; \c 0 disables
       cross-caller coalescing
+
+    acquireSession() holds a session for the caller in an @ref OnnxSessionLease until it is released; a held
+    session counts against the pool's capacity.
 
     @par Example:
     @code{.py}
@@ -855,6 +940,33 @@ OnnxSessionPool::constructor(binary model_data, *hash<OnnxSessionConfig> session
 */
 OnnxSessionPool::copy() {
     xsink->raiseException("COPY-ERROR", "OnnxSessionPool objects cannot be copied");
+}
+
+//! Acquires a session of the pool and holds it until the returned lease is released
+/** The session is acquired under the same rules as run(): if no session is free, the caller waits for one while
+    fewer than \c queue_depth callers are waiting, for at most \c timeout_ms (with no fixed deadline when it is
+    \c 0), and is rejected otherwise.  The session counts against the pool's capacity until
+    @ref OnnxSessionLease::release() is called or the lease object is destroyed.
+
+    @return an @ref OnnxSessionLease holding the session
+
+    @par Example:
+    @code{.py}
+# keep the pool's only session idle while another component uses the accelerator exclusively
+ML::OnnxSessionLease lease = pool.acquireSession();
+on_exit lease.release();
+runExclusiveAcceleratorJob();
+    @endcode
+
+    @throw ML-ONNX-POOL-BACKPRESSURE if no session is free and \c queue_depth callers are already waiting (always
+    when \c queue_depth is 0)
+    @throw ML-ONNX-POOL-TIMEOUT if no session became free within \c timeout_ms
+    @throw ML-ONNX-POOL-ERROR if the pool has no loaded sessions
+
+    @since ml 3.0
+*/
+OnnxSessionLease OnnxSessionPool::acquireSession() {
+    return pool->acquireSession(getProgram(), xsink);
 }
 
 //! Runs inference with named input tensors through an acquired session

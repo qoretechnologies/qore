@@ -171,6 +171,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel batch inference", \onnxBatchTest());
         addTestCase("OnnxSessionPool inference and stats", \onnxSessionPoolTest());
         addTestCase("OnnxSessionPool dynamic batch ordering", \onnxSessionPoolDynamicBatchTest());
+        addTestCase("OnnxSessionPool session lease", \onnxSessionLeaseTest());
         addTestCase("OnnxSessionPool backpressure", \onnxSessionPoolBackpressureTest());
         addTestCase("OnnxSessionPool timeout", \onnxSessionPoolTimeoutTest());
         addTestCase("OnnxSessionPool async inference", \onnxSessionPoolAsyncTest());
@@ -4760,6 +4761,73 @@ public class MlTest inherits QUnit::Test {
         assertEq(1, stats.total_batches);
         assertEq(1, stats.total_runs);
         assertEq(5, stats.total_batch_items);
+    }
+
+    onnxSessionLeaseTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "queue_depth": 0});
+
+        # a held session counts against the pool's capacity
+        *ML::OnnxSessionLease lease = pool.acquireSession();
+        assertTrue(lease.isHeld());
+        assertEq(1, pool.getPoolStats().active_runs);
+        assertThrows("ML-ONNX-POOL-BACKPRESSURE", \pool.run(), {"X": ((1.0,),)});
+        assertThrows("ML-ONNX-POOL-BACKPRESSURE", \pool.acquireSession());
+        assertEq(2, pool.getPoolStats().total_rejections);
+
+        # an explicit release returns the session, and a second release does nothing
+        lease.release();
+        assertFalse(lease.isHeld());
+        lease.release();
+        assertEq(0, pool.getPoolStats().active_runs);
+        assertFloat(3.0, pool.run({"X": ((1.0,),)}).Y[0], 1e-5);
+
+        # deleting the lease returns the session
+        lease = pool.acquireSession();
+        assertEq(1, pool.getPoolStats().active_runs);
+        delete lease;
+        assertEq(0, pool.getPoolStats().active_runs);
+
+        # and so does its last reference going out of scope
+        {
+            ML::OnnxSessionLease scoped = pool.acquireSession();
+            assertTrue(scoped.isHeld());
+            assertEq(1, pool.getPoolStats().active_runs);
+        }
+        assertEq(0, pool.getPoolStats().active_runs);
+
+        # a lease is not counted as a run
+        assertEq(1, pool.getPoolStats().total_runs);
+
+        # a caller that waits for a held session times out after timeout_ms
+        ML::OnnxSessionPool tpool(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "queue_depth": 1, "timeout_ms": 1});
+        ML::OnnxSessionLease held = tpool.acquireSession();
+        assertThrows("ML-ONNX-POOL-TIMEOUT", \tpool.acquireSession());
+        hash<auto> stats = tpool.getPoolStats();
+        assertEq(1, stats.total_timeouts);
+        assertEq(0, stats.waiting_callers);
+        held.release();
+        ML::OnnxSessionLease again = tpool.acquireSession();
+        assertTrue(again.isHeld());
+        again.release();
+
+        # the lease keeps its pool's sessions valid after the pool object is gone
+        {
+            ML::OnnxSessionPool gone(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()});
+            lease = gone.acquireSession();
+        }
+        assertTrue(lease.isHeld());
+        lease.release();
+        assertFalse(lease.isHeld());
+
+        # leases come only from acquireSession() and cannot be copied
+        assertThrows("ML-ONNX-POOL-ERROR", sub () { ML::OnnxSessionLease l(); });
+        assertThrows("COPY-ERROR", sub () { ML::OnnxSessionLease c = lease.copy(); });
     }
 
     onnxSessionPoolBackpressureTest() {
