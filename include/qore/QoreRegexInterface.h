@@ -52,6 +52,23 @@
 // note that the following constant is > 32 bits
 #define QRE_GLOBAL            0x100000000LL
 
+//! Returns true if PCRE2 regular expressions may be JIT-compiled, false if the interpreter must be used
+/** PCRE2 JIT compilation is disabled when the \c QORE_PCRE2_NO_JIT environment variable is set to exactly \c 1
+    when the process starts, for example to run under a memory checker such as valgrind, which cannot follow
+    JIT-generated code.  The setting is read once, at the first call, and does not change afterwards.
+
+    %Qore's own regular expressions follow this setting; a module that compiles PCRE2 patterns itself must not call
+    \c pcre2_jit_compile() when this function returns false, so that one switch controls all PCRE2 JIT code in the
+    process.
+
+    @return true if PCRE2 JIT compilation is enabled, false if it is disabled
+
+    @note this function does not report on %Qore's LLVM JIT, which is controlled separately
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_pcre2_jit_enabled();
+
 class QoreRegexInterface {
 public:
     DLLEXPORT QoreRegexInterface(ExceptionSink* xsink, const QoreString& pattern);

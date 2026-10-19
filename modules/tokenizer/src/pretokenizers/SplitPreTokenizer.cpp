@@ -107,8 +107,12 @@ SplitPreTokenizer::SplitPreTokenizer(const QoreHashNode* config, ExceptionSink* 
     // remaining subject reaches 5,000,000 code units (REQ_CU_MAX * 1000 in pcre2_match.c), after
     // which an unanchored pattern is retried at every offset -- quadratic in the text length.  The
     // JIT has no such cutoff.  pcre2_jit_compile() modifies the pcre2_code block, so it must run
-    // here, before the pretokenizer is visible to other threads.
-    pcre2_jit_compile(re, PCRE2_JIT_COMPLETE);
+    // here, before the pretokenizer is visible to other threads.  No JIT code is made when PCRE2 JIT is disabled
+    // for the process (QORE_PCRE2_NO_JIT=1, ex: for a memory checker, which cannot follow JIT code); the
+    // interpreter is then used, with the cost above on very large texts.
+    if (qore_pcre2_jit_enabled()) {
+        pcre2_jit_compile(re, PCRE2_JIT_COMPLETE);
+    }
 
     QoreValue bv = config->getKeyValue("behavior");
     std::string bs = bv.isNullOrNothing() ? "" : safeGetStdString(bv);
