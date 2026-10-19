@@ -497,12 +497,15 @@ list l = db.getAlignSql(schema_hash);
             l += AbstractDatabase::doCallback(opt, seq.getCreateSql(), AC_Create, "sequence", name);
         }
 
-        # create template tables
-        table_cache.populate(ds, schema_hash.tables, copt);
+        # create template tables; every section of a schema description is optional
+        if (schema_hash.tables) {
+            table_cache.populate(ds, schema_hash.tables, copt);
+        }
 
         # rename any tables
         AbstractDatabase::checkDriverOptions(\schema_hash.table_map, drv);
-        foreach hash<auto> th in (schema_hash.table_map) {
+        # each source and target name; iterating the hash itself gave the hash, so any table_map raised an error
+        foreach hash<auto> th in (schema_hash.table_map.pairIterator()) {
             if (th.value.typeCode() != NT_STRING)
                 throw "SCHEMA-DESCRIPTION-ERROR", sprintf("table_map %y value is not a string in the schema description hash; got type %y instead (%y)", th.key, th.value.type(), th.value);
 

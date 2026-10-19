@@ -142,6 +142,11 @@ module SqlUtil {
       @ref select_option_hash "select option" is the integer \c 10, and a string given for an option that takes a
       list is a list of one string; a column number given as a string in \c orderby or \c groupby, such as
       \c "2", was refused with \c OPTION-ERROR, and is now the column number, checked to be positive as a number is
+    - fixed @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" raising
+      \c RUNTIME-OVERLOAD-ERROR for a @ref schema_desc_hash "schema description hash" without tables, such as one
+      of sequences or functions only; every section of the description is optional
+    - fixed @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" raising
+      \c SCHEMA-DESCRIPTION-ERROR for any \c table_map, so that no table was renamed by it
 
     @subsection sqlutilv3_10_0 SqlUtil v3.10.0
     - Added an offline table rewrite transaction that limits only lock waits, for single schema statements

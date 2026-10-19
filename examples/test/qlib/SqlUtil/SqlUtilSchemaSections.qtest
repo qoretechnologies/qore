@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires SqlUtil
+%requires Sqlite3SqlUtil
+%requires PgsqlSqlUtilBase
+%requires PgsqlSqlUtil
+%requires QUnit
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class SqlUtilSchemaSectionsTest
+
+#! Every section of a schema description hash is optional
+/** A schema description with only some of its sections (only sequences, only functions, no tables at all) is
+    aligned and dropped like one with every section.  The PostgreSQL cases run in a schema of their own, set as the
+    search_path of their connection with \c PGOPTIONS before it is opened, and dropped when the test ends, also when
+    it fails.
+*/
+class SqlUtilSchemaSectionsTest inherits QUnit::Test {
+    private {
+        #! the connection that creates and drops the run schema, opened with the default search_path
+        *Datasource admin;
+        #! the PostgreSQL connection of the tests, whose search_path is the run schema
+        *Datasource pgds;
+        #! the PGOPTIONS environment variable before the test set it
+        *string pgoptions;
+        string run_schema;
+
+        #! a function source in the form that PostgreSQL returns, with the body on its own line
+        const FunctionSource = "returns integer language sql as $function$\nselect 1\n$function$";
+    }
+
+    constructor() : Test("SqlUtilSchemaSectionsTest", "1.0", \ARGV) {
+        addTestCase("an empty or table-less schema description is aligned and dropped (SQLite)", \sqliteSections());
+        addTestCase("a schema description of sequences only is aligned and dropped", \sequencesOnly());
+        addTestCase("a schema description of functions only is aligned and dropped", \functionsOnly());
+        addTestCase("a schema description of procedures or types only is aligned and dropped", \otherSections());
+        addTestCase("a schema description of renames only is aligned", \mapsOnly());
+
+        {
+            on_exit cleanup();
+            setup();
+            set_return_value(main());
+        }
+    }
+
+    private setup() {
+%ifdef NoPgsql
+        return;
+%endif
+        *string connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!connstr) {
+            return;
+        }
+        string host = gethostname().lwr();
+        host =~ s/[^a-z0-9_]/_/g;
+        run_schema = sprintf("qtest_sections_%s_%d_%d", host.substr(0, 16), getpid(), get_epoch_seconds(now_utc()));
+
+        admin = new Datasource(connstr);
+        if (admin.getDriverName() != "pgsql") {
+            throw "PGSQL-ERROR", sprintf("cannot run the PostgreSQL tests with driver %y", admin.getDriverName());
+        }
+        admin.open();
+        {
+            on_error admin.rollback();
+            on_success admin.commit();
+            admin.exec(sprintf("create schema %s", run_schema));
+            admin.exec(sprintf("create sequence %s.sa_existing_seq", run_schema));
+            admin.exec(sprintf("create function %s.sa_existing_f() %s", run_schema, FunctionSource));
+            admin.exec(sprintf("create table %s.sa_existing_t (id int)", run_schema));
+        }
+
+        # every connection of this process opened from now on has the run schema as its search_path
+        pgoptions = ENV.PGOPTIONS;
+        setenv("PGOPTIONS", (pgoptions ? pgoptions + " " : "") + "-c search_path=" + run_schema);
+        pgds = new Datasource(connstr);
+        pgds.open();
+    }
+
+    private cleanup() {
+        if (pgds) {
+            pgds.rollback();
+            pgds.close();
+        }
+        if (pgoptions) {
+            setenv("PGOPTIONS", pgoptions);
+        } else {
+            unsetenv("PGOPTIONS");
+        }
+        if (admin) {
+            admin.rollback();
+            admin.exec(sprintf("drop schema if exists %s cascade", run_schema));
+            admin.commit();
+        }
+    }
+
+    private Database getPgsqlDatabase() {
+        if (!pgds) {
+            testSkip("no PostgreSQL database is configured (QORE_DB_CONNSTR_PGSQL)");
+        }
+        return new Database(pgds);
+    }
+
+    private sqliteSections() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:@:memory:");
+        on_exit ds.rollback();
+        ds.exec("create table existing_t (id int)");
+        Database db(ds);
+        # nothing to do
+        assertEq((), db.getAlignSql({}));
+        assertEq((), db.getDropSchemaSql({}));
+        # a table that is not there is not renamed
+        assertEq((), db.getAlignSql({"table_map": {"no_such_table": "other_table"}}));
+        # a table is renamed
+        assertEq(1, db.getAlignSql({"table_map": {"existing_t": "renamed_t"}}).size());
+    }
+
+    private sequencesOnly() {
+        Database db = getPgsqlDatabase();
+        assertEq(("create sequence sa_seq start with 2 increment by 1 no maxvalue",),
+            db.getAlignSql({"sequences": {"sa_seq": {"start": 2}, "sa_existing_seq": {}}}));
+        assertEq(("drop sequence sa_existing_seq",), db.getDropSchemaSql({"sequences": {"sa_existing_seq": {}}}));
+    }
+
+    private functionsOnly() {
+        Database db = getPgsqlDatabase();
+        assertEq(("create function sa_f() " + FunctionSource,),
+            db.getAlignSql({"functions": {"sa_f()": FunctionSource, "sa_existing_f()": FunctionSource}}));
+        assertEq(("drop function sa_existing_f()",), db.getDropSchemaSql({"functions": {"sa_existing_f()": ""}}));
+    }
+
+    private otherSections() {
+        Database db = getPgsqlDatabase();
+        assertEq(("create function sa_p() " + FunctionSource,),
+            db.getAlignSql({"procedures": {"sa_p()": FunctionSource}}));
+        list<auto> sql = db.getAlignSql({"types": {"sa_type": "a int"}});
+        assertEq(1, sql.size());
+        assertRegex("^create type sa_type", sql[0]);
+        # a table that exists is dropped from a description of tables only
+        assertEq(1, db.getDropSchemaSql({"tables": {"sa_existing_t": {}}}).size());
+    }
+
+    private mapsOnly() {
+        Database db = getPgsqlDatabase();
+        assertEq(("alter sequence sa_existing_seq rename to sa_renamed_seq",),
+            db.getAlignSql({"sequence_map": {"sa_existing_seq": "sa_renamed_seq"}}));
+        assertEq(1, db.getAlignSql({"function_map": {"sa_existing_f()": "sa_renamed_f"}}).size());
+        assertEq(1, db.getAlignSql({"table_map": {"sa_existing_t": "sa_renamed_t"}}).size());
+        assertEq((), db.getAlignSql({}));
+    }
+}

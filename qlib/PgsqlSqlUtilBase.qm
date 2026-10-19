@@ -264,6 +264,8 @@ $function$
       @ref PgsqlSqlUtilBase::PgsqlSequence::min "min" and @ref PgsqlSqlUtilBase::PgsqlSequence::cycle "cycle", and
       gives in the SQL that creates the sequence; schema alignment creates a sequence that does not exist and does not
       change one that exists, so a sequence is never created again nor restarted by it
+    - fixed @ref SqlUtil::AbstractDatabase::getProcedure() "getProcedure()" raising \c RUNTIME-TYPE-ERROR for a
+      procedure that does not exist, so that a schema with a procedure that did not exist could not be aligned
     - Added the size of the current schema (\c current_schema(): the first existing schema of the connection's
       \c search_path; see @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
       "AbstractDatabase::getCurrentSchemaPhysicalSize()"), which measures only that schema's relations instead of
@@ -1966,7 +1968,8 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         return PgsqlDatabase::processFunction(qh + {"proname": sql_fname}, native_case);
     }
 
-    private AbstractFunction getProcedureImpl(string name) {
+    #! returns the procedure (function) of the given name, or no value if there is none
+    private *AbstractFunction getProcedureImpl(string name) {
         return getFunctionImpl(name);
     }
 
