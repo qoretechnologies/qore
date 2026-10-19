@@ -252,15 +252,19 @@ struct qore_number_private : public qore_number_private_intern {
         return mpfr_sgn(num);
     }
 
-    DLLLOCAL void sprintf(QoreString& str, const char* fmt) const {
+    //! appends the number formatted with a printf() format
+    /** @return 0 if the number was appended, -1 if its output cannot be formatted (it is then not appended), as it
+        would be longer than INT_MAX characters
+    */
+    DLLLOCAL int sprintf(QoreString& str, const char* fmt) const {
 #ifdef HAVE_MPFR_SPRINTF
         //printd(5, "qore_number_private::sprintf() fmt: '%s'\n", fmt);
         int len = mpfr_snprintf(0, 0, fmt, num);
-        if (!len)
-            return;
         if (len < 0) {
-            numError(str);
-            return;
+            return -1;
+        }
+        if (!len) {
+            return 0;
         }
         str.allocate(str.size() + len + 1);
         mpfr_sprintf((char*)(str.getBuffer() + str.size()), fmt, num);
@@ -269,19 +273,28 @@ struct qore_number_private : public qore_number_private_intern {
         // if there is no mpfr_sprintf, then we convert to a long double and output the number
         long double ld = mpfr_get_ld(num, QORE_MPFR_RND);
         int len = ::snprintf(0, 0, fmt, ld);
-        if (len <= 0)
-            return;
+        if (len < 0) {
+            return -1;
+        }
+        if (!len) {
+            return 0;
+        }
         str.allocate(str.size() + len + 1);
         ::snprintf((char*)(str.getBuffer() + str.size()), len + 1, fmt, ld);
         str.terminate(str.size() + len);
 #endif
+        return 0;
     }
 
     DLLLOCAL void getScientificString(QoreString& str, bool round = true) const {
 #ifdef HAVE_MPFR_SPRINTF
-        sprintf(str, "%Re");
+        if (sprintf(str, "%Re")) {
+            numError(str);
+        }
 #else
-        sprintf(str, "%Le");
+        if (sprintf(str, "%Le")) {
+            numError(str);
+        }
 #endif
 
         if (round) {
@@ -611,8 +624,9 @@ public:
     DLLLOCAL static int roundUp(QoreString& str, qore_offset_t pos);
 
     // static accessor methods
-    DLLLOCAL static void sprintf(const QoreNumberNode& n, QoreString& str, const char* fmt) {
-        n.priv->sprintf(str, fmt);
+    //! appends a number formatted with a printf() format; returns -1 if its output cannot be formatted, 0 otherwise
+    DLLLOCAL static int sprintf(const QoreNumberNode& n, QoreString& str, const char* fmt) {
+        return n.priv->sprintf(str, fmt);
     }
 
     DLLLOCAL static void inc(QoreNumberNode& n) {

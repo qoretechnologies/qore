@@ -15,11 +15,12 @@
 
     <b>Security</b>: @ref Qore::sprintf() "sprintf()", @ref Qore::printf() "printf()" and the other
     @ref string_formatting "string formatting" functions no longer write past the end of a buffer on the stack when a
-    floating-point or number conversion has a long field width and precision, such as <tt>%-+01000000.100000e</tt>, and
-    a conversion whose output cannot be formatted because its field width or precision is too large, such as
-    <tt>%2147483647d</tt>, raises a \c SPRINTF-ERROR exception, where it could corrupt the result or crash the
-    process; a field width or precision with more digits than an \c int can hold is read as the largest \c int
-    instead of overflowing.
+    floating-point or number conversion has a long field width and precision, such as <tt>%-+01000000.100000e</tt>; a
+    field width or precision larger than 2147482623, such as <tt>%2147483647d</tt>, raises a \c SPRINTF-ERROR
+    exception with every C library, where it could corrupt the result or crash the process, or gave a result that
+    depended on the C library (a field width or precision with more digits than an \c int can hold also overflowed
+    while it was read); a number conversion whose output would be longer than 2147483647 characters raises the same
+    exception, where it gave \c "<number error>".
 
     <b>CSV files are RFC 4180 by default</b>: the @ref csvutilintro "CsvUtil" writers escape a quote in a quoted
     field by doubling it, as spreadsheet programs and most applications do, instead of with a backslash, and quote

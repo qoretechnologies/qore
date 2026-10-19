@@ -883,9 +883,10 @@ hashdecl Qore::UnicodeByteOrderInfo {
     For floating-point arguments, a precision specifier may be given by including a period "." and another digit
     string, which indicates the number of digits to appear after the decimal point.
 
-    A field width or precision larger than 2147483647 is read as 2147483647; an integer or floating-point
-    conversion whose output cannot be formatted because its field width or precision is too large raises a
-    \c SPRINTF-ERROR exception.
+    The field width and the precision of the \c s, \c w, \c p, \c d, \c o, \c x, \c X and floating-point
+    conversions are at most 2147482623: a larger one raises a \c SPRINTF-ERROR exception, as does a conversion of an
+    @ref number "arbitrary-precision number" whose output would be longer than 2147483647 characters (a number with a
+    very large exponent and a large precision).
 
     Then the format character is given as follows:
 
@@ -2589,7 +2590,8 @@ nothing print(...) [dom=TERMINAL_IO] {
 
     @return a formatted string corresponding to the arguments given
 
-    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+    @throw SPRINTF-ERROR a conversion has a field width or precision larger than 2147482623, or its output would be
+    longer than 2147483647 characters
 
     @par Example:
     @code{.py}
@@ -2620,7 +2622,8 @@ string f_sprintf() [flags=NOOP] {
 
     @return a formatted string corresponding to the arguments given
 
-    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+    @throw SPRINTF-ERROR a conversion has a field width or precision larger than 2147482623, or its output would be
+    longer than 2147483647 characters
 
     @par Example:
     @code{.py}
@@ -2651,7 +2654,8 @@ string sprintf() [flags=NOOP] {
 
     @return a formatted string corresponding to the arguments given
 
-    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+    @throw SPRINTF-ERROR a conversion has a field width or precision larger than 2147482623, or its output would be
+    longer than 2147483647 characters
 
     @par Example:
     @code{.py}
@@ -2677,7 +2681,8 @@ string f_vsprintf(string[doc] format, auto[doc] values) [flags=RET_VALUE_ONLY,NA
 
     @return a formatted string corresponding to the arguments given
 
-    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+    @throw SPRINTF-ERROR a conversion has a field width or precision larger than 2147482623, or its output would be
+    longer than 2147483647 characters
 
     @par Example:
     @code{.py}
@@ -2816,7 +2821,8 @@ string vsprintf_bounded(string format, softlist<auto> values, *hash<FormatBounds
 
     @return the formatted string output corresponding to the arguments given
 
-    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+    @throw SPRINTF-ERROR a conversion has a field width or precision larger than 2147482623, or its output would be
+    longer than 2147483647 characters
 
     @par Example:
     @code{.py}
@@ -2849,7 +2855,8 @@ string f_printf() [flags=NOOP] {
 
     @return the formatted string output corresponding to the arguments given
 
-    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+    @throw SPRINTF-ERROR a conversion has a field width or precision larger than 2147482623, or its output would be
+    longer than 2147483647 characters
 
     @par Example:
     @code{.py}
@@ -2882,7 +2889,8 @@ string printf() [flags=NOOP;dom=TERMINAL_IO] {
 
     @return the formatted string output corresponding to the arguments given
 
-    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+    @throw SPRINTF-ERROR a conversion has a field width or precision larger than 2147482623, or its output would be
+    longer than 2147483647 characters
 
     @par Example:
     @code{.py}
@@ -2910,7 +2918,8 @@ string f_vprintf(string[doc] format, auto[doc] values) [flags=NAMED_ARGS;dom=TER
 
     @return the formatted string output corresponding to the arguments given
 
-    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+    @throw SPRINTF-ERROR a conversion has a field width or precision larger than 2147482623, or its output would be
+    longer than 2147483647 characters
 
     @par Example:
     @code{.py}

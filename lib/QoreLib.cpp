@@ -775,10 +775,25 @@ static void process_opt_string(QoreString& tbuf, QoreValue qv, int type, int opt
 }
 
 // if type = 0 then field widths are soft limits, otherwise they are hard
-// raises an exception for a conversion whose output cannot be formatted, such as one longer than INT_MAX characters
+// the largest field width and precision of a conversion: an integer or floating-point conversion with no larger one
+// has an output shorter than INT_MAX bytes (a double adds at most 311 characters to its precision), which every C
+// library formats; the C libraries differ for longer outputs (glibc formats one of INT_MAX bytes, macOS fails), so the
+// limit is checked before any is used
+static constexpr int QORE_SPRINTF_MAX_FIELD = INT_MAX - 1024;
+
+// the conversions whose field width or precision is checked against QORE_SPRINTF_MAX_FIELD
+static const char QORE_SPRINTF_LIMITED_CONVERSIONS[] = "swpdoxXaAeEfFgG";
+
+// raises an exception for a conversion with a field width or precision larger than QORE_SPRINTF_MAX_FIELD
+static void process_opt_limit_error(const char* str, const char* param, ExceptionSink* xsink) {
+    xsink->raiseException("SPRINTF-ERROR", "the format conversion \"%.*s\" has a field width or precision larger "
+        "than %d", static_cast<int>(param - str + 1), str, QORE_SPRINTF_MAX_FIELD);
+}
+
+// raises an exception for a conversion whose output cannot be formatted, as it would be longer than INT_MAX characters
 static void process_opt_format_error(const char* str, const char* param, ExceptionSink* xsink) {
     xsink->raiseException("SPRINTF-ERROR", "the output of the format conversion \"%.*s\" cannot be formatted, as "
-        "its field width or precision is too large", static_cast<int>(param - str + 1), str);
+        "it would be longer than %d characters", static_cast<int>(param - str + 1), str, INT_MAX);
 }
 
 // appends a field width or a precision to the C format of a conversion
@@ -834,6 +849,12 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
     }
     if (decimals < 0) {
         decimals = -1;
+    }
+
+    if ((width > QORE_SPRINTF_MAX_FIELD || decimals > QORE_SPRINTF_MAX_FIELD) && *param
+            && strchr(QORE_SPRINTF_LIMITED_CONVERSIONS, *param)) {
+        process_opt_limit_error(str, param, xsink);
+        return static_cast<int>(param - str);
     }
 
     char p = *param;
@@ -924,7 +945,11 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
                 *(f++) = *param; // a|A|e|E|f|F|g|G
                 *f = '\0';
                 assert(f < fmt_end);
-                qore_number_private::sprintf(*qv.get<const QoreNumberNode>(), tbuf, fmt);
+                // the integer part of a number can be long enough to make the output longer than INT_MAX characters
+                if (qore_number_private::sprintf(*qv.get<const QoreNumberNode>(), tbuf, fmt)) {
+                    process_opt_format_error(str, param, xsink);
+                    return static_cast<int>(param - str);
+                }
             } else {
                 *(f++) = *param; // a|A|e|E|f|F|g|G
                 *f = '\0';

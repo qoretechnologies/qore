@@ -64,13 +64,19 @@ public class SprintfTest inherits QUnit::Test {
         assertEq(1000000, str.size());
         assertEq("-" + strmul("0", 1000000 - 100003) + "2.25" + strmul("0", 99998), str);
 
-        # an integer with all flags and a 10-digit width is not formatted at its full width here, but its format is
-        # built: a width that cannot be formatted raises an exception
-        assertThrows("SPRINTF-ERROR", "\"%2147483647d\"", \sprintf(), ("abc%2147483647d", 1));
+        # a field width or precision larger than 2147482623 raises an exception before anything is formatted, with
+        # every C library (glibc formats an output of 2147483647 characters, macOS fails)
+        string limit_desc = "has a field width or precision larger than 2147482623";
+        assertThrows("SPRINTF-ERROR", "\"%2147483647d\" " + limit_desc, \sprintf(), ("abc%2147483647d", 1));
+        assertThrows("SPRINTF-ERROR", "\"%2147482624d\" " + limit_desc, \sprintf(), ("%2147482624d", 1));
+        assertThrows("SPRINTF-ERROR", "\"%2147482624s\" " + limit_desc, \sprintf(), ("%2147482624s", "x"));
         # a width with more digits than an int has is read as the largest int
-        assertThrows("SPRINTF-ERROR", "\"%99999999999d\"", \sprintf(), ("%99999999999d", 1));
-        assertThrows("SPRINTF-ERROR", "cannot be formatted", \sprintf(), ("x%.2147483647f", 1.0));
-        assertThrows("SPRINTF-ERROR", "cannot be formatted", \f_sprintf(), ("%-+02147483647.2147483647e", 1.0));
+        assertThrows("SPRINTF-ERROR", "\"%99999999999d\" " + limit_desc, \sprintf(), ("%99999999999d", 1));
+        assertThrows("SPRINTF-ERROR", "\"%.2147483647f\" " + limit_desc, \sprintf(), ("x%.2147483647f", 1.0));
+        assertThrows("SPRINTF-ERROR", "\"%.2147483647e\" " + limit_desc, \sprintf(), ("%.2147483647e", 1n));
+        assertThrows("SPRINTF-ERROR", "\"%-\\+02147483647.2147483647e\" " + limit_desc, \f_sprintf(),
+            ("%-+02147483647.2147483647e", 1.0));
+        assertThrows("SPRINTF-ERROR", limit_desc, \vsprintf(), ("%2147483647x", (1,)));
         # the conversions around one that cannot be formatted are not affected
         assertEq("1 2", call_function("sprintf", "%d %d", 1, 2));
     }
