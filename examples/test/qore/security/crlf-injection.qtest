@@ -169,6 +169,7 @@ class CrLfInjectionTest inherits QUnit::Test {
         addTestCase("HTTPClient requests", \httpClient());
         addTestCase("FTP commands", \ftp());
         addTestCase("other protocol strings", \other());
+        addTestCase("check_line_text()", \checkLineText());
         set_return_value(main());
     }
 
@@ -358,5 +359,61 @@ class CrLfInjectionTest inherits QUnit::Test {
         # the target host of an HTTP/1 connection is sent in the Host header
         assertThrows("HTTPCLIENT-CONNECT-ERROR", "hostname .* contains a control character",
             sub () { Http1Connection c("127.0.0.1\r\nInjected: 1", 80); });
+    }
+
+    #! returns the exception raised by check_line_text() with the given arguments
+    private hash<ExceptionInfo> lineTextError(string str, *bool secret) {
+        try {
+            check_line_text(str, "test value", "TEST-LINE-ERROR", secret);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        throw "NO-EXCEPTION", sprintf("check_line_text() accepted %y", str);
+    }
+
+    checkLineText() {
+        # a line break: the string escaped and the byte offset of the first CR or LF
+        hash<ExceptionInfo> ex = lineTextError("a@example.com\r\nRCPT TO:<b@example.com>");
+        assertEq("TEST-LINE-ERROR", ex.err);
+        assertEq("test value \"a@example.com\\x0d\\x0aRCPT TO:<b@example.com>\" contains a line break (\\x0d) at byte "
+            "offset 13; it cannot contain CR or LF characters", ex.desc);
+        assertEq(Err::EINVAL, ex.arg);
+        ex = lineTextError("a\nb");
+        assertEq("test value \"a\\x0ab\" contains a line break (\\x0a) at byte offset 1; it cannot contain CR or LF "
+            "characters", ex.desc);
+        # a NUL character
+        ex = lineTextError("ab\x00c\r\n");
+        assertEq("TEST-LINE-ERROR", ex.err);
+        assertEq("test value \"ab\\x00c\\x0d\\x0a\" contains a NUL character at byte offset 2; it cannot contain NUL "
+            "characters", ex.desc);
+        assertEq(Err::EINVAL, ex.arg);
+        # a secret is not shown, and neither is the position of the character
+        ex = lineTextError("pass\r\nword", True);
+        assertEq("TEST-LINE-ERROR", ex.err);
+        assertEq("test value contains a line break; it cannot contain CR or LF characters", ex.desc);
+        assertEq(Err::EINVAL, ex.arg);
+        ex = lineTextError("pass\x00word", True);
+        assertEq("test value contains a NUL character; it cannot contain NUL characters", ex.desc);
+        # at most the first 64 characters are shown
+        ex = lineTextError(strmul("x", 70) + "\n");
+        assertEq("test value \"" + strmul("x", 64) + "...\" contains a line break (\\x0a) at byte offset 70; it cannot "
+            "contain CR or LF characters", ex.desc);
+        # a string that is not valid in the default encoding is shown with its non-ASCII bytes escaped
+        ex = lineTextError(convert_encoding("café\r\n", "ISO-8859-1"));
+        assertEq("test value \"caf\\xe9\\x0d\\x0a\" contains a line break (\\x0d) at byte offset 4; it cannot contain "
+            "CR or LF characters", ex.desc);
+        # a string in an encoding that is not ASCII-compatible is checked in UTF-8: its zero bytes are not NUL
+        # characters, and a line break in it is found
+        check_line_text(convert_encoding("ab", "UTF-16LE"), "test value", "TEST-LINE-ERROR");
+        ex = lineTextError(convert_encoding("ab\r\n", "UTF-16LE"));
+        assertEq("test value \"ab\\x0d\\x0a\" contains a line break (\\x0d) at byte offset 2; it cannot contain CR or "
+            "LF characters", ex.desc);
+        # strings that can be written to a line: no exception is raised
+        check_line_text("", "test value", "TEST-LINE-ERROR");
+        check_line_text("RCPT TO:<b@example.com>\tx", "test value", "TEST-LINE-ERROR");
+        check_line_text("café 日本", "test value", "TEST-LINE-ERROR", True);
+        # named arguments
+        assertThrows("TEST-LINE-ERROR", "contains a line break; it cannot",
+            sub () { check_line_text(err: "TEST-LINE-ERROR", what: "test value", str: "a\nb", secret: True); });
     }
 }

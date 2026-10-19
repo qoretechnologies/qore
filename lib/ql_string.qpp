@@ -1768,6 +1768,42 @@ nothing check_unicode_byte_order(binary sample, string encoding) {
     return QoreValue();
 }
 
+//! Raises an exception if a string to be written to a line of a line-based protocol contains a NUL, CR or LF character
+/** For a client of a line-based protocol (such as SMTP, POP3 or IMAP) written in %Qore: a string written to a command
+    line or a header line cannot contain a CR or LF character, which would end the line and start another command or
+    header (command or header injection), or a NUL character, which a server can take as the end of the string.  This
+    is the rule that the FTP client of %Qore applies to its commands (see @ref string_line_characters).
+
+    @param str the string to be written to the line
+    @param what what the string is, for the exception description (ex: \c "SMTP recipient address")
+    @param err the error code of the exception to raise
+    @param secret if @ref True, the string is not shown in the exception, and neither is the position of the
+    character, for a string that can hold a secret (ex: a password)
+
+    @throw err the error code given as \a err: \a str contains a NUL, CR or LF character; the exception argument is
+    \c EINVAL, and the description gives the string (escaped, with at most its first 64 characters) and the byte
+    offset of the first such character, unless \a secret is @ref True
+
+    @par Example:
+    @code{.py}
+# throws SMTP-ERROR: SMTP recipient address "a@example.com\x0d\x0aRCPT TO:<b@example.com>" contains a line break
+# (\x0d) at byte offset 13; it cannot contain CR or LF characters
+check_line_text("a@example.com\r\nRCPT TO:<b@example.com>", "SMTP recipient address", "SMTP-ERROR");
+    @endcode
+
+    @note a string in an encoding that is not ASCII-compatible (UTF-16, UTF-16LE, UTF-16BE) is checked in UTF-8, and
+    a byte offset in the description is then an offset in the UTF-8 text
+
+    @since %Qore 3.0
+*/
+nothing check_line_text(string str, string what, string err, *bool secret) [flags=NAMED_ARGS] {
+    // the characters are found in the text in an ASCII-compatible encoding, where a NUL, CR or LF byte is that
+    // character and never part of another one
+    QoreAsciiCompatStringHelper text(*str);
+    q_check_line_text(text.c_str(), text.size(), what->c_str(), "it", err->c_str(), secret, xsink);
+    return QoreValue();
+}
+
 //! Returns the first string argument tagged with the character encoding given as the second argument; does not actually change the string data
 /** Use only in the case that a string is tagged with the wrong encoding, for example, if a string from a @ref Qore::File "File" object has a different encoding than the @ref Qore::File "File" object.
 

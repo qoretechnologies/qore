@@ -2042,6 +2042,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       - @ref Qore::cancel_thread() "cancel_thread()": requests cooperative cancellation of another thread
       - @ref Qore::channel_select() "channel_select()": waits on multiple @ref Qore::Thread::Channel "Channel"
         objects for the first ready operation (send or recv)
+      - @ref Qore::check_line_text() "check_line_text()": raises the given error code for a string with a NUL, CR or
+        LF character, which cannot be written to a line of a line-based protocol, without showing the string if it
+        can hold a secret; see @ref string_line_characters
       - @ref Qore::check_unicode_byte_order() "check_unicode_byte_order()": raises \c ENCODING-BYTE-ORDER-ERROR for
         data in the other byte order than its declared UTF-16 or UTF-32 encoding, and
         @ref Qore::get_unicode_byte_order() "get_unicode_byte_order()": returns the UTF-16 or UTF-32 byte order of

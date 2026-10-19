@@ -98,7 +98,8 @@ on more than 1 line";
     messages, and header names and values) cannot contain any control character other than horizontal tab, and the
     strings written to FTP commands (remote paths, arguments, user names and passwords) cannot contain CR or LF
     characters, since a line break would start another header, request or command; such a string is refused with the
-    error code of the API before anything is sent.\n\n
+    error code of the API before anything is sent.  A client of a line-based protocol written in %Qore applies the same
+    rule with @ref Qore::check_line_text() "check_line_text()".\n\n
 
     @par Immediate Value Example:
     \c "this is a string"
