@@ -145,13 +145,15 @@ static bool columnar_type_is_one_of(const std::string& value, std::initializer_l
     return false;
 }
 
+// returns the whole string, with any NUL characters, so that a value with a NUL character is never cut to another
+// valid value
 static std::string columnar_get_string_value(QoreValue value) {
     if (value.getType() != NT_STRING) {
         return std::string();
     }
 
     QoreStringValueHelper str(value);
-    return std::string(str->c_str());
+    return std::string(str->c_str(), str->size());
 }
 
 static std::string columnar_get_desc_string(const QoreHashNode* desc, const char* key) {
@@ -1158,6 +1160,10 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
 
     std::string name = columnar_get_desc_string(desc, "name");
     if (!name.empty()) {
+        // a column or field name is the key of the hashes of the result and of its struct values
+        if (QoreHashNode::checkKey(name.data(), name.size(), xsink)) {
+            return schema;
+        }
         schema.name = std::move(name);
     }
 
@@ -1503,8 +1509,9 @@ static std::string columnar_required_string(const QoreHashNode* h, const char* k
             key, context, value.getTypeName());
         return std::string();
     }
+    // the whole string, with any NUL characters
     QoreStringValueHelper str(value);
-    return std::string(str->c_str());
+    return std::string(str->c_str(), str->size());
 }
 
 static int64 columnar_required_int(const QoreHashNode* h, const char* key, const char* context,
@@ -3802,6 +3809,10 @@ static QoreValue qore_arrow_value_at(const ArrowSchema* schema, const ArrowArray
             if (*xsink) {
                 return QoreValue();
             }
+            // a map key with a NUL character cannot be a hash key
+            if (QoreHashNode::checkKey(key_str->c_str(), key_str->size(), xsink)) {
+                return QoreValue();
+            }
             hash->setKeyValue(key_str->c_str(),
                 qore_arrow_value_at(entries_schema->children[1], entries_array->children[1], entry_index, xsink),
                 xsink);
@@ -4312,6 +4323,10 @@ QoreColumnarResult* QoreColumnarResult::deserialize(const QoreHashNode* sdata, E
         const QoreHashNode* data_hash = columnar_required_hash(column_hash, "data", "columnar result column",
             xsink);
         if (*xsink) {
+            return nullptr;
+        }
+        // a column name is the key of the records and column hashes of the result
+        if (QoreHashNode::checkKey(name.data(), name.size(), xsink)) {
             return nullptr;
         }
 

@@ -105,8 +105,11 @@ int HFTokenizer::tokenToId(string token) [flags=CONSTANT] {
 //! Returns the full vocabulary as a token-to-ID hash
 /** Includes all model vocabulary entries plus any added tokens.
     @return a hash mapping token strings to their integer IDs
+
+    @throw HASH-KEY-ERROR a token has a NUL character, which a hash key cannot contain; use
+    @ref Qore::Tokenizer::HFTokenizer::tokenToId() "tokenToId()" to look such a token up
 */
-hash<string, int> HFTokenizer::getVocab() [flags=CONSTANT] {
+hash<string, int> HFTokenizer::getVocab() [flags=RET_VALUE_ONLY] {
     return tok->getVocab(xsink);
 }
 

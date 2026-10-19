@@ -293,14 +293,14 @@ QoreHashNode* QoreHFTokenizer::encode(const QoreStringNode* text,
     }
 
     // Encode first text
-    std::string text_str = text ? text->c_str() : "";
+    std::string text_str = qoreStdString(text);
     InternalEncoding enc_a = encodeText(text_str);
 
     // Encode second text (optional)
     InternalEncoding enc_b;
     bool has_pair = false;
     if (text_pair && text_pair->size() > 0) {
-        enc_b = encodeText(text_pair->c_str());
+        enc_b = encodeText(qoreStdString(text_pair));
         has_pair = true;
     }
 
@@ -420,12 +420,12 @@ int QoreHFTokenizer::tokenToId(const QoreStringNode* token) const {
     if (!model || !token) {
         return -1;
     }
-    int id = model->tokenToId(token->c_str());
+    std::string tok_str = qoreStdString(token);
+    int id = model->tokenToId(tok_str);
     if (id >= 0) {
         return id;
     }
     // Check added tokens
-    std::string tok_str = token->c_str();
     for (const auto& at : added_tokens) {
         if (at.content == tok_str) {
             return at.id;
@@ -452,7 +452,16 @@ QoreHashNode* QoreHFTokenizer::getVocab(ExceptionSink* xsink) const {
     }
 
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(bigIntTypeInfo), xsink);
+    size_t n = 0;
     for (const auto& entry : vocab) {
+        if (n && !(n % 100) && qore_check_cancel(xsink, "building tokenizer vocabulary")) {
+            return nullptr;
+        }
+        ++n;
+        // the tokens are the keys of the hash; a token with a NUL character cannot be a key
+        if (QoreHashNode::checkKey(entry.first.data(), entry.first.size(), xsink)) {
+            return nullptr;
+        }
         result->setKeyValue(entry.first.c_str(), entry.second, xsink);
     }
     return result.release();
@@ -521,7 +530,7 @@ QoreHashNode* QoreHFTokenizer::encodeAdvancedIntern(const QoreStringNode* text,
             }
         } else {
             // Fallback: split on whitespace
-            std::string text_str = text ? text->c_str() : "";
+            std::string text_str = qoreStdString(text);
             std::string word;
             for (char c : text_str) {
                 if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
@@ -539,7 +548,7 @@ QoreHashNode* QoreHFTokenizer::encodeAdvancedIntern(const QoreStringNode* text,
         }
         enc_a = encodePreTokenizedWords(words);
     } else {
-        enc_a = encodeText(text ? text->c_str() : "");
+        enc_a = encodeText(qoreStdString(text));
     }
 
     // Encode second text (optional)
@@ -863,7 +872,7 @@ int QoreHFTokenizer::encodeForModelIntern(const QoreStringNode* text, const Qore
     }
 
     std::string text_pair = text_pair_override
-        ? text_pair_override->c_str()
+        ? qoreStdString(text_pair_override)
         : (options ? safeGetStdString(options->getKeyValue("text_pair")) : "");
     int max_length = options ? static_cast<int>(options->getKeyValue("max_length").getAsBigInt()) : 0;
     std::string truncation = options ? safeGetStringKey(options, "truncation") : "";
@@ -896,7 +905,7 @@ int QoreHFTokenizer::encodeForModelIntern(const QoreStringNode* text, const Qore
                 ++count;
             }
         } else {
-            std::string text_str = text ? text->c_str() : "";
+            std::string text_str = qoreStdString(text);
             std::string word;
             for (size_t i = 0; i < text_str.size(); ++i) {
                 if (i && !(i % 100) && qore_check_cancel(xsink, "splitting pre-tokenized text")) {
@@ -918,7 +927,7 @@ int QoreHFTokenizer::encodeForModelIntern(const QoreStringNode* text, const Qore
         }
         enc_a = encodePreTokenizedWords(words);
     } else {
-        enc_a = encodeText(text ? text->c_str() : "");
+        enc_a = encodeText(qoreStdString(text));
     }
 
     InternalEncoding enc_b;

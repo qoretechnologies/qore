@@ -11,6 +11,19 @@
 #include "qore/intern/QC_ColumnarResult.h"
 #include "qore/intern/QC_Serializable.h"
 
+#include <cstring>
+
+// a column name with a NUL character names no column, as a column name cannot contain one; as a C string, it would
+// be cut at the NUL character and name another column, so it raises the error of a column that does not exist
+static int ColumnarResult_check_column_name(const QoreStringNode* name, ExceptionSink* xsink) {
+    if (!memchr(name->c_str(), '\0', name->size())) {
+        return 0;
+    }
+    xsink->raiseException("COLUMNAR-RESULT-ERROR", "column '%s' does not exist: a column name cannot contain a NUL "
+        "character", name->c_str());
+    return -1;
+}
+
 static QoreHashNode* ColumnarResult_serializer(const QoreObject& self, const QoreColumnarResult& result,
         QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
     (void)rc;
@@ -147,6 +160,8 @@ ColumnarResult compact = ColumnarResult::fromColumnHash({
 
     @throw COLUMNAR-RESULT-ERROR if a column value is not a list or buffer, or
         if column lengths differ
+    @throw HASH-KEY-ERROR a column or field name in \a desc has a NUL character, which the keys of the records,
+        column hashes and struct values of the result cannot contain
 */
 static ColumnarResult ColumnarResult::fromColumnHash(hash<auto> columns, *hash<auto> desc)
         [flags=RET_VALUE_ONLY,NAMED_ARGS] {
@@ -164,6 +179,8 @@ static ColumnarResult ColumnarResult::fromColumnHash(hash<auto> columns, *hash<a
 
     @throw COLUMNAR-RESULT-ERROR if row values are not hashes or cannot be
         converted to columns
+    @throw HASH-KEY-ERROR a column or field name in \a desc has a NUL character, which the keys of the records,
+        column hashes and struct values of the result cannot contain
 */
 static ColumnarResult ColumnarResult::fromRows(list<hash<auto>> rows, *hash<auto> desc)
         [flags=RET_VALUE_ONLY,NAMED_ARGS] {
@@ -255,6 +272,9 @@ list<hash<auto>> ColumnarResult::schemaV2() [flags=RET_VALUE_ONLY] {
     @throw COLUMNAR-RESULT-ERROR if the column does not exist
 */
 auto ColumnarResult::getColumn(string name) [flags=RET_VALUE_ONLY] {
+    if (ColumnarResult_check_column_name(name, xsink)) {
+        return QoreValue();
+    }
     return result->getColumnValue(name->c_str(), xsink);
 }
 
@@ -420,6 +440,9 @@ ColumnarResult complete = result.filter(result.nullMask("completed_at", True));
     @throw COLUMNAR-RESULT-ERROR if the column does not exist
 */
 auto ColumnarResult::nullMask(string name, *bool invert) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (ColumnarResult_check_column_name(name, xsink)) {
+        return QoreValue();
+    }
     return result->nullMask(name->c_str(), invert ? static_cast<bool>(invert) : false, xsink);
 }
 
@@ -437,6 +460,9 @@ auto ColumnarResult::nullMask(string name, *bool invert) [flags=RET_VALUE_ONLY,N
 */
 auto ColumnarResult::stringPredicateMask(string name, string op, softstring value, *bool ignore_case)
         [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (ColumnarResult_check_column_name(name, xsink)) {
+        return QoreValue();
+    }
     return result->stringPredicateMask(name->c_str(), op->c_str(), value,
         ignore_case ? static_cast<bool>(ignore_case) : false, xsink);
 }

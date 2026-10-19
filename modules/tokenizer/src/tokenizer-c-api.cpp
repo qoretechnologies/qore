@@ -8,6 +8,10 @@
     automatically visible to all subsequently loaded modules. Consumers
     call dlsym(RTLD_DEFAULT, "qore_tokenizer_count_tokens") etc.
 
+    The input text is given with its length and may contain NUL characters, but
+    the strings returned by this API are NUL-terminated C strings: a token or
+    error message with a NUL character ends at its first NUL character.
+
     Copyright (C) 2026 Qore Technologies, s.r.o.
     MIT License
 */
@@ -87,10 +91,13 @@ DLLEXPORT int32_t qore_tokenizer_count_tokens(void* handle,
 
 //! Tokenize text to token strings
 /** @param handle tokenizer handle
-    @param text UTF-8 text
+    @param text UTF-8 text, which may contain NUL characters
     @param text_len length in bytes
     @param count_out receives the number of tokens
     @return array of token strings (caller frees with qore_tokenizer_free_tokens), or nullptr on error
+
+    @note the token strings are NUL-terminated C strings, so a token with a NUL character ends at its first NUL
+    character
 */
 DLLEXPORT char** qore_tokenizer_tokenize(void* handle,
     const char* text, size_t text_len, int32_t* count_out) {

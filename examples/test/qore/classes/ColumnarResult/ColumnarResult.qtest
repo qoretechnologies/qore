@@ -15,6 +15,7 @@ class ColumnarResultTest inherits QUnit::Test {
         addTestCase("sliced buffer round trip", \slicedBufferRoundTrip());
         addTestCase("row result round trip", \rowResultRoundTrip());
         addTestCase("scale-0 numeric narrowing", \scaleZeroNumericNarrowing());
+        addTestCase("NUL characters in names and descriptions", \nulNames());
         set_return_value(main());
     }
 
@@ -110,5 +111,64 @@ class ColumnarResultTest inherits QUnit::Test {
 
     private list<auto> columnValues(auto value) {
         return value.type() == Type::List ? value : value.toList();
+    }
+
+    # a column or field name with a NUL character cannot be a hash key, and a name or description string is used
+    # whole: it is never cut at a NUL character to another valid value
+    private nulNames() {
+        # a schema field name
+        assertThrows("HASH-KEY-ERROR", \ColumnarResult::fromColumnHash(), ({"st": ({"a": 1},)}, {"st": {"schema": {
+            "kind": "struct",
+            "children": ({"name": "a\x00b", "kind": "int"},),
+        }}}), "a struct field name with a NUL character cannot be a hash key");
+        # a column name given in the schema
+        assertThrows("HASH-KEY-ERROR", \ColumnarResult::fromColumnHash(), ({"c": (1,)}, {"c": {"schema": {
+            "name": "c\x00d",
+            "kind": "int",
+        }}}), "a column name with a NUL character in the schema cannot be a hash key");
+
+        # a kind with a NUL character is not the kind before the NUL character, but an unknown kind
+        hash<auto> nul_kind = ColumnarResult::fromColumnHash({"st": ({"a": 1},)}, {"st": {"schema": {
+            "kind": "struct\x00x",
+            "children": ({"name": "a", "kind": "int"},),
+        }}}).schemaV2()[0];
+        hash<auto> unknown_kind = ColumnarResult::fromColumnHash({"st": ({"a": 1},)}, {"st": {"schema": {
+            "kind": "nosuchkind",
+            "children": ({"name": "a", "kind": "int"},),
+        }}}).schemaV2()[0];
+        assertEq(unknown_kind.kind, nul_kind.kind, "a kind with a NUL character is an unknown kind");
+
+        # a lookup by a name with a NUL character finds no column, rather than the column named by the part before it
+        ColumnarResult result = ColumnarResult::fromColumnHash({"a": (1, NOTHING), "s": ("x", "y")});
+        assertThrows("COLUMNAR-RESULT-ERROR", "does not exist", \result.getColumn(), ("a\x00b",),
+            "getColumn() finds no column for a name with a NUL character");
+        assertThrows("COLUMNAR-RESULT-ERROR", "does not exist", \result.nullMask(), ("a\x00b",),
+            "nullMask() finds no column for a name with a NUL character");
+        assertThrows("COLUMNAR-RESULT-ERROR", "does not exist", \result.stringPredicateMask(),
+            ("s\x00t", "contains", "x"), "stringPredicateMask() finds no column for a name with a NUL character");
+
+        # a serialized column name with a NUL character cannot be a hash key
+        hash<SerializationInfo> data = result.serializeToData();
+        string column_index;
+        string schema_index;
+        foreach hash<auto> i in (data._index.pairIterator()) {
+            # only hash entries have members
+            if (!i.value.hasKey("_members")) {
+                continue;
+            }
+            hash<auto> members = i.value._members;
+            if (members.data && members.name == "a") {
+                column_index = i.key;
+                schema_index = members.schema._index;
+            }
+        }
+        hash<SerializationInfo> bad_column = data;
+        bad_column._index{column_index}._members.name = "a\x00b";
+        assertThrows("HASH-KEY-ERROR", \Serializable::deserialize(), (bad_column,),
+            "a serialized column name with a NUL character cannot be a hash key");
+        hash<SerializationInfo> bad_schema = data;
+        bad_schema._index{schema_index}._members.name = "a\x00b";
+        assertThrows("HASH-KEY-ERROR", \Serializable::deserialize(), (bad_schema,),
+            "a serialized schema name with a NUL character cannot be a hash key");
     }
 }

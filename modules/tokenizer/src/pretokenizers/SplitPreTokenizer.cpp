@@ -88,7 +88,9 @@ SplitPreTokenizer::SplitPreTokenizer(const QoreHashNode* config, ExceptionSink* 
     // lookarounds) work as written — std::regex (ECMAScript) supports none of them.
     int errornumber = 0;
     PCRE2_SIZE erroroffset = 0;
-    re = pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pat.c_str()), PCRE2_ZERO_TERMINATED,
+    // the pattern is given with its length, so a pattern with a NUL character (ex: a String pattern splitting on
+    // NUL characters) is used whole
+    re = pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pat.data()), pat.size(),
         PCRE2_UTF | PCRE2_UCP, &errornumber, &erroroffset, nullptr);
     if (!re) {
         PCRE2_UCHAR buf[256];

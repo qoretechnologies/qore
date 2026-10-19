@@ -48,6 +48,8 @@ class TokenizerTest inherits QUnit::Test {
         addTestCase("addTokensTest", \addTokensTest());
         addTestCase("preTokenizedTest", \preTokenizedTest());
         addTestCase("slidingWindowTest", \slidingWindowTest());
+        addTestCase("NUL characters in text and tokens", \nulTextTest());
+        addTestCase("NUL characters in tokenizer configurations", \nulConfigTest());
 
         set_return_value(main());
     }
@@ -835,5 +837,84 @@ class TokenizerTest inherits QUnit::Test {
         hash<auto> enc3 = tok.encode("test 42 end");
         assertEq((9288, 5433, 886), enc3.input_ids,
             "ASCII digits still tokenize correctly");
+    }
+
+    # returns the bytes of a string as hex, so that strings with NUL characters can be compared and shown whole
+    private static string hex(string s) {
+        return make_hex_string(binary(s));
+    }
+
+    # a NUL character is valid text: text, text pairs, added tokens and chat messages keep it
+    nulTextTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        string nul_token = "a\x00b";
+        assertEq(3, nul_token.size(), "the test token has a NUL character");
+        Tokenizer::HFTokenizer tok = createMinimalWordPiece();
+
+        # an added token with a NUL character is a token of its own, not the token before the NUL ("a", id 11)
+        assertEq(1, tok.addTokens((nul_token,)), "an added token with a NUL character is added");
+        int nul_id = tok.tokenToId(nul_token);
+        assertEq(12, nul_id, "the added token with a NUL character has the next id");
+        assertEq(11, tok.tokenToId("a"), "the token before the NUL character is another token");
+        assertEq(-1, tok.tokenToId("a\x00c"), "a token with a NUL character is looked up whole");
+        assertEq(hex(nul_token), hex(tok.idToToken(nul_id)), "idToToken() returns the whole token");
+
+        # text with a NUL character
+        assertEq((2, nul_id, 3), tok.encode(nul_token).input_ids,
+            "encode() finds the added token in text with a NUL character");
+        hash<auto> enc = tok.encode("hello" + nul_token + "world");
+        assertEq((2, 4, nul_id, 5, 3), enc.input_ids, "encode() encodes the text after the NUL character");
+        assertEq((5, 8), enc.offset_mapping[2], "the offsets of the added token cover the whole token");
+        assertEq((2, 4, 3, nul_id, 3), tok.encodeWithOptions("hello", nul_token).input_ids,
+            "encode() encodes a text pair with a NUL character");
+        assertEq((2, 4, 3, nul_id, 3), tok.encodeAdvanced("hello", {"text_pair": nul_token}).input_ids,
+            "encodeAdvanced() encodes a text pair with a NUL character");
+
+        # batches and model inputs
+        list<hash<auto>> batch = tok.encodeBatch(("hello", nul_token));
+        assertEq((2, nul_id, 3), batch[1].input_ids, "encodeBatch() encodes text with a NUL character");
+        assertEq((2, nul_id, 3), tok.encodeForModel(nul_token).input_ids.toList(),
+            "encodeForModel() encodes text with a NUL character");
+        assertEq((2, 4, 3, nul_id, 3), tok.encodeForModel("hello", {"text_pair": nul_token}).input_ids.toList(),
+            "encodeForModel() encodes a text pair with a NUL character");
+        assertEq((2, nul_id, 3), tok.encodeBatchForModel((nul_token,)).input_ids.toList(),
+            "encodeBatchForModel() encodes text with a NUL character");
+        assertEq((2, nul_id, 3, nul_id, 3), tok.encodeBatchPairsForModel((nul_token,), (nul_token,)).input_ids.toList(),
+            "encodeBatchPairsForModel() encodes text pairs with a NUL character");
+
+        # a chat message with a NUL character
+        tok.loadConfig({"chat_template": "plain"});
+        assertEq(hex(nul_token), hex(tok.applyChatTemplate(({"role": "user", "content": nul_token},))),
+            "applyChatTemplate() keeps a message with a NUL character");
+
+        # a token with a NUL character cannot be a hash key
+        assertThrows("HASH-KEY-ERROR", \tok.getVocab(), NOTHING,
+            "getVocab() refuses a token with a NUL character");
+    }
+
+    # a NUL character in a tokenizer configuration is kept: here a Split pre-tokenizer splitting on NUL characters
+    nulConfigTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        hash<auto> config = {
+            "model": {
+                "type": "WordPiece",
+                "vocab": {"[UNK]": 0, "hello": 1, "world": 2},
+                "unk_token": "[UNK]",
+                "continuing_subword_prefix": "##",
+            },
+            "pre_tokenizer": {
+                "type": "Split",
+                "pattern": {"String": "\x00"},
+                "behavior": "Removed",
+            },
+        };
+        Tokenizer::HFTokenizer tok(config);
+        assertEq((1, 2), tok.encode("hello\x00world").input_ids,
+            "a Split pre-tokenizer splits text on a NUL character pattern");
+        assertEq((1,), tok.encode("hello").input_ids, "text without a NUL character is not split");
     }
 }
