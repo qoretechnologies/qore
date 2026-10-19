@@ -97,6 +97,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("n-ary arithmetic round-trip tests", \naryArithmeticRoundTripTests());
         addTestCase("expression parentheses tests", \expressionParenthesesTests());
         addTestCase("value literal rendering tests", \valueLiteralRenderingTests());
+        addTestCase("field references render as the serializer writes them", \fieldReferenceRenderingTests());
         addTestCase("accessor round-trip tests", \accessorRoundTripTests());
         addTestCase("accessor operator discoverability tests", \accessorOperatorDiscoverabilityTests());
         addTestCase("accessor serializer edge case tests", \accessorSerializerEdgeCaseTests());
@@ -1945,6 +1946,37 @@ public class DpqlTest inherits QUnit::Test {
             string dpql = DataProvider::serializeDpqlExpression(exp, expmap);
             assertEq("substr(@name, 0, 5)", dpql, "serializer strips () from function symbol");
         }
+    }
+
+    #! A field reference and its accessors are described as the serializer writes them, so that a description and the
+    #! DPQL of the same expression read the same
+    fieldReferenceRenderingTests() {
+        code<string(string)> ref = string sub (string field) {
+            return DataProvider::renderExpression(<DataProviderExpression>{
+                "exp": DP_EXPR_VALUE,
+                "args": (<DataProviderFieldReference>{"field": field},),
+            });
+        };
+        assertEq("@pos", ref("pos"));
+        assertEq("@order.id", ref("order.id"));
+        assertEq('@"create.order-id"', ref("create.order-id"));
+        assertEq('@"Unit\.Price"', ref("Unit\\.Price"));
+        assertEq('@"order.Unit\.Price"', ref("order.Unit\\.Price"));
+        assertEq('@"p\\\\q"', ref("p\\\\q"));
+        assertEq('@"a b"', ref("a b"));
+
+        # the description of each expression is its DPQL, for field references, accessors and wildcards, alone and
+        # as an operand
+        foreach string dpql in ('@pos', '@"create.order-id"', '@"Unit\.Price"', '@orders[*].id', '@orders[0].id',
+                '@orders[1..2]', '@items[0]', '@prices{*}', '@prices{*}.amount', '@h{a, "b c"}', '@a.b.c',
+                '@orders[*].items[*].sku', '@pos == 1', '@orders[*].id == 1', '@"Unit\.Price" * 2',
+                '@create.items[0].@"Unit.Price" > 1') {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql);
+            assertEq(DataProvider::serializeDpqlExpression(exp), DataProvider::renderExpression(exp), dpql);
+        }
+        # other template contexts are written as they are
+        hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$static:{x} == @pos');
+        assertEq('$static:{x} == @pos', DataProvider::renderExpression(exp));
     }
 
     #! A `value` expression renders and serializes as the literal it holds

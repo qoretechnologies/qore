@@ -1106,6 +1106,11 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
                 ? "null"
                 : renderExpressionArg(literal, emap, info.arg_info[0], DPQL_PREC_OR + 1);
         }
+        # an accessor or a wildcard on a field reference is described as the DPQL serializer writes it
+        # (@orders[*].id), so that the description and the DPQL read the same
+        if (*string accessors = DpqlSerializer::accessorForm(exp)) {
+            return accessors;
+        }
         if (info.type == DET_Function) {
             # a call's arguments are delimited by the call's own parentheses and commas, so nothing
             # inside them can be misread, except a prefix operator, which reads the commas after it as its
@@ -2219,7 +2224,8 @@ if (action.data_provider_info) {
     static private string renderExpressionArg(hash<DataProviderFieldReference> ref,
             hash<string, hash<DataProviderExpressionInfo>> emap, *hash<DataProviderArgInfo> arg_info,
             *int context_prec) {
-        return sprintf("{%s}", ref.field);
+        # as the DPQL serializer writes it, so that the description and the DPQL read the same
+        return DpqlSerializer::fieldReference(ref.field);
     }
 
     #! Returns a descriptive string for the given template reference argument
@@ -2251,7 +2257,7 @@ if (action.data_provider_info) {
             *int context_prec) {
         *hash<DataProviderExpressionInfo> info = emap{exp.exp};
         if (!info) {
-            throw "INVALID-EXPRESSION", sprintf("Expression %y not found in expression map", info.name);
+            throw "INVALID-EXPRESSION", sprintf("Expression %y not found in expression map", exp.exp);
         }
         # Parenthesised exactly when this argument's own operator binds LOOSER than the context it
         # is being rendered in — @ref DpqlSerializer::getArgumentContext() is the single answer to

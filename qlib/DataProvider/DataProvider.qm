@@ -1538,6 +1538,16 @@ fetch
       known fields offers no keys.  The new @ref DataProvider::DpqlSerializer::fieldReferenceForPath()
       "DpqlSerializer::fieldReferenceForPath()" and @ref DataProvider::DpqlSerializer::memberNameForKey()
       "DpqlSerializer::memberNameForKey()" give these forms
+    - the \c INVALID-EXPRESSION error of
+      @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" names the expression
+      that is not in the expression map also when it is an argument of another expression, where it named none
+    - @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" describes a field
+      reference, and the accessors and wildcards on it, as the DPQL serializer writes them: \c @pos,
+      <tt>\@"create.order-id"</tt>, <tt>\@"Unit\\.Price"</tt>, <tt>\@orders[*].id</tt>, where it wrote \c {pos} and
+      the accessors as calls, so that the description and the DPQL of an expression read the same; template
+      references are written as before (<tt>$static:{x}</tt>); the new
+      @ref DataProvider::DpqlSerializer::fieldReference() "DpqlSerializer::fieldReference()" and
+      @ref DataProvider::DpqlSerializer::accessorForm() "DpqlSerializer::accessorForm()" give these forms
     - added the private method \c readLocationGrid() to
       @ref DataProvider::AbstractTabularProfileDataProvider "AbstractTabularProfileDataProvider", which a profile
       provider whose reader streams its input overrides to read a location as a stream, so that the content of a

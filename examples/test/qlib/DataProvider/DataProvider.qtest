@@ -1225,8 +1225,8 @@ public class DataProviderTest inherits QUnit::Test {
         string str = DataProvider::renderExpression(exp, DataProviderGenericExpressions + {
             "calculate": fexp,
         });
-        assertEq("{status} == \"active\" && {email} =~ /\"@example\\\\.com$\"/ && ({age} between 18 and 30 || "
-            "{role} in ([\"admin\", \"editor\", \"moderator\"]) || calculate({score}, 1000, 2000))", str);
+        assertEq("@status == \"active\" && @email =~ /\"@example\\\\.com$\"/ && (@age between 18 and 30 || "
+            "@role in ([\"admin\", \"editor\", \"moderator\"]) || calculate(@score, 1000, 2000))", str);
 
         hash<DataProviderExpressionInfo> opexp = <DataProviderExpressionInfo>{
             "type": DET_Operator,
@@ -1261,7 +1261,7 @@ public class DataProviderTest inherits QUnit::Test {
         str = DataProvider::renderExpression(exp, DataProviderGenericExpressions + {
             "startsWith": opexp,
         });
-        assertEq("{username}.startsWith(\"admin\", true)", str);
+        assertEq("@username.startsWith(\"admin\", true)", str);
         exp = <DataProviderExpression>{
             "exp": "startsWith",
             "args": (
@@ -1272,7 +1272,7 @@ public class DataProviderTest inherits QUnit::Test {
         str = DataProvider::renderExpression(exp, DataProviderGenericExpressions + {
             "startsWith": opexp,
         });
-        assertEq("{username}.startsWith(\"admin\", false)", str);
+        assertEq("@username.startsWith(\"admin\", false)", str);
 
         opexp = <DataProviderExpressionInfo>{
             "type": DET_Operator,
@@ -1299,7 +1299,7 @@ public class DataProviderTest inherits QUnit::Test {
         str = DataProvider::renderExpression(exp, DataProviderGenericExpressions + {
             "in-list": opexp,
         });
-        assertEq("{category} in ([\"A\", \"B\", \"C\"]) [IGNORE-CASE]", str);
+        assertEq("@category in ([\"A\", \"B\", \"C\"]) [IGNORE-CASE]", str);
         exp = <DataProviderExpression>{
             "exp": "in-list",
             "args": (
@@ -1310,7 +1310,7 @@ public class DataProviderTest inherits QUnit::Test {
         str = DataProvider::renderExpression(exp, DataProviderGenericExpressions + {
             "in-list": opexp,
         });
-        assertEq("{category} in ([\"A\", \"B\", \"C\"])", str);
+        assertEq("@category in ([\"A\", \"B\", \"C\"])", str);
 
         # a conditional template part reads an argument that was given as given, and its default only when the
         # argument was omitted; an argument set to False must not be rendered as its True default, or the
@@ -1342,11 +1342,11 @@ public class DataProviderTest inherits QUnit::Test {
             };
             return DataProvider::renderExpression(cexp, DataProviderGenericExpressions + {"in-list": caseexp});
         };
-        assertEq("{category} in ([\"A\", \"B\"]) [IGNORE-CASE]", render_case(NOTHING, True),
+        assertEq("@category in ([\"A\", \"B\"]) [IGNORE-CASE]", render_case(NOTHING, True),
             "an omitted argument renders its True default");
-        assertEq("{category} in ([\"A\", \"B\"]) [IGNORE-CASE]", render_case(True, False),
+        assertEq("@category in ([\"A\", \"B\"]) [IGNORE-CASE]", render_case(True, False),
             "an argument given as True renders the part");
-        assertEq("{category} in ([\"A\", \"B\"])", render_case(False, False),
+        assertEq("@category in ([\"A\", \"B\"])", render_case(False, False),
             "an argument given as False does not render the part despite the True default");
 
         # the same with a False default: only an argument given as True renders the part
@@ -1355,11 +1355,11 @@ public class DataProviderTest inherits QUnit::Test {
             <DataProviderArgInfo>{"display_name": "List"},
             <DataProviderArgInfo>{"display_name": "Ignore Case?", "default_value": False},
         );
-        assertEq("{category} in ([\"A\", \"B\"])", render_case(NOTHING, True),
+        assertEq("@category in ([\"A\", \"B\"])", render_case(NOTHING, True),
             "an omitted argument renders its False default");
-        assertEq("{category} in ([\"A\", \"B\"])", render_case(False, False),
+        assertEq("@category in ([\"A\", \"B\"])", render_case(False, False),
             "an argument given as False does not render the part");
-        assertEq("{category} in ([\"A\", \"B\"]) [IGNORE-CASE]", render_case(True, False),
+        assertEq("@category in ([\"A\", \"B\"]) [IGNORE-CASE]", render_case(True, False),
             "an argument given as True renders the part with a False default");
 
         opexp = <DataProviderExpressionInfo>{
@@ -1388,8 +1388,21 @@ public class DataProviderTest inherits QUnit::Test {
         str = DataProvider::renderExpression(exp, DataProviderGenericExpressions + {
             "in-list": opexp,
         });
-        assertEq("{account} in ([\"A\", \"B\", \"C\"]) [loc \"extra.info\"]", str);
+        assertEq("@account in ([\"A\", \"B\", \"C\"]) [loc \"extra.info\"]", str);
 
+        # an expression that is not in the expression map is named in the error, also as an argument
+        exp = <DataProviderExpression>{
+            "exp": "no-such-expression",
+            "args": (),
+        };
+        assertThrows("INVALID-EXPRESSION", "\"no-such-expression\" not found",
+            \DataProvider::renderExpression(), (exp,), "unknown top-level expression");
+        hash<DataProviderExpression> outer = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (exp, 1),
+        };
+        assertThrows("INVALID-EXPRESSION", "\"no-such-expression\" not found",
+            \DataProvider::renderExpression(), (outer,), "unknown expression as an argument");
     }
 
     getDisplayNameLocaleTest() {

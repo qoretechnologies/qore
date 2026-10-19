@@ -644,13 +644,72 @@ public class DpqlSerializer {
 
     #! Serializes a field reference
     private string serializeFieldRef(hash<auto> ref) {
-        string field = ref.field;
+        return DpqlSerializer::fieldReference(ref.field);
+    }
 
-        # A name the tokenizer reads bare, in any script, is written bare; any other is quoted
+    #! Returns the DPQL field reference for a field path, as the serializer writes it
+    /** A path that the tokenizer reads bare, in any script, is written bare (<tt>\@order.id</tt>); any other is
+        quoted (<tt>\@"create.order-id"</tt>, <tt>\@"Unit\\.Price"</tt>)
+
+        @param field the field path (the \c field of a @ref DataProviderFieldReference)
+
+        @return the field reference, which the parser reads as the same field path
+
+        @par Example:
+        @code{.py}
+# @"Unit\.Price" > 100
+string dpql = DpqlSerializer::fieldReference("Unit\\.Price") + " > 100";
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static string fieldReference(string field) {
         if (!DpqlTokenizer::isBareFieldName(field)) {
             return '@"' + DpqlSerializer::escapeFieldPath(field) + '"';
         }
         return "@" + field;
+    }
+
+    #! Returns an accessor or wildcard expression as the serializer writes it with accessors, or @ref nothing
+    /** An index, slice or key accessor, or a list or hash wildcard, whose value is a field reference or another
+        accessor is written as accessors after the field reference: <tt>\@orders[*].id</tt>, <tt>\@items[0]</tt>,
+        <tt>\@h{a, "b c"}</tt>, <tt>\@prices{*}.amount</tt>.  Any other expression, or one whose indexes, keys or
+        wildcard body cannot be written as accessors, gives @ref nothing.
+
+        @param exp the expression
+
+        @return the DPQL of the expression written with accessors, or @ref nothing
+
+        @par Example:
+        @code{.py}
+# @orders[*].id
+*string dpql = DpqlSerializer::accessorForm(DataProvider::parseDpqlExpression("@orders[*].id"));
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static *string accessorForm(hash<DataProviderExpression> exp) {
+        # a serializer is only created for an accessor or a wildcard; this is called for every expression that
+        # DataProvider::renderExpression() describes
+        switch (exp.exp) {
+            case DP_FUNC_INDEX:
+            case DP_FUNC_SLICE:
+            case DP_FUNC_KEY: {
+                DpqlSerializer serializer();
+                return serializer.serializeAccessors(exp);
+            }
+
+            case DP_FUNC_LIST_WILDCARD:
+            case DP_FUNC_HASH_WILDCARD: {
+                if (exp.args.size() != 2) {
+                    return;
+                }
+                DpqlSerializer serializer();
+                *string base = serializer.serializeAccessorBase(exp.args[0]);
+                *string body = serializer.serializeWildcardBody(exp.args[1], exp.exp);
+                return exists base && exists body ? base + DpqlWildcardAccessors{exp.exp} + body : NOTHING;
+            }
+        }
     }
 
     #! Returns the DPQL field reference to one key of a record
