@@ -476,6 +476,44 @@ registry stores and classifies ONNX artifacts as executable binary model files.
 Detailed ONNX graph inspection/export remains in the ONNX/protobuf layers so the
 registry can stay safe, fast, and backend-agnostic.
 
+## Testing Under Valgrind
+
+Run `modules/ml/test/ml.qtest` (or a subset with `--include=PATTERN`) under valgrind in IR mode, with the
+build's `ml`, `json`, `yaml`, `reflection` and `protobuf` module directories and the source `qlib` in
+`QORE_MODULE_DIR`:
+
+```
+env QORE_PCRE2_NO_JIT=1 valgrind --leak-check=full --errors-for-leak-kinds=definite \
+    qore -b --exec-mode=ir --enable-debug modules/ml/test/ml.qtest
+```
+
+The `ml` module does not link Apache Arrow, so the `ARROW_DEFAULT_MEMORY_POOL=system` setting the
+DataFrame tests need under valgrind does not apply.
+
+### Known third-party leak: ONNX Runtime 1.23.0 on Alpine (musl)
+
+With Alpine's `onnxruntime-1.23.0-r0` package, valgrind reports two blocks of 256 bytes as
+"definitely lost". They are allocated with `calloc()` inside `libonnxruntime.so.1.23.0` (through
+`ld-musl`) when an ONNX Runtime session is created, so every run that loads an ONNX model reports
+them. They are not suppressed, so a musl run must be judged with exactly these two records
+excluded; any other leak is a finding.
+
+The leak does not involve module code. It reproduces with a script that only loads the bundled test model
+and runs it once, also with `intra_op_threads` and `inter_op_threads` set to 1. It does not appear when the
+script only loads the `ml` module without creating a session:
+
+```
+%modern
+%requires ml
+ML::OnnxModel m("modules/ml/test/data/test_linear.onnx", <ML::OnnxSessionConfig>{"providers": ()});
+printf("%y\n", m.run({"X": ((1.0,),)}));
+```
+
+| Platform | ONNX Runtime | valgrind | Result |
+|---|---|---|---|
+| Ubuntu 26.04.1 LTS (glibc) | `libonnxruntime1.23` 1.23.2+dfsg-6ubuntu1 | 3.26.0 | 0 errors |
+| Alpine Linux v3.23 (musl 1.2.5-r23), `qore-test-base:develop-alpine` | `onnxruntime-1.23.0-r0` | 3.25.1 | 2 errors: 2 × 256 bytes definitely lost |
+
 ## Extension Guide: Adding a New Algorithm
 
 1. Create `QC_NewAlgo.h` with the C++ class (extend `AbstractPrivateData`, add mutex)
