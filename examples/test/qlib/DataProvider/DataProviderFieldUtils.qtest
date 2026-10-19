@@ -55,6 +55,7 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("getFieldNamesAsAllowedValues - flat type", \fieldNamesFlat());
         addTestCase("getFieldNamesAsAllowedValues - nested type", \fieldNamesNested());
         addTestCase("getFieldNamesAsAllowedValues - no fields", \fieldNamesNoFields());
+        addTestCase("getFieldNamesAsAllowedValues - names with dots", \fieldNamesEscapedKeys());
 
         # input_field_names marker tests
         addTestCase("input_field_names - BaseOptionInfo marker", \inputFieldNamesMarker());
@@ -215,6 +216,33 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         assertTrue(inlist("address", values));
         assertTrue(inlist("address.city", values));
         assertTrue(inlist("address.zip", values));
+    }
+
+    #! Each value is the field path of the field, with the dots of a name escaped; the display name is the names
+    #! as they are written
+    fieldNamesEscapedKeys() {
+        HashDataType inner("order");
+        inner.addField(new QoreDataField("id", "Id", AbstractDataProviderTypeMap."int"));
+        inner.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderTypeMap."float"));
+        HashDataType zero("zero");
+        zero.addField(new QoreDataField("a", "A", AbstractDataProviderTypeMap."int"));
+        HashDataType outer("rec");
+        outer.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderTypeMap."float"));
+        outer.addField(new QoreDataField("order", "Order", inner));
+        outer.addField(new QoreDataField("0", "Zero", zero));
+        outer.addField(new QoreDataField("p\\q", "Backslash", AbstractDataProviderTypeMap."int"));
+
+        list<hash<AllowedValueInfo>> avs = AbstractDataProviderType::getFieldNamesAsAllowedValues(outer);
+        assertEq(("Unit\\.Price", "order", "order.id", "order.Unit\\.Price", "0", "0.a", "p\\\\q"),
+            (map $1.value, avs));
+        assertEq(("Unit.Price", "order", "order.id", "order.Unit.Price", "0", "0.a", "p\\q"),
+            (map $1.display_name, avs));
+        assertEq("field 'order.Unit.Price' (float)", avs[3].desc);
+
+        # each value reads its field
+        hash<auto> rec = {"Unit.Price": 1.5, "order": {"id": 7, "Unit.Price": 2.5}, "0": {"a": 3}, "p\\q": 4};
+        assertEq((1.5, rec.order, 7, 2.5, rec."0", 3, 4),
+            (map AbstractDataProvider::getFieldValue(rec, $1.value), avs));
     }
 
     fieldNamesNoFields() {

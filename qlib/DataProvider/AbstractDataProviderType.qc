@@ -1609,18 +1609,26 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     }
 
     #! Returns a list of allowed value entries for all field names in the given type
-    /** Recursively walks the type's fields, building dot-notation paths for nested hash fields.
+    /** Recursively walks the type's fields, building field paths for nested hash fields.
+
+        Each value is the field path of the field, as processors and field references read it: the keys of the path
+        joined with dots, each key escaped with @ref DataProvider::AbstractDataProvider::escapeFieldPathKey()
+        "AbstractDataProvider::escapeFieldPathKey()", so a field whose name has a dot is one key (the field
+        \c Unit.Price is the value <tt>Unit\\.Price</tt>).  The display name is the names of the path joined with
+        dots, as they are written (\c Unit.Price).
 
         @param type the data provider type to enumerate fields from
-        @param prefix the current dot-notation prefix (empty for top-level)
+        @param prefix the field path of the type in the record (empty for top-level)
         @param visited a set of type unique IDs already visited (to guard against circular types)
+        @param display_prefix the display name of the type in the record (empty for top-level)
 
-        @return a list of AllowedValueInfo hashes with field names as values
+        @return a list of AllowedValueInfo hashes with field paths as values
 
         @since %DataProvider 3.4
+        @since %DataProvider 3.11 the value is the field path with the keys escaped, and \c display_prefix was added
     */
     static list<hash<AllowedValueInfo>> getFieldNamesAsAllowedValues(AbstractDataProviderType type,
-            string prefix = "", *hash<string, bool> visited) {
+            string prefix = "", *hash<string, bool> visited, string display_prefix = "") {
         list<hash<AllowedValueInfo>> result = ();
         *hash<string, AbstractDataField> fields = type.getFields();
         if (!fields) {
@@ -1632,17 +1640,20 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         }
         visited{uid} = True;
         foreach hash<auto> i in (fields.pairIterator()) {
-            string full_name = prefix.val() ? prefix + "." + i.key : i.key;
+            string key = AbstractDataProvider::escapeFieldPathKey(i.key);
+            string full_name = prefix != "" ? prefix + "." + key : key;
+            string display_name = display_prefix != "" ? display_prefix + "." + i.key : i.key;
             AbstractDataProviderType field_type = i.value.getType();
             string type_name = field_type.getName();
             push result, <AllowedValueInfo>{
                 "value": full_name,
-                "display_name": full_name,
-                "desc": sprintf("field '%s' (%s)", full_name, type_name),
+                "display_name": display_name,
+                "desc": sprintf("field '%s' (%s)", display_name, type_name),
             };
             # recurse into hash-type fields for dot-notation access
             if (field_type.getBaseTypeCode() == NT_HASH) {
-                result += AbstractDataProviderType::getFieldNamesAsAllowedValues(field_type, full_name, visited);
+                result += AbstractDataProviderType::getFieldNamesAsAllowedValues(field_type, full_name, visited,
+                    display_name);
             }
         }
         return result;

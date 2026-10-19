@@ -1611,6 +1611,14 @@ fetch
       whether a field path is the one key it is written as, and the processors read a column of a column block by a
       field name directly only then, so a field path with a backslash is no longer read as a column with the
       backslashes in its name
+    - @ref DataProvider::AbstractDataProviderType::getFieldNamesAsAllowedValues()
+      "AbstractDataProviderType::getFieldNamesAsAllowedValues()" gives the field path of each field as its value,
+      with the keys escaped by
+      @ref DataProvider::AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()", so
+      that a processor reads the field it names: the field \c Unit.Price is the value <tt>Unit\\.Price</tt>, and the
+      field \c id of \c order is \c order.id; the display name is the names of the path as they are written
+      (\c Unit.Price, \c order.id).  The value was the names joined with dots, which a processor read as a path, so
+      a field whose name has a dot could not be picked
     - fixed @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
       dropping the \c input_field_names marker, so the options of the registered processor actions that take field
       names of the input (such as \c group_by of \c group-by and \c fields of \c select-fields) did not have it, and
