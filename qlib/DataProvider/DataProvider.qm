@@ -1625,6 +1625,11 @@ fetch
       creating the hashes on the path that are missing; \c search-replace writes the value back at the path of its
       field: it added a top-level key named by the path (\c order.name or <tt>Unit\\.Price</tt>) and left the field
       unchanged
+    - added @ref DataProvider::AbstractDataProvider::removeFieldValue() "AbstractDataProvider::removeFieldValue()",
+      which removes the value at a field path, leaving the hashes on the path in place; a path with no value is left
+      as it is; \c remove-fields reads each of its fields as a field path, so \c address.city removes the key
+      \c city of \c address (it removed nothing), and <tt>Unit\\.Price</tt> removes the key \c Unit.Price; its
+      output type does not have the fields removed, also from a nested hash type
     - fixed @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
       dropping the \c input_field_names marker, so the options of the registered processor actions that take field
       names of the input (such as \c group_by of \c group-by and \c fields of \c select-fields) did not have it, and

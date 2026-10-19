@@ -70,6 +70,8 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("ExpressionTypes::getType - field references are paths", \fieldReferenceTypeTest());
         addTestCase("setFieldValue - paths, intermediates and errors", \setFieldValueTest());
         addTestCase("search-replace - writes the field at its path", \searchReplacePathTest());
+        addTestCase("removeFieldValue - paths, missing paths and non-hash values", \removeFieldValueTest());
+        addTestCase("remove-fields - fields are paths", \removeFieldsPathTest());
 
         # Processor backward compatibility tests
         addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
@@ -464,6 +466,78 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         # the path is given as it is written (the description is a regular expression)
         assertThrows("FIELD-PATH-ERROR", "the value at \"Unit\\\\\\.Price\" is list",
             \AbstractDataProvider::setFieldValue(), ({"Unit.Price": (1,)}, "Unit\\.Price.x", 1));
+    }
+
+    #! A field path is removed as getFieldValue() reads it; a path with no value is left as it is
+    removeFieldValueTest() {
+        hash<auto> rec = {"x": 1, "order": {"id": 7, "qty": 2}, "Unit.Price": 2.5, "Unit": {"Price": 3.5},
+            "p\\q": 4, "": 5};
+        # plain
+        assertEq(rec - "x", AbstractDataProvider::removeFieldValue(rec, "x"));
+        # nested; a hash left empty is kept
+        assertEq(rec + {"order": {"qty": 2}}, AbstractDataProvider::removeFieldValue(rec, "order.id"));
+        assertEq(rec + {"Unit": {}}, AbstractDataProvider::removeFieldValue(rec, "Unit.Price"));
+        # a hash is removed as a whole
+        assertEq(rec - "order", AbstractDataProvider::removeFieldValue(rec, "order"));
+        # an escaped dot is part of a key, and an escaped backslash is one backslash
+        assertEq(rec - "Unit.Price", AbstractDataProvider::removeFieldValue(rec, "Unit\\.Price"));
+        assertEq(rec - "p\\q", AbstractDataProvider::removeFieldValue(rec, "p\\\\q"));
+        # any other backslash is itself
+        assertEq(rec - "p\\q", AbstractDataProvider::removeFieldValue(rec, "p\\q"));
+        # the empty path is the empty key, as getFieldValue() reads it
+        assertEq(rec - "", AbstractDataProvider::removeFieldValue(rec, ""));
+        # the value removed is no longer read
+        foreach string path in ("x", "order.id", "Unit.Price", "Unit\\.Price", "p\\\\q", "") {
+            assertNothing(AbstractDataProvider::getFieldValue(AbstractDataProvider::removeFieldValue(rec, path),
+                path), path);
+        }
+
+        # a path with no value: a missing key, or a value on the path that is not a hash
+        foreach string path in ("y", "order.missing", "a.b.c", "x.y", "order.id.z", "Unit\\.Price.x", "q\\\\p") {
+            assertEq(rec, AbstractDataProvider::removeFieldValue(rec, path), path);
+        }
+        assertEq({"l": (1, 2)}, AbstractDataProvider::removeFieldValue({"l": (1, 2)}, "l.0"));
+        assertEq({}, AbstractDataProvider::removeFieldValue({}, ""));
+
+        # the record passed is not changed
+        assertEq({"x": 1, "order": {"id": 7, "qty": 2}, "Unit.Price": 2.5, "Unit": {"Price": 3.5}, "p\\q": 4, "": 5},
+            rec);
+    }
+
+    #! remove-fields reads each field as a path
+    removeFieldsPathTest() {
+        hash<auto> rec = {"id": 1, "address": {"city": "Prague", "zip": "11000"}, "Unit.Price": 2.5,
+            "Unit": {"Price": 3.5}};
+        QoreRemoveFieldsProcessor nested({"fields": "address.city"});
+        assertEq(rec + {"address": {"zip": "11000"}}, nested.processRecord(rec));
+        QoreRemoveFieldsProcessor escaped({"fields": "Unit\\.Price"});
+        assertEq(rec - "Unit.Price", escaped.processRecord(rec));
+        QoreRemoveFieldsProcessor dotted({"fields": "Unit.Price"});
+        assertEq(rec + {"Unit": {}}, dotted.processRecord(rec));
+        QoreRemoveFieldsProcessor several({"fields": ("id", "address.zip", "Unit\\.Price", "missing.field")});
+        assertEq({"address": {"city": "Prague"}, "Unit": {"Price": 3.5}}, several.processRecord(rec));
+
+        # a column block with a field path is processed row by row
+        hash<auto> block = {"id": (1, 2), "address": ({"city": "Prague"}, {"city": "Brno"})};
+        QoreRemoveFieldsProcessor block_proc({"fields": "address.city"});
+        assertEq({"id": (1, 2), "address": ({}, {})},
+            block_proc.processRecordsShape(block, DataProviderShape::HashOfLists));
+
+        # the output type does not have the fields removed
+        HashDataType address("address");
+        address.addField(new QoreDataField("city", "City", AbstractDataProviderTypeMap."string"));
+        address.addField(new QoreDataField("zip", "Zip", AbstractDataProviderTypeMap."string"));
+        HashDataType input("input");
+        input.addField(new QoreDataField("id", "Id", AbstractDataProviderTypeMap."int"));
+        input.addField(new QoreDataField("address", "Address", address));
+        input.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderTypeMap."float"));
+        QoreRemoveFieldsProcessor typed({"fields": ("address.city", "Unit\\.Price")});
+        *AbstractDataProviderType output = typed.getPipelineProcessorOutputTypeWithInputType(input);
+        assertEq(("id", "address"), keys output.getFields());
+        assertEq(("zip",), keys output.getFields().address.getType().getFields());
+        # the input type is not changed
+        assertEq(("city", "zip"), keys address.getFields());
+        assertEq(("id", "address", "Unit.Price"), keys input.getFields());
     }
 
     #! search-replace writes the field that it reads, at its path

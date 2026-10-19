@@ -40,7 +40,8 @@ public class QoreRemoveFieldsProcessor inherits AbstractDataProvider {
             "fields": <DataProviderOptionInfo>{
                 "display_name": "Fields to Remove",
                 "short_desc": "Field names to remove",
-                "desc": "A list of field names to remove from each record",
+                "desc": "A list of field names to remove from each record; supports dot-notation for nested "
+                    "fields (e.g. `address.city`)",
                 "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "required": True,
                 "input_field_names": True,
@@ -90,7 +91,15 @@ public class QoreRemoveFieldsProcessor inherits AbstractDataProvider {
             throw "PROCESSOR-ERROR", "QoreRemoveFieldsProcessor: no field list configured; "
                 "provide the 'fields' option";
         }
-        return record - field_list;
+        if (canUseColumnShapes()) {
+            # each field is a top-level key
+            return record - field_list;
+        }
+        hash<auto> rv = record;
+        foreach string field in (field_list) {
+            rv = AbstractDataProvider::removeFieldValue(rv, field);
+        }
+        return rv;
     }
 
     #! Returns True if configured fields can be removed from a column block directly
@@ -175,14 +184,51 @@ public class QoreRemoveFieldsProcessor inherits AbstractDataProvider {
             return;
         }
         # remove the specified fields
-        hash<string, bool> remove_set = map {$1: True}, field_list;
+        hash<string, AbstractDataField> fields = input_fields;
+        foreach string field in (field_list) {
+            # a plain path is the one key it is written as (also the empty key, as getFieldValue() reads it)
+            list<string> path = AbstractDataProvider::isPlainFieldPath(field)
+                ? (field,)
+                : AbstractDataProvider::getFieldPath(field);
+            fields = QoreRemoveFieldsProcessor::removeTypeField(fields, path, 0);
+        }
         HashDataType rv(input_type.getName() + " (filtered)");
-        foreach hash<auto> i in (input_fields.pairIterator()) {
-            if (!remove_set{i.key}) {
-                rv.addField(i.value);
-            }
+        foreach AbstractDataField field in (fields.iterator()) {
+            rv.addField(field);
         }
         return rv.getFields() ? rv : NOTHING;
+    }
+
+    #! Returns type fields without the field at a field path
+    /** A field of a nested hash type is removed from a copy of that type; when the type on the path cannot be
+        copied (it is not a hash type with fields of a Qore field), the field is kept
+
+        @param fields the fields
+        @param path the keys of the field path
+        @param i the index of the key in \a path to look up in \a fields
+
+        @return the fields without the field at the path; the fields and types passed are not changed
+    */
+    private static hash<string, AbstractDataField> removeTypeField(hash<string, AbstractDataField> fields,
+            list<string> path, int i) {
+        string key = path[i];
+        if (!fields{key}) {
+            return fields;
+        }
+        if (i == path.size() - 1) {
+            return fields - key;
+        }
+        AbstractDataField field = fields{key};
+        AbstractDataProviderType type = field.getType();
+        *hash<string, AbstractDataField> child_fields = type.getFields();
+        if (!child_fields || !(type instanceof HashDataType) || !(field instanceof QoreDataField)) {
+            return fields;
+        }
+        QoreDataField new_field = cast<QoreDataField>(field).copy();
+        new_field.updateFieldType(cast<HashDataType>(type).copyWithFields(
+            QoreRemoveFieldsProcessor::removeTypeField(child_fields, path, i + 1)));
+        fields{key} = new_field;
+        return fields;
     }
 
     #! Indicates that this processor supports the bulk API

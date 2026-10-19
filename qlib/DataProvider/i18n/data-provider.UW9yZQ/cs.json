@@ -120,8 +120,8 @@
           "message": "Názvy polí k odebrání"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.desc": {
-          "source": "A list of field names to remove from each record",
-          "message": "Seznam názvů polí k odebrání z každého záznamu"
+          "source": "A list of field names to remove from each record; supports dot-notation for nested fields (e.g. `address.city`)",
+          "message": "Seznam názvů polí k odebrání z každého záznamu; podporuje tečkovou notaci pro vnořená pole (např. `address.city`)"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
           "source": "Search and Replace",

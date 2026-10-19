@@ -9085,6 +9085,8 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
 hash<auto> rec = AbstractDataProvider::setFieldValue({"order": {"id": 1}}, "order.Unit\\.Price", 2.5);
         @endcode
 
+        @see @ref removeFieldValue()
+
         @since %DataProvider 3.11
     */
     static hash<auto> setFieldValue(hash<auto> record, string field_path, auto value) {
@@ -9096,6 +9098,39 @@ hash<auto> rec = AbstractDataProvider::setFieldValue({"order": {"id": 1}}, "orde
         }
         return AbstractDataProvider::setFieldValueIntern(rec, AbstractDataProvider::getFieldPath(field_path), 0,
             value, field_path);
+    }
+
+    #! Returns a record without the value of a field
+    /** The field path is read as @ref getFieldValue() reads it (@ref getFieldPath()): dots separate its keys, and a
+        dot or a backslash that is part of a key is escaped (<tt>Unit\\.Price</tt>).  The record passed is not
+        changed; the record returned does not have the last key of the path, and each hash on the path is copied as
+        a plain hash (<tt>hash<auto></tt>).  A hash that the removal leaves empty is kept: removing \c address.city
+        from <tt>{"address": {"city": "Prague"}}</tt> gives <tt>{"address": {}}</tt>.
+
+        When the record has no value at the path, because a key on the path is missing or a value on the path before
+        its last key is not a hash (where @ref getFieldValue() gives @ref nothing), the record is returned as it is.
+
+        @param record the record
+        @param field_path the field name or dot-notation path (e.g. \c "address.city")
+
+        @return the record without the value at the path
+
+        @par Example:
+        @code{.py}
+# {"order": {"id": 1}}
+hash<auto> rec = AbstractDataProvider::removeFieldValue({"order": {"id": 1, "Unit.Price": 2.5}},
+    "order.Unit\\.Price");
+        @endcode
+
+        @since %DataProvider 3.11
+    */
+    static hash<auto> removeFieldValue(hash<auto> record, string field_path) {
+        if (AbstractDataProvider::isPlainFieldPath(field_path)) {
+            # Strip hashdecl type to plain hash<auto> so that any key can be removed
+            return record.hasKey(field_path) ? ({} + record) - field_path : record;
+        }
+        return AbstractDataProvider::removeFieldValueIntern(record, AbstractDataProvider::getFieldPath(field_path), 0)
+            ?? record;
     }
 
     #! Sets the value at the given key of a field path in a hash, and returns the hash
@@ -9116,6 +9151,28 @@ hash<auto> rec = AbstractDataProvider::setFieldValue({"order": {"id": 1}}, "orde
         }
         h{key} = AbstractDataProvider::setFieldValueIntern({} + child, path, i + 1, value, field_path);
         return h;
+    }
+
+    #! Returns a copy of a hash without the value at the given key of a field path, or @ref nothing if it has none
+    private static *hash<auto> removeFieldValueIntern(hash<auto> h, list<string> path, int i) {
+        string key = path[i];
+        if (!h.hasKey(key)) {
+            return;
+        }
+        if (i == path.size() - 1) {
+            return ({} + h) - key;
+        }
+        auto child = h{key};
+        if (child.typeCode() != NT_HASH) {
+            return;
+        }
+        *hash<auto> new_child = AbstractDataProvider::removeFieldValueIntern(child, path, i + 1);
+        if (!exists new_child) {
+            return;
+        }
+        hash<auto> rv = {} + h;
+        rv{key} = new_child;
+        return rv;
     }
 
     #! Parses a field list from either a comma-separated string or a list of strings

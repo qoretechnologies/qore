@@ -120,8 +120,8 @@
           "message": "Nazwy pól do usunięcia"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.desc": {
-          "source": "A list of field names to remove from each record",
-          "message": "Lista nazw pól do usunięcia z każdego rekordu"
+          "source": "A list of field names to remove from each record; supports dot-notation for nested fields (e.g. `address.city`)",
+          "message": "Lista nazw pól do usunięcia z każdego rekordu; obsługuje notację z kropką dla pól zagnieżdżonych (np. `address.city`)"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
           "source": "Search and Replace",
