@@ -1526,6 +1526,18 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_11 DataProvider v3.11
+    - DPQL field completion follows field paths: after \c @ and a path of keys (<tt>\@create.</tt>,
+      <tt>\@create.it</tt>), it offers the keys of the type the path reaches, each inserted as the field reference to
+      its path as the serializer writes it (<tt>\@create.items</tt>, <tt>\@"create.order-id"</tt>); after accessors and
+      a dot (<tt>\@create.items[*].</tt>, <tt>\@stats{*}.</tt>), it offers the keys of the value the accessors give,
+      each inserted as the member after the dot (\c id, <tt>\@"Unit.Price"</tt>), also after a member written so
+      (<tt>\@create.items[*].order-id.</tt>, <tt>\@create.items[*].\@"Unit.Price".</tt>) and after a quoted field
+      reference (<tt>\@"create.unit price".</tt>); inside an accessor that has been
+      opened, it offers the wildcard \c * in <tt>[</tt> after a list and in <tt>{</tt> after a hash; after a slice of
+      a list (<tt>\@orders[0..1]</tt>), which gives a list, it offers \c [*] and not \c {*}.  A type without
+      known fields offers no keys.  The new @ref DataProvider::DpqlSerializer::fieldReferenceForPath()
+      "DpqlSerializer::fieldReferenceForPath()" and @ref DataProvider::DpqlSerializer::memberNameForKey()
+      "DpqlSerializer::memberNameForKey()" give these forms
     - added the private method \c readLocationGrid() to
       @ref DataProvider::AbstractTabularProfileDataProvider "AbstractTabularProfileDataProvider", which a profile
       provider whose reader streams its input overrides to read a location as a stream, so that the content of a

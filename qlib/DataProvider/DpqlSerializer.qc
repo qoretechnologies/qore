@@ -678,6 +678,57 @@ string dpql = DpqlSerializer::fieldReferenceForKey("Unit.Price") + " == 10";
         return '@"' + DpqlSerializer::escapeFieldPath(AbstractDataProvider::escapeFieldPathKey(key)) + '"';
     }
 
+    #! Returns the DPQL field reference to a path of keys
+    /** The keys are joined into a field path, each escaped with
+        @ref AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()", and the path is
+        written as the serializer writes a field reference: bare if the tokenizer reads it bare
+        (<tt>\@create.items</tt>), quoted otherwise (<tt>\@"create.order-id"</tt>, <tt>\@"order.Unit\\.Price"</tt>)
+
+        @param key_list the keys of the path, the first a field of the record
+
+        @return the field reference, which the parser reads as the field reference to the path
+
+        @par Example:
+        @code{.py}
+# @"create.order-id"
+string dpql = DpqlSerializer::fieldReferenceForPath(("create", "order-id"));
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static string fieldReferenceForPath(list<string> key_list) {
+        string path = (map AbstractDataProvider::escapeFieldPathKey($1), key_list).join(".");
+        if (DpqlTokenizer::isBareFieldName(path)) {
+            return "@" + path;
+        }
+        return '@"' + DpqlSerializer::escapeFieldPath(path) + '"';
+    }
+
+    #! Returns a key as it is written after the dot that follows an accessor
+    /** After an accessor, <tt>.name</tt> is the key \c name (<tt>\@orders[*].id</tt>), and a key that is not a bare
+        member name is quoted after the dot, where the quoted text is the one key, dots included:
+        <tt>.\@"Unit.Price"</tt>; a backslash in it is written <tt>\\\\</tt> and a quote <tt>\\"</tt>
+
+        @param key the key
+
+        @return the text that follows the dot
+
+        @par Example:
+        @code{.py}
+# @orders[*].@"Unit.Price"
+string dpql = "@orders[*]." + DpqlSerializer::memberNameForKey("Unit.Price");
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static string memberNameForKey(string key) {
+        if (DpqlSerializer::isBareMemberName(key)) {
+            return key;
+        }
+        # in single quotes a backslash is itself, so '\"' is a backslash and a quote
+        return '@"' + replace(replace(key, "\\", "\\\\"), '"', '\"') + '"';
+    }
+
     #! Returns a field path as it is written between the quotes of <tt>\@"..."</tt>
     /** The dots of the path are written as they are, as they separate its parts in a quoted name too; a dot that
         is part of a key is escaped in the path (<tt>a\\.b</tt>) and is written so (<tt>\@"a\\.b"</tt>); any other

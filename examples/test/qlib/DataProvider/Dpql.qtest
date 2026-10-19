@@ -140,6 +140,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("keyword keys are quoted when serialized", \keywordKeyTests());
         addTestCase("quoted member names after accessors", \quotedMemberTests());
         addTestCase("completion quotes keyword keys", \keywordKeyCompletionTests());
+        addTestCase("completion of the keys of a field path", \fieldPathCompletionTests());
         addTestCase("item-scoped arguments", \itemScopedArgTests());
         addTestCase("a key that is a name is serialized as a member after an accessor",
             \memberKeySerializationTests());
@@ -309,6 +310,142 @@ public class DpqlTest inherits QUnit::Test {
             DataProvider::parseDpqlExpression('@h{*}.@"x y"')));
     }
 
+    #! The keys of a field typed as a path after @, and of the value after accessors, are offered from the field types
+    fieldPathCompletionTests() {
+        HashDataType product_t("product");
+        product_t.addField(new QoreDataField("sku", "SKU", AbstractDataProviderType::get("string")));
+        HashDataType item_t("item");
+        item_t.addField(new QoreDataField("id", "Item id", AbstractDataProviderType::get("int")));
+        item_t.addField(new QoreDataField("product", "Product", product_t));
+        item_t.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderType::get("float")));
+        HashDataType create_t("create");
+        create_t.addField(new QoreDataField("order-id", "Order id", AbstractDataProviderType::get("string")));
+        create_t.addField(new QoreDataField("items", "Items", new ListDataType(item_t)));
+        create_t.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderType::get("float")));
+        create_t.addField(new QoreDataField("data", "Data", AbstractDataProviderType::get("hash<auto>")));
+        hash<string, AbstractDataField> fields = {
+            "create": new QoreDataField("create", "Create", create_t),
+            "stats": new QoreDataField("stats", "Stats", AbstractDataProviderType::get("hash<string, hash<StatInfo>>")),
+            "name": new QoreDataField("name", "Name", AbstractDataProviderType::get("string")),
+        };
+        # the label and insert text of each item
+        code<hash<string, string>(string)> complete = hash<string, string> sub (string text) {
+            return map {$1.label: $1.insert_text}, DataProvider::getDpqlCompletions(text, text.size(), fields),
+                $1.kind == "field";
+        };
+
+        # a nested hash: the keys of the field's type, inserted as the field reference to the path
+        assertEq({"order-id": '@"create.order-id"', "items": "@create.items", "Unit.Price": '@"create.Unit\.Price"',
+            "data": "@create.data"}, complete('@create.'));
+        assertEq({"items": "@create.items"}, complete('@create.it'));
+        assertEq({"order-id": '@"create.order-id"'}, complete('@create.ORD'));
+        # a list of hashes: the keys of the item after [*] or an index, inserted as the member after the dot
+        assertEq({"id": "id", "product": "product", "Unit.Price": '@"Unit.Price"'}, complete('@create.items[*].'));
+        assertEq({"product": "product"}, complete('@create.items[0].pr'));
+        assertEq({"sku": "sku"}, complete('@create.items[*].product.'));
+        # a hash of hashes: the keys of the values after {*}
+        hash<string, string> stat_keys = complete('@stats{*}.');
+        assertEq("size", stat_keys.size);
+        assertEq("mode", stat_keys.mode);
+        # the keys of a member's value, filtered by the part typed
+        assertEq({"sku": "sku"}, complete('@create.items[*].product.s'));
+        # an escaped dotted key is one key of the path: the keys of its value are offered; unescaped, its dot
+        # separates two keys, which the type does not have
+        HashDataType dims_t("dims");
+        dims_t.addField(new QoreDataField("width", "Width", AbstractDataProviderType::get("int")));
+        HashDataType box_t("box");
+        box_t.addField(new QoreDataField("Box.Dims", "Box dimensions", dims_t));
+        hash<string, AbstractDataField> box_fields = {"box": new QoreDataField("box", "Box", box_t)};
+        string box_text = '@box.Box\.Dims.';
+        assertEq({"width": '@"box.Box\.Dims.width"'}, map {$1.label: $1.insert_text},
+            DataProvider::getDpqlCompletions(box_text, box_text.size(), box_fields), $1.kind == "field");
+        box_text = '@box.Box.Dims.';
+        assertEq({}, map {$1.label: $1.insert_text}, DataProvider::getDpqlCompletions(box_text, box_text.size(),
+            box_fields), $1.kind == "field");
+        assertEq({}, complete('@create.Unit\.Price.'));
+
+        # a type that stops: no known fields, a key that the type does not have, a list, a scalar
+        assertEq({}, complete('@create.data.'));
+        assertEq({}, complete('@stats.'));
+        assertEq({}, complete('@create.items.'));
+        assertEq({}, complete('@create.nosuch.'));
+        assertEq({}, complete('@name.'));
+        assertEq({}, complete('@nosuch.'));
+        assertEq({}, complete('@create.items[*].id.'));
+        assertEq({}, complete('@name[0].'));
+
+        # a top-level field named with a dot is still offered as one key
+        hash<string, AbstractDataField> dotted = fields + {
+            "Unit.Price": new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderType::get("float")),
+        };
+        list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@Unit.', 6, dotted);
+        assertEq(('@"Unit\.Price"',), (map $1.insert_text, items, $1.label == "Unit.Price"));
+
+        # each insert text is read back as the path it was offered for
+        foreach hash<auto> i in (complete('@create.').pairIterator()) {
+            hash<auto> ref = DataProvider::parseDpqlExpression(i.value).args[0];
+            assertEq(("create", i.key), AbstractDataProvider::getFieldPath(ref.field), i.value);
+        }
+        foreach hash<auto> i in (complete('@create.items[*].').pairIterator()) {
+            hash<auto> exp = DataProvider::parseDpqlExpression('@create.items[0].' + i.value);
+            assertEq(i.key, exp.args[1], i.value);
+        }
+
+        # a member is read as the parser reads it: a hyphenated or a quoted member, which is one key, is followed by
+        # the keys of its value; a keyword is not a member; a dot after a quoted field reference is followed by a
+        # member, also when the name has a space
+        HashDataType line_t("line");
+        line_t.addField(new QoreDataField("sub-item", "Sub item", product_t));
+        line_t.addField(new QoreDataField("Unit.Info", "Unit info", product_t));
+        line_t.addField(new QoreDataField("true", "True", product_t));
+        HashDataType doc_t("doc");
+        doc_t.addField(new QoreDataField("x y", "Spaced", product_t));
+        doc_t.addField(new QoreDataField("Info", "Info", item_t));
+        hash<string, AbstractDataField> member_fields = {
+            "lines": new QoreDataField("lines", "Lines", new ListDataType(line_t)),
+            "doc": new QoreDataField("doc", "Doc", doc_t),
+            # the field that a quoted member .@"Unit.Info" would wrongly be read as the reference to
+            "Unit": new QoreDataField("Unit", "Unit", doc_t),
+        };
+        code<hash<string, string>(string)> complete_member = hash<string, string> sub (string text) {
+            return map {$1.label: $1.insert_text}, DataProvider::getDpqlCompletions(text, text.size(),
+                member_fields), $1.kind == "field";
+        };
+        assertEq({"sku": "sku"}, complete_member('@lines[*].sub-item.'));
+        assertEq({"sku": "sku"}, complete_member('@lines[0].@"Unit.Info".'));
+        assertEq({"sku": "sku"}, complete_member('@lines[0].@"true".s'));
+        assertEq({}, complete_member('@lines[0].true.'));
+        assertEq({"sku": "sku"}, complete_member('@"doc.x y".'));
+        assertEq({"sku": "sku"}, complete_member('@"doc".@"x y".'));
+        # the member is completed at the end of an expression
+        assertEq({"sku": "sku"}, complete_member('@"doc.x y".sku == "a" && @"doc.x y".s'));
+        foreach string text in ('@lines[0].sub-item.', '@lines[0].@"Unit.Info".', '@"doc.x y".', '@"doc".@"x y".') {
+            hash<auto> exp = DataProvider::parseDpqlExpression(text + complete_member(text).sku);
+            assertEq("sku", exp.args[1], text);
+        }
+
+        # the serializer's forms that the items insert
+        assertEq("@create.items", DpqlSerializer::fieldReferenceForPath(("create", "items")));
+        assertEq('@"create.order-id"', DpqlSerializer::fieldReferenceForPath(("create", "order-id")));
+        assertEq('@"order.Unit\.Price"', DpqlSerializer::fieldReferenceForPath(("order", "Unit.Price")));
+        assertEq('@"p\\\\q.r"', DpqlSerializer::fieldReferenceForPath(("p\\q", "r")));
+        assertEq("@name", DpqlSerializer::fieldReferenceForPath(("name",)));
+        foreach list<string> path in (("create", "order-id"), ("order", "Unit.Price"), ("p\\q", "r"), ("a\\", "b"),
+                ("x y", "q\"r")) {
+            hash<auto> ref = DataProvider::parseDpqlExpression(DpqlSerializer::fieldReferenceForPath(path)).args[0];
+            assertEq(path, AbstractDataProvider::getFieldPath(ref.field), sprintf("%y", path));
+        }
+        assertEq("id", DpqlSerializer::memberNameForKey("id"));
+        assertEq("order-id", DpqlSerializer::memberNameForKey("order-id"));
+        assertEq('@"Unit.Price"', DpqlSerializer::memberNameForKey("Unit.Price"));
+        assertEq('@"true"', DpqlSerializer::memberNameForKey("true"));
+        assertEq('@"q\"r\\s"', DpqlSerializer::memberNameForKey("q\"r\\s"));
+        foreach string key in ("id", "order-id", "Unit.Price", "true", "x y", "q\"r\\s", "a\\") {
+            hash<auto> exp = DataProvider::parseDpqlExpression('@a[0].' + DpqlSerializer::memberNameForKey(key));
+            assertEq(key, exp.args[1], key);
+        }
+    }
+
     #! Completion inserts a key that is a keyword quoted
     keywordKeyCompletionTests() {
         HashDataType flags_t("flags");
@@ -436,12 +573,14 @@ public class DpqlTest inherits QUnit::Test {
             assertTrue((select items, $1.kind == "operator").size() > 0, "operators after a field in any script");
             # a key after a field preceded by non-ASCII text
             items = DataProvider::getDpqlCompletions('@größe > 1 && @adresse{', 23, fields);
-            assertEq(("ort", "straße"), sort(map $1.label, items), "the keys of the hash field");
+            # the keys of the hash, and the wildcard for each of its values
+            assertEq(("*", "ort", "straße"), sort(map $1.label, items), "the keys of the hash field");
             # a character that is not a letter, mark, digit or _ ends a name, whether ASCII or not, as in the
             # tokenizer
             foreach string text in ('@adresse%{', '@adresse€{', '@adresse…{') {
                 items = DataProvider::getDpqlCompletions(text, text.length(), fields);
-                assertEq(("ort", "straße"), sort(map $1.label, items), text + ": the name ends before the symbol");
+                assertEq(("*", "ort", "straße"), sort(map $1.label, items),
+                    text + ": the name ends before the symbol");
             }
         }
     }
@@ -2423,7 +2562,9 @@ public class DpqlTest inherits QUnit::Test {
                     })),
             };
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{', 8, fields);
-            assertEq(3, items.size());
+            # the wildcard for each value of the hash, then the keys
+            assertEq(4, items.size());
+            assertEq("*", items[0].label);
             list<string> labels = map $1.label, items;
             assertTrue(inlist("name", labels));
             assertTrue(inlist("age", labels));
@@ -2505,7 +2646,9 @@ public class DpqlTest inherits QUnit::Test {
                     }))),
             };
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data[0]{', 9, fields);
-            assertEq(2, items.size());
+            # the wildcard for each value of the hash, then the keys
+            assertEq(3, items.size());
+            assertEq("*", items[0].label);
             list<string> labels = map $1.label, items;
             assertTrue(inlist("id", labels));
             assertTrue(inlist("value", labels));
@@ -2537,19 +2680,21 @@ public class DpqlTest inherits QUnit::Test {
                     })),
             };
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data{user}{', 12, fields);
-            assertEq(2, items.size());
+            # the wildcard for each value of the hash, then the keys
+            assertEq(3, items.size());
+            assertEq("*", items[0].label);
             list<string> labels = map $1.label, items;
             assertTrue(inlist("name", labels));
             assertTrue(inlist("email", labels));
         }
 
-        # Test no completions for untyped hash
+        # Test no key completions for untyped hash: only the wildcard for each of its values
         {
             hash<string, AbstractDataField> fields = {
                 "data": new QoreDataField("data", NOTHING, AbstractDataProviderType::get(AutoHashType)),
             };
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data{', 6, fields);
-            assertEq(0, items.size());
+            assertEq(("*",), (map $1.label, items));
         }
 
         # Test no completions for non-existent field
@@ -2582,8 +2727,10 @@ public class DpqlTest inherits QUnit::Test {
                     })),
             };
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@"my field"{', 12, fields);
-            assertEq(1, items.size());
-            assertEq("value", items[0].label);
+            # the wildcard for each value of the hash, then the keys
+            assertEq(2, items.size());
+            assertEq("*", items[0].label);
+            assertEq("value", items[1].label);
         }
 
         # Test key that needs quoting in insert_text
@@ -2597,7 +2744,9 @@ public class DpqlTest inherits QUnit::Test {
                     })),
             };
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{', 8, fields);
-            assertEq(3, items.size());
+            # the wildcard for each value of the hash, then the keys
+            assertEq(4, items.size());
+            assertEq("*", items[0].label);
             hash<DpqlCompletionItem> spaced_key = (select items, $1.label == "my key")[0];
             hash<DpqlCompletionItem> num_key = (select items, $1.label == "123num")[0];
             hash<DpqlCompletionItem> normal_key = (select items, $1.label == "normal")[0];
@@ -2620,7 +2769,9 @@ public class DpqlTest inherits QUnit::Test {
                     }))),
             };
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data[0]{users}[1]{', 19, fields);
-            assertEq(2, items.size());
+            # the wildcard for each value of the hash, then the keys
+            assertEq(3, items.size());
+            assertEq("*", items[0].label);
             list<string> labels = map $1.label, items;
             assertTrue(inlist("name", labels));
             assertTrue(inlist("role", labels));
@@ -2644,7 +2795,9 @@ public class DpqlTest inherits QUnit::Test {
             # With multiple keys, we can't determine a single type, so suggest from parent type
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data{a,b}{', 11, fields);
             # Should suggest keys from the data hash (a and b)
-            assertEq(2, items.size());
+            # the wildcard for each value of the hash, then the keys
+            assertEq(3, items.size());
+            assertEq("*", items[0].label);
             list<string> labels = map $1.label, items;
             assertTrue(inlist("a", labels));
             assertTrue(inlist("b", labels));
@@ -2664,8 +2817,10 @@ public class DpqlTest inherits QUnit::Test {
             # In double-quoted string, backslash and quote need escaping
             string dpql = "@\"field\\\"name\"{";
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(dpql, dpql.size(), fields);
-            assertEq(1, items.size());
-            assertEq("inner", items[0].label);
+            # the wildcard for each value of the hash, then the keys
+            assertEq(2, items.size());
+            assertEq("*", items[0].label);
+            assertEq("inner", items[1].label);
         }
 
         # Test empty fields hash
@@ -2689,7 +2844,9 @@ public class DpqlTest inherits QUnit::Test {
                     })),
             };
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record.address{', 16, fields);
-            assertEq(2, items.size());
+            # the wildcard for each value of the hash, then the keys
+            assertEq(3, items.size());
+            assertEq("*", items[0].label);
             list<string> labels = map $1.label, items;
             assertTrue(inlist("city", labels));
             assertTrue(inlist("zip", labels));
@@ -2711,7 +2868,9 @@ public class DpqlTest inherits QUnit::Test {
                     })),
             };
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@user.profile.settings{', 23, fields);
-            assertEq(2, items.size());
+            # the wildcard for each value of the hash, then the keys
+            assertEq(3, items.size());
+            assertEq("*", items[0].label);
             list<string> labels = map $1.label, items;
             assertTrue(inlist("theme", labels));
             assertTrue(inlist("lang", labels));
@@ -2730,7 +2889,9 @@ public class DpqlTest inherits QUnit::Test {
                     }))),
             };
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data[0].user{', 14, fields);
-            assertEq(2, items.size());
+            # the wildcard for each value of the hash, then the keys
+            assertEq(3, items.size());
+            assertEq("*", items[0].label);
             list<string> labels = map $1.label, items;
             assertTrue(inlist("name", labels));
             assertTrue(inlist("email", labels));

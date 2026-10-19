@@ -738,10 +738,39 @@ class DpqlWildcardTest inherits QUnit::Test {
         assertEq((), wildcards('@orders[*].id '));
         assertEq((), wildcards('@prices{*}'));
         assertEq(("{*}",), wildcards('@rates{*}'));
-        # the wildcards are offered whole, after the value; not inside an accessor, where the keys and indexes are
-        assertEq((), wildcards('@orders['));
-        assertEq((), wildcards('@prices{'));
-        assertEq((), wildcards('@orders[*]{'));
+        # inside an accessor that has been opened, the wildcard is offered as "*" by the type of the value: in [
+        # after a list and in { after a hash; nothing is offered when the type is not known
+        assertEq(("*",), wildcards('@orders['));
+        assertEq(("*",), wildcards('@prices{'));
+        assertEq(("*",), wildcards('@orders[*]{'));
+        assertEq(("*",), wildcards('@orders[*].items['));
+        assertEq(("*",), wildcards('@rates{'));
+        assertEq((), wildcards('@orders{'));
+        assertEq((), wildcards('@prices['));
+        assertEq((), wildcards('@name['));
+        assertEq((), wildcards('@data['));
+        assertEq((), wildcards('@data{'));
+        assertEq((), wildcards('@unknown['));
+        assertEq((), wildcards('@unknown{'));
+        # a slice of a list gives a list, whatever its items are: [*] applies to it, {*} does not; a slice of a
+        # value whose type is not known, or of a string, offers nothing inside an accessor
+        assertEq(("*",), wildcards('@orders[0..1]['));
+        assertEq(("*",), wildcards('@orders[1..]['));
+        assertEq((), wildcards('@orders[0..1]{'));
+        assertEq(("[*]",), wildcards('@orders[0..1]'));
+        assertEq(("[*]",), wildcards('@orders[*].items[0..1] '));
+        assertEq((), wildcards('@data[0..1]['));
+        assertEq((), wildcards('@name[0..1]['));
+        # the keys of the items are still offered after a slice, as a key applies to each item
+        assertTrue(inlist("id", labels('@orders[0..1]{')));
+        # with the index suggestions and the keys
+        assertTrue(inlist("0", labels('@orders[')));
+        assertTrue(inlist("id", labels('@orders[*]{')));
+        # it inserts the wildcard inside the accessor
+        assertEq(("*",), (map $1.insert_text, DataProvider::getDpqlCompletions('@orders[', 8, fields),
+            $1.label == "*"));
+        assertEq(("*",), (map $1.insert_text, DataProvider::getDpqlCompletions('@prices{', 8, fields),
+            $1.label == "*"));
         # the keys of the elements after [*]
         list<string> key_labels = labels('@orders[*]{');
         assertTrue(inlist("id", key_labels));
