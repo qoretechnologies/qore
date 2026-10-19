@@ -105,6 +105,11 @@ extern char **environ;
 #endif
 #endif
 
+// a module name with a NUL character would be cut at the NUL character and blacklist another module
+static int check_blacklist_name(const QoreString& name, ExceptionSink* xsink) {
+    return q_check_no_nul(name.c_str(), name.size(), "module name", "module names", "BLACKLIST-ERROR", xsink);
+}
+
 AbstractQoreNode* missing_function_error(const char* func, ExceptionSink* xsink) {
    QoreString have(func);
    have.toupr();
@@ -1904,11 +1909,13 @@ string get_global_http2_mode() [dom=PROCESS] {
 
     @return 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
 
+    @throw BLACKLIST-ERROR the module name contains a NUL character; see @ref path_nul_characters
+
     @since %Qore 2.0.1
 */
 int qore_add_module_to_blacklist(string name, string message = "by an API call") [flags=NAMED_ARGS;dom=PROCESS] {
     TempEncodingHelper n(name, QCS_DEFAULT, xsink);
-    if (*xsink) {
+    if (*xsink || check_blacklist_name(**n, xsink)) {
         return QoreValue();
     }
     TempEncodingHelper m(message, QCS_DEFAULT, xsink);
@@ -1923,6 +1930,7 @@ int qore_add_module_to_blacklist(string name, string message = "by an API call")
     @param message the message that will be included in any exception when the module is attempted to be loaded
 
     @throw BLACKLIST-ERROR could not add module to blacklist
+    @throw BLACKLIST-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     If the given module is already in the blacklist, then no error is raised
 
@@ -1930,7 +1938,7 @@ int qore_add_module_to_blacklist(string name, string message = "by an API call")
 */
 int qore_add_module_to_blacklist_ex(string name, string message = "by an API call") [flags=NAMED_ARGS;dom=PROCESS] {
     TempEncodingHelper n(name, QCS_DEFAULT, xsink);
-    if (*xsink) {
+    if (*xsink || check_blacklist_name(**n, xsink)) {
         return QoreValue();
     }
     TempEncodingHelper m(message, QCS_DEFAULT, xsink);

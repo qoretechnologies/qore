@@ -4571,6 +4571,12 @@ while (*binary chunk = input.read(65536)) {
       multiplication added the precisions of the two numbers), so that a loop of in-place multiplications used memory
       and time without limit and crashed when the precision outgrew the stack; their result now has at most the
       maximum precision of a number (8192 bits), as the result of the other operations has
+    - Fixed a memory leak of the @ref Qore::Program "Program" container passed to
+      @ref Qore::load_user_module_with_program() "load_user_module_with_program()" when the module was already loaded;
+      the container is released whenever the module is not loaded into it
+    - @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" and
+      @ref Qore::qore_add_module_to_blacklist_ex() "qore_add_module_to_blacklist_ex()" raise \c BLACKLIST-ERROR for a
+      module name with a NUL character instead of blacklisting the name cut at the NUL character
     - Fixed a crash in @ref Qore::ReadOnlyFile::startPollRead() "ReadOnlyFile::startPollRead()" when the path could
       not be converted to the @ref default_encoding "default character encoding"; the \c ENCODING-CONVERSION-ERROR
       exception is now raised

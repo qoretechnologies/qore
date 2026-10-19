@@ -992,6 +992,9 @@ static const char* get_feature_from_path(QoreString& tmp);
 int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
         QoreProgram* pgm, QoreProgram* mpgm, unsigned load_opt, int warning_mask, bool reexport,
         qore_binary_module_desc_t mod_desc_func) {
+    // a Program container for the module is owned by this call; it is released when the module is not loaded into it
+    ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
+
     // lock-free fast path: check committedFeatureList using only featureLock(read); this allows full
     // concurrency for the common case where the module is already loaded — no serialization on plock.
     // committedFeatureList is only populated AFTER namespace changes are committed in addToProgramImpl(),
@@ -1038,7 +1041,7 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
     }
 
     OptLocker ol(&mutex);
-    loadModuleIntern(xsink, wsink, name, pgm, reexport, MOD_OP_NONE, 0, 0, mpgm, load_opt, warning_mask,
+    loadModuleIntern(xsink, wsink, name, pgm, reexport, MOD_OP_NONE, 0, 0, pholder.release(), load_opt, warning_mask,
         mod_desc_func);
     return xsink ? -1 : 0;
 }
