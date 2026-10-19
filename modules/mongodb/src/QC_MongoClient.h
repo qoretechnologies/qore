@@ -4,7 +4,7 @@
 
     Qore mongodb module - MongoClient class
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -49,6 +49,13 @@ public:
         uri = mongoc_uri_new_with_error(uri_string, &error);
         if (!uri) {
             xsink->raiseException("MONGODB-CLIENT-ERROR", "failed to parse MongoDB URI: %s", error.message);
+            return;
+        }
+        // libmongoc reads the TLS files the URI names when the client is created, on behalf of the calling program,
+        // so its sandbox must allow them
+        if (qore_mongo_check_uri_tls_files(uri, xsink)) {
+            mongoc_uri_destroy(uri);
+            uri = nullptr;
             return;
         }
         client = mongoc_client_new_from_uri(uri);

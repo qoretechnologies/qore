@@ -4796,6 +4796,9 @@ while (*binary chunk = input.read(65536)) {
     - Fixed the history files of the @ref linenoiseintro "linenoise" module not being subject to the filesystem policy
       of a @ref sandboxing "sandbox": a sandboxed program could read and write them outside the sandbox's allowed
       paths; they now raise \c FILESYSTEM-ACCESS-DENIED, as core file access does
+    - Fixed the TLS CA and certificate key files named by a connection string of the @ref mongodbintro "mongodb"
+      module not being subject to the filesystem policy of a @ref sandboxing "sandbox": a sandboxed program could make
+      the MongoDB driver read them outside the sandbox's allowed paths
     - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
       @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
       thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in

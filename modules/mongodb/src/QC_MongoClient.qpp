@@ -70,6 +70,14 @@ MongoClient client("mongodb://host1:27017,host2:27017/?replicaSet=rs0");
     @endcode
 
     @throw MONGODB-CLIENT-ERROR failed to parse URI or create client
+    @throw FILESYSTEM-ACCESS-DENIED the sandbox of the calling program does not allow a file named by the
+    \c tlsCAFile or \c tlsCertificateKeyFile option of the URI to be read
+    @throw SANDBOX-PATH-ERROR the sandbox of the calling program cannot resolve the path of such a file
+
+    @note The files named by the \c tlsCAFile and \c tlsCertificateKeyFile options are read when the client is
+    created and for each connection, on behalf of the calling program, so its filesystem sandbox applies each time; a
+    connection of sandboxed code with a file the sandbox does not allow fails with a \c MONGODB-CLIENT-ERROR (or
+    another operation error) whose description contains \c FILESYSTEM-ACCESS-DENIED
 */
 MongoClient::constructor(string uri) {
     // the URI is parsed as a C string, which would be cut at a NUL character; it is not shown, as it can contain a

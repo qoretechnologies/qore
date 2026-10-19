@@ -279,6 +279,13 @@ int myFileOperation(const char* path, ExceptionSink* xsink) {
 4. **Logging**: File-based logging may bypass sandbox
 5. **Caching**: File-based caches may not be checked
 6. **Path construction**: Concatenating paths without re-checking final path
+7. **Paths read by a third-party library**: a library may open files named by a user-supplied option rather than by
+   an explicit path argument - the TLS CA and certificate key files of a connection string (`tlsCAFile`), a data
+   directory and the file names derived from other arguments (Tesseract's `<datapath>/<lang>.traineddata`), or
+   profiling and cache output paths in session options. Check every such path before the library is given it, and
+   check it again wherever the library reads it again on behalf of a different caller (libmongoc reads the TLS files
+   both when a client is created and for each connection); an argument that becomes part of a file name must not be
+   able to contain a path character
 
 ---
 

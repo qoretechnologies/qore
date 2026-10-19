@@ -25,12 +25,11 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 
 %requires QUnit
+%requires FsUtil
 %requires mongodb
 
 %exec-class MongoDbTest
@@ -66,6 +65,7 @@ public class MongoDbTest inherits QUnit::Test {
         addTestCase("Large data tests", \largeDataTests());
         addTestCase("Memory stress tests", \memoryStressTests());
         addTestCase("Interrupt test", \interruptTests());
+        addTestCase("TLS files respect the sandbox", \tlsFileSandboxTests());
         set_return_value(main());
     }
 
@@ -1253,5 +1253,77 @@ sub test_pre_interrupt() {
         # and complex to test reliably. The pre-interrupt test above verifies the core
         # interrupt mechanism works. Additional async interrupt testing can be added
         # in integration tests if needed.
+    }
+
+    tlsFileSandboxTests() {
+        string tmp_dir = make_tmp_dir("qore-mongodb-sandbox-");
+        on_exit remove_tree(tmp_dir);
+        string allowed_dir = tmp_dir + "/allowed";
+        string outside_dir = tmp_dir + "/outside";
+        mkdir(allowed_dir);
+        mkdir(outside_dir);
+        string allowed_ca = allowed_dir + "/ca.pem";
+        string outside_ca = outside_dir + "/ca.pem";
+        foreach string path in ((allowed_ca, outside_ca)) {
+            File f();
+            f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write("not a certificate\n");
+            f.close();
+        }
+
+        string code = '
+%modern
+
+%requires mongodb
+
+# nothing listens on port 1, so a connection attempt fails at once
+const Url = "mongodb://127.0.0.1:1/?tls=true&serverSelectionTimeoutMS=1000&connectTimeoutMS=1000&tlsCAFile=";
+
+*hash<ExceptionInfo> sub ping_with_ca(string ca_file) {
+    try {
+        MongoClient client(Url + ca_file);
+        client.ping();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub ping_client(MongoClient client) {
+    try {
+        client.ping();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+';
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        pgm.parse(code, "tls_file_sandbox_test");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(allowed_dir);
+        sm.addNetworkAllowedHost("127.0.0.1");
+        sm.addNetworkAllowedPort(1);
+        pgm.setSandboxManager(sm);
+
+        # libmongoc reads the CA file when the client is created: a CA file outside the sandbox root is refused then
+        *hash<ExceptionInfo> ex = pgm.callFunction("ping_with_ca", outside_ca);
+        assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, "a client with a CA file outside the sandbox root is refused");
+
+        # a CA file inside the sandbox root passes the check; the connection itself then fails
+        ex = pgm.callFunction("ping_with_ca", allowed_ca);
+        assertTrue(exists ex, "a ping without a server fails");
+        assertNeq("FILESYSTEM-ACCESS-DENIED", ex.err, "a client with a CA file inside the sandbox root is allowed");
+        assertFalse(ex.desc =~ /FILESYSTEM-ACCESS-DENIED/, "a connection with a CA file inside the sandbox root is "
+            "allowed");
+
+        # libmongoc also reads the CA file for each connection: a client made without a sandbox and used by sandboxed
+        # code cannot connect with a CA file outside the sandbox root
+        MongoClient client("mongodb://127.0.0.1:1/?tls=true&serverSelectionTimeoutMS=1000&connectTimeoutMS=1000"
+            "&tlsCAFile=" + outside_ca);
+        ex = pgm.callFunction("ping_client", client);
+        assertTrue(exists ex, "a ping without a server fails");
+        assertRegex("FILESYSTEM-ACCESS-DENIED", ex.desc, "a connection of sandboxed code with a CA file outside the "
+            "sandbox root is denied");
+        assertRegex("tlscafile", ex.desc.lwr(), "the error names the TLS option whose file is denied");
     }
 }
