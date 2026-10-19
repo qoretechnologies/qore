@@ -96,4 +96,10 @@ list sub my_callback(string value) {
 Linenoise::set_callback(\my_callback());
     @endcode
 
+    @section linenoise_program_lifetime Callbacks and Program Lifetime
+
+    The completion, hints and syntax callbacks, the key bindings and the history provider are global to the process;
+    each one ends when the @ref Qore::Program "Program" that created its code or object is destroyed: the binding is
+    removed and the callback or object is released while its Program can still run its destructors.  Kept after its
+    Program is destroyed, it could neither be called nor destroyed.
 */

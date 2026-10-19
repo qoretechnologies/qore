@@ -27,6 +27,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 extern "C" {
 #include "linenoise.h"
