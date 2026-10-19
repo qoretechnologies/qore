@@ -18161,3 +18161,110 @@ Actual legacy baseline executables are checked against the candidate runtime sep
 Development records preserve the baseline REST output-format harness failure, unsupported numbered patch-hunk formatting before source application, a prematurely started qualification cancelled before application, and the new fixture's `bool(...)` parse error corrected to logical conversion. The corrected fixture passes 230 assertions; final Release/Debug qualification is fresh. An initial inspection summary incorrectly counted zero instructions because its address parser omitted Mach-O colons; that summary is invalid and archived. The corrected parser requires positive counts, and all 118 raw assembly/symbol outputs match between inspection attempts. No timed samples were discarded or retried.
 
 See `results-aot-ordinary-dispatch-runtime-config-rejected-macos-arm64.json` for all raw windows, hashes, commands, logs, failed attempts, code/layout diagnostics, the independent replay and complete 62-item audit. No new Java ratio or global performance ceiling is established. The next separate hypothesis is moving immutable zero-argument signature/return-family proof into existing generic admission, without widening native eligibility or changing live guards, binding readiness, locks or frames.
+
+
+## Rejected immutable getter signature admission (post-e92fe83c3)
+
+The candidate fails the predeclared retention rule and is rejected. All five existing source/fixture files are archived and restored, followed by fresh Release/Debug qualification. This is a matched optimized branch before/after comparison, not a fresh Java or develop comparison.
+
+The baseline artifacts were qualified at `bf4b4ebddfb8f778527d81ac3f514ddeb0e9d27a`. The single intervening commit `e92fe83c301472df578567a3aa1cb2d250f0efeb` changes only the preceding experiment report and two documentation files. Exact source and artifact hashes prove that all other qualified inputs are unchanged; both revisions and the explicit lineage check are preserved. The candidate is built from the latter revision plus the recorded patch.
+
+Both runtimes use Release `-O3 -DNDEBUG` and qcc `-O3`. The matrix covers 55 workloads (37 micro, 4 mixed, 14 getter/control), three fixed layouts, 4096 items / seed 7, three warmup and three measured 300 ms windows per job. The three-fork screen retains all 2970 windows. The target gate did not permit confirmation.
+
+Values are the median of the three layout medians of fork means, in ns/item; negative percentage means less elapsed time. These whole-workload costs include dispatch, loop, callback and setup work, not isolated call latency or production throughput.
+
+|!Workload|!Screen before|!Screen candidate|!Screen time change
+|arithmetic|1.480093|1.487229|+0.482170%
+|direct_call|1.493145|1.490461|-0.179711%
+|method_call|1.546838|1.548487|+0.106639%
+|indirect_call|6.744695|6.615375|-1.917362%
+|polymorphic_call|22.327869|22.239484|-0.395851%
+|polymorphic_expression_call|10.198441|10.079635|-1.164945%
+|monomorphic_call|3.467059|3.537344|+2.027220%
+|optional_method_call|10.428447|10.353797|-0.715830%
+|polymorphic_float_call|22.226386|22.304143|+0.349842%
+|polymorphic_float_expression_call|10.444075|10.490063|+0.440327%
+|monomorphic_float_call|3.395413|3.381842|-0.399692%
+|optional_float_method_call|10.553874|10.456224|-0.925247%
+|boxed_float_method_call|19.032811|19.167419|+0.707241%
+|dynamic_int_result_call|10.198800|10.220725|+0.214977%
+|dynamic_int_result_fallback|21.299208|21.078981|-1.033966%
+|boxed_int_method_call|15.617730|15.484779|-0.851280%
+|boxed_int_method_fallback|30.375994|30.198514|-0.584277%
+|boxed_float_method_fallback|31.662422|31.679686|+0.054527%
+|boxed_int_method_effect|86.443929|85.613253|-0.960942%
+|dynamic_float_result_call|11.440359|11.385102|-0.482994%
+|indirect_wide|6.498679|6.596812|+1.510041%
+|indirect_float|6.393944|6.409357|+0.241056%
+|indirect_int_result|6.177011|6.217896|+0.661898%
+|indirect_float_result|7.404017|7.047142|-4.820023%
+|indirect_tagged_float|6.662576|6.479967|-2.740829%
+|indirect_branch_float|6.558026|6.568870|+0.165360%
+|indirect_affine|6.619187|6.581080|-0.575695%
+|indirect_affine_wide|6.650359|6.641047|-0.140021%
+|indirect_branch_int|6.642615|6.619666|-0.345484%
+|dispatch_control|1.581092|1.575909|-0.327845%
+|list_read|2.622373|2.564314|-2.213991%
+|list_build|25.627478|25.495437|-0.515233%
+|list_mutate|181.103384|180.520880|-0.321642%
+|temporary_list|1.573379|1.569644|-0.237351%
+|temporary_hash|317.600299|319.013551|+0.444978%
+|closure_call|17.399584|17.447956|+0.278007%
+|closure_capture|23.426557|23.460775|+0.146066%
+|csv_report|915.327158|905.668650|-1.055197%
+|object_orders|1764.498812|1751.570782|-0.732674%
+|callback_pipeline|80.947733|80.886003|-0.076259%
+|text_index|1294.144972|1294.529251|+0.029694%
+|object_loop|164.550678|160.241391|-2.618820%
+|object_short|1035.924072|1020.260730|-1.512016%
+|float_loop|166.518251|165.396790|-0.673476%
+|float_short|1049.338217|1026.357604|-2.190010%
+|string_loop|356.072403|356.156353|+0.023577%
+|string_short|1193.004332|1192.219213|-0.065810%
+|effect_loop|355.053986|338.299583|-4.718833%
+|effect_short|1218.643672|1212.921926|-0.469518%
+|two_read_loop|392.347106|372.201306|-5.134688%
+|two_read_short|1262.772577|1252.710095|-0.796856%
+|default_loop|665.218179|685.448845|+3.041208%
+|default_short|1561.966860|1561.445376|-0.033386%
+|string_result_loop|423.341682|428.913795|+1.316221%
+|string_result_short|1293.163938|1288.919728|-0.328204%
+
+### Prospective retention rule and adverse results
+
+Both integer and floating getter-loop targets must use at least 2% less aggregate time and improve in every fixed layout in both epochs. Reject any non-target workload with at least 3% aggregate slowdown in both epochs, regardless of observed range overlap. Also reject a repeated same-workload/layout slowdown of at least 3% with disjoint observed fork-mean ranges. These rules were frozen before this experiment; they do not retroactively change the preceding RuntimeConfig experiment.
+
+Reverse and shuffle487 orders are fixed from the baseline default symbols and shared exactly with the candidate. No alignment search, dropped window, pooling or rescue epoch is permitted.
+
+Screen: 19 aggregate losses and 76 adverse workload/layout comparisons. Largest layout loss: `string_result_loop` / `shuffle-487`, +5.868094%. All losses and observed ranges are preserved in the raw report.
+
+No confirmation epoch was run after the failed target screen, so repeatability of non-target regressions was not assessed. Rejection follows the failed target gate, not a claim that every observed loss is a repeatable regression.
+
+Failed target checks:
+
+- screen / `float_loop` / aggregate reduction at least 2%: -0.673476% time.
+- screen / `float_loop` / default: +0.475157% time.
+
+Observed ranges are not confidence intervals; overlap does not prove non-regression. Host frequency, thermals and unrelated load are uncontrolled. No task-owned builds, tests, profiles, edits or source analysis overlapped timing. Static instruction evidence does not establish sole timing causality.
+
+### Implementation, footprint and qualification
+
+The candidate runtime recorded a strongly typed byte-sized return-family proof before immutable full-key PIC publication. Exact zero-formal/supplied arity, canonical hard int/float return identity and absence of type substitution were proved at admission. The outlined getter reused only those facts. This was neither native body eligibility nor a cached binding: the compiler proof and matching positive typed companion remained independently required. Missing/default, optional/soft/enum and generic signatures retained ordinary behavior.
+
+Original caller lowering and the eight-argument internal helper ABI remain unchanged. Live Program/object/private-access/epoch checks, debugger state, exact AOT body/readiness, ARGV and parameterized-receiver guards, member locks, eager object/class context, reader-safe logical frames, stack checks, ownership cleanup and cancellation remain. RuntimeConfig is still acquired through TLS after positive getter admission; no context deferral, cached member value or negative binding cache is introduced. Frame diagnostics still read signature metadata.
+
+Compiled macOS arm64 probes measure cache-entry size 240 -> 240 bytes, alignment 8 -> 8, and actual allocator block 256 -> 256 bytes (malloc_good_size 256 -> 256). The new enum is at offset 233, after the existing scalar-parameter flag at offset 232; existing measured offsets remain unchanged. This targeted layout check is not an application-memory measurement.
+
+The compiled getter helper grows from 582 to 608 total instructions and its native stack frame from 352 to 368 bytes. The cold admission helper grows from 741 to 760 instructions, with its 288-byte stack frame unchanged. The getter removes the substitution-query call and uses the admitted byte, but register allocation and other generated code change too. These static whole-function counts include cold and cleanup paths; they are not executed instruction counts or proof of timing causality. No general memory-cost reduction is claimed.
+
+Actual exported runtime function names match. The two getter probe callers have identical LLVM bodies after removing only debug-metadata IDs; exact executable/helper assembly and all operands are retained for review. Actual baseline executables pass their micro/mixed/probe reference grids on the candidate runtime with loaded-library identity checked. These are untimed diagnostics, not additional performance samples.
+
+All nine matched relocatable text sections have equal lengths, but only the three mixed-suite pairs are byte-identical; micro/probe pairs differ. Equal generated function/instruction counts are not executable identity. Relocations, placement and runtime code can influence timings. The initial supplemental byte parser stopped because objdump appended disassembly after the raw section; its original script/output are preserved, with the original terminal status unavailable after tool-output truncation. The corrected explicit-section parser completed successfully before timing, without changing any measured binary.
+
+Qualified baseline Release/Debug each pass 69 core files / 112 cases / 17,595 assertions. Candidate Release/Debug each pass 69 / 112 / 17,659, including the expanded getter suite's 1,117 assertions (64 more QUnit assertions; additional native C++ assertions are not counted as QUnit assertions). Fresh restored Release/Debug each pass 69 / 112 / 17,595 after candidate removal. The expanded exclusion fixture also passes AST/IR on the unchanged frozen baseline. Tests verify positive cache proofs, excluded return signatures, independently type-correct companion slots, absent matching binding and delayed rebinding. Existing debugger, concurrent reader/writer, cross-Program, epoch, stack-limit and readiness coverage remains.
+
+Qualification rebuilds all 64 owned qmods and restores their Release aliases with unrelated links unchanged. It includes 13 lvalue/DGC suites, local HTTP/REST, seven merged DataProvider suites, offline LLM, thread cancellation, 555 IR + 555 AOT reference checks and 1,985 Debug native checks in each enabled/disabled mode. Filtered REST summaries include skipped cases; only the single selected case per module is claimed. No external database suite was run. This is selected macOS arm64 coverage, not full-suite/sanitizer/cross-platform certification.
+
+See `results-aot-getter-signature-admission-rejected-macos-arm64.json` for every measured window, exact sources/artifacts, commands, logs, any development attempts, independent replay and all 62 audit-changes checks. No new Java ratio or global performance ceiling is established.
+
+The next independent investigation is compiler recognition of stable auto parameters selected by boxed PHIs feeding method receivers. Existing entry-owner, strong-slot identity and reflective-mutation epoch guards must remain; the direct receiver-only ownership set must not be widened. This addresses repeated receiver-local reloads visible in the historical optimized profile, not signature admission. It is a hypothesis, not an implemented or measured improvement, and does not revive the rejected all-auto-parameter heuristic.

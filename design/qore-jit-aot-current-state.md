@@ -3545,3 +3545,16 @@ Floating getter loop: 171.850485 -> 166.210816 ns/item (-3.281730% time).
 Rejected by conservative manual review despite passing the original mechanical rule: repeated monomorphic and side-effecting method losses are not dismissed because ranges overlap. Candidate sources archived and production restored/requalified. All 7920 optimized windows and every loss are preserved across 55 workloads / three fixed layouts. This is matched branch before/after, not fresh Java/develop or isolated-call timing.
 
 The experiment tested passing an explicit borrowed live view through ordinary AOT dispatch, retaining old ABIs, complete live guards, fallback snapshots, argument ownership, cancellation and observable frames. See RESULTS and `results-aot-ordinary-dispatch-runtime-config-rejected-macos-arm64.json` for all results, qualification, diagnostics and audit. Next separately investigate immutable signature proof at admission. Java parity and a global ceiling remain unestablished.
+
+
+## Rejected immutable getter signature admission (post-e92fe83c3)
+
+Integer getter loop: 164.550678 -> 160.241391 ns/item (-2.618820% time).
+
+Floating getter loop: 166.518251 -> 165.396790 ns/item (-0.673476% time).
+
+Rejected; candidate sources archived and the runtime/fixtures restored and requalified. All 2970 optimized measured windows and all losses are preserved across 55 workloads / three fixed layouts. This is matched branch before/after, not fresh Java/develop or isolated-call timing. Baseline binaries predate the intervening evidence-only commit; exact lineage and artifact hashes are recorded.
+
+The experiment moved only immutable zero-argument signature facts into existing PIC admission. Caller lowering/ABI, positive live companion binding, body/readiness/Program guards, TLS acquisition, locks, observable frames and cancellation were unchanged. See RESULTS and `results-aot-getter-signature-admission-rejected-macos-arm64.json` for footprint, all results and the complete audit. Java parity and a global ceiling remain unestablished.
+
+Next: investigate extending the existing guarded object-parameter cache through boxed PHIs used as method receivers, retaining all ownership and reflective invalidation checks. This is distinct from the rejected all-auto heuristic and is not yet implemented or measured.
