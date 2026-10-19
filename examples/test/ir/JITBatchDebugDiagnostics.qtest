@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  JITBatchDebugDiagnostics.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../qlib/Util.qm
+%requires ../../../qlib/QUnit.qm
+
+%exec-class JITBatchDebugDiagnosticsTest
+
+#! The QORE_BATCH_DEBUG diagnostics of JIT batch compilation
+/** When a function is compiled with its callees in a batch, each callee is checked for the direct calling
+    convention ("Approach B"); with \c QORE_BATCH_DEBUG set and a debugging level of 5, the result of the check is
+    printed with the batch.  The check printed nothing, as a local flag shadowed the debugging level.
+*/
+public class JITBatchDebugDiagnosticsTest inherits QUnit::Test {
+    private {
+        # the script compiled in JIT mode: caller() is compiled with callee() in a batch
+        const Script = "%modern
+int sub callee(int x) {
+    return x * 2 + 1;
+}
+int sub caller(int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        total += callee(i);
+    }
+    return total;
+}
+int t = 0;
+for (int i = 0; i < 200; ++i) {
+    t += caller(50);
+}
+printf(\"%d\\n\", t);
+";
+
+        string qore_bin;
+        string script_path;
+    }
+
+    constructor() : QUnit::Test("JITBatchDebugDiagnostics", "1.0") {
+        addTestCase("approach B check printed with QORE_BATCH_DEBUG", \approachBCheckPrinted());
+        addTestCase("approach B check not printed without QORE_BATCH_DEBUG", \approachBCheckNotPrinted());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        script_path = tmp_location() + DirSep + sprintf("jit-batch-debug-%d-%s.q", getpid(),
+            get_random_bytes(4).toHex());
+        File f();
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        f.close();
+    }
+
+    globalTearDown() {
+        if (script_path && is_file(script_path)) {
+            unlink(script_path);
+        }
+    }
+
+    approachBCheckPrinted() {
+        string output = runScript(True);
+        if (output !~ /BATCH: 'caller/) {
+            testSkip("no JIT batch debugging output: not a debug build, or JIT compilation is not available");
+        }
+        # the batch marks the callee as eligible, and the check that decided it is printed
+        assertRegex("callee[^ ]*\\(B\\)", output);
+        assertRegex("APPROACH_B: 'callee[^']*' eligible \\(1 params\\)", output);
+        # the script's own result is unchanged
+        assertRegex("(?m)^500000$", output, "script result");
+    }
+
+    approachBCheckNotPrinted() {
+        string output = runScript(False);
+        if (output !~ /attemptJITCompilation\(\) 'caller[^']*' batch enqueued/) {
+            testSkip("no JIT debugging output: not a debug build, or JIT compilation is not available");
+        }
+        assertNRegex("APPROACH_B", output);
+        assertNRegex("BATCH: 'caller", output);
+    }
+
+    #! Runs the script in JIT mode with a debugging level of 5 and returns the lines of its output about JIT batches
+    private string runScript(bool batch_debug) {
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        # the library path is set in the command, as the shell does not pass DYLD_* variables on macOS
+        string cmd = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s%s -d 5 --exec-mode=jit %s 2>&1", lib_dir,
+            lib_dir, batch_debug ? "QORE_BATCH_DEBUG=1 " : "", qore_bin, script_path);
+        return (select backquote(cmd).split("\n"), $1 =~ /BATCH|APPROACH_B|attemptJITCompilation|^[0-9]+$/)
+            .join("\n");
+    }
+}

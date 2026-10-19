@@ -5936,11 +5936,12 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
 // no reference-type params, no closure-captured params, same QoreProgram.
 static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction* callee_ir,
         QoreProgram* root_pgm) {
-    bool debug = getenv("QORE_BATCH_DEBUG") != nullptr;
+    // not "debug", which would hide the debugging level that printd() compares with
+    bool batch_debug = getenv("QORE_BATCH_DEBUG") != nullptr;
 
     // Must be same program (no ProgramThreadCountContextHelper needed)
     if (uvb->pgm != root_pgm) {
-        if (debug) {
+        if (batch_debug) {
             printd(5, "  APPROACH_B: '%s' ineligible: different program\n",
                 callee_ir->name.c_str());
         }
@@ -5951,7 +5952,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     // areAllBodyLocalsIROnly() returns false when all_body_locals is empty,
     // but for Approach B, no body locals is trivially fine.
     if (!callee_ir->all_body_locals.empty() && !callee_ir->areAllBodyLocalsIROnly()) {
-        if (debug) {
+        if (batch_debug) {
             printd(5, "  APPROACH_B: '%s' ineligible: body locals not all IR-only"
                 " (body_locals=%d, ir_only=%d)\n",
                 callee_ir->name.c_str(), (int)callee_ir->all_body_locals.size(),
@@ -5967,7 +5968,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     if (sig->argvid) {
         const void* argv_key = reinterpret_cast<const void*>(sig->argvid);
         if (callee_ir->ir_only_locals.count(argv_key)) {
-            if (debug) {
+            if (batch_debug) {
                 printd(5, "  APPROACH_B: '%s' ineligible: argvid referenced in IR\n",
                     callee_ir->name.c_str());
             }
@@ -5988,7 +5989,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
         // Referenced parameters must be IR-only; unused parameters do not
         // require a runtime-stack local and can still use the direct ABI.
         if (!qore_ir_fast_entry_param_is_private(*callee_ir, lv)) {
-            if (debug) {
+            if (batch_debug) {
                 printd(5, "  APPROACH_B: '%s' ineligible: param '%s' not private\n",
                     callee_ir->name.c_str(), lv->getName());
             }
@@ -5997,7 +5998,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
 
     }
 
-    if (debug) {
+    if (batch_debug) {
         printd(5, "  APPROACH_B: '%s' eligible (%d params)\n",
             callee_ir->name.c_str(), num_params);
     }
