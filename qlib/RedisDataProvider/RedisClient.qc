@@ -342,7 +342,8 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
 
         @return a list of results, one for each command
 
-        @throw REDIS-ERROR if any command fails
+        @throw REDIS-ERROR if any command fails; the error of the first command that failed is raised after the
+        replies to all commands have been read
         @throw REDIS-NOT-CONNECTED if not connected to the server
 
         @par Example
@@ -371,10 +372,25 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
         @debug(logTrace("RedisClient: pipeline sending %d commands", commands.size()));
         sock.send(encoded);
 
-        # Read all responses
+        # read one reply for each command; an error reply is raised after all replies have been read, so that the
+        # connection stays in step with the server
         list<auto> results = ();
+        *hash<ExceptionInfo> error;
         for (int i = 0; i < commands.size(); ++i) {
-            results += decodeRESP();
+            try {
+                push results, decodeRESP();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "REDIS-ERROR") {
+                    rethrow;
+                }
+                if (!error) {
+                    error = ex;
+                }
+                push results, NOTHING;
+            }
+        }
+        if (error) {
+            throw error.err, error.desc, error.arg;
         }
 
         return results;
@@ -485,14 +501,31 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
     }
 
     #! Reads an array of the given length
+    /** Each element is one entry of the list returned, also a null or an array element.  An error element is raised
+        after all elements have been read, so that the connection stays in step with the server.
+    */
     private *list<auto> readArray(int length) {
         if (length < 0) {
             # Null array
             return NOTHING;
         }
         list<auto> result = ();
+        *hash<ExceptionInfo> error;
         for (int i = 0; i < length; ++i) {
-            result += decodeRESP();
+            try {
+                push result, decodeRESP();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "REDIS-ERROR") {
+                    rethrow;
+                }
+                if (!error) {
+                    error = ex;
+                }
+                push result, NOTHING;
+            }
+        }
+        if (error) {
+            throw error.err, error.desc, error.arg;
         }
         return result;
     }
