@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires SqlUtil
+%requires PgsqlSqlUtilBase
 %requires PgsqlSqlUtil
 %requires QUnit
 
@@ -20,8 +21,9 @@
 #! PostgreSQL introspection resolves an unqualified name in the schema of the connection's search_path
 /** The test creates a schema of its own for the run and sets it as the search_path of its connection (with
     \c PGOPTIONS, before the connection is opened), and a decoy schema outside the search_path with objects of the
-    same names but other definitions; every object described or listed must be the run schema's.  Both schemas are
-    dropped when the test ends, also when it fails.
+    same names but other definitions; every object described or listed must be the run schema's.  A third schema,
+    whose name must be quoted, and the decoy schema hold the functions of triggers that name them with their schema.
+    The schemas are dropped when the test ends, also when it fails.
 */
 class PgsqlSearchPathTest inherits QUnit::Test {
     private {
@@ -35,6 +37,11 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         *string pgoptions;
         string run_schema;
         string decoy_schema;
+        #! a schema outside the search_path whose name must be quoted (upper case letters and a space)
+        string other_schema;
+
+        #! a function name that must be quoted, with a quote and a parenthesis
+        const QuotedFunction = "Sp\"(Tf";
     }
 
     constructor() : Test("PgsqlSearchPathTest", "1.0", \ARGV) {
@@ -45,6 +52,12 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         addTestCase("tables, indexes and triggers are the run schema's", \tables());
         addTestCase("partitions are named as in the run schema", \partitions());
         addTestCase("sequences and views are the run schema's", \sequencesAndViews());
+        addTestCase("trigger functions named with their schema are the functions the triggers execute",
+            \qualifiedTriggerFunctions());
+        addTestCase("a table with qualified trigger functions is dropped and created again as it was",
+            \qualifiedTriggerFunctionRoundTrip());
+        addTestCase("a table with qualified trigger functions is aligned with its description",
+            \qualifiedTriggerFunctionAlignment());
 
         {
             on_exit cleanup();
@@ -72,6 +85,7 @@ class PgsqlSearchPathTest inherits QUnit::Test {
             get_epoch_seconds(now_utc()));
         run_schema = "qtest_searchpath_" + tail;
         decoy_schema = "qtest_spdecoy_" + tail;
+        other_schema = "Qtest Sp " + tail;
 
         # the schemas are created and dropped with the default search_path
         admin = new Datasource(connstr);
@@ -103,6 +117,7 @@ class PgsqlSearchPathTest inherits QUnit::Test {
                 "bound": "0) to (50",
                 "view": "select 2 as decoy_col",
             });
+            createQualifiedTriggerObjects();
         }
 
         # every connection of this process opened from now on has the run schema as its search_path
@@ -131,6 +146,51 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         admin.exec(sprintf("create view %s.sp_v as %s", schema, def.view));
     }
 
+    #! returns an identifier quoted as PostgreSQL quotes it: in double quotes, with each double quote doubled
+    private static string quote(string id) {
+        return "\"" + replace(id, "\"", "\"\"") + "\"";
+    }
+
+    #! returns the source of a trigger function that sets a column, as PostgreSQL returns it
+    private static string triggerFunctionSource(string column, string value) {
+        return sprintf("returns trigger language plpgsql as $function$ begin new.%s := '%s'; return new; end "
+            "$function$", column, value);
+    }
+
+    #! returns the functions of the triggers of sp_qt as the triggers name them, with the column each one sets
+    private hash<string, hash<auto>> getQualifiedTriggerFunctions() {
+        return {
+            "sp_qt_a": {"function": quote(other_schema) + "." + quote(QuotedFunction), "column": "a",
+                "value": "quoted schema, quoted name"},
+            "sp_qt_b": {"function": quote(other_schema) + ".sp_plain", "column": "b",
+                "value": "quoted schema, plain name"},
+            "sp_qt_c": {"function": decoy_schema + "." + quote(QuotedFunction), "column": "c",
+                "value": "plain schema, quoted name"},
+            "sp_qt_d": {"function": decoy_schema + ".sp_plain", "column": "d",
+                "value": "plain schema, plain name"},
+        };
+    }
+
+    #! creates the table sp_qt in the run schema, whose triggers execute functions in other schemas
+    /** the run schema has functions of the same names that set every column to \c "decoy"
+    */
+    private createQualifiedTriggerObjects() {
+        admin.exec(sprintf("create schema %s", quote(other_schema)));
+        admin.exec(sprintf("create table %s.sp_qt (id int not null primary key, a text, b text, c text, d text)",
+            run_schema));
+        foreach string name in ((quote(QuotedFunction), "sp_plain")) {
+            admin.exec(sprintf("create function %s.%s() returns trigger language plpgsql as $function$ begin "
+                "new.a := 'decoy'; new.b := 'decoy'; new.c := 'decoy'; new.d := 'decoy'; return new; end "
+                "$function$", run_schema, name));
+        }
+        foreach hash<auto> i in (getQualifiedTriggerFunctions().pairIterator()) {
+            admin.exec(sprintf("create function %s() %s", i.value.function,
+                PgsqlSearchPathTest::triggerFunctionSource(i.value.column, i.value.value)));
+            admin.exec(sprintf("create trigger %s before insert on %s.sp_qt for each row execute function %s()",
+                i.key, run_schema, i.value.function));
+        }
+    }
+
     private cleanup() {
         if (ds) {
             ds.rollback();
@@ -143,9 +203,9 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         }
         if (admin) {
             admin.rollback();
-            foreach string schema in ((run_schema, decoy_schema)) {
-                admin.exec(sprintf("drop schema if exists %s cascade", schema));
-            }
+            # one statement, so that every schema is dropped or none
+            admin.exec(sprintf("drop schema if exists %s cascade", (foldl $1 + ", " + $2,
+                (map quote($1), (run_schema, decoy_schema, other_schema)))));
             admin.commit();
         }
     }
@@ -215,10 +275,11 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         hash<auto> indexes = map {$1.name: $1.columns.keys()}, table.getIndexes().iterator();
         assertEq(("name",), indexes.sp_t_ix);
         assertEq(("sp_trg",), table.getTriggers().keys());
-        # the trigger function is the run schema's
+        # the trigger function is the run schema's, named as the trigger names it: without a schema
         list<auto> sql = table.getCreateSql();
-        assertEq(1, (select sql, $1.typeCode() == NT_STRING && $1 =~ /run trigger/).size(), sprintf("%N", sql));
-        assertEq((), (select sql, $1.typeCode() == NT_STRING && $1 =~ /decoy trigger/), sprintf("%N", sql));
+        assertEq(1, (select sql, $1.typeCode() == NT_STRING && $1 =~ /run trigger/).size(), sprintf("%Y", sql));
+        assertEq((), (select sql, $1.typeCode() == NT_STRING && $1 =~ /decoy trigger/), sprintf("%Y", sql));
+        assertEq(1, (select table.getCreateMiscSql(), $1 =~ /^create function sp_tf\(\) /).size());
         # and runs on an insert
         t.insert({"id": 1});
         assertEq("run trigger", t.selectRow({"where": {"id": 1}}).name);
@@ -246,5 +307,92 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         assertEq(1, seq.increment.toInt());
         *AbstractView v = db.getView("sp_v");
         assertRegex("run_col", v.src);
+    }
+
+    #! returns the SQL that creates the trigger functions of sp_qt
+    private list<string> getQualifiedTriggerFunctionSql() {
+        return sort(map sprintf("create function %s() %s", $1.function,
+            PgsqlSearchPathTest::triggerFunctionSource($1.column, $1.value)),
+            getQualifiedTriggerFunctions().iterator());
+    }
+
+    #! returns the schemas that have a function of the given name
+    private list<string> getFunctionSchemas(string name) {
+        return sort(ds.select("select n.nspname from pg_catalog.pg_proc p join pg_catalog.pg_namespace n "
+            "on n.oid = p.pronamespace where p.proname = %v", name).nspname ?? ());
+    }
+
+    private qualifiedTriggerFunctions() {
+        Datasource ds = getDatasource();
+        PgsqlTable t(ds, "sp_qt");
+        hash<string, AbstractTrigger> triggers = map {$1.name: $1}, t.getTriggers().iterator();
+        assertEq(sort(keys getQualifiedTriggerFunctions()), sort(keys triggers));
+        foreach hash<auto> i in (getQualifiedTriggerFunctions().pairIterator()) {
+            # the trigger names its function as PostgreSQL does, with the case of quoted identifiers kept
+            assertEq(sprintf("before insert on sp_qt for each row execute function %s()", i.value.function),
+                triggers{i.key}.src, i.key);
+        }
+        # each trigger function is read from the schema the trigger names, not the run schema's decoy
+        list<string> sql = sort(t.getCreateMiscSql() ?? ());
+        assertEq(getQualifiedTriggerFunctionSql(), sql);
+        assertEq((), (select sql, $1 =~ /:= 'decoy'/));
+    }
+
+    private qualifiedTriggerFunctionRoundTrip() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        PgsqlTable t(ds, "sp_qt");
+        list<auto> create_sql = t.getCreateSql();
+        list<auto> drop_sql = t.getDropSql();
+
+        # the table's trigger functions are dropped with it; the run schema's decoys are not
+        map ds.exec($1), drop_sql;
+        assertEq((run_schema,), getFunctionSchemas(QuotedFunction));
+        assertEq((run_schema,), getFunctionSchemas("sp_plain"));
+        assertFalse((new PgsqlTable(ds, "sp_qt")).checkExistence());
+
+        map ds.exec($1), create_sql;
+        assertEq(sort((decoy_schema, other_schema, run_schema)), getFunctionSchemas(QuotedFunction));
+        assertEq(sort((decoy_schema, other_schema, run_schema)), getFunctionSchemas("sp_plain"));
+
+        # the triggers execute the functions of the schemas they name
+        ds.exec("insert into sp_qt (id) values (1)");
+        hash<auto> row = ds.selectRow("select a, b, c, d from sp_qt where id = 1");
+        assertEq((map {$1.column: $1.value}, getQualifiedTriggerFunctions().iterator()), row);
+
+        # and the table is described as it was
+        assertEq(create_sql, (new PgsqlTable(ds, "sp_qt")).getCreateSql());
+    }
+
+    #! returns a description of sp_qt with its triggers and trigger functions
+    private hash<auto> getQualifiedTriggerDescription(PgsqlTable t) {
+        hash<auto> desc = t.getDescriptionHash();
+        foreach hash<auto> i in (getQualifiedTriggerFunctions().pairIterator()) {
+            desc.functions{i.value.function + "()"} = PgsqlSearchPathTest::triggerFunctionSource(i.value.column,
+                i.value.value);
+            desc.triggers{i.key} = sprintf("before insert on sp_qt for each row execute function %s()",
+                i.value.function);
+        }
+        return desc;
+    }
+
+    private qualifiedTriggerFunctionAlignment() {
+        Datasource ds = getDatasource();
+        PgsqlTable t(ds, "sp_qt");
+        hash<auto> desc = getQualifiedTriggerDescription(t);
+
+        PgsqlTable template(ds, "sp_qt");
+        template.setupTable(desc);
+        assertEq((), t.getAlignSql(template) ?? ());
+
+        # a trigger naming a function whose quoted name differs only in case names another function
+        string other_function = quote(other_schema) + "." + quote(QuotedFunction.lwr());
+        desc.triggers.sp_qt_a = sprintf("before insert on sp_qt for each row execute function %s()",
+            other_function);
+        template = new PgsqlTable(ds, "sp_qt");
+        template.setupTable(desc);
+        list<auto> sql = t.getAlignSql(template) ?? ();
+        assertEq(("drop trigger sp_qt_a on " + t.getSqlName(), "create trigger sp_qt_a " + desc.triggers.sp_qt_a),
+            sql);
     }
 }

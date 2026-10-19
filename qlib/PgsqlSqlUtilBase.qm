@@ -66,8 +66,10 @@ module PgsqlSqlUtilBase {
     resolves such a name for tables, views, sequences, functions, and types in <tt>current_schema()</tt>, the first
     existing schema of the \c search_path (or \c "public" if the \c search_path names no existing schema); a name
     of the form \c "schema.name" is resolved in the schema given.  The trigger functions of a table are the
-    functions that its triggers execute, and the partitions of a table in <tt>current_schema()</tt> are named by
-    their names alone, as other objects there are.
+    functions that its triggers execute, named as the triggers name them: by the function name alone when the
+    \c search_path resolves it to the function, otherwise with its schema, with each identifier that needs it quoted
+    as PostgreSQL quotes it (ex: <tt>"my schema"."F"()</tt>).  The partitions of a table in
+    <tt>current_schema()</tt> are named by their names alone, as other objects there are.
 
     Like Oracle and MySQL, which list only the objects of the connection's own schema, the following methods
     list only the objects in the schemas of the connection's \c search_path (<tt>current_schemas(false)</tt>),
@@ -234,6 +236,15 @@ $function$
     - fixed the partitions of a table in a schema other than \c public being named with their schema, so that they
       differed from the unqualified partition names of a template; a partition in <tt>current_schema()</tt> is named
       by its name alone
+    - fixed trigger functions named with their schema or with a quoted identifier by the trigger that executes them
+      (ex: <tt>execute function "my schema"."F"()</tt>, as PostgreSQL names a function that the \c search_path does
+      not resolve) not being read, so that they were missing from the SQL that creates, aligns, and drops the table;
+      such a trigger function is read from the schema the trigger names, and named as the trigger names it
+    - fixed the case of quoted identifiers and string literals in the source of a trigger being lost when the trigger
+      is described, and ignored when triggers are compared, so that a trigger was created again executing another
+      function, and a trigger executing another function of a name differing only in case was not aligned
+    - fixed a \c "(" in a quoted identifier of a function name (ex: <tt>"f(x"()</tt>) being read as the start of
+      the arguments of the function
     - Added the size of the current schema (\c current_schema(): the first existing schema of the connection's
       \c search_path; see @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
       "AbstractDatabase::getCurrentSchemaPhysicalSize()"), which measures only that schema's relations instead of
@@ -493,6 +504,49 @@ public string sub get_pgsql_default_schema(AbstractDatasource ds) {
 string sub pgsql_relation_name_expr(string schema_col, string name_col) {
     return sprintf("case when %s = current_schema() then %s else %s || '.' || %s end", schema_col, name_col,
         schema_col, name_col);
+}
+
+# returns SQL with the characters outside double-quoted identifiers and single-quoted string literals in lower case,
+# as PostgreSQL folds the case of keywords and unquoted identifiers, but not of quoted identifiers or literals
+string sub pgsql_lower_unquoted(string sql) {
+    string rv = "";
+    # in a quoted identifier or literal, a doubled quote is always a quote, so the quantifiers are possessive
+    foreach *string part in (regex_extract(sql, "([^\"']++|\"(?:[^\"]|\"\")*+\"?|'(?:[^']|'')*+'?)",
+            RE_Global)) {
+        if (!part) {
+            continue;
+        }
+        if (part[0] != "\"" && part[0] != "'") {
+            part =~ tr/A-Z/a-z/;
+        }
+        rv += part;
+    }
+    return rv;
+}
+
+# returns an identifier as PostgreSQL resolves it: a double-quoted identifier without its quotes and with each
+# doubled quote as one quote, an unquoted identifier in lower case
+string sub pgsql_unquote_identifier(string id) {
+    if (id =~ /^"/) {
+        return replace(id.substr(1, -1), "\"\"", "\"");
+    }
+    id =~ tr/A-Z/a-z/;
+    return id;
+}
+
+# returns the schema, if any, and the name of an SQL name in the form "name" or "schema.name", where each part is an
+# identifier, unquoted or double-quoted as PostgreSQL quotes it (ex: \c "\"my schema\".\"F\"\"x\""), or NOTHING if
+# the argument is not such a name
+*hash<auto> sub pgsql_parse_qualified_name(string sql_name) {
+    *list<*string> parts = (sql_name =~ x/^(?:(\w+|"(?:[^"]|"")++")\.)?(\w+|"(?:[^"]|"")++")$/);
+    if (!parts) {
+        return;
+    }
+    hash<auto> rv = {"name": pgsql_unquote_identifier(parts[1])};
+    if (parts[0]) {
+        rv.schema = pgsql_unquote_identifier(parts[0]);
+    }
+    return rv;
 }
 
 sub parse_schema_name(string nname, reference<string> schema, reference<string> name,
@@ -1434,8 +1488,8 @@ public class PgsqlTrigger inherits SqlUtil::AbstractTrigger {
         src =~ s/\/\*.*\*\///g;
         # replace multiple whitespace chars with a single space
         src =~ s/\s+/ /g;
-        # make everything lower case
-        src =~ tr/A-Z/a-z/;
+        # make everything lower case but quoted identifiers and string literals, whose case is significant
+        src = pgsql_lower_unquoted(src);
         # issue #3589: PostgreSQL 12+ compatibility
         # make sure text always says "execute function" and not "execute procedure"
         src =~ s/execute function/execute procedure/;
@@ -1789,10 +1843,12 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     static *string getFunctionArgs(string err, reference<string> src) {
-        # remove function name and "(" at beginning of hdr
-        int i = src.find("(");
-        if (i == -1)
+        # remove function name and "(" at beginning of hdr; a "(" in a quoted identifier of the name (ex:
+        # "\"my(schema\".f()") is part of the name
+        *string name = (src =~ x/^((?:[^"(]++|"(?:[^"]|"")*+")*+\()/)[0];
+        if (!name)
             throw err, sprintf("cannot find function arguments: %y", src);
+        int i = name.length() - 1;
         int e = src.find(")", i + 1);
         if (e == -1)
             throw err, sprintf("cannot find function arguments: %y", src);
@@ -4455,20 +4511,23 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         *hash<auto> qh = ds.select("select * from information_schema.triggers where event_object_schema = %v and "
             "event_object_table = %v", schema, name);
 
-        # list of trigger functions
-        list<string> fl = ();
-        # map trigger function name -> trigger name
+        # map trigger name -> the function it executes, as the trigger names it: PostgreSQL names the function
+        # without its schema when the search_path resolves the name to it, otherwise with its schema, and quotes
+        # each identifier that needs quoting (ex: "EXECUTE FUNCTION \"my schema\".\"F\"()"); a function called with
+        # trigger arguments is not read
         hash<string, string> tfh;
         foreach hash<auto> row in (qh.contextIterator()) {
-            *string f = (row.action_statement =~ x/EXECUTE (?:PROCEDURE|FUNCTION) (\w+)\(\)$/)[0];
-            if (f) {
-                fl += f;
-                tfh{f} = row.trigger_name;
+            *string f = (row.action_statement =~ x/EXECUTE (?:PROCEDURE|FUNCTION) (.+)\(\)$/)[0];
+            if (f && pgsql_parse_qualified_name(f)) {
+                tfh{row.trigger_name} = f;
             }
 
-            if (!native_case)
-                map row.$1 = row.$1.lwr(), ("event_manipulation", "action_statement", "action_timing",
-                    "action_orientation");
+            if (!native_case) {
+                map row.$1 = row.$1.lwr(), ("event_manipulation", "action_timing", "action_orientation");
+                # quoted identifiers and string literals keep their case, as they mean another object or value
+                # in another case
+                row.action_statement = pgsql_lower_unquoted(row.action_statement);
+            }
             *string trigger_src = trigger_sources{row.trigger_name};
             if (trigger_src) {
                 # add event to trigger
@@ -4495,25 +4554,40 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
         map rv{$1.key} = new PgsqlTrigger($1.key, $1.value), trigger_sources.pairIterator();
 
-        if (fl) {
+        if (tfh) {
             hash<auto> fh;
             # also get trigger functions
             # the functions that the table's triggers execute; matching on the function names alone found the
             # functions of those names in every schema and with any arguments, and proname::regproc raised an error
             # for a name with more than one function on the search_path
-            qh = ds.select("select distinct p.proname, t1.typname return_type, a.rolname procedure_owner, "
+            qh = ds.select("select tg.tgname as trigger_name, n.nspname as schema, p.proname, "
+                "t1.typname return_type, a.rolname procedure_owner, "
                 "l.lanname lang, prosrc body, pg_catalog.pg_get_functiondef(p.oid) hdr, "
                 "pg_catalog.pg_get_function_arguments(p.oid) args, "
                 "case provolatile when 'i' then 'IMMUTABLE' when 's' then 'STABLE' when 'v' then 'VOLATILE' end "
-                "stability from pg_catalog.pg_trigger tg join pg_proc p on p.oid = tg.tgfoid "
+                "stability from pg_catalog.pg_trigger tg "
+                "join pg_catalog.pg_class c on c.oid = tg.tgrelid "
+                "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
+                "join pg_proc p on p.oid = tg.tgfoid "
+                "join pg_catalog.pg_namespace n on n.oid = p.pronamespace "
                 "left join pg_type t1 on p.prorettype = t1.oid "
                 "left join pg_roles a on p.proowner = a.oid left join pg_language l on p.prolang = l.oid "
-                "where tg.tgrelid = %v::regclass and not tg.tgisinternal and p.proname in (%s)",
-                getSqlName(), (foldl $1 + "," + $2, (map sprintf("'%s'", $1), fl)));
+                "where cn.nspname = %v and c.relname = %v and not tg.tgisinternal", schema, name);
+            hash<string, hash<auto>> trigger_functions = map {$1.trigger_name: $1}, qh.contextIterator();
 
-            # create trigger function map
-            map fh{$1.proname + "()"} = PgsqlDatabase::processFunction($1 + ("trigger_name": tfh{$1.proname}),
-                native_case), qh.contextIterator();
+            # create trigger function map; a trigger function is named as the trigger names it, so that the SQL
+            # creating and dropping it names the function the trigger executes
+            foreach hash<auto> i in (tfh.pairIterator()) {
+                *hash<auto> row = trigger_functions{i.key};
+                hash<auto> fname = pgsql_parse_qualified_name(i.value);
+                # a trigger dropped or replaced since its description was read is not described with this function
+                if (!row || row.proname != fname.name || (fname.schema && row.schema != fname.schema)) {
+                    continue;
+                }
+                PgsqlFunction f = PgsqlDatabase::processFunction(row + {"proname": i.value, "trigger_name": i.key},
+                    native_case);
+                fh{f.name} = f;
+            }
 
             triggerFunctions = new Functions(fh);
         }
