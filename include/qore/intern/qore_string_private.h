@@ -1062,7 +1062,15 @@ public:
     DLLLOCAL int concat(const QoreString* str, ExceptionSink* xsink);
 
     // return 0 for success
-    DLLLOCAL int vsprintf(const char *fmt, va_list args) {
+    //! Appends the output of a printf() format
+    /** @param fmt the format
+        @param args the arguments of the format
+        @param failed set to true if the output cannot be formatted
+
+        @return -1 if the buffer was too small and the call must be repeated with the same arguments, 0 otherwise;
+        nothing is appended if the output cannot be formatted, such as an output longer than INT_MAX characters
+    */
+    DLLLOCAL int vsprintf(const char *fmt, va_list args, bool* failed = nullptr) {
         size_t fmtlen = ::strlen(fmt);
         // ensure minimum space is free
         if ((allocated - len - fmtlen) < MIN_SPRINTF_BUFSIZE) {
@@ -1090,6 +1098,14 @@ public:
             return -1;
         }
 #else
+        if (i < 0) {
+            // the output cannot be formatted: nothing is appended, and repeating the call cannot change that
+            *(buf + len) = '\0';
+            if (failed) {
+                *failed = true;
+            }
+            return 0;
+        }
         if (i >= free) {
             //printf("DEBUG: vsnprintf() failed: i=%d allocated=" QSD " len=" QSD " buf=%p fmtlen=" QSD
             //    " (new=i+%d = %d)\n", i, allocated, len, buf, fmtlen, STR_CLASS_EXTRA, i + STR_CLASS_EXTRA);
@@ -1112,31 +1128,32 @@ public:
             va_start(args, fmt);
             int rc = vsprintf(fmt, args);
             va_end(args);
-            if (!rc)
+            if (!rc) {
                 break;
+            }
         }
         return 0;
     }
 
-    DLLLOCAL int vsnprintf(size_t size, const char* fmt, va_list args) {
-        // ensure minimum space is free
-        if ((allocated - len) < (unsigned)size) {
-            allocated += (size + STR_CLASS_EXTRA);
-            // resize buffer
-            buf = (char*)realloc(buf, allocated * sizeof(char));
-        }
-        // copy formatted string to buffer
-        int i = ::vsnprintf(buf + len, size, fmt, args);
-        len += i;
-        return i;
-    }
+    //! Appends the output of a printf() format, and reports if it cannot be formatted
+    /** @param fmt the format
+        @param ... the arguments of the format
 
-    DLLLOCAL int snprintf(size_t size, const char* fmt, ...) {
+        @return 0 if the output was appended, -1 if it cannot be formatted (it is then not appended), such as an
+        output longer than INT_MAX characters
+    */
+    DLLLOCAL int sprintfChecked(const char *fmt, ...) {
         va_list args;
-        va_start(args, fmt);
-        int i = vsnprintf(size, fmt, args);
-        va_end(args);
-        return i;
+        bool failed = false;
+        while (true) {
+            va_start(args, fmt);
+            int rc = vsprintf(fmt, args, &failed);
+            va_end(args);
+            if (!rc) {
+                break;
+            }
+        }
+        return failed ? -1 : 0;
     }
 
     DLLLOCAL void concatUTF8FromUnicode(unsigned code);

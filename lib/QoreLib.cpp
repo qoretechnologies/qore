@@ -534,10 +534,12 @@ bool q_get_option_constant_value(const char* opt) {
     return false;
 }
 
+// reads a field width or a precision; a number larger than INT_MAX is INT_MAX
 static int get_number(char** param) {
     int num = 0;
     while (isdigit(**param)) {
-        num = num*10 + (**param - '0');
+        int digit = **param - '0';
+        num = num > (INT_MAX - digit) / 10 ? INT_MAX : num * 10 + digit;
         ++(*param);
     }
     //printd(5, "get_number(%x: %s) num: %d\n", *param, *param, num);
@@ -773,13 +775,30 @@ static void process_opt_string(QoreString& tbuf, QoreValue qv, int type, int opt
 }
 
 // if type = 0 then field widths are soft limits, otherwise they are hard
+// raises an exception for a conversion whose output cannot be formatted, such as one longer than INT_MAX characters
+static void process_opt_format_error(const char* str, const char* param, ExceptionSink* xsink) {
+    xsink->raiseException("SPRINTF-ERROR", "the output of the format conversion \"%.*s\" cannot be formatted, as "
+        "its field width or precision is too large", static_cast<int>(param - str + 1), str);
+}
+
+// appends a field width or a precision to the C format of a conversion
+static char* process_opt_append_number(char* f, const char* end, int num) {
+    int rc = snprintf(f, end - f, "%d", num);
+    // the format buffer is sized for the longest int
+    assert(rc > 0 && rc < end - f);
+    return f + rc;
+}
+
 static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bool& arg_used, ExceptionSink* xsink) {
     assert(arg_used == true);
     char* str = param;
     int opts = 0;
     int width = -1;
     int decimals = -1;
-    char fmt[20], *f;
+    // the C format of the conversion: '%', at most three flags, the width, '.' and the precision (each an int of at
+    // most 11 characters), the length modifier ("ll", "I64" or MPFR's 'R'), the conversion and the terminator
+    char fmt[1 + 3 + 11 + 1 + 11 + 3 + 1 + 1], *f;
+    const char* fmt_end = fmt + sizeof(fmt);
     QoreString tbuf(cstr->getEncoding());
 
     printd(5, "process_opt(): param: %s type: %d qv->getType(): %s refs: %d\n",
@@ -848,7 +867,7 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
                 } else if (opts & P_ZERO_FILL) {
                     *(f++) = '0';
                 }
-                f += sprintf(f, "%d", width);
+                f = process_opt_append_number(f, fmt_end, width);
             }
 #ifdef _Q_WINDOWS
             *(f++) = 'I';
@@ -860,8 +879,12 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
 #endif
             *(f++) = p; // 'd', etc;
             *f = '\0';
+            assert(f < fmt_end);
             int64 val = qv.getAsBigInt();
-            tbuf.sprintf(fmt, val);
+            if (qore_string_private::get(tbuf)->sprintfChecked(fmt, val)) {
+                process_opt_format_error(str, param, xsink);
+                return static_cast<int>(param - str);
+            }
             if (type && (width != -1)) {
                 tbuf.terminate(width);
             }
@@ -890,23 +913,28 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
                 } else if (opts & P_ZERO_FILL) {
                     *(f++) = '0';
                 }
-                f += sprintf(f, "%d", width);
+                f = process_opt_append_number(f, fmt_end, width);
             }
             if (decimals != -1) {
                 *(f++) = '.';
-                f += sprintf(f, "%d", decimals);
+                f = process_opt_append_number(f, fmt_end, decimals);
             }
             if (t == NT_NUMBER) {
                 *(f++) = QORE_MPFR_SPRINTF_ARG;
                 *(f++) = *param; // a|A|e|E|f|F|g|G
                 *f = '\0';
+                assert(f < fmt_end);
                 qore_number_private::sprintf(*qv.get<const QoreNumberNode>(), tbuf, fmt);
             } else {
                 *(f++) = *param; // a|A|e|E|f|F|g|G
                 *f = '\0';
+                assert(f < fmt_end);
                 double val = qv.getAsFloat();
                 size_t offset = tbuf.size();
-                tbuf.sprintf(fmt, val);
+                if (qore_string_private::get(tbuf)->sprintfChecked(fmt, val)) {
+                    process_opt_format_error(str, param, xsink);
+                    return static_cast<int>(param - str);
+                }
                 // issue 1556: external modules that call setlocale() can change
                 // the decimal point character used here from '.' to ','
                 q_fix_decimal(&tbuf, offset);

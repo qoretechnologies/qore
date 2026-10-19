@@ -568,11 +568,18 @@ public:
 
     //! this will concatentate a formatted string to the existing string according to the format string and the arguments
     /** NOTE that the formatted string is concatenated to the end of the current string!
+
+        @return 0; nothing is concatenated if the output cannot be formatted, such as an output longer than
+        \c INT_MAX characters
     */
     DLLEXPORT int sprintf(const char* fmt, ...);
 
     //! this will concatentate a formatted string to the existing string according to the format string and the arguments
     /** NOTE that the formatted string is concatenated to the end of the current string!
+
+        @return -1 if the buffer was too small, in which case the call must be repeated with the same arguments (and
+        a new \c va_list), 0 otherwise; nothing is concatenated if the output cannot be formatted, such as an output
+        longer than \c INT_MAX characters
     */
     DLLEXPORT int vsprintf(const char* fmt, va_list args);
 

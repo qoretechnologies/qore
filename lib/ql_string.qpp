@@ -883,6 +883,10 @@ hashdecl Qore::UnicodeByteOrderInfo {
     For floating-point arguments, a precision specifier may be given by including a period "." and another digit
     string, which indicates the number of digits to appear after the decimal point.
 
+    A field width or precision larger than 2147483647 is read as 2147483647; an integer or floating-point
+    conversion whose output cannot be formatted because its field width or precision is too large raises a
+    \c SPRINTF-ERROR exception.
+
     Then the format character is given as follows:
 
     <b>Printf Formatting Characters</b>

@@ -36,9 +36,43 @@ public class SprintfTest inherits QUnit::Test {
         addTestCase("yaml non-finite float format", \yamlNonFiniteFormat());
         addTestCase("yaml object format", \yamlObjectFormat());
         addTestCase("yaml parsing", \yamlParsing());
+        addTestCase("maximal conversion specifications", \maximalConversions());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    #! The longest field widths and precisions are formatted, or raise an exception when their output cannot be
+    #! formatted
+    maximalConversions() {
+        # a number with all flags, a 7-digit width and a 6-digit precision: its C format has 21 characters
+        string fmt = "%-+01000000.100000e";
+        string str = call_function("sprintf", fmt, 1.5n);
+        assertEq(1000000, str.size());
+        assertEq("+1.5" + strmul("0", 99999) + "e+00", str.substr(0, 100007));
+        assertEq(strmul(" ", 1000000 - 100007), str.substr(100007));
+
+        # a float with all flags, a 7-digit width and a 7-digit precision
+        fmt = "%-+01000000.1000000e";
+        str = call_function("sprintf", fmt, 1.5);
+        assertEq(1000007, str.size());
+        assertEq("+1.5" + strmul("0", 999999) + "e+00", str);
+
+        # right-justified and zero-filled
+        fmt = "%+01000000.100000f";
+        str = call_function("sprintf", fmt, -2.25);
+        assertEq(1000000, str.size());
+        assertEq("-" + strmul("0", 1000000 - 100003) + "2.25" + strmul("0", 99998), str);
+
+        # an integer with all flags and a 10-digit width is not formatted at its full width here, but its format is
+        # built: a width that cannot be formatted raises an exception
+        assertThrows("SPRINTF-ERROR", "\"%2147483647d\"", \sprintf(), ("abc%2147483647d", 1));
+        # a width with more digits than an int has is read as the largest int
+        assertThrows("SPRINTF-ERROR", "\"%99999999999d\"", \sprintf(), ("%99999999999d", 1));
+        assertThrows("SPRINTF-ERROR", "cannot be formatted", \sprintf(), ("x%.2147483647f", 1.0));
+        assertThrows("SPRINTF-ERROR", "cannot be formatted", \f_sprintf(), ("%-+02147483647.2147483647e", 1.0));
+        # the conversions around one that cannot be formatted are not affected
+        assertEq("1 2", call_function("sprintf", "%d %d", 1, 2));
     }
 
     separators() {
