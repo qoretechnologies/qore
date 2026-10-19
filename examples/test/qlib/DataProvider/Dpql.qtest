@@ -142,6 +142,9 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("quoted member names after accessors", \quotedMemberTests());
         addTestCase("completion quotes keyword keys", \keywordKeyCompletionTests());
         addTestCase("completion of the keys of a field path", \fieldPathCompletionTests());
+        addTestCase("completion of a key of a list", \listKeyCompletionTests());
+        addTestCase("completion of an open quoted field reference", \openQuotedReferenceCompletionTests());
+        addTestCase("completion after quoted text in an accessor", \quotedAccessorTextCompletionTests());
         addTestCase("item-scoped arguments", \itemScopedArgTests());
         addTestCase("a key that is a name is serialized as a member after an accessor",
             \memberKeySerializationTests());
@@ -445,6 +448,188 @@ public class DpqlTest inherits QUnit::Test {
             hash<auto> exp = DataProvider::parseDpqlExpression('@a[0].' + DpqlSerializer::memberNameForKey(key));
             assertEq(key, exp.args[1], key);
         }
+    }
+
+    #! The fields, a record and the completion closures of the tests of path completion through lists and quotes
+    private hash<auto> getQuotedPathFixture() {
+        HashDataType product_t("product");
+        product_t.addField(new QoreDataField("sku", "SKU", AbstractDataProviderType::get("string")));
+        HashDataType item_t("item");
+        item_t.addField(new QoreDataField("id", "Item id", AbstractDataProviderType::get("int")));
+        item_t.addField(new QoreDataField("product", "Product", product_t));
+        item_t.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderType::get("float")));
+        item_t.addField(new QoreDataField("order-id", "Order id", AbstractDataProviderType::get("string")));
+        HashDataType create_t("create");
+        create_t.addField(new QoreDataField("order-id", "Order id", AbstractDataProviderType::get("string")));
+        create_t.addField(new QoreDataField("items", "Items", new ListDataType(item_t)));
+        create_t.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderType::get("float")));
+        create_t.addField(new QoreDataField("q\"x", "Quoted", AbstractDataProviderType::get("int")));
+        create_t.addField(new QoreDataField("matrix", "Matrix", new ListDataType(new ListDataType(item_t))));
+        HashDataType spec_t("spec");
+        foreach string key in ("a}b", "x{y", "c]d", "e\"}f") {
+            spec_t.addField(new QoreDataField(key, key, product_t));
+        }
+        hash<string, AbstractDataField> fields = {
+            "create": new QoreDataField("create", "Create", create_t),
+            "items": new QoreDataField("items", "Items", new ListDataType(item_t)),
+            "spec": new QoreDataField("spec", "Spec", spec_t),
+            "name": new QoreDataField("name", "Name", AbstractDataProviderType::get("string")),
+            "Unit.Price": new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderType::get("float")),
+        };
+        # the label and insert text of each field item; the operator items' labels
+        code<hash<string, string>(string, *int)> complete = hash<string, string> sub (string text, *int pos) {
+            return map {$1.label: $1.insert_text}, DataProvider::getDpqlCompletions(text, pos ?? text.size(),
+                fields), $1.kind == "field";
+        };
+        # the wildcard items: the operator items other than the range operator of an index
+        code<list<string>(string)> operators = list<string> sub (string text) {
+            return map $1.label, DataProvider::getDpqlCompletions(text, text.size(), fields),
+                $1.kind == "operator" && $1.label != "..";
+        };
+        hash<auto> product = {"sku": "S1"};
+        hash<auto> rec = {
+            "items": (
+                {"id": 1, "product": product, "Unit.Price": 1.5, "order-id": "o1"},
+                {"id": 2, "product": {"sku": "S2"}, "Unit.Price": 2.5, "order-id": "o2"},
+            ),
+            "create": {"matrix": (({"id": 1, "product": product},), ({"id": 2, "product": product},))},
+            "spec": (map {$1: product}, ("a}b", "x{y", "c]d", "e\"}f")),
+        };
+
+        return {
+            "fields": fields,
+            "item_t": item_t,
+            "rec": rec,
+            "complete": complete,
+            "operators": operators,
+        };
+    }
+
+    #! A key of a list applies to each of its items, as at run time: the keys of its items are completed
+    listKeyCompletionTests() {
+        hash<auto> fx = getQuotedPathFixture();
+        hash<auto> rec = fx.rec;
+        code<hash<string, string>(string, *int)> complete = fx.complete;
+        code<list<string>(string)> operators = fx.operators;
+        # a key of a list applies to each of its items, also through nested lists, so the keys of the items are
+        # offered, and each one gives the list of the item values at run time
+        hash<string, string> item_keys = {"id": "id", "product": "product", "Unit.Price": '"Unit.Price"',
+            "order-id": '"order-id"'};
+        assertEq(item_keys, complete('@items{'));
+        assertEq(item_keys, complete('@create{items}{'));
+        assertEq(item_keys, complete('@create.matrix{'));
+        foreach hash<auto> i in (item_keys.pairIterator()) {
+            assertEq((map $1{i.key}, rec.items), AbstractDataProvider::evalGenericExpressionValue(rec,
+                DataProvider::parseDpqlExpression('@items{' + i.value + '}')), i.key);
+        }
+        assertEq((("S1",), ("S1",)), AbstractDataProvider::evalGenericExpressionValue(rec,
+            DataProvider::parseDpqlExpression('@create.matrix{product}{sku}')));
+        # the values of a key of a list are a list: its items' keys follow, and [*], not {*}
+        assertEq({"sku": "sku"}, complete('@items{product}{'));
+        assertEq({"sku": "sku"}, complete('@items{product}.'));
+        assertEq({"sku": "sku"}, complete('@create.matrix{product}{'));
+        assertEq(("S1", "S2"), AbstractDataProvider::evalGenericExpressionValue(rec,
+            DataProvider::parseDpqlExpression('@items{product}.sku')));
+        assertEq((), operators('@items{'), "a list takes no {*}");
+        assertEq((), operators('@items{product}{'), "a list takes no {*}");
+        assertEq(("*",), operators('@items{product}['));
+        assertEq(({"sku": "S1"}, {"sku": "S2"}), AbstractDataProvider::evalGenericExpressionValue(rec,
+            DataProvider::parseDpqlExpression('@items{product}[*]')));
+        # a slice of a list is a list: a key of it is a key of each item, and an index gives an item
+        assertEq(item_keys, complete('@items[0..1]{'));
+        assertEq(("*",), operators('@items[0..1]{product}['));
+        assertEq({"id": "id", "product": "product", "Unit.Price": '@"Unit.Price"', "order-id": "order-id"},
+            complete('@items[0..1][1].'));
+        assertEq(2, AbstractDataProvider::evalGenericExpressionValue(rec,
+            DataProvider::parseDpqlExpression('@items[0..1][1].id')));
+        assertEq(({"sku": "S1"}, {"sku": "S2"}), AbstractDataProvider::evalGenericExpressionValue(rec,
+            DataProvider::parseDpqlExpression('@items[0..1]{product}[*]')));
+        # a member after a quoted field reference to a list is a key of each item too, inserted as the member
+        assertEq({"id": "id", "product": "product", "Unit.Price": '@"Unit.Price"', "order-id": "order-id"},
+            complete('@"create.items".'));
+        assertEq(("o1", "o2"), AbstractDataProvider::evalGenericExpressionValue(rec + {"create": {"items": rec.items}},
+            DataProvider::parseDpqlExpression('@"create.items".order-id')));
+        # a key that the items do not have, the items of a scalar list; a bare path through a list is not a key of
+        # its items (@create.items.id is no value at run time)
+        assertEq({}, complete('@items{nosuch}{'));
+        assertEq({}, complete('@items{id}{'));
+        assertEq({}, complete('@create.items.'));
+    }
+
+    #! An open quoted field reference completes the path typed in it, as the parser reads it
+    openQuotedReferenceCompletionTests() {
+        hash<auto> fx = getQuotedPathFixture();
+        code<hash<string, string>(string, *int)> complete = fx.complete;
+        HashDataType item_t = fx.item_t;
+        # an open quoted field reference completes the path typed in it; each item inserts the reference to its path,
+        # quoted or escaped as the parser reads it
+        hash<string, string> create_keys = {
+            "order-id": '@"create.order-id"',
+            "items": "@create.items",
+            "Unit.Price": '@"create.Unit\.Price"',
+            "q\"x": '@"create.q\"x"',
+            "matrix": "@create.matrix",
+        };
+        assertEq(create_keys, complete('@"create.'));
+        # a hyphenated key in the quotes
+        assertEq({"order-id": '@"create.order-id"'}, complete('@"create.order-'));
+        assertEq({"order-id": '@"create.order-id"'}, complete('@"create.ORDER-I'));
+        # an escaped dot is part of the key; an unescaped one separates two keys, which the type does not have
+        assertEq({"Unit.Price": '@"create.Unit\.Price"'}, complete('@"create.Unit\.'));
+        assertEq({}, complete('@"create.Unit.'));
+        # an escaped quote is part of the key
+        assertEq({"q\"x": '@"create.q\"x"'}, complete('@"create.q\"'));
+        # the field names, and a top-level field whose name has a dot, which is one key when escaped
+        assertEq({"create": "@create"}, complete('@"cre'));
+        assertEq({"Unit.Price": '@"Unit\.Price"'}, complete('@"Unit\.P'));
+        # through the keys of nested hash types
+        {
+            hash<string, AbstractDataField> nested = {
+                "create": new QoreDataField("create", "Create", new HashDataType("c", {
+                    "item": new QoreDataField("item", "Item", item_t),
+                })),
+            };
+            string text = '@"create.item.product.';
+            assertEq({"sku": "@create.item.product.sku"}, map {$1.label: $1.insert_text},
+                DataProvider::getDpqlCompletions(text, text.size(), nested), $1.kind == "field");
+        }
+        # the quote closed by the editor after the cursor
+        assertEq(create_keys, complete('@"create."', 9));
+        # at the end of an expression, after a string
+        assertEq({"items": "@create.items"}, complete('@name == "a.b" && @"create.it'));
+        # each insert text is read back as the path it was offered for
+        foreach hash<auto> i in (create_keys.pairIterator()) {
+            hash<auto> ref = DataProvider::parseDpqlExpression(i.value).args[0];
+            assertEq(("create", i.key), AbstractDataProvider::getFieldPath(ref.field), i.value);
+        }
+        # an open quoted member after an accessor is one key: dots included; the item inserts the member
+        assertEq({"Unit.Price": '@"Unit.Price"'}, complete('@items[*].@"Unit.'));
+        assertEq({"order-id": "order-id"}, complete('@items[0].@"order-'));
+        assertEq({"sku": "sku"}, complete('@items[0].@"product".@"s'));
+        # a string is not a reference
+        assertEq({}, complete('@name == "create.'));
+        assertEq({}, complete('@name == "@create.'));
+        assertEq({}, complete('@name == "@\"create.'));
+    }
+
+    #! Quoted text in an accessor does not end the accessor
+    quotedAccessorTextCompletionTests() {
+        hash<auto> fx = getQuotedPathFixture();
+        hash<auto> rec = fx.rec;
+        code<hash<string, string>(string, *int)> complete = fx.complete;
+        code<list<string>(string)> operators = fx.operators;
+        # quoted text in an accessor does not end it: a key with a brace or a bracket, also an escaped quote, or in
+        # single quotes
+        foreach string text in ('@spec{"a}b"}.', '@spec{"a}b"}{', "@spec{'a}b'}.", '@spec{"x{y"}.', '@spec{"c]d"}.',
+                '@spec{"e\"}f"}.', '@spec{"a}b"}.s') {
+            assertEq({"sku": "sku"}, complete(text), text);
+        }
+        foreach string text in ('@spec{"a}b"}.sku', '@spec{"x{y"}{sku}', "@spec{'c]d'}.sku", '@spec{"e\"}f"}.sku') {
+            assertEq("S1", AbstractDataProvider::evalGenericExpressionValue(rec,
+                DataProvider::parseDpqlExpression(text)), text);
+        }
+        # no wildcard [*] for the hash that a quoted key gives
+        assertEq((), operators('@spec{"a}b"}['));
     }
 
     #! Completion inserts a key that is a keyword quoted

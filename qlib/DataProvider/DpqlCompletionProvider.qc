@@ -417,8 +417,9 @@ public class DpqlCompletionProvider {
                 break;
 
             case DPQL_CTX_IN_FIELD:
-                # Completing field name after @, or a key of a field in the path typed so far
-                items += getFieldCompletions(ctx.fields, analysis.prefix);
+                # Completing field name after @, or a key of a field in the path typed so far; in an open quoted
+                # field reference, the field name is the key that the path typed so far is
+                items += getFieldCompletions(ctx.fields, analysis.field_prefix ?? analysis.prefix);
                 items += getFieldPathCompletions(ctx.fields, analysis.prefix);
                 break;
 
@@ -518,10 +519,11 @@ public class DpqlCompletionProvider {
         string before = position > 0 ? substr(text, 0, position) : "";
         string prefix = "";
 
-        # Check if we're inside a string
-        int in_string = checkInString(before);
-        if (in_string) {
-            return {
+        # Check if we're inside a string; an open quoted field reference (<tt>\@"create.it</tt>) completes the path
+        # typed in it, and an open quoted member after an accessor (<tt>\@orders[*].\@"Unit.</tt>) the key typed in it
+        int string_start = getOpenStringStart(before);
+        if (string_start >= 0) {
+            return analyzeOpenQuotedReference(before, string_start) ?? {
                 "ctx": DPQL_CTX_IN_STRING,
                 "prefix": "",
             };
@@ -682,6 +684,51 @@ public class DpqlCompletionProvider {
             "ctx": DPQL_CTX_START,
             "prefix": prefix,
         } + (func_ctx ?? {});
+    }
+
+    #! Analyzes the text before the cursor when it ends in an open quoted field reference or member
+    /** In an open quoted field reference (<tt>\@"create.it</tt>), the path typed in the quotes is read as the parser
+        reads it: dots separate its keys, an escaped dot is part of a key, and the other escapes are decoded.  In an
+        open quoted member after the dot that follows an accessor or a quoted field name
+        (<tt>\@orders[*].\@"Unit.</tt>), the text typed in the quotes is one key, dots included.
+
+        @param before the text before the cursor
+        @param quote the byte offset of the quote that opens the string that \a before ends in
+
+        @return the context: \c DPQL_CTX_IN_FIELD with the path typed as \c prefix and the field name that it would
+        be as \c field_prefix, or \c DPQL_CTX_IN_MEMBER with the key typed as \c prefix and the text before the dot
+        as \c base_text; @ref nothing if the string is not a field reference or a member
+
+        @since DataProvider 3.11
+    */
+    private *hash<auto> analyzeOpenQuotedReference(string before, int quote) {
+        if (quote < 1 || chr(before.getByte(quote)) != '"' || chr(before.getByte(quote - 1)) != "@") {
+            return;
+        }
+        string typed = byteSubstr(before, quote + 1, before.size() - quote - 1);
+        # a member after a dot, which is not one of the dots of a range (<tt>[0..\@"n</tt>)
+        int at = quote - 1;
+        if (at > 0 && chr(before.getByte(at - 1)) == "." && (at == 1 || chr(before.getByte(at - 2)) != ".")) {
+            string base_text = byteSubstr(before, 0, at - 1);
+            *hash<auto> chain = extractFieldPath(base_text);
+            if (!chain.member || chain.end != base_text.size()) {
+                return;
+            }
+            return {
+                "ctx": DPQL_CTX_IN_MEMBER,
+                "prefix": unescapeString(typed),
+                "base_text": base_text,
+            };
+        }
+        # an escaped dot stays escaped in the path, as it is part of a key
+        string path = unescapeFieldPath(typed);
+        list<string> parts = AbstractDataProvider::getFieldPath(path);
+        return {
+            "ctx": DPQL_CTX_IN_FIELD,
+            "prefix": path,
+            # one key, or the whole text for a field whose name has a dot, as after a bare @
+            "field_prefix": parts.size() == 1 ? parts[0] : path,
+        };
     }
 
     #! Finds the enclosing function call context from text before cursor
@@ -849,10 +896,22 @@ public class DpqlCompletionProvider {
 
     #! Checks if position is inside a string literal
     private int checkInString(string text) {
-        bool in_double = False;
-        bool in_single = False;
-        bool escaped = False;
+        return getOpenStringStart(text) >= 0 ? 1 : 0;
+    }
 
+    #! Returns the byte offset of the quote that opens the string that the text ends in, or -1 if it ends in none
+    /** A backslash escapes the next character, and a quote of one kind is part of a string in quotes of the other
+
+        @param text the text before the cursor
+
+        @return the byte offset of the opening quote of the string that is not closed, or -1
+
+        @since DataProvider 3.11
+    */
+    private int getOpenStringStart(string text) {
+        int start = -1;
+        string quote_char;
+        bool escaped = False;
         for (int i = 0; i < text.size(); ++i) {
             string c = chr(text.getByte(i));
             if (escaped) {
@@ -863,14 +922,16 @@ public class DpqlCompletionProvider {
                 escaped = True;
                 continue;
             }
-            if (c == '"' && !in_single) {
-                in_double = !in_double;
-            } else if (c == "'" && !in_double) {
-                in_single = !in_single;
+            if (start >= 0) {
+                if (c == quote_char) {
+                    start = -1;
+                }
+            } else if (c == '"' || c == "'") {
+                start = i;
+                quote_char = c;
             }
         }
-
-        return in_double || in_single ? 1 : 0;
+        return start;
     }
 
     #! Gets field completions
@@ -968,7 +1029,8 @@ public class DpqlCompletionProvider {
         @param prefix the part of the member typed after the dot
 
         @return the key completion items; each inserts the member as the parser reads it after the dot
-        (@ref DpqlSerializer::memberNameForKey()); nothing when the type of the value has no known fields
+        (@ref DpqlSerializer::memberNameForKey()); nothing when the type of the value has no known fields; the keys of
+        a list are the keys of its items, as a member of a list is the key of each item
 
         @since DataProvider 3.11
     */
@@ -984,7 +1046,9 @@ public class DpqlCompletionProvider {
             return items;
         }
         *AbstractDataProviderType type = traverseTypeWithAccessors(field.getType(), chain.accessors);
-        *hash<string, AbstractDataField> type_fields = type ? type.getFields() : NOTHING;
+        # a member of a list is the key of each of its items
+        int depth;
+        *hash<string, AbstractDataField> type_fields = type ? getKeyedType(type, \depth).getFields() : NOTHING;
         if (!type_fields) {
             return items;
         }
@@ -1452,7 +1516,8 @@ public class DpqlCompletionProvider {
 
     #! Returns the wildcard accessors that the value before the cursor can take
     /** The type of the field reference and accessors before the cursor decides: a list takes \c [*] and a hash
-        takes \c {*}; when the type is not known, both are possible.  A slice of a list gives a list.
+        takes \c {*}; when the type is not known, both are possible.  A slice of a list, and a key of a list, give a
+        list.
 
         @param before the text before the cursor
         @param fields the fields of the record
@@ -1461,16 +1526,13 @@ public class DpqlCompletionProvider {
         \c known, True if the type of the value is known
 
         @since DataProvider 3.10
-        @since DataProvider 3.11 a slice of a list takes \c [*], not \c {*}, and the \c known key
+        @since DataProvider 3.11 a slice of a list and a key of a list take \c [*], not \c {*}, and the \c known key
     */
     private hash<string, bool> getWildcardKinds(string before, *hash<string, AbstractDataField> fields) {
         *AbstractDataProviderType type;
         if (*hash<auto> chain = extractFieldPath(before)) {
             if (*AbstractDataField field = fields{chain.field_name}) {
-                # a slice of a list gives a list, whatever its items are
-                if (isSliceOfList(field.getType(), chain.accessors)) {
-                    return {"list": True, "hash": False, "known": True};
-                }
+                # a slice of a list, and a key of a list, give a list
                 type = traverseTypeWithAccessors(field.getType(), chain.accessors);
             }
         }
@@ -1482,31 +1544,6 @@ public class DpqlCompletionProvider {
             "hash": type.getBaseTypeName() == "hash",
             "known": True,
         };
-    }
-
-    #! Returns True if the last accessor is a slice of a list whose type is known
-    /** traverseTypeWithAccessors() gives the type of the items after a slice, but the slice gives a list, which
-        \c [*] applies to and \c {*} does not
-
-        @param base_type the type of the field
-        @param accessors the accessors after the field
-
-        @return @ref True if the last accessor is a slice (<tt>[0..2]</tt>) of a value of a known list type
-
-        @since DataProvider 3.11
-    */
-    private bool isSliceOfList(AbstractDataProviderType base_type, list<hash<auto>> accessors) {
-        if (!accessors) {
-            return False;
-        }
-        hash<auto> last_acc = accessors.last();
-        if (last_acc.type != DP_FUNC_INDEX || last_acc.content !~ /\.\./) {
-            return False;
-        }
-        *AbstractDataProviderType sliced = accessors.size() > 1
-            ? traverseTypeWithAccessors(base_type, accessors[0..accessors.size() - 2])
-            : base_type;
-        return sliced && sliced.hasType() && sliced.isList();
     }
 
     #! Gets the wildcard accessor completions after a field reference or an accessor
@@ -1825,8 +1862,14 @@ public class DpqlCompletionProvider {
                 int bracket_start = pos;
                 int depth = 1;
                 while (pos < text.size() && depth > 0) {
-                    if (chr(text.getByte(pos)) == "[") ++depth;
-                    else if (chr(text.getByte(pos)) == "]") --depth;
+                    string ac = chr(text.getByte(pos));
+                    # quoted text is skipped: a bracket in it does not end the accessor
+                    if (ac == '"' || ac == "'") {
+                        pos = skipQuoted(text, pos);
+                        continue;
+                    }
+                    if (ac == "[") ++depth;
+                    else if (ac == "]") --depth;
                     ++pos;
                 }
                 # Only add accessor if it was properly closed
@@ -1848,8 +1891,14 @@ public class DpqlCompletionProvider {
                 int brace_start = pos;
                 int depth = 1;
                 while (pos < text.size() && depth > 0) {
-                    if (chr(text.getByte(pos)) == "{") ++depth;
-                    else if (chr(text.getByte(pos)) == "}") --depth;
+                    string ac = chr(text.getByte(pos));
+                    # quoted text is skipped: a brace in a quoted key (<tt>{"a}b"}</tt>) does not end the accessor
+                    if (ac == '"' || ac == "'") {
+                        pos = skipQuoted(text, pos);
+                        continue;
+                    }
+                    if (ac == "{") ++depth;
+                    else if (ac == "}") --depth;
                     ++pos;
                 }
                 # Only add accessor if it was properly closed
@@ -1902,6 +1951,33 @@ public class DpqlCompletionProvider {
             "end": pos,
             "member": member,
         };
+    }
+
+    #! Returns the byte offset after the quoted text that starts at a byte offset
+    /** A backslash escapes the next character
+
+        @param text the text
+        @param pos the byte offset of the opening quote
+
+        @return the byte offset after the closing quote, or the size of the text if the quote is not closed
+
+        @since DataProvider 3.11
+    */
+    private static int skipQuoted(string text, int pos) {
+        string quote_char = chr(text.getByte(pos));
+        ++pos;
+        while (pos < text.size()) {
+            string c = chr(text.getByte(pos));
+            if (c == "\\") {
+                pos += 2;
+                continue;
+            }
+            ++pos;
+            if (c == quote_char) {
+                return pos;
+            }
+        }
+        return text.size();
     }
 
     #! Reads the member after the dot that follows an accessor or a quoted field name, as the parser reads it
@@ -1984,11 +2060,12 @@ public class DpqlCompletionProvider {
             if (pos >= trimmed.size()) break;
 
             string key;
-            if (trimmed[pos] == '"') {
-                # Quoted key - extract and unescape
+            if (trimmed[pos] == '"' || trimmed[pos] == "'") {
+                # Quoted key, in double or single quotes, as the parser reads it - extract and unescape
+                string quote_char = trimmed[pos];
                 ++pos;
                 int start = pos;
-                while (pos < trimmed.size() && trimmed[pos] != '"') {
+                while (pos < trimmed.size() && trimmed[pos] != quote_char) {
                     if (trimmed[pos] == "\\" && pos + 1 < trimmed.size()) {
                         pos += 2;
                     } else {
@@ -2021,7 +2098,10 @@ public class DpqlCompletionProvider {
     }
 
     #! Traverses type through accessor chain to get the final type
-    /** @param base_type the starting field type
+    /** As at run time, a slice of a list is a list of the same type, and a key of a list is the key of each of its
+        items, through nested lists, which gives a list of the key's values
+
+        @param base_type the starting field type
         @param accessors list of accessor specifications
         @return the resulting type after all accessors, or NOTHING if path is invalid
     */
@@ -2045,23 +2125,36 @@ public class DpqlCompletionProvider {
 
                 case DP_FUNC_LIST_WILDCARD:
                 case DP_FUNC_INDEX:
-                case DP_FUNC_SLICE:
-                    # List index/slice access, or each element: get element type
+                case DP_FUNC_SLICE: {
                     *AbstractDataProviderType elem = current.getElementType();
                     if (!elem) {
                         return NOTHING;  # Not a list type
                     }
+                    # a slice of a list (<tt>[0..2]</tt>) is a list of the same type
+                    if (acc.type == DP_FUNC_SLICE || (acc.type == DP_FUNC_INDEX && acc.content =~ /\.\./)) {
+                        if (!current.isList()) {
+                            return NOTHING;
+                        }
+                        break;
+                    }
+                    # List index access, or each element: get element type
                     current = elem;
                     break;
+                }
 
                 case DP_FUNC_KEY:
-                    # Key access: get the field's type for single key
+                    # Key access: get the field's type for single key; a key of a list is the key of each of its
+                    # items, through nested lists, and gives the list of their values, as at run time
                     if (acc.key_list && acc.key_list.size() == 1) {
-                        *AbstractDataField field = current.getField(acc.key_list[0]);
+                        int depth;
+                        *AbstractDataField field = getKeyedType(current, \depth).getField(acc.key_list[0]);
                         if (!field) {
                             return NOTHING;  # Field doesn't exist
                         }
                         current = field.getType();
+                        for (int i = 0; i < depth; ++i) {
+                            current = new ListDataType(current);
+                        }
                     }
                     # Multiple keys: result is still a hash type (subset)
                     # We keep current type for key suggestions
@@ -2072,8 +2165,34 @@ public class DpqlCompletionProvider {
         return current;
     }
 
+    #! Returns the type of the values that a key accessor applies to: the items of a list, through nested lists
+    /** At run time a key of a list is the key of each of its items, also of the items of a list in it
+        (<tt>\@items{name}</tt> is the list of the names of the items); for a list of a known type, the type of its
+        items is returned, through nested lists, and any other type as it is
+
+        @param type the type of the value that the key accessor follows
+        @param depth set to the number of nested lists
+
+        @return the type of the values that the key applies to
+
+        @since DataProvider 3.11
+    */
+    private static AbstractDataProviderType getKeyedType(AbstractDataProviderType type, reference<int> depth) {
+        depth = 0;
+        while (type.isList()) {
+            *AbstractDataProviderType element_type = type.getElementType();
+            if (!element_type) {
+                break;
+            }
+            type = element_type;
+            ++depth;
+        }
+        return type;
+    }
+
     #! Gets key completions for a hash type
-    /** @param type the type to get keys from
+    /** @param type the type to get keys from; the keys of a list are the keys of its items, as a key of a list is the
+        key of each item
         @param prefix filter prefix for matching
         @return list of completion items for valid keys
     */
@@ -2083,8 +2202,9 @@ public class DpqlCompletionProvider {
 
         list<hash<DpqlCompletionItem>> items = ();
 
-        # Check if type has fields (is a hash-like type)
-        *hash<string, AbstractDataField> type_fields = type.getFields();
+        # Check if type has fields (is a hash-like type); a key of a list is the key of each item
+        int depth;
+        *hash<string, AbstractDataField> type_fields = getKeyedType(type, \depth).getFields();
         if (!type_fields) {
             return items;
         }

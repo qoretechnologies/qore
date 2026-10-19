@@ -1539,12 +1539,18 @@ fetch
       a dot (<tt>\@create.items[*].</tt>, <tt>\@stats{*}.</tt>), it offers the keys of the value the accessors give,
       each inserted as the member after the dot (\c id, <tt>\@"Unit.Price"</tt>), also after a member written so
       (<tt>\@create.items[*].order-id.</tt>, <tt>\@create.items[*].\@"Unit.Price".</tt>) and after a quoted field
-      reference (<tt>\@"create.unit price".</tt>); inside an accessor that has been
+      reference (<tt>\@"create.unit price".</tt>); in an open quoted field reference (<tt>\@"create.</tt>,
+      <tt>\@"create.order-</tt>), it offers the keys of the path typed in the quotes, read as the parser reads it (an
+      escaped dot is part of a key), each inserted as the field reference to its path, and in an open quoted member
+      (<tt>\@create.items[*].\@"Unit.</tt>) the keys that start with the text typed; as a key of a list is the key
+      of each of its items at run time, a key accessor or a member after a list (<tt>\@items{</tt>,
+      <tt>\@items{product}.</tt>, <tt>\@items[0..1]{</tt>) offers the keys of its items, through nested lists;
+      quoted text in an accessor does not end it (<tt>\@spec{"a}b"}.</tt>); inside an accessor that has been
       opened, it offers the wildcard \c * in <tt>[</tt> after a list and in <tt>{</tt> after a hash; after a slice of
-      a list (<tt>\@orders[0..1]</tt>), which gives a list, it offers \c [*] and not \c {*}.  A type without
-      known fields offers no keys.  The new @ref DataProvider::DpqlSerializer::fieldReferenceForPath()
-      "DpqlSerializer::fieldReferenceForPath()" and @ref DataProvider::DpqlSerializer::memberNameForKey()
-      "DpqlSerializer::memberNameForKey()" give these forms
+      a list (<tt>\@orders[0..1]</tt>) or a key of a list (<tt>\@items{product}</tt>), which give a list, it offers
+      \c [*] and not \c {*}.  A type without known fields offers no keys.  The new
+      @ref DataProvider::DpqlSerializer::fieldReferenceForPath() "DpqlSerializer::fieldReferenceForPath()" and
+      @ref DataProvider::DpqlSerializer::memberNameForKey() "DpqlSerializer::memberNameForKey()" give these forms
     - the \c INVALID-EXPRESSION error of
       @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" names the expression
       that is not in the expression map also when it is an argument of another expression, where it named none
