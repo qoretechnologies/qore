@@ -102,6 +102,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("pivotMeltTest", \pivotMeltTest());
         addTestCase("windowFunctionsTest", \windowFunctionsTest());
         addTestCase("fillna() fills every form of a column", \fillnaStorageTest());
+        addTestCase("concat() of the same DataFrames, also in other threads", \concatLockTest());
 
         set_return_value(main());
     }
@@ -3030,5 +3031,44 @@ sub invalid_dataframe_api() {
             "fillna() fills a date column");
         assertEq((2026-01-01T00:00:00Z, NOTHING), dates.fillna(0).getColumn("d"),
             "fillna() leaves a date null when the value is not a date");
+    }
+
+    # concat() never holds two DataFrame locks at once: a DataFrame given more than once, or two threads
+    # concatenating the same DataFrames in opposite orders, cannot deadlock
+    concatLockTest() {
+        DataFrame::DataFrame x({"a": (1, 2)});
+        DataFrame::DataFrame y({"a": (3,)});
+        *list<auto> self_rows;
+        *list<auto> repeat_rows;
+        Counter rows_ok();
+        Counter done(3);
+
+        # every concat() runs in a background thread, so that a deadlock can be detected below
+        background sub () {
+            on_exit done.dec();
+            self_rows = DataFrame::DataFrame::concat((x, x)).getColumn("a");
+            repeat_rows = DataFrame::DataFrame::concat((x, y, x)).getColumn("a");
+        }();
+        code run = sub (DataFrame::DataFrame first, DataFrame::DataFrame second) {
+            on_exit done.dec();
+            for (int i = 0; i < 1000; ++i) {
+                if (DataFrame::DataFrame::concat((first, second)).numRows() == 3) {
+                    rows_ok.inc();
+                }
+            }
+        };
+        background run(x, y);
+        background run(y, x);
+
+        # a hang guard, not synchronization: the threads end deterministically when their concat() calls return,
+        # and the wait returns as soon as they do; if concat() deadlocks, the deadlocked threads can never end and
+        # the program would wait for them forever, so the test fails and the process exits at once
+        if (done.waitForZero(60s)) {
+            stderr.print("FAILURE: concat() calls did not finish within 60 seconds: concat() deadlocked\n");
+            exit(1);
+        }
+        assertEq((1, 2, 1, 2), self_rows, "concat() of a DataFrame with itself");
+        assertEq((1, 2, 3, 1, 2), repeat_rows, "concat() of a DataFrame given twice with another between");
+        assertEq(2000, rows_ok.getCount(), "concurrent concat() calls in opposite orders each have all rows");
     }
 }

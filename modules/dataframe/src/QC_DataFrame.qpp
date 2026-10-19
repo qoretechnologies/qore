@@ -872,6 +872,8 @@ DataFrame DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=
     Horizontal concat requires all inputs to have the same row count and rejects
     duplicate column names.
 
+    A DataFrame may be given more than once, and other threads may use the same DataFrames at the same time.
+
     @par Example:
     @code{.py}
     DataFrame left({"id": (1, 2)});

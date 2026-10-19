@@ -2040,140 +2040,119 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
     }
 
     if (axis == 0) {
-        // Vertical concat: stack rows, columns must match
-        // Get first DataFrame's column structure
-        QoreObject* first_obj = dataframes->retrieveEntry(0).get<QoreObject>();
-        if (!first_obj) {
-            xsink->raiseException("DATAFRAME-ERROR", "concat list element 0 is not a DataFrame");
-            return nullptr;
-        }
-        QoreDataFrame* first_df = static_cast<QoreDataFrame*>(
-            first_obj->getReferencedPrivateData(CID_DATAFRAME, xsink));
-        if (!first_df) {
-            xsink->raiseException("DATAFRAME-ERROR", "concat list element 0 is not a DataFrame");
-            return nullptr;
-        }
-        // Lock first df and get column info
-        std::lock_guard<std::mutex> lk(first_df->mtx);
-        size_t num_cols = first_df->columns.size();
-        std::vector<std::string> col_names;
-        std::vector<ColumnType> col_types;
-        for (size_t c = 0; c < first_df->columns.size(); ++c) {
-            if (c && !(c % 100) && qore_check_cancel(xsink, "preparing DataFrame concat columns")) {
-                first_df->deref(xsink);
-                return nullptr;
-            }
-            col_names.push_back(first_df->columns[c].name);
-            col_types.push_back(first_df->columns[c].data->type);
-        }
-
-        // Collect total rows and build column value lists
-        int64_t total_rows = 0;
-        std::vector<QoreListNode*> col_values(num_cols);
-        for (size_t c = 0; c < num_cols; ++c) {
-            if (c && !(c % 100) && qore_check_cancel(xsink, "initializing DataFrame concat columns")) {
-                for (size_t j = 0; j < c; ++j) { col_values[j]->deref(xsink); }
-                first_df->deref(xsink);
-                return nullptr;
-            }
-            col_values[c] = new QoreListNode(autoTypeInfo);
-        }
-
+        // Vertical concat: stack rows; the columns of the first DataFrame are the columns of the result, and a later
+        // DataFrame without one of them gives null values.
+        //
+        // No two DataFrame locks may be held at once: the same DataFrame may be given more than once, and another
+        // thread may lock the same DataFrames in another order.  So a snapshot of each DataFrame is taken under its
+        // own lock, one at a time, and the snapshots are merged without any lock held.  Column data is immutable
+        // and shared, so a snapshot only copies references to it.
+        struct Snapshot {
+            std::vector<Column> columns;
+            std::unordered_map<std::string, size_t> col_index;
+            int64_t n_rows;
+        };
+        std::vector<Snapshot> snapshots;
+        snapshots.reserve(dataframes->size());
         for (size_t d = 0; d < dataframes->size(); ++d) {
             if (d && !(d % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrames")) {
-                for (size_t c = 0; c < num_cols; ++c) { col_values[c]->deref(xsink); }
-                first_df->deref(xsink);
                 return nullptr;
             }
             QoreObject* df_obj = dataframes->retrieveEntry(d).get<QoreObject>();
             if (!df_obj) {
-                for (size_t c = 0; c < num_cols; ++c) { col_values[c]->deref(xsink); }
-                first_df->deref(xsink);
-                xsink->raiseException("DATAFRAME-ERROR",
-                    "concat list element %zu is not a DataFrame", d);
+                xsink->raiseException("DATAFRAME-ERROR", "concat list element %zu is not a DataFrame", d);
                 return nullptr;
             }
-            QoreDataFrame* cur_df;
-            if (d == 0) {
-                cur_df = first_df;
-                // already locked above
-            } else {
-                cur_df = static_cast<QoreDataFrame*>(
-                    df_obj->getReferencedPrivateData(CID_DATAFRAME, xsink));
-                if (!cur_df) {
-                    for (size_t c = 0; c < num_cols; ++c) { col_values[c]->deref(xsink); }
-                    first_df->deref(xsink);
-                    xsink->raiseException("DATAFRAME-ERROR",
-                        "concat list element %zu is not a DataFrame", d);
+            ReferenceHolder<QoreDataFrame> cur_df(static_cast<QoreDataFrame*>(
+                df_obj->getReferencedPrivateData(CID_DATAFRAME, xsink)), xsink);
+            if (!cur_df) {
+                xsink->raiseException("DATAFRAME-ERROR", "concat list element %zu is not a DataFrame", d);
+                return nullptr;
+            }
+            std::lock_guard<std::mutex> lk(cur_df->mtx);
+            snapshots.push_back({cur_df->columns, cur_df->col_index, cur_df->n_rows});
+        }
+
+        const std::vector<Column>& first_columns = snapshots[0].columns;
+        size_t num_cols = first_columns.size();
+
+        // the value lists of the result columns, dereferenced on every exit
+        struct ColumnValues {
+            std::vector<QoreListNode*> lists;
+            ExceptionSink* xsink;
+
+            ~ColumnValues() {
+                for (QoreListNode* list : lists) {
+                    if (list) {
+                        list->deref(xsink);
+                    }
+                }
+            }
+        } col_values{std::vector<QoreListNode*>(num_cols, nullptr), xsink};
+        for (size_t c = 0; c < num_cols; ++c) {
+            if (c && !(c % 100) && qore_check_cancel(xsink, "initializing DataFrame concat columns")) {
+                return nullptr;
+            }
+            col_values.lists[c] = new QoreListNode(autoTypeInfo);
+        }
+
+        int64_t total_rows = 0;
+        for (size_t d = 0; d < snapshots.size(); ++d) {
+            if (d && !(d % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrames")) {
+                return nullptr;
+            }
+            const Snapshot& snapshot = snapshots[d];
+            // the source column of each result column, or nullptr if the DataFrame does not have it
+            std::vector<const ColumnData*> sources(num_cols, nullptr);
+            for (size_t c = 0; c < num_cols; ++c) {
+                if (c && !(c % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrame columns")) {
                     return nullptr;
+                }
+                auto it = snapshot.col_index.find(first_columns[c].name);
+                if (it != snapshot.col_index.end()) {
+                    sources[c] = snapshot.columns[it->second].data.get();
                 }
             }
 
-            // For non-first DataFrames, we need to lock them too
-            std::unique_lock<std::mutex> cur_lk(cur_df->mtx, std::defer_lock);
-            if (d != 0) {
-                cur_lk.lock();
-            }
-
-            for (int64_t r = 0; r < cur_df->n_rows; ++r) {
+            for (int64_t r = 0; r < snapshot.n_rows; ++r) {
                 if (r && !(r % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrame rows")) {
-                    for (size_t j = 0; j < num_cols; ++j) { col_values[j]->deref(xsink); }
-                    if (d != 0) { cur_df->deref(xsink); }
-                    first_df->deref(xsink);
                     return nullptr;
                 }
                 for (size_t c = 0; c < num_cols; ++c) {
                     if (c && !(c % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrame columns")) {
-                        for (size_t j = 0; j < num_cols; ++j) { col_values[j]->deref(xsink); }
-                        if (d != 0) { cur_df->deref(xsink); }
-                        first_df->deref(xsink);
                         return nullptr;
                     }
-                    auto it = cur_df->col_index.find(col_names[c]);
-                    if (it != cur_df->col_index.end()) {
-                        QoreValue v = cur_df->columns[it->second].data->getValueAt(r, xsink);
+                    if (sources[c]) {
+                        QoreValue v = sources[c]->getValueAt(r, xsink);
                         if (*xsink) {
-                            for (size_t j = 0; j < num_cols; ++j) { col_values[j]->deref(xsink); }
-                            if (d != 0) { cur_df->deref(xsink); }
-                            first_df->deref(xsink);
                             return nullptr;
                         }
-                        col_values[c]->push(v, xsink);
+                        col_values.lists[c]->push(v, xsink);
                     } else {
-                        col_values[c]->push(QoreValue(), xsink);
+                        col_values.lists[c]->push(QoreValue(), xsink);
                     }
                 }
             }
-            total_rows += cur_df->n_rows;
-
-            if (d != 0) {
-                cur_df->deref(xsink);
-            }
+            total_rows += snapshot.n_rows;
         }
-        first_df->deref(xsink);
 
         // Build result
-        auto* result = new QoreDataFrame();
+        std::unique_ptr<QoreDataFrame> result(new QoreDataFrame());
         result->n_rows = total_rows;
         for (size_t c = 0; c < num_cols; ++c) {
             if (c && !(c % 100) && qore_check_cancel(xsink, "building vertically concatenated DataFrame")) {
-                for (size_t j = c; j < num_cols; ++j) { col_values[j]->deref(xsink); }
-                delete result;
                 return nullptr;
             }
             Column col;
-            col.name = col_names[c];
-            col.data = buildColumnData(col_values[c], col_types[c], xsink);
-            col_values[c]->deref(xsink);
+            col.name = first_columns[c].name;
+            col.data = buildColumnData(col_values.lists[c], first_columns[c].data->type, xsink);
             if (*xsink) {
-                for (size_t j = c + 1; j < num_cols; ++j) { col_values[j]->deref(xsink); }
-                delete result;
                 return nullptr;
             }
             result->col_index[col.name] = result->columns.size();
             result->columns.push_back(std::move(col));
         }
-        return result;
+        return result.release();
     }
 
     auto* result = new QoreDataFrame();
