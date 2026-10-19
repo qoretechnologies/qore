@@ -101,7 +101,7 @@ QoreHFTokenizer::QoreHFTokenizer(const QoreHashNode* config, ExceptionSink* xsin
             if (tok.special) {
                 special_token_ids.insert(tok.id);
             }
-            added_tokens.push_back(std::move(tok));
+            addAddedToken(std::move(tok));
         }
     }
 
@@ -146,6 +146,24 @@ std::vector<int> QoreHFTokenizer::tokenizePreToken(const std::string& pre_token)
     return model->tokenize(pre_token);
 }
 
+void QoreHFTokenizer::addAddedToken(AddedToken&& tok) {
+    int id = tok.id;
+    // the token is stored first, so that the index never has an entry for a token that is not stored
+    added_tokens.push_back(std::move(tok));
+    added_token_index.emplace(id, added_tokens.size() - 1);
+}
+
+std::string QoreHFTokenizer::tokenForId(int id) const {
+    if (model) {
+        std::string token = model->idToToken(id);
+        if (!token.empty()) {
+            return token;
+        }
+    }
+    auto i = added_token_index.find(id);
+    return i == added_token_index.end() ? std::string() : added_tokens[i->second].content;
+}
+
 // Internal: tokenize a text segment through normalize + pre-tokenize + model
 QoreHFTokenizer::InternalEncoding QoreHFTokenizer::encodeSegment(
         const std::string& text) const {
@@ -166,7 +184,7 @@ QoreHFTokenizer::InternalEncoding QoreHFTokenizer::encodeSegment(
                 auto toks = model->tokenizeWithOffsets(pt.text);
                 for (const auto& t : toks) {
                     result.ids.push_back(t.id);
-                    result.tokens.push_back(model->idToToken(t.id));
+                    result.tokens.push_back(tokenForId(t.id));
                     // Compose: pre-token offset + model-internal offset
                     result.offsets.push_back({pt.start + t.start, pt.start + t.end});
                     result.word_ids.push_back(word_idx);
@@ -178,7 +196,7 @@ QoreHFTokenizer::InternalEncoding QoreHFTokenizer::encodeSegment(
         auto toks = model->tokenizeWithOffsets(normalized);
         for (const auto& t : toks) {
             result.ids.push_back(t.id);
-            result.tokens.push_back(model->idToToken(t.id));
+            result.tokens.push_back(tokenForId(t.id));
             result.offsets.push_back({t.start, t.end});
             result.word_ids.push_back(0);
         }
@@ -265,7 +283,8 @@ QoreHFTokenizer::InternalEncoding QoreHFTokenizer::encodeText(
         // Insert the added token with its offset in the original text
         // Added tokens get word_id = -1 (not a word)
         result.ids.push_back(best_id);
-        result.tokens.push_back(model ? model->idToToken(best_id) : "");
+        // the token is the content of the added token that was matched
+        result.tokens.push_back(remaining.substr(best_pos, best_len));
         result.offsets.push_back({base_offset + best_pos,
             base_offset + best_pos + best_len});
         result.word_ids.push_back(-1);
@@ -340,7 +359,7 @@ QoreHashNode* QoreHFTokenizer::encode(const QoreStringNode* text,
     // Ensure tokens are populated
     if (post_result.tokens.empty() && model) {
         for (int id : post_result.ids) {
-            post_result.tokens.push_back(model->idToToken(id));
+            post_result.tokens.push_back(tokenForId(id));
         }
     }
 
@@ -367,7 +386,7 @@ QoreStringNode* QoreHFTokenizer::decode(const QoreListNode* ids,
         if (skip_special_tokens && special_token_ids.count(id)) {
             continue;
         }
-        tokens.push_back(model->idToToken(id));
+        tokens.push_back(tokenForId(id));
     }
 
     // Apply decoder
@@ -402,16 +421,7 @@ QoreStringNode* QoreHFTokenizer::idToToken(int id, ExceptionSink* xsink) const {
         xsink->raiseException("TOKENIZER-ERROR", "tokenizer model not initialized");
         return nullptr;
     }
-    std::string token = model->idToToken(id);
-    if (token.empty()) {
-        // Check added tokens
-        for (const auto& at : added_tokens) {
-            if (at.id == id) {
-                return new QoreStringNode(at.content);
-            }
-        }
-    }
-    return new QoreStringNode(token);
+    return new QoreStringNode(tokenForId(id));
 }
 
 int QoreHFTokenizer::tokenToId(const QoreStringNode* token) const {
@@ -688,7 +698,7 @@ QoreHashNode* QoreHFTokenizer::encodeAdvancedIntern(const QoreStringNode* text,
             while ((int)pr.ids.size() < max_length) {
                 pr.ids.push_back(effective_pad);
                 pr.type_ids.push_back(0);
-                pr.tokens.push_back(model->idToToken(effective_pad));
+                pr.tokens.push_back(tokenForId(effective_pad));
                 pr.offsets.push_back({0, 0});
                 pr.special_tokens_mask.push_back(1);
                 pr.word_ids.push_back(-1);
@@ -1356,7 +1366,7 @@ QoreHFTokenizer::InternalEncoding QoreHFTokenizer::encodePreTokenizedWords(
             auto toks = model->tokenizeWithOffsets(word);
             for (const auto& t : toks) {
                 result.ids.push_back(t.id);
-                result.tokens.push_back(model->idToToken(t.id));
+                result.tokens.push_back(tokenForId(t.id));
                 result.offsets.push_back({byte_offset + t.start, byte_offset + t.end});
                 result.word_ids.push_back(word_idx);
             }
@@ -1433,7 +1443,7 @@ int QoreHFTokenizer::addTokens(const QoreListNode* tokens, ExceptionSink* xsink)
             special_token_ids.insert(tok.id);
         }
 
-        added_tokens.push_back(std::move(tok));
+        addAddedToken(std::move(tok));
         ++added;
         ++dynamic_added_count;
     }
@@ -1462,7 +1472,7 @@ QoreListNode* QoreHFTokenizer::decodeBatch(const QoreListNode* batch,
             if (skip_special_tokens && special_token_ids.count(id)) {
                 continue;
             }
-            std::string tok = model->idToToken(id);
+            std::string tok = tokenForId(id);
             if (!tok.empty()) {
                 tokens.push_back(std::move(tok));
             }
@@ -1535,7 +1545,7 @@ QoreStringNode* QoreHFTokenizer::applyChatTemplate(const QoreListNode* messages,
     // Resolve token strings for template substitution
     auto tokenStr = [this](int id) -> std::string {
         if (id < 0) return "";
-        return model ? model->idToToken(id) : "";
+        return tokenForId(id);
     };
     std::string bos_str = tokenStr(bos_token_id);
     std::string eos_str = tokenStr(eos_token_id);

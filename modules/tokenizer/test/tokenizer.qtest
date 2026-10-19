@@ -50,6 +50,7 @@ class TokenizerTest inherits QUnit::Test {
         addTestCase("slidingWindowTest", \slidingWindowTest());
         addTestCase("NUL characters in text and tokens", \nulTextTest());
         addTestCase("NUL characters in tokenizer configurations", \nulConfigTest());
+        addTestCase("added tokens have their token strings", \addedTokenStringTest());
 
         set_return_value(main());
     }
@@ -916,5 +917,54 @@ class TokenizerTest inherits QUnit::Test {
         assertEq((1, 2), tok.encode("hello\x00world").input_ids,
             "a Split pre-tokenizer splits text on a NUL character pattern");
         assertEq((1,), tok.encode("hello").input_ids, "text without a NUL character is not split");
+    }
+
+    # the token string of an added token that is not in the model vocabulary is its content wherever IDs are turned
+    # into token strings
+    addedTokenStringTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        # added tokens from the configuration that are not in the model vocabulary: "<pad>", the pad token, and
+        # "<s>" and "</s>", the BOS and EOS tokens
+        hash<auto> config = {
+            "model": {
+                "type": "WordPiece",
+                "vocab": {"[UNK]": 0, "hello": 1, "world": 2},
+                "unk_token": "[UNK]",
+                "continuing_subword_prefix": "##",
+            },
+            "added_tokens": (
+                {"id": 3, "content": "<pad>", "special": True},
+                {"id": 4, "content": "<s>", "special": True},
+                {"id": 5, "content": "</s>", "special": True},
+            ),
+            "pre_tokenizer": {"type": "Whitespace"},
+        };
+        Tokenizer::HFTokenizer tok(config);
+        assertEq(1, tok.addTokens(("<|custom|>",)), "a token is added");
+        int custom_id = tok.tokenToId("<|custom|>");
+        assertEq(6, custom_id, "the added token has the next ID");
+
+        # encoding
+        hash<auto> enc = tok.encode("hello<|custom|>world");
+        assertEq((1, custom_id, 2), enc.input_ids, "encode() finds the added token");
+        assertEq(("hello", "<|custom|>", "world"), enc.tokens, "encode() returns the token string of an added token");
+        hash<auto> padded = tok.encodeAdvanced("hello", {"max_length": 3, "padding": "max_length"});
+        assertEq((1, 3, 3), padded.input_ids, "padding uses the pad token");
+        assertEq(("hello", "<pad>", "<pad>"), padded.tokens,
+            "padding returns the token string of a pad token that is an added token");
+        assertEq(("<s>", "hello"), tok.encodePreTokenized(("<s>", "hello")).tokens,
+            "encodePreTokenized() returns the token string of an added token");
+
+        # IDs to token strings
+        assertEq("<|custom|>", tok.idToToken(custom_id), "idToToken() returns the content of an added token");
+        assertEq("<pad>", tok.idToToken(3), "idToToken() returns the content of an added token from the configuration");
+        assertEq("", tok.idToToken(99), "idToToken() returns an empty string for an unknown ID");
+        assertEq("hello <|custom|> world", tok.decode((1, custom_id, 2)),
+            "decode() returns the token string of an added token");
+        assertEq("hello world", tok.decode((1, 3, 2), True), "decode() skips a special added token");
+        assertEq(("hello <|custom|> world", "<s> hello"), tok.decodeBatch(((1, custom_id, 2), (4, 1))),
+            "decodeBatch() returns the token strings of added tokens");
     }
 }

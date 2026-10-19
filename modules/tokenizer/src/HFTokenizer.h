@@ -23,6 +23,7 @@
 #include <shared_mutex>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace QoreTokenizer {
@@ -170,6 +171,19 @@ private:
         bool single_word;
     };
     std::vector<AddedToken> added_tokens;
+    //! Added token ID -> index in added_tokens; the first added token with an ID is used
+    std::unordered_map<int, size_t> added_token_index;
+
+    //! Adds an added token, which is matched before the model, and indexes its ID
+    void addAddedToken(AddedToken&& tok);
+
+    //! Returns the token string of an ID: the model's token, else the content of the added token with the ID
+    /** The model does not know the IDs of added tokens that are not in its vocabulary, so every conversion of an
+        ID to a token string must use this function.
+
+        @return the token string, or an empty string if the ID is not known
+    */
+    std::string tokenForId(int id) const;
 
     //! Pad token ID (-1 if no pad token found)
     int pad_token_id = -1;
