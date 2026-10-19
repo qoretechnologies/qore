@@ -5,4 +5,9 @@
     @tableofcontents
 
     This module is always delivered with %Qore and therefore mirrors the %Qore version.
+
+    @section linenoise_3_0 linenoise Module Version 3.0
+    - @ref Qore::Linenoise::history_save() "history_save()" and @ref Qore::Linenoise::history_load() "history_load()"
+      are subject to the filesystem sandbox of the calling program: they raise \c FILESYSTEM-ACCESS-DENIED for a
+      file the sandbox does not allow to be written or read
 */

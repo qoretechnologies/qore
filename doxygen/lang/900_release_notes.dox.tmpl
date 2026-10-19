@@ -4793,6 +4793,9 @@ while (*binary chunk = input.read(65536)) {
       @ref sandboxing "sandbox": a sandboxed program could make ONNX Runtime read a model and its external data, and
       write optimized models, profiles and the files named by ONNX Runtime options, outside the sandbox's allowed
       paths, and load a library named by an execution provider option
+    - Fixed the history files of the @ref linenoiseintro "linenoise" module not being subject to the filesystem policy
+      of a @ref sandboxing "sandbox": a sandboxed program could read and write them outside the sandbox's allowed
+      paths; they now raise \c FILESYSTEM-ACCESS-DENIED, as core file access does
     - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
       @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
       thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in
