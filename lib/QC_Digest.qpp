@@ -161,7 +161,7 @@ qclass Digest [arg=QoreDigest* d; ns=Qore; flags=final];
 Digest sha("sha256");
     @endcode
 
-    @throw DIGEST-ERROR unknown digest
+    @throw DIGEST-ERROR unknown digest, or the digest name contains a NUL character
     @throw DIGEST-CALCULATION-ERROR error initializing the digest (should not normally happen)
 */
 Digest::constructor(string digest) {

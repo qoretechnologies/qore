@@ -2125,6 +2125,8 @@ Qore::TransformOutputStream ts(of, get_compressor(Qore::COMPRESSION_ALG_BZIP2));
 
     @return a @ref Transform object for compressing data using the given @ref compression_transformations "algorithm" for use with @ref TransformInputStream and @ref TransformOutputStream
 
+    @throw COMPRESS-ERROR unknown compression algorithm, or the algorithm name contains a NUL character
+
     @see @ref Qore::get_decompressor()
 
     @since %Qore 0.8.13
@@ -2159,6 +2161,7 @@ Qore::TransformOutputStream ts(of, get_decompressor(Qore::COMPRESSION_ALG_GZIP, 
     @return a @ref Transform object for decompressing data using the given @ref compression_transformations "algorithm" for use with @ref TransformInputStream and @ref TransformOutputStream
 
     @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
+    @throw COMPRESS-ERROR unknown compression algorithm, or the algorithm name contains a NUL character
 
     @see @ref Qore::get_compressor()
 

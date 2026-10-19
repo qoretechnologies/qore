@@ -739,7 +739,7 @@ httpclient.setHttp2Mode("h2c");
     @note h2c modes work on non-TLS connections only
     @note h2c-upgrade mode is not yet implemented; use h2c mode (prior knowledge) instead
 
-    @throw HTTP2-MODE-ERROR invalid mode value
+    @throw HTTP2-MODE-ERROR invalid mode value, or the mode contains a NUL character
 
     @since %Qore 2.2
 
@@ -747,6 +747,10 @@ httpclient.setHttp2Mode("h2c");
     @see setHTTPVersion()
 */
 nothing HTTPClient::setHttp2Mode(string mode) [flags=NAMED_ARGS] {
+    // the mode is compared as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(mode->c_str(), mode->size(), "HTTP/2 mode", "HTTP/2 modes", "HTTP2-MODE-ERROR", xsink)) {
+        return QoreValue();
+    }
     const char* str = mode->c_str();
     int mode_int;
     if (!strcasecmp(str, "disabled") || !strcmp(str, "0")) {
@@ -1237,13 +1241,17 @@ httpclient.setHttp3Mode(HTTP3Mode::Auto);
 
     @note HTTP/3 requires TLS; non-TLS connections will never attempt HTTP/3
 
-    @throw HTTP3-MODE-ERROR invalid mode value
+    @throw HTTP3-MODE-ERROR invalid mode value, or the mode contains a NUL character
 
     @since %Qore 3.0
 
     @see getHttp3Mode()
 */
 nothing HTTPClient::setHttp3Mode(string mode) [flags=NAMED_ARGS] {
+    // the mode is compared as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(mode->c_str(), mode->size(), "HTTP/3 mode", "HTTP/3 modes", "HTTP3-MODE-ERROR", xsink)) {
+        return QoreValue();
+    }
     const char* str = mode->c_str();
     int mode_int = parseHttp3ModeString(str);
     if (mode_int < 0) {

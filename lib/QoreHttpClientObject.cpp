@@ -3716,6 +3716,11 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     if (!n.isNothing()) {
         if (n.getType() == NT_STRING) {
             QoreStringValueHelper str(n);
+            // the mode is compared as a C string, which would be cut at a NUL character
+            if (q_check_no_nul(str->c_str(), str->size(), "HTTP/3 mode", "HTTP/3 modes", "HTTP-CLIENT-OPTION-ERROR",
+                    xsink)) {
+                return -1;
+            }
             int mode = parseHttp3ModeString(str->c_str());
             if (mode < 0) {
                 xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "invalid http3_mode value '%s'; "

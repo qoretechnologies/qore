@@ -782,6 +782,19 @@
       string values (\c DBI-OPTION-ERROR)
     - the principals, credential cache and keytab names, passwords and hex strings of the \c krb5 module, and the URI,
       database and collection names and ObjectId strings of the \c mongodb module
+    - algorithm and mode names: digest names (@ref Qore::digest() "digest()", @ref Qore::hmac() "hmac()",
+      @ref Qore::pbkdf2() "pbkdf2()" and @ref Qore::Digest "Digest": \c DIGEST-ERROR), cipher names
+      (@ref Qore::encrypt() "encrypt()" and @ref Qore::get_encryptor() "get_encryptor()": \c ENCRYPT-ERROR;
+      @ref Qore::decrypt_to_binary() "decrypt_to_binary()", @ref Qore::decrypt_to_string() "decrypt_to_string()" and
+      @ref Qore::get_decryptor() "get_decryptor()": \c DECRYPT-ERROR), compression algorithm names
+      (@ref Qore::get_compressor() "get_compressor()" and @ref Qore::get_decompressor() "get_decompressor()":
+      \c COMPRESS-ERROR), the HTTP/2 and HTTP/3 modes of @ref Qore::HTTPClient "HTTPClient" and
+      @ref Qore::set_global_http2_mode() "set_global_http2_mode()", and the GSSAPI mechanism and name type options of
+      the \c krb5 module; @ref Qore::get_cipher_info() "get_cipher_info()" and @ref Qore::has_digest() "has_digest()"
+      return @ref nothing and @ref False with \c EINVAL
+    - character encoding names: a name with a NUL character is the name of an encoding that %Qore does not know (the
+      whole name, with the NUL character escaped as \c \\x00), so converting to or from it raises
+      \c ENCODING-CONVERSION-ERROR instead of using the encoding named by the part before the NUL character
 
     Passwords, URLs, datasource strings, HTTP request targets and header values, and DBI option values are not shown
     in the exception, so that a secret does not appear in a log.  @ref Qore::basename() "basename()",

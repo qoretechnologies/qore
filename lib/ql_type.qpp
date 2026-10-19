@@ -315,7 +315,7 @@ string str = string(100);
 */
 string string(softstring value, *string encoding) [flags=CONSTANT,NAMED_ARGS] {
    if (encoding) {
-      const QoreEncoding* e = QEM.findCreate(encoding->getBuffer());
+      const QoreEncoding* e = QEM.findCreate(encoding);
       if (e != value->getEncoding())
          return value->convertEncoding(e, xsink);
    }

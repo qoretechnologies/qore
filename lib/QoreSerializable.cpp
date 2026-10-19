@@ -2345,7 +2345,7 @@ QoreStringNode* QoreSerializable::deserializeStringFromStream(StreamReader& read
         if (readStringFromStream(reader, enc_str, "encoding", xsink)) {
             return nullptr;
         }
-        enc = QEM.findCreate(enc_str.c_str());
+        enc = QEM.findCreate(&enc_str);
     } else {
         assert(code == qore_stream_type::UTF8_STRING);
         enc = QCS_UTF8;

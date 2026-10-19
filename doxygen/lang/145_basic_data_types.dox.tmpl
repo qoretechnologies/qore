@@ -75,9 +75,10 @@ on more than 1 line";
     @ref Qore::exec() "exec()"), environment variable names and values, user and group names, host names, addresses,
     and service names (sockets, the resolver functions, and the FTP and HTTP clients), URLs, FTP commands and remote
     paths, HTTP methods, request targets, status messages and header values, datasource strings, connection values,
-    and DBI driver names and option values, the names of functions, methods, classes, variables, types and other
-    identifiers resolved at runtime (for example by @ref Qore::call_function() "call_function()",
-    @ref Qore::call_object_method() "call_object_method()", @ref Qore::create_object() "create_object()", the
+    and DBI driver names and option values, digest, cipher and compression algorithm names, HTTP/2 and HTTP/3 modes,
+    the names of functions, methods, classes, variables, types and other identifiers resolved at runtime (for example
+    by @ref Qore::call_function() "call_function()", @ref Qore::call_object_method() "call_object_method()",
+    @ref Qore::create_object() "create_object()", the
     @ref Qore::Program "Program" and reflection APIs, and deserialization), and file and directory paths (see
     @ref path_nul_characters):
     - an API that raises exceptions raises its own error code with \c EINVAL as the exception argument; the description
@@ -88,6 +89,9 @@ on more than 1 line";
       example @ref nothing from @ref Qore::getenv() "getenv()" and @ref Qore::gethostbyname() "gethostbyname()", or
       -1 from @ref Qore::setenv() "setenv()"), and @ref Qore::errno() "errno()" returns \c EINVAL
     .
+    A character encoding name with a NUL character is the name of an encoding that %Qore does not know: the whole
+    name, with the NUL character escaped as \c \\x00, so converting to or from it raises
+    \c ENCODING-CONVERSION-ERROR.
     String functions that do not pass the string on, such as @ref Qore::basename() "basename()",
     @ref Qore::dirname() "dirname()", @ref Qore::encode_url() "encode_url()" and @ref Qore::decode_url() "decode_url()",
     process the whole string.\n\n

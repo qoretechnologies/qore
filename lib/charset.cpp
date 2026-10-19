@@ -723,7 +723,26 @@ const QoreEncoding* QoreEncodingManager::find(const char* name) {
 }
 
 const QoreEncoding* QoreEncodingManager::findCreate(const QoreString* str) {
-   return findCreate(str->getBuffer());
+    // a name with a NUL character would be looked up cut at the NUL character and select the encoding named before
+    // it; it is the name of an encoding that Qore does not know instead: the whole name, with every control
+    // character escaped as \xNN and every backslash doubled, so that converting to or from it raises
+    // ENCODING-CONVERSION-ERROR as for any other unknown name; like any other unknown name, it is registered once
+    if (str->size() && memchr(str->c_str(), '\0', str->size())) {
+        QoreString name;
+        const char* p = str->c_str();
+        for (size_t i = 0, e = str->size(); i < e; ++i) {
+            unsigned char c = static_cast<unsigned char>(p[i]);
+            if (c < 0x20 || c == 0x7f) {
+                name.sprintf("\\x%02x", c);
+            } else if (c == '\\') {
+                name.concat("\\\\");
+            } else {
+                name.concat(static_cast<char>(c));
+            }
+        }
+        return findCreate(name.c_str());
+    }
+    return findCreate(str->c_str());
 }
 
 qore_offset_t q_UTF8_get_char_len(const char* p, size_t len) {

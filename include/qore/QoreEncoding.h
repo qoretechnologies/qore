@@ -222,6 +222,10 @@ public:
    DLLLOCAL static const QoreEncoding* find(const char* name);
 
    //! finds an encoding if it exists (also looks up against alias names) and creates a new one if it doesn't
+   /** @since %Qore 3.0 a name with a NUL character is the name of an encoding that %Qore does not know: the whole
+       name, with every control character escaped as <tt>\\xNN</tt> and every backslash doubled (ex:
+       <tt>UTF-8\\x00x</tt>), instead of the name cut at the NUL character
+   */
    DLLEXPORT static const QoreEncoding* findCreate(const QoreString* str);
 
    //! prints out all valid encodings to stdout

@@ -727,6 +727,11 @@ public:
                 xsink->raiseException("KRB5-GSS-ARG-ERROR", "option 'mechanism' cannot be empty");
                 return;
             }
+            // the mechanism is compared as a C string, which would be cut at a NUL character
+            if (krb5_check_no_nul(*mechanism, "GSSAPI mechanism", "GSSAPI mechanisms", "KRB5-GSS-ARG-ERROR", false,
+                    xsink)) {
+                return;
+            }
             if (!strcasecmp(mechanism->c_str(), "kerberos")) {
                 mech = gss_mech_krb5;
             } else if (!strcasecmp(mechanism->c_str(), "default")) {
@@ -747,6 +752,10 @@ public:
             }
             if (!nt->c_str() || !*nt->c_str()) {
                 xsink->raiseException("KRB5-GSS-ARG-ERROR", "option 'name_type' cannot be empty");
+                return;
+            }
+            // the name type is compared as a C string, which would be cut at a NUL character
+            if (krb5_check_no_nul(*nt, "GSSAPI name type", "GSSAPI name types", "KRB5-GSS-ARG-ERROR", false, xsink)) {
                 return;
             }
             if (!strcasecmp(nt->c_str(), "krb5-principal")) {

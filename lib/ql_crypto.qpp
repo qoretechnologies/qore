@@ -70,6 +70,14 @@ DLLLOCAL unsigned char def_iv_8[] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 // default 16-byte initialization vector
 DLLLOCAL unsigned char def_iv_16[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
+// raises ENCRYPT-ERROR or DECRYPT-ERROR for a cipher name with a NUL character: the name is looked up as a C
+// string, which would be cut at the NUL character and name another cipher
+static int q_check_cipher_name(const QoreString& alg, bool do_crypt, ExceptionSink* xsink) {
+    return q_check_no_nul(alg.c_str(), alg.size(), do_crypt ? "encryption algorithm" : "decryption algorithm",
+        do_crypt ? "encryption algorithms" : "decryption algorithms", do_crypt ? "ENCRYPT-ERROR" : "DECRYPT-ERROR",
+        xsink);
+}
+
 /*
 */
 class CryptoHelper : public BaseHelper {
@@ -422,6 +430,10 @@ static QoreValue apply_transformation(SimpleRefHolder<Transform>& t, SimpleRefHo
 }
 
 const EVP_MD* q_get_digest(const QoreString& digest, ExceptionSink* xsink) {
+    // the name is looked up as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(digest.c_str(), digest.size(), "digest name", "digest names", "DIGEST-ERROR", xsink)) {
+        return nullptr;
+    }
     const EVP_MD* md = q_lookup_digest(digest.c_str());
     if (!md) {
         xsink->raiseException("DIGEST-ERROR", "unknown digest '%s'; check DigestMap for supported digests",
@@ -3177,7 +3189,7 @@ binary bin = digest("md2", "Hello There This is a Test - 1234567890");
 
     @return the binary value of the digest
 
-    @throw DIGEST-ERROR unknown digest
+    @throw DIGEST-ERROR unknown digest, or the digest name contains a NUL character
     @throw DIGEST-CALCULATION-ERROR error calculating digest (should not normally happen)
 
     @note If %Qore is compiled with OpenSSL 3+, it will use dynamic lookups of all digests known to the OpenSSL
@@ -3212,7 +3224,7 @@ binary bin = hmac("ripemd160", "Hello There This is a Test - 1234567890", "a key
 
     @return the binary value of the HMAC
 
-    @throw DIGEST-ERROR unknown digest
+    @throw DIGEST-ERROR unknown digest, or the digest name contains a NUL character
     @throw HMAC-CALCULATION-ERROR error calculating digest (should not normally happen)
 
     @see @ref Qore::DigestMap "DigestMap"
@@ -3224,6 +3236,10 @@ binary bin = hmac("ripemd160", "Hello There This is a Test - 1234567890", "a key
     @since %Qore 0.9.3
 */
 binary hmac(string digest, data data, data key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(digest->c_str(), digest->size(), "digest name", "digest names", "DIGEST-ERROR", xsink)) {
+        return QoreValue();
+    }
     HMACHelper dh(data);
 
     // get key data
@@ -3284,7 +3300,8 @@ Qore::TransformOutputStream ts(of, get_encryptor(Qore::CRYPTO_ALG_BLOWFISH, key)
     @return a @ref Transform object for encrypting data using the given @ref crypto_transformations "algorithm" for use with @ref TransformInputStream and @ref TransformOutputStream
 
     @throw MAC-ERROR this exception is thrown if the \a mac_size argument is passed but no \a mac argument or vice-versa or if the \a mac_size argument is negative or greater than 4096 bytes
-    @throw ENCRYPT-ERROR unknown encryption algorithm; error with the encryption algorithm (ex: invalid key size)
+    @throw ENCRYPT-ERROR unknown encryption algorithm; error with the encryption algorithm (ex: invalid key size),
+    or the algorithm name contains a NUL character
 
     @see
     - @ref Qore::decrypt_to_binary()
@@ -3321,6 +3338,9 @@ Transform get_encryptor(string algorithm, data key, data iv = Qore::DefaultIV, *
         q_get_data(aad, aadstr, aad_len, aad_storage);
     }
 
+    if (q_check_cipher_name(*algorithm, true, xsink)) {
+        return QoreValue();
+    }
     SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(algorithm->c_str(), true, keystr,
         (unsigned)key_len, ivstr, (unsigned)iv_len, nullptr, 0, (unsigned)mac_size, mac, aadstr, (unsigned)aad_len,
         xsink));
@@ -3342,7 +3362,8 @@ Qore::TransformOutputStream ts(of, get_decryptor(Qore::CRYPTO_ALG_BLOWFISH, key)
 
     @return a @ref Transform object for decrypting data using the given @ref crypto_transformations "algorithm" for use with @ref TransformInputStream and @ref TransformOutputStream
 
-    @throw DECRYPT-ERROR unknown encryption algorithm; error decrypting the data
+    @throw DECRYPT-ERROR unknown encryption algorithm; error decrypting the data, or the algorithm name contains a
+    NUL character
 
     @see
     - @ref Qore::decrypt_to_binary()
@@ -3380,6 +3401,9 @@ Transform get_decryptor(string algorithm, data key, data iv = Qore::DefaultIV, *
     if (aad)
         q_get_data(aad, aadstr, aad_len, aad_storage);
 
+    if (q_check_cipher_name(*algorithm, false, xsink)) {
+        return QoreValue();
+    }
     SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(algorithm->c_str(), false, keystr, (unsigned)key_len, ivstr, (unsigned)iv_len, macstr, (unsigned)mac_len, 0, nullptr, aadstr, (unsigned)aad_len, xsink));
     return *xsink ? nullptr : new QoreObject(QC_TRANSFORM, getProgram(), t.release());
 }
@@ -3401,7 +3425,8 @@ binary bin = encrypt(Qore::CRYPTO_ALG_BLOWFISH, data, key);
     @return a binary value of encrypted data corresponding to the input arguments
 
     @throw MAC-ERROR this exception is thrown if the \a mac_size argument is passed but no \a mac argument or vice-versa or if the \a mac_size argument is negative or greater than 4096 bytes
-    @throw ENCRYPT-ERROR unknown encryption algorithm; error with the encryption algorithm (ex: invalid key size)
+    @throw ENCRYPT-ERROR unknown encryption algorithm; error with the encryption algorithm (ex: invalid key size),
+    or the algorithm name contains a NUL character
 
     @see
     - @ref Qore::decrypt_to_binary()
@@ -3443,6 +3468,9 @@ binary encrypt(string algorithm, data data, data key, data iv = Qore::DefaultIV,
         q_get_data(aad, aadstr, aad_len, aad_storage);
     }
 
+    if (q_check_cipher_name(*algorithm, true, xsink)) {
+        return QoreValue();
+    }
     SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(algorithm->c_str(), true, keystr,
             (unsigned)key_len, ivstr, (unsigned)iv_len, nullptr, 0, (unsigned)mac_size, mac, aadstr,
             (unsigned)aad_len, xsink));
@@ -3469,7 +3497,8 @@ binary bin = decrypt_to_binary(Qore::CRYPTO_ALG_BLOWFISH, data, key);
 
     @return a binary value of decrypted data corresponding to the input arguments
 
-    @throw DECRYPT-ERROR unknown decryption algorithm; error with the decryption algorithm (ex: invalid key)
+    @throw DECRYPT-ERROR unknown decryption algorithm; error with the decryption algorithm (ex: invalid key), or the
+    algorithm name contains a NUL character
 
     @see
     - @ref Qore::decrypt_to_string()
@@ -3512,6 +3541,9 @@ binary decrypt_to_binary(string algorithm, data data, data key, data iv = Qore::
     if (aad)
         q_get_data(aad, aadstr, aad_len, aad_storage);
 
+    if (q_check_cipher_name(*algorithm, false, xsink)) {
+        return QoreValue();
+    }
     SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(algorithm->c_str(), false, keystr, (unsigned)key_len, ivstr, (unsigned)iv_len, macstr, (unsigned)mac_len, 0, nullptr, aadstr, (unsigned)aad_len, xsink));
     if (*xsink)
         return QoreValue();
@@ -3536,7 +3568,8 @@ string str = decrypt_to_string(Qore::CRYPTO_ALG_BLOWFISH, data, key);
 
     @return a string of decrypted data corresponding to the input arguments
 
-    @throw DECRYPT-ERROR unknown decryption algorithm; error with the decryption algorithm (ex: invalid key)
+    @throw DECRYPT-ERROR unknown decryption algorithm; error with the decryption algorithm (ex: invalid key), or the
+    algorithm name contains a NUL character
 
     @see
     - @ref Qore::decrypt_to_binary()
@@ -3579,6 +3612,9 @@ string decrypt_to_string(string algorithm, data data, data key, data iv = Qore::
     if (aad)
         q_get_data(aad, aadstr, aad_len, aad_storage);
 
+    if (q_check_cipher_name(*algorithm, false, xsink)) {
+        return QoreValue();
+    }
     SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(algorithm->c_str(), false, keystr, (unsigned)key_len, ivstr, (unsigned)iv_len, macstr, (unsigned)mac_len, 0, nullptr, aadstr, (unsigned)aad_len, xsink));
     if (*xsink)
         return QoreValue();
@@ -3655,10 +3691,17 @@ hash<auto> get_crypto_info() [flags=RET_VALUE_ONLY] {
     @ref default_encoding "default character encoding"
 
     @since %Qore 1.4.0
+
+    @note a name with a NUL character names no cipher: @ref nothing is returned, and @ref Qore::errno() "errno()"
+    returns \c EINVAL (since %Qore 3.0)
 */
 *hash<auto> get_cipher_info(string cipher) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     TempEncodingHelper temp(cipher, QCS_DEFAULT, xsink);
     if (*xsink) {
+        return QoreValue();
+    }
+    // the name is looked up as a C string, which would be cut at a NUL character and name another cipher
+    if (q_check_no_nul(temp->c_str(), temp->size())) {
         return QoreValue();
     }
 
@@ -3690,11 +3733,18 @@ hash<auto> get_crypto_info() [flags=RET_VALUE_ONLY] {
     @ref default_encoding "default character encoding"
 
     @since %Qore 1.4.0
+
+    @note a name with a NUL character names no digest: @ref False is returned, and @ref Qore::errno() "errno()"
+    returns \c EINVAL (since %Qore 3.0)
 */
 bool has_digest(string digest) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     TempEncodingHelper temp(digest, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
+    }
+    // the name is looked up as a C string, which would be cut at a NUL character and name another digest
+    if (q_check_no_nul(temp->c_str(), temp->size())) {
+        return false;
     }
 
     return q_lookup_digest(temp->c_str()) ? true : false;
@@ -3717,7 +3767,7 @@ binary key = pbkdf2("sha256", "my password", salt, 600000, 32);
     @return the derived key as binary data of the requested length
 
     @throw PBKDF2-ERROR invalid arguments (iterations or key_length <= 0) or error deriving key
-    @throw DIGEST-ERROR unknown or unsupported digest algorithm
+    @throw DIGEST-ERROR unknown or unsupported digest algorithm, or the digest name contains a NUL character
     @throw ENCODING-CONVERSION-ERROR this error is thrown if the digest string cannot be converted to the
     @ref default_encoding "default character encoding"
 
@@ -3751,6 +3801,10 @@ binary pbkdf2(string digest, data password, data salt, int iterations, int key_l
     // convert digest to default encoding
     TempEncodingHelper temp(digest, QCS_DEFAULT, xsink);
     if (*xsink) {
+        return QoreValue();
+    }
+    // the name is looked up as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(temp->c_str(), temp->size(), "digest name", "digest names", "DIGEST-ERROR", xsink)) {
         return QoreValue();
     }
 

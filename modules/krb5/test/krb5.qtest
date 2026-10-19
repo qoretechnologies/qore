@@ -932,6 +932,17 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
                 hash<Qore::Krb5::GssClientContextOptions> opts({"channel_binding_application_data_hex": "6162\x00ff"});
                 Qore::Krb5::GssClientContext c("HTTP/qorus.example.com@EXAMPLE.COM", opts);
             });
+        # the mechanism and name type are compared as C strings: cut at the NUL character, they are valid values
+        assertThrows("KRB5-GSS-ARG-ERROR", "GSSAPI mechanism \"kerberos\\\\x00x\" contains a NUL character",
+            sub () {
+                hash<Qore::Krb5::GssClientContextOptions> opts({"mechanism": "kerberos\x00x"});
+                Qore::Krb5::GssClientContext c("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+            });
+        assertThrows("KRB5-GSS-ARG-ERROR", "GSSAPI name type .* contains a NUL character",
+            sub () {
+                hash<Qore::Krb5::GssClientContextOptions> opts({"name_type": "krb5-principal\x00x"});
+                Qore::Krb5::GssClientContext c("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+            });
 
         Qore::Krb5::Krb5Context kctx();
         assertThrows("KRB5-CACHE-ERROR", "credential cache name .* contains a NUL character",

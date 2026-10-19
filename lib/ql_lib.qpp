@@ -1920,7 +1920,7 @@ int qore_get_library_options() [dom=PROCESS] {
     @note This function requires @ref Qore::DOM_PROCESS_CONTROL "DOM_PROCESS_CONTROL" rights (not available with
     @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL")
 
-    @throw SET-GLOBAL-HTTP2-MODE-ERROR invalid mode string
+    @throw SET-GLOBAL-HTTP2-MODE-ERROR invalid mode string, or the mode contains a NUL character
 
     @see set_global_http2_mode(enum<HTTP2Mode>)
     @see get_global_http2_mode()
@@ -1928,6 +1928,11 @@ int qore_get_library_options() [dom=PROCESS] {
     @since %Qore 3.0
 */
 nothing set_global_http2_mode(string mode) [flags=NAMED_ARGS;dom=PROCESS] {
+    // the mode is compared as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(mode->c_str(), mode->size(), "HTTP/2 mode", "HTTP/2 modes", "SET-GLOBAL-HTTP2-MODE-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     const char* mode_str = mode->c_str();
     int mode_val;
     if (!strcasecmp(mode_str, "auto")) {
