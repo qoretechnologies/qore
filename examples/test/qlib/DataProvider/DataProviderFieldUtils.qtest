@@ -96,6 +96,7 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
 
         # Analytics processor tests
         addTestCase("AbstractAnalyticsProcessor - list fields", \analyticsListFields());
+        addTestCase("analytics events - fields are named by their paths as given", \analyticsEventFieldPaths());
 
         set_return_value(main());
     }
@@ -1132,5 +1133,63 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         # should get 2 events (one per field)
         assertEq(2, results.lsize());
         assertEq("statistics", results[0].event_type);
+    }
+
+    analyticsEventFieldPaths() {
+        # the key "Unit.Price" and the key "id" of the key "order"
+        list<hash<auto>> recs = (
+            {"Unit.Price": 1.5, "order": {"id": 10.0}},
+            {"Unit.Price": 2.5, "order": {"id": 30.0}},
+            {"Unit.Price": 4.5, "order": {"id": 20.0}},
+        );
+
+        # an analytics event names its field by the path given in the "fields" option, escaped as written
+        QoreRunningStatsProcessor stats({"fields": ("Unit\\.Price", "order.id"), "window_size": 2});
+        list<auto> events;
+        foreach hash<auto> rec in (recs[0..1]) {
+            DataProviderFieldUtilsTest::collectResult(\events, stats.processRecord(rec));
+        }
+        assertEq(("Unit\\.Price", "order.id"), (map $1.field, events));
+        # the values were read at the paths
+        assertEq((2.0, 20.0), (map $1.avg, events));
+        # the path given back reads the same field, and its display name is its keys joined with dots
+        assertEq(2.5, AbstractDataProvider::getFieldValue(recs[1], events[0].field));
+        assertEq(30.0, AbstractDataProvider::getFieldValue(recs[1], events[1].field));
+        assertEq(("Unit.Price", "order.id"), (map AbstractDataProvider::getFieldPathDisplayName($1.field), events));
+        QoreRunningStatsProcessor again({"fields": (map $1.field, events), "window_size": 2});
+        list<auto> again_events;
+        foreach hash<auto> rec in (recs[0..1]) {
+            DataProviderFieldUtilsTest::collectResult(\again_events, again.processRecord(rec));
+        }
+        assertEq(("Unit\\.Price", "order.id"), (map $1.field, again_events));
+        assertEq((2.0, 20.0), (map $1.avg, again_events));
+
+        # correlation: the pairs and both levels of the matrix are keyed by the paths as given
+        QoreCorrelationProcessor corr({"fields": ("Unit\\.Price", "order.id"), "window_size": 3});
+        list<auto> corr_events;
+        foreach hash<auto> rec in (recs) {
+            DataProviderFieldUtilsTest::collectResult(\corr_events, corr.processRecord(rec));
+        }
+        assertEq(1, corr_events.lsize());
+        hash<auto> ev = corr_events[0];
+        assertEq(3, ev.count);
+        assertEq(("Unit\\.Price_order.id",), keys ev.correlations);
+        assertEq(("Unit\\.Price", "order.id"), keys ev.matrix);
+        assertEq(("Unit\\.Price", "order.id"), keys ev.matrix{"order.id"});
+        assertEq(1.0, ev.matrix{"Unit\\.Price"}{"Unit\\.Price"});
+        assertEq(ev.correlations{"Unit\\.Price_order.id"}, ev.matrix{"Unit\\.Price"}{"order.id"});
+        # 1.5, 2.5, 4.5 against 10, 30, 20: the values were read at the paths
+        assertEq(True, abs(ev.matrix{"Unit\\.Price"}{"order.id"} - 0.3273268353539886) < 0.000001);
+
+        # cross-correlation: field_x and field_y are the paths given in those options
+        QoreCrossCorrelationProcessor xcorr({"field_x": "Unit\\.Price", "field_y": "order.id", "window_size": 3});
+        list<auto> xcorr_events;
+        foreach hash<auto> rec in (recs) {
+            DataProviderFieldUtilsTest::collectResult(\xcorr_events, xcorr.processRecord(rec));
+        }
+        assertEq(1, xcorr_events.lsize());
+        assertEq("Unit\\.Price", xcorr_events[0].field_x);
+        assertEq("order.id", xcorr_events[0].field_y);
+        assertEq(3, xcorr_events[0].count);
     }
 }

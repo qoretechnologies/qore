@@ -254,6 +254,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("data-profile - not configured", \dataProfileNotConfigured());
         addTestCase("data-profile - capabilities", \dataProfileCapabilities());
         addTestCase("data-profile - constructor validation", \dataProfileConstructorValidation());
+        addTestCase("data-profile - fields are named by their paths as given", \dataProfileFieldPaths());
 
         # TextNormalize tests
         addTestCase("text-normalize - DataFrameBlock shape", \textNormalizeDataFrameShape());
@@ -6393,6 +6394,32 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
                 "window_size": 10,
             });
         });
+    }
+
+    dataProfileFieldPaths() {
+        # the key "Unit.Price" and the key "id" of the key "order"
+        list<hash<auto>> recs = (
+            {"Unit.Price": 1.5, "order": {"id": 7.0}},
+            {"Unit.Price": 2.5, "order": {"id": 9.0}},
+        );
+        # an event names its field by the path given in the "fields" option, escaped as written
+        DataProviderML::QoreDataProfileProcessor proc({
+            "fields": ("Unit\\.Price", "order.id"),
+            "window_size": 2,
+        });
+        list<auto> results;
+        foreach hash<auto> rec in (recs) {
+            DataProviderMLProcessorsTest::collectResult(\results, proc.processRecord(rec));
+        }
+        assertEq(("Unit\\.Price", "order.id"), (map $1.field_name, results));
+        assertEq(("Unit.Price", "order.id"),
+            (map DataProvider::AbstractDataProvider::getFieldPathDisplayName($1.field_name), results));
+        # the values were read at the paths
+        assertEq((0, 0), (map $1.missing_count, results));
+        assertEq((1.5, 7.0), (map $1.min, results));
+        assertEq((2.5, 9.0), (map $1.max, results));
+        # the path given back reads the same field
+        assertEq((2.5, 9.0), (map DataProvider::AbstractDataProvider::getFieldValue(recs[1], $1.field_name), results));
     }
 
     # ===================== TextNormalize Tests =====================

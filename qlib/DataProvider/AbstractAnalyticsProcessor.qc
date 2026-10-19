@@ -41,7 +41,13 @@ public const ANALYTICS_MODE_RECORD = 1;
 public hashdecl AnalyticsEventInfo {
     #! The type of analytics event (e.g. "statistics", "moving-average", "trend", "anomaly")
     string event_type;
-    #! The field name this event was computed for
+    #! The field this event was computed for: its field path as it is given in the \c fields option
+    /** The @ref dpql_field_paths "field path" is written as it is given: dots separate its keys, and a dot that is
+        part of a key is escaped, so the key \c Unit.Price is <tt>Unit\\.Price</tt> and the key \c id of the key
+        \c order is \c order.id.  The path names the field without ambiguity and can be given back to the processor
+        as it is; @ref AbstractDataProvider::getFieldPath() gives its keys, and
+        @ref AbstractDataProvider::getFieldPathDisplayName() the name to show for it (\c Unit.Price)
+    */
     string field;
     #! The configured window size
     int window_size;
@@ -143,9 +149,17 @@ public hashdecl CorrelationEventInfo {
     int window_size;
     #! Number of windows processed
     int window_count;
-    #! Pairwise correlations keyed by "fieldA_fieldB"
+    #! Pairwise correlations keyed by <tt>fieldA_fieldB</tt>: the field paths of the two fields joined with \c _
+    /** Each pair is given once, its first field being the one given first in the \c fields option.  Each field is
+        its @ref dpql_field_paths "field path" as it is given in the \c fields option, with a dot that is part of a
+        key escaped: the fields \c order.id and <tt>Unit\\.Price</tt> give the key <tt>order.id_Unit\\.Price</tt>
+    */
     hash<auto> correlations;
-    #! Full correlation matrix keyed by field name
+    #! Full correlation matrix: <tt>matrix{fieldA}{fieldB}</tt> is the correlation of two fields
+    /** Both levels are keyed by the @ref dpql_field_paths "field paths" as they are given in the \c fields option,
+        with a dot that is part of a key escaped (<tt>Unit\\.Price</tt>); the path \c order.id is the one key
+        \c "order.id".  The correlation of a field with itself is \c 1.0
+    */
     hash<auto> matrix;
     #! Number of values in the window
     int count;
@@ -157,9 +171,15 @@ public hashdecl CorrelationEventInfo {
 public hashdecl CrossCorrelationEventInfo {
     #! Event type identifier
     string event_type = "cross-correlation";
-    #! First field name
+    #! The first field: its field path as it is given in the \c field_x option
+    /** The @ref dpql_field_paths "field path" is written as it is given, with a dot that is part of a key escaped
+        (<tt>Unit\\.Price</tt>); @ref AbstractDataProvider::getFieldPathDisplayName() gives the name to show for it
+    */
     string field_x;
-    #! Second field name
+    #! The second field: its field path as it is given in the \c field_y option
+    /** The @ref dpql_field_paths "field path" is written as it is given, with a dot that is part of a key escaped
+        (<tt>Unit\\.Price</tt>); @ref AbstractDataProvider::getFieldPathDisplayName() gives the name to show for it
+    */
     string field_y;
     #! Window size used
     int window_size;
