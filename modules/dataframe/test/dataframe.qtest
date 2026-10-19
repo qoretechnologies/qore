@@ -300,6 +300,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("null and NUL group and join keys", \nullKeyTest());
         addTestCase("toTable() names are plain SQL identifiers", \sqlIdentifierTest());
         addTestCase("toTable() needs SqlUtil", \sqlUtilRequiredTest());
+        addTestCase("NUL characters in file paths", \nulPathTest());
 
         set_return_value(main());
     }
@@ -3659,5 +3660,26 @@ sub invalid_dataframe_api() {
         assertThrows("DATAFRAME-DB-ERROR", "needs the SqlUtil module.*'sqlite3' driver", \p.callFunction(),
             ("write", plain, ds), "toTable() refuses to write without SqlUtil");
         assertEq((), ds.sql + ds.prepared, "no SQL is sent without SqlUtil");
+    }
+
+    # a file path with a NUL character would name another file, so it is refused
+    nulPathTest() {
+        string real = tmp_location() + "/df_nul_path_" + string(getpid()) + ".csv";
+        on_exit {
+            unlink(real);
+        }
+        DataFrame::DataFrame df({"a": (1, 2)});
+        df.writeCSV(real);
+        string nul_path = real + "\x00.txt";
+        assertThrows("DATAFRAME-IO-ERROR", "NUL", \DataFrame::DataFrame::readCSV(), (nul_path,),
+            "readCSV() refuses a path with a NUL character");
+        assertThrows("DATAFRAME-IO-ERROR", "NUL", \df.writeCSV(), (nul_path,),
+            "writeCSV() refuses a path with a NUL character");
+        assertThrows("DATAFRAME-IO-ERROR", "NUL", \DataFrame::DataFrame::readParquet(), (nul_path,),
+            "readParquet() refuses a path with a NUL character");
+        assertThrows("DATAFRAME-IO-ERROR", "NUL", \df.writeParquet(), (nul_path,),
+            "writeParquet() refuses a path with a NUL character");
+        assertEq((1, 2), DataFrame::DataFrame::readCSV(real).getColumn("a"),
+            "the file named by the part of the path before the NUL is unchanged");
     }
 }

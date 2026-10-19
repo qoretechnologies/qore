@@ -1262,10 +1262,14 @@ nothing DataFrame::renameColumn(string old_name, string new_name) {
     DataFrame tsv = DataFrame::readCSV("data.tsv", tsv_options);
     @endcode
 
-    @throw DATAFRAME-IO-ERROR if the file cannot be opened
+    @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened
 
 */
 static DataFrame DataFrame::readCSV(string path, *hash<CsvOptions> options) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
+    // a path with a NUL character would name another file
+    if (q_check_path(*path, "DATAFRAME-IO-ERROR", xsink)) {
+        return QoreValue();
+    }
     QoreDataFrame* result = QoreDataFrame::readCSV(path->c_str(), options, xsink);
     if (!result) {
         return QoreValue();
@@ -1286,10 +1290,14 @@ static DataFrame DataFrame::readCSV(string path, *hash<CsvOptions> options) [dom
     df.writeCSV("output.tsv", options);
     @endcode
 
-    @throw DATAFRAME-IO-ERROR if the file cannot be opened for writing
+    @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened for writing
 
 */
 nothing DataFrame::writeCSV(string path, *hash<CsvOptions> options) [dom=FILESYSTEM] {
+    // a path with a NUL character would name another file
+    if (q_check_path(*path, "DATAFRAME-IO-ERROR", xsink)) {
+        return QoreValue();
+    }
     df->writeCSV(path->c_str(), options, xsink);
 }
 
@@ -1527,9 +1535,13 @@ binary DataFrame::toArrowIpc() [flags=RET_VALUE_ONLY] {
     printf("Loaded %d rows, %d cols\n", df.numRows(), df.numCols());
     @endcode
 
-    @throw DATAFRAME-IO-ERROR if the file cannot be opened or parsed
+    @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened or parsed
 */
 static DataFrame DataFrame::readParquet(string path, *hash<ParquetReadOptions> options) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
+    // a path with a NUL character would name another file
+    if (q_check_path(*path, "DATAFRAME-IO-ERROR", xsink)) {
+        return QoreValue();
+    }
     QoreDataFrame* result = QoreDataFrame::readParquet(path->c_str(), options, xsink);
     if (!result) {
         return QoreValue();
@@ -1563,9 +1575,13 @@ static DataFrame DataFrame::readParquet(string path, *hash<ParquetReadOptions> o
     df.writeParquet("/data/output.parquet", options);
     @endcode
 
-    @throw DATAFRAME-IO-ERROR if the file cannot be opened for writing
+    @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened for writing
 */
 nothing DataFrame::writeParquet(string path, *hash<ParquetWriteOptions> options) [dom=FILESYSTEM] {
+    // a path with a NUL character would name another file
+    if (q_check_path(*path, "DATAFRAME-IO-ERROR", xsink)) {
+        return QoreValue();
+    }
     df->writeParquet(path->c_str(), options, xsink);
 }
 
