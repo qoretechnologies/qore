@@ -1,0 +1,53 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A LoggerAppenderFile file name with a NUL character is refused when the file is opened instead of being cut at the
+# NUL character.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires Logger
+
+%exec-class LoggerAppenderFilePathNulTest
+
+class LoggerAppenderFilePathNulTest inherits QUnit::Test {
+    constructor() : QUnit::Test("LoggerAppenderFile path NUL characters", "1.0", \ARGV) {
+        addTestCase("LoggerAppenderFile::open()", \testOpen());
+        set_return_value(main());
+    }
+
+    #! asserts that the code raises the given error for a string with a NUL character at the given byte offset
+    /** @param what what the string is in the description, ex: \c "path"
+    */
+    assertNul(string err, string what, int offset, code c, string label) {
+        try {
+            c();
+            assertTrue(False, label + ": an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(err, ex.err, label + ": error code");
+            assertEq(0, ex.desc.find(what + " \""), label + ": the description names the " + what);
+            assertTrue(ex.desc.find(sprintf("\" contains a NUL character at byte offset %d; ", offset)) > 0,
+                label + ": the description gives the offset of the NUL character");
+            assertEq(EINVAL, ex.arg, label + ": the argument is EINVAL");
+        }
+    }
+
+    testOpen() {
+        TmpDir dir("logger-path-nul-");
+        string path = dir.path + "/app.log";
+        # cut at the NUL character, the name would name app.log
+        LoggerAppenderFile la("TEST", new LoggerLayoutPattern("%m"), path + "\x00.txt");
+        assertNul("FILE-OPEN2-ERROR", "path", path.size(), sub () { la.open(); }, "open()");
+        assertFalse(is_file(path), "no file is created");
+
+        LoggerAppenderFile la2("TEST", new LoggerLayoutPattern("%m"), path);
+        la2.open();
+        assertTrue(is_file(path), "the file is opened without the NUL character");
+        la2.close();
+    }
+}

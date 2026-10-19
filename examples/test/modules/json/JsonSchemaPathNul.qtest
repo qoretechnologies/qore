@@ -1,0 +1,51 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A schema location with a NUL character is refused instead of being cut at the NUL character.
+
+%modern
+
+%requires json
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class JsonSchemaPathNulTest
+
+class JsonSchemaPathNulTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JsonSchema path NUL characters", "1.0", \ARGV) {
+        addTestCase("JsonSchema::load()", \testLoad());
+        set_return_value(main());
+    }
+
+    #! asserts that the code raises the given error for a string with a NUL character at the given byte offset
+    /** @param what what the string is in the description, ex: \c "path"
+    */
+    assertNul(string err, string what, int offset, code c, string label) {
+        try {
+            c();
+            assertTrue(False, label + ": an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(err, ex.err, label + ": error code");
+            assertEq(0, ex.desc.find(what + " \""), label + ": the description names the " + what);
+            assertTrue(ex.desc.find(sprintf("\" contains a NUL character at byte offset %d; ", offset)) > 0,
+                label + ": the description gives the offset of the NUL character");
+            assertEq(EINVAL, ex.arg, label + ": the argument is EINVAL");
+        }
+    }
+
+    testLoad() {
+        TmpDir dir("json-path-nul-");
+        string path = dir.path + "/schema.json";
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write('{"type": "string"}');
+        f.close();
+
+        # cut at the NUL character, the location would name the schema file
+        assertNul("JSON-SCHEMA-ERROR", "path", path.size(),
+            auto sub () { return JsonSchema::load(path + "\x00.txt"); }, "JsonSchema::load()");
+        assertTrue(JsonSchema::load(path).validate("text"), "the schema is loaded without the NUL character");
+    }
+}

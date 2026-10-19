@@ -606,7 +606,8 @@ QoreHashNode* i18n_load_native_catalog_json(const QoreStringNode* path, int64 ma
     }
 
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
-    if (*xsink) {
+    // a path with a NUL character would be cut at the NUL character
+    if (*xsink || q_check_path(**npath, "FILE-OPEN2-ERROR", xsink)) {
         return nullptr;
     }
 

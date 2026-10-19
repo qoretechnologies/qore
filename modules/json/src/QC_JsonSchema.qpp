@@ -303,12 +303,16 @@ hash<JsonSchemaValidationResult> JsonSchema::validateWithErrors(auto data) {
 JsonSchema validator = JsonSchema::load("/path/to/schema.json");
     @endcode
 
-    @throw JSON-SCHEMA-ERROR if the schema cannot be loaded or is invalid
+    @throw JSON-SCHEMA-ERROR if the schema cannot be loaded or is invalid, or if the location contains a NUL character
     @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
     @throw THREAD-CANCELLED the current thread was cancelled
     @throw PROGRAM-INTERRUPTED the current program was interrupted
 */
 static JsonSchema JsonSchema::load(string location) [flags=RET_VALUE_ONLY;dom=FILESYSTEM] {
+    // a path with a NUL character would be cut at the NUL character
+    if (q_check_path(*location, "JSON-SCHEMA-ERROR", xsink)) {
+        return QoreValue();
+    }
     SimpleRefHolder<QoreStringNode> content;
     if (location->find("://") != -1) {
         xsink->raiseException("JSON-SCHEMA-ERROR", "URL loading not yet implemented; use file paths");

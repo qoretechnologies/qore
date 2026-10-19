@@ -41,6 +41,8 @@ qclass FilesystemSshClientIdentityProvider [arg=FilesystemSshClientIdentityProvi
     @param agent include an SSH agent candidate before file candidates
     @param optional mark returned candidates optional
 
+    @throw SSHUTIL-CLIENT-IDENTITY-PROVIDER-ERROR a path contains a NUL character, which would cut the path
+
     @since sshutil 1.0
 */
 FilesystemSshClientIdentityProvider::constructor(*list<string> key_paths, bool agent = False, bool optional = False) {

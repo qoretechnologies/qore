@@ -59,8 +59,15 @@ AstParser::constructor() {
     @throw FILESYSTEM-ACCESS-DENIED the sandbox of the calling program does not allow the file to be read
     @throw THREAD-CANCELLED the current thread was cancelled
     @throw PROGRAM-INTERRUPTED the current program was interrupted
+
+    @note a file name containing a NUL character names no file: @ref nothing is returned, and errno() returns
+    \c EINVAL
  */
 *AstTree AstParser::parseFile(string filename) [dom=FILESYSTEM] {
+    // a file name with a NUL character names no file; it fails before the sandbox check
+    if (q_check_path(*filename)) {
+        return QoreValue();
+    }
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh && !smh->checkFilesystemAccess(filename->c_str(), QSEC_READ, xsink)) {
         return QoreValue();

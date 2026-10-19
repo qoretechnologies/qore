@@ -70,7 +70,7 @@ qclass AvroFileReader [arg=QoreAvroFileReader* reader; ns=Qore::Avro; vparent=Ab
 //! Opens an Avro object container file on the filesystem
 /** @param path the path of the file to read
 
-    @throw FILE-OPEN2-ERROR the file cannot be opened
+    @throw FILE-OPEN2-ERROR the file cannot be opened, or the path contains a NUL character
     @throw AVRO-FILE-ERROR the file is not an Avro object container file, or its header is corrupt
     @throw AVRO-SCHEMA-ERROR the schema embedded in the header is not valid
     @throw AVRO-CODEC-ERROR the file uses a codec this module does not implement
@@ -80,6 +80,10 @@ qclass AvroFileReader [arg=QoreAvroFileReader* reader; ns=Qore::Avro; vparent=Ab
     @since %avro 1.0
 */
 AvroFileReader::constructor(string path) [dom=FILESYSTEM] {
+    // a path with a NUL character would be cut at the NUL character
+    if (q_check_path(*path, "FILE-OPEN2-ERROR", xsink)) {
+        return;
+    }
     avro_setup_reader(self, avro_source_from_file(path->c_str(), xsink), xsink);
 }
 

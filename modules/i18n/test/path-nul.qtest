@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Catalog paths, catalog search paths, domains and locales with a NUL character are refused instead of being cut at
+# the NUL character.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires FsUtil
+%requires QUnit
+%requires i18n
+
+%exec-class I18nPathNulTest
+
+class I18nPathNulTest inherits QUnit::Test {
+    private {
+        const Catalog = '{"schema_version": 1, "locales": {"root": {"messages": {"Hello": "Hello"}}}}';
+    }
+
+    constructor() : QUnit::Test("i18n path NUL characters", "1.0", \ARGV) {
+        addTestCase("catalog files", \testCatalogFiles());
+        addTestCase("catalog discovery", \testDiscovery());
+        set_return_value(main());
+    }
+
+    #! asserts that the code raises the given error for a string with a NUL character at the given byte offset
+    /** @param what what the string is in the description, ex: \c "path"
+    */
+    assertNul(string err, string what, int offset, code c, string label) {
+        try {
+            c();
+            assertTrue(False, label + ": an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(err, ex.err, label + ": error code");
+            assertEq(0, ex.desc.find(what + " \""), label + ": the description names the " + what);
+            assertTrue(ex.desc.find(sprintf("\" contains a NUL character at byte offset %d; ", offset)) > 0,
+                label + ": the description gives the offset of the NUL character");
+            assertEq(EINVAL, ex.arg, label + ": the argument is EINVAL");
+        }
+    }
+
+    testCatalogFiles() {
+        TmpDir dir("i18n-path-nul-");
+        string path = dir.path + "/catalog.json";
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(Catalog);
+        f.close();
+
+        # cut at the NUL character, the path would name the catalog file
+        string nul = path + "\x00.txt";
+        assertNul("FILE-OPEN2-ERROR", "path", path.size(), auto sub () { return I18n::load_native_catalog(nul); },
+            "load_native_catalog()");
+        assertNul("FILE-OPEN2-ERROR", "path", path.size(), auto sub () { return I18n::load_native_catalog(nul, 1000); },
+            "load_native_catalog() with a size limit");
+        assertNul("FILE-OPEN2-ERROR", "path", path.size(), sub () { I18n::MessageCatalog c(nul); },
+            "MessageCatalog::constructor()");
+        assertEq("Hello", (new I18n::MessageCatalog(path)).t("Hello", "en"), "the catalog without the NUL character");
+    }
+
+    testDiscovery() {
+        TmpDir dir("i18n-path-nul-");
+        mkdir(dir.path + "/billing");
+        File f();
+        f.open2(dir.path + "/billing/root.json", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(Catalog);
+        f.close();
+        hash<auto> opts = {"search_path": dir.path};
+        I18n::CatalogDiscoveryIndex index();
+
+        # the domain and the locale are path components
+        assertNul("I18N-CATALOG-ERROR", "catalog domain", 7,
+            auto sub () { return I18n::discover_catalog_files("billing\x00/../x", "en", opts); },
+            "discover_catalog_files() domain");
+        assertNul("I18N-LOCALE-ERROR", "locale", 2,
+            auto sub () { return I18n::discover_catalog_files("billing", "en\x00/x", opts); },
+            "discover_catalog_files() locale");
+        assertNul("I18N-CATALOG-ERROR", "catalog domain", 7,
+            auto sub () { return I18n::discover_catalog_locales("billing\x00/../x", opts); },
+            "discover_catalog_locales() domain");
+        assertNul("I18N-CATALOG-ERROR", "catalog domain", 7,
+            auto sub () { return index.discover("billing\x00/../x", "en", opts); },
+            "CatalogDiscoveryIndex::discover() domain");
+        assertNul("I18N-CATALOG-ERROR", "catalog domain", 7,
+            auto sub () { return index.discoverLocales("billing\x00/../x", opts); },
+            "CatalogDiscoveryIndex::discoverLocales() domain");
+
+        # search paths
+        assertNul("I18N-CATALOG-ERROR", "path", dir.path.size(),
+            auto sub () { return I18n::discover_catalog_files("billing", "en", {"search_path": dir.path + "\x00/x"}); },
+            "search_path string");
+        list<string> paths = (dir.path + "\x00/x",);
+        assertNul("I18N-CATALOG-ERROR", "path", dir.path.size(),
+            auto sub () { return I18n::discover_catalog_files("billing", "en", {"search_path": paths}); },
+            "search_path list");
+        assertNul("I18N-CATALOG-ERROR", "path", dir.path.size(),
+            auto sub () { return I18n::discover_catalog_locales("billing", {"override_path": dir.path + "\x00/x"}); },
+            "override_path string");
+
+        assertEq((dir.path + "/billing/root.json",), I18n::discover_catalog_files("billing", "en", opts),
+            "discovery without the NUL character");
+    }
+}

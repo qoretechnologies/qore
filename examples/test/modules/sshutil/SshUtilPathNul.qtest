@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Key paths and passphrase references with a NUL character are refused instead of being cut at the NUL character.
+
+%modern
+
+%requires sshutil
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SshUtilPathNulTest
+
+class SshUtilPathNulTest inherits QUnit::Test {
+    constructor() : QUnit::Test("sshutil path NUL characters", "1.0", \ARGV) {
+        addTestCase("filesystem providers", \testProviders());
+        set_return_value(main());
+    }
+
+    #! asserts that the code raises the given error for a string with a NUL character at the given byte offset
+    /** @param what what the string is in the description, ex: \c "path"
+    */
+    assertNul(string err, string what, int offset, code c, string label) {
+        try {
+            c();
+            assertTrue(False, label + ": an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(err, ex.err, label + ": error code");
+            assertEq(0, ex.desc.find(what + " \""), label + ": the description names the " + what);
+            assertTrue(ex.desc.find(sprintf("\" contains a NUL character at byte offset %d; ", offset)) > 0,
+                label + ": the description gives the offset of the NUL character");
+            assertEq(EINVAL, ex.arg, label + ": the argument is EINVAL");
+        }
+    }
+
+    testProviders() {
+        string key = "/etc/ssh/ssh_host_ed25519_key";
+        # cut at the NUL character, the path would name the key
+        assertNul("SSHUTIL-CLIENT-IDENTITY-PROVIDER-ERROR", "path", key.size(),
+            sub () { SshUtil::FilesystemSshClientIdentityProvider p((key + "\x00.pub",)); },
+            "client identity key path");
+        assertNul("SSHUTIL-SERVER-HOST-KEY-PROVIDER-ERROR", "path", key.size(),
+            sub () { SshUtil::FilesystemSshServerHostKeyProvider p((key + "\x00.pub",)); }, "server host key path");
+        assertNul("SSHUTIL-SERVER-HOST-KEY-PROVIDER-ERROR", "passphrase reference", 4,
+            sub () { SshUtil::FilesystemSshServerHostKeyProvider p((key,), "host\x00-other"); },
+            "passphrase reference");
+
+        SshUtil::FilesystemSshClientIdentityProvider p((key,));
+        int now = clock_getnanos();
+        hash<SshUtil::SshProviderContext> ctx = <SshUtil::SshProviderContext>{
+            "purpose": SshUtil::SshProviderPurpose::ClientIdentity,
+            "connection_name": "test-connection",
+            "original_host": "example.com",
+            "normalized_host": SshUtil::normalize_ssh_host("example.com"),
+            "port": 22,
+            "username": "test-user",
+            "host_key_policy": "reject",
+            "client_auth_order": SshUtil::SshClientAuthOrder::ExplicitFirst,
+            "client_identity_fallback_policy": SshUtil::SshClientIdentityFallbackPolicy::Disabled,
+            "deadline_ns": now + 1000000000,
+            "remaining_ns": 1000000000,
+        };
+        assertEq(key, p.getClientIdentityCandidates(ctx)[0].path, "the key path without the NUL character");
+    }
+}

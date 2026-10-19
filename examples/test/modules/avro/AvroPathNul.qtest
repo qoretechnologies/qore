@@ -1,0 +1,62 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A path with a NUL character is refused instead of being cut at the NUL character.
+
+%modern
+
+%requires avro
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AvroPathNulTest
+
+class AvroPathNulTest inherits QUnit::Test {
+    private {
+        const Schema = '{"type": "record", "name": "Event", "fields": [{"name": "id", "type": "string"}]}';
+    }
+
+    constructor() : QUnit::Test("avro path NUL characters", "1.0", \ARGV) {
+        addTestCase("AvroFileReader and AvroFileWriter", \testPaths());
+        set_return_value(main());
+    }
+
+    #! asserts that the code raises the given error for a string with a NUL character at the given byte offset
+    /** @param what what the string is in the description, ex: \c "path"
+    */
+    assertNul(string err, string what, int offset, code c, string label) {
+        try {
+            c();
+            assertTrue(False, label + ": an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(err, ex.err, label + ": error code");
+            assertEq(0, ex.desc.find(what + " \""), label + ": the description names the " + what);
+            assertTrue(ex.desc.find(sprintf("\" contains a NUL character at byte offset %d; ", offset)) > 0,
+                label + ": the description gives the offset of the NUL character");
+            assertEq(EINVAL, ex.arg, label + ": the argument is EINVAL");
+        }
+    }
+
+    testPaths() {
+        TmpDir dir("avro-path-nul-");
+        AvroSchema schema(Schema);
+        string path = dir.path + "/events.avro";
+        {
+            AvroFileWriter w(path, schema);
+            w.write({"id": "a"});
+        }
+
+        # cut at the NUL character, the path would name the file written above
+        assertNul("FILE-OPEN2-ERROR", "path", path.size(), sub () { AvroFileReader r(path + "\x00.txt"); },
+            "AvroFileReader::constructor()");
+        string out = dir.path + "/out.avro";
+        assertNul("FILE-OPEN2-ERROR", "path", out.size(), sub () { AvroFileWriter w(out + "\x00.txt", schema); },
+            "AvroFileWriter::constructor()");
+        assertFalse(is_file(out), "no file is created");
+
+        AvroFileReader r(path);
+        assertEq("Event", r.getSchema().getName(), "the file is read without the NUL character");
+    }
+}

@@ -764,6 +764,12 @@ static bool i18n_qore_value_to_utf8_string(QoreValue value, std::string& out, Ex
     return true;
 }
 
+// a catalog domain with a NUL character would be cut at the NUL character
+static int i18n_check_catalog_domain_nul(const QoreString& domain, ExceptionSink* xsink) {
+    return q_check_no_nul(domain.c_str(), domain.size(), "catalog domain", "catalog domains", "I18N-CATALOG-ERROR",
+        xsink);
+}
+
 static bool i18n_validate_catalog_domain(const std::string& domain, ExceptionSink* xsink) {
     if (domain.empty() || domain.size() > 128) {
         xsink->raiseException("I18N-CATALOG-ERROR",
@@ -831,6 +837,10 @@ static bool i18n_append_catalog_paths_option(std::vector<std::string>& paths, co
         return true;
     }
     if (value.getType() == NT_STRING) {
+        // a path with a NUL character would be cut at the NUL character
+        if (q_check_path(*value.get<const QoreStringNode>(), "I18N-CATALOG-ERROR", xsink)) {
+            return false;
+        }
         std::string path;
         if (!i18n_qore_value_to_utf8_string(value, path, xsink, key)) {
             return false;
@@ -850,7 +860,7 @@ static bool i18n_append_catalog_paths_option(std::vector<std::string>& paths, co
             return false;
         }
         QoreStringValueHelper str(list->retrieveEntry(i), QCS_UTF8, xsink);
-        if (*xsink) {
+        if (*xsink || q_check_path(**str, "I18N-CATALOG-ERROR", xsink)) {
             return false;
         }
         i18n_push_catalog_search_path(paths, str->c_str());
@@ -1303,6 +1313,11 @@ static std::string i18n_string_arg_to_utf8(const QoreStringNode* str, ExceptionS
 // I18n::CatalogDiscoveryIndex::discover(); \a index is optional and only reuses directory reads.
 QoreListNode* i18n_discover_catalog_files_api(const QoreStringNode* domain, const QoreStringNode* locale,
         const QoreHashNode* opts, I18nCatalogDirIndex* index, ExceptionSink* xsink) {
+    // the domain and the locale are components of the catalog file paths
+    if (i18n_check_catalog_domain_nul(*domain, xsink) || q_check_no_nul(locale->c_str(), locale->size(), "locale",
+            "locales", "I18N-LOCALE-ERROR", xsink)) {
+        return nullptr;
+    }
     std::string domain_str = i18n_string_arg_to_utf8(domain, xsink, "domain", 128);
     if (*xsink) {
         return nullptr;
@@ -1321,6 +1336,10 @@ QoreListNode* i18n_discover_catalog_files_api(const QoreStringNode* domain, cons
 
 QoreListNode* i18n_discover_catalog_locales_api(const QoreStringNode* domain, const QoreHashNode* opts,
         I18nCatalogDirIndex* index, ExceptionSink* xsink) {
+    // the domain is a component of the catalog file paths
+    if (i18n_check_catalog_domain_nul(*domain, xsink)) {
+        return nullptr;
+    }
     std::string domain_str = i18n_string_arg_to_utf8(domain, xsink, "domain", 128);
     if (*xsink) {
         return nullptr;
@@ -2918,6 +2937,7 @@ hash<auto> parse_native_catalog_json(string json) [flags=RET_VALUE_ONLY] {
     @param path catalog JSON file path
     @return native catalog hash suitable for I18n::MessageCatalog
 
+    @throw FILE-OPEN2-ERROR if the file cannot be opened, or the path contains a NUL character
     @throw FILE-READ-ERROR if the file cannot be read
     @throw I18N-CATALOG-ERROR if the file exceeds the default size limit
     @throw I18N-CATALOG-JSON-ERROR if the file is not valid native catalog JSON
@@ -2941,6 +2961,7 @@ hash<auto> load_native_catalog(string path) [dom=FILESYSTEM] {
     @param max_file_len maximum accepted file size in bytes
     @return native catalog hash suitable for I18n::MessageCatalog
 
+    @throw FILE-OPEN2-ERROR if the file cannot be opened, or the path contains a NUL character
     @throw FILE-READ-ERROR if the file cannot be read
     @throw I18N-CATALOG-ERROR if \a max_file_len is invalid or the file exceeds it
     @throw I18N-CATALOG-JSON-ERROR if the file is not valid native catalog JSON
@@ -3280,8 +3301,9 @@ list<string> get_catalog_search_path(*hash<auto> opts) [flags=RET_VALUE_ONLY;dom
     @param opts optional hash with \c search_path and \c override_path string or list<string> entries
     @return existing native catalog JSON file paths in load order
 
-    @throw I18N-CATALOG-ERROR if \a domain or \a opts is invalid, or a catalog fragment directory cannot be read
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-CATALOG-ERROR if \a domain or \a opts is invalid (including a NUL character in the domain or a path),
+    or a catalog fragment directory cannot be read
+    @throw I18N-LOCALE-ERROR if \a locale is invalid (including a NUL character)
 
     @par Example
     @code{.qc}
@@ -3309,7 +3331,8 @@ list<string> discover_catalog_files(string domain, string locale, *hash<auto> op
     @return distinct catalog locale names, with \c root first when present and all other names in lexical order
 
     @throw FILESYSTEM-ACCESS-DENIED if a sandbox does not permit listing a required catalog directory
-    @throw I18N-CATALOG-ERROR if \a domain or \a opts is invalid, or a catalog directory cannot be read
+    @throw I18N-CATALOG-ERROR if \a domain or \a opts is invalid (including a NUL character in the domain or a path),
+    or a catalog directory cannot be read
 
     @par Example
     @code{.py}

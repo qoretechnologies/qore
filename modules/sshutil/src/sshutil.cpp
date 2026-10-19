@@ -192,6 +192,10 @@ FilesystemSshClientIdentityProviderData::FilesystemSshClientIdentityProviderData
             return;
         }
         QoreStringValueHelper str(i.getValue());
+        // a path with a NUL character would be cut at the NUL character
+        if (q_check_path(**str, "SSHUTIL-CLIENT-IDENTITY-PROVIDER-ERROR", xsink)) {
+            return;
+        }
         key_paths.emplace_back(str->c_str());
         ++count;
     }
@@ -237,10 +241,19 @@ FilesystemSshServerHostKeyProviderData::FilesystemSshServerHostKeyProviderData(c
             return;
         }
         QoreStringValueHelper str(i.getValue());
+        // a path with a NUL character would be cut at the NUL character
+        if (q_check_path(**str, "SSHUTIL-SERVER-HOST-KEY-PROVIDER-ERROR", xsink)) {
+            return;
+        }
         key_paths.emplace_back(str->c_str());
         ++count;
     }
     if (has_passphrase_ref) {
+        // a reference with a NUL character would be cut at the NUL character and name another passphrase
+        if (q_check_no_nul(passphrase_ref->c_str(), passphrase_ref->size(), "passphrase reference",
+                "passphrase references", "SSHUTIL-SERVER-HOST-KEY-PROVIDER-ERROR", xsink)) {
+            return;
+        }
         this->passphrase_ref = passphrase_ref->c_str();
     }
 }

@@ -119,11 +119,17 @@ qclass ProtobufSchema [arg=QoreProtobufSchema* schema; ns=Qore::Protobuf; dom=FI
 /** @param path the directory path for \c .proto file imports
     @param proto_file the \c .proto file name to load
 
-    @throw PROTOBUF-SCHEMA-ERROR if the file cannot be loaded or parsed
+    @throw PROTOBUF-SCHEMA-ERROR if the file cannot be loaded or parsed, or if \a path or \a proto_file contains a NUL
+    character
 
     @since %protobuf 1.0
 */
 ProtobufSchema::constructor(string path, string proto_file) {
+    // a path with a NUL character would be cut at the NUL character
+    if (q_check_path(*path, "PROTOBUF-SCHEMA-ERROR", xsink)
+            || q_check_path(*proto_file, "PROTOBUF-SCHEMA-ERROR", xsink)) {
+        return;
+    }
     self->setPrivate(CID_PROTOBUFSCHEMA,
         new QoreProtobufSchema(path->c_str(), proto_file->c_str(), xsink));
 }

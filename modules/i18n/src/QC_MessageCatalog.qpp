@@ -1315,6 +1315,7 @@ MessageCatalog::constructor(hash<auto> native_catalog, *hash<auto> opts) {
 //! Creates a message catalog from one native catalog JSON file.
 /** @param path path to a UTF-8 native catalog JSON file
 
+    @throw FILE-OPEN2-ERROR if the file cannot be opened, or the path contains a NUL character
     @throw FILE-READ-ERROR if the file cannot be read
     @throw I18N-CATALOG-JSON-ERROR if the file does not contain valid native catalog JSON
     @throw I18N-CATALOG-ERROR if the catalog schema or placeholders are invalid
@@ -1336,6 +1337,7 @@ MessageCatalog::constructor(string path) [dom=FILESYSTEM] {
         \c "disjoint_layers" rejects a message id that is defined again with different content, which within one
         catalog can only happen when two locale keys normalize to the same locale
 
+    @throw FILE-OPEN2-ERROR if the file cannot be opened, or the path contains a NUL character
     @throw FILE-READ-ERROR if the file cannot be read
     @throw I18N-CATALOG-JSON-ERROR if the file does not contain valid native catalog JSON
     @throw I18N-CATALOG-ERROR if the catalog schema, placeholders, or options are invalid
@@ -1388,6 +1390,7 @@ MessageCatalog::constructor(list<hash<auto>> native_catalogs) {
 
     @param paths list of UTF-8 native catalog JSON file paths
 
+    @throw FILE-OPEN2-ERROR if a file cannot be opened, or a path contains a NUL character
     @throw FILE-READ-ERROR if a file cannot be read
     @throw I18N-CATALOG-JSON-ERROR if a file does not contain valid native catalog JSON
     @throw I18N-CATALOG-ERROR if any catalog schema or placeholders are invalid
@@ -1419,6 +1422,7 @@ MessageCatalog::constructor(list<string> paths) [dom=FILESYSTEM] {
         \c "disjoint_layers" rejects a message id that a later layer defines again with different content instead of
         letting the later layer override it; see @ref i18ncatalogslayers
 
+    @throw FILE-OPEN2-ERROR if a file cannot be opened, or a path contains a NUL character
     @throw FILE-READ-ERROR if a file cannot be read
     @throw I18N-CATALOG-JSON-ERROR if a file does not contain valid native catalog JSON
     @throw I18N-CATALOG-ERROR if any catalog schema, placeholders, or options are invalid

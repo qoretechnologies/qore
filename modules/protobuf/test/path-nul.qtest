@@ -1,0 +1,56 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A .proto import path or file name with a NUL character is refused instead of being cut at the NUL character.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires protobuf
+
+%exec-class ProtobufPathNulTest
+
+class ProtobufPathNulTest inherits QUnit::Test {
+    constructor() : QUnit::Test("protobuf path NUL characters", "1.0", \ARGV) {
+        addTestCase("ProtobufSchema::constructor()", \testConstructor());
+        set_return_value(main());
+    }
+
+    #! asserts that the code raises the given error for a string with a NUL character at the given byte offset
+    /** @param what what the string is in the description, ex: \c "path"
+    */
+    assertNul(string err, string what, int offset, code c, string label) {
+        try {
+            c();
+            assertTrue(False, label + ": an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(err, ex.err, label + ": error code");
+            assertEq(0, ex.desc.find(what + " \""), label + ": the description names the " + what);
+            assertTrue(ex.desc.find(sprintf("\" contains a NUL character at byte offset %d; ", offset)) > 0,
+                label + ": the description gives the offset of the NUL character");
+            assertEq(EINVAL, ex.arg, label + ": the argument is EINVAL");
+        }
+    }
+
+    testConstructor() {
+        TmpDir dir("protobuf-path-nul-");
+        File f();
+        f.open2(dir.path + "/point.proto", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("syntax = \"proto3\";\npackage test;\nmessage Point { double x = 1; }\n");
+        f.close();
+
+        # cut at the NUL character, each argument would name the file above
+        assertNul("PROTOBUF-SCHEMA-ERROR", "path", dir.path.size(),
+            sub () { ProtobufSchema s(dir.path + "\x00/x", "point.proto"); }, "import path");
+        assertNul("PROTOBUF-SCHEMA-ERROR", "path", 11, sub () { ProtobufSchema s(dir.path, "point.proto\x00.txt"); },
+            "proto file name");
+        ProtobufSchema s(dir.path, "point.proto");
+        assertEq({"x": 1.5}, s.decode("test.Point", s.encode("test.Point", {"x": 1.5})),
+            "the schema is loaded without the NUL character");
+    }
+}
