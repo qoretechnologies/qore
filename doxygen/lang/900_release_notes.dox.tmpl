@@ -3099,6 +3099,9 @@ while (*binary chunk = input.read(65536)) {
       - fixed tables being created without their primary key, so that the key was not enforced and every schema
         upgrade of a table with a primary key raised \c UNSUPPORTED; the primary key is now created with its table
         (see @ref sqlite3_primary_keys)
+      - fixed creating a table with foreign constraints, which failed with an SQL syntax error; they are now
+        created with their table and aligned by their definitions, as SQLite does not report their names; they are
+        declared but not enforced through the \c sqlite3 driver (see @ref sqlite3_foreign_constraints)
       - fixed duplicate-row detection never recognizing a duplicate key
       - fixed describing a table's indexes: automatic indexes failed, lower-case unique indexes were not unique,
         and quoted column names kept their quotes

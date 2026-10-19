@@ -123,6 +123,39 @@ module Sqlite3SqlUtil {
     table created by Sqlite3SqlUtil 1.1 or earlier was created without its primary key, so aligning it to its
     template raises \c UNSUPPORTED in the same way.
 
+    @subsection sqlite3_foreign_constraints Foreign Constraints
+
+    SQLite also creates a foreign constraint only with its table: each foreign constraint of a table is written in
+    its \c CREATE \c TABLE statement as a table constraint, <tt>constraint</tt> <em>name</em>
+    <tt>foreign key (</tt>...<tt>) references</tt> <em>table</em> <tt>(</tt>...<tt>)</tt>, with the source and
+    target columns in the constraint's order.  The referenced table does not have to exist when the table is
+    created, so the tables of a schema can be created in any order.
+
+    SQLite does not report the name of a foreign constraint: the name given in a table description is written in the
+    \c CREATE \c TABLE statement, but a foreign constraint that is read from the database (as by
+    @ref SqlUtil::AbstractTable::getForeignConstraints() "AbstractTable::getForeignConstraints()" or
+    @ref SqlUtil::AbstractTable::getDescriptionHash() "AbstractTable::getDescriptionHash()") is named
+    <tt>sqlite_fk_</tt><em>n</em>, where \em n is SQLite's number for the constraint in its table.  So a table is
+    aligned to a template by the definitions of its foreign constraints, their source columns, referenced table and
+    referenced columns, not by their names: a foreign constraint with the same definition under another name is
+    unchanged and needs no SQL.  Do not name a foreign constraint <tt>sqlite_fk_</tt><em>n</em> yourself.
+
+    SQLite cannot add a foreign constraint to an existing table or drop one, so aligning an existing table to a
+    template with other foreign constraints raises \c UNSUPPORTED with a description; a changed foreign constraint is
+    one dropped and another added.  Such a table can only be created anew and its rows copied, which this module does
+    not do.
+
+    A foreign constraint description in SqlUtil has no referential actions (\c ON \c DELETE, \c ON \c UPDATE) on
+    any database, so a foreign constraint is created without them and compared without them, and a foreign
+    constraint on SQLite cannot be deferrable through SqlUtil.
+
+    @note Foreign constraints are declared but not enforced on SQLite through the \c sqlite3 driver: a row that
+    references no row of the referenced table can be inserted.  SQLite enforces foreign constraints only on a
+    connection on which <tt>PRAGMA foreign_keys</tt> is on; it is off by default, and SQLite ignores the pragma inside
+    a transaction, while the \c sqlite3 driver runs every statement in a transaction, so the pragma cannot be turned
+    on through the driver.  Only an SQLite library built with \c SQLITE_DEFAULT_FOREIGN_KEYS=1 enforces them.  This
+    module does not change the setting.
+
     @section sqlite3_relnotes Release Notes
 
     @subsection sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
@@ -140,6 +173,12 @@ module Sqlite3SqlUtil {
       template raised a bare \c UNSUPPORTED, as every schema upgrade did for a table with a primary key; the
       primary key is now created with its table, and adding a primary key to an existing table or dropping it raises
       \c UNSUPPORTED with a description of what SQLite cannot change; see @ref sqlite3_primary_keys
+    - fixed creating a table with foreign constraints, which failed with an SQL syntax error, since SQLite cannot add
+      a foreign constraint to an existing table; foreign constraints are now created with their table, described
+      from SQLite's foreign key pragma, and aligned by their definitions, as SQLite does not report their names;
+      adding a foreign constraint to an existing table or dropping one raises \c UNSUPPORTED with a description;
+      foreign constraints are declared but not enforced through the \c sqlite3 driver; see
+      @ref sqlite3_foreign_constraints
     - fixed describing indexes: a table with an automatic index (a composite primary key or a unique
       constraint) failed, a unique index created in lower case was reported as not unique, and quoted column
       names kept their quotes; indexes are now described from SQLite's index pragmas instead of their SQL
@@ -252,21 +291,59 @@ public namespace Sqlite3SqlUtil {
     }
 
     #! represents a Sqlite3-specific foreign constraint
+    /** SQLite creates a foreign constraint only with its table: @ref Sqlite3Table writes it in the table's
+        \c CREATE \c TABLE statement (@ref getTableConstraintSql()), and a foreign constraint cannot be added to or
+        dropped from an existing table; SQLite does not report the name of a foreign constraint, so a described one is
+        named by @ref Sqlite3Table; see @ref sqlite3_foreign_constraints
+    */
     public class Sqlite3ForeignConstraint inherits SqlUtil::AbstractForeignConstraint {
         constructor(string n, Columns c, ForeignConstraintTarget t) : AbstractForeignConstraint(n, c, t) {
         }
 
+        #! returns the \c FOREIGN \c KEY table constraint that creates the foreign constraint with its table
+        /** @par Example:
+            @code{.py}
+# "constraint fk_order_item_order foreign key (order_id) references orders (id)"
+string sql = fk.getTableConstraintSql();
+            @endcode
+
+            @return the \c FOREIGN \c KEY table constraint, named with the constraint's name, with the source and
+            target columns in the constraint's order
+
+            @since Sqlite3SqlUtil 1.2
+        */
+        string getTableConstraintSql() {
+            return sprintf("constraint %s foreign key (%s) references %s (%s)", name,
+                (foldl $1 + ", " + $2, getSqlColumnNameIterator()), target.table,
+                (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()));
+        }
+
+        #! SQLite cannot add a foreign constraint to an existing table
+        /** The foreign constraints of a table are created with the table (@ref getTableConstraintSql())
+
+            @throw UNSUPPORTED SQLite cannot add a foreign constraint to an existing table
+        */
         string getCreateSql(string table_name, *hash<auto> opt) {
             return getCreateSql(name, table_name, opt);
         }
 
-        #! returns a string that drops the constraint and re-adds it, since Sqlite3 does not support renaming constraints
+        #! returns an empty list: SQLite does not keep the name of a foreign constraint, so there is nothing to rename
+        /** @return an empty list
+        */
         softlist getRenameSql(string table_name, string new_name) {
-            return getDropSql(table_name) + ", " + getAddSql(new_name, table_name);
+            return ();
         }
 
+        #! SQLite cannot add a foreign constraint to an existing table
+        /** The foreign constraints of a table are created with the table (@ref getTableConstraintSql())
+
+            @throw UNSUPPORTED SQLite cannot add a foreign constraint to an existing table
+        */
         string getCreateSql(string name, string table_name, *hash<auto> opt) {
-            return sprintf("alter table %s ", table_name) + getAddSql(name, table_name, opt);
+            throw "UNSUPPORTED", sprintf("cannot add the foreign constraint %y (%s) referencing %s (%s) to table %y: "
+                "SQLite cannot add a foreign constraint to an existing table; a table has the foreign constraints "
+                "that it was created with", name, getColumnListDesc(), target.table, getTargetColumnListDesc(),
+                table_name);
         }
 
         string getAddSql(string name, string table_name, *hash<auto> opt) {
@@ -275,9 +352,23 @@ public namespace Sqlite3SqlUtil {
                 (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()));
         }
 
-        #! returns a string that can be used to drop the foreign constraint from the database
+        #! SQLite cannot drop a foreign constraint of an existing table
+        /** @throw UNSUPPORTED SQLite cannot drop a foreign constraint of an existing table
+        */
         string getDropSql(string table_name) {
-            return sprintf("alter table %s drop foreign key %s", table_name, name);
+            throw "UNSUPPORTED", sprintf("cannot drop the foreign constraint (%s) referencing %s (%s) of table %y: "
+                "SQLite cannot drop a foreign constraint of an existing table; a table has the foreign constraints "
+                "that it was created with", getColumnListDesc(), target.table, getTargetColumnListDesc(), table_name);
+        }
+
+        #! returns the source columns, separated by commas, for a description
+        private string getColumnListDesc() {
+            return join(", ", self.keys());
+        }
+
+        #! returns the target columns, separated by commas, for a description
+        private string getTargetColumnListDesc() {
+            return join(", ", target.columns.keys());
         }
     }
 
@@ -1318,8 +1409,48 @@ string sql = pk.getTableConstraintSql();
             return new Indexes(rv);
         }
 
+        #! describes the foreign constraints of the table from SQLite's foreign key pragma
+        /** SQLite does not report the name of a foreign constraint, so each is named
+            <tt>sqlite_fk_</tt><em>n</em> by its number in the pragma (see @ref sqlite3_foreign_constraints); a table
+            is aligned to a template by the definitions of its foreign constraints, not by their names
+        */
         private ForeignConstraints getForeignConstraintsImpl(*hash<auto> opts) {
-            return new ForeignConstraints();
+            # pragma foreign_key_list gives one row per column of each constraint: its number (id), the column's
+            # position in the constraint (seq), the referenced table, the column (from) and the referenced column
+            # (to), which is null when the constraint references the primary key of the table
+            *hash<auto> qh = ds.select("pragma foreign_key_list(%s)", name);
+            hash<string, hash<auto>> fks;
+            foreach hash<auto> row in (qh.contextIterator()) {
+                string id = sprintf("%06d", row.id.toInt());
+                string pos = sprintf("%06d", row.seq.toInt());
+                fks{id}.table = row.table;
+                fks{id}.columns{pos} = row.from;
+                if (exists row.to && row.to !== NULL) {
+                    fks{id}.target_columns{pos} = row.to;
+                }
+            }
+            hash<string, AbstractForeignConstraint> rv;
+            foreach string id in (sort(keys fks)) {
+                hash<auto> fk = fks{id};
+                list<string> cols = map fk.columns{$1}, sort(keys fk.columns);
+                Columns targ_columns = getReferencedTableColumnsUnlocked(fk.table, opts.table_cache);
+                list<string> target_cols;
+                if (fk.target_columns) {
+                    target_cols = map fk.target_columns{$1}, sort(keys fk.target_columns);
+                } else {
+                    # the constraint references the primary key of the referenced table
+                    Table target(ds, fk.table);
+                    target_cols = target.getPrimaryKey().keys();
+                }
+                string fk_name = sprintf("sqlite_fk_%d", id.toInt());
+                rv{fk_name} = new Sqlite3ForeignConstraint(fk_name, columns.subset(cols),
+                    new ForeignConstraintTarget(fk.table, targ_columns.subset(target_cols)));
+            }
+            return new ForeignConstraints(rv);
+        }
+
+        #! returns no SQL: the foreign constraints are created with the table (@ref getCreateTableSqlImpl())
+        private *list<auto> getCreateForeignConstraintsSqlUnlocked(*hash<auto> opt, bool cache = True) {
         }
 
         private Constraints getConstraintsImpl() {
@@ -1364,6 +1495,12 @@ string sql = pk.getTableConstraintSql();
             getPrimaryKeyUnlocked();
             if (!primaryKey.empty()) {
                 defs += "  " + cast<Sqlite3PrimaryKey>(primaryKey).getTableConstraintSql();
+            }
+            # nor a foreign constraint
+            if (!opt.omit.foreign_constraints) {
+                getForeignConstraintsUnlocked(opt);
+                defs += map "  " + cast<Sqlite3ForeignConstraint>($1).getTableConstraintSql(),
+                    foreignConstraints.iterator();
             }
             sql += foldl $1 + ",\n" + $2, defs;
             sql += "\n)";

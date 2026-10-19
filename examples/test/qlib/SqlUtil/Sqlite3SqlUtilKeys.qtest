@@ -31,6 +31,9 @@ class Sqlite3KeysTest inherits QUnit::Test {
         addTestCase("unsupported primary key DDL remains explicit", \unsupportedPrimaryKeyDdl());
         addTestCase("a table is created with its primary key", \createdPrimaryKeys());
         addTestCase("the primary key of an existing table is not added or dropped", \existingPrimaryKeyChanges());
+        addTestCase("a table is created with its foreign constraints", \createdForeignConstraints());
+        addTestCase("a foreign constraint of an existing table is not added or dropped",
+            \existingForeignConstraintChanges());
         addTestCase("automatic indexes are described", \automaticIndexes());
         addTestCase("upsert uses the key", \upsert());
         addTestCase("a select that locks rows is refused", \forUpdateRefused());
@@ -221,6 +224,116 @@ class Sqlite3KeysTest inherits QUnit::Test {
         Sqlite3PrimaryKey pk = cast<Sqlite3PrimaryKey>(single_pk.getPrimaryKey());
         assertFalse(pk.supportsName());
         assertEq((), pk.getRenameSql("single_pk", "pk_other"));
+    }
+
+    #! Returns a template for the table "fk_line", whose foreign constraints reference "fk_order" and "fk_item"
+    private Sqlite3Table lineTemplate(Datasource ds, *hash<auto> foreign_constraints) {
+        Sqlite3Table line(ds, "fk_line");
+        line.setupTable({
+            "columns": {
+                "id": {"native_type": "integer", "notnull": True},
+                "order_id": {"native_type": "integer"},
+                "item_group": {"native_type": "text"},
+                "item_id": {"native_type": "integer"},
+            },
+            "primary_key": {"name": "pk_fk_line", "columns": ("id",)},
+            "foreign_constraints": foreign_constraints ?? {
+                "fk_line_order": {"columns": ("order_id",), "table": "fk_order", "target_columns": ("id",)},
+                # a composite key in another order than the referenced table's columns, with a reserved word
+                "fk_line_item": {"columns": ("item_group", "item_id"), "table": "fk_item",
+                    "target_columns": ("group", "id")},
+            },
+        });
+        return line;
+    }
+
+    #! Creates the tables referenced by "fk_line"
+    private createReferencedTables(Datasource ds) {
+        Sqlite3Table order(ds, "fk_order");
+        order.setupTable({"columns": {"id": {"native_type": "integer", "notnull": True}},
+            "primary_key": {"name": "pk_fk_order", "columns": ("id",)}});
+        order.create();
+        Sqlite3Table item(ds, "fk_item");
+        item.setupTable({"columns": {"id": {"native_type": "integer", "notnull": True},
+            "group": {"native_type": "text", "notnull": True}},
+            "primary_key": {"name": "pk_fk_item", "columns": ("group", "id")}});
+        item.create();
+    }
+
+    #! SQLite creates a foreign constraint only with its table, so it is in the table's CREATE TABLE statement
+    createdForeignConstraints() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        createReferencedTables(ds);
+
+        Sqlite3Table line = lineTemplate(ds);
+        assertEq("create table fk_line (\n  id integer not null,\n  order_id integer,\n  item_group text,\n"
+            "  item_id integer,\n  primary key (id),\n"
+            "  constraint fk_line_order foreign key (order_id) references fk_order (id),\n"
+            "  constraint fk_line_item foreign key (item_group, item_id) references fk_item ('group', id)\n)",
+            line.getCreateTableSql());
+        assertEq((line.getCreateTableSql(),), line.getCreateSql(), "there is no separate foreign constraint SQL");
+        hash<auto> omit_opt = {};
+        omit_opt.omit = "foreign_constraints";
+        assertEq(("create table fk_line (\n  id integer not null,\n  order_id integer,\n  item_group text,\n"
+            "  item_id integer,\n  primary key (id)\n)",), line.getCreateSql(omit_opt),
+            "the foreign constraints can be omitted");
+        line.create();
+
+        # SQLite does not report the names, so the described constraints are numbered; their definitions are kept
+        Sqlite3Table live(ds, "fk_line");
+        hash<auto> desc = live.getDescriptionHash().foreign_constraints;
+        assertEq(2, desc.size());
+        assertEq(({"table": "fk_item", "columns": ("item_group", "item_id"), "target_columns": ("group", "id")},
+            {"table": "fk_order", "columns": ("order_id",), "target_columns": ("id",)}),
+            sort(desc.values(), int sub (hash<auto> l, hash<auto> r) { return l.table <=> r.table; }));
+        foreach string fk_name in (keys desc) {
+            assertRegex("^sqlite_fk_[0-9]+$", fk_name);
+        }
+        # an unchanged foreign constraint needs no SQL, whatever its name in the template
+        assertEq((), live.getAlignSql(line));
+
+        # a foreign constraint that references the primary key of a table without naming its columns
+        ds.exec("create table fk_implicit (id integer primary key, item_group text, item_id integer, "
+            "foreign key (item_group, item_id) references fk_item)");
+        Sqlite3Table implicit(ds, "fk_implicit");
+        hash<auto> implicit_desc = implicit.getDescriptionHash().foreign_constraints;
+        assertEq(({"table": "fk_item", "columns": ("item_group", "item_id"), "target_columns": ("group", "id")},),
+            implicit_desc.values());
+    }
+
+    #! SQLite cannot add a foreign constraint to an existing table, or drop one: the alignment says so
+    existingForeignConstraintChanges() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        createReferencedTables(ds);
+        lineTemplate(ds, {"fk_line_order": {"columns": ("order_id",), "table": "fk_order",
+            "target_columns": ("id",)}}).create();
+        Sqlite3Table live(ds, "fk_line");
+
+        # adding a foreign constraint
+        assertThrows("UNSUPPORTED", "cannot add the foreign constraint \"fk_line_item\" \\(item_group, item_id\\) "
+            "referencing fk_item \\(group, id\\) to table \"fk_line\": SQLite cannot add a foreign constraint to an "
+            "existing table", \live.getAlignSql(), (lineTemplate(ds),));
+
+        # dropping it
+        Sqlite3Table live_again(ds, "fk_line");
+        assertThrows("UNSUPPORTED", "cannot drop the foreign constraint \\(order_id\\) referencing fk_order \\(id\\) "
+            "of table \"fk_line\": SQLite cannot drop a foreign constraint of an existing table",
+            \live_again.getAlignSql(), (lineTemplate(ds, {}),));
+
+        # changing it is dropping it and adding another
+        Sqlite3Table live_changed(ds, "fk_line");
+        assertThrows("UNSUPPORTED", "cannot drop the foreign constraint \\(order_id\\) referencing fk_order",
+            \live_changed.getAlignSql(), (lineTemplate(ds, {"fk_line_order": {"columns": ("item_id",),
+                "table": "fk_order", "target_columns": ("id",)}}),));
+
+        # SQLite does not keep the name of a foreign constraint, so there is nothing to rename
+        Sqlite3Table live_rename(ds, "fk_line");
+        list<AbstractForeignConstraint> fks = map $1, live_rename.getForeignConstraints().iterator();
+        assertEq(1, fks.size());
+        AbstractForeignConstraint fk = fks[0];
+        assertEq((), fk.getRenameSql("fk_line", "fk_other"));
     }
 
     forUpdateRefused() {

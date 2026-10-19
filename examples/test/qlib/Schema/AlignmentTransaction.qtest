@@ -33,6 +33,8 @@ class AlignmentTransactionTest inherits QUnit::Test {
         addTestCase("a populate NOT NULL column added to a PostgreSQL table is made NOT NULL",
             \populateNotNullPgsql());
         addTestCase("a SQLite table is created with its primary key, and an upgrade keeps it", \primaryKeyUpgrade());
+        addTestCase("a SQLite table is created with its foreign constraints, and an upgrade keeps them",
+            \foreignConstraintUpgrade());
         set_return_value(main());
     }
     #! Returns an in-memory SQLite datasource; with a version, the datasource reports it as the SQLite version
@@ -253,6 +255,95 @@ class AlignmentTransactionTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             assertTrue(t.isDuplicateRowError(ex), get_exception_string(ex));
         }
+    }
+
+    #! A table with foreign constraints is created with them on SQLite, which cannot add one later; an upgrade that
+    #! changes nothing, or adds an unrelated column, leaves them as they are, and changing one is refused
+    private foreignConstraintUpgrade() {
+        AbstractDatasource ds = datasource();
+        on_exit ds.rollback();
+        code definition = hash<auto> sub (string version, hash<auto> extra_columns, *hash<auto> line_fks) {
+            return Schema::DataSchemaLoader::loadHash({
+                "schema": {"name": "orders", "version": version, "version_table": "orders_version",
+                    "version_column": "version", "version_where": {"name": "orders"}},
+                "tables": {
+                    "orders_version": {
+                        "columns": {"name": {"type": "text"}, "version": {"type": "text"}},
+                        "primary_key": {"name": "pk_orders_version", "columns": ("name",)},
+                    },
+                    # the table with the foreign constraints comes before the tables it references
+                    "order_line": {
+                        "columns": {"id": {"type": "int"}, "order_id": {"type": "int"},
+                            "item_group": {"type": "text"}, "item_id": {"type": "int"}} + extra_columns,
+                        "primary_key": {"name": "pk_order_line", "columns": ("id",)},
+                        "foreign_constraints": line_fks ?? {
+                            "fk_order_line_order": {"columns": ("order_id",), "table": "orders",
+                                "target_columns": ("id",)},
+                            # a composite key in another order than its columns, with a reserved word
+                            "fk_order_line_item": {"columns": ("item_group", "item_id"), "table": "item",
+                                "target_columns": ("group", "id")},
+                        },
+                    },
+                    "orders": {
+                        "columns": {"id": {"type": "int"}, "customer": {"type": "text"}},
+                        "primary_key": {"name": "pk_orders", "columns": ("id",)},
+                    },
+                    "item": {
+                        "columns": {"id": {"type": "int"}, "group": {"type": "text"}},
+                        "primary_key": {"name": "pk_item", "columns": ("group", "id")},
+                    },
+                },
+                "reference_data": {"normal": {"orders_version": {"columns": ("name", "version"),
+                    "rows": (("orders", version),)}}},
+            });
+        };
+        code get_version = string sub () {
+            return new SqlUtil::Table(ds, "orders_version").selectRow({"where": {"name": "orders"}}).version;
+        };
+        code get_fks = list<hash<auto>> sub () {
+            *hash<auto> fks = new SqlUtil::Table(ds, "order_line").getTable().getDescriptionHash()
+                .foreign_constraints;
+            return sort(fks.values(), int sub (hash<auto> l, hash<auto> r) { return l.table <=> r.table; });
+        };
+        list<hash<auto>> expected_fks = (
+            {"table": "item", "columns": ("item_group", "item_id"), "target_columns": ("group", "id")},
+            {"table": "orders", "columns": ("order_id",), "target_columns": ("id",)},
+        );
+
+        # a first install
+        Schema::DataSchema v1(ds, definition("1.0", {}));
+        v1.alignWithInfo(True, -1, False);
+        assertEq("1.0", get_version());
+        assertEq(expected_fks, get_fks());
+        new SqlUtil::Table(ds, "orders").insert({"id": 1, "customer": "a"});
+        new SqlUtil::Table(ds, "order_line").insert({"id": 1, "order_id": 1});
+        ds.commit();
+
+        # the same schema again: nothing is changed
+        Schema::DataSchema same(ds, definition("1.0", {}));
+        hash<SchemaAlignmentInfo> info = same.alignWithInfo(True, -1, False);
+        assertEq(("unchanged",), keys info.change_map, sprintf("%y", info.change_map));
+
+        # an unrelated column is added, and the foreign constraints are kept
+        Schema::DataSchema v2(ds, definition("2.0", {"note": {"type": "text"}}));
+        info = v2.alignWithInfo(True, -1, False);
+        assertEq(("add", "unchanged"), sort(keys info.change_map), sprintf("%y", info.change_map));
+        assertEq(1, info.change_map.add, sprintf("%y", info.change_map));
+        ds.commit();
+        assertEq("2.0", get_version());
+        assertEq(expected_fks, get_fks());
+        assertEq(1, new SqlUtil::Table(ds, "order_line").selectRow({"where": {"id": 1}}).order_id);
+
+        # a foreign constraint that changes cannot be changed in an existing table: the alignment is refused and
+        # rolled back
+        Schema::DataSchema v3(ds, definition("3.0", {"note": {"type": "text"}}, {
+            "fk_order_line_order": {"columns": ("order_id",), "table": "orders", "target_columns": ("id",)},
+        }));
+        assertThrows("UNSUPPORTED", "cannot drop the foreign constraint \\(item_group, item_id\\) referencing item "
+            "\\(group, id\\) of table \"order_line\": SQLite cannot drop a foreign constraint of an existing table",
+            \v3.alignWithInfo(), (True, -1, False));
+        assertEq("2.0", get_version());
+        assertEq(expected_fks, get_fks());
     }
 
     #! PostgreSQL makes the populated column NOT NULL with its own DDL, and keeps the column's default

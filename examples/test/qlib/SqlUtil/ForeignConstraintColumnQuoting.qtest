@@ -67,23 +67,35 @@ class ForeignConstraintColumnQuotingTest inherits QUnit::Test {
             string quote_start, string quote_end) {
         string quoted_order = quote_start + "order" + quote_end;
         string quoted_select = quote_start + "select" + quote_end;
+        # SQLite creates a foreign constraint only with its table, as a table constraint in CREATE TABLE
+        bool sqlite = driver == "SQLite";
+        string create_prefix = sqlite ? "constraint " : "alter table child add constraint ";
+        code create_sql = string sub (AbstractForeignConstraint fk) {
+            return sqlite ? cast<Sqlite3ForeignConstraint>(fk).getTableConstraintSql() : fk.getCreateSql("child");
+        };
 
         addTestCase(driver + ": plain foreign-key names remain unchanged", sub () {
             AbstractForeignConstraint fk = constraint_factory("fk_plain", columns(column_factory, ("parent_id",)),
                 new ForeignConstraintTarget("parent", columns(column_factory, ("id",))));
-            assertEq("alter table child add constraint fk_plain foreign key (parent_id) references parent (id)",
-                fk.getCreateSql("child"));
+            assertEq(create_prefix + "fk_plain foreign key (parent_id) references parent (id)", create_sql(fk));
+            if (sqlite) {
+                assertThrows("UNSUPPORTED", "SQLite cannot add a foreign constraint to an existing table",
+                    \fk.getCreateSql(), ("child",));
+            }
         });
 
         addTestCase(driver + ": reserved columns are quoted on both sides", sub () {
             AbstractForeignConstraint fk = constraint_factory("fk_reserved", columns(column_factory, ("order",)),
                 new ForeignConstraintTarget("parent", columns(column_factory, ("select",))));
             string definition = "foreign key (" + quoted_order + ") references parent (" + quoted_select + ")";
-            assertEq("alter table child add constraint fk_reserved " + definition, fk.getCreateSql("child"));
+            assertEq(create_prefix + "fk_reserved " + definition, create_sql(fk));
 
             # Recreating a renamed constraint must preserve the same column quoting.
             softlist<string> renamed = fk.getRenameSql("child", "fk_renamed");
-            if (driver == "Oracle") {
+            if (sqlite) {
+                # SQLite does not keep the name of a foreign constraint, so there is nothing to rename
+                assertEq((), renamed);
+            } else if (driver == "Oracle") {
                 assertEq(("alter table child rename constraint fk_reserved to fk_renamed",), renamed);
             } else if (driver == "MS SQL") {
                 assertEq(("alter table child drop constraint fk_reserved",
@@ -99,8 +111,8 @@ class ForeignConstraintColumnQuotingTest inherits QUnit::Test {
             AbstractForeignConstraint fk = constraint_factory("fk_composite",
                 columns(column_factory, ("z_id", "order", "a_id")),
                 new ForeignConstraintTarget("parent", columns(column_factory, ("z_key", "select", "a_key"))));
-            assertEq("alter table child add constraint fk_composite foreign key (z_id, " + quoted_order
-                + ", a_id) references parent (z_key, " + quoted_select + ", a_key)", fk.getCreateSql("child"));
+            assertEq(create_prefix + "fk_composite foreign key (z_id, " + quoted_order
+                + ", a_id) references parent (z_key, " + quoted_select + ", a_key)", create_sql(fk));
         });
 
         addTestCase(driver + ": renamed column DDL names are used", sub () {
@@ -110,8 +122,8 @@ class ForeignConstraintColumnQuotingTest inherits QUnit::Test {
             target.old_name.setDdlName("select");
             AbstractForeignConstraint fk = constraint_factory("fk_after_rename", source,
                 new ForeignConstraintTarget("parent", target));
-            assertEq("alter table child add constraint fk_after_rename foreign key (" + quoted_order
-                + ") references parent (" + quoted_select + ")", fk.getCreateSql("child"));
+            assertEq(create_prefix + "fk_after_rename foreign key (" + quoted_order
+                + ") references parent (" + quoted_select + ")", create_sql(fk));
         });
     }
 

@@ -1547,8 +1547,9 @@ bool b = table.empty();
     }
 
     #! creates the object from a table description hash
-    /** Primary-key metadata is validated without generating SQL to add the key to an existing table. This also
-        permits descriptions of keys on databases that do not support adding primary keys with \c ALTER \c TABLE.
+    /** Primary-key and foreign-constraint metadata is validated without generating SQL to add the key or the
+        constraint to an existing table. This also permits descriptions of keys and foreign constraints on databases
+        that do not support adding them with \c ALTER \c TABLE, such as SQLite.
 
         @par Example:
         @code{.py}
@@ -1763,8 +1764,10 @@ list<auto> changes = source_table.getAlignSql(target);
             try {
                 hash<auto> fk_opt = opt.(getForeignConstraintOptions().keys())
                     + (ch - ("columns", "table", "target_columns"));
-                addForeignConstraintUnlocked(cn, ch.columns, ch.table, ch.target_columns,
-                    fk_opt);
+                # a description constructs metadata only: drivers such as SQLite cannot add a foreign constraint to
+                # an existing table, so do not request ALTER TABLE SQL here
+                setForeignConstraintUnlocked(cn, addForeignConstraintUnlockedIntern(cn, ch.columns, ch.table,
+                    ch.target_columns, fk_opt, NOTHING, False), fk_opt);
             } catch (hash<ExceptionInfo> ex) {
                 rethrow ex.err, sprintf("error setting up %s: %s", getDesc(), ex.desc), ex.arg;
             }
@@ -2861,7 +2864,12 @@ printf("%s;\n", sql);
     private AbstractForeignConstraint addForeignConstraintUnlocked(string cname, softlist cols, string table, *softlist tcols, *hash<auto> opt, *reference<string> sql) {
         AbstractForeignConstraint fk = addForeignConstraintUnlockedIntern(cname, cols, table, tcols, opt, \sql);
         execSql(sql);
+        setForeignConstraintUnlocked(cname, fk, opt);
+        return fk;
+    }
 
+    #! sets a foreign constraint of the table and records it as a source constraint of the cached target table
+    private setForeignConstraintUnlocked(string cname, AbstractForeignConstraint fk, *hash<auto> opt) {
         # update cached tables with foreign constraint source info
         if (opt.table_cache.hasKey(fk.target.table))
             opt.table_cache{fk.target.table}.addSourceConstraint(getSqlName(), fk);
@@ -2870,10 +2878,10 @@ printf("%s;\n", sql);
         if (!foreignConstraints)
             foreignConstraints @= new ForeignConstraints();
         foreignConstraints.add(cname, fk);
-        return fk;
     }
 
-    private AbstractForeignConstraint addForeignConstraintUnlockedIntern(string cname, softlist cols, string table, *softlist tcols, *hash<auto> opt, *reference<string> sql) {
+    private AbstractForeignConstraint addForeignConstraintUnlockedIntern(string cname, softlist cols, string table,
+            *softlist tcols, *hash<auto> opt, *reference<string> sql, bool generate_sql = True) {
         getColumnsUnlocked();
         # load constraints if needed, verify unique constraint name, validate/process options
         checkUniqueConstraintNameValidateOptions("FOREIGN-CONSTRAINT-ERROR", cname, getForeignConstraintOptions(), \opt);
@@ -2918,7 +2926,9 @@ printf("%s;\n", sql);
         # get the new foreign constraint object
         AbstractForeignConstraint fk = addForeignConstraintImpl(cname, ch, table, tch, opt);
 
-        sql = fk.getCreateSql(getSqlName());
+        if (generate_sql) {
+            sql = fk.getCreateSql(getSqlName());
+        }
 
         # return the new foreign constraint
         return fk;
