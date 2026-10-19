@@ -2304,11 +2304,14 @@ public class McpClient {
     }
 
     #! Internal: returns the cache key for a cacheable request, if it is cacheable
+    /** The key is the JSON array of the method and its parameters, so each request is cached by its parameters as
+        well as by its method
+    */
     private *string getCacheKey(string method, *hash<auto> params) {
         if (!cache_list_results || !CacheableMethods{method}) {
             return;
         }
-        return method + "\0" + make_json(params - "_meta" ?? {});
+        return make_json((method, params - "_meta" ?? {}));
     }
 
     #! Internal: returns a cached result for a request, if one is present and still fresh
