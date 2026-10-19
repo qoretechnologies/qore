@@ -2589,6 +2589,8 @@ nothing print(...) [dom=TERMINAL_IO] {
 
     @return a formatted string corresponding to the arguments given
 
+    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+
     @par Example:
     @code{.py}
 string str = f_sprintf("%5s", "a long string"); # will return "a lon"
@@ -2598,7 +2600,7 @@ string str = f_sprintf("%5s", "a long string"); # will return "a lon"
     - @ref string_formatting for information on the formatting string
     - sprintf() for a similar function that does not enforce field widths
  */
-string f_sprintf(string[doc] fmt, ...) [flags=CONSTANT] {
+string f_sprintf(string[doc] fmt, ...) [flags=RET_VALUE_ONLY] {
    return q_sprintf(args, 1, 0, xsink);
 }
 
@@ -2618,6 +2620,8 @@ string f_sprintf() [flags=NOOP] {
 
     @return a formatted string corresponding to the arguments given
 
+    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+
     @par Example:
     @code{.py}
 string str = sprintf("%5s", "a long string"); # will return "a long string"
@@ -2627,7 +2631,7 @@ string str = sprintf("%5s", "a long string"); # will return "a long string"
     - @ref string_formatting for information on the formatting string
     - f_sprintf() for a similar function that enforces field widths
  */
-string sprintf(string[doc] fmt, ...) [flags=CONSTANT] {
+string sprintf(string[doc] fmt, ...) [flags=RET_VALUE_ONLY] {
    return q_sprintf(args, 0, 0, xsink);
 }
 
@@ -2647,6 +2651,8 @@ string sprintf() [flags=NOOP] {
 
     @return a formatted string corresponding to the arguments given
 
+    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+
     @par Example:
     @code{.py}
 string str = f_vsprintf("%5s %3d\n", ("a lon", 500)); # will return "a lon 500"
@@ -2658,7 +2664,7 @@ string str = f_vsprintf("%5s %3d\n", ("a lon", 500)); # will return "a lon 500"
 
     @since %Qore 0.8.4
  */
-string f_vsprintf(string[doc] format, auto[doc] values) [flags=CONSTANT,NAMED_ARGS] {
+string f_vsprintf(string[doc] format, auto[doc] values) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return q_vsprintf(args, 1, 0, xsink);
 }
 
@@ -2671,6 +2677,8 @@ string f_vsprintf(string[doc] format, auto[doc] values) [flags=CONSTANT,NAMED_AR
 
     @return a formatted string corresponding to the arguments given
 
+    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+
     @par Example:
     @code{.py}
 string str = vsprintf("%5s %3d\n", ("a long string", 5000)); # will return "a long string 5000"
@@ -2680,7 +2688,7 @@ string str = vsprintf("%5s %3d\n", ("a long string", 5000)); # will return "a lo
     - @ref string_formatting for information on the formatting string
     - f_vsprintf() for a similar function that enforces field widths
  */
-string vsprintf(string[doc] format, auto[doc] values) [flags=CONSTANT,NAMED_ARGS] {
+string vsprintf(string[doc] format, auto[doc] values) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return q_vsprintf(args, 0, 0, xsink);
 }
 
@@ -2808,6 +2816,8 @@ string vsprintf_bounded(string format, softlist<auto> values, *hash<FormatBounds
 
     @return the formatted string output corresponding to the arguments given
 
+    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+
     @par Example:
     @code{.py}
 f_printf("%5s", "a long string"); # will print out "a lon"
@@ -2838,6 +2848,8 @@ string f_printf() [flags=NOOP] {
     @param ... the argument(s) corresponding to format specifiers in the format string
 
     @return the formatted string output corresponding to the arguments given
+
+    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
 
     @par Example:
     @code{.py}
@@ -2870,6 +2882,8 @@ string printf() [flags=NOOP;dom=TERMINAL_IO] {
 
     @return the formatted string output corresponding to the arguments given
 
+    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
+
     @par Example:
     @code{.py}
 f_vprintf("%5s %3d", ("a long string", 5000)); # will print out "a lon 500"
@@ -2895,6 +2909,8 @@ string f_vprintf(string[doc] format, auto[doc] values) [flags=NAMED_ARGS;dom=TER
     @param values the argument(s) corresponding to format specifiers in the format string
 
     @return the formatted string output corresponding to the arguments given
+
+    @throw SPRINTF-ERROR the output of a conversion cannot be formatted, as its field width or precision is too large
 
     @par Example:
     @code{.py}
