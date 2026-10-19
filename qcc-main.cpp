@@ -1858,6 +1858,7 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::TOPLEVEL: return "TOPLEVEL";
         case QoreAOTSectionType::FUNC_SOURCES: return "FUNC_SOURCES";
         case QoreAOTSectionType::DEPENDENCIES: return "DEPENDENCIES";
+        case QoreAOTSectionType::IMPORT_DEPENDENCIES: return "IMPORT_DEPENDENCIES";
         case QoreAOTSectionType::REEXPORT_MODULES: return "REEXPORT_MODULES";
         case QoreAOTSectionType::PROGRAM_METADATA: return "PROGRAM_METADATA";
         case QoreAOTSectionType::INIT_FUNCS: return "INIT_FUNCS";

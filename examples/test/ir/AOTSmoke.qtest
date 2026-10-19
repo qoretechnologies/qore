@@ -350,6 +350,7 @@ class AOTSmokeTest inherits QUnit::Test {
             \testQccDumpModernSlotExprKinds());
         addTestCase("AOT qcc dump assignment, absolute comparison and streaming slot expressions",
             \testQccDumpCompoundSlotExprKinds());
+        addTestCase("AOT qcc dump names every section", \testQccDumpSectionNames());
         addTestCase("AOT qcc dump class injection metadata",
             \testQccDumpClassInjectionMetadata());
         # Strip source: static class variable access (module)
@@ -10573,6 +10574,28 @@ printf(\"%d\\n\", probe(3));
         string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, paths.out));
         assertEq(expected, actual);
         assertEq("9\n", actual);
+    }
+
+    testQccDumpSectionNames() {
+        # every section that the writer writes has a name in the qcc --dump-sections table, among them the
+        # IMPORT_DEPENDENCIES section of a relocatable object
+        hash<auto> paths = writeTempScript("%modern
+printf(\"ok\\n\");
+");
+        string obj = paths.out + ".qo";
+        on_exit {
+            unlink(paths.src);
+            unlink(obj);
+        }
+
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -c -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, qcc_bin, obj, paths.src));
+        assertTrue(compile_out.regex("EXIT=0"), "section probe compiles: " + compile_out);
+
+        string dump_out = dumpQccSections(obj);
+        assertTrue(dump_out.regex("IMPORT_DEPENDENCIES\\s+type=29 "),
+            "qcc dump names the IMPORT_DEPENDENCIES section: " + dump_out);
+        assertFalse(dump_out.regex("UNKNOWN\\s+type="), "qcc dump names every section: " + dump_out);
     }
 
     testQccDumpClassInjectionMetadata() {
