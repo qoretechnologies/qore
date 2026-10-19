@@ -101,6 +101,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("joinTest", \joinTest());
         addTestCase("pivotMeltTest", \pivotMeltTest());
         addTestCase("windowFunctionsTest", \windowFunctionsTest());
+        addTestCase("fillna() fills every form of a column", \fillnaStorageTest());
 
         set_return_value(main());
     }
@@ -2974,5 +2975,60 @@ sub invalid_dataframe_api() {
         list<auto> labels = df.getColumn("label");
         assertEq("A", labels[0], "CSV first label");
         assertEq(NOTHING, labels[2], "CSV empty label is null");
+    }
+
+    # fillna() fills every form of a column: the values, a dense buffer, and the Arrow storage of a column read from a
+    # file are never left with the nulls
+    fillnaStorageTest() {
+        string base = tmp_location() + "/df_fillna_" + string(getpid());
+        on_exit {
+            unlink(base + "-1.parquet");
+            unlink(base + "-2.parquet");
+            unlink(base + "-3.parquet");
+        }
+
+        # a dense buffer column
+        DataFrame::DataFrame dense({"x": new buffer<*int64>((1, NOTHING, 3))});
+        DataFrame::DataFrame filled = dense.fillna(0);
+        assertEq((1, 0, 3), filled.getColumn("x"), "fillna() fills a dense buffer column");
+        assertEq((1, 0, 3), filled.getColumnBuffer("x").toList(), "fillna() fills the buffer of a dense column");
+        assertEq(({"x": 1}, {"x": 0}, {"x": 3}), filled.toRecords(), "fillna() fills the records of a dense column");
+        assertEq((1, 0, 3), filled.toColumnarResult().getColumn("x").toList(),
+            "fillna() fills the columnar result of a dense column");
+        filled.writeParquet(base + "-1.parquet");
+        assertEq((1, 0, 3), DataFrame::DataFrame::readParquet(base + "-1.parquet").getColumn("x"),
+            "fillna() fills a dense column written to Parquet");
+        assertEq((1, 0, 3), DataFrame::DataFrame::fromArrowIpc(filled.toArrowIpc()).getColumn("x"),
+            "fillna() fills a dense column written to Arrow IPC");
+        assertEq((1, NOTHING, 3), dense.getColumn("x"), "fillna() leaves the original dense column unchanged");
+
+        # a nested column read from a Parquet file, which keeps its Arrow storage
+        ColumnarResult nested_columns = ColumnarResult::fromColumnHash({
+            "st": ({"a": 1}, NOTHING),
+        }, {
+            "st": {"schema": {
+                "kind": "struct",
+                "nullable": True,
+                "children": ({"name": "a", "kind": "int", "nullable": True},),
+            }},
+        });
+        DataFrame::DataFrame nested_source = DataFrame::DataFrame::fromColumnarResult(nested_columns);
+        nested_source.writeParquet(base + "-2.parquet");
+        DataFrame::DataFrame nested = DataFrame::DataFrame::readParquet(base + "-2.parquet");
+        DataFrame::DataFrame nested_filled = nested.fillna({"a": 7});
+        assertEq(({"a": 1}, {"a": 7}), nested_filled.getColumn("st"), "fillna() fills a nested column");
+        nested_filled.writeParquet(base + "-3.parquet");
+        assertEq(({"a": 1}, {"a": 7}), DataFrame::DataFrame::readParquet(base + "-3.parquet").getColumn("st"),
+            "fillna() fills a nested column read from Parquet and written to Parquet");
+        assertEq(({"a": 1}, {"a": 7}), DataFrame::DataFrame::fromArrowIpc(nested_filled.toArrowIpc()).getColumn("st"),
+            "fillna() fills a nested column read from Parquet and written to Arrow IPC");
+        assertEq(({"a": 1}, NOTHING), nested.getColumn("st"), "fillna() leaves the original nested column unchanged");
+
+        # a date column
+        DataFrame::DataFrame dates({"d": (2026-01-01T00:00:00Z, NOTHING)});
+        assertEq((2026-01-01T00:00:00Z, 2026-02-02T00:00:00Z), dates.fillna(2026-02-02T00:00:00Z).getColumn("d"),
+            "fillna() fills a date column");
+        assertEq((2026-01-01T00:00:00Z, NOTHING), dates.fillna(0).getColumn("d"),
+            "fillna() leaves a date null when the value is not a date");
     }
 }

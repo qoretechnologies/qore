@@ -97,6 +97,15 @@ struct ColumnData {
     //! Clears preserved external column storage
     DLLLOCAL void clearExternalColumnRef();
 
+    //! Returns a copy of this column for changing its values
+    /** The copy has the values, null mask and schema of this column, but not its preserved dense buffer or external
+        storage: they hold the values of this column, so they would no longer match the changed values of the copy.
+        The typed storage of a column always has all of its values, so nothing is lost.
+
+        Every operation that copies a column and then changes the values of the copy must use this function.
+    */
+    DLLLOCAL std::shared_ptr<ColumnData> copyForUpdate() const;
+
     //! Stores a referenced Qore value in an AUTO column slot
     DLLLOCAL void setAutoValue(int64_t i, QoreValue value, ExceptionSink* xsink);
 

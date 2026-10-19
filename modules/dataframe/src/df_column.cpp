@@ -200,6 +200,14 @@ void ColumnData::clearExternalColumnRef() {
     external_column_owner.reset();
 }
 
+std::shared_ptr<ColumnData> ColumnData::copyForUpdate() const {
+    auto rv = std::make_shared<ColumnData>(*this);
+    // the preserved storage holds the values of this column, not the changed values of the copy
+    rv->setDenseBufferRef(nullptr);
+    rv->clearExternalColumnRef();
+    return rv;
+}
+
 QoreBufferNode* ColumnData::refDenseBuffer() const {
     if (!dense_buffer) {
         return nullptr;

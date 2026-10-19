@@ -2265,10 +2265,14 @@ QoreDataFrame* QoreDataFrame::fillna(QoreValue value, ExceptionSink* xsink) cons
             continue;
         }
 
-        auto new_data = std::make_shared<ColumnData>();
-        *new_data = *src_col.data;  // copy column with nulls
+        // copy the column with nulls, without its preserved storage, which would keep the null values
+        std::shared_ptr<ColumnData> new_data = src_col.data->copyForUpdate();
         // Clear null_mask and fill with the replacement value
         for (int64_t i = 0; i < n_rows; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "filling DataFrame nulls")) {
+                delete df;
+                return nullptr;
+            }
             if (new_data->null_mask[i]) {
                 new_data->null_mask[i] = 0;
                 switch (new_data->type) {
@@ -2285,6 +2289,14 @@ QoreDataFrame* QoreDataFrame::fillna(QoreValue value, ExceptionSink* xsink) cons
                     }
                     case ColumnType::BOOL:
                         new_data->bool_data[i] = value.getAsBool() ? 1 : 0;
+                        break;
+                    case ColumnType::DATE:
+                        // as when a column is built: a value that is not a date leaves the value null
+                        if (value.getType() == NT_DATE) {
+                            new_data->date_data[i] = value.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
+                        } else {
+                            new_data->null_mask[i] = 1;
+                        }
                         break;
                     case ColumnType::AUTO:
                         new_data->setAutoValue(i, value, xsink);
