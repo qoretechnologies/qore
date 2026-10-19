@@ -163,8 +163,13 @@ bool sub dp_field_exists(hash<auto> rec, auto operand) {
 }
 
 #! Returns the steps of a findIn location
-/** The location is the grammar of Qorus's findIn: steps separated by dots, where an escaped dot (\c "\.") is part of
-    a step, and each step may end with an offset in a list (\c "[n]", negative from the end)
+/** The location is the grammar of Qorus's findIn: steps separated by dots, each step possibly ending with an offset in
+    a list (\c "[n]", negative from the end).  Its escapes are those of a field path
+    (@ref AbstractDataProvider::getFieldPath()): \c "\." is a dot and \c "\\" a backslash of a step, so that a step
+    ending with a backslash can be followed by another; \c "\ " is a space, \c "\[" and \c "\]" are brackets of a
+    step and not an offset (\c "tags\[0]" is the key \c "tags[0]"), and any other backslash is itself.  A location
+    joined from keys escaped with @ref AbstractDataProvider::escapeFieldPathKey() gives the keys back, if no key ends
+    with an offset.
 
     @param str the location, such as \c "account.id" or \c "tags[0]"
 
@@ -174,30 +179,76 @@ bool sub dp_field_exists(hash<auto> rec, auto operand) {
 */
 list<hash<auto>> sub dp_find_in_location(string str) {
     list<hash<auto>> rv = ();
-    list<string> steps = str.split(".");
-    for (int i = 0; i < steps.size(); ++i) {
-        # a step that ends in a backslash continues with the next one: the dot was escaped
-        if ((i < (steps.size() - 1)) && (steps[i] =~ /\\$/)) {
-            splice steps[i], -1;
-            steps[i] += "." + (extract steps, i + 1, 1)[0];
-            --i;
-            continue;
-        }
-        *string offset = (steps[i] =~ x/[^\\]?\[(-?[0-9]+)\]$/)[0];
-        if (exists offset) {
-            steps[i] =~ s/\[-?[0-9]+\]$//;
-        }
-        rv += {
-            "key": steps[i],
-            "offset": exists offset ? offset.toInt() : NOTHING,
-        };
+    if (str == "") {
+        return rv;
     }
+    string step = "";
+    # the position in the step of its last bracket that was not escaped, or -1
+    int open = -1;
+    # if the step ends with a bracket that was not escaped
+    bool closed = False;
+    bool escaped = False;
+    foreach string ch in (str.iterator()) {
+        if (escaped) {
+            escaped = False;
+            closed = False;
+            if (ch == "." || ch == "\\" || ch == " " || ch == "[" || ch == "]") {
+                step += ch;
+            } else {
+                step += "\\" + ch;
+            }
+        } else if (ch == "\\") {
+            escaped = True;
+        } else if (ch == ".") {
+            rv += dp_find_in_step(step, open, closed);
+            step = "";
+            open = -1;
+            closed = False;
+        } else {
+            if (ch == "[") {
+                open = step.length();
+            }
+            closed = ch == "]";
+            step += ch;
+        }
+    }
+    if (escaped) {
+        step += "\\";
+        closed = False;
+    }
+    rv += dp_find_in_step(step, open, closed);
     return rv;
 }
 
+#! Returns a step of a findIn location: its key, and its offset if it ends with one
+/** @param step the step, with its escapes read
+    @param open the position of the last bracket of the step that was not escaped, or -1
+    @param closed if the step ends with a bracket that was not escaped
+
+    @return the step, with the \c key to read and an optional \c offset: <tt>[n]</tt> or <tt>[-n]</tt> at the end of
+    the step, both brackets not escaped
+
+    @since %DataProvider 3.11
+*/
+hash<auto> sub dp_find_in_step(string step, int open, bool closed) {
+    if (closed && open >= 0) {
+        string offset = step.substr(open + 1, -1);
+        if (offset =~ /^-?[0-9]+$/) {
+            return {
+                "key": step.substr(0, open),
+                "offset": offset.toInt(),
+            };
+        }
+    }
+    return {
+        "key": step,
+        "offset": NOTHING,
+    };
+}
+
 #! Returns the value at a findIn location in an element, as Qorus's findIn reads it
-/** - a step with a key reads that key of a hash; a quoted key (\c 'a b' or \c "a b") loses its quotes, and
-      \c "\ " is a space
+/** - a step with a key reads that key of a hash; a quoted key (\c 'a b' or \c "a b") loses its quotes (the escapes
+      of the location, such as \c "\ " for a space, are read by dp_find_in_location())
     - a step with an offset reads that element of a list
     - a step without an offset that reads a list of more than one hash, before the last step, gives the list of the
       values that the rest of the location reads in each hash
@@ -218,9 +269,6 @@ auto sub dp_find_in_value(auto value, list<hash<auto>> steps, *reference<bool> e
             if ((key =~ /^'.*'$/) || (key =~ /^".*"$/)) {
                 splice key, 0, 1;
                 splice key, -1;
-            }
-            if (key =~ /\\ /) {
-                key =~ s/\\ / /g;
             }
             if (!exists v) {
                 return;

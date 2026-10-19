@@ -1599,6 +1599,13 @@ fetch
          <tt>findIn(2, (1, 2, 3), "id")</tt> is \c 2; it was no value
       -# an escaped dot is part of a key: <tt>findIn(2, ({"a.b": 2},), "a\\.b")</tt> finds the element; a location
          with \c "\\." found nothing unless a key ended with a backslash
+      -# an escaped backslash is one backslash of a key, as in a field path (@ref dpql_field_paths), so a key ending
+         with a backslash can be followed by another: <tt>findIn(2, ({"a\\": {"b": 2}},), "a\\\\.b")</tt> finds the
+         element; a location joined from keys escaped with
+         @ref DataProvider::AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()"
+         reads them back; an escaped bracket is a bracket of a key and not an offset:
+         <tt>findIn(1, ({"tags[0]": 1},), "tags\\[0]")</tt> finds the element; it read the key \c "tags\\" and the
+         offset \c 0
       -# <tt>[n]</tt> or <tt>[-n]</tt> after a key reads an element of a list: <tt>findIn("y", ({"tags": ("x", "y")},),
          "tags[-1]")</tt> finds the element; it read a key named \c "tags[-1]"
       -# a key in quotes, or with \c "\\ " for a space, is the key without the quotes or with the space:
