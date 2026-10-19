@@ -15,8 +15,10 @@ class AlignmentTransactionTest inherits QUnit::Test {
         addTestCase("caller can roll back DDL and additional writes", \rollbackAlignment());
         addTestCase("caller can commit alignment", \commitAlignment());
         addTestCase("default alignment still commits", \defaultCommit());
+        addTestCase("populate expressions bind their values", \populateExpressionValues());
         addTestCase("independently committing migrations are rejected before mutation", \rejectCommittingMigrations());
         addTestCase("caller retains ownership after alignment failure", \failureOwnership());
+        addTestCase("populate names its columns as the database requires", \populateColumnNames());
         set_return_value(main());
     }
     private Datasource datasource() {
@@ -34,6 +36,74 @@ class AlignmentTransactionTest inherits QUnit::Test {
                 "inventory": {"columns": {"id": {"type": "int"}, "name": {"type": "text"}}}},
         });
     }
+    private hash<auto> populateDefinition(string version, hash<auto> extra_columns) {
+        return Schema::DataSchemaLoader::loadHash({
+            "schema": {"name": "inventory", "version": version, "version_table": "inventory_version",
+                "version_column": "version", "version_where": {"name": "inventory"}},
+            "tables": {"inventory_version": {"columns": {
+                "name": {"type": "text"}, "version": {"type": "text"}}},
+                "inventory": {"columns": {"id": {"type": "int"}, "order": {"type": "text"}} + extra_columns}},
+        });
+    }
+
+    #! A populate expression binds its values, which were not bound and filled the column with NULL; a field whose
+    #! key has a dot cannot be named as a column
+    private populateExpressionValues() {
+        AbstractDatasource ds = datasource();
+        on_exit ds.rollback();
+        hash<auto> columns();
+        columns.amount = {"type": "int"};
+        columns.label = {"type": "text"};
+        Schema::DataSchema v1(ds, populateDefinition("1.0", columns));
+        v1.alignWithInfo(True, -1, False);
+        new SqlUtil::Table(ds, "inventory").insert({"id": 1, "order": "first", "amount": 5, "label": "x"});
+        ds.commit();
+
+        # the 1 of "@amount + 1" and the "-y" of the concatenation are bound
+        columns += {
+            "next": {"type": "int", "populate": {"exp": "+", "args": ({"field": "amount"}, 1)}},
+            "tagged": {"type": "text", "populate": {"exp": "concat", "args": ({"field": "label"}, "-y")}},
+        };
+        Schema::DataSchema v2(ds, populateDefinition("2.0", columns));
+        v2.alignWithInfo(True, -1, False);
+        hash<auto> row = new SqlUtil::Table(ds, "inventory").selectRow();
+        assertEq(6, row.next);
+        assertEq("x-y", row.tagged);
+
+        # a key with a dot would be read as a table and a column
+        columns.next -= "populate";
+        columns.tagged -= "populate";
+        Schema::DataSchema v3(ds, populateDefinition("3.0", columns + {"other": {"type": "text",
+            "populate": {"field": "unit\\.price"}}}));
+        assertThrows("POPULATE-ERROR", "the populate field \"unit\\\\.price\" cannot be named as a column",
+            \v3.alignWithInfo(), (True, -1, False));
+    }
+
+    #! A populated column, and the column it is populated from, are named as the database requires them: reserved
+    #! words are quoted; the field of the populate expression is a field path, and a path of more than one key is
+    #! refused
+    private populateColumnNames() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        Schema::DataSchema v1(ds, populateDefinition("1.0", {}));
+        v1.alignWithInfo(True, -1, False);
+        new SqlUtil::Table(ds, "inventory").insert({"id": 1, "order": "first"});
+        ds.commit();
+
+        # the new column "group" is populated from "order": both are reserved words
+        # (nullable: the NOT NULL that follows a backfill is not SQLite syntax)
+        Schema::DataSchema v2(ds, populateDefinition("2.0", {"group": {"type": "text",
+            "populate": {"field": "order"}}}));
+        v2.alignWithInfo(True, -1, False);
+        assertEq("first", new SqlUtil::Table(ds, "inventory").selectRow().group);
+
+        # a field path of more than one key is not a column
+        Schema::DataSchema v3(ds, populateDefinition("3.0", {"group": {"type": "text"},
+            "other": {"type": "text", "populate": {"field": "a.b"}}}));
+        assertThrows("POPULATE-ERROR", "the populate field \"a.b\" is not a column", \v3.alignWithInfo(),
+            (True, -1, False));
+    }
+
     private bool existsTable(AbstractDatasource ds) {
         return new SqlUtil::Table(ds, "inventory").checkExistence();
     }

@@ -404,9 +404,9 @@ public class DataSchema inherits AbstractVersionedSchema {
                         AbstractDatabase::AC_Update);
                 }
 
-                # render and execute the backfill UPDATE
-                string update_sql = renderPopulateUpdate(table, col_name, pop_info.populate);
-                int rows = ds.exec(update_sql);
+                # render and execute the backfill UPDATE with the values it binds
+                hash<SqlCommandInfo> update = renderPopulateUpdate(table, col_name, pop_info.populate);
+                int rows = ds.vexec(update.sql, update.args);
 
                 if (verbose > 0) {
                     info_callback(sprintf("  %d row%s populated", rows, rows == 1 ? "" : "s"),
@@ -416,7 +416,7 @@ public class DataSchema inherits AbstractVersionedSchema {
                 # re-apply NOT NULL if it was stripped
                 if (pop_info.notnull) {
                     string alter_sql = sprintf("alter table %s alter column %s set not null",
-                        table.getSqlName(), col_name);
+                        table.getSqlName(), table.getColumnSqlName(col_name));
                     ds.exec(alter_sql);
                     if (verbose > 0) {
                         info_callback(sprintf("  NOT NULL constraint applied to %s.%s",
@@ -438,23 +438,35 @@ public class DataSchema inherits AbstractVersionedSchema {
         @param table the live AbstractTable object for expression rendering
         @param col_name the column being populated
         @param populate_val the populate value from the schema definition
-        @return a complete SQL UPDATE statement ready for execution
+        @return a complete SQL UPDATE statement and the values it binds, ready for execution
+
+        @throw POPULATE-ERROR the populate value has no form given above; a field is not a column
     */
-    private string renderPopulateUpdate(AbstractTable table, string col_name, auto populate_val) {
+    private hash<SqlCommandInfo> renderPopulateUpdate(AbstractTable table, string col_name, auto populate_val) {
         string tname = table.getSqlName();
+        # the column name as the database requires it (a reserved word is quoted)
+        string column = table.getColumnSqlName(col_name);
 
         # literal scalar: inline the value (SqlUtil will handle quoting via %v)
         if (populate_val.typeCode() != NT_HASH) {
-            return sprintf("update %s set %s = %s where %s is null",
-                tname, col_name, table.getSqlValue(populate_val), col_name);
+            return <SqlCommandInfo>{
+                "sql": sprintf("update %s set %s = %s where %s is null",
+                    tname, column, table.getSqlValue(populate_val), column),
+                "args": (),
+            };
         }
 
         hash<auto> ph = populate_val;
 
         # {field: col} shorthand — copy from another column
         if (ph.hasKey("field")) {
-            return sprintf("update %s set %s = %s where %s is null",
-                tname, col_name, ph.field, col_name);
+            string source = DataSchema::getPopulateColumn(table, col_name,
+                <DataProviderFieldReference>{"field": ph.field});
+            return <SqlCommandInfo>{
+                "sql": sprintf("update %s set %s = %s where %s is null",
+                    tname, column, table.getColumnSqlName(source), column),
+                "args": (),
+            };
         }
 
         # {sql: {pgsql: "...", ...}} — raw per-driver SQL
@@ -470,8 +482,10 @@ public class DataSchema inherits AbstractVersionedSchema {
                 throw "POPULATE-ERROR", sprintf("table %y column %y: populate.sql has no "
                     "entry for driver %y", table.getName(), col_name, driver);
             }
-            return sprintf("update %s set %s = %s where %s is null",
-                tname, col_name, raw_sql, col_name);
+            return <SqlCommandInfo>{
+                "sql": sprintf("update %s set %s = %s where %s is null", tname, column, raw_sql, column),
+                "args": (),
+            };
         }
 
         # {exp: name, args: [...]} — DPQL expression
@@ -491,6 +505,8 @@ public class DataSchema inherits AbstractVersionedSchema {
             # convert plain field-reference / sub-expression hashes (as parsed from .ysm/.jsm)
             # into the typed hashdecls the expression engine requires
             list<auto> exp_args = map DataSchema::normalizeDpqlArg($1), (ph.args ?? ());
+            # a field reference is a field path: one key is a column, which SqlUtil names as the database requires
+            exp_args = map DataSchema::getPopulateArg(table, col_name, $1), exp_args;
 
             if (sql_exp) {
                 # expression exists in the SQL expression map — use SqlUtil to render it
@@ -500,9 +516,8 @@ public class DataSchema inherits AbstractVersionedSchema {
                     "args": exp_args,
                 };
                 hash<auto> where_hash = {col_name: NULL};
-                # getUpdateSql returns {sql: "...", args: (...)}
-                hash<auto> cmd = table.getUpdateSql(set_hash, where_hash);
-                return cmd.sql;
+                # the SQL binds the values of the expression, such as the 1 of "@amount + 1"
+                return table.getUpdateSql(set_hash, where_hash);
             }
 
             # fallback: evaluate expression client-side and use as a literal
@@ -511,8 +526,11 @@ public class DataSchema inherits AbstractVersionedSchema {
                     "exp": exp_name,
                     "args": exp_args,
                 });
-            return sprintf("update %s set %s = %s where %s is null",
-                tname, col_name, table.getSqlValue(result_val), col_name);
+            return <SqlCommandInfo>{
+                "sql": sprintf("update %s set %s = %s where %s is null",
+                    tname, column, table.getSqlValue(result_val), column),
+                "args": (),
+            };
         }
 
         throw "POPULATE-ERROR", sprintf("table %y column %y: unrecognized populate format; "
@@ -543,6 +561,60 @@ public class DataSchema inherits AbstractVersionedSchema {
             if (arg.hasKey("field")) {
                 return <DataProviderFieldReference>{"field": arg.field};
             }
+        }
+        return arg;
+    }
+
+    #! Returns the column a field reference of a populate expression names
+    /** The field of a field reference is a field path (@ref DataProvider::AbstractDataProvider::getFieldPath()
+        "AbstractDataProvider::getFieldPath()"): a path of one key is the column of that name
+
+        @param table the table
+        @param col_name the column being populated
+        @param ref the field reference
+
+        @return the name of the column
+
+        @throw POPULATE-ERROR the field is a field path of more than one key, which is not a column, or its key has a
+        dot, which SqlUtil and the database read as a table and a column
+
+        @since Schema 1.9
+    */
+    private static string getPopulateColumn(AbstractTable table, string col_name,
+            hash<DataProviderFieldReference> ref) {
+        list<string> path = ref.field_path ?? AbstractDataProvider::getFieldPath(ref.field);
+        if (path.size() != 1) {
+            throw "POPULATE-ERROR", sprintf("table %y column %y: the populate field \"%s\" is not a column: a field "
+                "path of more than one key cannot be read from a table", table.getName(), col_name, ref.field);
+        }
+        if (path[0].find(".") >= 0) {
+            throw "POPULATE-ERROR", sprintf("table %y column %y: the populate field \"%s\" cannot be named as a "
+                "column: a column name with a dot is read as a table and a column", table.getName(), col_name,
+                ref.field);
+        }
+        return path[0];
+    }
+
+    #! Returns an argument of a populate expression with its field references given as columns
+    /** @param table the table
+        @param col_name the column being populated
+        @param arg the argument
+
+        @return the argument with its field references given as columns (@ref getPopulateColumn())
+
+        @since Schema 1.9
+    */
+    private static auto getPopulateArg(AbstractTable table, string col_name, auto arg) {
+        code<hash<DataProviderFieldReference>(hash<DataProviderFieldReference>)> column_ref =
+                hash<DataProviderFieldReference> sub (hash<DataProviderFieldReference> ref) {
+            return <DataProviderFieldReference>{"field": DataSchema::getPopulateColumn(table, col_name, ref)};
+        };
+        if (arg instanceof hash<DataProviderFieldReference>) {
+            return column_ref(arg);
+        }
+        if (arg instanceof hash<DataProviderExpression>) {
+            return AbstractDataProvider::translateFieldReferences(cast<hash<DataProviderExpression>>(arg),
+                column_ref);
         }
         return arg;
     }

@@ -77,6 +77,7 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("select-fields - output names of field paths", \selectFieldsOutputNamesTest());
         addTestCase("group-by - output names of field paths", \groupByOutputNamesTest());
         addTestCase("field options - wildcards are refused", \fieldOptionWildcardTest());
+        addTestCase("pushdown split - field references the provider names", \pushdownFieldReferenceTest());
 
         # Processor backward compatibility tests
         addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
@@ -597,6 +598,63 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
             "give the output field \"sum_Unit.Price\"", sub () {
                 new QoreGroupByProcessor({"aggregates": "sum(Unit\\.Price),sum(Unit.Price)"});
             });
+    }
+
+    #! A provider names the field references it can push down; an expression with any other is evaluated client-side
+    pushdownFieldReferenceTest() {
+        hash<auto> expmap = {
+            DP_SEARCH_OP_EQ: {"code": sub () {}},
+            DP_SEARCH_OP_GT: {"code": sub () {}},
+            DP_OP_AND: {"code": sub () {}},
+        };
+        # one key without a dot is pushed down, as the key
+        code column = *hash<DataProviderFieldReference> sub (hash<DataProviderFieldReference> ref) {
+            list<string> path = AbstractDataProvider::getFieldPath(ref.field);
+            return path.size() == 1 && path[0].find(".") < 0
+                ? <DataProviderFieldReference>{"field": path[0]}
+                : NOTHING;
+        };
+        hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@"p\\\\q" == 1 && @a.b > 2 && @x > 1');
+        hash<auto> split = AbstractDataProvider::splitPushdownableExpression(exp, expmap, column);
+        assertEq(("p\\q", "x"), (map $1.args[0].field, split.pushdown.args));
+        assertEq("a.b", split.client.args[0].field);
+        # without the closure, everything is pushed down as it is
+        split = AbstractDataProvider::splitPushdownableExpression(exp, expmap);
+        assertEq(exp, split.pushdown);
+        assertNothing(split.client);
+
+        # a field reference that is the only condition of a part is kept in an expression, so that the part is never
+        # read as a provider's own where hash ({"field": "flag"} would be the column "field" with the value "flag")
+        split = AbstractDataProvider::splitPushdownableExpression(
+            DataProvider::parseDpqlExpression('@flag && @a.b > 2'), expmap, column);
+        assertEq(<DataProviderExpression>{"exp": DP_OP_AND, "args": (<DataProviderFieldReference>{"field": "flag"},)},
+            split.pushdown);
+        assertEq(DP_SEARCH_OP_GT, split.client.exp);
+        split = AbstractDataProvider::splitPushdownableExpression(
+            DataProvider::parseDpqlExpression('@a.b && @x > 1'), expmap, column);
+        assertEq(DP_SEARCH_OP_GT, split.pushdown.exp);
+        assertEq(<DataProviderExpression>{"exp": DP_OP_AND, "args": (<DataProviderFieldReference>{"field": "a.b"},)},
+            split.client);
+        # a part of one condition that is an expression is given as it is
+        split = AbstractDataProvider::splitPushdownableExpression(
+            DataProvider::parseDpqlExpression('@x > 1 && @a.b > 2'), expmap, column);
+        assertEq(DP_SEARCH_OP_GT, split.pushdown.exp);
+        assertEq("a.b", split.client.args[0].field);
+
+        # the field references of an expression are replaced
+        hash<DataProviderExpression> translated = AbstractDataProvider::translateFieldReferences(
+            DataProvider::parseDpqlExpression('@"Unit\.Price" > 1 && (@"p\\\\q" == 2)'),
+            hash<DataProviderFieldReference> sub (hash<DataProviderFieldReference> ref) {
+                return <DataProviderFieldReference>{"field": AbstractDataProvider::getFieldPath(ref.field)[0]};
+            });
+        assertEq("Unit.Price", translated.args[0].args[0].field);
+        assertEq("p\\q", translated.args[1].args[0].field);
+
+        # a closure that gives no field reference is an error, not an expression with no field
+        assertThrows("FIELD-REFERENCE-ERROR", "no field reference was given for the field \"a.b\"", sub () {
+            AbstractDataProvider::translateFieldReferences(DataProvider::parseDpqlExpression('@x == 1 && @a.b == 2'),
+                column);
+        });
     }
 
     #! A field option names one field by its path; a DPQL wildcard in it is refused when the processor is created

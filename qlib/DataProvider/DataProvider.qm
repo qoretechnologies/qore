@@ -1554,6 +1554,18 @@ fetch
       processors read the string given for such an option with the new
       @ref DataProvider::AbstractDataProvider::getFieldListOption() "AbstractDataProvider::getFieldListOption()",
       as the option type makes a single string a list of one string
+    - each part that @ref DataProvider::AbstractDataProvider::splitPushdownableExpression()
+      "AbstractDataProvider::splitPushdownableExpression()" gives is an expression: a field reference that was the only
+      condition of a part was given alone, and a database table read it as a where hash, so that
+      <tt>\@active && \@name =~ /x/</tt> searched for the rows whose column \c field held \c "active"
+    - @ref DataProvider::AbstractDataProvider::splitPushdownableExpression()
+      "AbstractDataProvider::splitPushdownableExpression()" and
+      @ref DataProvider::AbstractDataProvider::expressionPushdownable()
+      "AbstractDataProvider::expressionPushdownable()" take an optional closure that gives the field reference a
+      provider reads for a field reference of the expression, or no value if the provider cannot name the field, whose
+      expression is then evaluated client-side; the pushdown part has the field references the closure gives; added
+      @ref DataProvider::AbstractDataProvider::translateFieldReferences()
+      "AbstractDataProvider::translateFieldReferences()"
     - added the private method \c readLocationGrid() to
       @ref DataProvider::AbstractTabularProfileDataProvider "AbstractTabularProfileDataProvider", which a profile
       provider whose reader streams its input overrides to read a location as a stream, so that the content of a

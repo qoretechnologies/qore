@@ -677,8 +677,10 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         if (!(where_cond instanceof hash<DataProviderExpression>)) {
             return {"pushdown": where_cond, "client": NOTHING};
         }
+        # a field that SqlUtil cannot name as a column is read client-side
         hash<auto> split = AbstractDataProvider::splitPushdownableExpression(
-            cast<hash<DataProviderExpression>>(where_cond), table.getExpressionMap());
+            cast<hash<DataProviderExpression>>(where_cond), table.getExpressionMap(),
+            \DbTableDataProvider::getColumnReference());
         if (exists split.client && !search_options.allow_client_side_filter) {
             throw "CLIENT-SIDE-FILTER-DISABLED", sprintf(
                 "operator(s) in the search predicate have no native SQL implementation for database driver %y; "
@@ -686,6 +688,71 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                 "rows, or rewrite the predicate using native operators", table.getDatasource().getDriverName());
         }
         return split;
+    }
+
+    #! Returns the field reference to the column of a field reference of an expression, or @ref nothing
+    /** The field of a field reference is a field path (@ref DataProvider::AbstractDataProvider::getFieldPath()
+        "AbstractDataProvider::getFieldPath()"): a path of one key is the column of that name, and SqlUtil quotes it if
+        it is a reserved word.  A path of more than one key, and a key with a dot, which SqlUtil reads as an alias and
+        a column, cannot be named as a column.
+
+        @par Example:
+        @code{.py}
+# the field "order_id" is the column of that name: column is {"field": "order_id"}
+*hash<DataProviderFieldReference> column = DbTableDataProvider::getColumnReference(
+    <DataProviderFieldReference>{"field": "order_id"});
+# the field "customer.region" is a path of two keys, which is not a column: column is NOTHING
+column = DbTableDataProvider::getColumnReference(<DataProviderFieldReference>{"field": "customer.region"});
+        @endcode
+
+        @param ref the field reference
+
+        @return the field reference to the column, or @ref nothing if the field cannot be named as a column
+
+        @since DbDataProvider 2.5
+    */
+    static *hash<DataProviderFieldReference> getColumnReference(hash<DataProviderFieldReference> ref) {
+        list<string> path = ref.field_path ?? AbstractDataProvider::getFieldPath(ref.field);
+        if (path.size() != 1 || path[0].find(".") >= 0) {
+            return;
+        }
+        return <DataProviderFieldReference>{"field": path[0]};
+    }
+
+    #! Returns a condition for an update or a delete with the field references of an expression given as columns
+    /** A condition that is not an expression is a SqlUtil where hash and is returned as it is
+
+        @par Example:
+        @code{.py}
+# the condition of a delete names its columns by field paths of one key
+*hash<auto> cond = DbTableDataProvider::getColumnCondition(
+    DataProvider::parseDpqlExpression('@status == "cancelled" && @"order\\.ref" == 1'));
+# throws UNSUPPORTED-FIELD-REFERENCE: "order.ref" has a dot, which SqlUtil would read as an alias and a column
+        @endcode
+
+        @param where_cond the condition
+
+        @return the condition with the field references of an expression as columns
+
+        @throw UNSUPPORTED-FIELD-REFERENCE a field of the expression is a field path that cannot be named as a column
+
+        @since DbDataProvider 2.5
+    */
+    static *hash<auto> getColumnCondition(*hash<auto> where_cond) {
+        if (!(where_cond instanceof hash<DataProviderExpression>)) {
+            return where_cond;
+        }
+        return AbstractDataProvider::translateFieldReferences(cast<hash<DataProviderExpression>>(where_cond),
+            hash<DataProviderFieldReference> sub (hash<DataProviderFieldReference> ref) {
+                *hash<DataProviderFieldReference> column = DbTableDataProvider::getColumnReference(ref);
+                if (!column) {
+                    # the path is given as it is written
+                    throw "UNSUPPORTED-FIELD-REFERENCE", sprintf("the field \"%s\" is not a column of the table: a "
+                        "field path of more than one key, or a key with a dot, cannot be used in a condition of an "
+                        "update or a delete", ref.field);
+                }
+                return column;
+            });
     }
 
     #! Returns a read iterator after splitting any residual expression
@@ -748,7 +815,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         AbstractSavepointHelper sp = table.getSavepointHelper();
         int rows;
         try {
-            rows = table.update(set, where_cond);
+            rows = table.update(set, DbTableDataProvider::getColumnCondition(where_cond));
         } catch (hash<ExceptionInfo> ex) {
             sp.rollback();
             rethrow;
@@ -778,7 +845,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             AbstractSavepointHelper sp = table.getSavepointHelper();
             int rows;
             try {
-                rows = table.update(set, where_cond);
+                rows = table.update(set, DbTableDataProvider::getColumnCondition(where_cond));
             } catch (hash<ExceptionInfo> ex) {
                 sp.rollback();
                 rethrow;
@@ -791,7 +858,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             return rows;
         }
         DbOperationTransactionHelper trans(table);
-        return table.update(set, where_cond);
+        return table.update(set, DbTableDataProvider::getColumnCondition(where_cond));
     }
 
     #! Deletes zero or more records
@@ -813,7 +880,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             AbstractSavepointHelper sp = table.getSavepointHelper();
             int rows;
             try {
-                rows = table.del(where_cond);
+                rows = table.del(DbTableDataProvider::getColumnCondition(where_cond));
             } catch (hash<ExceptionInfo> ex) {
                 sp.rollback();
                 rethrow;
@@ -826,7 +893,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             return rows;
         }
         DbOperationTransactionHelper trans(table);
-        return table.del(where_cond);
+        return table.del(DbTableDataProvider::getColumnCondition(where_cond));
     }
 
     #! Returns data provider static info

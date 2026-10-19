@@ -87,6 +87,8 @@ class DbRecordMutationTest inherits QUnit::Test {
         addTestCase("residual expression filtering", \testResidualExpressionFiltering());
         addTestCase("SQLite string expression semantics", \testSqliteStringExpressionSemantics());
         addTestCase("field rename preserves data", \testFieldRenamePreservesData());
+        addTestCase("field paths in conditions", \testFieldPathConditions());
+        addTestCase("a field alone in a split condition", \testFieldAloneInSplitCondition());
 
         set_return_value(main());
     }
@@ -400,6 +402,84 @@ class DbRecordMutationTest inherits QUnit::Test {
             raw_provider.searchRecords({"RecordID": 1}, search_options);
         });
         assertFalse(ds.currentThreadInTransaction());
+    }
+
+    #! A field of a condition is a field path: one key without a dot is a column and is pushed down; a path of more
+    #! than one key, or a key with a dot, is read client-side, and cannot be used to update or delete
+    private testFieldPathConditions() {
+        requireSqlite();
+        ds.execRaw("create table field_path_test (id integer primary key, \"unit.price\" real, amount integer)");
+        on_exit {
+            ds.execRaw("drop table field_path_test");
+            ds.commit();
+        }
+        ds.execRaw("insert into field_path_test values (1, 1.5, 10), (2, 2.5, 20), (3, 3.5, 30)");
+        ds.commit();
+        Sqlite3Table path_table(ds, "field_path_test");
+        DbTableDataProvider path_provider(path_table);
+
+        # one key is a column
+        assertEq((2, 3), getIteratorIds(path_provider.searchRecords('@amount > 10', {"orderby": "id"})));
+        # a key with a dot cannot be named as a column: it is read client-side
+        assertThrows("CLIENT-SIDE-FILTER-DISABLED", sub () {
+            path_provider.searchRecords('@"unit\.price" > 2', {"orderby": "id"});
+        });
+        assertEq((2, 3), getIteratorIds(path_provider.searchRecords('@"unit\.price" > 2', {
+            "orderby": "id",
+            "allow_client_side_filter": True,
+        })));
+        # with a column that is pushed down
+        assertEq((3,), getIteratorIds(path_provider.searchRecords('@amount > 10 && @"unit\.price" > 3', {
+            "orderby": "id",
+            "allow_client_side_filter": True,
+        })));
+        # a path of more than one key is not a column: it is read client-side, where the rows do not have the field;
+        # it is not sent to SqlUtil, which would read a.b as an alias and a column
+        assertThrows("CLIENT-SIDE-FILTER-DISABLED", sub () {
+            path_provider.searchRecords('@a.b == 1', {"orderby": "id"});
+        });
+        assertThrows("INVALID-OPERATION", "invalid key \"a\" in field reference \"a.b\"", sub () {
+            getIteratorIds(path_provider.searchRecords('@a.b == 1', {
+                "orderby": "id",
+                "allow_client_side_filter": True,
+            }));
+        });
+        ds.rollback();
+
+        # an update or a delete needs columns
+        assertThrows("DELETE-RECORDS-ERROR", "UNSUPPORTED-FIELD-REFERENCE: the field \"a.b\" is not a column of the "
+            "table", sub () { path_provider.deleteRecords(DataProvider::parseDpqlExpression('@a.b == 1')); });
+        assertThrows("UPDATE-RECORDS-ERROR", "UNSUPPORTED-FIELD-REFERENCE: the field \"unit.*price\" is not a column",
+            sub () {
+                path_provider.updateRecords({"amount": 1}, DataProvider::parseDpqlExpression('@"unit\.price" > 1'));
+            });
+        assertEq(1, path_provider.deleteRecords(DataProvider::parseDpqlExpression('@amount == 10')));
+        ds.commit();
+        assertEq((2, 3), getIteratorIds(path_provider.searchRecords(NOTHING, {"orderby": "id"})));
+    }
+
+    #! A field reference that is a condition alone stays a condition when the rest of the condition is read
+    #! client-side: it is not read as a where hash ({"field": "flag"}: the column "field" with the value "flag")
+    private testFieldAloneInSplitCondition() {
+        requireSqlite();
+        ds.execRaw("create table field_alone_test (id integer primary key, flag integer, \"unit.flag\" integer, "
+            "field text)");
+        on_exit {
+            ds.execRaw("drop table field_alone_test");
+            ds.commit();
+        }
+        ds.execRaw("insert into field_alone_test values (1, 1, 1, 'flag'), (2, 0, 1, 'x'), (3, 1, 1, 'y'), "
+            "(4, 1, 0, 'unit\\.flag')");
+        ds.commit();
+        Sqlite3Table alone_table(ds, "field_alone_test");
+        DbTableDataProvider alone_provider(alone_table);
+        hash<auto> opts = {"orderby": "id", "allow_client_side_filter": True};
+
+        # the field pushed down alone
+        assertEq((1, 3), getIteratorIds(alone_provider.searchRecords('@flag && @"unit\.flag" == 1', opts)));
+        # the field read client-side alone
+        assertEq((1, 3), getIteratorIds(alone_provider.searchRecords('@"unit\.flag" && @flag == 1', opts)));
+        ds.rollback();
     }
 
     private testResidualExpressionFiltering() {

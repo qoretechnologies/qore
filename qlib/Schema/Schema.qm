@@ -263,7 +263,7 @@ module Schema {
           id: {type: int, notnull: true}
           name: {type: varchar, size: 200, notnull: true}
 
-          # Copy from another column
+          # Copy from another column (a field path of one key: the column of that name)
           display_name:
             type: varchar
             size: 240
@@ -900,6 +900,12 @@ module Schema {
     - added @ref Schema::AbstractSchema::alignWithInfoInTransaction()
       for alignment with caller-controlled commit or rollback; DataSchema
       rejects migration actions that commit independently in this mode
+    - a \c populate expression binds its values: a value in the expression, such as the \c 1 of
+      <tt>{exp: "+", args: [{field: amount}, 1]}</tt>, was not bound, and the column was filled with \c NULL
+    - \c populate names the column it fills, and a column it reads, as the database requires: a reserved word such as
+      \c order or \c group is quoted; the \c field of a \c populate field reference, also in a \c populate
+      expression, is a field path of one key, the column of that name; a path of more than one key, or a key with a
+      dot, is refused with \c POPULATE-ERROR
     - the top level of a data schema, a table, its \c auto_triggers, reference data, and shorthand columns no
       longer ignore unknown keys: they are rejected with an error that names the key and, where it belongs
       elsewhere, where it belongs (e.g. \c sequence_columns on a table instead of under \c auto_triggers, which

@@ -6263,16 +6263,41 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         pushdownable conjuncts go into the SQL where clause and only the
         non-pushdownable conjuncts are applied as a row filter.
 
+        With @a field_reference, the field references are given to the provider by the names it uses: the closure
+        returns the field reference that the provider reads for a field reference of the expression, or @ref nothing
+        if the provider cannot name the field (for example a field path of more than one key for a database table),
+        in which case the expression that has it is evaluated client-side.  The pushdown part has the field
+        references the closure returns.
+
+        Each part is an expression: a field reference or a value that is the only conjunct of a part is kept in an
+        \c "and" expression of one argument, so that a part is never read as a provider's own where hash.
+
+        @par Example:
+        @code{.py}
+# a database table can name a column only by a field path of one key; any other field is read client-side
+hash<auto> split = AbstractDataProvider::splitPushdownableExpression(
+    DataProvider::parseDpqlExpression('@status == "open" && @customer.region == "EU"'), table.getExpressionMap(),
+    *hash<DataProviderFieldReference> sub (hash<DataProviderFieldReference> ref) {
+        list<string> path = AbstractDataProvider::getFieldPath(ref.field);
+        return path.size() == 1 ? <DataProviderFieldReference>{"field": path[0]} : NOTHING;
+    });
+# split.pushdown: @status == "open"; split.client: @customer.region == "EU"
+        @endcode
+
         @param cond the where-clause expression to split (or NOTHING)
         @param expmap the data provider's expression map
+        @param field_reference an optional closure taking a field reference of the expression and returning the field
+        reference the provider reads, or @ref nothing if the field cannot be pushed down
         @return a hash with two keys:
-        - @c pushdown: the sub-expression that can be pushed down (or NOTHING)
-        - @c client: the sub-expression to evaluate client-side (or NOTHING)
+        - @c pushdown: the expression that can be pushed down (or NOTHING)
+        - @c client: the expression to evaluate client-side (or NOTHING)
 
         @since DataProvider 3.4
+        @since DataProvider 3.11 the \c field_reference parameter
     */
     static hash<auto> splitPushdownableExpression(*hash<DataProviderExpression> cond,
-            hash<auto> expmap) {
+            hash<auto> expmap,
+            *code<*hash<DataProviderFieldReference>(hash<DataProviderFieldReference>)> field_reference) {
         if (!cond) {
             return {"pushdown": NOTHING, "client": NOTHING};
         }
@@ -6283,7 +6308,13 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                 hash<auto> sub_split;
                 if (arg instanceof hash<DataProviderExpression>) {
                     sub_split = AbstractDataProvider::splitPushdownableExpression(
-                        cast<hash<DataProviderExpression>>(arg), expmap);
+                        cast<hash<DataProviderExpression>>(arg), expmap, field_reference);
+                } else if (field_reference && arg instanceof hash<DataProviderFieldReference>) {
+                    # a field reference alone, as a boolean condition
+                    *hash<DataProviderFieldReference> provider_ref = field_reference(arg);
+                    sub_split = exists provider_ref
+                        ? {"pushdown": provider_ref, "client": NOTHING}
+                        : {"pushdown": NOTHING, "client": arg};
                 } else {
                     # non-expression conjunct (e.g. literal True): treat as pushdownable
                     sub_split = {"pushdown": arg, "client": NOTHING};
@@ -6296,20 +6327,17 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                 }
             }
             return {
-                "pushdown": push_args.size() == 0
-                    ? NOTHING
-                    : (push_args.size() == 1
-                        ? push_args[0]
-                        : <DataProviderExpression>{"exp": DP_OP_AND, "args": push_args}),
-                "client": client_args.size() == 0
-                    ? NOTHING
-                    : (client_args.size() == 1
-                        ? client_args[0]
-                        : <DataProviderExpression>{"exp": DP_OP_AND, "args": client_args}),
+                "pushdown": AbstractDataProvider::getConjunction(push_args),
+                "client": AbstractDataProvider::getConjunction(client_args),
             };
         }
-        if (AbstractDataProvider::expressionPushdownable(cond, expmap)) {
-            return {"pushdown": cond, "client": NOTHING};
+        if (AbstractDataProvider::expressionPushdownable(cond, expmap, field_reference)) {
+            return {
+                "pushdown": field_reference
+                    ? AbstractDataProvider::translateFieldReferences(cond, field_reference)
+                    : cond,
+                "client": NOTHING,
+            };
         }
         return {"pushdown": NOTHING, "client": cond};
     }
@@ -6318,11 +6346,14 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     #! down to a provider with the given expression map.
     /** An expression is pushdownable when its operator resolves in the map (directly
         or via @ref OperatorAliasMap) to an entry with a non-NOTHING @c "code" field,
-        and every sub-expression argument is also pushdownable.
+        and every sub-expression argument is also pushdownable.  With @a field_reference, each field reference
+        argument must be one that the provider can name (see @ref splitPushdownableExpression()).
 
         @since DataProvider 3.4
+        @since DataProvider 3.11 the \c field_reference parameter
     */
-    static bool expressionPushdownable(hash<DataProviderExpression> cond, hash<auto> expmap) {
+    static bool expressionPushdownable(hash<DataProviderExpression> cond, hash<auto> expmap,
+            *code<*hash<DataProviderFieldReference>(hash<DataProviderFieldReference>)> field_reference) {
         *hash<auto> entry = expmap{cond.exp} ?? expmap{OperatorAliasMap{cond.exp}};
         if (!entry || !exists entry.code) {
             return False;
@@ -6330,12 +6361,79 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         foreach auto arg in (cond.args) {
             if (arg instanceof hash<DataProviderExpression>) {
                 if (!AbstractDataProvider::expressionPushdownable(
-                        cast<hash<DataProviderExpression>>(arg), expmap)) {
+                        cast<hash<DataProviderExpression>>(arg), expmap, field_reference)) {
                     return False;
                 }
+            } else if (field_reference && arg instanceof hash<DataProviderFieldReference>
+                    && !exists field_reference(arg)) {
+                return False;
             }
         }
         return True;
+    }
+
+    #! Returns an expression with its field references replaced by those a closure returns
+    /** The field references in the arguments of the expression and of its sub-expressions are replaced; any other
+        argument is kept
+
+        @par Example:
+        @code{.py}
+# a query language that reads a nested field as keys joined with "/"
+hash<DataProviderExpression> exp = AbstractDataProvider::translateFieldReferences(
+    DataProvider::parseDpqlExpression('@customer.name == "Acme"'),
+    hash<DataProviderFieldReference> sub (hash<DataProviderFieldReference> ref) {
+        return <DataProviderFieldReference>{"field": join("/", AbstractDataProvider::getFieldPath(ref.field))};
+    });
+# exp: @"customer/name" == "Acme"
+        @endcode
+
+        @param cond the expression
+        @param field_reference a closure taking a field reference and returning the field reference to use; it may
+        throw an exception if the field cannot be used
+
+        @return the expression with the field references replaced
+
+        @throw FIELD-REFERENCE-ERROR the closure returned no field reference
+
+        @since DataProvider 3.11
+    */
+    static hash<DataProviderExpression> translateFieldReferences(hash<DataProviderExpression> cond,
+            code<*hash<DataProviderFieldReference>(hash<DataProviderFieldReference>)> field_reference) {
+        hash<DataProviderExpression> rv = cond;
+        rv.args = map AbstractDataProvider::translateFieldReferenceArg($1, field_reference), cond.args;
+        return rv;
+    }
+
+    #! Returns the conjunction of conditions as an expression, or @ref nothing if there are none
+    /** A single condition that is an expression is returned as it is; any other single condition (a field reference
+        or a value) is kept in an \c "and" expression of one argument, so that the result is always an expression
+    */
+    private static *hash<DataProviderExpression> getConjunction(list<auto> conds) {
+        if (!conds) {
+            return;
+        }
+        if (conds.size() == 1 && conds[0] instanceof hash<DataProviderExpression>) {
+            return cast<hash<DataProviderExpression>>(conds[0]);
+        }
+        return <DataProviderExpression>{"exp": DP_OP_AND, "args": conds};
+    }
+
+    #! Returns an argument of an expression with its field references replaced
+    private static auto translateFieldReferenceArg(auto arg,
+            code<*hash<DataProviderFieldReference>(hash<DataProviderFieldReference>)> field_reference) {
+        if (arg instanceof hash<DataProviderFieldReference>) {
+            *hash<DataProviderFieldReference> rv = field_reference(arg);
+            if (!rv) {
+                throw "FIELD-REFERENCE-ERROR", sprintf("no field reference was given for the field \"%s\"",
+                    arg.field);
+            }
+            return rv;
+        }
+        if (arg instanceof hash<DataProviderExpression>) {
+            return AbstractDataProvider::translateFieldReferences(cast<hash<DataProviderExpression>>(arg),
+                field_reference);
+        }
+        return arg;
     }
 
     #! Returns the interactions of an option with other options
