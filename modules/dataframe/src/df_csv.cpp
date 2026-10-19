@@ -10,6 +10,8 @@
 
 #include "df_csv.h"
 
+#include <qore/QoreSandboxManager.h>
+
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -252,6 +254,12 @@ QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNod
         }
     }
 
+    // the file is read on behalf of the calling program, so its sandbox must allow it
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
+        return nullptr;
+    }
+
     // Open file
     std::ifstream file(path);
     if (!file.is_open()) {
@@ -420,6 +428,12 @@ void QoreDataFrame::writeCSV(const std::string& path,
         if (getDataFrameString(v, s) && !s.empty()) {
             sep = s[0];
         }
+    }
+
+    // the file is written on behalf of the calling program, so its sandbox must allow it
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_WRITE | QSEC_CREATE, xsink)) {
+        return;
     }
 
     std::ofstream file(path);

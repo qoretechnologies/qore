@@ -1271,6 +1271,8 @@ nothing DataFrame::renameColumn(string old_name, string new_name) {
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow the file to be read
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve the path
 
 */
 static DataFrame DataFrame::readCSV(string path, *hash<CsvOptions> options) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
@@ -1299,6 +1301,8 @@ static DataFrame DataFrame::readCSV(string path, *hash<CsvOptions> options) [dom
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened for writing
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow the file to be written
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve the path
 
 */
 nothing DataFrame::writeCSV(string path, *hash<CsvOptions> options) [dom=FILESYSTEM] {
@@ -1544,6 +1548,8 @@ binary DataFrame::toArrowIpc() [flags=RET_VALUE_ONLY] {
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened or parsed
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow the file to be read
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve the path
 */
 static DataFrame DataFrame::readParquet(string path, *hash<ParquetReadOptions> options) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
     // a path with a NUL character would name another file
@@ -1584,6 +1590,8 @@ static DataFrame DataFrame::readParquet(string path, *hash<ParquetReadOptions> o
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened for writing
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow the file to be written
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve the path
 */
 nothing DataFrame::writeParquet(string path, *hash<ParquetWriteOptions> options) [dom=FILESYSTEM] {
     // a path with a NUL character would name another file

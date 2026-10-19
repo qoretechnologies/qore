@@ -10,6 +10,7 @@
 
 
 %requires Util
+%requires FsUtil
 %requires QUnit
 %requires DataProvider
 %requires reflection
@@ -48,6 +49,20 @@ class DgcUserNode inherits DgcNode {
     destructor() {
         ref.numCols();
     }
+}
+
+#! a program with a filesystem sandbox, and the directories inside and outside its sandbox root
+hashdecl DataFrameSandboxFixture {
+    #! the directory holding the other directories; removed by the test
+    string root;
+    #! the sandbox root
+    string allowed;
+    #! a directory outside the sandbox root
+    string outside;
+    #! the sandboxed program
+    Program program;
+    #! the program's sandbox manager
+    SandboxManager sm;
 }
 
 class MockDataFrameDatasource {
@@ -341,6 +356,10 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("dropColumn() releases the values of the column after its lock", \dropColumnReleaseTest());
         addTestCase("GroupedDataFrame aggregations of every column type", \aggColumnTypeTest());
         addTestCase("GroupedDataFrame aggregations that cannot be applied raise errors", \aggErrorTest());
+        addTestCase("readCSV() respects the sandbox", \readCsvSandboxTest());
+        addTestCase("writeCSV() respects the sandbox", \writeCsvSandboxTest());
+        addTestCase("readParquet() respects the sandbox", \readParquetSandboxTest());
+        addTestCase("writeParquet() respects the sandbox", \writeParquetSandboxTest());
 
         set_return_value(main());
     }
@@ -3195,6 +3214,132 @@ sub invalid_dataframe_api() {
             "fromQuery uses selectColumnar() when native columnar support is present");
         assertEq((1, 2), native_df.getColumnBuffer("id").toList(),
             "fromQuery preserves dense native columnar columns");
+    }
+
+    #! Makes a program whose filesystem sandbox is rooted at a new directory, and files outside that directory
+    /** Files are read and written on behalf of the calling program, so its filesystem sandbox applies; the files
+        outside the sandbox root are made by this program, which has no sandbox.
+    */
+    private hash<DataFrameSandboxFixture> makeSandboxFixture() {
+        string root = make_tmp_dir("qore-dataframe-sandbox-");
+        string allowed = root + "/allowed";
+        string outside = root + "/outside";
+        mkdir(allowed);
+        mkdir(outside);
+
+        DataFrame::DataFrame secret({"secret": ("outside-1", "outside-2", "outside-3")});
+        secret.writeCSV(outside + "/secret.csv");
+        secret.writeParquet(outside + "/secret.parquet");
+        # links inside the sandbox root to files outside it
+        symlink(outside + "/secret.csv", allowed + "/link.csv");
+        symlink(outside + "/secret.parquet", allowed + "/link.parquet");
+
+        Program program(PO_NO_CHILD_PO_RESTRICTIONS);
+        program.parse("
+%modern
+%requires dataframe
+
+list<hash<auto>> sub read_csv(string path) {
+    return DataFrame::DataFrame::readCSV(path).toRecords();
+}
+
+sub write_csv(string path) {
+    DataFrame::DataFrame df({\"a\": (1, 2)});
+    df.writeCSV(path);
+}
+
+list<hash<auto>> sub read_parquet(string path) {
+    return DataFrame::DataFrame::readParquet(path).toRecords();
+}
+
+sub write_parquet(string path) {
+    DataFrame::DataFrame df({\"a\": (1, 2)});
+    df.writeParquet(path);
+}
+        ", "dataframe_sandbox_files");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(allowed);
+        program.setSandboxManager(sm);
+        return <DataFrameSandboxFixture>{
+            "root": root,
+            "allowed": allowed,
+            "outside": outside,
+            "program": program,
+            "sm": sm,
+        };
+    }
+
+    readCsvSandboxTest() {
+        hash<DataFrameSandboxFixture> fx = makeSandboxFixture();
+        on_exit remove_tree(fx.root);
+
+        DataFrame::DataFrame df({"a": (1, 2)});
+        df.writeCSV(fx.allowed + "/data.csv");
+        assertEq(({"a": 1}, {"a": 2}), fx.program.callFunction("read_csv", fx.allowed + "/data.csv"),
+            "a CSV file inside the sandbox root is read");
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \fx.program.callFunction(), ("read_csv", fx.outside + "/secret.csv"),
+            "readCSV() cannot read a file outside the sandbox root");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \fx.program.callFunction(), ("read_csv", fx.allowed + "/link.csv"),
+            "readCSV() cannot read a file outside the sandbox root through a link inside it");
+    }
+
+    writeCsvSandboxTest() {
+        hash<DataFrameSandboxFixture> fx = makeSandboxFixture();
+        on_exit remove_tree(fx.root);
+
+        fx.program.callFunction("write_csv", fx.allowed + "/data.csv");
+        assertEq((1, 2), DataFrame::DataFrame::readCSV(fx.allowed + "/data.csv").getColumn("a"),
+            "a CSV file inside the sandbox root is written");
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \fx.program.callFunction(), ("write_csv", fx.outside + "/written.csv"),
+            "writeCSV() cannot write a file outside the sandbox root");
+        assertFalse(is_file(fx.outside + "/written.csv"), "a denied writeCSV() creates no file");
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \fx.program.callFunction(), ("write_csv", fx.allowed + "/link.csv"),
+            "writeCSV() cannot overwrite a file outside the sandbox root through a link inside it");
+        assertEq(("outside-1", "outside-2", "outside-3"),
+            DataFrame::DataFrame::readCSV(fx.outside + "/secret.csv").getColumn("secret"),
+            "a denied writeCSV() leaves the file outside the sandbox root unchanged");
+    }
+
+    readParquetSandboxTest() {
+        hash<DataFrameSandboxFixture> fx = makeSandboxFixture();
+        on_exit remove_tree(fx.root);
+
+        DataFrame::DataFrame df({"a": (1, 2)});
+        df.writeParquet(fx.allowed + "/data.parquet");
+        assertEq(({"a": 1}, {"a": 2}), fx.program.callFunction("read_parquet", fx.allowed + "/data.parquet"),
+            "a Parquet file inside the sandbox root is read");
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \fx.program.callFunction(),
+            ("read_parquet", fx.outside + "/secret.parquet"),
+            "readParquet() cannot read a file outside the sandbox root");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \fx.program.callFunction(),
+            ("read_parquet", fx.allowed + "/link.parquet"),
+            "readParquet() cannot read a file outside the sandbox root through a link inside it");
+    }
+
+    writeParquetSandboxTest() {
+        hash<DataFrameSandboxFixture> fx = makeSandboxFixture();
+        on_exit remove_tree(fx.root);
+
+        fx.program.callFunction("write_parquet", fx.allowed + "/data.parquet");
+        assertEq((1, 2), DataFrame::DataFrame::readParquet(fx.allowed + "/data.parquet").getColumn("a"),
+            "a Parquet file inside the sandbox root is written");
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \fx.program.callFunction(),
+            ("write_parquet", fx.outside + "/written.parquet"),
+            "writeParquet() cannot write a file outside the sandbox root");
+        assertFalse(is_file(fx.outside + "/written.parquet"), "a denied writeParquet() creates no file");
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \fx.program.callFunction(),
+            ("write_parquet", fx.allowed + "/link.parquet"),
+            "writeParquet() cannot overwrite a file outside the sandbox root through a link inside it");
+        assertEq(("outside-1", "outside-2", "outside-3"),
+            DataFrame::DataFrame::readParquet(fx.outside + "/secret.parquet").getColumn("secret"),
+            "a denied writeParquet() leaves the file outside the sandbox root unchanged");
     }
 
     csvMissingValuesTest() {

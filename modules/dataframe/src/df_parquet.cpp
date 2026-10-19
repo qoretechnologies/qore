@@ -10,6 +10,8 @@
 
 #include "QC_DataFrame.h"
 
+#include <qore/QoreSandboxManager.h>
+
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
@@ -2680,6 +2682,12 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
         return nullptr;
     }
 
+    // the file is read on behalf of the calling program, so its sandbox must allow it
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
+        return nullptr;
+    }
+
     // Open file
     auto maybe_infile = arrow::io::ReadableFile::Open(path, pool);
     if (!maybe_infile.ok()) {
@@ -2998,6 +3006,13 @@ void QoreDataFrame::writeParquet(const std::string& path, const QoreHashNode* op
     arrow::MemoryPool* pool = arrow::system_memory_pool();
     QoreParquetWriteOptions write_options;
     if (!qoreParquetWriteOptions(options, write_options, xsink)) {
+        return;
+    }
+
+    // the file is written on behalf of the calling program, so its sandbox must allow it; this is checked before the
+    // data is converted
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_WRITE | QSEC_CREATE, xsink)) {
         return;
     }
 
