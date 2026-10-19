@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDataProviderBulkOperation class definition
 
-/** AbstractDataProviderBulkOperation.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** AbstractDataProviderBulkOperation.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -21,12 +21,6 @@
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
 */
-
-# assume local scope for variables, do not use "$" signs
-%modern
-# require type definitions everywhere
-#! strict argument handling
-# enable all warnings
 
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {

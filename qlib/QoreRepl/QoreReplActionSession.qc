@@ -22,10 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
-%requires Util
-
 public namespace QoreRepl {
 
 #! Action-based REPL session for Creator WebSocket integration

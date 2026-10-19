@@ -22,10 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
-%requires Util
-
 public namespace QoreRepl {
 
 #! WebSocket connection for remote REPL access

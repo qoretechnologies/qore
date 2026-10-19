@@ -28,6 +28,9 @@
 
 %requires WebSocketHandler >= 2.0
 
+# HttpServerUtil for the WebSocket handler's request handling
+%requires HttpServerUtil
+
 # Linenoise support for line editing and history
 %requires linenoise
 

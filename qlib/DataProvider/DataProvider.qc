@@ -22,9 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%requires reflection
-%requires Util
-
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
 /** @defgroup DataProviderGlobalOptions Data Provider Global Options

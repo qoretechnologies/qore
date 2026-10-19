@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 

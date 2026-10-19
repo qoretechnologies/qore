@@ -22,9 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-%disable-warning deprecated
-
 public namespace QoreRepl {
 
 #! QoreRepl module version
