@@ -2483,8 +2483,8 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
         @return True if the function should be hidden from completions
     */
     private bool isFunctionRestricted(Reflection::Function f, int po) {
-        # Domain check: function's domain conflicts with parse restrictions
-        if ((po & f.getDomain()) != 0) {
+        # Domain check: the parse options do not allow the function's domain
+        if (isDomainRestricted(f.getDomain(), po)) {
             return True;
         }
         # RUNTIME_NOOP check: when strict-args or require-types is set,
@@ -2517,7 +2517,22 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
         @return True if the class should be hidden from completions
     */
     private bool isClassRestricted(Reflection::Class cls, int po) {
-        return (po & cls.getDomain()) != 0;
+        return isDomainRestricted(cls.getDomain(), po);
+    }
+
+    #! Checks if a functional domain is not allowed by the active parse options
+    /** The rule is the one the parser applies to code that uses a class or function: a domain that parse options
+        can restrict (for example \c FILESYSTEM, excluded by \c PO_NO_FILESYSTEM) must not be excluded, and a domain
+        that parse options have to allow explicitly (for example \c DEBUGGER, allowed by \c PO_ALLOW_DEBUGGER) must be
+        allowed
+
+        @param domain the functional domain of a class or function
+        @param po active parse option flags
+        @return True if the parse options do not allow the domain
+    */
+    private static bool isDomainRestricted(int domain, int po) {
+        int allow = domain & PO_POSITIVE_OPTIONS;
+        return (domain & ~PO_POSITIVE_OPTIONS & po) != 0 || (allow & po) != allow;
     }
 
     #! Formats variant signatures for detail display
