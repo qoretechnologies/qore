@@ -67,6 +67,7 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("getTypeForActionOptions - a field for each option", \typeForActionOptions());
         addTestCase("isPlainFieldPath - a path read as it is written", \isPlainFieldPathTest());
         addTestCase("column blocks - a field path with a backslash", \columnBlockEscapedKeyTest());
+        addTestCase("ExpressionTypes::getType - field references are paths", \fieldReferenceTypeTest());
 
         # Processor backward compatibility tests
         addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
@@ -419,6 +420,36 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
 
         # an action without options has no option type
         assertNothing(DataProviderActionCatalog::getTypeForActionOptions(action - "options"));
+    }
+
+    #! The type of a field reference is the type of the field at its path: an escaped dot is part of a key, and a
+    #! dotted path reads nested fields
+    fieldReferenceTypeTest() {
+        HashDataType order("order");
+        order.addField(new QoreDataField("id", "Id", AbstractDataProviderTypeMap."int"));
+        order.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderTypeMap."float"));
+        hash<string, AbstractDataField> fields = {
+            "Unit.Price": new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderTypeMap."number"),
+            "order": new QoreDataField("order", "Order", order),
+            "name": new QoreDataField("name", "Name", AbstractDataProviderTypeMap."string"),
+        };
+        foreach hash<auto> i in ((
+                {"dpql": '@"Unit\.Price"', "type": "number"},
+                {"dpql": '@"Unit\\.Price"', "type": "number"},
+                {"dpql": '@order.id', "type": "int"},
+                {"dpql": '@"order.id"', "type": "int"},
+                {"dpql": '@"order.Unit\.Price"', "type": "float"},
+                {"dpql": '@name', "type": "string"},
+                {"dpql": '@"Unit\.Price" * 2', "type": "number"},
+            )) {
+            *AbstractDataProviderType type = ExpressionTypes::getType(DataProvider::parseDpqlExpression(i.dpql),
+                fields);
+            assertEq(i.type, type ? type.getName() : NOTHING, i.dpql);
+        }
+        # a path that the fields do not have has no type
+        foreach string dpql in ('@Unit.Price', '@order.qty', '@"order\\\\.id"') {
+            assertNothing(ExpressionTypes::getType(DataProvider::parseDpqlExpression(dpql), fields), dpql);
+        }
     }
 
     #! Only a path with no dot and no backslash is the one key it is written as
