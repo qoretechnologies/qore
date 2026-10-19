@@ -257,6 +257,13 @@ $function$
       \c search_path resolves a table name without a schema to is quoted in SQL if it needs quotes
     - fixed the functions of triggers called with trigger arguments (ex: <tt>execute function f('x', 'a,b')</tt>)
       not being read, so that they were missing from the SQL that creates, aligns, and drops the table
+    - fixed @ref SqlUtil::AbstractDatabase::getSequence() "getSequence()" describing every sequence with the default
+      start, increment, and maximum, as it read them from columns that a sequence does not have; they are read from
+      \c pg_sequence (PostgreSQL 10 and later) or from the sequence (earlier versions), with the minimum and the cycle
+      option, which @ref PgsqlSqlUtilBase::PgsqlSequence "PgsqlSequence" has as the new members
+      @ref PgsqlSqlUtilBase::PgsqlSequence::min "min" and @ref PgsqlSqlUtilBase::PgsqlSequence::cycle "cycle", and
+      gives in the SQL that creates the sequence; schema alignment creates a sequence that does not exist and does not
+      change one that exists, so a sequence is never created again nor restarted by it
     - Added the size of the current schema (\c current_schema(): the first existing schema of the connection's
       \c search_path; see @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
       "AbstractDatabase::getCurrentSchemaPhysicalSize()"), which measures only that schema's relations instead of
@@ -1441,15 +1448,47 @@ auto v = c.name;
 
 #! class for PostgreSQL sequences
 public class PgsqlSequence inherits SqlUtil::AbstractSequence {
+    public {
+        #! the minimum value; no value for the default minimum (1 for an ascending sequence, the minimum of a
+        #! bigint for a descending one)
+        /** @since PgsqlSqlUtilBase 1.19
+        */
+        *number min;
+
+        #! @ref True if the sequence starts again at its minimum (or maximum) value when it reaches its maximum (or
+        #! minimum) value
+        /** @since PgsqlSqlUtilBase 1.19
+        */
+        bool cycle = False;
+    }
+
     #! creates the object from the arguments
-    constructor(string n_name, number n_start = 1, number n_increment = 1, *softnumber n_end)
-            : AbstractSequence(n_name, n_start, n_increment, n_end) {
+    /** @param n_name the name of the sequence
+        @param n_start the starting value
+        @param n_increment the increment
+        @param n_end the maximum value; no value for the default maximum (the maximum of a bigint for an ascending
+        sequence, -1 for a descending one)
+        @param n_min the minimum value; no value for the default minimum
+        @param n_cycle @ref True if the sequence starts again when it reaches its limit
+
+        @note \a n_min and \a n_cycle are available since PgsqlSqlUtilBase 1.19
+    */
+    constructor(string n_name, number n_start = 1, number n_increment = 1, *softnumber n_end, *softnumber n_min,
+            bool n_cycle = False) : AbstractSequence(n_name, n_start, n_increment, n_end) {
+        min = n_min;
+        cycle = n_cycle;
     }
 
     #! returns a string that can be used to create the sequence in the database
     string getCreateSql(*hash opt) {
         string sql = sprintf("create sequence %s start with %d increment by %d ", name, start, increment);
-        sql += max ? sprintf("maxvalue %d", max) : "no maxvalue";
+        sql += exists max ? sprintf("maxvalue %d", max) : "no maxvalue";
+        if (exists min) {
+            sql += sprintf(" minvalue %d", min);
+        }
+        if (cycle) {
+            sql += " cycle";
+        }
         return sql;
     }
 
@@ -1764,17 +1803,43 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         hash<PgsqlObjectName> on = pgsql_parse_object_name(name);
         string schema = on.schema ?? get_pgsql_default_schema(ds);
 
-        *hash<auto> row = ds.selectRow("select c.relname from pg_class c "
-            "join pg_namespace n on n.oid = c.relnamespace "
-            "where c.relkind = 'S' and c.relname = %v and n.nspname = %v", on.name, schema);
-        if (!row)
+        # the attributes of a sequence are in pg_sequence since PostgreSQL 10; before, in the sequence relation,
+        # which has only its current value since.  The sequence was described with the default attributes, as the
+        # columns read from the relation (start, increment and max) did not exist in any version
+        *hash<auto> row;
+        if (ds.getServerVersion() >= 100000) {
+            row = ds.selectRow("select s.seqstart as start, s.seqincrement as increment, s.seqmax as max, "
+                "s.seqmin as min, s.seqcycle as cycle from pg_catalog.pg_sequence s "
+                "join pg_catalog.pg_class c on c.oid = s.seqrelid "
+                "join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+                "where c.relname = %v and n.nspname = %v", on.name, schema);
+        } else {
+            if (!ds.selectRow("select c.relname from pg_class c "
+                    "join pg_namespace n on n.oid = c.relnamespace "
+                    "where c.relkind = 'S' and c.relname = %v and n.nspname = %v", on.name, schema)) {
+                return;
+            }
+            # qualified, so it cannot resolve to a same-named sequence in another schema on the search path
+            row = ds.selectRow(sprintf("select start_value as start, increment_by as increment, max_value as max, "
+                "min_value as min, is_cycled as cycle from %s.%s", on.sql_schema ?? pgsql_quote_identifier(schema),
+                pgsql_quote_identifier(on.name)));
+        }
+        if (!row) {
             return;
+        }
 
-        # qualified, so it cannot resolve to a same-named sequence in another schema on the search path
-        row = ds.selectRow(sprintf("select * from %s.%s", on.sql_schema ?? pgsql_quote_identifier(schema),
-            pgsql_quote_identifier(on.name)));
-        return new PgsqlSequence(on.sql_name, row.start, row.increment,
-            row.max == 9223372036854775807 ? NOTHING : row.max);
+        # a maximum or minimum that is the default of a bigint sequence in its direction, as getCreateSql() creates
+        # it, is not given
+        bool ascending = row.increment > 0;
+        *int max = row.max;
+        if (max == (ascending ? 9223372036854775807 : -1)) {
+            remove max;
+        }
+        *int min = row.min;
+        if (min == (ascending ? 1 : -9223372036854775807 - 1)) {
+            remove min;
+        }
+        return new PgsqlSequence(on.sql_name, row.start, row.increment, max, min, row.cycle);
     }
 
     private *AbstractView getViewImpl(string name) {

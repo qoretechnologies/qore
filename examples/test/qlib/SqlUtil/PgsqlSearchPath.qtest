@@ -61,6 +61,9 @@ class PgsqlSearchPathTest inherits QUnit::Test {
             \qualifiedTriggerFunctionRoundTrip());
         addTestCase("a table with qualified trigger functions is aligned with its description",
             \qualifiedTriggerFunctionAlignment());
+        addTestCase("sequences are described with their start, increment, minimum, maximum and cycle",
+            \sequenceAttributes());
+        addTestCase("existing sequences are aligned without SQL and keep their values", \sequenceAlignment());
         addTestCase("functions given quoted names are looked up in the schema the name gives",
             \quotedFunctionNames());
         addTestCase("tables given quoted names are looked up in the schema the name gives", \quotedTableNames());
@@ -247,6 +250,12 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         # sequence on PostgreSQL 10 and later, so only its existence shows which schema it is looked up in
         admin.exec(sprintf("create sequence %s.\"S.1\"", quote(dot_schema)));
         admin.exec(sprintf("create sequence %s.sp_seq_decoy", decoy_schema));
+        # sequences with attributes other than the defaults
+        admin.exec(sprintf("create sequence %s.sp_seq_attr as integer start 7 increment 3 minvalue 5 maxvalue 1000 "
+            "cycle", run_schema));
+        admin.exec(sprintf("create sequence %s.sp_seq_desc increment -2", run_schema));
+        admin.exec(sprintf("create sequence %s.sp_seq_int as integer start 10", run_schema));
+        admin.exec(sprintf("create sequence %s.sp_seq_adv start 10", run_schema));
         # a quoted name in a schema with a plain name, and a plain name in a schema with a quoted one
         admin.exec(sprintf("create table %s.\"Sp Tab\" (id int, sp_col text)", decoy_schema));
         admin.exec(sprintf("create table %s.sp_plain_t (id int, plain_col text)", quote(other_schema)));
@@ -468,6 +477,75 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         template.setupTable(desc);
         assertEq(("drop trigger sp_qt_e on " + t.getSqlName(), "create trigger sp_qt_e " + desc.triggers.sp_qt_e),
             t.getAlignSql(template) ?? ());
+    }
+
+    #! returns the attributes of a sequence
+    private static hash<auto> getSequenceAttributes(AbstractSequence seq) {
+        PgsqlSequence pseq = cast<PgsqlSequence>(seq);
+        return {
+            "start": pseq.start.toInt(),
+            "increment": pseq.increment.toInt(),
+            "max": exists pseq.max ? pseq.max.toInt() : NOTHING,
+            "min": exists pseq.min ? pseq.min.toInt() : NOTHING,
+            "cycle": pseq.cycle,
+        };
+    }
+
+    private sequenceAttributes() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        Database db(ds);
+        # a maximum or minimum that is the default of a bigint sequence in its direction is not given
+        hash<string, hash<auto>> expected = {
+            "sp_seq_attr": {"start": 7, "increment": 3, "max": 1000, "min": 5, "cycle": True,
+                "sql": "create sequence sp_seq_attr start with 7 increment by 3 maxvalue 1000 minvalue 5 cycle"},
+            "sp_seq_desc": {"start": -1, "increment": -2, "max": NOTHING, "min": NOTHING, "cycle": False,
+                "sql": "create sequence sp_seq_desc start with -1 increment by -2 no maxvalue"},
+            # the maximum of an integer sequence is given, as a sequence is created as a bigint sequence
+            "sp_seq_int": {"start": 10, "increment": 1, "max": 2147483647, "min": NOTHING, "cycle": False,
+                "sql": "create sequence sp_seq_int start with 10 increment by 1 maxvalue 2147483647"},
+            "sp_seq": {"start": 1, "increment": 1, "max": NOTHING, "min": NOTHING, "cycle": False,
+                "sql": "create sequence sp_seq start with 1 increment by 1 no maxvalue"},
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            AbstractSequence seq = db.getSequence(i.key);
+            assertEq(i.value - "sql", PgsqlSearchPathTest::getSequenceAttributes(seq), i.key);
+            assertEq(i.value.sql, seq.getCreateSql(), i.key);
+        }
+        # the decoy schema's sequence of the same name
+        assertEq({"start": 100, "increment": 5, "max": NOTHING, "min": NOTHING, "cycle": False},
+            PgsqlSearchPathTest::getSequenceAttributes(db.getSequence(decoy_schema + ".sp_seq")));
+
+        # a sequence created with the SQL of its description is described as it was
+        AbstractSequence seq = db.getSequence("sp_seq_attr");
+        ds.exec(seq.getDropSql());
+        ds.exec(seq.getCreateSql());
+        assertEq(PgsqlSearchPathTest::getSequenceAttributes(seq),
+            PgsqlSearchPathTest::getSequenceAttributes(db.getSequence("sp_seq_attr")));
+    }
+
+    private sequenceAlignment() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        Database db(ds);
+        # advance the sequence
+        map ds.selectRow("select nextval('sp_seq_adv')"), xrange(3);
+
+        # a sequence as it is described produces no SQL
+        assertEq((), db.getAlignSql({"tables": {}, "sequences": {
+            "sp_seq_adv": {"start": 10, "increment": 1},
+            "sp_seq_attr": {"start": 7, "increment": 3, "end": 1000},
+        }}));
+        # an existing sequence is not created again nor restarted when the description differs, so it keeps its
+        # value
+        list<auto> sql = db.getAlignSql({"tables": {}, "sequences": {"sp_seq_adv": {"start": 1, "increment": 5,
+            "end": 50}}});
+        assertEq((), sql);
+        map ds.exec($1), sql;
+        assertEq(13, ds.selectRow("select nextval('sp_seq_adv') as v").v);
+        # a missing sequence is created
+        assertEq(("create sequence sp_seq_missing start with 3 increment by 1 no maxvalue",),
+            db.getAlignSql({"tables": {}, "sequences": {"sp_seq_missing": {"start": 3}}}));
     }
 
     private quotedFunctionNames() {
