@@ -441,6 +441,8 @@ public class MlTest inherits QUnit::Test {
         addTestCase("NUL: option values", \nulOptionValueTest());
         addTestCase("NUL: restored field names", \nulRestoredFieldNameTest());
         addTestCase("NUL: ONNX string tensors and model data", \nulOnnxDataTest());
+        addTestCase("NUL: refused in ONNX Runtime identifiers", \nulOnnxIdentifierTest());
+        addTestCase("NUL: refused in paths", \nulPathTest());
         set_return_value(main());
     }
 
@@ -9795,6 +9797,104 @@ public class MlTest inherits QUnit::Test {
                 (QoreOnnxExport::OnnxGraphBuilder::makeOutput("Y", 1),), (ext,))));
         assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", "invalid length value", \ciConstruct(),
             (tmp.path + "/model.onnx", ciConfig("required")));
+    }
+
+    nulOnnxIdentifierTest() {
+        # a tensor dtype is looked up by a NUL-terminated name
+        assertThrows("ML-TENSOR-DTYPE-ERROR", "NUL character", sub () {
+            ML::Tensor t(data: (1.0, 2.0), dtype: "float32\x00x");
+        });
+        assertThrows("ML-TENSOR-DTYPE-ERROR", "NUL character", sub () {
+            ML::Tensor t = ML::Tensor::fromColumns((new buffer<float64>((1.0,)),), "float64\x00x");
+        });
+
+        if (skipOnnx()) {
+            return;
+        }
+        # ONNX Runtime names tensors, providers, devices and settings by NUL-terminated strings, so a name with a
+        # NUL character would silently name another one
+        ML::OnnxModel model(getTestModelPath(), ciConfig());
+        assertThrows("ML-ONNX-INFERENCE-ERROR", "NUL character", sub () { model.run({"X": ((1.0,),)}, ("Y\x00z",)); });
+        ML::OnnxIoBinding b = model.createBinding();
+        assertThrows("ML-ONNX-BINDING-ERROR", "NUL character", sub () { b.bindInput("X\x00y", ((1.0,),)); });
+        assertThrows("ML-ONNX-BINDING-ERROR", "NUL character", sub () { b.bindOutput("Y\x00z"); });
+        assertThrows("ML-ONNX-BINDING-ERROR", "NUL character", sub () { b.bindOutputDevice("Y\x00z"); });
+        assertThrows("ML-ONNX-BINDING-ERROR", "NUL character", sub () {
+            b.bindOutputTensor("Y\x00z", new ML::Tensor(data: new buffer<float32>((0.0,)), shape: (1, 1)));
+        });
+        assertThrows("ML-ONNX-DEVICE-BINDING-ERROR", "NUL character", sub () {
+            b.bindOutputDevice("Y", {"kind": "cuda\x00x"});
+        });
+        assertThrows("ML-ONNX-RUN-OPTIONS-ERROR", "NUL character", sub () {
+            ML::OnnxRunOptions o({"run_tag": "tag\x00x"});
+        });
+        assertThrows("ML-ONNX-RUN-OPTIONS-ERROR", "NUL character", sub () {
+            ML::OnnxRunOptions o({"config": {"qore.test": "1\x00x"}});
+        });
+
+        list<hash<ML::OnnxSessionConfig>> configs = (
+            nulConfig({"config": {"qore.test": "1\x00x"}}),
+            nulConfig({"providers": (<ML::OnnxProviderConfig>{"name": "CPU\x00x"},)}),
+            nulConfig({"providers": (<ML::OnnxProviderConfig>{"name": "CPU", "options": {"x": "1\x00x"}},)}),
+            nulConfig({"required_providers": ("CPU\x00x",)}),
+            nulConfig({"device_binding": <ML::OnnxDeviceBindingConfig>{
+                "enabled": True, "default_output_device": "cpu\x00x",
+            }}),
+        );
+        list<string> errs = ("ML-ONNX-RUN-OPTIONS-ERROR", "ML-ONNX-PROVIDER-ERROR", "ML-ONNX-PROVIDER-ERROR",
+            "ML-ONNX-PROVIDER-ERROR", "ML-ONNX-DEVICE-BINDING-ERROR");
+        foreach hash<ML::OnnxSessionConfig> config in (configs) {
+            assertThrows(errs[$#], "NUL character", \ciConstruct(), (getTestModelPath(), config),
+                sprintf("session config %d", $#));
+        }
+    }
+
+    nulPathTest() {
+        FsUtil::TmpDir tmp("qore-ml-nul-");
+        # a native model file is opened by its NUL-terminated path
+        ML::LinearRegression lr();
+        lr.fitMatrix(((1.0,), (2.0,), (3.0,)), (3.0, 5.0, 7.0));
+        assertThrows("FILE-OPEN2-ERROR", "NUL character", \ML::ml_save_model(), (lr, tmp.path + "/m.qml\x00x"));
+        assertFalse(is_file(tmp.path + "/m.qml"));
+        ML::ml_save_model(lr, tmp.path + "/m.qml");
+        assertThrows("FILE-OPEN2-ERROR", "NUL character", \ML::ml_load_model(), tmp.path + "/m.qml\x00x");
+
+        if (skipOnnx()) {
+            return;
+        }
+        # so are ONNX model files, optimized models and profile files
+        string path = getTestModelPath();
+        assertThrows("ML-ONNX-ERROR", "NUL character", sub () { ML::OnnxModel m(path + "\x00x"); });
+        assertThrows("ML-ONNX-ERROR", "NUL character", \ciConstruct(), (path + "\x00x", ciConfig()));
+        assertThrows("ML-ONNX-ERROR", "NUL character", sub () {
+            ML::OnnxSessionPool p(path + "\x00x", ciConfig());
+        });
+        ML::OnnxModel model(path, ciConfig());
+        assertThrows("ML-ONNX-ERROR", "NUL character", sub () {
+            model.saveOptimized(output_path: tmp.path + "/opt.onnx\x00x");
+        });
+        assertThrows("ML-ONNX-ERROR", "NUL character", sub () {
+            ML::onnx_optimize_model(input_path: path + "\x00x", output_path: tmp.path + "/opt.onnx");
+        });
+        assertThrows("ML-ONNX-ERROR", "NUL character", sub () {
+            ML::onnx_optimize_model(input_path: path, output_path: tmp.path + "/opt.onnx\x00x");
+        });
+        assertThrows("ML-ONNX-ERROR", "NUL character", \ciConstruct(),
+            (path, nulConfig({"optimized_model_filepath": tmp.path + "/opt.onnx\x00x"})));
+        assertThrows("ML-ONNX-ERROR", "NUL character", \ciConstruct(),
+            (path, nulConfig({"profile_file_prefix": tmp.path + "/profile\x00x"})));
+        # nothing was written to the paths before the NUL characters
+        assertEq((), glob(tmp.path + "/opt.onnx*") ?? ());
+        assertEq((), glob(tmp.path + "/profile*") ?? ());
+    }
+
+    #! Returns the session config of the content identity tests with the given settings added
+    private hash<ML::OnnxSessionConfig> nulConfig(hash<auto> extra) {
+        hash<ML::OnnxSessionConfig> rv = ciConfig();
+        foreach hash<auto> i in (extra.pairIterator()) {
+            rv{i.key} = i.value;
+        }
+        return rv;
     }
 
     #! Returns the value with each string replaced by the hex of its bytes

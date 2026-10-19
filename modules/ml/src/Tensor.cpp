@@ -435,6 +435,11 @@ QoreTensor* QoreTensor::fromValue(QoreValue data, const QoreListNode* shape_arg,
 
     QoreBufferElementType element_type = QoreBufferElementType::Invalid;
     if (dtype) {
+        // the dtype name is looked up as a NUL-terminated string
+        if (q_check_no_nul(dtype->c_str(), dtype->size(), "tensor dtype", "tensor dtypes", "ML-TENSOR-DTYPE-ERROR",
+                xsink)) {
+            return nullptr;
+        }
         if (!qore_buffer_element_type_from_name(dtype->c_str(), element_type)) {
             xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
                 "unsupported tensor dtype '%s'; expected int8, int16, int32, int64, float32, float64, bool, or string",
@@ -532,6 +537,11 @@ QoreTensor* QoreTensor::fromColumns(const QoreListNode* columns_arg, const QoreS
 
     QoreBufferElementType element_type = QoreBufferElementType::Invalid;
     if (dtype) {
+        // the dtype name is looked up as a NUL-terminated string
+        if (q_check_no_nul(dtype->c_str(), dtype->size(), "tensor dtype", "tensor dtypes", "ML-TENSOR-DTYPE-ERROR",
+                xsink)) {
+            return nullptr;
+        }
         if (!qore_buffer_element_type_from_name(dtype->c_str(), element_type)) {
             xsink->raiseException("ML-TENSOR-DTYPE-ERROR",
                 "unsupported tensor dtype '%s'; expected int8, int16, int32, int64, float32, float64, or bool",

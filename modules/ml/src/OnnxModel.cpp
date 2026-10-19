@@ -770,6 +770,12 @@ static std::unordered_map<std::string, std::string> hashToStringMap(const QoreHa
             return {};
         }
         QoreStringValueHelper str(value);
+        // the value is passed to ONNX Runtime as a NUL-terminated string
+        if (q_check_no_nul(str->c_str(), str->size(),
+                (std::string(context) + " config entry '" + hi.getKey() + "' value").c_str(),
+                "ONNX Runtime config values", "ML-ONNX-RUN-OPTIONS-ERROR", xsink)) {
+            return {};
+        }
         rv[hi.getKey()] = str->c_str();
     }
     return rv;
@@ -859,6 +865,11 @@ QoreOnnxRunOptions::QoreOnnxRunOptions(const QoreHashNode* opts, ExceptionSink* 
     QoreValue tag_val = opts->getKeyValue("run_tag");
     if (!tag_val.isNullOrNothing()) {
         QoreStringValueHelper tag(tag_val);
+        // the run tag is passed to ONNX Runtime as a NUL-terminated string
+        if (q_check_no_nul(tag->c_str(), tag->size(), "run_tag", "ONNX Runtime run tags",
+                "ML-ONNX-RUN-OPTIONS-ERROR", xsink)) {
+            return;
+        }
         run_tag = tag->c_str();
         try {
             options.SetRunTag(run_tag.c_str());
@@ -1182,6 +1193,10 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
                     "invalid profile_file_prefix; expected a non-empty path prefix");
                 return;
             }
+            // the prefix of the profile file path is passed to ONNX Runtime as a NUL-terminated string
+            if (q_check_path(**profile_prefix, "ML-ONNX-ERROR", xsink)) {
+                return;
+            }
             prefix = profile_prefix->c_str();
         }
         try {
@@ -1205,6 +1220,10 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
         if (!optimized_path->strlen()) {
             xsink->raiseException("ML-ONNX-ERROR",
                 "invalid optimized_model_filepath; expected a non-empty output path");
+            return;
+        }
+        // the path is passed to ONNX Runtime as a NUL-terminated string
+        if (q_check_path(**optimized_path, "ML-ONNX-ERROR", xsink)) {
             return;
         }
         opts.SetOptimizedModelFilePath(optimized_path->c_str());
@@ -1373,6 +1392,11 @@ void QoreOnnxModel::configureProviderPolicy(const QoreHashNode* config, Exceptio
         const QoreListNode* required = required_val.get<const QoreListNode>();
         for (size_t i = 0; i < required->size(); ++i) {
             QoreStringValueHelper name(required->retrieveEntry(i));
+            // a provider is registered with ONNX Runtime by its NUL-terminated name
+            if (q_check_no_nul(name->c_str(), name->size(), "execution provider name", "execution provider names",
+                    "ML-ONNX-PROVIDER-ERROR", xsink)) {
+                return;
+            }
             std::string normalized = normalizeProviderName(name->c_str());
             required_providers.push_back(normalized);
             OnnxProviderDiagnostic& diag = providerDiagnostic(normalized);
@@ -1436,6 +1460,11 @@ void QoreOnnxModel::configureDeviceBinding(const QoreHashNode* config, Exception
     QoreValue out_dev_val = db->getKeyValue("default_output_device");
     if (!out_dev_val.isNullOrNothing()) {
         QoreStringValueHelper out_dev(out_dev_val);
+        // the device names a provider, which is registered with ONNX Runtime by its NUL-terminated name
+        if (q_check_no_nul(out_dev->c_str(), out_dev->size(), "output device", "output devices",
+                "ML-ONNX-DEVICE-BINDING-ERROR", xsink)) {
+            return;
+        }
         std::string spec = out_dev->c_str();
         // optional ":<device_id>" suffix on an explicit provider/device name
         std::string name = spec;
@@ -1518,6 +1547,11 @@ bool QoreOnnxModel::resolveOutputDeviceInfo(const QoreHashNode* device,
             return false;
         }
         QoreStringValueHelper kind(kind_val);
+        // the device kind names an ONNX Runtime memory device by its NUL-terminated name
+        if (q_check_no_nul(kind->c_str(), kind->size(), "device kind", "device kinds", "ML-ONNX-DEVICE-BINDING-ERROR",
+                xsink)) {
+            return false;
+        }
         out.kind = deviceKindFromName(kind->c_str());
         if (out.kind == QoreBufferDeviceKind::Unknown) {
             xsink->raiseException("ML-ONNX-DEVICE-BINDING-ERROR",
@@ -1771,6 +1805,11 @@ void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNo
                 return;
             }
             QoreStringValueHelper name_str(name_val);
+            // a provider is registered with ONNX Runtime by its NUL-terminated name
+            if (q_check_no_nul(name_str->c_str(), name_str->size(), "execution provider name",
+                    "execution provider names", "ML-ONNX-PROVIDER-ERROR", xsink)) {
+                return;
+            }
             std::string provider_name = normalizeProviderName(name_str->c_str());
             requested_providers.push_back(provider_name);
             OnnxProviderDiagnostic& diag = providerDiagnostic(provider_name);
@@ -1784,6 +1823,12 @@ void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNo
                 ConstHashIterator hi(opts_hash);
                 while (hi.next()) {
                     QoreStringValueHelper key_str(hi.get());
+                    // the option value is passed to ONNX Runtime as a NUL-terminated string
+                    if (q_check_no_nul(key_str->c_str(), key_str->size(),
+                            (std::string("execution provider option '") + hi.getKey() + "' value").c_str(),
+                            "execution provider option values", "ML-ONNX-PROVIDER-ERROR", xsink)) {
+                        return;
+                    }
                     provider_opts[hi.getKey()] = key_str->c_str();
                 }
             }
@@ -2609,6 +2654,11 @@ std::vector<const TensorMeta*> QoreOnnxModel::selectOutputMeta(const QoreListNod
             return {};
         }
         QoreStringValueHelper name(output_names->retrieveEntry(i));
+        // ONNX Runtime names an output by a NUL-terminated string
+        if (q_check_no_nul(name->c_str(), name->size(), "ONNX output name", "ONNX tensor names",
+                "ML-ONNX-INFERENCE-ERROR", xsink)) {
+            return {};
+        }
         const TensorMeta* meta = findOutputMeta(name->c_str());
         if (!meta) {
             std::string available;

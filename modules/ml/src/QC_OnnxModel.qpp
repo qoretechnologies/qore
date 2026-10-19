@@ -138,9 +138,14 @@ OnnxIoBinding::copy() {
     @param value tensor data; accepts the same values as OnnxModel::run(),
         including nested lists, dense \c buffer<T>, and @ref ML::Tensor values
 
-    @throw ML-ONNX-BINDING-ERROR if the input name is unknown or the value is invalid
+    @throw ML-ONNX-BINDING-ERROR if the input name is unknown or has a NUL character, or the value is invalid
 */
 nothing OnnxIoBinding::bindInput(string name, auto value) [flags=NAMED_ARGS] {
+    // ONNX Runtime names a tensor by a NUL-terminated string
+    if (q_check_no_nul(name->c_str(), name->size(), "ONNX input tensor name", "ONNX tensor names",
+            "ML-ONNX-BINDING-ERROR", xsink)) {
+        return QoreValue();
+    }
     binding->bindInput(name->c_str(), value, xsink);
 }
 
@@ -156,8 +161,15 @@ nothing OnnxIoBinding::bindInputs(hash<auto> inputs) [flags=NAMED_ARGS] {
 
 //! Binds one output to ONNX Runtime-managed CPU memory
 /** @param name model output tensor name
+
+    @throw ML-ONNX-BINDING-ERROR if the output name is unknown or has a NUL character
 */
 nothing OnnxIoBinding::bindOutput(string name) [flags=NAMED_ARGS] {
+    // ONNX Runtime names a tensor by a NUL-terminated string
+    if (q_check_no_nul(name->c_str(), name->size(), "ONNX output tensor name", "ONNX tensor names",
+            "ML-ONNX-BINDING-ERROR", xsink)) {
+        return QoreValue();
+    }
     binding->bindOutput(name->c_str(), xsink);
 }
 
@@ -183,6 +195,7 @@ nothing OnnxIoBinding::bindOutputs() {
     @throw ML-ONNX-DEVICE-UNAVAILABLE a device output was requested but no device
         provider is active and host fallback is not allowed
     @throw ML-ONNX-DEVICE-BINDING-ERROR the requested device is unknown or invalid
+    @throw ML-ONNX-BINDING-ERROR if the output name is unknown or has a NUL character
 
     @note This method binds accelerator device memory and is in the
         \c QDOM_UNCONTROLLED_API functional domain, so it is unavailable to programs
@@ -191,6 +204,11 @@ nothing OnnxIoBinding::bindOutputs() {
     @since %ML 2.6
 */
 nothing OnnxIoBinding::bindOutputDevice(string name, *hash<auto> device) [flags=NAMED_ARGS; dom=UNCONTROLLED_API] {
+    // ONNX Runtime names a tensor by a NUL-terminated string
+    if (q_check_no_nul(name->c_str(), name->size(), "ONNX output tensor name", "ONNX tensor names",
+            "ML-ONNX-BINDING-ERROR", xsink)) {
+        return QoreValue();
+    }
     binding->bindOutputDevice(name->c_str(), device, xsink);
 }
 
@@ -218,8 +236,16 @@ nothing OnnxIoBinding::bindOutputsDevice(*hash<auto> device) [flags=NAMED_ARGS; 
     Preallocated output binding is supported for fixed-width numeric output
     tensors whose buffer layout matches ONNX Runtime. Bool and string outputs
     should use bindOutput() so ONNX Runtime can allocate the output.
+
+    @throw ML-ONNX-BINDING-ERROR if the output name is unknown or has a NUL character, or the tensor does not match
+    the output
 */
 nothing OnnxIoBinding::bindOutputTensor(string name, Tensor output) [flags=NAMED_ARGS] {
+    // ONNX Runtime names a tensor by a NUL-terminated string
+    if (q_check_no_nul(name->c_str(), name->size(), "ONNX output tensor name", "ONNX tensor names",
+            "ML-ONNX-BINDING-ERROR", xsink)) {
+        return QoreValue();
+    }
     binding->bindOutputTensor(name->c_str(), output, xsink);
 }
 
@@ -306,10 +332,14 @@ qclass OnnxModel [arg=QoreOnnxModel* model; ns=Qore::ML; flags=final; dom=FILESY
 OnnxModel model("/path/to/model.onnx");
     @endcode
 
-    @throw ML-ONNX-ERROR if the model cannot be loaded
+    @throw ML-ONNX-ERROR if the model cannot be loaded or the model path has a NUL character
 */
 OnnxModel::constructor(string model_path) {
 #ifdef HAVE_ONNXRUNTIME
+    // the model file is opened by its NUL-terminated path
+    if (q_check_path(*model_path, "ML-ONNX-ERROR", xsink)) {
+        return;
+    }
     ReferenceHolder<QoreOnnxModel> model_holder(
         new QoreOnnxModel(model_path->c_str(), xsink), xsink);
     if (*xsink) {
@@ -341,12 +371,16 @@ hash<OnnxSessionConfig> config = <OnnxSessionConfig>{
 OnnxModel model("/path/to/model.onnx", config);
     @endcode
 
-    @throw ML-ONNX-ERROR if the model cannot be loaded or config is invalid
+    @throw ML-ONNX-ERROR if the model cannot be loaded, config is invalid, or the model path has a NUL character
     @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
 
 */
 OnnxModel::constructor(string model_path, hash<OnnxSessionConfig> options) {
 #ifdef HAVE_ONNXRUNTIME
+    // the model file is opened by its NUL-terminated path
+    if (q_check_path(*model_path, "ML-ONNX-ERROR", xsink)) {
+        return;
+    }
     ReferenceHolder<QoreOnnxModel> model_holder(
         new QoreOnnxModel(model_path->c_str(), options, xsink), xsink);
     if (*xsink) {
@@ -509,12 +543,16 @@ OnnxModel optimized("/models/customer-score.ort",
     <OnnxSessionConfig>{"providers": (), "load_model_format": "ORT"});
     @endcode
 
-    @throw ML-ONNX-ERROR if the optimized artifact cannot be written
+    @throw ML-ONNX-ERROR if the optimized artifact cannot be written or the output path has a NUL character
     @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
 */
 hash<auto> OnnxModel::saveOptimized(string output_path,
         *hash<OnnxSessionConfig> options, bool ort_format = False)
         [flags=NAMED_ARGS] {
+    // the optimized model is written to its NUL-terminated path
+    if (q_check_path(*output_path, "ML-ONNX-ERROR", xsink)) {
+        return QoreValue();
+    }
     return model->saveOptimized(output_path->c_str(), options, ort_format, xsink);
 }
 
@@ -908,11 +946,15 @@ qclass OnnxSessionPool [arg=QoreOnnxSessionPool* pool; ns=Qore::ML; flags=final;
     @param pool_options optional pool sizing and queueing options
 
     @throw ML-ONNX-POOL-ERROR if pool options are invalid
-    @throw ML-ONNX-ERROR if any session cannot be created
+    @throw ML-ONNX-ERROR if any session cannot be created or the model path has a NUL character
 */
 OnnxSessionPool::constructor(string model_path, *hash<OnnxSessionConfig> session_config,
         *hash<auto> pool_options) [flags=NAMED_ARGS] {
 #ifdef HAVE_ONNXRUNTIME
+    // the model file is opened by its NUL-terminated path
+    if (q_check_path(*model_path, "ML-ONNX-ERROR", xsink)) {
+        return;
+    }
     ReferenceHolder<QoreOnnxSessionPool> holder(
         new QoreOnnxSessionPool(model_path->c_str(), session_config, pool_options, xsink), xsink);
     if (*xsink) {
