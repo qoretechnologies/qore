@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MemcachedGetRequestDataType class definition
 
-/** MemcachedGetRequestDataType.qc Copyright 2025 Qore Technologies, s.r.o.
+/** MemcachedGetRequestDataType.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -21,8 +21,6 @@
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
 */
-
-%modern
 
 public namespace MemcachedDataProvider {
 #! Data type for memcached get requests

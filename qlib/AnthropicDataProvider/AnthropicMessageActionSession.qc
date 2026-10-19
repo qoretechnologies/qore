@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%requires json
-
 #! contains all public definitions in the AnthropicDataProvider module
 public namespace AnthropicDataProvider {
 

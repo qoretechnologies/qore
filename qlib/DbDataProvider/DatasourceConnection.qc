@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
 public namespace DbDataProvider {
 #! Datasource connection class providing database connectivity using the @c db:// URL scheme
 /** Provides connection support for databases using the @c db:// URL scheme.

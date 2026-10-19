@@ -22,9 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# for parsing response stream events
-%requires json
-
 #! Contains all public definitions in the GeminiDataProvider module
 public namespace GeminiDataProvider {
 #! Stream event constant

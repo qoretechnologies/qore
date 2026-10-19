@@ -22,9 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# for parsing response stream events
-%requires json
-
 #! contains all public definitions in the GrokDataProvider module
 public namespace GrokDataProvider {
 #! Response stream event constant

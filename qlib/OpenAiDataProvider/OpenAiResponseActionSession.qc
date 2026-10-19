@@ -22,11 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
-%requires json
-
-
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
 

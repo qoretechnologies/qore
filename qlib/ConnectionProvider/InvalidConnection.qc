@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
 #! the ConnectionProvider namespace. All classes used in the ConnectionProvider module should be inside this namespace
 public namespace ConnectionProvider {
 #! this class is used to mark invalid connections so they can be loaded and reported as invalid
