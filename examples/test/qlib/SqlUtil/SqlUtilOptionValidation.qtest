@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires SqlUtil
+%requires Sqlite3SqlUtil
+%requires QUnit
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class SqlUtilOptionValidationTest
+
+#! A table that gives the options as the SqlUtil option validation leaves them
+class ValidatingTable inherits Sqlite3Table {
+    constructor(AbstractDatasource ds, string name) : Sqlite3Table(ds, name) {
+    }
+
+    #! returns the options as they are after they are validated
+    hash<auto> validate(hash<auto> option_types, hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", option_types, \opt);
+        return opt;
+    }
+}
+
+#! The option validation of SqlUtil converts each option to the type of the option
+class SqlUtilOptionValidationTest inherits QUnit::Test {
+    constructor() : Test("SqlUtilOptionValidationTest", "1.0", \ARGV) {
+        addTestCase("validated options have the types of the options", \convertedTypes());
+        addTestCase("column numbers given as strings are numbers", \columnNumbers());
+        addTestCase("a select orders by a column number given as a string", \selectColumnNumber());
+        set_return_value(main());
+    }
+
+    private ValidatingTable table() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        return new ValidatingTable(new Datasource("sqlite3:@:memory:"), "t");
+    }
+
+    private convertedTypes() {
+        ValidatingTable t = table();
+        hash<auto> opt = {};
+        opt.limit = "10";
+        opt.desc = "1";
+        opt.alias = 5;
+        opt.forupdate = 0;
+        opt.columns = NOTHING;
+        hash<auto> rv = t.validate(AbstractTable::SelectOptions, opt);
+        assertEq(10, rv.limit);
+        assertEq("integer", rv.limit.type());
+        assertEq(True, rv.desc);
+        assertEq("bool", rv.desc.type());
+        assertEq("5", rv.alias);
+        assertEq(False, rv.forupdate);
+        assertEq("bool", rv.forupdate.type());
+        # an option with no value is not kept
+        assertFalse(rv.hasKey("columns"));
+
+        # a soft list of strings is a list
+        hash<auto> copt = {};
+        copt.omit = "indexes";
+        assertEq(("indexes",), t.validate(AbstractTable::TableCreationOptions, copt).omit);
+
+        # a value that cannot be converted is still refused
+        opt = {};
+        opt.limit = "ten";
+        assertThrows("OPTION-ERROR", "key \"limit\" has type \"string\", expecting \"int\"", \t.validate(),
+            (AbstractTable::SelectOptions, opt));
+    }
+
+    private columnNumbers() {
+        ValidatingTable t = table();
+        hash<auto> opt = {};
+        opt.orderby = ("2", "name", {"cop_upper": "name"});
+        opt.groupby = "1";
+        hash<auto> rv = t.validate(AbstractTable::SelectOptions, opt);
+        assertEq((2, "name", {"cop_upper": "name"}), rv.orderby);
+        assertEq("integer", rv.orderby[0].type());
+        assertEq((1,), rv.groupby);
+
+        # a column number given as a string is checked as a number is
+        foreach string bad in (("0", "-1")) {
+            opt = {};
+            opt.orderby = (bad,);
+            assertThrows("OPTION-ERROR", "column numbers must be positive integers", \t.validate(),
+                (AbstractTable::SelectOptions, opt), bad);
+        }
+        opt = {};
+        opt.orderby = (0,);
+        assertThrows("OPTION-ERROR", "column numbers must be positive integers", \t.validate(),
+            (AbstractTable::SelectOptions, opt));
+    }
+
+    private selectColumnNumber() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:@:memory:");
+        on_exit ds.rollback();
+        ds.exec("create table t (id integer, name text)");
+        ds.exec("insert into t values (1, 'b'), (2, 'a'), (3, 'c')");
+        Sqlite3Table t(ds, "t");
+        # the second column, name
+        assertEq((2, 1, 3), (map $1.id, t.selectRows({"orderby": "2"})));
+        assertEq((3, 1, 2), (map $1.id, t.selectRows({"orderby": "2", "desc": True})));
+        assertEq((1, 2, 3), (map $1.id, t.selectRows({"orderby": ("1",)})));
+    }
+}

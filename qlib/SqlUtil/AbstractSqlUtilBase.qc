@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractSqlUtilBase class definition
 
-/** AbstractSqlUtilBase.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** AbstractSqlUtilBase.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -83,13 +83,21 @@ public class AbstractSqlUtilBase inherits Qore::Serializable {
         return dsdesc;
     }
 
+    #! validates options and converts each one to the type of its option
+    /** @param err the exception code to throw
+        @param ropt the option types, keyed by option name
+        @param opt0 the options; on return, they have driver-specific options applied, each option converted to the
+        type of its option, and no option without a value, in a hash that takes values of any type
+        @param tag a description of the object for exception messages
+
+        @throw err an unknown option, or an option value that cannot be converted to the type of its option
+    */
     private validateOptionsIntern(string err, hash<auto> ropt, reference<hash<auto>> opt0, string tag) {
         # make sure driver-specific options take precedence over generic options
         string dn = getDriverName();
         # make sure types can be converted
         hash<auto> opt += opt0;
         AbstractDatabase::checkDriverOptions(\opt, dn);
-        opt0 = opt;
 
         # check valid options and option value types
         foreach string k in (keys opt) {
@@ -104,6 +112,8 @@ public class AbstractSqlUtilBase inherits Qore::Serializable {
 
             AbstractSqlUtilBase::validateOptionIntern(err, ropt{k}, \opt{k}, k, tag);
         }
+        # return the options as they are converted
+        opt0 = opt;
     }
 
     private static validateOptionIntern(string err, string type, reference<auto> opt, string k, string tag) {
@@ -173,23 +183,24 @@ public class AbstractSqlUtilBase inherits Qore::Serializable {
             }
             case "softstringinthashlist": {
                 softlist l = opt;
-                foreach auto v in (l) {
-                    int t = v.typeCode();
-                    bool ok;
-                    if (t == NT_STRING) {
-                        if (v.toInt() == v)
-                            v = v.toInt();
-                        else
-                            ok = True;
+                for (int i = 0; i < l.size(); ++i) {
+                    # a string that is an integer is a column number
+                    if (l[i].typeCode() == NT_STRING && l[i].toInt() == l[i]) {
+                        l[i] = l[i].toInt();
                     }
-                    if (!ok) {
-                        if (t == NT_INT) {
-                            if (v < 1)
-                                throw err, sprintf("%s: key %y element %d/%d (first is 0) is %d, column numbers must "
-                                    "be positive integers", tag, k, $#, l.size(), v);
-                        } else if (v.typeCode() != NT_HASH)
+                    switch (l[i].typeCode()) {
+                        case NT_INT:
+                            if (l[i] < 1) {
+                                throw err, sprintf("%s: key %y element %d/%d (first is 0) is %d, column numbers "
+                                    "must be positive integers", tag, k, i, l.size(), l[i]);
+                            }
+                            break;
+                        case NT_STRING:
+                        case NT_HASH:
+                            break;
+                        default:
                             throw err, sprintf("%s: key %y element %d/%d (first is 0) has type %y, expecting "
-                                "\"string\" or \"hash\" (value: %y)", tag, k, $#, l.size(), v.type(), opt);
+                                "\"string\" or \"hash\" (value: %y)", tag, k, i, l.size(), l[i].type(), opt);
                     }
                 }
 
