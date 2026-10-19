@@ -982,6 +982,30 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     - \c || - logical OR
     - \c ! - logical NOT
 
+    @anchor dpql_exists
+    @par Fields That a Record Does Not Have
+    A field reference to a field that the record does not have raises an error; <tt>exists \@field</tt> is \c true
+    when the record has the field, also when its value is \c null, and \c false when it does not, so records of
+    different shapes can be told apart: <tt>exists \@type && \@type == "return"</tt> is \c false for a record
+    without \c type, while <tt>\@type == "return"</tt> raises an error for it.  \c exists binds tighter than any
+    other operator (<tt>!exists \@type</tt>, <tt>exists \@type == false</tt>), and its field reference can be in
+    parentheses (<tt>exists(\@type)</tt>).  Its field reference is a path:
+    - <tt>exists \@a.b</tt> and <tt>exists \@a{b}</tt>: the record has \c a, which is a hash with the key \c b
+    - <tt>exists \@a[0]</tt>: the record has \c a, which is a list with an element at that position, or a string
+      with a character there; a negative position counts from the end
+    - wildcards (<tt>[*]</tt>, <tt>{*}</tt>), ranges, and several positions or keys are not accepted
+      (\c DPQL-E025); each item is tested with \c any or \c all instead: <tt>any exists \@id, \@orders</tt>
+    - the parts of a field reference are read as they are everywhere else: a quoted name with a dot
+      (<tt>exists \@"x.y"</tt>) is the path \c x, \c y, and an escaped dot is part of a key
+      (<tt>exists \@"a\\\\.b"</tt> is the key <tt>a.b</tt>); the semantics of quoted names are tracked in
+      <a href="https://github.com/qoretechnologies/qore/issues/5480">qore#5480</a>
+
+    Whether a field has a value is tested with <tt>isNotNull(\@field)</tt>, which needs the record to have the
+    field.  A database cannot search with \c exists, as every row has every column: it is not pushed down, and is
+    evaluated on the records read where the provider filters on the client (such as a database table with the
+    \c allow_client_side_filter search option); a provider that searches only on its server reports it with
+    \c DPQL-E041.
+
     @par Literals
     - Strings: \c "hello" or \c 'world'
     - Dates: <tt>2026-01-02</tt>, <tt>2026-01-02T15:20:11.123+01:00</tt>
@@ -1546,6 +1570,12 @@ fetch
       The list argument accepts no value (which finds nothing) and any other value, as a soft list
       (@ref DataProvider::DataProviderSignatureOptionalSoftListType "DataProviderSignatureOptionalSoftListType"),
       so <tt>findIn(1, null)</tt> passes validation
+    - added the DPQL operator @ref dpql_exists "exists" (@ref DP_OP_EXISTS): <tt>exists \@field</tt> is \c true
+      when the record has the field, also with no value, and \c false when it does not, without the error that a
+      field reference to a missing field raises, so records of different shapes can be tested, as with
+      <tt>exists \@type && \@type == "return"</tt>; the field reference can have accessors that read one key or
+      one position (<tt>exists \@a.b</tt>, <tt>exists \@a[0].b</tt>); it is offered by completion, written back by
+      the serializer, typed as \c bool, and evaluated locally, as databases cannot search with it
     - fixed @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
       dropping the \c input_field_names marker, so the options of the registered processor actions that take field
       names of the input (such as \c group_by of \c group-by and \c fields of \c select-fields) did not have it, and

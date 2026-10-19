@@ -55,6 +55,23 @@ const hash<auto> DpqlPrefixOperatorSpecs = {
     DP_OP_TAKEUNTIL: {"min": 2, "max": 2},
 };
 
+#! The tokens that start a value and that cannot follow a value
+/** An identifier can follow a value as an operator word (\c in, \c between, \c and, \c like)
+
+    @since DataProvider 3.11
+*/
+const DpqlValueStartTokens = {
+    DPQL_TOK_STRING: True,
+    DPQL_TOK_NUMBER: True,
+    DPQL_TOK_BOOLEAN: True,
+    DPQL_TOK_NULL: True,
+    DPQL_TOK_DATE: True,
+    DPQL_TOK_BINARY: True,
+    DPQL_TOK_LIST: True,
+    DPQL_TOK_HASH: True,
+    DPQL_TOK_TEMPLATE: True,
+};
+
 #! The wildcard accessor expressions, which are written as accessors and not as function calls
 /** @since DataProvider 3.10
 */
@@ -621,6 +638,10 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
     #! Recursively validates an expression
     private validateExprRecursive(hash<DataProviderExpression> exp,
             hash<string, AbstractDataField> fields, reference<list<hash<DpqlDiagnostic>>> diags) {
+        # the field of exists is looked for, not read: a field that the record type does not have is not an error
+        if (exp.exp == DP_OP_EXISTS) {
+            return;
+        }
         # Validate each argument
         foreach auto arg in (exp.args) {
             # an argument evaluated for each item of a source refers to the fields of the item
@@ -1313,6 +1334,19 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             case DPQL_TOK_IDENTIFIER: {
                 hash<DpqlTokenInfo> id_tok = nextToken();
                 skipWhitespace();
+                # "exists" followed by a field reference, also in parentheses, tests the record for the field; it
+                # binds tighter than any other operator; otherwise the word keeps its meaning (an unquoted value)
+                if (id_tok.value.lwr() == DP_OP_EXISTS && !atEnd()) {
+                    if (peek().type == DPQL_TOK_FIELD || peek().type == DPQL_TOK_LPAREN) {
+                        return parseExists(id_tok);
+                    }
+                    # a value after it cannot be an operand of anything else
+                    if (DpqlValueStartTokens{peek().type}) {
+                        addError("Operator 'exists' expects a field reference, such as exists @name", "DPQL-E025",
+                            peek());
+                        throw "DPQL-PARSE-ERROR", "Expected a field reference";
+                    }
+                }
                 string name = resolveExpressionName(id_tok.value);
                 if (isPrefixExpressionOperator(name)) {
                     # a parenthesized first argument is accepted (ex: "map (@x + 1) * 2, @list"), but a
@@ -1352,6 +1386,43 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                     "DPQL-E001", tok);
                 throw "DPQL-PARSE-ERROR", "Unexpected token";
         }
+    }
+
+    #! Parses \c exists and its field reference, which can be in parentheses
+    /** @param name_tok the \c exists token, which has been read; the next token is a field reference or \c (
+
+        @return the @ref DP_OP_EXISTS expression
+
+        @throw DPQL-PARSE-ERROR the operand is not a field reference with accessors that each read one key or one
+        position
+
+        @since DataProvider 3.11
+    */
+    private hash<DataProviderExpression> parseExists(hash<DpqlTokenInfo> name_tok) {
+        bool paren = peek().type == DPQL_TOK_LPAREN;
+        if (paren) {
+            nextToken();  # consume (
+            skipWhitespace();
+        }
+        if (atEnd() || peek().type != DPQL_TOK_FIELD) {
+            addError("Operator 'exists' expects a field reference, such as exists @name", "DPQL-E025",
+                atEnd() ? name_tok : peek());
+            throw "DPQL-PARSE-ERROR", "Expected a field reference";
+        }
+        hash<DpqlTokenInfo> field_tok = peek();
+        auto operand = parseFieldRef();
+        if (*string issue = dp_exists_operand_issue(operand)) {
+            addError("Operator 'exists' " + issue, "DPQL-E025", field_tok);
+            throw "DPQL-PARSE-ERROR", "Invalid operand of exists";
+        }
+        if (paren) {
+            skipWhitespace();
+            expect(DPQL_TOK_RPAREN, "')'");
+        }
+        return <DataProviderExpression>{
+            "exp": DP_OP_EXISTS,
+            "args": (operand,),
+        };
     }
 
     #! Parses a field reference with optional accessor chain as expression nodes

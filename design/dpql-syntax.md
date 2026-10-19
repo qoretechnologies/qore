@@ -206,6 +206,55 @@ Use parentheses to override:
 | `\|\|` | Logical OR |
 | `!` | Logical NOT |
 
+## Field Existence
+
+A field reference to a field that the record does not have raises an error. `exists @field` is
+`true` when the record has the field, also when its value is `null`, and `false` when it does
+not, so records of different shapes can be told apart:
+
+```dpql
+exists @type && @type == "return"   # false for a record without type; no error
+!exists @discount || @discount == 0
+any exists @id, @orders              # each item is tested with any or all
+```
+
+| Expression | True when |
+|------------|-----------|
+| `exists @a` | the record has the key `a` (any value, also `null`) |
+| `exists @a.b`, `exists @a{b}` | the record has `a`, which is a hash with the key `b` |
+| `exists @a[0]`, `exists @a[-1]` | `a` is a list or a string with an element at that position (negative from the end) |
+| `exists @a[0].b` | each step in turn, as above |
+| `exists @"a\\.b"` | the record has the key `a.b` (an escaped dot is part of the key) |
+
+The parts of the field reference are read as everywhere else in DPQL: a quoted name with a dot,
+such as `exists @"x.y"`, is the path `x`, `y`, as `@"x.y"` is when it is evaluated; the semantics
+of quoted names, which this document describes differently above, are tracked in
+[qore#5480](https://github.com/qoretechnologies/qore/issues/5480).
+
+- **Precedence**: `exists` binds tighter than every other operator: `exists @type && @type == "x"`
+  is `(exists @type) && (@type == "x")`, `!exists @a` is `!(exists @a)`, and
+  `exists @a == false` compares the result. The field reference can be in parentheses:
+  `exists(@a)`, which the serializer writes `exists @a`.
+- **Operand**: a field reference with accessors that each read one key or one position. Wildcards
+  (`[*]`, `{*}`), ranges, several positions or keys, values and expressions are refused at parse
+  time with `DPQL-E025`; an operand built without the parser is refused when evaluated
+  (`DATA-PROVIDER-EXPRESSION-ERROR`) and when serialized (`DPQL-SERIALIZE-ERROR`).
+- **Keyword**: `exists` is an identifier token, read as the operator only when a field reference or
+  `(` follows it; `@a == exists` is still the string `"exists"`, and keys and members named
+  `exists` need no quotes. A value after it (`exists 1`) is `DPQL-E025`. Highlighting gives it
+  the `operator` span type where the parser reads it as the operator.
+- **Expression form**: `{"exp": "exists", "args": (<field reference or accessor expression>,)}`
+  (`DP_OP_EXISTS`); its catalog entry is a user-facing operator in the `Comparison` group that
+  returns `bool`, so it types and verifies as a condition. Validation does not report the field as
+  unknown (`DPQL-E010`), as it is looked for, not read.
+- **Completion**: offered as a prefix operator where a condition starts (`exists ${1:Field}`);
+  after it, only fields are offered.
+- **Push-down**: SQL cannot express it (every row has every column, and a missing key is not a
+  SQL concept), so it is never pushed down: `splitPushdownableExpression()` puts it in the client
+  part, a database table evaluates it on the rows read with `allow_client_side_filter`, and a
+  provider that searches only on its server reports `DPQL-E041`. In-memory providers, filters and
+  DataFrame blocks evaluate it per record.
+
 ## Set Operators
 
 ```dpql

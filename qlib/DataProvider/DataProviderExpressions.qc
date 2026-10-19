@@ -45,6 +45,124 @@ auto sub dp_eval_arg(hash<auto> rec, hash<DataProviderExpression> exp, int index
     return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[index], template_context);
 }
 
+#! Returns why a value cannot be the operand of exists, or nothing if it can
+/** The operand of @ref DP_OP_EXISTS is a field reference (<tt>\@a</tt>, <tt>\@a.b</tt>) that can be followed by
+    accessors that each read one key (<tt>{b}</tt>, <tt>.b</tt>) or one position (<tt>[0]</tt>, <tt>[-1]</tt>)
+
+    @param operand the operand
+
+    @return the reason the operand is not accepted, as the end of a sentence that starts with "exists", or
+    @ref nothing if it is accepted
+
+    @since DataProvider 3.11
+*/
+*string sub dp_exists_operand_issue(auto operand) {
+    if (operand instanceof hash<DataProviderFieldReference>) {
+        return;
+    }
+    if (operand instanceof hash<DataProviderExpression>) {
+        switch (operand.exp) {
+            case DP_FUNC_KEY:
+                if (operand.args.lsize() != 2 || operand.args[1].typeCode() != NT_STRING) {
+                    return "takes one key in each key accessor, such as exists @a{b}";
+                }
+                return dp_exists_operand_issue(operand.args[0]);
+
+            case DP_FUNC_INDEX:
+                if (operand.args.lsize() != 2 || operand.args[1].typeCode() != NT_INT) {
+                    return "takes one position in each index accessor, such as exists @a[0]";
+                }
+                return dp_exists_operand_issue(operand.args[0]);
+
+            case DP_FUNC_SLICE:
+                return "takes one position in each index accessor, such as exists @a[0], not a range or several "
+                    "positions";
+
+            case DP_FUNC_LIST_WILDCARD:
+            case DP_FUNC_HASH_WILDCARD:
+                return "does not take a wildcard; test each item with any or all, such as any exists @id, @orders";
+        }
+    }
+    return "expects a field reference, such as exists @name";
+}
+
+#! Returns True if a record has the field that the operand of exists names, and its value if so
+/** @param rec the record
+    @param operand the operand of exists, which @ref dp_exists_operand_issue() accepts
+    @param value the value of the field, if the record has it
+
+    @return True if the record has the field, also when its value is @ref nothing
+
+    @since DataProvider 3.11
+*/
+bool sub dp_field_exists_intern(hash<auto> rec, auto operand, reference<auto> value) {
+    if (operand instanceof hash<DataProviderFieldReference>) {
+        # the path of the field reference, as it is evaluated
+        list<string> path = operand.field_path
+            ?? (map regex_subst($1, "\\\\.", ".", RE_Global), operand.field.splitRegex("(?<!\\\\)\\."));
+        auto v = rec;
+        foreach string key in (path) {
+            if (v.typeCode() != NT_HASH || !v.hasKey(key)) {
+                return False;
+            }
+            v = v{key};
+        }
+        value = v;
+        return True;
+    }
+    auto base;
+    if (!dp_field_exists_intern(rec, operand.args[0], \base)) {
+        return False;
+    }
+    if (operand.exp == DP_FUNC_KEY) {
+        string key = operand.args[1];
+        if (base.typeCode() != NT_HASH || !base.hasKey(key)) {
+            return False;
+        }
+        value = base{key};
+        return True;
+    }
+    # an index accessor: a position in a list or a string, negative from the end
+    int pos = operand.args[1];
+    int size;
+    switch (base.typeCode()) {
+        case NT_LIST:
+            size = base.size();
+            break;
+        case NT_STRING:
+            size = base.length();
+            break;
+        default:
+            return False;
+    }
+    if (pos < 0) {
+        pos += size;
+    }
+    if (pos < 0 || pos >= size) {
+        return False;
+    }
+    value = base[pos];
+    return True;
+}
+
+#! Returns True if a record has the field that the operand of exists names
+/** @param rec the record
+    @param operand the operand of exists
+
+    @return True if the record has the field, also when its value is @ref nothing
+
+    @throw DATA-PROVIDER-EXPRESSION-ERROR the operand is not a field reference with key and index accessors
+
+    @since DataProvider 3.11
+*/
+bool sub dp_field_exists(hash<auto> rec, auto operand) {
+    if (*string issue = dp_exists_operand_issue(operand)) {
+        throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("exists %s; got %y", issue, operand);
+    }
+    auto value;
+    return dp_field_exists_intern(rec, operand, \value);
+}
+
 #! Returns the steps of a findIn location
 /** The location is the grammar of Qorus's findIn: steps separated by dots, where an escaped dot (\c "\.") is part of
     a step, and each step may end with an offset in a list (\c "[n]", negative from the end)
@@ -2779,6 +2897,42 @@ public const hash<auto> ExtendedExpressionImplementations = {
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             auto val = dp_eval_arg(rec, exp, 0, tc);
             return exists val && val !== NULL;
+        },
+    },
+    DP_OP_EXISTS: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": DP_OP_EXISTS,
+            "display_name": "exists",
+            "short_desc": "Returns True if the record has the field, also when the field has no value",
+            "desc": "Returns `True` if the record has the field, also when its value is `null`, and `False` if it does "
+                "not have it; it is written `exists @field`.  A field that a record does not have raises an error "
+                "everywhere else, so `exists` is how records of different shapes are told apart: "
+                "`exists @type && @type == \"return\"` is `False` for a record without `type`, while "
+                "`@type == \"return\"` raises an error for it.\n\n"
+                "- `exists @a.b` and `exists @a{b}`: the record has `a`, which is a hash with the key `b`\n"
+                "- `exists @a[0]`: the record has `a`, which is a list with an element at that position, or a string "
+                "with a character there; a negative position counts from the end\n"
+                "- a wildcard (`[*]`, `{*}`), a range, or several positions or keys are not accepted; test each item "
+                "with `any` or `all` instead, such as `any exists @id, @orders`\n\n"
+                "Whether a field has a value is tested with `isNotNull(@field)`, which needs the record to have the "
+                "field.  Databases cannot search with `exists`, as every row has every column: it is evaluated on "
+                "the records read",
+            "symbol": "exists",
+            "groups": "Comparison",
+            "args": (DataProviderSignatureAnyType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Field",
+                    "short_desc": "The field to look for",
+                    "desc": "The field to look for: a field reference, such as `@type`, `@order.id`, `@items[0]` or "
+                        "`@totals{net}`",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return dp_field_exists(rec, exp.args[0]);
         },
     },
     DP_OP_NOT_IN: {

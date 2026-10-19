@@ -662,6 +662,10 @@ public class DpqlActionSession {
                         } else {
                             after_operand = False;
                         }
+                    } else if (word == DP_OP_EXISTS
+                            && (next.type == DPQL_TOK_FIELD || next.type == DPQL_TOK_LPAREN)) {
+                        # exists followed by its field reference, as the parser reads it
+                        type = "operator";
                     } else if (DpqlPrefixOperatorSpecs{name ?? word}) {
                         # a prefix operator such as map, also with a parenthesized first argument
                         type = "operator";

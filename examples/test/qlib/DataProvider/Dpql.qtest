@@ -147,6 +147,12 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("serialization is a fixed point over the expressions of the DPQL tests",
             \serializationFixedPointTests());
         addTestCase("a list literal operand is one operand", \listLiteralOperandTests());
+        addTestCase("exists: parsing and precedence", \existsParseTests());
+        addTestCase("exists: operands that are not accepted", \existsNegativeTests());
+        addTestCase("exists: evaluation", \existsEvalTests());
+        addTestCase("exists: serialization", \existsSerializationTests());
+        addTestCase("exists: typing, validation and verification", \existsValidationTests());
+        addTestCase("exists: searches", \existsSearchTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -8989,5 +8995,269 @@ public class DpqlTest inherits QUnit::Test {
         # the values of in are a list of values, as before
         assertEq(<DataProviderExpression>{"exp": DP_SEARCH_OP_IN, "args": (a, 1, 2)},
             DataProvider::parseDpqlExpression('@a in (1, 2)'));
+    }
+
+    #! Returns the parse diagnostics of DPQL text as "code: message"
+    private list<string> parseErrors(string text) {
+        return map $1.code + ": " + $1.message, DataProvider::parseDpqlExpressionWithInfo(text).diagnostics,
+            $1.severity == "error";
+    }
+
+    existsParseTests() {
+        hash<DataProviderFieldReference> type = <DataProviderFieldReference>{"field": "type"};
+        hash<DataProviderExpression> exists_type = <DataProviderExpression>{"exp": DP_OP_EXISTS, "args": (type,)};
+        assertEq(exists_type, DataProvider::parseDpqlExpression('exists @type'));
+        # exists binds tighter than every other operator
+        assertEq(<DataProviderExpression>{"exp": DP_OP_AND, "args": (exists_type,
+            <DataProviderExpression>{"exp": DP_SEARCH_OP_EQ, "args": (type, "return")})},
+            DataProvider::parseDpqlExpression('exists @type && @type == "return"'));
+        assertEq(<DataProviderExpression>{"exp": DP_OP_OR, "args": (
+            <DataProviderExpression>{"exp": DP_SEARCH_OP_NOT, "args": (exists_type,)},
+            <DataProviderExpression>{"exp": DP_SEARCH_OP_NE, "args": (type, "x")})},
+            DataProvider::parseDpqlExpression('!exists @type || @type != "x"'));
+        assertEq(<DataProviderExpression>{"exp": DP_SEARCH_OP_EQ, "args": (exists_type, False)},
+            DataProvider::parseDpqlExpression('exists @type == false'));
+        # with the field reference in parentheses, and in any case
+        assertEq(exists_type, DataProvider::parseDpqlExpression('exists(@type)'));
+        assertEq(exists_type, DataProvider::parseDpqlExpression('exists ( @type )'));
+        assertEq(exists_type, DataProvider::parseDpqlExpression('EXISTS @type'));
+        # paths: names, one key and one position in each accessor
+        assertEq(<DataProviderExpression>{"exp": DP_OP_EXISTS, "args": (
+            <DataProviderFieldReference>{"field": "a.b"},)}, DataProvider::parseDpqlExpression('exists @a.b'));
+        hash<DataProviderFieldReference> a = <DataProviderFieldReference>{"field": "a"};
+        assertEq(<DataProviderExpression>{"exp": DP_OP_EXISTS, "args": (
+            <DataProviderExpression>{"exp": DP_FUNC_INDEX, "args": (a, -1)},)},
+            DataProvider::parseDpqlExpression('exists @a[-1]'));
+        assertEq(<DataProviderExpression>{"exp": DP_OP_EXISTS, "args": (
+            <DataProviderExpression>{"exp": DP_FUNC_KEY, "args": (
+                <DataProviderExpression>{"exp": DP_FUNC_INDEX, "args": (a, 0)}, "b")},)},
+            DataProvider::parseDpqlExpression('exists @a[0].b'));
+        assertEq(<DataProviderExpression>{"exp": DP_OP_EXISTS, "args": (
+            <DataProviderExpression>{"exp": DP_FUNC_KEY, "args": (a, "b c")},)},
+            DataProvider::parseDpqlExpression('exists @a{"b c"}'));
+        # as the predicate of an operator that tests each item
+        assertEq(<DataProviderExpression>{"exp": DP_OP_ANY, "args": (
+            <DataProviderExpression>{"exp": DP_OP_EXISTS, "args": (<DataProviderFieldReference>{"field": "id"},)},
+            <DataProviderFieldReference>{"field": "orders"})},
+            DataProvider::parseDpqlExpression('any exists @id, @orders'));
+
+        # without a field reference after it, the word keeps its meaning
+        assertEq(<DataProviderExpression>{"exp": DP_SEARCH_OP_EQ, "args": (type, "exists")},
+            DataProvider::parseDpqlExpression('@type == exists'));
+        assertEq(<DataProviderExpression>{"exp": DP_SEARCH_OP_IN, "args": (type, "exists", "x")},
+            DataProvider::parseDpqlExpression('@type in (exists, x)'));
+        assertEq(<DataProviderExpression>{"exp": DP_FUNC_KEY, "args": (a, "exists")},
+            DataProvider::parseDpqlExpression('@a{exists}'));
+    }
+
+    existsNegativeTests() {
+        foreach hash<auto> i in ((
+                {"text": 'exists @a[*]', "error": "does not take a wildcard"},
+                {"text": 'exists @a[*].b', "error": "does not take a wildcard"},
+                {"text": 'exists @a{*}', "error": "does not take a wildcard"},
+                {"text": 'exists @a[0..1]', "error": "takes one position in each index accessor"},
+                {"text": 'exists @a[0, 2]', "error": "takes one position in each index accessor"},
+                {"text": 'exists @a{b, c}', "error": "takes one key in each key accessor"},
+                {"text": 'exists 1', "error": "expects a field reference"},
+                {"text": 'exists "a"', "error": "expects a field reference"},
+                {"text": 'exists null', "error": "expects a field reference"},
+                {"text": 'exists $static:x', "error": "expects a field reference"},
+                {"text": 'exists (1)', "error": "expects a field reference"},
+            )) {
+            list<string> errors = parseErrors(i.text);
+            assertEq(1, errors.size(), i.text);
+            assertEq("DPQL-E025: Operator 'exists' ", errors[0].substr(0, 29), i.text);
+            assertRegex(i.error, errors[0], i.text);
+        }
+        # the parenthesis holds only the field reference
+        assertEq(("DPQL-E001: Expected ')', got '+'",), parseErrors('exists (@a + 1)'));
+        # an operand built without the parser is refused when evaluated
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "exists expects a field reference",
+            \AbstractDataProvider::evalGenericExpression(), ({}, <DataProviderExpression>{
+                "exp": DP_OP_EXISTS,
+                "args": ("a",),
+            }));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "exists takes one key in each key accessor",
+            \AbstractDataProvider::evalGenericExpression(), ({"a": {}}, <DataProviderExpression>{
+                "exp": DP_OP_EXISTS,
+                "args": (<DataProviderExpression>{"exp": DP_FUNC_KEY, "args": (
+                    <DataProviderFieldReference>{"field": "a"}, "b", "c")},),
+            }));
+    }
+
+    existsEvalTests() {
+        # a field with a value or with no value exists; a field that the record does not have does not
+        foreach bool prepare in ((False, True)) {
+            code eval = auto sub (string text, hash<auto> rec) {
+                hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(text);
+                if (prepare) {
+                    exp = AbstractDataProvider::prepareExpression(exp);
+                }
+                return AbstractDataProvider::evalGenericExpression(rec, exp);
+            };
+            string label = prepare ? "prepared" : "parsed";
+            assertEq(True, eval('exists @type', {"type": "x"}), label);
+            assertEq(True, eval('exists @type', {"type": NOTHING}), label);
+            assertEq(True, eval('exists @type', {"type": NULL}), label);
+            assertEq(False, eval('exists @type', {"id": 1}), label);
+            assertEq(False, eval('exists @type', {}), label);
+            assertEq(True, eval('!exists @type', {"id": 1}), label);
+
+            # records of different shapes
+            string cond = 'exists @type && @type == "return"';
+            assertEq(True, eval(cond, {"type": "return"}), label);
+            assertEq(False, eval(cond, {"type": "order"}), label);
+            assertEq(False, eval(cond, {"type": NOTHING}), label);
+            assertEq(False, eval(cond, {"id": 1}), label);
+            # without exists, a field that the record does not have is an error
+            assertThrows("INVALID-OPERATION", "invalid key \"type\"", eval, ('@type == "return"', {"id": 1}),
+                label);
+
+            # names: the record has a, a hash with the key b
+            assertEq(True, eval('exists @a.b', {"a": {"b": NOTHING}}), label);
+            assertEq(True, eval('exists @a.b.c', {"a": {"b": {"c": 1}}}), label);
+            assertEq(False, eval('exists @a.b', {"a": {}}), label);
+            assertEq(False, eval('exists @a.b', {"a": 1}), label);
+            assertEq(False, eval('exists @a.b', {"a": NOTHING}), label);
+            assertEq(False, eval('exists @a.b', {"a": ({"b": 1},)}), label);
+            assertEq(False, eval('exists @a.b', {}), label);
+            assertEq(False, eval('exists @a.b.c', {"a": {"b": 1}}), label);
+            # a name is looked for as a field reference is read (qore#5480): @"x.y" is the path x, y, as for @x.y,
+            # and an escaped dot is part of a key
+            assertEq(True, eval('exists @"x.y"', {"x": {"y": 1}}), label);
+            assertEq(False, eval('exists @"x.y"', {"x.y": 1}), label);
+            assertEq(True, eval('exists @x.y', {"x": {"y": 1}}), label);
+            assertEq(True, eval('exists @"a\\.b"', {"a.b": 1}), label);
+            assertEq(False, eval('exists @"a\\.b"', {"a": {"b": 1}}), label);
+            # one key
+            assertEq(True, eval('exists @a{b}', {"a": {"b": NOTHING}}), label);
+            assertEq(False, eval('exists @a{b}', {"a": {"c": 1}}), label);
+            assertEq(True, eval('exists @a{b}.c', {"a": {"b": {"c": NOTHING}}}), label);
+            assertEq(False, eval('exists @a{b}.c', {"a": {"b": "c"}}), label);
+            # one position, negative from the end, in a list or a string
+            assertEq(True, eval('exists @a[0]', {"a": (1,)}), label);
+            assertEq(True, eval('exists @a[0]', {"a": (NOTHING,)}), label);
+            assertEq(False, eval('exists @a[0]', {"a": ()}), label);
+            assertEq(True, eval('exists @a[-2]', {"a": (1, 2)}), label);
+            assertEq(False, eval('exists @a[-3]', {"a": (1, 2)}), label);
+            assertEq(False, eval('exists @a[2]', {"a": (1, 2)}), label);
+            assertEq(True, eval('exists @a[2]', {"a": "abc"}), label);
+            assertEq(False, eval('exists @a[3]', {"a": "abc"}), label);
+            assertEq(False, eval('exists @a[0]', {"a": {"0": 1}}), label);
+            assertEq(False, eval('exists @a[0]', {"a": 1}), label);
+            assertEq(False, eval('exists @a[0]', {}), label);
+            assertEq(True, eval('exists @a[1].b', {"a": ({}, {"b": NOTHING})}), label);
+            assertEq(False, eval('exists @a[1].b', {"a": ({"b": 1}, {})}), label);
+            assertEq(False, eval('exists @a[1].b', {"a": ({"b": 1},)}), label);
+
+            # each item tested with any, all and count
+            hash<auto> rec = {"orders": ({"id": 1}, {"other": 2}, {"id": NOTHING})};
+            assertEq(True, eval('any exists @id, @orders', rec), label);
+            assertEq(False, eval('all exists @id, @orders', rec), label);
+            assertEq(2, eval('count exists @id, @orders', rec), label);
+            assertEq(({"id": 1}, {"id": NOTHING}), eval('select @orders, exists @id', rec), label);
+        }
+    }
+
+    existsSerializationTests() {
+        # written as it is read, in its canonical form
+        foreach hash<auto> i in ({
+                'exists @type': 'exists @type',
+                'exists(@type)': 'exists @type',
+                'EXISTS ( @type )': 'exists @type',
+                'exists @type && @type == "return"': 'exists @type && @type == "return"',
+                '!exists @type': '!exists @type',
+                '!(exists @type)': '!exists @type',
+                '(exists @type) == false': 'exists @type == false',
+                'exists @a.b': 'exists @a.b',
+                'exists @a[-1]': 'exists @a[-1]',
+                'exists @a[0].b': 'exists @a[0].b',
+                'exists @a{"b c"}': 'exists @a{"b c"}',
+                'exists @a{b}': 'exists @a{b}',
+                'any exists @id, @orders': 'any exists @id, @orders',
+                'select @orders, exists @id || @x': 'select @orders, exists @id || @x',
+            }.pairIterator()) {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(i.key);
+            string text = DataProvider::serializeDpqlExpression(exp);
+            assertEq(i.value, text, i.key);
+            assertEq(exp, DataProvider::parseDpqlExpression(text), i.key);
+        }
+        # an operand that cannot be written as exists is refused
+        assertThrows("DPQL-SERIALIZE-ERROR", "exists expects a field reference",
+            \DataProvider::serializeDpqlExpression(), <DataProviderExpression>{"exp": DP_OP_EXISTS, "args": (1,)});
+        assertThrows("DPQL-SERIALIZE-ERROR", "exists takes one field reference; got 2 arguments",
+            \DataProvider::serializeDpqlExpression(), <DataProviderExpression>{"exp": DP_OP_EXISTS, "args": (
+                <DataProviderFieldReference>{"field": "a"}, <DataProviderFieldReference>{"field": "b"})});
+    }
+
+    existsValidationTests() {
+        # a condition: its type is bool, whatever the field
+        assertEq("bool", ExpressionTypes::getType(DataProvider::parseDpqlExpression('exists @missing')).getName());
+        hash<string, AbstractDataField> fields = {
+            "type": new QoreDataField("type", "the type", AbstractDataProviderType::get(StringOrNothingType)),
+        };
+        assertEq("bool", ExpressionTypes::getType(DataProvider::parseDpqlExpression('exists @type'), fields)
+            .getName());
+        # a field that the record type does not have is looked for, not an error; it is everywhere else
+        assertEq((), (map $1.code, DataProvider::validateDpqlExpression('exists @missing && @type == "x"', fields)));
+        assertEq((), (map $1.code, DataProvider::validateDpqlExpression('exists @missing.a[0]', fields)));
+        assertEq(("DPQL-E010",), (map $1.code, DataProvider::validateDpqlExpression('@missing == "x"', fields)));
+        # a condition that is not a bool is still reported
+        assertEq(("DPQL-W004",), (map $1.code, DataProvider::validateDpqlExpression('exists @type && @type',
+            fields)));
+        # verification for evaluation
+        AbstractDataProvider::verifyGenericExpression(DataProvider::parseDpqlExpression(
+            'exists @missing && @type == "x"'), fields);
+        AbstractDataProvider::verifyExpression(ER_Search, DataProviderGenericExpressions, 0,
+            AbstractDataProviderTypeMap."bool", DataProvider::parseDpqlExpression('exists @missing'), fields);
+
+        # the catalog entry is a user-facing operator returning bool
+        hash<DataProviderExpressionInfo> info = DataProviderGenericExpressions{DP_OP_EXISTS};
+        assertEq(DET_Operator, info.type);
+        assertEq("exists", info.symbol);
+        assertEq("exists", info.display_name);
+        assertFalse(info.internal);
+        assertEq("bool", info.return_type.getName());
+        assertEq("Field", info.arg_info[0].display_name);
+        assertRegex("^Returns True if the record has the field", info.short_desc);
+        assertRegex("`exists @type && @type == \"return\"`", info.desc);
+    }
+
+    existsSearchTests() {
+        list<hash<auto>> data = (
+            {"id": 1, "type": "order", "amount": 10},
+            {"id": 2, "type": "return", "reason": "damaged"},
+            {"id": 3, "note": "no type"},
+            {"id": 4, "type": NOTHING},
+        );
+        DpqlTestDataProvider prov(data);
+        # records of different shapes
+        assertEq((2,), (map $1.id, prov.searchRecords(DataProvider::parseDpqlExpression(
+            'exists @type && @type == "return"'))));
+        assertEq((3,), (map $1.id, prov.searchRecords(DataProvider::parseDpqlExpression('!exists @type'))));
+        assertEq((1, 2, 4), (map $1.id, prov.searchRecords(DataProvider::parseDpqlExpression('exists @type'))));
+        assertEq((2,), (map $1.id, prov.searchRecords(DataProvider::parseDpqlExpression('exists @reason'))));
+        # updates and deletes
+        assertEq(1, prov.updateRecords({"checked": True}, DataProvider::parseDpqlExpression('exists @note')));
+        assertEq(1, prov.deleteRecords(DataProvider::parseDpqlExpression('exists @type && @type == null')));
+        assertEq((1, 2, 3), (map $1.id, prov.searchRecords()));
+
+        # a database cannot search with exists: the condition is split for evaluation on the records read
+        hash<auto> expmap = {
+            DP_OP_AND: {"code": sub () {}},
+            DP_SEARCH_OP_EQ: {"code": sub () {}},
+        };
+        hash<auto> split = AbstractDataProvider::splitPushdownableExpression(
+            DataProvider::parseDpqlExpression('exists @type && @id == 2'), expmap);
+        assertEq(DataProvider::parseDpqlExpression('@id == 2'), split.pushdown);
+        assertEq(DataProvider::parseDpqlExpression('exists @type'), split.client);
+        # and a provider that searches only on its server reports it as an operator evaluated locally
+        hash<string, hash<DataProviderExpressionInfo>> server = DataProviderGenericExpressions{
+            DP_OP_AND, DP_SEARCH_OP_EQ,
+        };
+        list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression('exists @type && @id == 2',
+            {"id": new QoreDataField("id", "id", AbstractDataProviderType::get(IntType))}, NOTHING, server);
+        assertEq(("DPQL-E041",), (map $1.code, diags));
+        assertRegex("Operator 'exists' is evaluated locally", diags[0].message);
     }
 }

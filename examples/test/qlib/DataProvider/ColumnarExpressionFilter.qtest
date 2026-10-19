@@ -43,6 +43,7 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         addTestCase("truthy and inRange DataFrame filter", \truthyAndRangeDataFrame());
         addTestCase("membership DataFrame and ColumnarResult filters", \membershipFilters());
         addTestCase("a condition evaluated row by row that matches no row", \noMatchRowFilters());
+        addTestCase("exists DataFrame and ColumnarResult filters", \existsFilters());
         addTestCase("string transform DataFrame filter", \stringTransformDataFrame());
         addTestCase("string transform ColumnarResult filter", \stringTransformBufferColumns());
         addTestCase("computed string predicate filters", \computedStringPredicateFilters());
@@ -222,6 +223,17 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         # when some rows match, they are returned
         assertShapeFilterIds(DataProvider::parseDpqlExpression('substr(@status, 0, 1) == "V"'), (3,),
             "one row matches");
+    }
+
+    #! Every row of a block has every column of the block, with or without a value
+    private existsFilters() {
+        assertShapeFilterIds(DataProvider::parseDpqlExpression('exists @status && @status == "VIP"'), (3,),
+            "exists and a comparison");
+        assertShapeFilterIds(DataProvider::parseDpqlExpression('exists @missing'), (), "a column that is missing");
+        assertShapeFilterIds(DataProvider::parseDpqlExpression('!exists @missing && @score > 89'), (2, 4),
+            "not exists and a comparison");
+        assertShapeFilterIds(DataProvider::parseDpqlExpression('exists @missing || @id == 1'), (1,),
+            "exists or a comparison");
     }
 
     private membershipFilters() {

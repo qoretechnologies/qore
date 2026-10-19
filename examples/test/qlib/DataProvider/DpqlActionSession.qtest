@@ -121,6 +121,7 @@ class DpqlActionSessionTest inherits QUnit::Test {
         addTestCase("dpql-eval collection operator", \testEvalCollectionOperator());
         addTestCase("dpql-eval parse error", \testEvalParseError());
         addTestCase("dpql-eval push-down", \testEvalPushdown());
+        addTestCase("exists: token types, completions and push-down", \testExists());
 
         set_return_value(main());
     }
@@ -474,6 +475,70 @@ class DpqlActionSessionTest inherits QUnit::Test {
         assertEq(1, e100.size(), "DPQL-E100 is reported");
         assertEq("error", e100[0].severity);
         assertRegex("^The search condition could not be checked here: DIVISION-BY-ZERO: ", e100[0].message);
+    }
+
+    #! exists is an operator where it is read as one, it is offered where a condition starts, a field reference
+    #! follows it, and it is evaluated on the records read
+    testExists() {
+        DataProvider::DpqlActionSession session = newSession();
+        assertEq(("exists:operator",), wordTypes(session, 'exists @type'));
+        assertEq(("exists:operator", "\"return\":string"), wordTypes(session, '!exists(@type) || @type == "return"'));
+        assertEq(("any:operator", "exists:operator"), wordTypes(session, 'any exists @id, @orders'));
+        # a value, a key and a member named exists
+        assertEq(("exists:string",), wordTypes(session, '@type == exists'));
+        assertEq(("exists:field", "exists:field"), wordTypes(session, '@a{exists}.exists == 1'));
+
+        # offered where a condition starts, with its field as the snippet's placeholder
+        foreach string text in ("", "ex", "@age > 1 && ", "! ") {
+            list<hash<auto>> items = select session.handleAction("dpql-get-completions", {
+                "text": text,
+                "position": text.size(),
+                "fields": getFieldInfo(),
+            }).completions, $1.label == "exists";
+            assertEq(1, items.size(), text);
+            assertEq("operator", items[0].kind, text);
+            assertEq("exists ${1:Field}$0", items[0].snippet_text, text);
+        }
+        # after it, only the fields
+        foreach string text in ("exists ", "exists(", "!exists ", "exists ( ") {
+            list<hash<auto>> items = session.handleAction("dpql-get-completions", {
+                "text": text,
+                "position": text.size(),
+                "fields": getFieldInfo(),
+            }).completions;
+            assertEq(("age", "name"), sort(map $1.label, items), text);
+            assertEq(("field",), keys (map {$1.kind: True}, items), text);
+        }
+        assertEq(("name",), (map $1.label, session.handleAction("dpql-get-completions", {
+            "text": "exists na",
+            "position": 9,
+            "fields": getFieldInfo(),
+        }).completions));
+
+        # not pushed down: it is evaluated on the records read
+        try {
+            DataProvider::registerFactory(new PushdownTestFactory());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PROVIDER-ERROR") {
+                rethrow;
+            }
+        }
+        session = newEvalSession();
+        session.handleAction("dpql-set-context", {"provider": "pushdown-test{}"});
+        session.setSearchContext(True);
+        hash<auto> r = session.handleAction("dpql-eval", {
+            "text": "exists @age && @age > 18",
+            "record": {"name": "John", "age": 25},
+        });
+        assertEq(False, r.pushdown.fully_pushdownable);
+        assertTrue(r.success);
+        assertEq(True, r.evaluation.result);
+        r = session.handleAction("dpql-eval", {
+            "text": "exists @nickname",
+            "record": {"name": "John", "age": 25},
+        });
+        assertTrue(r.success);
+        assertEq(False, r.evaluation.result);
     }
 
     testSchemaAwareKeyCompletions() {
