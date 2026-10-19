@@ -88,6 +88,14 @@ on more than 1 line";
     @ref Qore::dirname() "dirname()", @ref Qore::encode_url() "encode_url()" and @ref Qore::decode_url() "decode_url()",
     process the whole string.\n\n
 
+    @anchor string_line_characters
+    In the same way, a string written to a line of a network protocol cannot contain a character that ends the line:
+    since %Qore 3.0, the strings written to the lines of an HTTP message (methods, request targets, versions, status
+    messages, and header names and values) cannot contain any control character other than horizontal tab, and the
+    strings written to FTP commands (remote paths, arguments, user names and passwords) cannot contain CR or LF
+    characters, since a line break would start another header, request or command; such a string is refused with the
+    error code of the API before anything is sent.\n\n
+
     @par Immediate Value Example:
     \c "this is a string"
 

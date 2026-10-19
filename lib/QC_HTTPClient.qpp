@@ -41,16 +41,18 @@
 #include "qore/intern/ssl_constants.h"
 #include "qore/intern/QoreHttpClientObjectIntern.h"
 
-// the method and request path are sent as C strings, which would be cut at a NUL character; the request headers are
-// checked when the request is made, and raise HTTP-CLIENT-HEADER-ERROR
+// the method and request path are sent as C strings, which would be cut at a NUL character, and the method cannot
+// contain CR or LF, which would end the request line; the path is percent-encoded before it is sent; the request
+// headers are checked when the request is made, and raise HTTP-CLIENT-HEADER-ERROR
 static int hc_check_request(const QoreStringNode* method, const QoreStringNode* path, ExceptionSink* xsink) {
     return q_check_http_request(method, path, nullptr, "HTTP-CLIENT-METHOD-ERROR", "HTTP-CLIENT-URL-ERROR", nullptr,
-        xsink);
+        xsink, false);
 }
 
-// a URL would be parsed cut at a NUL character; it is not shown in the exception, as it can contain a password
+// a URL would be parsed cut at a NUL character, and its host is sent in the Host header, where a CR or LF would start
+// another header; it is not shown in the exception, as it can contain a password
 static int hc_check_url(const QoreStringNode* url, const char* what, ExceptionSink* xsink) {
-    return q_check_secret_no_nul(url->c_str(), url->size(), what, "URLs", "HTTP-CLIENT-URL-ERROR", xsink);
+    return q_check_http_text(url->c_str(), url->size(), what, "URLs", "HTTP-CLIENT-URL-ERROR", true, xsink);
 }
 
 /** @defgroup http_url_codes HTTP URL Codes
@@ -540,8 +542,8 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - \c username: The username for HTTP basic authentication; only used if no username or password is set in the
       URL and if the \c password option is also used
 
-    @throw HTTP-CLIENT-OPTION-ERROR invalid or unknown option passed in option hash, or the \c username, \c password, \c default_path or \c http_version option or a value of the \c headers option contains a NUL character (since %Qore 3.0); passwords, paths and header values are not shown in the exception
-    @throw HTTP-CLIENT-URL-ERROR invalid URL string, or the URL contains a NUL character (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
+    @throw HTTP-CLIENT-OPTION-ERROR invalid or unknown option passed in option hash, or the \c username, \c password, \c default_path or \c http_version option or a name or value of the \c headers option contains a NUL or another control character than horizontal tab (since %Qore 3.0); passwords, paths and header values are not shown in the exception
+    @throw HTTP-CLIENT-URL-ERROR invalid URL string, or the URL contains a NUL or another control character than horizontal tab (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
     @throw HTTP-CLIENT-UNKNOWN-PROTOCOL unknown protocol passed in URL
     @throw ILLEGAL-FILESYSTEM-ACCESS if the calling context is restricted with the @ref Qore::PO_NO_FILESYSTEM
     sandboxing restriction and one of the following options is used: \c ssl_cert_path or \c ssl_key_path
@@ -903,9 +905,9 @@ nothing HTTPClient::setHttp2StreamPriority(int stream_id, int weight = 16, int d
     - \c headers: response headers
 
     @throw HTTP2-ERROR if HTTP/2 is not available
-    @throw HTTP2-CONNECT-ERROR if the CONNECT request fails, or the protocol contains a NUL character
+    @throw HTTP2-CONNECT-ERROR if the CONNECT request fails, or the protocol contains a NUL or another control character than horizontal tab
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @par Example:
     @code{.py}
@@ -929,9 +931,9 @@ if (resp.status_code == 200) {
     // the path, protocol and header values are sent as C strings, which would be cut at a NUL character; these
     // requests do not go through the request header processing of the other requests
     if (q_check_http_request(nullptr, path, headers, nullptr, "HTTP-CLIENT-URL-ERROR", "HTTP-CLIENT-HEADER-ERROR",
-            xsink)
-        || q_check_no_nul(protocol->c_str(), protocol->size(), "protocol", "protocols", "HTTP2-CONNECT-ERROR",
-            xsink)) {
+            xsink, false)
+        || q_check_http_text(protocol->c_str(), protocol->size(), "protocol", "protocols", "HTTP2-CONNECT-ERROR",
+            false, xsink)) {
         return QoreValue();
     }
     OptHashRefHelper ohrh(info, xsink);
@@ -956,9 +958,9 @@ if (resp.status_code == 200) {
     - \c headers: response headers
 
     @throw HTTP3-ERROR if HTTP/3 is not available
-    @throw HTTP3-CONNECT-ERROR if the CONNECT request fails or server doesn't support extended CONNECT, or the protocol contains a NUL character
+    @throw HTTP3-CONNECT-ERROR if the CONNECT request fails or server doesn't support extended CONNECT, or the protocol contains a NUL or another control character than horizontal tab
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @par Example:
     @code{.py}
@@ -982,9 +984,9 @@ if (resp.status_code == 200) {
     // the path, protocol and header values are sent as C strings, which would be cut at a NUL character; these
     // requests do not go through the request header processing of the other requests
     if (q_check_http_request(nullptr, path, headers, nullptr, "HTTP-CLIENT-URL-ERROR", "HTTP-CLIENT-HEADER-ERROR",
-            xsink)
-        || q_check_no_nul(protocol->c_str(), protocol->size(), "protocol", "protocols", "HTTP3-CONNECT-ERROR",
-            xsink)) {
+            xsink, false)
+        || q_check_http_text(protocol->c_str(), protocol->size(), "protocol", "protocols", "HTTP3-CONNECT-ERROR",
+            false, xsink)) {
         return QoreValue();
     }
     OptHashRefHelper ohrh(info, xsink);
@@ -1417,9 +1419,9 @@ nothing HTTPClient::disconnect() {
 
     @since %Qore 1.12
 
-    @throw HTTP-CLIENT-METHOD-ERROR the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 */
 AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string path, string body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
@@ -1470,9 +1472,9 @@ AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string
 
     @since %Qore 1.12
 
-    @throw HTTP-CLIENT-METHOD-ERROR the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 */
 AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string path, *binary body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
@@ -1499,9 +1501,9 @@ AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string
 
     @since %Qore 3.0
 
-    @throw HTTP-CLIENT-METHOD-ERROR the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 */
 AbstractPollOperation<auto> HTTPClient::startPollSendAndStream(string method, *string path, string body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
@@ -1517,9 +1519,9 @@ AbstractPollOperation<auto> HTTPClient::startPollSendAndStream(string method, *s
 
     @since %Qore 3.0
 
-    @throw HTTP-CLIENT-METHOD-ERROR the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 */
 AbstractPollOperation<auto> HTTPClient::startPollSendAndStream(string method, *string path, *binary body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
@@ -1583,7 +1585,7 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
     any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the
     \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -1603,7 +1605,7 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or
     Socket::connectSSL() for secure connections)
@@ -1665,7 +1667,7 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
 
     @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -1683,7 +1685,7 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
@@ -1741,10 +1743,10 @@ printf("sent to %s\n", info."effective-url");
     \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
     @throw HTTP-CLIENT-URL-ERROR the URL has no host, has an invalid host, or names a UNIX domain socket when the
-    client is not itself on one, or the URL contains a NUL character (since %Qore 3.0); the URL is not shown in the
+    client is not itself on one, or the URL contains a NUL or another control character than horizontal tab (since %Qore 3.0); the URL is not shown in the
     exception, as it can contain a password
     @throw HTTP-CLIENT-UNKNOWN-PROTOCOL the URL has a scheme that is not supported
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -1761,7 +1763,7 @@ printf("sent to %s\n", info."effective-url");
     period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or
     Socket::connectSSL() for secure connections)
@@ -1813,10 +1815,10 @@ hash<auto> msg = httpclient.sendUrl(body, "POST", "http://other.example.com/path
     \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
     @throw HTTP-CLIENT-URL-ERROR the URL has no host, has an invalid host, or names a UNIX domain socket when the
-    client is not itself on one, or the URL contains a NUL character (since %Qore 3.0); the URL is not shown in the
+    client is not itself on one, or the URL contains a NUL or another control character than horizontal tab (since %Qore 3.0); the URL is not shown in the
     exception, as it can contain a password
     @throw HTTP-CLIENT-UNKNOWN-PROTOCOL the URL has a scheme that is not supported
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -1829,7 +1831,7 @@ hash<auto> msg = httpclient.sendUrl(body, "POST", "http://other.example.com/path
     period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or
     Socket::connectSSL() for secure connections)
@@ -1880,7 +1882,7 @@ if (resp.status_code == 200) {
     key will NOT be present as the body is left on the socket for streaming. The HTTP status will be assigned
     to the \c "status_code" key.
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR status error communicating with HTTP server; note that this error is not
@@ -1892,7 +1894,7 @@ if (resp.status_code == 200) {
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note
     - The response body is NOT read by this method; use @ref readHTTPChunk() or @ref readServerSentEvent()
@@ -2149,7 +2151,7 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
 
     @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -2168,7 +2170,7 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note
     - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
@@ -2248,7 +2250,7 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received
@@ -2262,7 +2264,7 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note A response body with a content coding (\c gzip, \c deflate, \c bzip2, \c br, or \c zstd) is decoded as it
     is received, unless the \c encoding_passthru option is set; since %Qore 3.0, this also applies to a body written
@@ -2346,7 +2348,7 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received
@@ -2360,7 +2362,7 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note A response body with a content coding (\c gzip, \c deflate, \c bzip2, \c br, or \c zstd) is decoded as it
     is received, unless the \c encoding_passthru option is set; since %Qore 3.0, this also applies to a body written
@@ -2420,7 +2422,7 @@ httpclient.send(output_stream: output_stream, body: data, method: "POST", path: 
       - \c "response-headers-raw": a hash of unprocessed headers with no case conversions or additional keys
     - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such as, for example, socket character encoding)
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -2439,7 +2441,7 @@ httpclient.send(output_stream: output_stream, body: data, method: "POST", path: 
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note A response body with a content coding (\c gzip, \c deflate, \c bzip2, \c br, or \c zstd) is decoded as it
     is received, unless the \c encoding_passthru option is set; since %Qore 3.0, this also applies to a body written
@@ -2510,7 +2512,7 @@ httpclient.sendChunked(output_stream: output_stream, input_stream: input_stream,
     - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such as, for example, socket character encoding)
     @param trailers_callback An optional trailer callback for message trailers to write in the outgoing chunked message; the callback takes no arguments and must return either @ref nothing or @ref hash_type "hash" giving a hash of trailers for the final chunk
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -2531,7 +2533,7 @@ httpclient.sendChunked(output_stream: output_stream, input_stream: input_stream,
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note A response body with a content coding (\c gzip, \c deflate, \c bzip2, \c br, or \c zstd) is decoded as it
     is received, unless the \c encoding_passthru option is set; since %Qore 3.0, this also applies to a body written
@@ -2616,7 +2618,7 @@ httpclient.sendWithCallbacks(send_callback, rcv_callback, "POST", "/path", {"Con
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received
@@ -2630,7 +2632,7 @@ httpclient.sendWithCallbacks(send_callback, rcv_callback, "POST", "/path", {"Con
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note
     - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
@@ -2718,7 +2720,7 @@ nothing HTTPClient::sendWithCallbacks(code send_callback, code receive_callback,
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
@@ -2789,7 +2791,7 @@ hash<auto> msg = httpclient.head("/path");
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
@@ -2865,7 +2867,7 @@ httpclient.post("/path", body);
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
@@ -2941,7 +2943,7 @@ httpclient.post("/path", body);
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
-    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
@@ -3015,7 +3017,7 @@ httpclient.setURL("https://user:password@hostname:8080/path");
 
     @param url the new URL for the object
 
-    @throw HTTP-CLIENT-URL-ERROR invalid URL string; invalid authorization credentials in  URL (username without password or vice-versa), or the URL contains a NUL character (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
+    @throw HTTP-CLIENT-URL-ERROR invalid URL string; invalid authorization credentials in  URL (username without password or vice-versa), or the URL contains a NUL or another control character than horizontal tab (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
     @throw HTTP-CLIENT-UNKNOWN-PROTOCOL unknown protocol (scheme) passed in URL
     @throw HTTP-CLIENT-URL-ERROR the URL host (for example a decoded UNIX socket path) contains a NUL character;
     see @ref path_nul_characters
@@ -3089,7 +3091,7 @@ nothing HTTPClient::setProxyURL() {
 httpclient.setProxyURL("http://user:password@proxy_host:8080/path");
     @endcode
 
-    @throw HTTP-CLIENT-URL-ERROR invalid proxy URL string; invalid authorization credentials in proxy URL (username without password or vice-versa), or the proxy URL contains a NUL character (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
+    @throw HTTP-CLIENT-URL-ERROR invalid proxy URL string; invalid authorization credentials in proxy URL (username without password or vice-versa), or the proxy URL contains a NUL or another control character than horizontal tab (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
     @throw HTTP-CLIENT-PROXY-PROTOCOL-ERROR unknown protocol passed in URL
 
     @note URLs with UNIX sockets are generally supported in Qore with the following syntax: <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i> is a path with URL-encoding as performed by @ref encode_url() "encode_url(string, True)"; for example: \c "http://socket=%2ftmp%socket-dir%2fsocket-file-1/url/path"; this allows a filesystem path to be used in the host portion of the URL and for the URL to include a URL path as well.
@@ -3585,7 +3587,7 @@ nothing HTTPClient::clearProxyUserPassword() {
 
     @since %Qore 0.9.5
 
-    @throw HTTP-CLIENT-OPTION-ERROR a header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw HTTP-CLIENT-OPTION-ERROR a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 */
 nothing HTTPClient::addDefaultHeaders(hash<auto> headers) [flags=NAMED_ARGS] {
     // the values are sent as C strings, which would be cut at a NUL character

@@ -689,18 +689,19 @@ qclass FtpControlPollOperation [
     @param username FTP username (default: "anonymous")
     @param password FTP password (default: "qore@nohost.com")
     @throw SOCKET-CONNECT-ERROR error connecting to the FTP server, or the hostname contains a NUL character
-    @throw FTP-LOGIN-ERROR the user name or password contains a NUL character; the password is not shown in the
+    @throw FTP-LOGIN-ERROR the user name or password contains a NUL, CR or LF character; the password is not shown in the
     exception
 */
 FtpControlPollOperation::constructor(string host, int port = 21, bool secure = False,
         bool secure_data = False, *string username, *string password) [flags=NAMED_ARGS] {
-    // the hostname, user name and password are used as C strings, which would be cut at a NUL character; the
-    // password is not shown in the exception
+    // the hostname, user name and password are used as C strings, which would be cut at a NUL character, and a CR or
+    // LF in the user name or password would end the USER or PASS command and start another one; the password is not
+    // shown in the exception
     if (q_check_host_service(host, nullptr, "SOCKET-CONNECT-ERROR", xsink)
-        || (username && q_check_no_nul(username->c_str(), username->size(), "user name", "user names",
-            "FTP-LOGIN-ERROR", xsink))
-        || (password && q_check_secret_no_nul(password->c_str(), password->size(), "password", "passwords",
-            "FTP-LOGIN-ERROR", xsink))) {
+        || (username && q_check_line_text(username->c_str(), username->size(), "user name", "user names",
+            "FTP-LOGIN-ERROR", false, xsink))
+        || (password && q_check_line_text(password->c_str(), password->size(), "password", "passwords",
+            "FTP-LOGIN-ERROR", true, xsink))) {
         return;
     }
     // Create control socket — the QoreObject owns the initial ref and the
@@ -801,14 +802,16 @@ bool FtpControlPollOperation::goalReached() {
     @param command the FTP command (e.g. "TYPE", "EPSV", "RETR")
     @param argument optional command argument
 
-    @throw FTP-COMMAND-ERROR if the operation is not in the ready state, or the command or its argument contains a NUL
-    character
+    @throw FTP-COMMAND-ERROR if the operation is not in the ready state, or the command or its argument contains a NUL,
+    CR or LF character
 */
 nothing FtpControlPollOperation::submitCommand(string command, *string argument) [flags=NAMED_ARGS] {
-    // the command is sent to the server as a C string, which would be cut at a NUL character
-    if (q_check_no_nul(command->c_str(), command->size(), "FTP command", "FTP commands", "FTP-COMMAND-ERROR", xsink)
-        || (argument && q_check_no_nul(argument->c_str(), argument->size(), "FTP command argument",
-            "FTP command arguments", "FTP-COMMAND-ERROR", xsink))) {
+    // the command is sent to the server as a C string, which would be cut at a NUL character, and a CR or LF would end
+    // the command and start another one
+    if (q_check_line_text(command->c_str(), command->size(), "FTP command", "FTP commands", "FTP-COMMAND-ERROR",
+            false, xsink)
+        || (argument && q_check_line_text(argument->c_str(), argument->size(), "FTP command argument",
+            "FTP command arguments", "FTP-COMMAND-ERROR", false, xsink))) {
         return QoreValue();
     }
     priv->submitCommand(command->c_str(), argument ? argument->c_str() : nullptr, xsink);

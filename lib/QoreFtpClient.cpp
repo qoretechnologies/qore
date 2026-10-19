@@ -747,9 +747,10 @@ struct qore_ftp_private {
 
     // private unlocked
     DLLLOCAL void setURLIntern(const QoreString* url_str, ExceptionSink* xsink) {
-        // a URL with a NUL character would be parsed cut at the NUL character; it is not shown in the exception, as
-        // it can contain a password
-        if (q_check_secret_no_nul(url_str->c_str(), url_str->size(), "URL", "URLs", "FTP-URL-ERROR", xsink)) {
+        // a URL with a NUL character would be parsed cut at the NUL character, and a CR or LF in its user name or
+        // password would end the USER or PASS command and start another one; it is not shown in the exception, as it
+        // can contain a password
+        if (q_check_line_text(url_str->c_str(), url_str->size(), "URL", "URLs", "FTP-URL-ERROR", true, xsink)) {
             return;
         }
         QoreURL url(url_str);

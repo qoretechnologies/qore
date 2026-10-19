@@ -1,0 +1,362 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a CR or LF in a string written to a line of an HTTP message or an FTP command would end the line and start another
+# header, request or command (header injection, request and response splitting, FTP command injection), so such a
+# string is refused before anything is sent; local listeners record the bytes that they receive, so that the test
+# shows that no injected line reaches the wire
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires FsUtil
+%requires QUnit
+
+%exec-class CrLfInjectionTest
+
+#! records the raw request header block of every connection, until a request for /done
+class RawHttpRecorder {
+    private {
+        Socket listener();
+        Queue requests();
+        Counter done(1);
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        background run();
+    }
+
+    int getPort() {
+        return listener.getPort();
+    }
+
+    #! returns the raw requests received, after a request for /done
+    list<string> getRequests() {
+        done.waitForZero();
+        list<string> rv = ();
+        while (requests.size()) {
+            rv += requests.get();
+        }
+        return rv;
+    }
+
+    #! ends the recorder if no request for /done was received, for example when an assertion fails
+    stop() {
+        if (done.getCount()) {
+            Socket s();
+            s.connectINET("127.0.0.1", getPort());
+            s.send("GET /done HTTP/1.1\r\n\r\n");
+            done.waitForZero();
+        }
+    }
+
+    private run() {
+        on_exit done.dec();
+        while (True) {
+            Socket ns = listener.accept();
+            string req;
+            while (req !~ /\r\n\r\n/) {
+                string c;
+                try {
+                    c = ns.recv(1);
+                } catch (hash<ExceptionInfo> ex) {
+                    break;
+                }
+                if (c == "") {
+                    break;
+                }
+                req += c;
+            }
+            requests.push(req);
+            try {
+                ns.send("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            ns.close();
+            if (req =~ /^GET \/done /) {
+                return;
+            }
+        }
+    }
+}
+
+#! a minimal FTP server that records every command received on one control connection
+class RecordingFtpServer {
+    private {
+        Socket listener();
+        Queue commands();
+        Counter done(1);
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        background run();
+    }
+
+    int getPort() {
+        return listener.getPort();
+    }
+
+    #! returns the commands received, after the client has disconnected
+    list<string> getCommands() {
+        done.waitForZero();
+        list<string> rv = ();
+        while (commands.size()) {
+            rv += commands.get();
+        }
+        return rv;
+    }
+
+    #! ends the server if the client never connected
+    stop() {
+        if (done.getCount()) {
+            Socket s();
+            s.connectINET("127.0.0.1", getPort());
+            s.send("QUIT\r\n");
+            done.waitForZero();
+        }
+    }
+
+    private run() {
+        on_exit done.dec();
+        Socket ns = listener.accept();
+        ns.send("220 ready\r\n");
+        string line;
+        while (True) {
+            string c;
+            try {
+                c = ns.recv(1);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            if (c == "") {
+                return;
+            }
+            if (c != "\n") {
+                line += c;
+                continue;
+            }
+            trim line;
+            commands.push(line);
+            if (line =~ /^USER /) {
+                ns.send("331 password required\r\n");
+            } else if (line =~ /^PASS /) {
+                ns.send("230 logged in\r\n");
+            } else if (line =~ /^QUIT/) {
+                ns.send("221 bye\r\n");
+                return;
+            } else if (line =~ /^RNFR /) {
+                ns.send("350 ready for RNTO\r\n");
+            } else if (line =~ /^(EPSV|PASV|PORT|EPRT)/) {
+                ns.send("500 no data connections\r\n");
+            } else {
+                ns.send("250 OK\r\n");
+            }
+            line = "";
+        }
+    }
+}
+
+class CrLfInjectionTest inherits QUnit::Test {
+    constructor() : Test("CrLfInjectionTest", "1.0") {
+        addTestCase("HTTP messages sent with a Socket", \socketHttp());
+        addTestCase("HTTPClient requests", \httpClient());
+        addTestCase("FTP commands", \ftp());
+        addTestCase("other protocol strings", \other());
+        set_return_value(main());
+    }
+
+    #! returns the bytes received by the server socket that are available
+    private string readAvailable(Socket server) {
+        string rv = "";
+        while (server.isDataAvailable(0)) {
+            rv += server.recv(0);
+        }
+        return rv;
+    }
+
+    socketHttp() {
+        Socket listener();
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        Socket client();
+        client.connectINET("127.0.0.1", listener.getPort());
+        Socket server = listener.accept();
+
+        # the request line would end at the CR LF, and "Injected: 1" would be a header of the request
+        assertThrows("SOCKET-SEND-ERROR", "HTTP request target contains a control character; HTTP request targets "
+            "cannot contain control characters other than horizontal tab", \client.sendHTTPMessage(),
+            ("GET", "/a\r\nInjected: 1", "1.1", {}, ""));
+        assertThrows("SOCKET-SEND-ERROR", "HTTP method \"GET /x HTTP/1\\.1\\\\x0d\\\\x0aX\" contains a control "
+            "character \\(\\\\x0d\\) at byte offset 15", \client.sendHTTPMessage(),
+            ("GET /x HTTP/1.1\r\nX", "/", "1.1", {}, ""));
+        assertThrows("SOCKET-SEND-ERROR", "HTTP version .* contains a control character", \client.sendHTTPMessage(),
+            ("GET", "/", "1.1\r\nInjected: 1", {}, ""));
+        try {
+            client.sendHTTPMessage("GET", "/", "1.1", {"X-A": "x\r\nInjected: 1"}, "");
+            fail("sendHTTPMessage() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-SEND-ERROR", ex.err);
+            assertEq("HTTP header 'X-A' value contains a control character; HTTP header values cannot contain "
+                "control characters other than horizontal tab", ex.desc);
+            assertEq(Err::EINVAL, ex.arg);
+        }
+        assertThrows("SOCKET-SEND-ERROR", "HTTP header name \"X-A\\\\x0d\\\\x0aInjected\" contains a control "
+            "character", \client.sendHTTPMessage(), ("GET", "/", "1.1", {"X-A\r\nInjected": "1"}, ""));
+        assertThrows("SOCKET-SEND-ERROR", "HTTP header 'X-L' value contains a control character",
+            \client.sendHTTPMessage(), ("GET", "/", "1.1", {"X-L": ("a", "b\nInjected: 1")}, ""));
+        # another control character than horizontal tab
+        assertThrows("SOCKET-SEND-ERROR", "HTTP header 'X-B' value contains a control character",
+            \client.sendHTTPMessage(), ("GET", "/", "1.1", {"X-B": "a\x01b"}, ""));
+        # none of them was sent
+        assertEq("", readAvailable(server));
+
+        # a horizontal tab is allowed in a header value
+        client.sendHTTPMessage("GET", "/ok", "1.1", {"X-Tab": "a\tb"}, "");
+        hash<auto> req = server.readHTTPHeader();
+        assertEq("/ok", req.path);
+        assertEq("a\tb", req."x-tab");
+        assertNothing(req.injected);
+
+        # response splitting
+        assertThrows("SOCKET-SEND-ERROR", "HTTP status message .* contains a control character",
+            \server.sendHTTPResponse(), (200, "OK\r\nInjected: 1", "1.1", {}, ""));
+        assertThrows("SOCKET-SEND-ERROR", "HTTP header 'Location' value contains a control character",
+            \server.sendHTTPResponse(), (302, "Found", "1.1", {"Location": "/x\r\nSet-Cookie: a=b"}, ""));
+        assertThrows("SOCKET-SEND-ERROR", "HTTP header name .* contains a control character",
+            \server.sendHTTPResponse(), (200, "OK", "1.1", {"X-A\r\nSet-Cookie": "a=b"}, ""));
+        assertThrows("SOCKET-SEND-ERROR", "HTTP header 'X-H' value contains a control character",
+            \server.sendHTTPResponseHeader(), (200, "OK", "1.1", {"X-H": "a\r\nb"}));
+        assertEq("", readAvailable(client));
+        server.sendHTTPResponse(200, "OK", "1.1", {"X-Ok": "1"}, "");
+        hash<auto> resp = client.readHTTPHeader();
+        assertEq(200, resp.status_code);
+        assertEq("1", resp."x-ok");
+        assertNothing(resp."set-cookie");
+
+        # trailers of a chunked message
+        client.sendHTTPMessageWithCallback(sub () {}, "POST", "/chunked", "1.1", {});
+        assertThrows("SOCKET-SEND-ERROR", "HTTP header 'X-T' value contains a control character",
+            \client.sendHTTPChunkedBodyTrailer(), {"X-T": "a\r\nInjected: 1"});
+        string sent = readAvailable(server);
+        assertFalse(sent =~ /Injected/, "no trailer was sent");
+    }
+
+    httpClient() {
+        RawHttpRecorder server();
+        string url = "http://127.0.0.1:" + server.getPort();
+        HTTPClient hc({"url": url, "additional_methods": {"PURGE\r\nInjected: 1": True}});
+        on_exit {
+            hc.disconnect();
+            server.stop();
+        }
+
+        assertThrows("HTTP-CLIENT-HEADER-ERROR", "HTTP header 'X-A' value contains a control character",
+            \hc.get(), ("/", {"X-A": "x\r\nInjected: 1"}));
+        assertThrows("HTTP-CLIENT-HEADER-ERROR", "HTTP header name .* contains a control character", \hc.get(),
+            ("/", {"X-A\r\nInjected": "1"}));
+        # a method name with a CR or LF given as an additional method
+        assertThrows("HTTP-CLIENT-METHOD-ERROR", "HTTP method .* contains a control character", \hc.send(),
+            ("", "PURGE\r\nInjected: 1", "/"));
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", "HTTP header 'X-D' value contains a control character",
+            \hc.addDefaultHeaders(), {"X-D": "x\r\nInjected: 1"});
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", "HTTP header 'X-D' value contains a control character",
+            sub () { HTTPClient c({"url": url, "headers": {"X-D": "x\r\nInjected: 1"}}); });
+        # the host of a URL is sent in the Host header
+        assertThrows("HTTP-CLIENT-URL-ERROR", "^URL contains a control character",
+            sub () { HTTPClient c({"url": "http://127.0.0.1\r\nInjected: 1:8080/"}); });
+        assertThrows("HTTP-CLIENT-URL-ERROR", "^URL contains a control character", \hc.sendUrl(),
+            ("", "GET", "http://127.0.0.1\r\nInjected: 1:" + server.getPort() + "/"));
+        assertThrows("HTTP-CLIENT-URL-ERROR", "^proxy URL contains a control character", \hc.setProxyURL(),
+            "http://127.0.0.1\r\nInjected: 1:3128");
+
+        # the request path is percent-encoded, so a CR or LF in it is sent encoded
+        hc.get("/a\r\nb", {"X-Tab": "a\tb"});
+        hc.get("/done");
+        list<string> l = server.getRequests();
+        assertEq(2, l.size());
+        assertRegex("^GET /a%0D%0Ab HTTP/1\\.1\r\n", l[0]);
+        assertRegex("\r\nX-Tab: a\tb\r\n", l[0]);
+        foreach string req in (l) {
+            assertFalse(req =~ /Injected/, "no injected header was sent");
+        }
+    }
+
+    ftp() {
+        RecordingFtpServer server();
+        FtpClient ftp("ftp://user:pass@127.0.0.1:" + server.getPort());
+        on_exit {
+            ftp.disconnect();
+            server.stop();
+        }
+        ftp.connect();
+
+        assertThrows("FTP-DELETE-ERROR", "remote path \"a\\.txt\\\\x0d\\\\x0aDELE b\\.txt\" contains a line break "
+            "\\(\\\\x0d\\) at byte offset 5; remote paths cannot contain CR or LF characters", \ftp.del(),
+            "a.txt\r\nDELE b.txt");
+        assertThrows("FTP-CWD-ERROR", "contains a line break", \ftp.cwd(), "/x\r\nRMD /y");
+        assertThrows("FTP-MKDIR-ERROR", "contains a line break", \ftp.mkdir(), "/x\nRMD /y");
+        assertThrows("FTP-RMDIR-ERROR", "contains a line break", \ftp.rmdir(), "/x\rRMD /y");
+        assertThrows("FTP-RENAME-ERROR", "contains a line break", \ftp.rename(), ("a\r\nDELE c", "b"));
+        assertThrows("FTP-SIZE-ERROR", "contains a line break", \ftp.size(), "a\r\nDELE c");
+        assertThrows("FTP-GET-ERROR", "contains a line break", \ftp.getAsString(), "a\r\nDELE c");
+        assertThrows("FTP-PUT-ERROR", "contains a line break", \ftp.putData(), ("data", "a\r\nDELE c"));
+        assertThrows("FTP-COMMAND-ERROR", "FTP command argument .* contains a line break",
+            \ftp.sendControlMessage(), ("SITE", "x\r\nDELE z"));
+        assertThrows("FTP-COMMAND-ERROR", "FTP command .* contains a line break", \ftp.sendControlMessage(),
+            ("NOOP\r\nDELE z", "x"));
+
+        # a remote path without a local path is also the local file name; a local file name with a line break is the
+        # remote file name of put() without a remote path
+        TmpDir tmp("qore-ftp-crlf-");
+        string local = tmp.path + DirSep + "a\r\nDELE z";
+        {
+            File f();
+            f.open2(local, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("data");
+        }
+        assertThrows("FTP-PUT-ERROR", "remote path .* contains a line break", \ftp.put(), local);
+        string cwd = getcwd();
+        on_exit chdir(cwd);
+        chdir(tmp.path);
+        assertThrows("FTP-GET-ERROR", "remote path .* contains a line break", \ftp.get(), "b\r\nDELE z");
+
+        # user names and passwords: a password is not shown
+        FtpClient other();
+        assertThrows("FTP-URL-ERROR", "user name .* contains a line break", \other.setUserName(),
+            "user\r\nDELE z");
+        assertThrows("FTP-URL-ERROR", "^password contains a line break; passwords cannot contain CR or LF characters",
+            \other.setPassword(), "pw\r\nDELE z");
+        assertThrows("FTP-URL-ERROR", "^URL contains a line break", \other.setURL(),
+            "ftp://user\r\nDELE z:pw@127.0.0.1:21");
+        assertThrows("FTP-URL-ERROR", "^URL contains a line break",
+            sub () { FtpClient f("ftp://user:pw\r\nDELE z@127.0.0.1:21"); });
+        assertThrows("FTP-LOGIN-ERROR", "user name .* contains a line break",
+            sub () { FtpControlPollOperation op("127.0.0.1", 21, False, False, "user\r\nDELE z", "pw"); });
+        FtpControlPollOperation op("127.0.0.1", 21);
+        assertThrows("FTP-COMMAND-ERROR", "FTP command argument .* contains a line break", \op.submitCommand(),
+            ("DELE", "a\r\nDELE z"));
+
+        ftp.del("done");
+        ftp.disconnect();
+        list<string> l = server.getCommands();
+        # commands that the client may send when it connects and disconnects are not checked
+        assertEq(("USER user", "PASS pass", "DELE done"), (select l, $1 !~ /^(TYPE|OPTS|FEAT|PWD|SYST|QUIT)/));
+    }
+
+    other() {
+        # POP3 APOP: the user name is written to the APOP command
+        PollPipeline pp();
+        assertThrows("POLL-PIPELINE-ERROR", "user name .* contains a line break", \pp.addMakePop3ApopCommand(),
+            ("cmd", "present", "user\r\nDELE 1", "pw"));
+        # the target host of an HTTP/1 connection is sent in the Host header
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", "hostname .* contains a control character",
+            sub () { Http1Connection c("127.0.0.1\r\nInjected: 1", 80); });
+    }
+}

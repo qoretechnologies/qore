@@ -50,6 +50,7 @@
 #include "qore/intern/QoreQuestionMarkOperatorNode.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <cerrno>
@@ -2246,21 +2247,24 @@ int q_check_http_header_values(const QoreHashNode* headers, const char* err, Exc
     if (!headers) {
         return 0;
     }
-    // a header value is sent cut at a NUL character, or written to the message with it, which corrupts the message
+    // a header value is sent cut at a NUL character, or written to the message with it, which corrupts the message;
+    // a CR or LF would end the header and start another one
     auto check = [&](const char* name, const QoreValue& v) -> int {
         if (v.getType() != NT_STRING) {
             return 0;
         }
         // a string can be held in inline short string storage, which has no QoreStringNode
         QoreStringDataHelper str(v);
-        if (!str.size() || !memchr(str.c_str(), '\0', str.size())) {
-            return 0;
-        }
         QoreStringMaker what("HTTP header '%s' value", name);
-        return q_check_secret_no_nul(str.c_str(), str.size(), what.c_str(), "HTTP header values", err, xsink);
+        return q_check_http_text(str.c_str(), str.size(), what.c_str(), "HTTP header values", err, true, xsink);
     };
     ConstHashIterator hi(headers);
     while (hi.next()) {
+        // the name is a hash key, which has no NUL character; a CR or LF in it would start another header
+        const char* key = hi.getKey();
+        if (q_check_http_text(key, strlen(key), "HTTP header name", "HTTP header names", err, false, xsink)) {
+            return -1;
+        }
         const QoreValue v = hi.get();
         if (v.getType() == NT_LIST) {
             ConstListIterator li(v.get<const QoreListNode>());
@@ -2277,14 +2281,20 @@ int q_check_http_header_values(const QoreHashNode* headers, const char* err, Exc
 }
 
 int q_check_http_request(const QoreString* method, const QoreString* path, const QoreHashNode* headers,
-        const char* method_err, const char* path_err, const char* header_err, ExceptionSink* xsink) {
+        const char* method_err, const char* path_err, const char* header_err, ExceptionSink* xsink,
+        bool path_sent_as_is) {
     // the method and request target are written to the request line or HTTP/2 and HTTP/3 pseudo-headers as C strings,
-    // which would be cut at a NUL character
-    if (method && q_check_no_nul(method->c_str(), method->size(), "HTTP method", "HTTP methods", method_err, xsink)) {
+    // which would be cut at a NUL character, and a CR or LF would end the request line and start a header or another
+    // request
+    if (method && q_check_http_text(method->c_str(), method->size(), "HTTP method", "HTTP methods", method_err, false,
+            xsink)) {
         return -1;
     }
-    if (path && q_check_secret_no_nul(path->c_str(), path->size(), "HTTP request target", "HTTP request targets",
-            path_err, xsink)) {
+    if (path && (path_sent_as_is
+            ? q_check_http_text(path->c_str(), path->size(), "HTTP request target", "HTTP request targets", path_err,
+                true, xsink)
+            : q_check_secret_no_nul(path->c_str(), path->size(), "HTTP request target", "HTTP request targets",
+                path_err, xsink))) {
         return -1;
     }
     return q_check_http_header_values(headers, header_err, xsink);
@@ -2300,6 +2310,63 @@ int q_check_host_service(const QoreString* host, const QoreString* service, cons
         return -1;
     }
     return 0;
+}
+
+// raises err for the character at offset in a string that cannot hold it; a secret is not shown in the exception
+static int q_raise_bad_char(const char* str, size_t len, size_t offset, const char* what, const char* what_plural,
+        const char* char_desc, const char* rule, const char* err, bool secret, ExceptionSink* xsink) {
+    if (secret) {
+        xsink->raiseExceptionArg(err, EINVAL, new QoreStringNodeMaker("%s contains %s; %s cannot contain %s", what,
+            char_desc, what_plural, rule));
+        return -1;
+    }
+    QoreStringNode* desc = new QoreStringNodeMaker("%s \"", what);
+    q_append_escaped(*desc, str, len);
+    desc->sprintf("\" contains %s (\\x%02x) at byte offset %zu; %s cannot contain %s", char_desc,
+        static_cast<unsigned>(static_cast<unsigned char>(str[offset])), offset, what_plural, rule);
+    xsink->raiseExceptionArg(err, EINVAL, desc);
+    return -1;
+}
+
+int q_check_http_text(const char* str, size_t len, const char* what, const char* what_plural, const char* err,
+        bool secret, ExceptionSink* xsink) {
+    assert(str || !len);
+    // a NUL character is reported as for every other string passed on as a C string
+    if (secret ? q_check_secret_no_nul(str, len, what, what_plural, err, xsink)
+            : q_check_no_nul(str, len, what, what_plural, err, xsink)) {
+        return -1;
+    }
+    // CR and LF would end the line or field and start another one in the message (request splitting, header
+    // injection); no other control character than horizontal tab can be in a line or field either (RFC 9110 section
+    // 5.5, RFC 9112 sections 3 and 4)
+    const char* end = str + len;
+    const char* p = std::find_if(str, end, [](char ch) {
+        unsigned char c = static_cast<unsigned char>(ch);
+        return (c < 0x20 && c != '\t') || c == 0x7f;
+    });
+    if (p == end) {
+        return 0;
+    }
+    return q_raise_bad_char(str, len, p - str, what, what_plural, "a control character",
+        "control characters other than horizontal tab", err, secret, xsink);
+}
+
+int q_check_line_text(const char* str, size_t len, const char* what, const char* what_plural, const char* err,
+        bool secret, ExceptionSink* xsink) {
+    assert(str || !len);
+    // a NUL character is reported as for every other string passed on as a C string
+    if (secret ? q_check_secret_no_nul(str, len, what, what_plural, err, xsink)
+            : q_check_no_nul(str, len, what, what_plural, err, xsink)) {
+        return -1;
+    }
+    // CR or LF would end the command line and start another command
+    const char* end = str + len;
+    const char* p = std::find_if(str, end, [](char c) { return c == '\r' || c == '\n'; });
+    if (p == end) {
+        return 0;
+    }
+    return q_raise_bad_char(str, len, p - str, what, what_plural, "a line break", "CR or LF characters", err,
+        secret, xsink);
 }
 
 // Handle GNU strerror_r() which returns char*
@@ -3122,6 +3189,34 @@ int q_get_mode(const QoreString& path) {
     return sbuf.st_mode;
 }
 
+void q_append_escaped(QoreString& desc, const char* str, size_t len) {
+    // the string is shown with at most its first 64 characters, with control characters, quotes and backslashes
+    // escaped, so that a NUL or other control character and where it is can be seen; a string that is not valid in
+    // the default encoding is shown with at most its first 64 bytes, with the bytes that are not ASCII escaped as
+    // well, so that the description is valid in the default encoding
+    static constexpr size_t max_chars = 64;
+    bool invalid = false;
+    size_t show = QCS_DEFAULT->getByteLen(str, str + len, max_chars, invalid);
+    if (invalid || show > len) {
+        invalid = true;
+        show = len < max_chars ? len : max_chars;
+    }
+    for (size_t i = 0; i < show; ++i) {
+        unsigned char c = static_cast<unsigned char>(str[i]);
+        if (c < 0x20 || c == 0x7f || (invalid && c >= 0x80)) {
+            desc.sprintf("\\x%02x", c);
+        } else if (c == '"' || c == '\\') {
+            desc.concat('\\');
+            desc.concat(static_cast<char>(c));
+        } else {
+            desc.concat(static_cast<char>(c));
+        }
+    }
+    if (show < len) {
+        desc.concat("...");
+    }
+}
+
 int q_check_no_nul(const char* str, size_t len, const char* what, const char* what_plural, const char* err,
         ExceptionSink* xsink) {
     assert(str || !len);
@@ -3134,32 +3229,8 @@ int q_check_no_nul(const char* str, size_t len, const char* what, const char* wh
         return 0;
     }
     size_t offset = nul - str;
-    // the string is shown with at most its first 64 characters, with control characters, quotes and backslashes
-    // escaped, so that the NUL character and where it is can be seen; a string that is not valid in the default
-    // encoding is shown with at most its first 64 bytes, with the bytes that are not ASCII escaped as well, so that
-    // the description is valid in the default encoding
-    static constexpr size_t max_chars = 64;
-    bool invalid = false;
-    size_t show = QCS_DEFAULT->getByteLen(str, str + len, max_chars, invalid);
-    if (invalid || show > len) {
-        invalid = true;
-        show = len < max_chars ? len : max_chars;
-    }
     QoreStringNode* desc = new QoreStringNodeMaker("%s \"", what);
-    for (size_t i = 0; i < show; ++i) {
-        unsigned char c = static_cast<unsigned char>(str[i]);
-        if (c < 0x20 || c == 0x7f || (invalid && c >= 0x80)) {
-            desc->sprintf("\\x%02x", c);
-        } else if (c == '"' || c == '\\') {
-            desc->concat('\\');
-            desc->concat(static_cast<char>(c));
-        } else {
-            desc->concat(static_cast<char>(c));
-        }
-    }
-    if (show < len) {
-        desc->concat("...");
-    }
+    q_append_escaped(*desc, str, len);
     desc->sprintf("\" contains a NUL character at byte offset %zu; %s cannot contain NUL characters", offset,
         what_plural);
     xsink->raiseExceptionArg(err, EINVAL, desc);

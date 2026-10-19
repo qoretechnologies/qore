@@ -3639,8 +3639,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("proxy");
     if (n.getType() == NT_STRING) {
         QoreStringValueHelper str(n);
-        // a URL would be parsed cut at a NUL character; it is not shown, as it can contain a password
-        if (q_check_secret_no_nul(str->c_str(), str->size(), "proxy URL", "URLs", "HTTP-CLIENT-URL-ERROR", xsink)
+        // a URL would be parsed cut at a NUL character, and its host is sent in the Host header, where a CR or LF
+        // would start another header; it is not shown, as it can contain a password
+        if (q_check_http_text(str->c_str(), str->size(), "proxy URL", "URLs", "HTTP-CLIENT-URL-ERROR", true, xsink)
             || http_priv->setProxyUrlUnlocked(str->c_str(), xsink)) {
             return -1;
         }
@@ -3650,8 +3651,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("url");
     if (n.getType() == NT_STRING) {
         QoreStringValueHelper str(n);
-        // a URL would be parsed cut at a NUL character; it is not shown, as it can contain a password
-        if (q_check_secret_no_nul(str->c_str(), str->size(), "URL", "URLs", "HTTP-CLIENT-URL-ERROR", xsink)
+        // a URL would be parsed cut at a NUL character, and its host is sent in the Host header, where a CR or LF
+        // would start another header; it is not shown, as it can contain a password
+        if (q_check_http_text(str->c_str(), str->size(), "URL", "URLs", "HTTP-CLIENT-URL-ERROR", true, xsink)
             || http_priv->setUrlUnlocked(str->c_str(), xsink)) {
             return -1;
         }

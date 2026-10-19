@@ -1165,23 +1165,57 @@ DLLLOCAL int q_check_secret_no_nul(const char* str, size_t len, const char* what
 DLLLOCAL int q_check_host_service(const QoreString* host, const QoreString* service, const char* err,
         ExceptionSink* xsink);
 
-//! checks that the string values of HTTP headers to be sent have no NUL character
-/** String values and the strings in list values are checked; the value is not shown in the exception, as a header
-    can carry credentials (ex: \c Authorization or \c Cookie)
+//! checks the names and string values of HTTP headers to be sent
+/** Names, string values and the strings in list values cannot contain NUL or other control characters than
+    horizontal tab (see q_check_http_text()); a value is not shown in the exception, as a header can carry credentials
+    (ex: \c Authorization or \c Cookie)
 
-    @return 0 if no value contains a NUL character, -1 if one does and an exception was raised
+    @return 0 if the headers can be sent, -1 if not and an exception was raised
 */
 DLLLOCAL int q_check_http_header_values(const QoreHashNode* headers, const char* err, ExceptionSink* xsink);
 
-//! checks that the method, request target and header values of an HTTP request to be sent have no NUL character
-/** @param method the HTTP method, if any
+//! checks the method, request target and headers of an HTTP request to be sent
+/** The method and header names and values cannot contain NUL or other control characters than horizontal tab (see
+    q_check_http_text()).
+
+    @param method the HTTP method, if any
     @param path the request target, if any; not shown in the exception, as a query can carry credentials
     @param headers the request headers, if any; see q_check_http_header_values()
+    @param path_sent_as_is true if the request target is written to the message as given, so that it cannot contain
+    control characters either; false if it is percent-encoded before it is sent, so that only a NUL character, which
+    would cut it, is refused
 
-    @return 0 if no string contains a NUL character, -1 if one does and an exception was raised
+    @return 0 if the request can be sent, -1 if not and an exception was raised
 */
 DLLLOCAL int q_check_http_request(const QoreString* method, const QoreString* path, const QoreHashNode* headers,
-        const char* method_err, const char* path_err, const char* header_err, ExceptionSink* xsink);
+        const char* method_err, const char* path_err, const char* header_err, ExceptionSink* xsink,
+        bool path_sent_as_is = true);
+
+//! checks a string written to a line or field of an HTTP message: a request or status line or a header
+/** The string cannot contain a NUL character, which would cut it, or another control character than horizontal tab,
+    since CR and LF would end the line or field and start another one (request splitting, header injection), and no
+    other control character can be in an HTTP line or field (RFC 9110 section 5.5, RFC 9112 sections 3 and 4).
+
+    @param secret if true, the string is not shown in the exception, and neither is the position of the character
+
+    @return 0 if the string can be sent, -1 if not and an exception was raised
+*/
+DLLLOCAL int q_check_http_text(const char* str, size_t len, const char* what, const char* what_plural,
+        const char* err, bool secret, ExceptionSink* xsink);
+
+//! checks a string written to a command line of a line-based protocol such as FTP
+/** The string cannot contain a NUL character, which would cut it, or a CR or LF character, which would end the
+    command line and start another command (command injection).
+
+    @param secret if true, the string is not shown in the exception, and neither is the position of the character
+
+    @return 0 if the string can be sent, -1 if not and an exception was raised
+*/
+DLLLOCAL int q_check_line_text(const char* str, size_t len, const char* what, const char* what_plural,
+        const char* err, bool secret, ExceptionSink* xsink);
+
+//! appends a string to an exception description: escaped, with at most its first 64 characters
+DLLLOCAL void q_append_escaped(QoreString& desc, const char* str, size_t len);
 
 // class for master namespace of all builtin classes, constants, etc
 class StaticSystemNamespace : public RootQoreNamespace {

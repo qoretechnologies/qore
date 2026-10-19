@@ -790,6 +790,29 @@
     the part before the NUL character.
     @endparblock
 
+    @par A CR, LF or Other Control Character Is Refused in HTTP Message Lines and FTP Commands
+    @parblock
+    A CR or LF in a string written to a line of an HTTP message or to an FTP command ended the line there and started
+    another one: a header value <tt>"x\\r\\nSet-Cookie: a=b"</tt> sent a second header (header injection), a request
+    target, method, version or status message with a line break sent another header or request (request and response
+    splitting), and an FTP remote path <tt>"a.txt\\r\\nDELE b.txt"</tt> sent a second command (FTP command
+    injection).  Such a string is now refused before anything is sent, with the error code of the API:
+    - HTTP: the method, request target, version, status message, and header and trailer names and values sent by
+      @ref Qore::Socket "Socket" (\c SOCKET-SEND-ERROR and the codes of the response poll operations), the method,
+      header names and values, default headers, and the URL and proxy URL (whose host is sent in the \c Host header
+      or the \c CONNECT request) of @ref Qore::HTTPClient "HTTPClient", the HTTP/1 and HTTP/2 client poll
+      operations and their target hosts, and @ref Qore::Http1Connection "Http1Connection" hosts; these strings cannot
+      contain any control character other than horizontal tab (RFC 9110 section 5.5, RFC 9112); the request target
+      of an @ref Qore::HTTPClient "HTTPClient" request is percent-encoded, as before, so a line break in it is sent
+      as \c %0D%0A
+    - FTP: the remote paths, commands and arguments, user names, passwords and URLs of
+      @ref Qore::FtpClient "FtpClient" and the FTP poll operations, including the remote file name that
+      @ref Qore::FtpClient::put() "FtpClient::put()" takes from the local path, cannot contain CR or LF characters
+    - the user name of a POP3 \c APOP command made by @ref Qore::PollPipeline "PollPipeline"
+
+    Header values, request targets, passwords and URLs are not shown in the exception.
+    @endparblock
+
     @par Modules Export Only Their Own Declarations and Reexported Modules
     @parblock
     Constants, enums and their members, and typedefs that a module received from another module it imported with a

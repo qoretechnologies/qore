@@ -347,25 +347,28 @@ private:
     ExceptionSink* xsink;
 };
 
-// the strings of an HTTP/1 request are written to the message as C strings, which would be cut at a NUL character;
-// the header values are checked when the message is made
+// the strings of an HTTP/1 request are written to the message as C strings, which would be cut at a NUL character,
+// and a CR or LF would end the request line and start a header or another request; the headers are checked when the
+// message is made
 static int socket_check_http_request(const QoreStringNode* method, const QoreStringNode* path,
         const QoreStringNode* http_version, const char* err, ExceptionSink* xsink) {
     if (q_check_http_request(method, path, nullptr, err, err, nullptr, xsink)
-        || q_check_no_nul(http_version->c_str(), http_version->size(), "HTTP version", "HTTP versions", err,
-            xsink)) {
+        || q_check_http_text(http_version->c_str(), http_version->size(), "HTTP version", "HTTP versions", err,
+            false, xsink)) {
         return -1;
     }
     return 0;
 }
 
-// the strings of an HTTP/1 response are written to the message as C strings, which would be cut at a NUL character;
-// headers are only given here when the message is made without my_socket_priv, which checks them otherwise
+// the strings of an HTTP/1 response are written to the message as C strings, which would be cut at a NUL character,
+// and a CR or LF would end the status line and start a header; headers are only given here when the message is made
+// without my_socket_priv, which checks them otherwise
 static int socket_check_http_response(const QoreStringNode* status_description, const QoreStringNode* http_version,
         const QoreHashNode* headers, const char* err, ExceptionSink* xsink) {
-    if (q_check_no_nul(status_description->c_str(), status_description->size(), "HTTP status message",
-            "HTTP status messages", err, xsink)
-        || q_check_no_nul(http_version->c_str(), http_version->size(), "HTTP version", "HTTP versions", err, xsink)
+    if (q_check_http_text(status_description->c_str(), status_description->size(), "HTTP status message",
+            "HTTP status messages", err, false, xsink)
+        || q_check_http_text(http_version->c_str(), http_version->size(), "HTTP version", "HTTP versions", err, false,
+            xsink)
         || q_check_http_header_values(headers, err, xsink)) {
         return -1;
     }
@@ -2616,7 +2619,7 @@ AbstractPollOperation<auto> Socket::startPollSend(binary data) [flags=NAMED_ARGS
     }
     @endcode
 
-    @throw SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR invalid status code or unsupported body type, or the status message, HTTP version or a header value contains a NUL character (since %Qore 3.0); header values are not shown in the exception
+    @throw SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR invalid status code or unsupported body type, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @note This method properly handles the \c Content-Length header by calculating it from the body size, ignoring
     any \c Content-Length header passed in the \a headers argument.
@@ -2700,7 +2703,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, s
       headers) and \c "info" (header info) keys
     - If \c getState() returns \c "timeout": the idle timeout expired; connection should be closed
 
-    @throw SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR invalid status code or unsupported body type, or the status message, HTTP version or a header value contains a NUL character (since %Qore 3.0); header values are not shown in the exception
+    @throw SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR invalid status code or unsupported body type, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @since %Qore 3.0
 */
@@ -2783,8 +2786,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
     - If \c getState() returns \c "timeout": the idle timeout expired
 
     @throw SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR invalid status code, a non-I/O-thread-safe
-    InputStream, or a negative content length, or the status message, HTTP version or a header value contains a NUL
-    character (since %Qore 3.0); header values are not shown in the exception
+    InputStream, or a negative content length, or the status message, HTTP version or a header name or value contains a NUL
+    or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
     @throw HTTP-STREAM-ERROR raised during polling if the InputStream provides fewer bytes than
     Content-Length (truncated stream), or if poll() on a pollable InputStream fd fails
 
@@ -2894,7 +2897,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHe
 
     @since %Qore 3.0
 
-    @throw SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAMANDREADHEADER-ERROR the status message, HTTP version or a header value contains a NUL character (since %Qore 3.0); header values are not shown in the exception
+    @throw SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAMANDREADHEADER-ERROR the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeader(int status_code,
         string status_description, string http_version, *hash<auto> headers,
@@ -2991,8 +2994,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeade
     @return an @ref Qore::AbstractPollOperation object; when goal is reached, getState() returns "stream-complete"
 
     @throw SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR invalid status code, a non-I/O-thread-safe
-    InputStream, or a negative content length, or the status message, HTTP version or a header value contains a NUL
-    character (since %Qore 3.0); header values are not shown in the exception
+    InputStream, or a negative content length, or the status message, HTTP version or a header name or value contains a NUL
+    or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
     @throw HTTP-STREAM-ERROR raised during polling if the InputStream provides fewer bytes than
     Content-Length (truncated stream), or if poll() on a pollable InputStream fd fails
 
@@ -3092,7 +3095,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStream(int stat
 
     @return an @ref Qore::AbstractPollOperation object; when goal is reached, getState() returns "stream-complete"
 
-    @throw SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAM-ERROR invalid status code or non-I/O-safe InputStream, or the status message, HTTP version or a header value contains a NUL character (since %Qore 3.0); header values are not shown in the exception
+    @throw SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAM-ERROR invalid status code or non-I/O-safe InputStream, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @since %Qore 3.0
 */
@@ -5085,7 +5088,7 @@ sock.sendHTTPMessage("POST", "/RPC2", "1.1", ("Content-Type" : "text/xml"), xml)
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
-    @throw SOCKET-SEND-ERROR Send failed, or the method, path, HTTP version or a header value contains a NUL character (since %Qore 3.0); the path and header values are not shown in the exception
+    @throw SOCKET-SEND-ERROR Send failed, or the method, path, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the path and header values are not shown in the exception
     @throw SOCKET-SSL-ERROR there was an error sending SSL data
 
     @see Socket::sendHTTPResponse(), Socket::readHTTPHeader()
@@ -5132,7 +5135,7 @@ sock.sendHTTPMessage("POST", "/RPC2", "1.1", ("Content-Type" : "text/xml"), xml)
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR Send failed, or the method, path, HTTP version or a header value contains a NUL character (since %Qore 3.0); the path and header values are not shown in the exception
+    @throw SOCKET-SEND-ERROR Send failed, or the method, path, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the path and header values are not shown in the exception
     @throw SOCKET-SSL-ERROR there was an error sending SSL data
 
     @see Socket::sendHTTPResponse(), Socket::readHTTPHeader()
@@ -5169,7 +5172,7 @@ sock.sendHTTPMessageWithCallback(send_callback, "POST", "/RPC2", "1.1", ("Conten
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR Send failed, or the method, path, HTTP version or a header value contains a NUL character (since %Qore 3.0); the path and header values are not shown in the exception
+    @throw SOCKET-SEND-ERROR Send failed, or the method, path, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the path and header values are not shown in the exception
     @throw SOCKET-SSL-ERROR there was an error sending SSL data
 
     @see Socket::sendHTTPResponse(), Socket::readHTTPHeader()
@@ -5209,7 +5212,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", ("Connection":"Keep-Alive"));
     @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header value contains a NUL character (since %Qore 3.0); header values are not shown in the exception
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 */
 nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
         hash<auto> headers, string body, timeout timeout_ms = -1) {
@@ -5263,7 +5266,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", ("Connection":"Keep-Alive"));
     @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header value contains a NUL character (since %Qore 3.0); header values are not shown in the exception
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @since %Qore 0.9.4
 */
@@ -5313,7 +5316,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection":"Keep-Alive"}, bin);
     @throw SOCKET-SENDHTTPRESPONSE-STATUS-ERROR raised if the status_code (first argument) is < 100 or > 599
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header value contains a NUL character (since %Qore 3.0); header values are not shown in the exception
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 */
 nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
         hash<auto> headers, *binary body, timeout timeout_ms = -1) {
@@ -5359,7 +5362,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection":"Keep-Alive"}, bin);
     @throw SOCKET-SENDHTTPRESPONSE-STATUS-ERROR raised if the status_code (first argument) is < 100 or > 599
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header value contains a NUL character (since %Qore 3.0); header values are not shown in the exception
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @since %Qore 0.9.4
 */
@@ -5413,7 +5416,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed or the InputStream is not I/O-thread-safe, or the status message, HTTP version or a header value contains a NUL character (since %Qore 3.0); header values are not shown in the exception
+    @throw SOCKET-SEND-ERROR send failed or the InputStream is not I/O-thread-safe, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
     @throw HTTP-CHUNK-ERROR the chunk size given is not greater than 0
     @throw HTTP-TRAILER-ERROR the trailer callback must return either @ref nothing or @ref hash_type "hash"; this
     exception is thrown is another type is returned
@@ -5473,7 +5476,7 @@ sock.sendHTTPResponseWithCallback(send_callback, 200, "OK", "1.1", {"Connection"
     @throw SOCKET-SENDHTTPRESPONSE-STATUS-ERROR raised if the status_code (first argument) is < 100 or > 599
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header value contains a NUL character (since %Qore 3.0); header values are not shown in the exception
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @since %Qore 0.8.10
 */
@@ -5525,7 +5528,7 @@ sock.sendHTTPResponseWithCallback(send_callback, 200, "OK", "1.1", {"Connection"
     @throw SOCKET-SENDHTTPRESPONSE-STATUS-ERROR raised if the status_code (first argument) is < 100 or > 599
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header value contains a NUL character (since %Qore 3.0); header values are not shown in the exception
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @since %Qore 0.9.4
 */
@@ -5582,7 +5585,7 @@ sock.close();
     @throw SOCKET-SENDHTTPRESPONSE-STATUS-ERROR raised if the status_code (first argument) is < 100 or > 599
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header value contains a NUL character (since %Qore 3.0); header values are not shown in the exception
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
     @throw HTTP2-ERROR the socket has an HTTP/2 session; a response header without a message body is an HTTP/1 message
 
     @since %Qore 3.0
@@ -5664,7 +5667,7 @@ sock.sendHTTPChunkedBodyTrailer({});
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed, or a trailer value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
+    @throw SOCKET-SEND-ERROR send failed, or a trailer name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @since %Qore 0.8.13
 */
@@ -7310,7 +7313,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2StreamingResponse(int stre
     @return the promised stream ID on success (positive integer), or -1 on error
 
     @throw SOCKET-NOT-OPEN The socket is not connected
-    @throw HTTP2-ERROR HTTP/2 push promise submission failed or not in server mode, or the path contains a NUL character
+    @throw HTTP2-ERROR HTTP/2 push promise submission failed or not in server mode, or the path contains a NUL or another control character than horizontal tab
 
     @note Server Push can be disabled by clients; check if the push was successful by verifying
     the return value is positive.
@@ -8041,7 +8044,7 @@ bool Socket::isQuic() [flags=CONSTANT] {
 
     @return the stream ID assigned to this request
 
-    @throw QUIC-ERROR if no QUIC session is active or an error occurs, or the method or path contains a NUL character
+    @throw QUIC-ERROR if no QUIC session is active or an error occurs, or the method or path contains a NUL or another control character than horizontal tab
 
     @note This method requires an active QUIC session, typically established via
     @ref startPollQuicConnect()
@@ -8089,7 +8092,7 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
 
     @return the stream ID assigned to this request
 
-    @throw QUIC-ERROR if no QUIC session is active or an error occurs, or the method or path contains a NUL character
+    @throw QUIC-ERROR if no QUIC session is active or an error occurs, or the method or path contains a NUL or another control character than horizontal tab
 
     @since %Qore 3.0
 */

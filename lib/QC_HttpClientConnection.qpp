@@ -86,13 +86,16 @@ qclass Http1Connection [
     @param target_port the TCP port (e.g. 80)
     @param ssl_required True for HTTPS (requires SSL/TLS handshake), False for plain HTTP
 
-    @throw HTTPCLIENT-CONNECT-ERROR on construction / submission failure, or if the hostname contains a NUL character
+    @throw HTTPCLIENT-CONNECT-ERROR on construction / submission failure, or if the hostname contains a NUL or another
+    control character
 
     @since %Qore 3.0
 */
 Http1Connection::constructor(string target_host, int target_port, bool ssl_required = False) [flags=NAMED_ARGS] {
-    // the hostname is passed to the resolver as a C string, which would be cut at a NUL character
-    if (q_check_host_service(target_host, nullptr, "HTTPCLIENT-CONNECT-ERROR", xsink)) {
+    // the hostname is passed to the resolver as a C string, which would be cut at a NUL character, and sent in the Host
+    // header, where a CR or LF would start another header
+    if (q_check_http_text(target_host->c_str(), target_host->size(), "hostname", "hostnames",
+            "HTTPCLIENT-CONNECT-ERROR", false, xsink)) {
         return;
     }
     ReferenceHolder<Http1ClientConnection> conn(

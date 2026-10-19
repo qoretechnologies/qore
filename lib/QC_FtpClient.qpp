@@ -34,10 +34,14 @@
 #include "qore/intern/QC_FtpClient.h"
 #include "qore/intern/QC_Queue.h"
 
-// a remote path or a command argument is sent to the server in an FTP command as a C string, which would be cut at a
-// NUL character
+// a remote path is sent to the server in an FTP command as a C string, which would be cut at a NUL character, and a
+// CR or LF would end the command and start another one
+static int ftp_check_remote_path(const QoreString& path, const char* err, ExceptionSink* xsink) {
+    return q_check_line_text(path.c_str(), path.size(), "remote path", "remote paths", err, false, xsink);
+}
+
 static int ftp_check_remote_path(const QoreStringNode* path, const char* err, ExceptionSink* xsink) {
-    return q_check_no_nul(path->c_str(), path->size(), "remote path", "remote paths", err, xsink);
+    return ftp_check_remote_path(*path, err, xsink);
 }
 
 //! A hash describing a free-form FTP control response
@@ -120,7 +124,7 @@ FtpClient ftp("ftp://user:pass@example.com:2021");
     @endcode
 
     @throw UNSUPPORTED-PROTOCOL Only \c "ftp" or \c "ftps" are allowed as the protocol in the URL
-    @throw FTP-URL-ERROR No hostname given in the URL, or the URL contains a NUL character (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
+    @throw FTP-URL-ERROR No hostname given in the URL, or the URL contains a NUL, CR or LF character (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
 */
 FtpClient::constructor(string url) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreFtpClientClass> f(new QoreFtpClientClass(url, xsink), xsink);
@@ -236,7 +240,7 @@ nothing FtpClient::disconnect() {
     @endcode
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
-    @throw FTP-LIST-ERROR FTP server returned an error in response to the LIST command, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-LIST-ERROR FTP server returned an error in response to the LIST command, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 
@@ -285,7 +289,7 @@ nothing FtpClient::disconnect() {
     @endcode
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
-    @throw FTP-LIST-ERROR FTP server returned an error in response to the LIST command, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-LIST-ERROR FTP server returned an error in response to the LIST command, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 
@@ -328,7 +332,7 @@ ftp.cwd("/foo/bar");
     @endcode
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
-    @throw FTP-CWD-ERROR FTP server returned an error to the CWD command, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-CWD-ERROR FTP server returned an error to the CWD command, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
@@ -354,7 +358,8 @@ ftp.put("/tmp/file-1.txt", "file.txt");
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
     @throw FTP-FILE-OPEN-ERROR Could not open local file for reading
     @throw FTP-FILE-PUT-ERROR Could not determine file size of local file (stat() failed)
-    @throw FTP-PUT-ERROR An error occurred while sending the file, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-PUT-ERROR An error occurred while sending the file, or the remote path (without one, the last element
+    of the local path) contains a NUL, CR or LF character (since %Qore 3.0)
     @throw FTP-FILE-OPEN-ERROR the local path contains a NUL character; see @ref path_nul_characters
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
@@ -362,9 +367,22 @@ ftp.put("/tmp/file-1.txt", "file.txt");
     @see FtpClient::putData()
 */
 nothing FtpClient::put(string local_path, *string remote_path) [dom=FILESYSTEM;flags=NAMED_ARGS] {
-    if (q_check_path(*local_path, "FTP-FILE-OPEN-ERROR", xsink)
-        || (remote_path && ftp_check_remote_path(remote_path, "FTP-PUT-ERROR", xsink))) {
+    if (q_check_path(*local_path, "FTP-FILE-OPEN-ERROR", xsink)) {
         return QoreValue();
+    }
+    if (remote_path) {
+        if (ftp_check_remote_path(remote_path, "FTP-PUT-ERROR", xsink)) {
+            return QoreValue();
+        }
+    } else {
+        // without a remote path, the file is stored under the last element of the local path, which a CR or LF in a
+        // local file name would make another command
+        size_t sep = q_find_last_path_sep(*local_path);
+        QoreString name(local_path->c_str() + (sep == (size_t)-1 ? 0 : sep + 1),
+            local_path->size() - (sep == (size_t)-1 ? 0 : sep + 1), local_path->getEncoding());
+        if (ftp_check_remote_path(name, "FTP-PUT-ERROR", xsink)) {
+            return QoreValue();
+        }
     }
     f->put(local_path->c_str(), remote_path ? remote_path->c_str() : 0, xsink);
 }
@@ -384,7 +402,7 @@ ftp.put(new FileInputStream("/tmp/file-1.txt"), "file.txt");
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
     @throw FTP-FILE-OPEN-ERROR Could not open local file for reading
     @throw FTP-FILE-PUT-ERROR Could not determine file size of local file (stat() failed)
-    @throw FTP-PUT-ERROR An error occurred while sending the file, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-PUT-ERROR An error occurred while sending the file, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 
@@ -410,7 +428,7 @@ ftp.rename("file.txt", "file.txt.orig");
     @endcode
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
-    @throw FTP-RENAME-ERROR FTP server returned an error to the \c RNFR or \c RNTO commands, or the source or target path contains a NUL character (since %Qore 3.0)
+    @throw FTP-RENAME-ERROR FTP server returned an error to the \c RNFR or \c RNTO commands, or the source or target path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
@@ -437,7 +455,7 @@ ftp.get("file.txt", "/tmp/file-1.txt");
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
     @throw FTP-FILE-OPEN-ERROR Could not create the local file
     @throw FTP-FILE-WRITE-ERROR Could not replace the local file after transfer
-    @throw FTP-GET-ERROR There was an error retrieving the file, or a local path is given and the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-GET-ERROR There was an error retrieving the file, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
     @throw FTP-FILE-OPEN-ERROR the local path (or without one, the remote path) contains a NUL character; see
     @ref path_nul_characters
 
@@ -448,10 +466,9 @@ ftp.get("file.txt", "/tmp/file-1.txt");
     @see FtpClient::getAsString(), FtpClient::getAsData()
 */
 nothing FtpClient::get(string remote_path, *string local_path) [dom=FILESYSTEM;flags=NAMED_ARGS] {
-    // without a local path, the remote path is also the local path; with one, the remote path is only sent to the
-    // server
+    // without a local path, the remote path is also the local path; the remote path is sent to the server
     if (q_check_path(local_path ? *local_path : *remote_path, "FTP-FILE-OPEN-ERROR", xsink)
-        || (local_path && ftp_check_remote_path(remote_path, "FTP-GET-ERROR", xsink))) {
+        || ftp_check_remote_path(remote_path, "FTP-GET-ERROR", xsink)) {
         return QoreValue();
     }
     f->get(remote_path->c_str(), local_path ? local_path->c_str() : 0, xsink);
@@ -471,7 +488,7 @@ ftp.get("file.txt", new FileOutputStream("/tmp/file-1.txt"));
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
     @throw FTP-FILE-OPEN-ERROR Could not create the local file
-    @throw FTP-GET-ERROR There was an error retrieving the file, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-GET-ERROR There was an error retrieving the file, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note the output stream can be of any class, including a class implemented in %Qore that inherits
     @ref Qore::OutputStream "OutputStream"; a stream that is not I/O-thread safe is written in the calling thread
@@ -508,7 +525,7 @@ ftp.get("file.iso", new FileOutputStream(local_path, True), offset);
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
     @throw FTP-RESTART-ERROR The server does not support restarting the transfer at the given offset
-    @throw FTP-GET-ERROR There was an error retrieving the file, or \a offset is negative, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-GET-ERROR There was an error retrieving the file, or \a offset is negative, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note the output stream can be of any class, including a class implemented in %Qore that inherits
     @ref Qore::OutputStream "OutputStream"; a stream that is not I/O-thread safe is written in the calling thread
@@ -538,7 +555,7 @@ nothing FtpClient::get(string remote_path, Qore::OutputStream[OutputStream] outp
 int size = ftp.size("file.iso");
     @endcode
 
-    @throw FTP-SIZE-ERROR The server does not support the \c SIZE command, or the file does not exist, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-SIZE-ERROR The server does not support the \c SIZE command, or the file does not exist, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
@@ -565,7 +582,7 @@ ftp.putData(str, "file.txt");
     @endcode
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
-    @throw FTP-PUT-ERROR An error occurred while sending the file, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-PUT-ERROR An error occurred while sending the file, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
@@ -589,7 +606,7 @@ ftp.putData(bin, "file.pdf");
     @endcode
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
-    @throw FTP-PUT-ERROR An error occurred while sending the file, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-PUT-ERROR An error occurred while sending the file, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
@@ -616,7 +633,7 @@ string str = ftp.getAsString("file.txt");
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
     @throw FTP-FILE-OPEN-ERROR Could not create the local file
-    @throw FTP-GET-ERROR There was an error retrieving the file, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-GET-ERROR There was an error retrieving the file, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 
@@ -647,7 +664,7 @@ binary b = ftp.getAsBinary("file.pdf");
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
     @throw FTP-FILE-OPEN-ERROR Could not create the local file
-    @throw FTP-GET-ERROR There was an error retrieving the file, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-GET-ERROR There was an error retrieving the file, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 
@@ -672,7 +689,7 @@ ftp.del("file-2.txt");
     @endcode
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
-    @throw FTP-DELETE-ERROR FTP server returned an error to the \c DELE command, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-DELETE-ERROR FTP server returned an error to the \c DELE command, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
@@ -695,7 +712,7 @@ ftp.mkdir("tmp");
     @endcode
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
-    @throw FTP-MKDIR-ERROR FTP server returned an error to the \c MKD command, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-MKDIR-ERROR FTP server returned an error to the \c MKD command, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
@@ -718,7 +735,7 @@ ftp.rmdir("tmp");
     @endcode
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
-    @throw FTP-RMDIR-ERROR FTP server returned an error to the \c RMD command, or the remote path contains a NUL character (since %Qore 3.0)
+    @throw FTP-RMDIR-ERROR FTP server returned an error to the \c RMD command, or the remote path contains a NUL, CR or LF character (since %Qore 3.0)
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
@@ -737,11 +754,13 @@ nothing FtpClient::rmdir(string remote_path) [flags=NAMED_ARGS] {
 ftp.setUserName("ftp");
     @endcode
 
-    @throw FTP-URL-ERROR the user name contains a NUL character (since %Qore 3.0)
+    @throw FTP-URL-ERROR the user name contains a NUL, CR or LF character (since %Qore 3.0)
 */
 nothing FtpClient::setUserName(string username) [flags=NAMED_ARGS] {
-    // the user name is sent to the server in a C string, which would be cut at a NUL character
-    if (q_check_no_nul(username->c_str(), username->size(), "user name", "user names", "FTP-URL-ERROR", xsink)) {
+    // the user name is sent to the server in a C string, which would be cut at a NUL character, and a CR or LF would
+    // end the USER command and start another one
+    if (q_check_line_text(username->c_str(), username->size(), "user name", "user names", "FTP-URL-ERROR", false,
+            xsink)) {
         return QoreValue();
     }
     f->setUserName(username->c_str());
@@ -755,12 +774,12 @@ nothing FtpClient::setUserName(string username) [flags=NAMED_ARGS] {
 ftp.setPassword("ftp");
     @endcode
 
-    @throw FTP-URL-ERROR the password contains a NUL character (since %Qore 3.0); the password is not shown in the exception
+    @throw FTP-URL-ERROR the password contains a NUL, CR or LF character (since %Qore 3.0); the password is not shown in the exception
 */
 nothing FtpClient::setPassword(string password) [flags=NAMED_ARGS] {
-    // the password is sent to the server in a C string, which would be cut at a NUL character; it is not shown in the
-    // exception
-    if (q_check_secret_no_nul(password->c_str(), password->size(), "password", "passwords", "FTP-URL-ERROR",
+    // the password is sent to the server in a C string, which would be cut at a NUL character, and a CR or LF would
+    // end the PASS command and start another one; it is not shown in the exception
+    if (q_check_line_text(password->c_str(), password->size(), "password", "passwords", "FTP-URL-ERROR", true,
             xsink)) {
         return QoreValue();
     }
@@ -816,7 +835,7 @@ ftp.setURL("ftps://user:pass@example.com:2021");
     @endcode
 
     @throw UNSUPPORTED-PROTOCOL Only \c "ftp" and "ftps" are allowed as the protocol (scheme) in the URL
-    @throw FTP-URL-ERROR No hostname given in the URL, or the URL contains a NUL character (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
+    @throw FTP-URL-ERROR No hostname given in the URL, or the URL contains a NUL, CR or LF character (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
 */
 nothing FtpClient::setURL(string url) [flags=NAMED_ARGS] {
     f->setURL(url, xsink);
@@ -1427,13 +1446,15 @@ FtpClient::setTimeout(timeout timeout_ms) [flags=NAMED_ARGS] {
 
     @since %Qore 0.9.4
 
-    @throw FTP-COMMAND-ERROR the command or its argument contains a NUL character (since %Qore 3.0)
+    @throw FTP-COMMAND-ERROR the command or its argument contains a NUL, CR or LF character (since %Qore 3.0)
 */
 hash<FtpResponseInfo> FtpClient::sendControlMessage(string command, string argument) [flags=NAMED_ARGS] {
-    // the command is sent to the server as a C string, which would be cut at a NUL character
-    if (q_check_no_nul(command->c_str(), command->size(), "FTP command", "FTP commands", "FTP-COMMAND-ERROR", xsink)
-        || q_check_no_nul(argument->c_str(), argument->size(), "FTP command argument", "FTP command arguments",
-            "FTP-COMMAND-ERROR", xsink)) {
+    // the command is sent to the server as a C string, which would be cut at a NUL character, and a CR or LF would end
+    // the command and start another one
+    if (q_check_line_text(command->c_str(), command->size(), "FTP command", "FTP commands", "FTP-COMMAND-ERROR",
+            false, xsink)
+        || q_check_line_text(argument->c_str(), argument->size(), "FTP command argument", "FTP command arguments",
+            "FTP-COMMAND-ERROR", false, xsink)) {
         return QoreValue();
     }
     return f->sendControlMessage(command->c_str(), argument->c_str(), xsink);
