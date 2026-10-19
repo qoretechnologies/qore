@@ -339,13 +339,17 @@ Class cls("Thread::Mutex");
 
     @param path the class name or namespace-justified path as a string
 
-    @throw UNKNOWN-CLASS cannot find a class with the given name or path
+    @throw UNKNOWN-CLASS cannot find a class with the given name or path, or the class name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @see forName()
  */
 Class::constructor(string path) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another class
+    if (q_check_no_nul(path->c_str(), path->size(), "class name", "class names", "UNKNOWN-CLASS", xsink)) {
+        return;
+    }
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return;
@@ -545,6 +549,7 @@ printf("find('%s::%s()': found '%s::%s()'; class access %y, variants: %d\n", cls
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw METHOD-ERROR unknown method
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
+    @throw UNKNOWN-METHOD the method name contains a NUL character (since %Qore 3.0)
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @note Methods group variants with the same name; see
@@ -557,6 +562,10 @@ printf("find('%s::%s()': found '%s::%s()'; class access %y, variants: %d\n", cls
     - @ref AbstractClass::getMethod()
 */
 hash<MethodAccessInfo> Class::findMethod(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(name->c_str(), name->size(), "method name", "method names", "UNKNOWN-METHOD", xsink)) {
+        return QoreValue();
+    }
     return find_method_intern(name, c, MT_None, xsink);
 }
 
@@ -579,6 +588,7 @@ printf("find('%s::%s()': found '%s::%s()'; class access %y, variants: %d\n", cls
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw METHOD-ERROR unknown method
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
+    @throw UNKNOWN-METHOD the method name contains a NUL character (since %Qore 3.0)
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @note Methods group variants with the same name; see
@@ -591,6 +601,10 @@ printf("find('%s::%s()': found '%s::%s()'; class access %y, variants: %d\n", cls
     - @ref AbstractClass::getMethod()
 */
 hash<MethodAccessInfo> Class::findNormalMethod(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(name->c_str(), name->size(), "method name", "method names", "UNKNOWN-METHOD", xsink)) {
+        return QoreValue();
+    }
     return find_method_intern(name, c, MT_Normal, xsink);
 }
 
@@ -613,6 +627,7 @@ printf("find('%s::%s()': found '%s::%s()'; class access %y, variants: %d\n", cls
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw METHOD-ERROR unknown method
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
+    @throw UNKNOWN-METHOD the method name contains a NUL character (since %Qore 3.0)
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @note Methods group variants with the same name; see
@@ -625,6 +640,10 @@ printf("find('%s::%s()': found '%s::%s()'; class access %y, variants: %d\n", cls
     - @ref AbstractClass::getMethod()
 */
 hash<MethodAccessInfo> Class::findStaticMethod(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(name->c_str(), name->size(), "method name", "method names", "UNKNOWN-METHOD", xsink)) {
+        return QoreValue();
+    }
     return find_method_intern(name, c, MT_Static, xsink);
 }
 
@@ -708,7 +727,7 @@ NormalMethodVariant m = cls.getNormalVariant(name, IntType, StringType);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw GETVARIANT-ERROR invalid argument to method
-    @throw METHOD-ERROR unknown normal (non-static, non-special) method
+    @throw METHOD-ERROR unknown normal (non-static, non-special) method, or the method name contains a NUL character (since %Qore 3.0)
     @throw VARIANT-MATCH-ERROR no normal (non-static, non-special) method variant van be found matching the given
     argument types
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
@@ -739,7 +758,7 @@ NormalMethodVariant m = cls.getNormalVariantArgs(name, (IntType, StringType));
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw GETVARIANT-ERROR invalid argument to method
-    @throw METHOD-ERROR unknown normal (non-static, non-special) method
+    @throw METHOD-ERROR unknown normal (non-static, non-special) method, or the method name contains a NUL character (since %Qore 3.0)
     @throw VARIANT-MATCH-ERROR no normal (non-static, non-special) method variant van be found matching the given argument types
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
@@ -769,7 +788,7 @@ StaticMethodVariant m = cls.getStaticVariant(name, IntType, StringType);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw GETVARIANT-ERROR invalid argument to method
-    @throw METHOD-ERROR unknown static method
+    @throw METHOD-ERROR unknown static method, or the method name contains a NUL character (since %Qore 3.0)
     @throw VARIANT-MATCH-ERROR no static method variant van be found matching the given argument types
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
@@ -799,7 +818,7 @@ StaticMethodVariant m = cls.getStaticVariantArgs(name, (IntType, StringType));
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw GETVARIANT-ERROR invalid argument to method
-    @throw METHOD-ERROR unknown static method
+    @throw METHOD-ERROR unknown static method, or the method name contains a NUL character (since %Qore 3.0)
     @throw VARIANT-MATCH-ERROR no method static variant van be found matching the given argument types
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
@@ -919,7 +938,7 @@ NormalMethod m = cls.getNormalMethod(name);
     @return the given normal (non-special, non-static) method
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
-    @throw UNKNOWN-METHOD unknown method or method is not normal
+    @throw UNKNOWN-METHOD unknown method or method is not normal, or the method name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
@@ -931,6 +950,10 @@ NormalMethod m = cls.getNormalMethod(name);
     - getCopyMethd()
 */
 NormalMethod Class::getNormalMethod(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(name->c_str(), name->size(), "method name", "method names", "UNKNOWN-METHOD", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper nname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -963,7 +986,7 @@ StaticMethod m = cls.getStaticMethod(name);
     @return the given static method
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
-    @throw UNKNOWN-METHOD unknown method or method is not static
+    @throw UNKNOWN-METHOD unknown method or method is not static, or the method name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
@@ -975,6 +998,10 @@ StaticMethod m = cls.getStaticMethod(name);
     - getCopyMethd()
 */
 StaticMethod Class::getStaticMethod(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(name->c_str(), name->size(), "method name", "method names", "UNKNOWN-METHOD", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper nname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -1718,7 +1745,7 @@ AbstractClassMember m = cls.getMember(name);
     @return the requested member or throws an exception if the member is not defined in the class
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
-    @throw UNKNOWN-MEMBER if the requested member is not defined in the class
+    @throw UNKNOWN-MEMBER if the requested member is not defined in the class, or the member name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
@@ -1727,6 +1754,10 @@ AbstractClassMember m = cls.getMember(name);
     - @ref getStaticMember()
 */
 AbstractClassMember Class::getMember(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another member
+    if (q_check_no_nul(name->c_str(), name->size(), "member name", "member names", "UNKNOWN-MEMBER", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -1771,6 +1802,7 @@ NormalMember m = cls.getNormalMember(name);
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw UNKNOWN-NORMAL-MEMBER if the requested normal (non-static) member is not defined in the class
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
+    @throw UNKNOWN-MEMBER the member name contains a NUL character (since %Qore 3.0)
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @see
@@ -1778,6 +1810,10 @@ NormalMember m = cls.getNormalMember(name);
     - @ref getStaticMember()
 */
 NormalMember Class::getNormalMember(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another member
+    if (q_check_no_nul(name->c_str(), name->size(), "member name", "member names", "UNKNOWN-MEMBER", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -1812,6 +1848,7 @@ StaticMember m = cls.getStaticMember(name);
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw UNKNOWN-STATIC-MEMBER if the requested static member is not defined in the class
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
+    @throw UNKNOWN-MEMBER the member name contains a NUL character (since %Qore 3.0)
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @see
@@ -1819,6 +1856,10 @@ StaticMember m = cls.getStaticMember(name);
     - @ref getNormalMember()
 */
 StaticMember Class::getStaticMember(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another member
+    if (q_check_no_nul(name->c_str(), name->size(), "member name", "member names", "UNKNOWN-MEMBER", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -1888,13 +1929,17 @@ ClassConstant con = cls.getConstant(name);
     @return the given class constant or throws an exception if the constant is not defined
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
-    @throw UNKNOWN-CONSTANT thrown if the constant cannot be found
+    @throw UNKNOWN-CONSTANT thrown if the constant cannot be found, or the constant name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @since %Qore 3.0.0 this method searches the class hieararchy
 */
 ClassConstant Class::getConstant(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another constant
+    if (q_check_no_nul(name->c_str(), name->size(), "constant name", "constant names", "UNKNOWN-CONSTANT", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -1922,8 +1967,16 @@ ClassConstant Class::getConstant(string name) [flags=RET_VALUE_ONLY] {
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
 */
 *ClassConstant Class::tryGetConstant(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(name->c_str(), name->size())) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -2062,10 +2115,14 @@ Class cls = Class::forName("Thread::Mutex");
 
     @return a class object corresponding to the name or namespace-justified path provided as an argument
 
-    @throw UNKNOWN-CLASS cannot find a class with the given name or path
+    @throw UNKNOWN-CLASS cannot find a class with the given name or path, or the class name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static Class Class::forName(string path) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another class
+    if (q_check_no_nul(path->c_str(), path->size(), "class name", "class names", "UNKNOWN-CLASS", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -2092,10 +2149,14 @@ Class cls = Class::forName(pgm, "Thread::Mutex");
 
     @return a class object corresponding to the name or namespace-justified path provided as an argument
 
-    @throw UNKNOWN-CLASS cannot find a class with the given name or path
+    @throw UNKNOWN-CLASS cannot find a class with the given name or path, or the class name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static Class Class::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another class
+    if (q_check_no_nul(path->c_str(), path->size(), "class name", "class names", "UNKNOWN-CLASS", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();

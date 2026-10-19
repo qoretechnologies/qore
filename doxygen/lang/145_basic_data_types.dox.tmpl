@@ -75,7 +75,11 @@ on more than 1 line";
     @ref Qore::exec() "exec()"), environment variable names and values, user and group names, host names, addresses,
     and service names (sockets, the resolver functions, and the FTP and HTTP clients), URLs, FTP commands and remote
     paths, HTTP methods, request targets, status messages and header values, datasource strings, connection values,
-    and DBI driver names and option values, and file and directory paths (see @ref path_nul_characters):
+    and DBI driver names and option values, the names of functions, methods, classes, variables, types and other
+    identifiers resolved at runtime (for example by @ref Qore::call_function() "call_function()",
+    @ref Qore::call_object_method() "call_object_method()", @ref Qore::create_object() "create_object()", the
+    @ref Qore::Program "Program" and reflection APIs, and deserialization), and file and directory paths (see
+    @ref path_nul_characters):
     - an API that raises exceptions raises its own error code with \c EINVAL as the exception argument; the description
       gives the string (escaped, with at most its first 64 characters) and the byte offset of the NUL character,
       except for a string that can hold a secret (a password, a URL, a datasource string, an HTTP request target or

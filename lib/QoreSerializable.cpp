@@ -50,6 +50,12 @@
 #include <vector>
 #include <memory>
 
+// a type, class, enum or module name in serialized data is resolved as a C string, which would be cut at a NUL
+// character and name another type, class, enum or module than the data does
+static int qore_check_deserialized_name(const QoreString& name, const char* what, ExceptionSink* xsink) {
+    return q_check_no_nul(name.c_str(), name.size(), what, "names in serialized data", "DESERIALIZATION-ERROR", xsink);
+}
+
 static QoreString QoreSerializationTypeString("QS");
 static QoreString QoreSerializationVersionString("1.2");
 
@@ -824,6 +830,9 @@ static int qore_set_indexed_list_type(QoreListNode& l, const QoreHashNode& oh, E
         return -1;
     }
     QoreStringValueHelper type(v);
+    if (qore_check_deserialized_name(**type, "list type name", xsink)) {
+        return -1;
+    }
     const char* value_type = type->c_str();
     const QoreTypeInfo* vti = qore_get_type_from_string_intern(value_type);
     if (!vti) {
@@ -852,6 +861,9 @@ static int qore_set_indexed_hash_type(QoreHashNode& h, const QoreHashNode& oh, E
         return -1;
     }
     QoreStringValueHelper type(v);
+    if (qore_check_deserialized_name(**type, "hash type name", xsink)) {
+        return -1;
+    }
     const char* type_str = type->c_str();
     if (type_str[0] == '^') {
         // v1.0 data uses '^hash^' for a hash without a value type
@@ -906,6 +918,9 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
             val = li.getValue();
             assert(val.getType() == NT_STRING);
             QoreStringValueHelper str(val);
+            if (qore_check_deserialized_name(**str, "module name", xsink)) {
+                return QoreValue();
+            }
             QorePluginAOTModuleInfo plugin_info;
             if (!qore_plugin_get_aot_module_info(str->c_str(), plugin_info, nullptr)) {
                 continue;
@@ -934,6 +949,9 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                 QoreValue v = oh->getKeyValue("_class");
                 assert(v.getType() == NT_STRING);
                 QoreStringValueHelper cname_str(v);
+                if (qore_check_deserialized_name(**cname_str, "class name", xsink)) {
+                    return QoreValue();
+                }
                 const char* cname = cname_str->c_str();
                 const QoreClass* cls = pgm->findClass(cname, xsink);
                 if (!cls) {
@@ -953,6 +971,10 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                         return QoreValue();
                     }
                     QoreStringValueHelper type_str(v);
+                    if (qore_check_deserialized_name(**type_str, "object type name", xsink)) {
+                        obj->deref(xsink);
+                        return QoreValue();
+                    }
                     const QoreTypeInfo* object_type = qore_get_type_from_string_intern(type_str->c_str());
                     const QoreParameterizedClassTypeInfo* pcti = QoreTypeInfo::getParameterizedClassType(object_type);
                     if (!pcti || pcti->isOrNothing() || pcti->getBaseClass() != cls) {
@@ -1308,6 +1330,10 @@ QoreValue QoreSerializable::deserializeIndexedWeakReference(const char* key,
 
 QoreValue QoreSerializable::deserializeEnumData(const QoreStringNode& enum_path,
         const QoreStringNode& member_name, ExceptionSink* xsink) {
+    if (qore_check_deserialized_name(enum_path, "enum name", xsink)
+        || qore_check_deserialized_name(member_name, "enum member name", xsink)) {
+        return QoreValue();
+    }
     const QoreNamespace* pns = nullptr;
     const QoreEnumDecl* ed = getProgram()->findEnum(enum_path.c_str(), pns);
     if (!ed) {
@@ -1407,6 +1433,9 @@ QoreValue QoreSerializable::deserializeData(const QoreValue val, QoreInternalDes
                 return QoreValue();
             }
             QoreStringValueHelper module_name(pv);
+            if (qore_check_deserialized_name(**module_name, "plugin module name", xsink)) {
+                return QoreValue();
+            }
             return qore_plugin_deserialize_value(module_name->c_str(), static_cast<uint16_t>(type_id),
                 static_cast<uint16_t>(serializer_version), static_cast<const uint8_t*>(payload->getPtr()),
                 static_cast<uint32_t>(payload->size()), xsink);
@@ -1462,6 +1491,9 @@ QoreValue QoreSerializable::deserializeData(const QoreValue val, QoreInternalDes
 
 QoreValue QoreSerializable::deserializeHashData(const QoreStringNode& type, const QoreHashNode& h,
         QoreInternalDeserializationContext& context, ExceptionSink* xsink, QoreHashNode* rval) {
+    if (qore_check_deserialized_name(type, "hash type name", xsink)) {
+        return QoreValue();
+    }
     // get members, if any
     const QoreValue members = h.getKeyValue("_members");
 
@@ -1531,6 +1563,9 @@ QoreValue QoreSerializable::deserializeListData(QoreValue v, const QoreHashNode&
 
     // get element type
     QoreStringValueHelper type(v);
+    if (qore_check_deserialized_name(**type, "list type name", xsink)) {
+        return QoreValue();
+    }
     const char* value_type = type->c_str();
     const QoreTypeInfo* vti = qore_get_type_from_string_intern(value_type);
     if (!vti) {
@@ -2160,6 +2195,11 @@ QoreValue QoreSerializable::deserializeEnumFromStream(ExceptionSink* xsink, Stre
     if (readStringFromStream(reader, member_str, "enum member name", xsink)) {
         return QoreValue();
     }
+    if (qore_check_deserialized_name(path_str, "enum name", xsink)
+        || qore_check_deserialized_name(member_str, "enum member name", xsink)) {
+        return QoreValue();
+    }
+
     // Look up enum in current program
     const QoreNamespace* pns = nullptr;
     const QoreEnumDecl* ed = getProgram()->findEnum(path_str.c_str(), pns);
@@ -2210,7 +2250,8 @@ QoreHashNode* QoreSerializable::deserializeHashFromStream(ExceptionSink* xsink, 
     if (code == qore_stream_type::HASHDECL) {
         // read hashdecl path string
         QoreString path_str;
-        if (readStringFromStream(reader, path_str, "hashdecl tag", xsink)) {
+        if (readStringFromStream(reader, path_str, "hashdecl tag", xsink)
+            || qore_check_deserialized_name(path_str, "hashdecl name", xsink)) {
             return nullptr;
         }
 

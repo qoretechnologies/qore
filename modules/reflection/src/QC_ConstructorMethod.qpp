@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -76,10 +76,14 @@ ConstructorMethod m(class_name);
 
     @param class_name the class name or namespace path for the method
 
-    @throw UNKNOWN-CLASS cannot find a class with the given name or path
+    @throw UNKNOWN-CLASS cannot find a class with the given name or path, or the class name contains a NUL character (since %Qore 3.0)
     @throw UNKOWN-METHOD cannot find a constructor method for the given class
  */
 ConstructorMethod::constructor(string class_name) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another class
+    if (q_check_no_nul(class_name->c_str(), class_name->size(), "class name", "class names", "UNKNOWN-CLASS", xsink)) {
+        return;
+    }
     TempEncodingHelper npath(class_name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return;

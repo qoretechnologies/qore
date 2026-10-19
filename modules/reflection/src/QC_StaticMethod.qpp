@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -50,8 +50,13 @@ StaticMethod m(cls, name);
     @param method the static method name
 
     @throw UNKOWN-METHOD cannot find a static method with the given name
+    @throw UNKNOWN-METHOD the method name contains a NUL character (since %Qore 3.0)
  */
 StaticMethod::constructor(Class[QoreReflectionClass] cls, string method) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(method->c_str(), method->size(), "method name", "method names", "UNKNOWN-METHOD", xsink)) {
+        return;
+    }
     TempEncodingHelper nmethod(method, QCS_DEFAULT, xsink);
     if (*xsink) {
         return;
@@ -86,10 +91,16 @@ StaticMethod m(class_name, method_name);
     @param class_name the class name or namespace path for the method
     @param method the static method name
 
-    @throw UNKNOWN-CLASS cannot find a class with the given name or path
+    @throw UNKNOWN-CLASS cannot find a class with the given name or path, or the class name contains a NUL character (since %Qore 3.0)
     @throw UNKOWN-METHOD cannot find a static method with the given name
+    @throw UNKNOWN-METHOD the method name contains a NUL character (since %Qore 3.0)
  */
 StaticMethod::constructor(string class_name, string method) {
+    // the names are looked up as C strings, which would be cut at a NUL character and name another class or method
+    if (q_check_no_nul(class_name->c_str(), class_name->size(), "class name", "class names", "UNKNOWN-CLASS", xsink)
+        || q_check_no_nul(method->c_str(), method->size(), "method name", "method names", "UNKNOWN-METHOD", xsink)) {
+        return;
+    }
     TempEncodingHelper npath(class_name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return;

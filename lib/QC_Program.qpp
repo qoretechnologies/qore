@@ -1682,12 +1682,16 @@ auto result = pgm.callFunction("func_name", arg1, arg2);
     @endcode
 
     @throw INVALID-FUNCTION-ACCESS @ref parse_options "Parse options" do not allow this builtin function to be called
-    @throw NO-FUNCTION The function does not exist
+    @throw NO-FUNCTION The function does not exist, or the function name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the function name could not be converted to the @ref default_encoding "default character encoding"
 
     @note The function called could also cause other exceptions to be thrown
  */
 auto Program::callFunction(string name, ...) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tmp(name, QCS_DEFAULT, xsink);
     if (!tmp)
         return QoreValue();
@@ -1713,12 +1717,16 @@ auto result = pgm.callFunctionArgs("func_name", (arg1, arg2));
     @endcode
 
     @throw INVALID-FUNCTION-ACCESS @ref parse_options "Parse options" do not allow this builtin function to be called
-    @throw NO-FUNCTION The function does not exist
+    @throw NO-FUNCTION The function does not exist, or the function name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the function name could not be converted to the @ref default_encoding "default character encoding"
 
     @note The function called could also cause other exceptions to be thrown
  */
 auto Program::callFunctionArgs(string function_name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(function_name->c_str(), function_name->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tmp(function_name, QCS_DEFAULT, xsink);
     if (!tmp)
         return QoreValue();
@@ -1741,6 +1749,8 @@ auto result = p.callStaticMethod("Namespace::Class::method", arg1, arg2);
     @throw ILLEGAL-EXPLICIT-METHOD-CALL The named method may not be called explicitly
     @throw METHOD-IS-PRIVATE The named method is private and therefore can only be called within the class
     @throw BASE-CLASS-IS-PRIVATE The named method is a member of a privately inherited base class
+    @throw UNKNOWN-CLASS the class name contains a NUL character (since %Qore 3.0)
+    @throw UNKNOWN-METHOD the method name contains a NUL character (since %Qore 3.0)
 
     @note the method called could cause additional exceptions to be thrown
 
@@ -1776,6 +1786,8 @@ auto result = p.callStaticMethodArgs("Namespace::Class::method", (arg1, arg2));
     @throw ILLEGAL-EXPLICIT-METHOD-CALL The named method may not be called explicitly
     @throw METHOD-IS-PRIVATE The named method is private and therefore can only be called within the class
     @throw BASE-CLASS-IS-PRIVATE The named method is a member of a privately inherited base class
+    @throw UNKNOWN-CLASS the class name contains a NUL character (since %Qore 3.0)
+    @throw UNKNOWN-METHOD the method name contains a NUL character (since %Qore 3.0)
 
     @note the method called could cause additional exceptions to be thrown
 
@@ -1802,8 +1814,15 @@ if (pgm.existsFunction("my_func"))
     @endcode
 
     @throw ENCODING-CONVERSION-ERROR the function name could not be converted to the @ref default_encoding "default character encoding"
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
  */
 bool Program::existsFunction(string function_name) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(function_name->c_str(), function_name->size())) {
+        return false;
+    }
     TempEncodingHelper tmp(function_name, QCS_DEFAULT, xsink);
     if (!tmp)
         return false;
@@ -1833,12 +1852,16 @@ pgm.importFunction("log");
     @endcode
 
     @throw FUNCTION-IMPORT-ERROR Cannot import a function into the same Program object; function with this name already exists
-    @throw PROGRAM-IMPORTFUNCTION-NO-FUNCTION The function does not exist
+    @throw PROGRAM-IMPORTFUNCTION-NO-FUNCTION The function does not exist, or the function name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the function name could not be converted to the @ref default_encoding "default character encoding"
 
     @since %Qore 0.8.4 the function name can include a namespace path (ex \c "Namespace::func")
  */
 nothing Program::importFunction(string function_name) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(function_name->c_str(), function_name->size(), "function name", "function names", "PROGRAM-IMPORTFUNCTION-NO-FUNCTION", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tmp(function_name, QCS_DEFAULT, xsink);
     if (!tmp)
         return QoreValue();
@@ -1865,7 +1888,7 @@ pgm.importFunction("service_log", "log");
 
     @throw FUNCTION-IMPORT-ERROR Cannot import a function into the same Program object; function with this name
     already exists; target namespace does not exist; injection indicated but @ref Qore::PO_ALLOW_INJECTION not set
-    @throw PROGRAM-IMPORTFUNCTION-NO-FUNCTION The function does not exist
+    @throw PROGRAM-IMPORTFUNCTION-NO-FUNCTION The function does not exist, or the function name or the name to import it as contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the function name could not be converted to the
     @ref default_encoding "default character encoding"
 
@@ -1874,6 +1897,14 @@ pgm.importFunction("service_log", "log");
     - %Qore 0.8.12 added the \a inject parameter
  */
 nothing Program::importFunction(string function_name, string import_as, *softbool inject) [flags=NAMED_ARGS] {
+    // the names are looked up and created as C strings, which would be cut at a NUL character and name another
+    // function
+    if (q_check_no_nul(function_name->c_str(), function_name->size(), "function name", "function names",
+            "PROGRAM-IMPORTFUNCTION-NO-FUNCTION", xsink)
+        || q_check_no_nul(import_as->c_str(), import_as->size(), "function name", "function names",
+            "PROGRAM-IMPORTFUNCTION-NO-FUNCTION", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tfunc(function_name, QCS_DEFAULT, xsink);
     if (!tfunc)
         return QoreValue();
@@ -1900,11 +1931,15 @@ pgm.importGlobalVariable("var");
     @endcode
 
     @throw PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION The global variable does not exist in the source program, or the
-    target variable already exists
+    target variable already exists, or the variable name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the global variablt name could not be converted to the
     @ref default_encoding "default character encoding"
  */
 nothing Program::importGlobalVariable(string variable_name, bool readonly = False) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another variable
+    if (q_check_no_nul(variable_name->c_str(), variable_name->size(), "variable name", "variable names", "PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tmp(variable_name, QCS_DEFAULT, xsink);
     if (!tmp) {
         return QoreValue();
@@ -1965,7 +2000,7 @@ nothing Program::importGlobalVariable(
 pgm.importClass("MyNamespace::MyClass");
     @endcode
 
-    @throw CLASS-IMPORT-ERROR Cannot import a class into the same Program object; class or namespace with this name already exists or the source class does not exist; injection indicated but @ref Qore::PO_ALLOW_INJECTION not set
+    @throw CLASS-IMPORT-ERROR Cannot import a class into the same Program object; class or namespace with this name already exists or the source class does not exist; injection indicated but @ref Qore::PO_ALLOW_INJECTION not set, or the class name or the name to import it as contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the class name could not be converted to the @ref default_encoding "default character encoding"
 
     @param reexport if @ref True "True", the imported class is marked for re-export to child Programs created when modules are required transitively from this Program — i.e. when this Program is the parent in a module-loader child-Program creation, qore_program_private::inheritParseImports() will propagate the imported class so the child's parse can resolve unqualified references to it.  Default is @ref False "False" (no re-export), which preserves the historical "imports stay local" semantic and avoids diamond conflicts with namespace-merged public classes that the host never opted to expose.
@@ -1978,6 +2013,13 @@ pgm.importClass("MyNamespace::MyClass");
  */
 nothing Program::importClass(string class_name, *string import_as, *softbool inject,
         int module_visibility = CSP_UNCHANGED, bool reexport = False) [flags=NAMED_ARGS] {
+    // the names are looked up and created as C strings, which would be cut at a NUL character and name another class
+    if (q_check_no_nul(class_name->c_str(), class_name->size(), "class name", "class names", "CLASS-IMPORT-ERROR",
+            xsink)
+        || (import_as && q_check_no_nul(import_as->c_str(), import_as->size(), "class name", "class names",
+            "CLASS-IMPORT-ERROR", xsink))) {
+        return QoreValue();
+    }
     TempEncodingHelper tmp(class_name, QCS_DEFAULT, xsink);
     if (!tmp) {
         assert(*xsink);
@@ -2010,7 +2052,7 @@ nothing Program::importClass(string class_name, *string import_as, *softbool inj
 pgm.importHashDecl("MyNamespace::MyHash");
     @endcode
 
-    @throw HASHDECL-IMPORT-ERROR Cannot import a hashdecl into the same Program object; conflict with an existing definition
+    @throw HASHDECL-IMPORT-ERROR Cannot import a hashdecl into the same Program object; conflict with an existing definition, or the hashdecl name or the name to import it as contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR the hashdecl name could not be converted to the @ref default_encoding "default character encoding"
 
     @param reexport if @ref True "True", the imported hashdecl is marked for re-export to child Programs created when modules are required transitively from this Program — i.e. when this Program is the parent in a module-loader child-Program creation, qore_program_private::inheritParseImports() will propagate the imported hashdecl so the child's parse can resolve unqualified references to it (closest-to-root match algorithm).  Default is @ref False "False" (no re-export), which preserves the historical "imports stay local" semantic.
@@ -2020,6 +2062,14 @@ pgm.importHashDecl("MyNamespace::MyHash");
     - %Qore 3.0 added the \a reexport parameter
  */
 nothing Program::importHashDecl(string hashdecl_name, *string import_as, bool reexport = False) [flags=NAMED_ARGS] {
+    // the names are looked up and created as C strings, which would be cut at a NUL character and name another
+    // hashdecl
+    if (q_check_no_nul(hashdecl_name->c_str(), hashdecl_name->size(), "hashdecl name", "hashdecl names",
+            "HASHDECL-IMPORT-ERROR", xsink)
+        || (import_as && q_check_no_nul(import_as->c_str(), import_as->size(), "hashdecl name", "hashdecl names",
+            "HASHDECL-IMPORT-ERROR", xsink))) {
+        return QoreValue();
+    }
     TempEncodingHelper tmp(hashdecl_name, QCS_DEFAULT, xsink);
     if (!tmp) {
         assert(*xsink);
@@ -2286,14 +2336,22 @@ nothing Program::lockOptions() {
 bool existsv;
 auto val = pgm.getGlobalVariable("error_count", \existsv);
     @endcode
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
  */
 auto Program::getGlobalVariable(string variable_name, *reference<bool> found) [flags=NAMED_ARGS] {
     TempEncodingHelper t(variable_name, QCS_DEFAULT, xsink);
     if (!t)
         return QoreValue();
 
-    bool exists;
-    ValueHolder rv(p->getGlobalVariableValue(t->c_str(), exists), xsink);
+    // the name is looked up as a C string, which would be cut at a NUL character and name another variable; a name
+    // with a NUL character names no variable, and errno is set to EINVAL
+    bool exists = false;
+    ValueHolder rv(xsink);
+    if (!q_check_no_nul(variable_name->c_str(), variable_name->size())) {
+        rv = p->getGlobalVariableValue(t->c_str(), exists);
+    }
 
     if (found) {
         QoreTypeSafeReferenceHelper r(found, xsink);
@@ -2478,8 +2536,15 @@ enum<ExecMode> Program::getExecMode() [flags=CONSTANT] {
     @code{.py}
 pgm.define("PRODUCTION", True);
     @endcode
+
+
+    @throw PROGRAM-ERROR the define name contains a NUL character (since %Qore 3.0)
  */
 nothing Program::define(string parse_define, auto value) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another define
+    if (q_check_no_nul(parse_define->c_str(), parse_define->size(), "define name", "define names", "PROGRAM-ERROR", xsink)) {
+        return QoreValue();
+    }
    TempEncodingHelper t(parse_define, QCS_DEFAULT, xsink);
    if (t)
       qore_program_private::runTimeDefine(p, t->c_str(), value.refSelf(), xsink);
@@ -2492,8 +2557,15 @@ nothing Program::define(string parse_define, auto value) [flags=NAMED_ARGS] {
     @code{.py}
 pgm.undefine("PRODUCTION");
     @endcode
+
+
+    @throw PROGRAM-ERROR the define name contains a NUL character (since %Qore 3.0)
  */
 nothing Program::undefine(string parse_define) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another define
+    if (q_check_no_nul(parse_define->c_str(), parse_define->size(), "define name", "define names", "PROGRAM-ERROR", xsink)) {
+        return QoreValue();
+    }
    TempEncodingHelper t(parse_define, QCS_DEFAULT, xsink);
    if (t)
       qore_program_private::runTimeUnDefine(p, t->c_str(), xsink);
@@ -2510,8 +2582,15 @@ bool b = pgm.isDefined("PRODUCTION");
     @endcode
 
     @throw ENCODING-CONVERSION-ERROR this error is thrown if the string cannot be converted to the @ref default_encoding "default character encoding"
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
  */
 bool Program::isDefined(string parse_define) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(parse_define->c_str(), parse_define->size())) {
+        return false;
+    }
    TempEncodingHelper t(parse_define, QCS_DEFAULT, xsink);
    return t ? qore_program_private::runTimeIsDefined(p, t->c_str()) : false;
 }
@@ -2527,8 +2606,15 @@ auto val = pgm.getDefine("PRODUCTION");
     @throw ENCODING-CONVERSION-ERROR this error is thrown if the string cannot be converted to the @ref default_encoding "default character encoding"
 
     @note A parse define may be defined with no value; use Program::isDefined() to check if a parse define is actually defined or not
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
  */
 auto Program::getDefine(string parse_define) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(parse_define->c_str(), parse_define->size())) {
+        return QoreValue();
+    }
    TempEncodingHelper t(parse_define, QCS_DEFAULT, xsink);
    return t ? qore_program_private::runTimeGetDefine(p, t->c_str()) : QoreValue();
 }
@@ -3093,7 +3179,7 @@ pgm.setGlobalVarValue("a", 1);
     @param variable_name the name of the variable
     @param value the value to assign
 
-    @throw UNKNOWN-VARIABLE the variable is not a global variable
+    @throw UNKNOWN-VARIABLE the variable is not a global variable, or the variable name contains a NUL character (since %Qore 3.0)
 
     @note other exceptions could be thrown if the value cannot be assigned to the given variable
 
@@ -3102,6 +3188,10 @@ pgm.setGlobalVarValue("a", 1);
     @since %Qore 0.8.13
  */
 nothing Program::setGlobalVarValue(string variable_name, auto value) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another variable
+    if (q_check_no_nul(variable_name->c_str(), variable_name->size(), "variable name", "variable names", "UNKNOWN-VARIABLE", xsink)) {
+        return QoreValue();
+    }
    p->setGlobalVarValue(variable_name->c_str(), value.refSelf(), xsink);
 }
 
@@ -3112,13 +3202,17 @@ nothing Program::setGlobalVarValue(string variable_name, auto value) [flags=NAME
     - \c desc: a string description of the call which includes the name and the full text call signature
     - \c params: a QoreListNode object that gives the params in a format that can be used by @ref Qore::ProgramControl::findFunctionStatementId "ProgramControl::findFunctionStatementId"
 
-    @throw PROGRAM-ERROR thrown if the function cannot be found
+    @throw PROGRAM-ERROR thrown if the function cannot be found, or the function name contains a NUL character (since %Qore 3.0)
 
     @since %Qore 0.8.13
 
     @note the <a href="../../modules/reflection/html/index.html">reflection</a> module supercedes this functionality
 */
 list<hash<auto>> Program::findFunctionVariants(string function_name) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(function_name->c_str(), function_name->size(), "function name", "function names", "PROGRAM-ERROR", xsink)) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreListNode> vl(p->runtimeFindCallVariants(function_name->c_str(), xsink), xsink);
     if (!vl)
         return xsink->raiseException("PROGRAM-ERROR", "cannot find any function \"%s\"", function_name->c_str());
@@ -3201,7 +3295,7 @@ nothing Program::issueModuleCmd(string module_name, string command) [flags=NAMED
     - if not found, then a function lookup is made
     - if not found, an \c CALL-REFERENCE-ERROR exception is thrown
 
-    @throw CALL-REFERENCE-ERROR cannot resolve call reference; method not accessible in the calling context
+    @throw CALL-REFERENCE-ERROR cannot resolve call reference; method not accessible in the calling context, or the identifier contains a NUL character (since %Qore 3.0)
 
     @note
     - use <object>::getCallReference() to get call references to non-public class methods; this builtin function
@@ -3365,7 +3459,7 @@ static int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
 
     @return @ref True if the parse option is set in the current Program, @ref False otherwise
 
-    @throw PARSE-OPTION-ERROR if the parse option name is not recognized
+    @throw PARSE-OPTION-ERROR if the parse option name is not recognized, or the parse option name contains a NUL character (since %Qore 3.0)
 
     @note This function checks both standard (lo-word) and extended (hi-word) parse options
 
@@ -3379,6 +3473,10 @@ if (Program::hasParseOption("broken-soft-types")) {
     @since %Qore 3.0
  */
 static bool Program::hasParseOption(string name) [flags=CONSTANT,NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another parse
+    if (q_check_no_nul(name->c_str(), name->size(), "parse option name", "parse option names", "PARSE-OPTION-ERROR", xsink)) {
+        return false;
+    }
     QoreParseOptions opts = runtime_get_parse_options();
     QoreParseOptions opt = ParseOptionMap::find_code(name->c_str());
     if (opt == QoreParseOptions(-1)) {

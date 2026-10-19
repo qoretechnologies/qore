@@ -790,6 +790,36 @@
     the part before the NUL character.
     @endparblock
 
+    @par A Name With a NUL Character Names No Function, Method, Class or Other Identifier
+    @parblock
+    A function, method, class, variable, type or other identifier named by a runtime string was looked up with the
+    name cut at its first NUL character, so a check made by %Qore code on the whole name could be bypassed: a
+    dispatcher that only calls methods whose names end with \c "_public" called \c deleteAll() for
+    <tt>call_object_method(obj, "deleteAll\\x00_public")</tt>.  Such a name is now refused with the error that the API
+    raises for a name that does not exist (with \c EINVAL as the argument and a description showing the name and the
+    offset of the NUL character), or the API returns the value it returns for a name that does not exist, with
+    @ref Qore::errno() "errno()" returning \c EINVAL:
+    - functions: @ref Qore::call_function() "call_function()", @ref Qore::call_function_args() "call_function_args()",
+      @ref Qore::call_builtin_function() "call_builtin_function()" and
+      @ref Qore::call_builtin_function_args() "call_builtin_function_args()" (\c NO-FUNCTION),
+      @ref Qore::exists_function() "exists_function()" and @ref Qore::function_type() "function_type()"
+    - methods and classes: @ref Qore::call_object_method() "call_object_method()",
+      @ref Qore::call_object_method_args() "call_object_method_args()" (\c METHOD-DOES-NOT-EXIST),
+      @ref Qore::call_static_method() "call_static_method()" and
+      @ref Qore::call_static_method_args() "call_static_method_args()" (\c UNKNOWN-CLASS, \c UNKNOWN-METHOD),
+      @ref Qore::call_pseudo() "call_pseudo()" and @ref Qore::call_pseudo_args() "call_pseudo_args()",
+      @ref Qore::create_object() "create_object()" and @ref Qore::create_object_args() "create_object_args()"
+      (\c CREATE-OBJECT-ERROR), the \c hasCallable*Method() and \c getCallReference() pseudo-methods of objects
+    - variables: @ref Qore::set_global_var_value() "set_global_var_value()" and
+      @ref Qore::set_local_var_value() "set_local_var_value()" (\c UNKNOWN-VARIABLE)
+    - the function, method, class, hashdecl, global variable, define and parse option names of
+      @ref Qore::Program "Program" and @ref Qore::ProgramControl "ProgramControl", including the names to import
+      functions, classes and hashdecls as
+    - the class, enum, type, hashdecl, module and plugin module names of serialized data (\c DESERIALIZATION-ERROR)
+    - the names looked up by the reflection module (classes, methods, members, constants, functions, namespaces,
+      global variables, typed hashes, enums, types and plugin modules)
+    @endparblock
+
     @par A CR, LF or Other Control Character Is Refused in HTTP Message Lines and FTP Commands
     @parblock
     A CR or LF in a string written to a line of an HTTP message or to an FTP command ended the line there and started

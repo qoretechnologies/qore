@@ -27,6 +27,7 @@
     Note that the Qore library is released under a choice of three open-source
     licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
     information.
+
 */
 
 #include <qore/Qore.h>
@@ -55,6 +56,10 @@
 #endif
 
 static const QoreFunction* get_builtin_func(const QoreStringNode* str, ExceptionSink* xsink) {
+   // the name is looked up as a C string, which would be cut at a NUL character and name another function
+   if (q_check_no_nul(str->c_str(), str->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
+      return nullptr;
+   }
    const qore_ns_private* ns;
    const QoreFunction* f = qore_root_ns_private::runtimeFindFunction(*(getRootNS()), str->c_str(), ns);
    if (f)
@@ -793,7 +798,7 @@ auto result = call_function("func_name", arg1, arg2);
     @endcode
 
     @throw INVALID-FUNCTION-ACCESS Parse options do not allow access to the function
-    @throw NO-FUNCTION The function does not exist
+    @throw NO-FUNCTION The function does not exist, or the function name contains a NUL character (since %Qore 3.0)
 
     @note The function called could also throw other exceptions
 
@@ -805,6 +810,10 @@ auto result = call_function("func_name", arg1, arg2);
     - call_object_method_args()
 */
 auto call_function(string name, ...) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreListNode> vargs(xsink);
     // if there are arguments to pass, create argument list by copying current list
     if (num_args(args) > 1) {
@@ -857,7 +866,7 @@ auto result = call_function_args("func_name", (arg1, arg2));
     @endcode
 
     @throw INVALID-FUNCTION-ACCESS Parse options do not allow access to the function
-    @throw NO-FUNCTION The function does not exist
+    @throw NO-FUNCTION The function does not exist, or the function name contains a NUL character (since %Qore 3.0)
 
     @note The function called could also throw other exceptions
 
@@ -869,6 +878,10 @@ auto result = call_function_args("func_name", (arg1, arg2));
     - call_object_method_args()
 */
 auto call_function_args(string name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
+        return QoreValue();
+    }
     return q_get_runtime_call_program(runtime_cfg)->callFunction(name->c_str(), arguments, xsink);
 }
 
@@ -909,7 +922,7 @@ auto result = call_builtin_function("func_name", arg1, arg2);
     @endcode
 
     @throw INVALID-FUNCTION-ACCESS Parse options do not allow access to the function
-    @throw NO-FUNCTION The function does not exist
+    @throw NO-FUNCTION The function does not exist, or the function name contains a NUL character (since %Qore 3.0)
 
     @note The function called could also throw other exceptions
 
@@ -942,7 +955,7 @@ auto result = call_builtin_function_args("func_name", (arg1, arg2));
     @endcode
 
     @throw INVALID-FUNCTION-ACCESS Parse options do not allow access to the function
-    @throw NO-FUNCTION The function does not exist
+    @throw NO-FUNCTION The function does not exist, or the function name contains a NUL character (since %Qore 3.0)
 
     @note The function called could also throw other exceptions
 
@@ -978,8 +991,17 @@ bool exists(...) [flags=CONSTANT] {
     @return @ref True if the function exists in the current program's function name space, @ref False if not
 
     @deprecated use exists_function(); camel-case function names were deprecated in %Qore 0.8.12
+
+
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
 */
 bool existsFunction(string name) [flags=CONSTANT,DEPRECATED] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(name->c_str(), name->size())) {
+        return false;
+    }
     return q_get_runtime_call_program(runtime_cfg)->existsFunction(name->c_str());
 }
 
@@ -1013,8 +1035,16 @@ bool b = exists_function("func_name");
     @endcode
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case existsFunction()
+
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
 */
 bool exists_function(string name) [flags=CONSTANT,NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(name->c_str(), name->size())) {
+        return false;
+    }
     return q_get_runtime_call_program(runtime_cfg)->existsFunction(name->c_str());
 }
 
@@ -1037,8 +1067,16 @@ bool exists_function(code[doc] c) [flags=NOOP] {
     @return \c "builtin" (for a builtin function), \c "user" (for a user function), or @ref nothing (if the function cannot be found) according to the function name passed
 
     @deprecated use function_type(); camel-case function names were deprecated in %Qore 0.8.12
+
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
 */
 *string functionType(string name) [flags=CONSTANT,DEPRECATED] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(name->c_str(), name->size())) {
+        return QoreValue();
+    }
     const qore_ns_private* ns;
     const QoreFunction* f = qore_root_ns_private::runtimeFindFunction(*(getRootNS()), name->c_str(), ns);
     if (!f)
@@ -1064,8 +1102,16 @@ nothing functionType() [flags=RUNTIME_NOOP,DEPRECATED] {
     @endcode
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case functionType()
+
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
 */
 *string function_type(string name) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(name->c_str(), name->size())) {
+        return QoreValue();
+    }
     const qore_ns_private* ns;
     const QoreFunction* f = qore_root_ns_private::runtimeFindFunction(*(getRootNS()), name->c_str(), ns);
     if (!f)
@@ -3551,7 +3597,7 @@ set_local_var_value(0, "var", 1);
     @param name the name of the local variable
     @param value the value to assign
 
-    @throw UNKNOWN-VARIABLE the given local variable is not present in the current stack frame
+    @throw UNKNOWN-VARIABLE the given local variable is not present in the current stack frame, or the variable name contains a NUL character (since %Qore 3.0)
 
     @note
     - other exceptions could be raised when making the assignment such as incompatible type exceptions
@@ -3560,6 +3606,10 @@ set_local_var_value(0, "var", 1);
     @since %Qore 0.8.13
 */
 nothing set_local_var_value(int frame, string name, auto value) [dom=DEBUGGER;flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another variable
+    if (q_check_no_nul(name->c_str(), name->size(), "variable name", "variable names", "UNKNOWN-VARIABLE", xsink)) {
+        return QoreValue();
+    }
    if (thread_set_local_var_value(frame, name->c_str(), value, xsink) == 1 && thread_set_closure_var_value(frame, name->c_str(), value, xsink) == 1 && !xsink->isEvent())
       xsink->raiseException("UNKNOWN-VARIABLE", "cannot find local variable '%s' in stack frame %d", name->c_str(), (int)frame);
 }
@@ -3589,7 +3639,7 @@ set_global_var_value("a", 1);
     @param name the name of the variable
     @param value the value to assign
 
-    @throw UNKNOWN-VARIABLE the variable is not a global variable
+    @throw UNKNOWN-VARIABLE the variable is not a global variable, or the variable name contains a NUL character (since %Qore 3.0)
 
     @note other exceptions could be thrown if the value cannot be assigned to the given variable
 
@@ -3598,6 +3648,10 @@ set_global_var_value("a", 1);
     @since %Qore 0.8.13
  */
 nothing set_global_var_value(string name, auto value) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another variable
+    if (q_check_no_nul(name->c_str(), name->size(), "variable name", "variable names", "UNKNOWN-VARIABLE", xsink)) {
+        return QoreValue();
+    }
    q_get_runtime_call_program(runtime_cfg)->setGlobalVarValue(name->c_str(), value.refSelf(), xsink);
 }
 

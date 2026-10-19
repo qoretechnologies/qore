@@ -467,9 +467,13 @@ qclass Type [ns=Qore::Reflection; arg=QoreType* t; dom=REFLECTION; vparent=Seria
 //! Creates the type from the given string
 /** @param typestr the type string
 
-    @throw UNKNOWN-TYPE cannot find the given type
+    @throw UNKNOWN-TYPE cannot find the given type, or the type name contains a NUL character (since %Qore 3.0)
  */
 Type::constructor(string typestr) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another type
+    if (q_check_no_nul(typestr->c_str(), typestr->size(), "type name", "type names", "UNKNOWN-TYPE", xsink)) {
+        return;
+    }
     TempEncodingHelper utf8_typestr(typestr, QCS_UTF8, xsink);
     if (*xsink) {
         return;

@@ -1493,6 +1493,12 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
 }
 
 QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* identifier, ExceptionSink* xsink) {
+    // the identifier is resolved as a C string, which would be cut at a NUL character and name another function or
+    // method
+    if (q_check_no_nul(identifier->c_str(), identifier->size(), "identifier", "identifiers", "CALL-REFERENCE-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper name(identifier, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();

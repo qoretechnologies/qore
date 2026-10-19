@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,6 +38,11 @@
 // once in ql_misc.cpp; the calls below resolve to that single definition.
 
 QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* class_name, const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink) {
+    // the names are looked up as C strings, which would be cut at a NUL character and name another class or method
+    if (q_check_no_nul(class_name->c_str(), class_name->size(), "class name", "class names", "UNKNOWN-CLASS", xsink)
+        || q_check_no_nul(method->c_str(), method->size(), "method name", "method names", "UNKNOWN-METHOD", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper cls_path(class_name, QCS_DEFAULT, xsink);
     if (!cls_path) {
         assert(*xsink);
@@ -74,6 +79,11 @@ static QoreValue call_static_method_args_intern(QoreProgram* pgm, const QoreStri
 
 static QoreObject* create_object_intern(QoreProgram* pgm, const QoreStringNode* class_name, unsigned arg_offset,
         const QoreListNode* args, ExceptionSink* xsink) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another class
+    if (q_check_no_nul(class_name->c_str(), class_name->size(), "class name", "class names", "CREATE-OBJECT-ERROR",
+            xsink)) {
+        return nullptr;
+    }
     TempEncodingHelper tmp(class_name, QCS_DEFAULT, xsink);
     if (!tmp) {
         assert(*xsink);
@@ -158,7 +168,7 @@ list<string> get_method_list(object object_value) [flags=CONSTANT,NAMED_ARGS] {
 auto result = callObjectMethod(obj, "method", arg1, arg2);
     @endcode
 
-    @throw METHOD-DOES-NOT-EXIST The named method does not exist in this class
+    @throw METHOD-DOES-NOT-EXIST The named method does not exist in this class, or the method name contains a NUL character (since %Qore 3.0)
     @throw ILLEGAL-EXPLICIT-METHOD-CALL The named method may not be called explicitly
     @throw METHOD-IS-PRIVATE The named method is private and therefore can only be called within the class
     @throw BASE-CLASS-IS-PRIVATE The named method is a member of a privately inherited base class
@@ -168,6 +178,10 @@ auto result = callObjectMethod(obj, "method", arg1, arg2);
     @deprecated use call_object_method(); camel-case function names were deprecated in %Qore 0.8.12
  */
 auto callObjectMethod(object obj, string method, ...) [flags=DEPRECATED] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(method->c_str(), method->size(), "method name", "method names", "METHOD-DOES-NOT-EXIST", xsink)) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreListNode> call_args(xsink);
 
     // if there are arguments to pass
@@ -198,7 +212,7 @@ nothing callObjectMethod() [flags=RUNTIME_NOOP,DEPRECATED] {
 auto result = call_object_method(obj, "method", arg1, arg2);
     @endcode
 
-    @throw METHOD-DOES-NOT-EXIST The named method does not exist in this class
+    @throw METHOD-DOES-NOT-EXIST The named method does not exist in this class, or the method name contains a NUL character (since %Qore 3.0)
     @throw ILLEGAL-EXPLICIT-METHOD-CALL The named method may not be called explicitly
     @throw METHOD-IS-PRIVATE The named method is private and therefore can only be called within the class
     @throw BASE-CLASS-IS-PRIVATE The named method is a member of a privately inherited base class
@@ -213,6 +227,10 @@ auto result = call_object_method(obj, "method", arg1, arg2);
     - call_static_method_args()
 */
 auto call_object_method(object object_value, string method, ...) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(method->c_str(), method->size(), "method name", "method names", "METHOD-DOES-NOT-EXIST", xsink)) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreListNode> call_args(xsink);
 
     // if there are arguments to pass
@@ -232,7 +250,7 @@ auto call_object_method(object object_value, string method, ...) {
 
     @return the value returned by the method call
 
-    @throw METHOD-DOES-NOT-EXIST The named method does not exist in this class
+    @throw METHOD-DOES-NOT-EXIST The named method does not exist in this class, or the method name contains a NUL character (since %Qore 3.0)
     @throw ILLEGAL-EXPLICIT-METHOD-CALL The named method may not be called explicitly
     @throw METHOD-IS-PRIVATE The named method is private and therefore can only be called within the class
     @throw BASE-CLASS-IS-PRIVATE The named method is a member of a privately inherited base class
@@ -242,6 +260,10 @@ auto call_object_method(object object_value, string method, ...) {
     @deprecated use call_object_method_args(); camel-case function names were deprecated in %Qore 0.8.12
  */
 auto callObjectMethodArgs(object obj, string method, *softlist<auto> varg) [flags=DEPRECATED] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(method->c_str(), method->size(), "method name", "method names", "METHOD-DOES-NOT-EXIST", xsink)) {
+        return QoreValue();
+    }
     return obj->evalMethod(method, varg, xsink);
 }
 
@@ -264,7 +286,7 @@ nothing callObjectMethodArgs() [flags=RUNTIME_NOOP,DEPRECATED] {
 auto result = call_object_method_args(obj, "method", arglist);
     @endcode
 
-    @throw METHOD-DOES-NOT-EXIST The named method does not exist in this class
+    @throw METHOD-DOES-NOT-EXIST The named method does not exist in this class, or the method name contains a NUL character (since %Qore 3.0)
     @throw ILLEGAL-EXPLICIT-METHOD-CALL The named method may not be called explicitly
     @throw METHOD-IS-PRIVATE The named method is private and therefore can only be called within the class
     @throw BASE-CLASS-IS-PRIVATE The named method is a member of a privately inherited base class
@@ -279,6 +301,10 @@ auto result = call_object_method_args(obj, "method", arglist);
     - call_static_method_args()
 */
 auto call_object_method_args(object object_value, string method, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(method->c_str(), method->size(), "method name", "method names", "METHOD-DOES-NOT-EXIST", xsink)) {
+        return QoreValue();
+    }
     return object_value->evalMethod(method, arguments, xsink);
 }
 
@@ -298,6 +324,8 @@ auto result = call_static_method("Namespace::Class", "method", arg1, arg2);
     @throw ILLEGAL-EXPLICIT-METHOD-CALL The named method may not be called explicitly
     @throw METHOD-IS-PRIVATE The named method is private and therefore can only be called within the class
     @throw BASE-CLASS-IS-PRIVATE The named method is a member of a privately inherited base class
+    @throw UNKNOWN-CLASS the class name contains a NUL character (since %Qore 3.0)
+    @throw UNKNOWN-METHOD the method name contains a NUL character (since %Qore 3.0)
 
     @note the method called could cause additional exceptions to be thrown
 
@@ -335,6 +363,8 @@ auto result = call_static_method_args("Namespace::Class", "method", (arg1, arg2)
     @throw ILLEGAL-EXPLICIT-METHOD-CALL The named method may not be called explicitly
     @throw METHOD-IS-PRIVATE The named method is private and therefore can only be called within the class
     @throw BASE-CLASS-IS-PRIVATE The named method is a member of a privately inherited base class
+    @throw UNKNOWN-CLASS the class name contains a NUL character (since %Qore 3.0)
+    @throw UNKNOWN-METHOD the method name contains a NUL character (since %Qore 3.0)
 
     @note the method called could cause additional exceptions to be thrown
 
@@ -363,8 +393,14 @@ auto call_static_method_args(string class_name, string method, *softlist<auto> a
     as by default if a method of the same name is implemented by the object's class, the class method will be called instead.
 
     @since %Qore 0.8.5
+
+    @throw PSEUDO-METHOD-DOES-NOT-EXIST the method name contains a NUL character (since %Qore 3.0)
  */
  auto call_pseudo(auto value, string method, ...) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(method->c_str(), method->size(), "method name", "method names", "PSEUDO-METHOD-DOES-NOT-EXIST", xsink)) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreListNode> nargs(xsink);
     if (args->size() > 2)
         nargs = args->copyListFrom(2);
@@ -384,8 +420,15 @@ auto call_static_method_args(string class_name, string method, *softlist<auto> a
     as by default if a method of the same name is implemented by the object's class, the class method will be called instead.
 
     @since %Qore 0.8.8
+
+
+    @throw PSEUDO-METHOD-DOES-NOT-EXIST the method name contains a NUL character (since %Qore 3.0)
  */
 auto call_pseudo_args(auto value, string method, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(method->c_str(), method->size(), "method name", "method names", "PSEUDO-METHOD-DOES-NOT-EXIST", xsink)) {
+        return QoreValue();
+    }
     return pseudo_classes_eval(value, method->getBuffer(), arguments, xsink);
 }
 
@@ -400,7 +443,7 @@ object obj = create_object(class_name, arg1, arg2);
 
     @return the object created
 
-    @throw CREATE-OBJECT-ERROR unknown class, class implements features restricted by current parse options / sandboxing restrictions
+    @throw CREATE-OBJECT-ERROR unknown class, class implements features restricted by current parse options / sandboxing restrictions, or the class name contains a NUL character (since %Qore 3.0)
     @throw CONSTRUCTOR-IS-PRIVATE attempt to instantiate an object with a private constructor from outside the class
 
     @note see the class documentation for the class to be instantiated for a list of additional exceptions that can be thrown
@@ -424,7 +467,7 @@ object obj = create_object_args(class_name, arg_list);
 
     @return the object created
 
-    @throw CREATE-OBJECT-ERROR unknown class, class implements features restricted by current parse options / sandboxing restrictions
+    @throw CREATE-OBJECT-ERROR unknown class, class implements features restricted by current parse options / sandboxing restrictions, or the class name contains a NUL character (since %Qore 3.0)
     @throw CONSTRUCTOR-IS-PRIVATE attempt to instantiate an object with a private constructor from outside the class
 
     @note see the class documentation for the class to be instantiated for a list of additional exceptions that can be thrown

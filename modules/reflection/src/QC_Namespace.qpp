@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -80,12 +80,16 @@ Namespace ns("Qore::Thread");
 
     @param path the namespace name or namespace-justified path as a string; the root namespace is returned with an empty string or \c "::" argument
 
-    @throw UNKNOWN-NAMESPACE cannot find a namespace with the given name or path
+    @throw UNKNOWN-NAMESPACE cannot find a namespace with the given name or path, or the namespace name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @see forName()
  */
 Namespace::constructor(string path) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another namespace
+    if (q_check_no_nul(path->c_str(), path->size(), "namespace name", "namespace names", "UNKNOWN-NAMESPACE", xsink)) {
+        return;
+    }
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return;
@@ -387,10 +391,14 @@ Constant con = n.getConstant(name);
     @return given constant or throws an exception if the constant is not defined
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
-    @throw UNKNOWN-CONSTANT thrown if the constant cannot be found
+    @throw UNKNOWN-CONSTANT thrown if the constant cannot be found, or the constant name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 */
 Constant Namespace::getConstant(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another constant
+    if (q_check_no_nul(name->c_str(), name->size(), "constant name", "constant names", "UNKNOWN-CONSTANT", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -443,10 +451,14 @@ Namespace con = n.getNamespace(name);
     @return given namespace or throws an exception if the namespace is not defined
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
-    @throw UNKNOWN-NAMESPACE thrown if the namespace cannot be found
+    @throw UNKNOWN-NAMESPACE thrown if the namespace cannot be found, or the namespace name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 */
 Namespace Namespace::getNamespace(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another namespace
+    if (q_check_no_nul(name->c_str(), name->size(), "namespace name", "namespace names", "UNKNOWN-NAMESPACE", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -498,10 +510,14 @@ Class cls = n.getClass(name);
     @return given class or throws an exception if the class is not defined in this namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
-    @throw UNKNOWN-CLASS thrown if the class cannot be found
+    @throw UNKNOWN-CLASS thrown if the class cannot be found, or the class name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 */
 Class Namespace::getClass(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another class
+    if (q_check_no_nul(name->c_str(), name->size(), "class name", "class names", "UNKNOWN-CLASS", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -557,10 +573,14 @@ Function f = n.getFunction(name);
     @return given function or throws an exception if the function is not defined in this namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
-    @throw UNKNOWN-FUNCTION thrown if the function cannot be found
+    @throw UNKNOWN-FUNCTION thrown if the function cannot be found, or the function name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 */
 Function Namespace::getFunction(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "UNKNOWN-FUNCTION", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -622,7 +642,7 @@ FunctionVariant v = n.getVariant(name, IntType, StringType);
     @return given function variant or throws an exception if the function variant is not defined in this namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
-    @throw UNKNOWN-FUNCTION thrown if the function cannot be found
+    @throw UNKNOWN-FUNCTION thrown if the function cannot be found, or the function name contains a NUL character (since %Qore 3.0)
     @throw VARIANT-MATCH-ERROR thrown if the function variant cannot be matched to the given arguments
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
@@ -632,6 +652,10 @@ FunctionVariant v = n.getVariant(name, IntType, StringType);
     - getExactVariantArgs()
 */
 FunctionVariant Namespace::getVariant(string name, ...) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "UNKNOWN-FUNCTION", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -665,7 +689,7 @@ FunctionVariant v = n.getVariantArgs(name, (IntType, StringType));
     @return given function variant or throws an exception if the function variant is not defined in this namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
-    @throw UNKNOWN-FUNCTION thrown if the function cannot be found
+    @throw UNKNOWN-FUNCTION thrown if the function cannot be found, or the function name contains a NUL character (since %Qore 3.0)
     @throw VARIANT-MATCH-ERROR thrown if the function variant cannot be matched to the given arguments
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
@@ -675,6 +699,10 @@ FunctionVariant v = n.getVariantArgs(name, (IntType, StringType));
     - getExactVariantArgs()
 */
 FunctionVariant Namespace::getVariantArgs(string name, softlist<Type> argv) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "UNKNOWN-FUNCTION", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -737,10 +765,14 @@ GlobalVar cls = n.getGlobalVar(name);
     @return given global variable or throws an exception if the global variable is not defined in this namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
-    @throw UNKNOWN-GLOBAL-VAR thrown if the global variable cannot be found
+    @throw UNKNOWN-GLOBAL-VAR thrown if the global variable cannot be found, or the variable name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 */
 GlobalVar Namespace::getGlobalVar(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another variable
+    if (q_check_no_nul(name->c_str(), name->size(), "variable name", "variable names", "UNKNOWN-GLOBAL-VAR", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -792,10 +824,14 @@ TypedHash th = n.getTypedHash(name);
     @return given @ref hashdecl "typed hash (hashdecl)" or throws an exception if the @ref hashdecl "typed hash (hashdecl)" is not defined in this namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
-    @throw UNKNOWN-TYPED-HASH thrown if the @ref hashdecl "typed hash (hashdecl)" cannot be found
+    @throw UNKNOWN-TYPED-HASH thrown if the @ref hashdecl "typed hash (hashdecl)" cannot be found, or the typed hash name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 */
 TypedHash Namespace::getTypedHash(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another typed
+    if (q_check_no_nul(name->c_str(), name->size(), "typed hash name", "typed hash names", "UNKNOWN-TYPED-HASH", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -847,12 +883,16 @@ Enum e = n.getEnum(name);
     @return given enum or throws an exception if the enum is not defined in this namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
-    @throw UNKNOWN-ENUM thrown if the enum cannot be found
+    @throw UNKNOWN-ENUM thrown if the enum cannot be found, or the enum name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @since %Qore 2.1
 */
 Enum Namespace::getEnum(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another enum
+    if (q_check_no_nul(name->c_str(), name->size(), "enum name", "enum names", "UNKNOWN-ENUM", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -907,10 +947,14 @@ Namespace n = Namespace::forName("Thread::Mutex");
 
     @return a namespace object corresponding to the name or namespace-justified path provided as an argument
 
-    @throw UNKNOWN-NAMESPACE cannot find a namespace with the given name or path
+    @throw UNKNOWN-NAMESPACE cannot find a namespace with the given name or path, or the namespace name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static Namespace Namespace::forName(string path) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another namespace
+    if (q_check_no_nul(path->c_str(), path->size(), "namespace name", "namespace names", "UNKNOWN-NAMESPACE", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -936,10 +980,14 @@ Namespace n = Namespace::forName(pgm, "Thread::Mutex");
 
     @return a namespace object corresponding to the name or namespace-justified path provided as an argument
 
-    @throw UNKNOWN-NAMESPACE cannot find a namespace with the given name or path
+    @throw UNKNOWN-NAMESPACE cannot find a namespace with the given name or path, or the namespace name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static Namespace Namespace::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another namespace
+    if (q_check_no_nul(path->c_str(), path->size(), "namespace name", "namespace names", "UNKNOWN-NAMESPACE", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
