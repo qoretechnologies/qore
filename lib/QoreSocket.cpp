@@ -4455,6 +4455,11 @@ static int qore_socket_exec_send_http_message(QoreSocket* s, QoreHashNode* info,
         return -1;
     }
 
+    // the header values are written to the message as C strings, which would be cut at a NUL character
+    if (q_check_http_header_values(headers, "SOCKET-SEND-ERROR", xsink)) {
+        return -1;
+    }
+
     QoreString hdr(s->getEncoding());
     priv->getSendHttpMessageHeaders(hdr, info, method, path, http_version, headers, size, source);
 
@@ -4495,6 +4500,11 @@ static int qore_socket_exec_send_http_response(QoreSocket* s, QoreHashNode* info
         return -1;
     }
 
+    // the header values are written to the message as C strings, which would be cut at a NUL character
+    if (q_check_http_header_values(headers, "SOCKET-SEND-ERROR", xsink)) {
+        return -1;
+    }
+
     QoreString hdr(s->getEncoding());
     hdr.sprintf("HTTP/%s %03d %s", http_version, code, desc);
     if (info) {
@@ -4527,6 +4537,11 @@ static int qore_socket_exec_send_http_chunked_headers(QoreSocket* s, QoreHashNod
         return -1;
     }
 
+    // the header values are written to the message as C strings, which would be cut at a NUL character
+    if (q_check_http_header_values(headers, "SOCKET-SEND-ERROR", xsink)) {
+        return -1;
+    }
+
     QoreString hdr(s->getEncoding());
     hdr.sprintf("%s %s HTTP/%s", method, path && path[0] ? path : "/", http_version);
     if (info) {
@@ -4543,6 +4558,10 @@ static void qore_socket_exec_set_http_chunk_prefix(QoreString& prefix, size_t si
 
 static int qore_socket_exec_send_http_chunked_body_trailer(QoreSocket* s, const QoreHashNode* trailer,
         int source, int timeout_ms, ExceptionSink* xsink) {
+    // the values are written to the message as C strings, which would be cut at a NUL character
+    if (q_check_http_header_values(trailer, "SOCKET-SEND-ERROR", xsink)) {
+        return -1;
+    }
     qore_socket_private* priv = qore_socket_private::get(*s);
     QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_SEND);
     if (!io_guard) {
@@ -6248,6 +6267,10 @@ void my_socket_priv::setSseGotCr(bool got_cr) const {
 int my_socket_priv::getSendHttpMessageHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         size_t size, int source) const {
+    // the header values are written to the message as C strings, which would be cut at a NUL character
+    if (q_check_http_header_values(headers, "SOCKET-SEND-ERROR", xsink)) {
+        return -1;
+    }
     socket->priv->getSendHttpMessageHeaders(hdr, info, method, path, http_version, headers, size, source);
     return 0;
 }
@@ -6255,6 +6278,10 @@ int my_socket_priv::getSendHttpMessageHeaders(ExceptionSink* xsink, QoreString& 
 int my_socket_priv::getSendHttpMessageChunkedHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         int source) const {
+    // the header values are written to the message as C strings, which would be cut at a NUL character
+    if (q_check_http_header_values(headers, "SOCKET-SEND-ERROR", xsink)) {
+        return -1;
+    }
     hdr.sprintf("%s %s HTTP/%s", method, path && path[0] ? path : "/", http_version);
     if (info) {
         info->setKeyValue("request-uri", new QoreStringNode(hdr), nullptr);
@@ -6277,6 +6304,10 @@ void my_socket_priv::getSendHttpResponseStatusLine(QoreString& hdr, QoreHashNode
 
 int my_socket_priv::getSendHttpResponseHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info, int code,
         const char* desc, const char* http_version, const QoreHashNode* headers, size_t size, int source) const {
+    // the header values are written to the message as C strings, which would be cut at a NUL character
+    if (q_check_http_header_values(headers, "SOCKET-SEND-ERROR", xsink)) {
+        return -1;
+    }
     getSendHttpResponseStatusLine(hdr, info, code, desc, http_version);
     socket->priv->getSendHttpMessageHeadersCommon(hdr, info, headers, size, source);
     return 0;
@@ -6284,6 +6315,10 @@ int my_socket_priv::getSendHttpResponseHeaders(ExceptionSink* xsink, QoreString&
 
 int my_socket_priv::getSendHttpResponseChunkedHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
         int code, const char* desc, const char* http_version, const QoreHashNode* headers, int source) const {
+    // the header values are written to the message as C strings, which would be cut at a NUL character
+    if (q_check_http_header_values(headers, "SOCKET-SEND-ERROR", xsink)) {
+        return -1;
+    }
     getSendHttpResponseStatusLine(hdr, info, code, desc, http_version);
 
     socket->priv->getSendHttpMessageHeadersCommon(hdr, info, headers, 0, source, false, true);

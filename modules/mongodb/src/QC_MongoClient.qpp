@@ -4,7 +4,7 @@
 
     Qore mongodb module - MongoClient class definition
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -72,6 +72,13 @@ MongoClient client("mongodb://host1:27017,host2:27017/?replicaSet=rs0");
     @throw MONGODB-CLIENT-ERROR failed to parse URI or create client
 */
 MongoClient::constructor(string uri) {
+    // the URI is parsed as a C string, which would be cut at a NUL character; it is not shown, as it can contain a
+    // password
+    if (q_check_no_nul(uri->c_str(), uri->size())) {
+        xsink->raiseExceptionArg("MONGODB-CLIENT-ERROR", EINVAL, new QoreStringNode("the MongoDB URI contains a NUL "
+            "character; URIs cannot contain NUL characters"));
+        return;
+    }
     SimpleRefHolder<QoreMongoClient> holder(new QoreMongoClient(uri->c_str(), xsink));
     if (*xsink) {
         return;
@@ -122,6 +129,11 @@ MongoDatabase db = client.getDatabase("mydb");
     @endcode
 */
 MongoDatabase MongoClient::getDatabase(string name) {
+    // the name is passed to the driver as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(name->c_str(), name->size(), "database name", "database names", "MONGODB-CLIENT-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     mongoc_database_t* db = client->getDatabase(name->c_str());
     if (!db) {
         xsink->raiseException("MONGODB-CLIENT-ERROR", "failed to get database '%s'", name->c_str());

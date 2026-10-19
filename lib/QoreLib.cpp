@@ -61,6 +61,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 #include <strings.h>
 #include <sys/param.h>
@@ -1898,6 +1899,19 @@ const char* q_find_last_path_sep(const char* path) {
 #endif
 }
 
+size_t q_find_last_path_sep(const QoreString& path) {
+#ifdef _Q_WINDOWS
+    // on windows we have to find either '\\' (standard directory separator character) or '/' (UNIX-style, also
+    // accepted on Windows)
+    static constexpr const char* seps = "/\\";
+#else
+    static constexpr const char* seps = QORE_DIR_SEP_STR;
+#endif
+    // the whole string is searched, including any part after a NUL character
+    size_t pos = std::string_view(path.c_str(), path.size()).find_last_of(seps);
+    return pos == std::string_view::npos ? (size_t)-1 : pos;
+}
+
 // thread-safe basename function (resulting pointer must be free()ed)
 char* q_basename(const char* path) {
    const char* p = q_find_last_path_sep(path);
@@ -2194,20 +2208,98 @@ QoreParseListNode* make_args(const QoreProgramLocation* loc, QoreValue arg) {
 }
 
 bool check_hash_key(const QoreHashNode* h, const char* key, const char* err, std::string& value,
-        ExceptionSink* xsink) {
-   value.clear();
-   QoreValue p = h->getKeyValue(key);
-   if (p.isNothing()) {
-      return false;
-   }
+        ExceptionSink* xsink, bool secret) {
+    value.clear();
+    QoreValue p = h->getKeyValue(key);
+    if (p.isNothing()) {
+        return false;
+    }
 
-   if (p.getType() != NT_STRING) {
-      xsink->raiseException(err, "'%s' key is not type 'string' but is type '%s'", key, p.getTypeName());
-      return false;
-   }
-   QoreStringValueHelper str(p);
-   value = str->c_str();
-   return true;
+    if (p.getType() != NT_STRING) {
+        xsink->raiseException(err, "'%s' key is not type 'string' but is type '%s'", key, p.getTypeName());
+        return false;
+    }
+    QoreStringValueHelper str(p);
+    // the value is passed on as a C string, which would be cut at a NUL character
+    QoreStringMaker what("'%s' value", key);
+    if (secret ? q_check_secret_no_nul(str->c_str(), str->size(), what.c_str(), "datasource values", err, xsink)
+            : q_check_no_nul(str->c_str(), str->size(), what.c_str(), "datasource values", err, xsink)) {
+        return false;
+    }
+    value.assign(str->c_str(), str->size());
+    return true;
+}
+
+int q_check_secret_no_nul(const char* str, size_t len, const char* what, const char* what_plural,
+        const char* err, ExceptionSink* xsink) {
+    assert(str || !len);
+    assert(xsink);
+    if (!len || !memchr(str, '\0', len)) {
+        return 0;
+    }
+    xsink->raiseExceptionArg(err, EINVAL, new QoreStringNodeMaker("%s contains a NUL character; %s cannot contain "
+        "NUL characters", what, what_plural));
+    return -1;
+}
+
+int q_check_http_header_values(const QoreHashNode* headers, const char* err, ExceptionSink* xsink) {
+    if (!headers) {
+        return 0;
+    }
+    // a header value is sent cut at a NUL character, or written to the message with it, which corrupts the message
+    auto check = [&](const char* name, const QoreValue& v) -> int {
+        if (v.getType() != NT_STRING) {
+            return 0;
+        }
+        // a string can be held in inline short string storage, which has no QoreStringNode
+        QoreStringDataHelper str(v);
+        if (!str.size() || !memchr(str.c_str(), '\0', str.size())) {
+            return 0;
+        }
+        QoreStringMaker what("HTTP header '%s' value", name);
+        return q_check_secret_no_nul(str.c_str(), str.size(), what.c_str(), "HTTP header values", err, xsink);
+    };
+    ConstHashIterator hi(headers);
+    while (hi.next()) {
+        const QoreValue v = hi.get();
+        if (v.getType() == NT_LIST) {
+            ConstListIterator li(v.get<const QoreListNode>());
+            while (li.next()) {
+                if (check(hi.getKey(), li.getValue())) {
+                    return -1;
+                }
+            }
+        } else if (check(hi.getKey(), v)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int q_check_http_request(const QoreString* method, const QoreString* path, const QoreHashNode* headers,
+        const char* method_err, const char* path_err, const char* header_err, ExceptionSink* xsink) {
+    // the method and request target are written to the request line or HTTP/2 and HTTP/3 pseudo-headers as C strings,
+    // which would be cut at a NUL character
+    if (method && q_check_no_nul(method->c_str(), method->size(), "HTTP method", "HTTP methods", method_err, xsink)) {
+        return -1;
+    }
+    if (path && q_check_secret_no_nul(path->c_str(), path->size(), "HTTP request target", "HTTP request targets",
+            path_err, xsink)) {
+        return -1;
+    }
+    return q_check_http_header_values(headers, header_err, xsink);
+}
+
+int q_check_host_service(const QoreString* host, const QoreString* service, const char* err,
+        ExceptionSink* xsink) {
+    // a host name would be resolved, and a service name looked up, cut at the NUL character
+    if (host && q_check_no_nul(host->c_str(), host->size(), "hostname", "hostnames", err, xsink)) {
+        return -1;
+    }
+    if (service && q_check_no_nul(service->c_str(), service->size(), "service name", "service names", err, xsink)) {
+        return -1;
+    }
+    return 0;
 }
 
 // Handle GNU strerror_r() which returns char*

@@ -343,7 +343,8 @@ QoreValue sshutil_enum_value(const QoreEnumDecl* ed, const char* value, Exceptio
 }
 
 QoreStringNode* sshutil_normalize_ssh_host(const QoreStringNode* host) {
-    std::string rv(host->c_str());
+    // the whole string is normalized, including any part after a NUL character
+    std::string rv(host->c_str(), host->size());
     if (!rv.empty() && rv[rv.size() - 1] == '.') {
         rv.resize(rv.size() - 1);
     }
@@ -361,13 +362,13 @@ QoreStringNode* sshutil_format_known_hosts_host(const QoreStringNode* host, int6
     // note: safe; sshutil_normalize_ssh_host() always returns a heap QoreStringNode, so the value
     // is never held in inline short string storage
     QoreStringNode* normalized = normalized_holder->get<QoreStringNode>();
-    std::string rv(normalized->c_str());
+    std::string rv(normalized->c_str(), normalized->size());
     if (port == 22 && rv.find(':') == std::string::npos) {
         return normalized_holder.releaseAs<QoreStringNode>();
     }
 
     QoreStringNode* str = new QoreStringNode("[", host->getEncoding());
-    str->concat(rv.c_str());
+    str->concat(rv.c_str(), rv.size());
     str->sprintf("]:%lld", port);
     return str;
 }

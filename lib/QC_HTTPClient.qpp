@@ -41,6 +41,18 @@
 #include "qore/intern/ssl_constants.h"
 #include "qore/intern/QoreHttpClientObjectIntern.h"
 
+// the method and request path are sent as C strings, which would be cut at a NUL character; the request headers are
+// checked when the request is made, and raise HTTP-CLIENT-HEADER-ERROR
+static int hc_check_request(const QoreStringNode* method, const QoreStringNode* path, ExceptionSink* xsink) {
+    return q_check_http_request(method, path, nullptr, "HTTP-CLIENT-METHOD-ERROR", "HTTP-CLIENT-URL-ERROR", nullptr,
+        xsink);
+}
+
+// a URL would be parsed cut at a NUL character; it is not shown in the exception, as it can contain a password
+static int hc_check_url(const QoreStringNode* url, const char* what, ExceptionSink* xsink) {
+    return q_check_secret_no_nul(url->c_str(), url->size(), what, "URLs", "HTTP-CLIENT-URL-ERROR", xsink);
+}
+
 /** @defgroup http_url_codes HTTP URL Codes
 
     @since %Qore 2.0
@@ -528,8 +540,8 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - \c username: The username for HTTP basic authentication; only used if no username or password is set in the
       URL and if the \c password option is also used
 
-    @throw HTTP-CLIENT-OPTION-ERROR invalid or unknown option passed in option hash
-    @throw HTTP-CLIENT-URL-ERROR invalid URL string
+    @throw HTTP-CLIENT-OPTION-ERROR invalid or unknown option passed in option hash, or the \c username, \c password, \c default_path or \c http_version option or a value of the \c headers option contains a NUL character (since %Qore 3.0); passwords, paths and header values are not shown in the exception
+    @throw HTTP-CLIENT-URL-ERROR invalid URL string, or the URL contains a NUL character (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
     @throw HTTP-CLIENT-UNKNOWN-PROTOCOL unknown protocol passed in URL
     @throw ILLEGAL-FILESYSTEM-ACCESS if the calling context is restricted with the @ref Qore::PO_NO_FILESYSTEM
     sandboxing restriction and one of the following options is used: \c ssl_cert_path or \c ssl_key_path
@@ -639,8 +651,14 @@ httpclient.setHTTPVersion("1.1");
     @endcode
 
     @throw HTTP-VERSION-ERROR invalid HTTP version passed (allowed values: \c "1.0" and \"1.1\")
+    @throw HTTP-CLIENT-OPTION-ERROR the version contains a NUL character (since %Qore 3.0)
  */
 nothing HTTPClient::setHTTPVersion(string version) [flags=NAMED_ARGS] {
+    // the version is checked and sent as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(version->c_str(), version->size(), "HTTP version", "HTTP versions", "HTTP-CLIENT-OPTION-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     client->setHTTPVersion(version->c_str(), xsink);
 }
 
@@ -885,7 +903,9 @@ nothing HTTPClient::setHttp2StreamPriority(int stream_id, int weight = 16, int d
     - \c headers: response headers
 
     @throw HTTP2-ERROR if HTTP/2 is not available
-    @throw HTTP2-CONNECT-ERROR if the CONNECT request fails
+    @throw HTTP2-CONNECT-ERROR if the CONNECT request fails, or the protocol contains a NUL character
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @par Example:
     @code{.py}
@@ -906,6 +926,14 @@ if (resp.status_code == 200) {
 */
 *hash<auto> HTTPClient::sendHttp2Connect(string path, *hash<auto> headers, string protocol,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    // the path, protocol and header values are sent as C strings, which would be cut at a NUL character; these
+    // requests do not go through the request header processing of the other requests
+    if (q_check_http_request(nullptr, path, headers, nullptr, "HTTP-CLIENT-URL-ERROR", "HTTP-CLIENT-HEADER-ERROR",
+            xsink)
+        || q_check_no_nul(protocol->c_str(), protocol->size(), "protocol", "protocols", "HTTP2-CONNECT-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->sendHttp2Connect(path->c_str(), headers,
         protocol->c_str(), *ohrh, xsink), xsink);
@@ -928,7 +956,9 @@ if (resp.status_code == 200) {
     - \c headers: response headers
 
     @throw HTTP3-ERROR if HTTP/3 is not available
-    @throw HTTP3-CONNECT-ERROR if the CONNECT request fails or server doesn't support extended CONNECT
+    @throw HTTP3-CONNECT-ERROR if the CONNECT request fails or server doesn't support extended CONNECT, or the protocol contains a NUL character
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @par Example:
     @code{.py}
@@ -949,6 +979,14 @@ if (resp.status_code == 200) {
 */
 *hash<auto> HTTPClient::sendHttp3Connect(string path, *hash<auto> headers, string protocol,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    // the path, protocol and header values are sent as C strings, which would be cut at a NUL character; these
+    // requests do not go through the request header processing of the other requests
+    if (q_check_http_request(nullptr, path, headers, nullptr, "HTTP-CLIENT-URL-ERROR", "HTTP-CLIENT-HEADER-ERROR",
+            xsink)
+        || q_check_no_nul(protocol->c_str(), protocol->size(), "protocol", "protocols", "HTTP3-CONNECT-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->sendHttp3Connect(path->c_str(), headers,
         protocol->c_str(), *ohrh, xsink), xsink);
@@ -1378,9 +1416,16 @@ nothing HTTPClient::disconnect() {
     - [\c response-body]: a binary object of any response body
 
     @since %Qore 1.12
+
+    @throw HTTP-CLIENT-METHOD-ERROR the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 */
 AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string path, string body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, path, xsink)) {
+        return QoreValue();
+    }
     return client->startPollSendRecv(xsink, self, method, path, body, body->c_str(), body->size(), headers,
         body->getEncoding());
 }
@@ -1424,9 +1469,16 @@ AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string
     - [\c response-body]: a binary object of any response body
 
     @since %Qore 1.12
+
+    @throw HTTP-CLIENT-METHOD-ERROR the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 */
 AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string path, *binary body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, path, xsink)) {
+        return QoreValue();
+    }
     return client->startPollSendRecv(xsink, self, method, path, body, body ? body->getPtr() : nullptr,
         body ? body->size() : 0, headers);
 }
@@ -1446,9 +1498,16 @@ AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string
     @ref startPollSendRecv() after response headers are received
 
     @since %Qore 3.0
+
+    @throw HTTP-CLIENT-METHOD-ERROR the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 */
 AbstractPollOperation<auto> HTTPClient::startPollSendAndStream(string method, *string path, string body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, path, xsink)) {
+        return QoreValue();
+    }
     return client->startPollSendAndStream(xsink, self, method, path, body, body->c_str(), body->size(), headers,
         body->getEncoding());
 }
@@ -1457,9 +1516,16 @@ AbstractPollOperation<auto> HTTPClient::startPollSendAndStream(string method, *s
 /** @see startPollSendAndStream(string, *string, string, *hash<auto>)
 
     @since %Qore 3.0
+
+    @throw HTTP-CLIENT-METHOD-ERROR the method contains a NUL character (since %Qore 3.0)
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 */
 AbstractPollOperation<auto> HTTPClient::startPollSendAndStream(string method, *string path, *binary body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, path, xsink)) {
+        return QoreValue();
+    }
     return client->startPollSendAndStream(xsink, self, method, path, body, body ? body->getPtr() : nullptr,
         body ? body->size() : 0, headers);
 }
@@ -1517,7 +1583,7 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
     any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the
     \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -1536,6 +1602,8 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or
     Socket::connectSSL() for secure connections)
@@ -1546,6 +1614,9 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
  */
 hash<auto> HTTPClient::send(string body, string method, *string path, *hash<auto> headers,
         softbool read_response_body = False, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, path, xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->send(method->c_str(), path && !path->empty() ? path->c_str() : nullptr,
         headers, *body, read_response_body, *ohrh, xsink), xsink);
@@ -1594,7 +1665,7 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
 
     @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -1611,6 +1682,8 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
@@ -1620,6 +1693,9 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
  */
 hash<auto> HTTPClient::send(*binary body, string method, *string path, *hash<auto> headers,
         softbool read_response_body = False, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, path, xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->send(method->c_str(), path && !path->empty() ? path->c_str() : nullptr,
         headers, body ? body->getPtr() : nullptr, body ? body->size() : 0, read_response_body, *ohrh, xsink), xsink);
@@ -1665,9 +1741,10 @@ printf("sent to %s\n", info."effective-url");
     \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
     @throw HTTP-CLIENT-URL-ERROR the URL has no host, has an invalid host, or names a UNIX domain socket when the
-    client is not itself on one
+    client is not itself on one, or the URL contains a NUL character (since %Qore 3.0); the URL is not shown in the
+    exception, as it can contain a password
     @throw HTTP-CLIENT-UNKNOWN-PROTOCOL the URL has a scheme that is not supported
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -1684,6 +1761,7 @@ printf("sent to %s\n", info."effective-url");
     period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or
     Socket::connectSSL() for secure connections)
@@ -1696,6 +1774,9 @@ printf("sent to %s\n", info."effective-url");
  */
 hash<auto> HTTPClient::sendUrl(string body, string method, string url, *hash<auto> headers,
         softbool read_response_body = False, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, nullptr, xsink) || hc_check_url(url, "URL", xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->sendUrl(method->c_str(), *url, headers, *body, read_response_body,
         *ohrh, xsink), xsink);
@@ -1732,9 +1813,10 @@ hash<auto> msg = httpclient.sendUrl(body, "POST", "http://other.example.com/path
     \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
     @throw HTTP-CLIENT-URL-ERROR the URL has no host, has an invalid host, or names a UNIX domain socket when the
-    client is not itself on one
+    client is not itself on one, or the URL contains a NUL character (since %Qore 3.0); the URL is not shown in the
+    exception, as it can contain a password
     @throw HTTP-CLIENT-UNKNOWN-PROTOCOL the URL has a scheme that is not supported
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -1747,6 +1829,7 @@ hash<auto> msg = httpclient.sendUrl(body, "POST", "http://other.example.com/path
     period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or
     Socket::connectSSL() for secure connections)
@@ -1759,6 +1842,9 @@ hash<auto> msg = httpclient.sendUrl(body, "POST", "http://other.example.com/path
  */
 hash<auto> HTTPClient::sendUrl(*binary body, string method, string url, *hash<auto> headers,
         softbool read_response_body = False, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, nullptr, xsink) || hc_check_url(url, "URL", xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->sendUrl(method->c_str(), *url, headers,
         body ? body->getPtr() : nullptr, body ? body->size() : 0, read_response_body, *ohrh, xsink), xsink);
@@ -1794,7 +1880,7 @@ if (resp.status_code == 200) {
     key will NOT be present as the body is left on the socket for streaming. The HTTP status will be assigned
     to the \c "status_code" key.
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR status error communicating with HTTP server; note that this error is not
@@ -1805,6 +1891,8 @@ if (resp.status_code == 200) {
     @throw SOCKET-TIMEOUT Data transmission or reception exceeded the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note
     - The response body is NOT read by this method; use @ref readHTTPChunk() or @ref readServerSentEvent()
@@ -1815,6 +1903,9 @@ if (resp.status_code == 200) {
  */
 hash<auto> HTTPClient::sendAndStream(string method, *string path, *data body, *hash<auto> headers,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, path, xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(xsink);
     const char* pstr = path && !path->empty() ? path->c_str() : nullptr;
@@ -2058,7 +2149,7 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
 
     @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -2076,6 +2167,8 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note
     - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
@@ -2090,6 +2183,9 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
 hash<auto> HTTPClient::sendWithSendCallback(code send_callback, string method, *string path, *hash<auto> headers,
         timeout timeout_ms = 0, softbool read_response_body = False,
         *reference<hash> info) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, path, xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->sendWithSendCallback(method->c_str(),
         path && !path->empty() ? path->c_str() : 0, headers, send_callback, read_response_body, *ohrh,
@@ -2152,7 +2248,7 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received
@@ -2165,6 +2261,8 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note A response body with a content coding (\c gzip, \c deflate, \c bzip2, \c br, or \c zstd) is decoded as it
     is received, unless the \c encoding_passthru option is set; since %Qore 3.0, this also applies to a body written
@@ -2181,6 +2279,9 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
 nothing HTTPClient::sendWithRecvCallback(code receive_callback, string body, string method, *string path,
         *hash<auto> headers, timeout timeout_ms = 0, softbool read_response_body = False,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, path, xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     // issue 1813: convert string to socket's character encoding as documented
     TempEncodingHelper btmp(body, client->getEncoding(), xsink);
@@ -2245,7 +2346,7 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received
@@ -2258,6 +2359,8 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note A response body with a content coding (\c gzip, \c deflate, \c bzip2, \c br, or \c zstd) is decoded as it
     is received, unless the \c encoding_passthru option is set; since %Qore 3.0, this also applies to a body written
@@ -2272,6 +2375,9 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
 nothing HTTPClient::sendWithRecvCallback(code receive_callback, *binary body, string method, *string path,
         *hash<auto> headers, timeout timeout_ms = 0, softbool read_response_body = False,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, path, xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     client->sendWithRecvCallback(method->c_str(), path && !path->empty() ? path->c_str() : nullptr, headers,
         body ? body->getPtr() : nullptr, body ? body->size() : 0, read_response_body, *ohrh, timeout_ms,
@@ -2314,7 +2420,7 @@ httpclient.send(output_stream: output_stream, body: data, method: "POST", path: 
       - \c "response-headers-raw": a hash of unprocessed headers with no case conversions or additional keys
     - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such as, for example, socket character encoding)
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -2332,6 +2438,8 @@ httpclient.send(output_stream: output_stream, body: data, method: "POST", path: 
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note A response body with a content coding (\c gzip, \c deflate, \c bzip2, \c br, or \c zstd) is decoded as it
     is received, unless the \c encoding_passthru option is set; since %Qore 3.0, this also applies to a body written
@@ -2344,6 +2452,9 @@ httpclient.send(output_stream: output_stream, body: data, method: "POST", path: 
 nothing HTTPClient::send(Qore::OutputStream[OutputStream] output_stream, *data body, string method, *string path,
         *hash<auto> headers, timeout timeout_ms = 0, softbool read_response_body = False,
         *reference<hash<auto>> info, *code receive_callback) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, path, xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     const char* pstr = path && !path->empty() ? path->c_str() : nullptr;
     if (get_node_type(body) == NT_STRING) {
@@ -2399,7 +2510,7 @@ httpclient.sendChunked(output_stream: output_stream, input_stream: input_stream,
     - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such as, for example, socket character encoding)
     @param trailers_callback An optional trailer callback for message trailers to write in the outgoing chunked message; the callback takes no arguments and must return either @ref nothing or @ref hash_type "hash" giving a hash of trailers for the final chunk
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
@@ -2419,6 +2530,8 @@ httpclient.sendChunked(output_stream: output_stream, input_stream: input_stream,
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note A response body with a content coding (\c gzip, \c deflate, \c bzip2, \c br, or \c zstd) is decoded as it
     is received, unless the \c encoding_passthru option is set; since %Qore 3.0, this also applies to a body written
@@ -2433,6 +2546,9 @@ nothing HTTPClient::sendChunked(Qore::OutputStream[OutputStream] output_stream,
         int max_chunk_size = 4096, *string path, *hash<auto> headers, timeout timeout_ms = 0,
         softbool read_response_body = False, *reference<hash<auto>> info, *code receive_callback,
         *code trailers_callback) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, path, xsink)) {
+        return QoreValue();
+    }
     if (max_chunk_size < 1) {
         xsink->raiseException("HTTP-CHUNK-ERROR", "the max chunk size must be greater than 0; value given is: " QLLD,
             max_chunk_size);
@@ -2500,7 +2616,7 @@ httpclient.sendWithCallbacks(send_callback, rcv_callback, "POST", "/path", {"Con
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed, or the method contains a NUL character (since %Qore 3.0)
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
     @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
     @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received
@@ -2513,6 +2629,8 @@ httpclient.sendWithCallbacks(send_callback, rcv_callback, "POST", "/path", {"Con
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
     @throw URL-ENCODING-ERROR Thrown if the \c pre_encoded_urls option is set, and the URL has at least one unencoded
     character that requires URL percent encoding
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note
     - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
@@ -2531,6 +2649,9 @@ httpclient.sendWithCallbacks(send_callback, rcv_callback, "POST", "/path", {"Con
 nothing HTTPClient::sendWithCallbacks(code send_callback, code receive_callback, string method, *string path,
         *hash<auto> headers, timeout timeout_ms = 0, softbool read_response_body = False,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    if (hc_check_request(method, path, xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     client->sendWithCallbacks(method->c_str(), path && !path->empty() ? path->c_str() : nullptr, headers,
         send_callback, read_response_body, *ohrh, timeout_ms, receive_callback, self, xsink);
@@ -2596,6 +2717,8 @@ nothing HTTPClient::sendWithCallbacks(code send_callback, code receive_callback,
     @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
@@ -2604,6 +2727,9 @@ nothing HTTPClient::sendWithCallbacks(code send_callback, code receive_callback,
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
 *data HTTPClient::get(string path, *hash<auto> headers, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    if (hc_check_request(nullptr, path, xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<AbstractQoreNode> rv(client->get(path->c_str(), headers, *ohrh, xsink), xsink);
     return *xsink ? nullptr : rv.release();
@@ -2662,12 +2788,17 @@ hash<auto> msg = httpclient.head("/path");
     @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
 hash<auto> HTTPClient::head(string path, *hash<auto> headers, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    if (hc_check_request(nullptr, path, xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->head(path->c_str(), headers, *ohrh, xsink), xsink);
     return *xsink ? nullptr : rv.release();
@@ -2733,6 +2864,8 @@ httpclient.post("/path", body);
     @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
@@ -2740,6 +2873,9 @@ httpclient.post("/path", body);
  */
 *data HTTPClient::post(string path, string body, *hash<auto> headers,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    if (hc_check_request(nullptr, path, xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<AbstractQoreNode> rv(client->post(path->c_str(), headers, *body, *ohrh, xsink), xsink);
     return *xsink ? QoreValue() : rv.release();
@@ -2804,6 +2940,8 @@ httpclient.post("/path", body);
     @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+    @throw HTTP-CLIENT-URL-ERROR the request path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
+    @throw HTTP-CLIENT-HEADER-ERROR a request header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 
     @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
@@ -2811,6 +2949,9 @@ httpclient.post("/path", body);
  */
 *data HTTPClient::post(string path, *binary body, *hash<auto> headers,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    if (hc_check_request(nullptr, path, xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<AbstractQoreNode> rv(client->post(path->c_str(), headers, body ? body->getPtr() : 0, body ? body->size() : 0, *ohrh, xsink), xsink);
     return *xsink ? nullptr : rv.release();
@@ -2874,7 +3015,7 @@ httpclient.setURL("https://user:password@hostname:8080/path");
 
     @param url the new URL for the object
 
-    @throw HTTP-CLIENT-URL-ERROR invalid URL string; invalid authorization credentials in  URL (username without password or vice-versa)
+    @throw HTTP-CLIENT-URL-ERROR invalid URL string; invalid authorization credentials in  URL (username without password or vice-versa), or the URL contains a NUL character (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
     @throw HTTP-CLIENT-UNKNOWN-PROTOCOL unknown protocol (scheme) passed in URL
     @throw HTTP-CLIENT-URL-ERROR the URL host (for example a decoded UNIX socket path) contains a NUL character;
     see @ref path_nul_characters
@@ -2884,6 +3025,9 @@ httpclient.setURL("https://user:password@hostname:8080/path");
     @note URLs with UNIX sockets are generally supported in Qore with the following syntax: <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i> is a path with URL-encoding as performed by @ref encode_url() "encode_url(string, True)"; for example: \c "http://socket=%2ftmp%socket-dir%2fsocket-file-1/url/path"; this allows a filesystem path to be used in the host portion of the URL and for the URL to include a URL path as well.
  */
 HTTPClient::setURL(string url) [flags=NAMED_ARGS] {
+    if (hc_check_url(url, "URL", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper nurl(url, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -2945,12 +3089,15 @@ nothing HTTPClient::setProxyURL() {
 httpclient.setProxyURL("http://user:password@proxy_host:8080/path");
     @endcode
 
-    @throw HTTP-CLIENT-URL-ERROR invalid proxy URL string; invalid authorization credentials in proxy URL (username without password or vice-versa)
+    @throw HTTP-CLIENT-URL-ERROR invalid proxy URL string; invalid authorization credentials in proxy URL (username without password or vice-versa), or the proxy URL contains a NUL character (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
     @throw HTTP-CLIENT-PROXY-PROTOCOL-ERROR unknown protocol passed in URL
 
     @note URLs with UNIX sockets are generally supported in Qore with the following syntax: <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i> is a path with URL-encoding as performed by @ref encode_url() "encode_url(string, True)"; for example: \c "http://socket=%2ftmp%socket-dir%2fsocket-file-1/url/path"; this allows a filesystem path to be used in the host portion of the URL and for the URL to include a URL path as well.
  */
 nothing HTTPClient::setProxyURL(string url) [flags=NAMED_ARGS] {
+    if (hc_check_url(url, "proxy URL", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper nurl(url, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -3312,8 +3459,18 @@ bool HTTPClient::isConnected() [flags=CONSTANT] {
     @code{.py}
 httpclient.setUserPassword(user, pass);
     @endcode
+
+    @throw HTTP-CLIENT-URL-ERROR the user name or password contains a NUL character (since %Qore 3.0); the password is not shown in the exception
  */
 nothing HTTPClient::setUserPassword(string username, string password) [flags=NAMED_ARGS] {
+    // the user name and password are sent as C strings, which would be cut at a NUL character; the password is not
+    // shown in the exception
+    if (q_check_no_nul(username->c_str(), username->size(), "user name", "user names", "HTTP-CLIENT-URL-ERROR",
+            xsink)
+        || q_check_secret_no_nul(password->c_str(), password->size(), "password", "passwords",
+            "HTTP-CLIENT-URL-ERROR", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper nuser(username, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -3367,8 +3524,18 @@ httpclient.setProxyUserPassword(user, pass);
 
     @param username the username to use for proxy authentication in the next HTTP connection
     @param password the password to use for proxy authentication in the next HTTP connection
+
+    @throw HTTP-CLIENT-URL-ERROR the user name or password contains a NUL character (since %Qore 3.0); the password is not shown in the exception
 */
 nothing HTTPClient::setProxyUserPassword(string username, string password) [flags=NAMED_ARGS] {
+    // the user name and password are sent as C strings, which would be cut at a NUL character; the password is not
+    // shown in the exception
+    if (q_check_no_nul(username->c_str(), username->size(), "proxy user name", "user names", "HTTP-CLIENT-URL-ERROR",
+            xsink)
+        || q_check_secret_no_nul(password->c_str(), password->size(), "proxy password", "passwords",
+            "HTTP-CLIENT-URL-ERROR", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper nuser(username, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -3417,8 +3584,14 @@ nothing HTTPClient::clearProxyUserPassword() {
     @see getDefaultHeaders()
 
     @since %Qore 0.9.5
+
+    @throw HTTP-CLIENT-OPTION-ERROR a header value contains a NUL character (since %Qore 3.0); the value is not shown in the exception
 */
 nothing HTTPClient::addDefaultHeaders(hash<auto> headers) [flags=NAMED_ARGS] {
+    // the values are sent as C strings, which would be cut at a NUL character
+    if (q_check_http_header_values(headers, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
+        return QoreValue();
+    }
     client->addDefaultHeaders(headers);
 }
 
@@ -3440,8 +3613,13 @@ hash<string, string> HTTPClient::getDefaultHeaders() [flags=CONSTANT] {
     @code{.py}
 httpclient.setDefaultPath();
     @endcode
+
+    @throw HTTP-CLIENT-URL-ERROR the path contains a NUL character (since %Qore 3.0); the path is not shown in the exception
  */
 nothing HTTPClient::setDefaultPath(*string path) [flags=NAMED_ARGS] {
+    if (path && hc_check_request(nullptr, path, xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper npath;
     if (path && !npath.set(path, QCS_DEFAULT, xsink)) {
         return QoreValue();

@@ -741,6 +741,55 @@
     codes they document: \c GETPWUID2-ERROR, \c GETPWNAM2-ERROR and \c GETGRNAM2-ERROR.  Code that catches the
     misspelled error codes must catch the documented ones instead.
 
+    @par A String With a NUL Character Is Refused Where It Would Be Cut
+    @parblock
+    A string passed to the operating system, a C library or a network protocol was cut at its first NUL character
+    there, so it named something else than the string, after any check made by %Qore code on the whole string: a host
+    name such as <tt>"evil.example\\x00.trusted.example"</tt> passes a check that it ends with
+    <tt>".trusted.example"</tt>, but a connection was made to \c evil.example.  Such a string is now refused before
+    it is used, and before any @ref sandboxing "sandbox" check (see @ref string_nul_characters):
+    - commands: @ref Qore::system() "system()" (\c SYSTEM-ERROR), @ref Qore::backquote() "backquote()"
+      (\c BACKQUOTE-ERROR) and @ref Qore::exec() "exec()" (\c EXEC-ERROR)
+    - environment variables: @ref Qore::getenv() "getenv()" returns @ref nothing, and
+      @ref Qore::setenv() "setenv()" and @ref Qore::unsetenv() "unsetenv()" return -1, with
+      @ref Qore::errno() "errno()" returning \c EINVAL
+    - user and group names: @ref Qore::getpwnam() "getpwnam()" and @ref Qore::getgrnam() "getgrnam()" return
+      @ref nothing with \c EINVAL, @ref Qore::getpwnam2() "getpwnam2()", @ref Qore::getgrnam2() "getgrnam2()",
+      @ref Qore::Dir::chown() "Dir::chown()" and @ref Qore::Dir::chgrp() "Dir::chgrp()" raise their error codes
+    - host names, addresses and service names: @ref Qore::gethostbyname() "gethostbyname()" and
+      @ref Qore::gethostbyname_long() "gethostbyname_long()" return @ref nothing with \c EINVAL;
+      @ref Qore::gethostbyaddr() "gethostbyaddr()", @ref Qore::getaddrinfo() "getaddrinfo()", the asynchronous
+      lookups, @ref Qore::Socket::connectINET() "Socket::connectINET()",
+      @ref Qore::Socket::bindINET() "Socket::bindINET()", @ref Qore::Socket::resolveAddrInfo()
+      "Socket::resolveAddrInfo()", @ref Qore::Http1Connection "Http1Connection" and the FTP poll operations raise
+      their error codes
+    - URLs: @ref Qore::parse_url() "parse_url()" and @ref Qore::get_safe_url() "get_safe_url()" raise
+      \c PARSE-URL-ERROR, @ref Qore::parseURL() "parseURL()" returns @ref nothing, and the URLs of
+      @ref Qore::HTTPClient "HTTPClient" and @ref Qore::FtpClient "FtpClient" raise \c HTTP-CLIENT-URL-ERROR and
+      \c FTP-URL-ERROR
+    - HTTP messages: the method (\c HTTP-CLIENT-METHOD-ERROR), request target (\c HTTP-CLIENT-URL-ERROR) and header
+      values (the new \c HTTP-CLIENT-HEADER-ERROR) of @ref Qore::HTTPClient "HTTPClient" requests, its user name,
+      password, default path, HTTP version and default headers, and the request line, status line and header values of
+      the messages sent by @ref Qore::Socket "Socket" (\c SOCKET-SEND-ERROR), and the request strings of the HTTP/1
+      and HTTP/2 client poll operations; also TLS ALPN protocol names
+      (@ref Qore::Socket::setAlpnProtocols() "Socket::setAlpnProtocols()") and the POP3 APOP credentials of
+      @ref Qore::PollPipeline "PollPipeline"
+    - FTP: remote paths, commands, the host name, user name and password of @ref Qore::FtpClient "FtpClient" raise the
+      error code of the method
+    - databases: datasource strings (\c DATASOURCE-PARSE-ERROR), connection values given to the constructors and
+      setters of @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" (an
+      SQLite database file name cut at the NUL character named another file), driver names, and DBI option names and
+      string values (\c DBI-OPTION-ERROR)
+    - the principals, credential cache and keytab names, passwords and hex strings of the \c krb5 module, and the URI,
+      database and collection names and ObjectId strings of the \c mongodb module
+
+    Passwords, URLs, datasource strings, HTTP request targets and header values, and DBI option values are not shown
+    in the exception, so that a secret does not appear in a log.  @ref Qore::basename() "basename()",
+    @ref Qore::dirname() "dirname()", @ref Qore::get_masked_url() "get_masked_url()", the URL encoding functions and
+    the host functions of the \c sshutil module, which do not pass the string on, process the whole string instead of
+    the part before the NUL character.
+    @endparblock
+
     @par Modules Export Only Their Own Declarations and Reexported Modules
     @parblock
     Constants, enums and their members, and typedefs that a module received from another module it imported with a

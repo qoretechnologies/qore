@@ -5,7 +5,7 @@
 #
 # Qore mongodb module test script
 #
-# Copyright (C) 2025 Qore Technologies, s.r.o.
+# Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -49,6 +49,7 @@ public class MongoDbTest inherits QUnit::Test {
         addTestCase("ObjectId edge cases", \objectIdEdgeCaseTests());
         addTestCase("Connection tests", \connectionTests());
         addTestCase("Connection negative tests", \connectionNegativeTests());
+        addTestCase("NUL character tests", \nulCharacterTests());
         addTestCase("Database tests", \databaseTests());
         addTestCase("Insert result tests", \insertResultTests());
         addTestCase("CRUD tests", \crudTests());
@@ -188,6 +189,30 @@ public class MongoDbTest inherits QUnit::Test {
         # Test connection to non-existent host (should fail on operations, not connect)
         # MongoDB driver uses lazy connection, so creation may succeed
         # but operations should fail with proper timeout
+    }
+
+    #! a string passed to the driver as a C string would be cut at a NUL character; no server is needed
+    nulCharacterTests() {
+        # cut at the NUL character, the ObjectId would be valid
+        assertThrows("MONGODB-OBJECTID-ERROR", "ObjectId string .* contains a NUL character at byte offset 24",
+            sub() { ObjectId oid("507f1f77bcf86cd799439011\x00junk"); });
+        # the URI is not shown, as it can contain a password
+        try {
+            MongoClient c("mongodb://user:secretpw@127.0.0.1:1\x00.trusted.example/db");
+            fail("the MongoClient constructor did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("MONGODB-CLIENT-ERROR", ex.err);
+            assertEq("the MongoDB URI contains a NUL character; URIs cannot contain NUL characters", ex.desc);
+        }
+        # the client connects only when an operation needs a server
+        MongoClient c("mongodb://127.0.0.1:1/?serverSelectionTimeoutMS=1");
+        assertThrows("MONGODB-CLIENT-ERROR", "database name .* contains a NUL character", \c.getDatabase(),
+            "admin\x00.other");
+        MongoDatabase db = c.getDatabase("test");
+        assertThrows("MONGODB-DATABASE-ERROR", "collection name .* contains a NUL character", \db.getCollection(),
+            "users\x00.other");
+        assertThrows("MONGODB-DATABASE-ERROR", "collection name .* contains a NUL character",
+            \db.createCollection(), "users\x00.other");
     }
 
     databaseTests() {

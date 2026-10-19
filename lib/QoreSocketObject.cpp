@@ -4173,6 +4173,10 @@ static int qore_socket_object_exec_send_http_response(QoreSocketObject* s, QoreH
 
 static int qore_socket_object_exec_send_http_chunked_body_trailer(QoreSocketObject* s,
         const QoreHashNode* trailer, int source, int timeout_ms, ExceptionSink* xsink) {
+    // the values are written to the message as C strings, which would be cut at a NUL character
+    if (q_check_http_header_values(trailer, "SOCKET-SEND-ERROR", xsink)) {
+        return -1;
+    }
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
     if (!async_guard) {

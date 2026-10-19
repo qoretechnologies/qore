@@ -396,12 +396,19 @@ try {
 }
     @endcode
 
-    @throw DIR-CHOWN-PARAMETER-ERROR no userid found for user
+    @throw DIR-CHOWN-PARAMETER-ERROR no userid found for user, or the user name contains a NUL character
     @throw DIR-CHOWN-ERROR cannot change directory owner; no directory is set
     @throw DIR-CHOWN-FAILURE error changing directory owner (\c arg will be assigned to the errno value)
+
+    @since %Qore 3.0 a user name with a NUL character raises \c DIR-CHOWN-PARAMETER-ERROR; previously the name was
+    cut at the NUL character
  */
 nothing Dir::chown(string owner) [flags=NAMED_ARGS] {
 #ifdef HAVE_CHOWN
+   // the name is passed to the operating system as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(owner->c_str(), owner->size(), "user name", "user names", "DIR-CHOWN-PARAMETER-ERROR", xsink)) {
+      return QoreValue();
+   }
    uid_t uid;
 
    // Try getting UID for username
@@ -458,12 +465,20 @@ try {
 }
     @endcode
 
-    @throw DIR-CHGRP-PARAMETER-ERROR no userid found for user
+    @throw DIR-CHGRP-PARAMETER-ERROR no groupid found for group, or the group name contains a NUL character
     @throw DIR-CHOWN-ERROR cannot change directory owner; no directory is set
     @throw DIR-CHOWN-FAILURE error changing directory owner (\c arg will be assigned to the errno value)
+
+    @since %Qore 3.0 a group name with a NUL character raises \c DIR-CHGRP-PARAMETER-ERROR; previously the name was
+    cut at the NUL character
  */
 nothing Dir::chgrp(string group) [flags=NAMED_ARGS] {
 #ifdef HAVE_CHOWN
+   // the name is passed to the operating system as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(group->c_str(), group->size(), "group name", "group names", "DIR-CHGRP-PARAMETER-ERROR",
+         xsink)) {
+      return QoreValue();
+   }
    gid_t gid;
 
    // Try getting GID for name

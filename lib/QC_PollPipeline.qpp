@@ -2687,9 +2687,18 @@ int PollPipeline::addValidateResponsePrefix(string expected_prefix, string error
     @return the step index
 
     @since %Qore 3.0
+
+    @throw POLL-PIPELINE-ERROR the user name or password contains a NUL character; the password is not shown in the exception
 */
 int PollPipeline::addMakePop3ApopCommand(
         string command_key, string present_key, string username, string password) [flags=NAMED_ARGS] {
+    // the user name and password are used as C strings, which would be cut at a NUL character; the password is not
+    // shown in the exception
+    if (q_check_no_nul(username->c_str(), username->size(), "user name", "user names", "POLL-PIPELINE-ERROR", xsink)
+        || q_check_secret_no_nul(password->c_str(), password->size(), "password", "passwords",
+            "POLL-PIPELINE-ERROR", xsink)) {
+        return QoreValue();
+    }
     return priv->addMakePop3ApopCommand(
         command_key->c_str(), present_key->c_str(), username->c_str(), password->c_str());
 }

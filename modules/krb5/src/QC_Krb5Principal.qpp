@@ -37,6 +37,9 @@ qclass Krb5Principal [arg=QoreKrb5Principal* principal; ns=Qore::Krb5; flags=fin
     @throw KRB5-PRINCIPAL-ERROR if the principal cannot be parsed
 */
 Krb5Principal::constructor(string principal_string) {
+    if (krb5_check_no_nul(principal_string, "principal", "principals", "KRB5-PRINCIPAL-ERROR", false, xsink)) {
+        return;
+    }
     SimpleRefHolder<QoreKrb5Principal> p(new QoreKrb5Principal(principal_string->c_str(), xsink));
     if (*xsink) {
         return;
@@ -53,6 +56,9 @@ Krb5Principal::constructor(string principal_string) {
     @throw KRB5-PRINCIPAL-ERROR if the principal cannot be parsed
 */
 static Krb5Principal Krb5Principal::parseEnterprise(string principal_string) {
+    if (krb5_check_no_nul(principal_string, "principal", "principals", "KRB5-PRINCIPAL-ERROR", false, xsink)) {
+        return QoreValue();
+    }
     SimpleRefHolder<QoreKrb5Principal> p(new QoreKrb5Principal(principal_string->c_str(),
         KRB5_PRINCIPAL_PARSE_ENTERPRISE, xsink));
     if (*xsink) {

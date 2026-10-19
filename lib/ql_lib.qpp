@@ -565,8 +565,18 @@ nothing abort() [dom=PROCESS] {
     @code{.py}
 exec("/usr/bin/xterm -bg black -fg white -sb -sl 2000");
     @endcode
+
+    @throw EXEC-ERROR the command contains a NUL character (\c arg is \c EINVAL), or execvp() failed (\c arg is the
+    \c errno value)
+
+    @since %Qore 3.0 a command with a NUL character raises \c EXEC-ERROR; previously the command was cut at the NUL
+    character
  */
 nothing exec(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS,PROCESS] {
+   // the command is passed to the operating system as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(command->c_str(), command->size(), "command", "commands", "EXEC-ERROR", xsink)) {
+      return QoreValue();
+   }
    ExecArgList exec_args(command->c_str());
    QoreSandboxManagerHelper smh;
    if (smh && !smh->checkFilesystemAccess(exec_args.getFile(), QSEC_EXECUTE, xsink)) {
@@ -586,8 +596,8 @@ nothing exec(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS,PROCESS] {
     @return the exit code of the process executed, or -1 if the process did not exit normally or could not be waited
     for
 
-    @throw SYSTEM-ERROR the process to execute the command could not be started, or the thread that waits for it
-    could not be started (the process is then killed)
+    @throw SYSTEM-ERROR the command contains a NUL character (\c arg is \c EINVAL), the process to execute the
+    command could not be started, or the thread that waits for it could not be started (the process is then killed)
     @throw THREAD-CANCELLED the thread was cancelled while waiting for the process; the process is killed
     @throw PROGRAM-INTERRUPTED the Program was interrupted by its @ref Qore::SandboxManager "SandboxManager" while
     waiting for the process; the process group is killed
@@ -606,8 +616,15 @@ int rc = system("ls -l");
     @see
     - backquote()
     - @ref backquote_operator "the backquote operator"
+
+    @since %Qore 3.0 a command with a NUL character raises \c SYSTEM-ERROR; previously the command was cut at the NUL
+    character
  */
 int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
+    // the command is passed to the shell as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(command->c_str(), command->size(), "command", "commands", "SYSTEM-ERROR", xsink)) {
+        return -1;
+    }
     QoreSandboxManagerHelper smh;
     const bool use_pgroup = (bool)smh;
 #ifndef _Q_WINDOWS
@@ -1195,12 +1212,21 @@ string strerror() [flags=CONSTANT] {
 string fn = basename("/usr/local/bin/file_name");
     @endcode
 
+    @note This function only processes the string; it does not access the filesystem, and it processes the whole
+    string, including any NUL characters in it
+
     @see dirname()
+
+    @since %Qore 3.0 the whole string is processed; previously a string was cut at its first NUL character
  */
 string basename(string path) [flags=CONSTANT,NAMED_ARGS] {
-   char* p = q_basename(path->c_str());
-   int len = strlen(p);
-   return new QoreStringNode(p, len, len + 1, path->getEncoding());
+    // the whole string is processed, so that the result is the last element of the string given, also if it
+    // contains a NUL character
+    size_t sep = q_find_last_path_sep(*path);
+    if (sep == (size_t)-1) {
+        return path->stringRefSelf();
+    }
+    return new QoreStringNode(path->c_str() + sep + 1, path->size() - sep - 1, path->getEncoding());
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1219,12 +1245,24 @@ nothing basename() [flags=RUNTIME_NOOP] {
 string dir = dirname("/usr/local/bin/file_name");
     @endcode
 
+    @note This function only processes the string; it does not access the filesystem, and it processes the whole
+    string, including any NUL characters in it
+
     @see basename()
+
+    @since %Qore 3.0 the whole string is processed; previously a string was cut at its first NUL character
  */
 string dirname(string path) [flags=CONSTANT,NAMED_ARGS] {
-   char* p = q_dirname(path->c_str());
-   int len = strlen(p);
-   return new QoreStringNode(p, len, len + 1, path->getEncoding());
+    // the whole string is processed, so that the result is the directory of the string given, also if it contains a
+    // NUL character
+    size_t sep = q_find_last_path_sep(*path);
+    if (sep == (size_t)-1) {
+        return new QoreStringNode(".", path->getEncoding());
+    }
+    if (!sep) {
+        return new QoreStringNode(QORE_DIR_SEP_STR, path->getEncoding());
+    }
+    return new QoreStringNode(path->c_str(), sep, path->getEncoding());
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1355,8 +1393,15 @@ if (!exists host)
     @endcode
 
     @see gethostbyname_long() for a version of this function that returns all host information, including all hostname aliases and all addresses
+
+    @since %Qore 3.0 a hostname with a NUL character returns @ref nothing, and @ref Qore::errno() "errno()" returns
+    \c EINVAL; previously the hostname was cut at the NUL character and the name before it was looked up
  */
 *string gethostbyname(string hostname) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+   // the hostname is passed to the resolver as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(hostname->c_str(), hostname->size())) {
+      return QoreValue();
+   }
    return q_gethostbyname_to_string_asyncio(xsink, hostname->c_str());
 }
 
@@ -1383,11 +1428,19 @@ if (!exists hostname)
     printf("address lookup on 192.168.0.33 failed\n", host);
     @endcode
 
-    @throw GETHOSTBYADDR-ERROR invalid address for the given family or invalid address family
+    @throw GETHOSTBYADDR-ERROR invalid address for the given family or invalid address family, or the address contains
+    a NUL character
+
+    @since %Qore 3.0 an address with a NUL character raises \c GETHOSTBYADDR-ERROR; previously the address was cut at
+    the NUL character
 
     @see gethostbyaddr_long() for a version of this function that returns all host information, including all hostname aliases and all addresses
  */
 *string gethostbyaddr(string address, softint family = AF_INET) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+   // the address is parsed as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(address->c_str(), address->size(), "address", "addresses", "GETHOSTBYADDR-ERROR", xsink)) {
+      return QoreValue();
+   }
    return q_gethostbyaddr_to_string_asyncio(xsink, address->c_str(), family);
 }
 
@@ -1401,7 +1454,7 @@ nothing gethostbyaddr() [flags=RUNTIME_NOOP] {
 /**
     @param hostname the name to look up
 
-    @return @ref host_information_hash "a hash" representing all host and address information corresponding to the hostname passed as an argument
+    @return @ref host_information_hash "a hash" representing all host and address information corresponding to the hostname passed as an argument, or @ref nothing if the lookup fails
 
     @note delegates to the global async I/O controller and blocks until the async DNS lookup completes
 
@@ -1413,8 +1466,15 @@ if (!ah)
     @endcode
 
     @see gethostbyname() for a version of this function that returns just the first network address corresponding to the hostname
+
+    @since %Qore 3.0 a hostname with a NUL character returns @ref nothing, and @ref Qore::errno() "errno()" returns
+    \c EINVAL; previously the hostname was cut at the NUL character and the name before it was looked up
  */
 *hash<auto> gethostbyname_long(string hostname) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+   // the hostname is passed to the resolver as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(hostname->c_str(), hostname->size())) {
+      return QoreValue();
+   }
    return q_gethostbyname_to_hash_asyncio(xsink, hostname->c_str());
 }
 
@@ -1441,11 +1501,19 @@ if (!ah)
     printf("address lookup on 192.168.0.33 failed\n", host);
     @endcode
 
-    @throw GETHOSTBYADDR-ERROR invalid address for the given family or invalid address family
+    @throw GETHOSTBYADDR-ERROR invalid address for the given family or invalid address family, or the address contains
+    a NUL character
+
+    @since %Qore 3.0 an address with a NUL character raises \c GETHOSTBYADDR-ERROR; previously the address was cut at
+    the NUL character
 
     @see gethostbyaddr() for a simpler version of this function that returns just a single hostname for the address
  */
 *hash<auto> gethostbyaddr_long(string address, softint family = AF_INET) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+   // the address is parsed as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(address->c_str(), address->size(), "address", "addresses", "GETHOSTBYADDR-ERROR", xsink)) {
+      return QoreValue();
+   }
    return q_gethostbyaddr_to_hash_asyncio(xsink, address->c_str(), family);
 }
 
@@ -1473,9 +1541,17 @@ nothing gethostbyaddr_long() [flags=RUNTIME_NOOP] {
 list<hash<auto>> l = getaddrinfo("localhost");
     @endcode
 
-    @throw QOREADDRINFO-GETINFO-ERROR nodename nor servname provided, or not known
+    @throw QOREADDRINFO-GETINFO-ERROR nodename nor servname provided, or not known, or the node or service name
+    contains a NUL character
+
+    @since %Qore 3.0 a node or service name with a NUL character raises \c QOREADDRINFO-GETINFO-ERROR; previously the
+    name was cut at the NUL character
  */
 list<hash<auto>> getaddrinfo(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+   // the names are passed to the resolver as C strings, which would be cut at a NUL character
+   if (q_check_host_service(node, service, "QOREADDRINFO-GETINFO-ERROR", xsink)) {
+      return QoreValue();
+   }
    return qore_socket_resolve_addrinfo_asyncio(xsink, node ? node->c_str() : 0, service ? service->c_str() : 0,
       (int)family, (int)flags);
 }
@@ -1509,6 +1585,10 @@ list<hash<auto>> l = f.get();
     @since %Qore 3.0
  */
 Future getaddrinfo_async(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0, timeout timeout = -1) [flags=NAMED_ARGS;dom=EXTERNAL_INFO] {
+   // the names are passed to the resolver as C strings, which would be cut at a NUL character
+   if (q_check_host_service(node, service, "QOREADDRINFO-GETINFO-ERROR", xsink)) {
+      return QoreValue();
+   }
    QoreFuture* future = qore_socket_resolve_addrinfo_asyncio_future(xsink, node ? node->c_str() : 0,
       service ? service->c_str() : 0, (int)family, (int)flags, (int)socktype, (int)protocol, timeout);
    return future ? qore_new_future_impl_object(getProgram(), future) : nullptr;
@@ -1533,12 +1613,17 @@ Future f = getnameinfo_async("127.0.0.1", AF_INET, 12345);
 hash<auto> peer_info = f.get(100ms);
     @endcode
 
-    @throw QOREADDRINFO-GETNAMEINFO-ERROR invalid address information
+    @throw QOREADDRINFO-GETNAMEINFO-ERROR invalid address information, or the address contains a NUL character
     @throw ASYNC-IO-ERROR the lookup could not be submitted to the global async I/O controller
 
     @since %Qore 3.0
  */
 Future getnameinfo_async(string address, softint family = AF_INET, softint port = 0, timeout timeout = -1) [flags=NAMED_ARGS;dom=EXTERNAL_INFO] {
+   // the address is parsed as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(address->c_str(), address->size(), "address", "addresses", "QOREADDRINFO-GETNAMEINFO-ERROR",
+         xsink)) {
+      return QoreValue();
+   }
    struct sockaddr_storage sa;
    socklen_t len = 0;
    if (q_getnameinfo_sockaddr(xsink, address->c_str(), family, port, sa, len) < 0) {

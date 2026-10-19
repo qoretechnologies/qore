@@ -273,6 +273,7 @@ public class Krb5ModuleTest inherits QUnit::Test {
         addTestCase("keytab remove entry non existent", \testKeytabRemoveEntryNonExistent());
         addTestCase("keytab remove entry sandbox deny", \testKeytabRemoveEntrySandboxDeny());
         addTestCase("keytab remove then has content", \testKeytabRemoveThenHasContent());
+        addTestCase("strings with NUL characters are refused", \testNulCharacters());
 
         set_return_value(main());
     }
@@ -894,6 +895,56 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
         assertEq(2, info.ticket_size);
         assertEq("alice@EXAMPLE.COM", creds.getClientPrincipal().toString());
         assertEq("HTTP/qorus.example.com@EXAMPLE.COM", creds.getServerPrincipal().toString());
+    }
+
+    #! a string passed to the Kerberos or GSSAPI libraries, or decoded from hex, would be cut at a NUL character
+    private testNulCharacters() {
+        # cut at the NUL character, the principal would be alice@EXAMPLE.COM
+        assertThrows("KRB5-PRINCIPAL-ERROR", "principal \"alice@EXAMPLE\\.COM\\\\x00\\.evil\" contains a NUL "
+            "character at byte offset 17", sub () { Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM\x00.evil"); });
+        assertThrows("KRB5-PRINCIPAL-ERROR", "principal .* contains a NUL character",
+            \Qore::Krb5::Krb5Principal::parseEnterprise(), "alice@corp.example@EXAMPLE.COM\x00.evil");
+        assertThrows("KRB5-GSS-ARG-ERROR", "service principal .* contains a NUL character",
+            sub () { Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM\x00.evil"); });
+        # a hex string with a NUL character is not valid hex; it is not shown, as it can be a key or a message
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal server("HTTP/qorus.example.com@EXAMPLE.COM");
+        try {
+            Qore::Krb5::Krb5Credentials bad(client, server, getTestKeyHex1() + "\x00ff",
+                Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000);
+            fail("the Krb5Credentials constructor did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("KRB5-CREDENTIALS-ERROR", ex.err);
+            assertEq("session_key_hex contains a NUL character; hex strings cannot contain NUL characters", ex.desc);
+        }
+        assertThrows("KRB5-CREDENTIALS-ERROR", "ticket_hex contains a NUL character", sub () {
+            Qore::Krb5::Krb5Credentials bad(client, server, getTestKeyHex1(),
+                Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000, 0, 0, "00\x0000");
+        });
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-TOKEN-ERROR", "token_hex contains a NUL character", \ctx.step(), "6082\x00ff");
+        assertThrows("KRB5-TOKEN-ERROR", "message_hex contains a NUL character", \ctx.wrap(), "6162\x00ff");
+        assertThrows("KRB5-TOKEN-ERROR", "token_hex contains a NUL character", \ctx.unwrap(), "6162\x00ff");
+        assertThrows("KRB5-TOKEN-ERROR", "message_hex contains a NUL character", \ctx.getMic(), "6162\x00ff");
+        assertThrows("KRB5-TOKEN-ERROR", "mic_hex contains a NUL character", \ctx.verifyMic(), ("6162", "00\x00ff"));
+        assertThrows("KRB5-GSS-ARG-ERROR", "option 'channel_binding_application_data_hex' contains a NUL character",
+            sub () {
+                hash<Qore::Krb5::GssClientContextOptions> opts({"channel_binding_application_data_hex": "6162\x00ff"});
+                Qore::Krb5::GssClientContext c("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+            });
+
+        Qore::Krb5::Krb5Context kctx();
+        assertThrows("KRB5-CACHE-ERROR", "credential cache name .* contains a NUL character",
+            \kctx.openCredentialCache(), "MEMORY:nul-test\x00.other");
+        assertThrows("KRB5-CACHE-ERROR", "credential cache name .* contains a NUL character",
+            \kctx.createMemoryCredentialCache(), (client, "nul-test\x00.other"));
+        assertThrows("KRB5-KEYTAB-ERROR", "keytab name .* contains a NUL character", \kctx.openKeytab(),
+            "MEMORY:nul-test\x00.other");
+        assertThrows("KRB5-INIT-CREDS-ERROR", "^password contains a NUL character",
+            \kctx.acquireCredentialsWithPassword(), (client, "secret\x00pw"));
+        auto kt = kctx.openKeytab("MEMORY:module-krb5-nul-test");
+        assertThrows("KRB5-KEYTAB-ERROR", "key_hex contains a NUL character", \kt.addEntry(),
+            (client, getTestKeyHex1() + "\x00ff", Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1));
     }
 
     private testCredentialsInvalidKeyHexRejected() {

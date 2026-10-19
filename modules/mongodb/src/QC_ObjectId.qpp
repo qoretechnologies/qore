@@ -4,7 +4,7 @@
 
     Qore mongodb module - ObjectId class definition
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -73,6 +73,11 @@ ObjectId oid("507f1f77bcf86cd799439011");
     @throw MONGODB-OBJECTID-ERROR the hex string is not a valid ObjectId
 */
 ObjectId::constructor(string hex_string) {
+    // the string is parsed as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(hex_string->c_str(), hex_string->size(), "ObjectId string", "ObjectId strings",
+            "MONGODB-OBJECTID-ERROR", xsink)) {
+        return;
+    }
     SimpleRefHolder<QoreObjectId> holder(new QoreObjectId(hex_string->c_str(), xsink));
     if (*xsink) {
         return;

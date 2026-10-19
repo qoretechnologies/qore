@@ -2798,6 +2798,10 @@ struct qore_httpclient_priv {
     DLLLOCAL QoreHashNode* getRequestHeaders(ExceptionSink* xsink, const QoreHashNode* headers,
             const QoreEncoding* string_body_enc, bool msg_body, bool send_chunked, bool& keep_alive,
             bool& host_override, bool suppress_configured_origin_headers = false) {
+        // a header value would be sent cut at a NUL character, or corrupt the message
+        if (q_check_http_header_values(headers, "HTTP-CLIENT-HEADER-ERROR", xsink)) {
+            return nullptr;
+        }
         ReferenceHolder<QoreHashNode> nh(new QoreHashNode(autoTypeInfo), xsink);
         bool transfer_encoding = false;
         // issue #1824: find content-type header, if any
@@ -3635,7 +3639,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("proxy");
     if (n.getType() == NT_STRING) {
         QoreStringValueHelper str(n);
-        if (http_priv->setProxyUrlUnlocked(str->c_str(), xsink)) {
+        // a URL would be parsed cut at a NUL character; it is not shown, as it can contain a password
+        if (q_check_secret_no_nul(str->c_str(), str->size(), "proxy URL", "URLs", "HTTP-CLIENT-URL-ERROR", xsink)
+            || http_priv->setProxyUrlUnlocked(str->c_str(), xsink)) {
             return -1;
         }
     }
@@ -3644,7 +3650,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("url");
     if (n.getType() == NT_STRING) {
         QoreStringValueHelper str(n);
-        if (http_priv->setUrlUnlocked(str->c_str(), xsink)) {
+        // a URL would be parsed cut at a NUL character; it is not shown, as it can contain a password
+        if (q_check_secret_no_nul(str->c_str(), str->size(), "URL", "URLs", "HTTP-CLIENT-URL-ERROR", xsink)
+            || http_priv->setUrlUnlocked(str->c_str(), xsink)) {
             return -1;
         }
     }
@@ -3657,6 +3665,13 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             if (p.getType() == NT_STRING) {
                 QoreStringValueHelper user(n);
                 QoreStringValueHelper pass(p);
+                // they are sent as C strings, which would be cut at a NUL character; the password is not shown
+                if (q_check_no_nul(user->c_str(), user->size(), "user name", "user names", "HTTP-CLIENT-OPTION-ERROR",
+                        xsink)
+                    || q_check_secret_no_nul(pass->c_str(), pass->size(), "password", "passwords",
+                        "HTTP-CLIENT-OPTION-ERROR", xsink)) {
+                    return -1;
+                }
                 http_priv->setUserPassword(user->c_str(), pass->c_str());
             }
         }
@@ -3665,6 +3680,11 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("default_path");
     if (n.getType() == NT_STRING) {
         QoreStringValueHelper str(n);
+        // the path is sent as a C string, which would be cut at a NUL character
+        if (q_check_secret_no_nul(str->c_str(), str->size(), "default path", "HTTP request targets",
+                "HTTP-CLIENT-OPTION-ERROR", xsink)) {
+            return -1;
+        }
         http_priv->default_path = str->c_str();
     }
 
@@ -3682,7 +3702,10 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             return -1;
         }
         QoreStringValueHelper str(n);
-        if (setHTTPVersion(str->c_str(), xsink)) {
+        // the version is checked as a C string, which would be cut at a NUL character
+        if (q_check_no_nul(str->c_str(), str->size(), "HTTP version", "HTTP versions", "HTTP-CLIENT-OPTION-ERROR",
+                xsink)
+            || setHTTPVersion(str->c_str(), xsink)) {
             return -1;
         }
     }
@@ -3718,6 +3741,10 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         if (n.getType() != NT_HASH) {
             xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting hash of headers as value for the "
                 "\"headers\" key in the options hash");
+            return -1;
+        }
+        // the values are sent as C strings, which would be cut at a NUL character
+        if (q_check_http_header_values(n.get<const QoreHashNode>(), "HTTP-CLIENT-OPTION-ERROR", xsink)) {
             return -1;
         }
         addDefaultHeaders(n.get<const QoreHashNode>());

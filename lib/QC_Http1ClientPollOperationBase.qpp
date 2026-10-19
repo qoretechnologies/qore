@@ -3422,9 +3422,16 @@ int Http1ClientPollOperationBase::getActiveStreamCount() [flags=RET_VALUE_ONLY] 
     @param promise Promise to resolve with the response
     @param max_streams maximum concurrent streams (should be 1 for HTTP/1.1)
     @return the stream ID assigned to this request
+
+    @throw HTTP1-ERROR the method or path contains a NUL character
+    @throw HTTP-HEADER-ERROR a header value contains a NUL character; the value is not shown in the exception
 */
 int Http1ClientPollOperationBase::submitRequest(string method, string path,
         *hash<auto> headers, *data body, Promise[QorePromise] promise, int max_streams) [flags=NAMED_ARGS] {
+    // the method, path and header values are sent as C strings, which would be cut at a NUL character
+    if (q_check_http_request(method, path, headers, "HTTP1-ERROR", "HTTP1-ERROR", "HTTP-HEADER-ERROR", xsink)) {
+        return QoreValue();
+    }
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     if (body) {
@@ -3475,10 +3482,17 @@ int Http1ClientPollOperationBase::submitRequest(string method, string path,
     @return the stream ID assigned to this request
 
     @since %Qore 3.0
+
+    @throw HTTP1-ERROR the method or path contains a NUL character
+    @throw HTTP-HEADER-ERROR a header value contains a NUL character; the value is not shown in the exception
 */
 int Http1ClientPollOperationBase::submitRequestWithNotifier(string method, string path,
         *hash<auto> headers, *data body, Promise[QorePromise] promise,
         EventNotifier[QoreEventNotifier] notifier, int max_streams) [flags=NAMED_ARGS] {
+    // the method, path and header values are sent as C strings, which would be cut at a NUL character
+    if (q_check_http_request(method, path, headers, "HTTP1-ERROR", "HTTP1-ERROR", "HTTP-HEADER-ERROR", xsink)) {
+        return QoreValue();
+    }
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     if (body) {
@@ -3543,12 +3557,19 @@ int Http1ClientPollOperationBase::submitRequestWithNotifier(string method, strin
     @return the stream ID assigned to this request
 
     @since %Qore 3.0
+
+    @throw HTTP1-ERROR the method or path contains a NUL character
+    @throw HTTP-HEADER-ERROR a header value contains a NUL character; the value is not shown in the exception
 */
 int Http1ClientPollOperationBase::submitRequestStreaming(string method, string path,
         *hash<auto> headers, *data body, object channel, int max_streams,
         bool streaming = False, bool body_streaming = False,
         *EventNotifier[QoreEventNotifier] notifier,
         bool sse_install_eligible = False) [flags=NAMED_ARGS] {
+    // the method, path and header values are sent as C strings, which would be cut at a NUL character
+    if (q_check_http_request(method, path, headers, "HTTP1-ERROR", "HTTP1-ERROR", "HTTP-HEADER-ERROR", xsink)) {
+        return QoreValue();
+    }
     // Extract QoreChannel private data from the Channel object
     QoreChannel* ch = static_cast<QoreChannel*>(
         const_cast<QoreObject*>(channel)->getReferencedPrivateData(CID_CHANNEL, xsink));
@@ -3669,10 +3690,17 @@ nothing Http1ClientPollOperationBase::setTrailers(*hash<string, string> trailers
     @return the stream ID assigned to this request
 
     @since %Qore 3.0
+
+    @throw HTTP1-ERROR the method or path contains a NUL character
+    @throw HTTP-HEADER-ERROR a header value contains a NUL character; the value is not shown in the exception
 */
 int Http1ClientPollOperationBase::submitRequestSse(string method, string path,
         *hash<auto> headers, *data body, Queue[Queue] queue, int max_streams,
         *EventNotifier[QoreEventNotifier] notifier) [flags=NAMED_ARGS] {
+    // the method, path and header values are sent as C strings, which would be cut at a NUL character
+    if (q_check_http_request(method, path, headers, "HTTP1-ERROR", "HTTP1-ERROR", "HTTP-HEADER-ERROR", xsink)) {
+        return QoreValue();
+    }
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     if (body) {

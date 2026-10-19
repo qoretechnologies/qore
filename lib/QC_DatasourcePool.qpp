@@ -73,7 +73,7 @@ static void dsp_constructor_hash(const QoreHashNode* opts, QoreObject* self, Que
    if (*xsink) return;
 
    std::string pass;
-   bool has_pass = check_hash_key(opts, "pass", DSPC_ERR, pass, xsink);
+   bool has_pass = check_hash_key(opts, "pass", DSPC_ERR, pass, xsink, true);
    if (*xsink) return;
 
    std::string db;
@@ -175,6 +175,11 @@ static void DatasourcePool_deserializer(QoreObject& self, const QoreHashNode* sd
             }
 
             QoreStringValueHelper conf(val);
+            // the string would be parsed cut at a NUL character; it is not shown, as it can contain a password
+            if (q_check_secret_no_nul(conf->c_str(), conf->size(), "datasource string", "datasource strings",
+                    "DATASOURCE-PARSE-ERROR", xsink)) {
+                return;
+            }
             ReferenceHolder<QoreHashNode> h(parseDatasource(conf->c_str(), xsink), xsink);
             if (!h) {
                 assert(*xsink);
@@ -251,14 +256,32 @@ qclass DatasourcePool [dom=DATABASE; arg=DatasourcePool* ds; ns=Qore::SQL; vpare
 DatasourcePool db(DSPGSQL, "user", "pass", "database", "utf8", "localhost", 3, 10, 5432);
     @endcode
 
-    @throw DATASOURCEPOOL-UNSUPPORTED-DATABASE DBI driver cannot be found
-    @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR invalid min, max, or port argument
+    @throw DATASOURCEPOOL-UNSUPPORTED-DATABASE DBI driver cannot be found, or the driver name contains a NUL character (since %Qore 3.0)
+    @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR invalid min, max, or port argument, or a user name, password, database name, encoding or hostname contains a NUL character (since %Qore 3.0); a password is not shown in the exception
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
+    @throw DATASOURCE-PARSE-ERROR the driver argument is a datasource string with a NUL character (since %Qore 3.0); it is not shown in the exception, as it can contain a password
  */
 DatasourcePool::constructor(string driver, *string username, *string password, *string database, *string encoding,
       *string host, softint min_connections = 3, softint max_connections = 10, softint port = 0,
       *Qore::Thread::Queue[Queue] queue, auto argument) {
-   if (!port && min_connections == 3 && max_connections == 10 && driver->find(':') != -1) {
+   // the strings are passed on as C strings, which would be cut at a NUL character; the driver argument can be a
+   // datasource string with a password, so it is not shown, and neither is the password
+   bool is_ds_string = !port && min_connections == 3 && max_connections == 10 && driver->find(':') != -1;
+   if (q_check_secret_no_nul(driver->c_str(), driver->size(), "driver or datasource string",
+         "driver names and datasource strings", is_ds_string ? "DATASOURCE-PARSE-ERROR"
+            : "DATASOURCEPOOL-UNSUPPORTED-DATABASE", xsink)
+      || (username && q_check_no_nul(username->c_str(), username->size(), "user name", "datasource values", DSPC_ERR,
+         xsink))
+      || (password && q_check_secret_no_nul(password->c_str(), password->size(), "password", "datasource values",
+         DSPC_ERR, xsink))
+      || (database && q_check_no_nul(database->c_str(), database->size(), "database name", "datasource values",
+         DSPC_ERR, xsink))
+      || (encoding && q_check_no_nul(encoding->c_str(), encoding->size(), "encoding", "datasource values", DSPC_ERR,
+         xsink))
+      || (host && q_check_no_nul(host->c_str(), host->size(), "hostname", "datasource values", DSPC_ERR, xsink))) {
+      return;
+   }
+   if (is_ds_string) {
       ReferenceHolder<QoreHashNode> h(parseDatasource(driver->getBuffer(), xsink), xsink);
       if (!h) {
          assert(*xsink);
@@ -310,13 +333,19 @@ DatasourcePool::constructor(string driver, *string username, *string password, *
 DatasourcePool ds("pgsql:user/pass@db01(utf8)%localhost:5432");
     @endcode
 
-    @throw DATASOURCE-UNSUPPORTED-DATABASE DBI driver cannot be loaded
-    @throw DATASOURCE-CONSTRUCTOR-ERRO missing required parameter for connection; port value is \<= 0
+    @throw DATASOURCEPOOL-UNSUPPORTED-DATABASE DBI driver cannot be loaded
+    @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR missing required parameter for connection; port value is \<= 0
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
+    @throw DATASOURCE-PARSE-ERROR the datasource string cannot be parsed or contains a NUL character (since %Qore 3.0); a datasource string with a NUL character is not shown in the exception, as it can contain a password
 
     @since %Qore 0.8.6
  */
 DatasourcePool::constructor(string description, *Qore::Thread::Queue[Queue] queue, auto argument) {
+    // the string would be parsed cut at a NUL character; it is not shown, as it can contain a password
+    if (q_check_secret_no_nul(description->c_str(), description->size(), "datasource string", "datasource strings",
+            "DATASOURCE-PARSE-ERROR", xsink)) {
+        return;
+    }
     ReferenceHolder<QoreHashNode> h(parseDatasource(description->getBuffer(), xsink), xsink);
     if (!h) {
         assert(*xsink);
@@ -345,7 +374,7 @@ Datasource db(("type": DSPGSQL, "user": "username", "pass": "password", "db": "d
     @endcode
 
     @throw DATASOURCEPOOL-UNSUPPORTED-DATABASE DBI driver cannot be loaded
-    @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR missing or invalid \c "driver" key, other key name not assigned to a string; \c "port" value is \<= 0; invalid \c "min" or \c "max" keys
+    @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR missing or invalid \c "driver" key, other key name not assigned to a string; \c "port" value is \<= 0; invalid \c "min" or \c "max" keys, or a string value contains a NUL character (since %Qore 3.0); the value of the \c "pass" key is not shown in the exception
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
  */
 DatasourcePool::constructor(hash<auto> options, *Qore::Thread::Queue[Queue] queue, auto argument) {
@@ -1120,11 +1149,15 @@ hash<auto> DatasourcePool::getOptionHash() [flags=CONSTANT] {
 //! Returns the current value for the given option
 /** @param option the option to get
 
-    @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
+    @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver, or the option name contains a NUL character (since %Qore 3.0)
 
     @since %Qore 0.8.6
  */
 auto DatasourcePool::getOption(string option) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   // the option name is passed on as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(option->c_str(), option->size(), "option name", "option names", "DBI-OPTION-ERROR", xsink)) {
+      return QoreValue();
+   }
    return ds->getOption(option->getBuffer(), xsink);
 }
 

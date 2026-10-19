@@ -705,8 +705,10 @@ int qore_string_private::concatDecodeUriIntern(ExceptionSink* xsink, const qore_
 
     bool in_query = false;
 
+    // the whole string is decoded, including any part after a NUL character
     const char* url = str.effective_buf();
-    while (*url) {
+    const char* end = url + str.len;
+    while (url < end) {
         int x1 = getHex(url);
         if (x1 >= 0) {
             // see if a multi-byte char is starting
@@ -835,15 +837,17 @@ int qore_string_private::concatEncodeUriRequest(ExceptionSink* xsink, const qore
 
     int state = QUS_PATH;
 
-    const unsigned char* p = (const unsigned char*)str.buf;
-    while (*p) {
+    // the whole string is encoded, including any part after a NUL character
+    const unsigned char* p = (const unsigned char*)str.effective_buf();
+    const unsigned char* end = p + str.len;
+    while (p < end) {
         if ((*p) == '%') {
             concat("%25");
         } else if (*p == '"') {
             concat("%22");
         } else if (*p > 127) {
             // a negative length means an incomplete character at the end of the string
-            qore_offset_t len = q_UTF8_get_char_len((const char*)p, str.len - ((const char*)p - str.buf));
+            qore_offset_t len = q_UTF8_get_char_len((const char*)p, end - p);
             if (len <= 0) {
                 xsink->raiseException("INVALID-ENCODING", "invalid UTF-8 encoding found in string");
                 return -1;
@@ -3254,8 +3258,10 @@ int QoreString::concatEncodeUrl(ExceptionSink* xsink, const QoreString& url, boo
     if (*xsink)
         return -1;
 
+    // the whole string is encoded, including any part after a NUL character, which is encoded as a control character
     const unsigned char* p = (const unsigned char*)str->c_str();
-    while (*p) {
+    const unsigned char* end = p + str->size();
+    while (p < end) {
         if ((*p) == '%') {
             concat("%25");
         } else if ((*p) == ' ') {
@@ -3264,7 +3270,7 @@ int QoreString::concatEncodeUrl(ExceptionSink* xsink, const QoreString& url, boo
             concat("%22");
         } else if (*p > 127) {
             // a negative length means an incomplete character at the end of the string
-            qore_offset_t len = q_UTF8_get_char_len((const char*)p, str->size() - ((const char*)p - str->c_str()));
+            qore_offset_t len = q_UTF8_get_char_len((const char*)p, end - p);
             if (len <= 0) {
                 xsink->raiseException("INVALID-ENCODING", "invalid UTF-8 encoding found in string");
                 return -1;

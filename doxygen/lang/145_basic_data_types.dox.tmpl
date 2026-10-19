@@ -65,6 +65,29 @@ on more than 1 line";
     @anchor string_views
     Internally, %Qore strings use a copy-on-write (CoW) view layer that lets read-only operations on substrings of larger strings — most importantly <string>::substr() and the @ref string_slicing "[] slice operator" — share the original buffer instead of allocating and copying the slice.  The first write to a viewed string materialises a private copy automatically, so the optimisation is transparent to user code.  This makes byte- and codepoint-indexed scanning over large strings allocation-free; see @ref fast_text_processing for the suite of cursor- and iterator-based APIs that build on it.\n\n
 
+    @anchor string_nul_characters
+    A string can contain NUL (zero) bytes, since its length is stored with it.  A string passed to the operating
+    system, a C library or a network protocol is a NUL-terminated string there, so it would be cut at its first NUL
+    character and name something else than the string does, after any check made by %Qore code on the whole string
+    (for example a check that a host name ends with an allowed domain).  Therefore, since %Qore 3.0, every API that
+    passes such a string on refuses a string with a NUL character before it is used, and before any
+    @ref sandboxing "sandbox" check: commands (@ref Qore::system() "system()", @ref Qore::backquote() "backquote()",
+    @ref Qore::exec() "exec()"), environment variable names and values, user and group names, host names, addresses,
+    and service names (sockets, the resolver functions, and the FTP and HTTP clients), URLs, FTP commands and remote
+    paths, HTTP methods, request targets, status messages and header values, datasource strings, connection values,
+    and DBI driver names and option values, and file and directory paths (see @ref path_nul_characters):
+    - an API that raises exceptions raises its own error code with \c EINVAL as the exception argument; the description
+      gives the string (escaped, with at most its first 64 characters) and the byte offset of the NUL character,
+      except for a string that can hold a secret (a password, a URL, a datasource string, an HTTP request target or
+      header value, or a DBI option value), which is not shown in the exception
+    - an API that reports errors with its return value and @ref Qore::errno() "errno()" returns its failure value (for
+      example @ref nothing from @ref Qore::getenv() "getenv()" and @ref Qore::gethostbyname() "gethostbyname()", or
+      -1 from @ref Qore::setenv() "setenv()"), and @ref Qore::errno() "errno()" returns \c EINVAL
+    .
+    String functions that do not pass the string on, such as @ref Qore::basename() "basename()",
+    @ref Qore::dirname() "dirname()", @ref Qore::encode_url() "encode_url()" and @ref Qore::decode_url() "decode_url()",
+    process the whole string.\n\n
+
     @par Immediate Value Example:
     \c "this is a string"
 

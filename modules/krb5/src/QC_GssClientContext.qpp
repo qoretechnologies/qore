@@ -132,6 +132,10 @@ hashdecl Qore::Krb5::GssMicVerifyInfo {
     @throw KRB5-GSS-ERROR if the GSSAPI target name cannot be imported
 */
 GssClientContext::constructor(string service_principal) {
+    if (krb5_check_no_nul(service_principal, "service principal", "principals", "KRB5-GSS-ARG-ERROR", false,
+            xsink)) {
+        return;
+    }
     SimpleRefHolder<QoreGssClientContext> c(new QoreGssClientContext(service_principal->c_str(), nullptr, xsink));
     if (*xsink) {
         return;
@@ -150,6 +154,10 @@ GssClientContext::constructor(string service_principal) {
     @throw KRB5-GSS-ERROR if the GSSAPI target name cannot be imported
 */
 GssClientContext::constructor(string service_principal, hash<GssClientContextOptions> opts) {
+    if (krb5_check_no_nul(service_principal, "service principal", "principals", "KRB5-GSS-ARG-ERROR", false,
+            xsink)) {
+        return;
+    }
     SimpleRefHolder<QoreGssClientContext> c(new QoreGssClientContext(service_principal->c_str(), opts, xsink));
     if (*xsink) {
         return;
@@ -166,6 +174,10 @@ GssClientContext::constructor(string service_principal, hash<GssClientContextOpt
     @throw KRB5-GSS-ERROR if the GSSAPI target name cannot be imported
 */
 GssClientContext::constructor(string service_principal, GssCredential[QoreGssCredential] cred) {
+    if (krb5_check_no_nul(service_principal, "service principal", "principals", "KRB5-GSS-ARG-ERROR", false,
+            xsink)) {
+        return;
+    }
     SimpleRefHolder<QoreGssClientContext> c(new QoreGssClientContext(service_principal->c_str(), *cred,
         nullptr, xsink));
     if (*xsink) {
@@ -187,6 +199,10 @@ GssClientContext::constructor(string service_principal, GssCredential[QoreGssCre
 */
 GssClientContext::constructor(string service_principal, GssCredential[QoreGssCredential] cred,
         hash<GssClientContextOptions> opts) {
+    if (krb5_check_no_nul(service_principal, "service principal", "principals", "KRB5-GSS-ARG-ERROR", false,
+            xsink)) {
+        return;
+    }
     SimpleRefHolder<QoreGssClientContext> c(new QoreGssClientContext(service_principal->c_str(), *cred,
         opts, xsink));
     if (*xsink) {
@@ -244,6 +260,9 @@ hash<GssStepInfo> GssClientContext::step() {
     be enforced while MIT GSSAPI contacts the KDC
 */
 hash<GssStepInfo> GssClientContext::step(string token_hex) {
+    if (krb5_check_no_nul(token_hex, "token_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)) {
+        return QoreValue();
+    }
     return ctx->step(token_hex->c_str(), xsink);
 }
 
@@ -262,6 +281,9 @@ hash<GssStepInfo> GssClientContext::step(string token_hex) {
     @throw KRB5-GSS-ERROR if GSSAPI wrapping fails
 */
 hash<GssWrapInfo> GssClientContext::wrap(string message_hex, bool confidential = True, int qop = 0) {
+    if (krb5_check_no_nul(message_hex, "message_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)) {
+        return QoreValue();
+    }
     return ctx->wrap(message_hex->c_str(), confidential, static_cast<int>(qop), xsink);
 }
 
@@ -277,6 +299,9 @@ hash<GssWrapInfo> GssClientContext::wrap(string message_hex, bool confidential =
     @throw KRB5-GSS-ERROR if GSSAPI unwrapping fails
 */
 hash<GssUnwrapInfo> GssClientContext::unwrap(string token_hex) {
+    if (krb5_check_no_nul(token_hex, "token_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)) {
+        return QoreValue();
+    }
     return ctx->unwrap(token_hex->c_str(), xsink);
 }
 
@@ -309,6 +334,9 @@ int GssClientContext::getWrapSizeLimit(int output_size, bool confidential = True
     @throw KRB5-GSS-ERROR if GSSAPI MIC computation fails
 */
 hash<GssMicInfo> GssClientContext::getMic(string message_hex, int qop = 0) {
+    if (krb5_check_no_nul(message_hex, "message_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)) {
+        return QoreValue();
+    }
     return ctx->getMic(message_hex->c_str(), static_cast<int>(qop), xsink);
 }
 
@@ -326,5 +354,9 @@ hash<GssMicInfo> GssClientContext::getMic(string message_hex, int qop = 0) {
     @throw KRB5-GSS-ERROR if GSSAPI MIC verification fails
 */
 hash<GssMicVerifyInfo> GssClientContext::verifyMic(string message_hex, string mic_hex) {
+    if (krb5_check_no_nul(message_hex, "message_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)
+        || krb5_check_no_nul(mic_hex, "mic_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)) {
+        return QoreValue();
+    }
     return ctx->verifyMic(message_hex->c_str(), mic_hex->c_str(), xsink);
 }

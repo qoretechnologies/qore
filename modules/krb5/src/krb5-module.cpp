@@ -141,6 +141,19 @@ static int from_hex(unsigned char ch) {
     return -1;
 }
 
+int krb5_check_no_nul(const QoreString* str, const char* what, const char* what_plural, const char* err,
+        bool secret, ExceptionSink* xsink) {
+    if (!secret) {
+        return q_check_no_nul(str->c_str(), str->size(), what, what_plural, err, xsink);
+    }
+    if (!q_check_no_nul(str->c_str(), str->size())) {
+        return 0;
+    }
+    xsink->raiseExceptionArg(err, EINVAL, new QoreStringNodeMaker("%s contains a NUL character; %s cannot contain "
+        "NUL characters", what, what_plural));
+    return -1;
+}
+
 DLLLOCAL bool decode_hex(const char* str, std::vector<unsigned char>& out, ExceptionSink* xsink,
         const char* err, const char* context) {
     size_t len = strlen(str);
@@ -661,6 +674,10 @@ private:
         }
         if (!str->c_str() || !*str->c_str()) {
             xsink->raiseException("KRB5-GSS-ARG-ERROR", "option '%s' cannot be empty", key);
+            return;
+        }
+        QoreStringMaker what("option '%s'", key);
+        if (krb5_check_no_nul(*str, what.c_str(), "hex strings", "KRB5-GSS-ARG-ERROR", true, xsink)) {
             return;
         }
         decode_hex(str->c_str(), value, xsink, "KRB5-GSS-ARG-ERROR", key);
@@ -2088,6 +2105,10 @@ private:
         }
         if (!str->c_str() || !*str->c_str()) {
             xsink->raiseException("KRB5-INIT-CREDS-ERROR", "option '%s' cannot be empty", key);
+            return false;
+        }
+        QoreStringMaker what("option '%s'", key);
+        if (krb5_check_no_nul(*str, what.c_str(), "options", "KRB5-INIT-CREDS-ERROR", false, xsink)) {
             return false;
         }
         out = str->c_str();

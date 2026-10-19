@@ -140,6 +140,9 @@ nothing GssAcceptorContext::reset() {
     @throw KRB5-GSS-ERROR if the GSSAPI negotiation fails
 */
 hash<GssStepInfo> GssAcceptorContext::step(string token_hex) {
+    if (krb5_check_no_nul(token_hex, "token_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)) {
+        return QoreValue();
+    }
     return ctx->step(token_hex->c_str(), xsink);
 }
 
@@ -158,6 +161,9 @@ hash<GssStepInfo> GssAcceptorContext::step(string token_hex) {
     @throw KRB5-GSS-ERROR if GSSAPI wrapping fails
 */
 hash<GssWrapInfo> GssAcceptorContext::wrap(string message_hex, bool confidential = True, int qop = 0) {
+    if (krb5_check_no_nul(message_hex, "message_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)) {
+        return QoreValue();
+    }
     return ctx->wrap(message_hex->c_str(), confidential, static_cast<int>(qop), xsink);
 }
 
@@ -173,6 +179,9 @@ hash<GssWrapInfo> GssAcceptorContext::wrap(string message_hex, bool confidential
     @throw KRB5-GSS-ERROR if GSSAPI unwrapping fails
 */
 hash<GssUnwrapInfo> GssAcceptorContext::unwrap(string token_hex) {
+    if (krb5_check_no_nul(token_hex, "token_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)) {
+        return QoreValue();
+    }
     return ctx->unwrap(token_hex->c_str(), xsink);
 }
 
@@ -205,6 +214,9 @@ int GssAcceptorContext::getWrapSizeLimit(int output_size, bool confidential = Tr
     @throw KRB5-GSS-ERROR if GSSAPI MIC computation fails
 */
 hash<GssMicInfo> GssAcceptorContext::getMic(string message_hex, int qop = 0) {
+    if (krb5_check_no_nul(message_hex, "message_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)) {
+        return QoreValue();
+    }
     return ctx->getMic(message_hex->c_str(), static_cast<int>(qop), xsink);
 }
 
@@ -222,6 +234,10 @@ hash<GssMicInfo> GssAcceptorContext::getMic(string message_hex, int qop = 0) {
     @throw KRB5-GSS-ERROR if GSSAPI MIC verification fails
 */
 hash<GssMicVerifyInfo> GssAcceptorContext::verifyMic(string message_hex, string mic_hex) {
+    if (krb5_check_no_nul(message_hex, "message_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)
+        || krb5_check_no_nul(mic_hex, "mic_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)) {
+        return QoreValue();
+    }
     return ctx->verifyMic(message_hex->c_str(), mic_hex->c_str(), xsink);
 }
 

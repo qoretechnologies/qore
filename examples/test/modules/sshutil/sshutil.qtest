@@ -126,6 +126,11 @@ public class SshUtilTest inherits QUnit::Test {
         assertEq("example.com", SshUtil::format_known_hosts_host("Example.COM.", 22));
         assertEq("[example.com]:2222", SshUtil::format_known_hosts_host("Example.COM.", 2222));
         assertEq("[2001:db8::1]:22", SshUtil::format_known_hosts_host("2001:DB8::1", 22));
+        # the whole string is normalized, including any part after a NUL character
+        assertEq("example.com\x00.trusted.example", SshUtil::normalize_ssh_host("Example.COM\x00.Trusted.EXAMPLE."));
+        assertEq("[example.com\x00.trusted]:2222",
+            SshUtil::format_known_hosts_host("Example.COM\x00.Trusted", 2222));
+        assertEq("example.com\x00.trusted", SshUtil::format_known_hosts_host("Example.COM\x00.Trusted", 22));
     }
 
     testFilesystemClientIdentityProvider() {

@@ -132,7 +132,7 @@ hash getpwuid2(softint uid) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] 
 
     @param name the user name to look up
 
-    @return a @ref password_info_hash "password information hash" representing the user information for the user name passed, or, if the user does not exist @ref nothing is returned
+    @return a @ref password_info_hash "password information hash" representing the user information for the user name passed, or, if the user does not exist @ref nothing is returned; if \a name contains a NUL character, @ref nothing is returned and @ref Qore::errno() "errno()" returns \c EINVAL
 
     @par Example:
     @code{.py}
@@ -140,9 +140,15 @@ hash getpwuid2(softint uid) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] 
     @endcode
 
     @see getpwnam2() for a similar function that throws an exception if the user is invalid
+
+    @since %Qore 3.0 a name with a NUL character returns @ref nothing; previously the name was cut at the NUL character
  */
 hash getpwnam(string name) [flags=CONSTANT,NAMED_ARGS;dom=EXTERNAL_INFO] {
 #ifdef HAVE_PWD_H
+   // the name is passed to the operating system as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(name->c_str(), name->size())) {
+      return QoreValue();
+   }
    return q_getpwnam(name->getBuffer());
 #else
    return missing_function_error("getpwnam", "UNIX_USERMGT", xsink);
@@ -163,12 +169,19 @@ hash getpwnam(string name) [flags=CONSTANT,NAMED_ARGS;dom=EXTERNAL_INFO] {
 *hash hash = getpwnam2("root");
     @endcode
 
-    @throw GETPWNAM2-ERROR invalid user or error reading user information
+    @throw GETPWNAM2-ERROR invalid user, the name contains a NUL character, or error reading user information
 
     @see getpwnam() for a similar function that does not throw an exception if the user is invalid
+
+    @since %Qore 3.0 a name with a NUL character raises \c GETPWNAM2-ERROR; previously the name was cut at the NUL
+    character
  */
 hash getpwnam2(string name) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
 #ifdef HAVE_PWD_H
+   // the name is passed to the operating system as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(name->c_str(), name->size(), "user name", "user names", "GETPWNAM2-ERROR", xsink)) {
+      return QoreValue();
+   }
    errno = 0;
    QoreHashNode *h = q_getpwnam(name->getBuffer());
    if (!h) {
@@ -248,7 +261,7 @@ hash getgrgid2(softint gid) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] 
 
     @param name the group name to look up
 
-    @return a @ref group_info_hash "group information hash" representing the group information for the group name passed, or, if the group does not exist @ref nothing is returned
+    @return a @ref group_info_hash "group information hash" representing the group information for the group name passed, or, if the group does not exist @ref nothing is returned; if \a name contains a NUL character, @ref nothing is returned and @ref Qore::errno() "errno()" returns \c EINVAL
 
     @par Example:
     @code{.py}
@@ -256,9 +269,15 @@ hash getgrgid2(softint gid) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] 
     @endcode
 
     @see getgrnam2() for a similar function that throws an exception if the group is invalid
+
+    @since %Qore 3.0 a name with a NUL character returns @ref nothing; previously the name was cut at the NUL character
  */
 *hash getgrnam(string name) [flags=CONSTANT,NAMED_ARGS;dom=EXTERNAL_INFO] {
 #ifdef HAVE_PWD_H
+   // the name is passed to the operating system as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(name->c_str(), name->size())) {
+      return QoreValue();
+   }
    return q_getgrnam(name->getBuffer());
 #else
    return missing_function_error("getgrnam", "UNIX_USERMGT", xsink);
@@ -279,12 +298,19 @@ hash getgrgid2(softint gid) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] 
 *hash hash = getgrnam2("root");
     @endcode
 
-    @throw GETGRNAM2-ERROR invalid group or error reading group information
+    @throw GETGRNAM2-ERROR invalid group, the name contains a NUL character, or error reading group information
 
     @see getgrnam() for a similar function that does not throw an exception if the group is invalid
+
+    @since %Qore 3.0 a name with a NUL character raises \c GETGRNAM2-ERROR; previously the name was cut at the NUL
+    character
  */
 hash getgrnam2(string name) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
 #ifdef HAVE_PWD_H
+   // the name is passed to the operating system as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(name->c_str(), name->size(), "group name", "group names", "GETGRNAM2-ERROR", xsink)) {
+      return QoreValue();
+   }
    errno = 0;
    QoreHashNode *h = q_getgrnam(name->getBuffer());
    if (!h) {
