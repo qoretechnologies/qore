@@ -1630,6 +1630,12 @@ fetch
       as it is; \c remove-fields reads each of its fields as a field path, so \c address.city removes the key
       \c city of \c address (it removed nothing), and <tt>Unit\\.Price</tt> removes the key \c Unit.Price; its
       output type does not have the fields removed, also from a nested hash type
+    - added @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName()
+      "AbstractDataProvider::getFieldPathDisplayName()", which gives a field path as it is written (the display name
+      of its allowed value); \c select-fields outputs a field that is not renamed, and \c group-by a group-by field,
+      under that name (<tt>Unit\\.Price</tt> as \c Unit.Price), and so is the field in the default name of a
+      \c group-by aggregate; two fields, or a field and an aggregate, that give the same output name are refused when
+      the processor is created, as are two aggregates with the same name, which were accumulated into one
     - fixed @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
       dropping the \c input_field_names marker, so the options of the registered processor actions that take field
       names of the input (such as \c group_by of \c group-by and \c fields of \c select-fields) did not have it, and

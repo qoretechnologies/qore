@@ -72,6 +72,9 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("search-replace - writes the field at its path", \searchReplacePathTest());
         addTestCase("removeFieldValue - paths, missing paths and non-hash values", \removeFieldValueTest());
         addTestCase("remove-fields - fields are paths", \removeFieldsPathTest());
+        addTestCase("getFieldPathDisplayName - a path as it is written", \fieldPathDisplayNameTest());
+        addTestCase("select-fields - output names of field paths", \selectFieldsOutputNamesTest());
+        addTestCase("group-by - output names of field paths", \groupByOutputNamesTest());
 
         # Processor backward compatibility tests
         addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
@@ -466,6 +469,98 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         # the path is given as it is written (the description is a regular expression)
         assertThrows("FIELD-PATH-ERROR", "the value at \"Unit\\\\\\.Price\" is list",
             \AbstractDataProvider::setFieldValue(), ({"Unit.Price": (1,)}, "Unit\\.Price.x", 1));
+    }
+
+    #! The display name of a field path is its keys joined with dots, as they are written
+    fieldPathDisplayNameTest() {
+        assertEq("name", AbstractDataProvider::getFieldPathDisplayName("name"));
+        assertEq("order.id", AbstractDataProvider::getFieldPathDisplayName("order.id"));
+        assertEq("Unit.Price", AbstractDataProvider::getFieldPathDisplayName("Unit\\.Price"));
+        assertEq("order.Unit.Price", AbstractDataProvider::getFieldPathDisplayName("order.Unit\\.Price"));
+        assertEq("p\\q", AbstractDataProvider::getFieldPathDisplayName("p\\\\q"));
+        assertEq("", AbstractDataProvider::getFieldPathDisplayName(""));
+        # it is the display name of the field's allowed value
+        HashDataType order("order");
+        order.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderTypeMap."float"));
+        HashDataType rec("rec");
+        rec.addField(new QoreDataField("order", "Order", order));
+        foreach hash<AllowedValueInfo> av in (AbstractDataProviderType::getFieldNamesAsAllowedValues(rec)) {
+            assertEq(av.display_name, AbstractDataProvider::getFieldPathDisplayName(av.value), av.value);
+        }
+    }
+
+    #! A field that is not renamed is output under its path as it is written; two fields with the same output name
+    #! are refused
+    selectFieldsOutputNamesTest() {
+        hash<auto> rec = {"Unit.Price": 2.5, "order": {"id": 7}, "name": "x"};
+        QoreSelectFieldsProcessor proc({"fields": ("Unit\\.Price", "order.id", "name")});
+        assertEq({"Unit.Price": 2.5, "order.id": 7, "name": "x"}, proc.processRecord(rec));
+        QoreSelectFieldsProcessor renamed({"fields": ("price=Unit\\.Price", "id=order.id")});
+        assertEq({"price": 2.5, "id": 7}, renamed.processRecord(rec));
+        # the same field twice is one field
+        QoreSelectFieldsProcessor twice({"fields": ("name", "name")});
+        assertEq({"name": "x"}, twice.processRecord(rec));
+
+        # two paths with the same output name
+        assertThrows("CONSTRUCTOR-ERROR", "the fields \"order.id\" and \"order.*id\" both give the output field "
+            "\"order.id\"; rename one of them", sub () {
+                new QoreSelectFieldsProcessor({"fields": ("order.id", "order\\.id")});
+            });
+        assertThrows("CONSTRUCTOR-ERROR", "the fields \"a\" and \"b\" both give the output field \"x\"", sub () {
+            new QoreSelectFieldsProcessor({"fields": ("x=a", "x=b")});
+        });
+        assertThrows("CONSTRUCTOR-ERROR", "the fields \"Unit.*Price\" and \"Unit.Price\" both give the output field",
+            sub () {
+                new QoreSelectFieldsProcessor({"fields": ("Unit\\.Price", "Unit.Price")});
+            });
+    }
+
+    #! A group-by field is output under its path as it is written, and so is the field in the default name of an
+    #! aggregate; output names that collide are refused
+    groupByOutputNamesTest() {
+        QoreGroupByProcessor proc({"group_by": ("Unit\\.Price", "order.id"), "aggregates": "n=count(),max(qty)"});
+        proc.processRecord({"Unit.Price": 2.5, "order": {"id": 1}, "qty": 1});
+        proc.processRecord({"Unit.Price": 2.5, "order": {"id": 1}, "qty": 3});
+        proc.processRecord({"Unit.Price": 3.0, "order": {"id": 1}, "qty": 2});
+        list<auto> rows = sort(proc.flushRecords(), int sub (hash<auto> l, hash<auto> r) {
+            return l."Unit.Price" <=> r."Unit.Price";
+        });
+        assertEq(({"Unit.Price": 2.5, "order.id": 1, "n": 2, "max_qty": 3.0},
+            {"Unit.Price": 3.0, "order.id": 1, "n": 1, "max_qty": 2.0}), rows);
+
+        # the default name of an aggregate has the field as it is written
+        QoreGroupByProcessor agg({"aggregates": "sum(Unit\\.Price),max(order.id)"});
+        agg.processRecord({"Unit.Price": 2.5, "order": {"id": 4}});
+        agg.processRecord({"Unit.Price": 1.5, "order": {"id": 2}});
+        assertEq(({"sum_Unit.Price": 4.0, "max_order.id": 4.0},), agg.flushRecords());
+
+        # the same group-by field twice is one field
+        QoreGroupByProcessor twice({"group_by": ("city", "city"), "aggregates": "count()"});
+        twice.processRecord({"city": "Prague"});
+        assertEq(({"city": "Prague", "count": 1},), twice.flushRecords());
+
+        # output names that collide
+        assertThrows("CONSTRUCTOR-ERROR", "the group-by fields \"order.id\" and \"order.*id\" both give the output "
+            "field \"order.id\"", sub () {
+                new QoreGroupByProcessor({"group_by": ("order.id", "order\\.id"), "aggregates": "count()"});
+            });
+        assertThrows("CONSTRUCTOR-ERROR", "the group-by field \"city\" and the aggregate \"first\\(name\\)\" both "
+            "give the output field \"city\"", sub () {
+                new QoreGroupByProcessor({"group_by": "city", "aggregates": "city=first(name)"});
+            });
+        assertThrows("CONSTRUCTOR-ERROR", "the aggregates \"sum\\(a\\)\" and \"max\\(a\\)\" both give the output "
+            "field \"x\"", sub () {
+                new QoreGroupByProcessor({"aggregates": "x=sum(a),x=max(a)"});
+            });
+        # the same aggregate twice would be accumulated twice
+        assertThrows("CONSTRUCTOR-ERROR", "the aggregates \"sum\\(a\\)\" and \"sum\\(a\\)\" both give the output "
+            "field \"sum_a\"", sub () {
+                new QoreGroupByProcessor({"aggregates": "sum(a),sum(a)"});
+            });
+        assertThrows("CONSTRUCTOR-ERROR", "the aggregates \"sum\\(Unit.*Price\\)\" and \"sum\\(Unit.Price\\)\" both "
+            "give the output field \"sum_Unit.Price\"", sub () {
+                new QoreGroupByProcessor({"aggregates": "sum(Unit\\.Price),sum(Unit.Price)"});
+            });
     }
 
     #! A field path is removed as getFieldValue() reads it; a path with no value is left as it is

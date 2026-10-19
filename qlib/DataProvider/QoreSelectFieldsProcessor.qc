@@ -25,6 +25,14 @@
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Pipeline processor that selects and optionally renames fields from records
+/** Each field is a field path (@ref AbstractDataProvider::getFieldPath()): \c order.id is the key \c id of
+    \c order, and <tt>Unit\\.Price</tt> the key \c Unit.Price.  A field that is not renamed is output under its path
+    as it is written (@ref AbstractDataProvider::getFieldPathDisplayName()), as \c order.id and \c Unit.Price; a field
+    is renamed with \c new_name=field.  Two different fields with the same output name are refused when the processor
+    is created.
+
+    @since %DataProvider 3.3
+*/
 public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
     public {
         #! Provider info
@@ -68,21 +76,42 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
     }
 
     #! Parses a field specification from either a string or list into a mapping hash
+    /** A field that is not renamed is output under its path as it is written
+        (@ref AbstractDataProvider::getFieldPathDisplayName()): <tt>Unit\\.Price</tt> as \c Unit.Price and
+        \c order.id as \c order.id.
+
+        @param fields a string with comma-separated field specifications or a list of them
+
+        @return a hash of output names to input field paths
+
+        @throw CONSTRUCTOR-ERROR no valid field specification was given, or two different fields give the same
+        output name
+    */
     static hash<string, string> parseFieldSpec(auto fields) {
         # normalize to a flat list of spec strings
         list<string> specs = AbstractDataProvider::parseFieldList(fields);
         hash<string, string> result;
         foreach string spec in (specs) {
+            string output_name;
+            string input_name;
             int eq_pos = spec.find("=");
             if (eq_pos >= 0) {
-                string output_name = trim(spec.substr(0, eq_pos));
-                string input_name = trim(spec.substr(eq_pos + 1));
-                if (output_name.val() && input_name.val()) {
-                    result{output_name} = input_name;
+                output_name = trim(spec.substr(0, eq_pos));
+                input_name = trim(spec.substr(eq_pos + 1));
+                if (!output_name.val() || !input_name.val()) {
+                    continue;
                 }
             } else {
-                result{spec} = spec;
+                input_name = spec;
+                output_name = AbstractDataProvider::getFieldPathDisplayName(spec);
             }
+            # one field must not overwrite another; the paths are given as they are written
+            if (exists result{output_name} && result{output_name} != input_name) {
+                throw "CONSTRUCTOR-ERROR", sprintf("the fields \"%s\" and \"%s\" both give the output field "
+                    "\"%s\"; rename one of them with `new_name=field`", result{output_name}, input_name,
+                    output_name);
+            }
+            result{output_name} = input_name;
         }
         if (!result) {
             throw "CONSTRUCTOR-ERROR", "no valid field specifications found in 'fields' option";

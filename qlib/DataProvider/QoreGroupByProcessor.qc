@@ -55,6 +55,15 @@ public hashdecl GroupByAggSpec {
 
     Output name defaults to @c op_field (or just @c count for count()).
 
+    @par Field Paths and Output Names
+    Group-by fields and aggregate fields are field paths (@ref AbstractDataProvider::getFieldPath()):
+    \c order.id is the key \c id of \c order, and <tt>Unit\\.Price</tt> the key \c Unit.Price.  A group-by field
+    is output under its path as it is written (@ref AbstractDataProvider::getFieldPathDisplayName()), as \c order.id
+    and \c Unit.Price, and so is the field in the default name of an aggregate (\c sum_Unit.Price).  Each output name
+    must be given by one group-by field or one aggregate: two paths written the same way (\c order.id and
+    <tt>order\\.id</tt>), a group-by field and an aggregate with its name, or two aggregates with the same name are
+    refused when the processor is created.
+
     @par Example
     @code{.qore}
     # Group sales by region, computing total and average
@@ -119,6 +128,9 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         #! Parsed group-by field names (empty list = all records in one group)
         list<string> group_by_fields;
 
+        #! The output name of each group-by field: its path as it is written
+        list<string> group_by_output_names;
+
         #! Parsed aggregate specifications
         list<hash<GroupByAggSpec>> agg_specs;
 
@@ -157,8 +169,10 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         } else {
             group_by_fields = ();
         }
+        group_by_output_names = map AbstractDataProvider::getFieldPathDisplayName($1), group_by_fields;
         # parse aggregate expressions
         agg_specs = parseAggregates(copts.aggregates);
+        QoreGroupByProcessor::checkOutputNames(group_by_fields, agg_specs);
         configured = True;
     }
 
@@ -204,7 +218,7 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
                 # skip records missing any group-by field
                 return;
             }
-            gv{field} = val;
+            gv{group_by_output_names[$#]} = val;
         }
         string key = group_by_fields ? sprintf("%y", gv) : "";
 
@@ -321,6 +335,7 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
                     skip_row = True;
                     break;
                 }
+                # a column block field is a plain path, which is its own output name
                 gv{field} = getColumnBlockValue(columns{field}, i);
             }
             if (skip_row) {
@@ -811,7 +826,8 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
 
         # determine default output name
         if (!output_name) {
-            output_name = field ? op + "_" + field : op;
+            # the field as it is written
+            output_name = field ? op + "_" + AbstractDataProvider::getFieldPathDisplayName(field) : op;
         }
 
         return <GroupByAggSpec>{
@@ -819,6 +835,49 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
             "op": op,
             "field": field,
         };
+    }
+
+    #! Checks that each group-by field and each aggregate has an output name of its own
+    /** A group-by field is output under its path as it is written
+        (@ref AbstractDataProvider::getFieldPathDisplayName()), so two different paths can give the same name
+        (\c order.id and <tt>order\\.id</tt>); an aggregate is output under its name.  The same group-by field given
+        twice is one field; the same aggregate given twice would be accumulated twice, so it is refused.
+
+        @param group_by_fields the group-by field paths
+        @param agg_specs the aggregates
+
+        @throw CONSTRUCTOR-ERROR two group-by fields, a group-by field and an aggregate, or two aggregates give the same
+        output name; the message names both
+    */
+    static checkOutputNames(list<string> group_by_fields, list<hash<GroupByAggSpec>> agg_specs) {
+        # output name -> the group-by field path that gives it
+        hash<string, string> fields;
+        foreach string field in (group_by_fields) {
+            string name = AbstractDataProvider::getFieldPathDisplayName(field);
+            if (exists fields{name} && fields{name} != field) {
+                # the paths are given as they are written
+                throw "CONSTRUCTOR-ERROR", sprintf("the group-by fields \"%s\" and \"%s\" both give the output field "
+                    "\"%s\"; group by only one of them, or rename one of them before grouping", fields{name}, field,
+                    name);
+            }
+            fields{name} = field;
+        }
+        # output name -> the aggregate that gives it
+        hash<string, string> aggs;
+        foreach hash<GroupByAggSpec> spec in (agg_specs) {
+            string agg = sprintf("%s(%s)", spec.op, spec.field ?? "");
+            if (exists fields{spec.output_name}) {
+                throw "CONSTRUCTOR-ERROR", sprintf("the group-by field \"%s\" and the aggregate \"%s\" both give the "
+                    "output field \"%s\"; give the aggregate another name with `name=op(field)`",
+                    fields{spec.output_name}, agg, spec.output_name);
+            }
+            if (exists aggs{spec.output_name}) {
+                throw "CONSTRUCTOR-ERROR", sprintf("the aggregates \"%s\" and \"%s\" both give the output field "
+                    "\"%s\"; give one of them another name with `name=op(field)`", aggs{spec.output_name}, agg,
+                    spec.output_name);
+            }
+            aggs{spec.output_name} = agg;
+        }
     }
 }
 }

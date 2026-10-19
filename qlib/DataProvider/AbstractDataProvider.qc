@@ -6484,6 +6484,30 @@ auto column = AbstractDataProvider::isPlainFieldPath(field) ? block{field} : NOT
         return field.find(".") < 0 && field.find("\\") < 0;
     }
 
+    #! Returns the display name of a field path: its keys joined with dots, as they are written
+    /** <tt>Unit\\.Price</tt> is \c Unit.Price and \c order.id is \c order.id.  This is the display name that
+        @ref AbstractDataProviderType::getFieldNamesAsAllowedValues() gives a field, and the name that a processor
+        gives a field in its output when the field is not renamed.  Two paths can have the same display name, such as
+        \c order.id (the key \c id of \c order) and <tt>order\\.id</tt> (the key \c order.id).
+
+        @param field_path the field path
+
+        @return the keys of the path joined with dots, as they are written
+
+        @par Example:
+        @code{.py}
+# "Unit.Price"
+string name = AbstractDataProvider::getFieldPathDisplayName("Unit\\.Price");
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static string getFieldPathDisplayName(string field_path) {
+        return AbstractDataProvider::isPlainFieldPath(field_path)
+            ? field_path
+            : AbstractDataProvider::getFieldPath(field_path).join(".");
+    }
+
     #! Pre-processes a single expression argument for repeated evaluation
     /** @param arg the argument to prepare (field reference, sub-expression, or literal)
         @return the prepared argument with pre-computed paths where applicable
