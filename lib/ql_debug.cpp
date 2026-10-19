@@ -295,6 +295,28 @@ struct UnitTestCounters {
     } \
 } while (0)
 
+//! Reserves a loopback TCP port that nothing listens on: binds a socket to an ephemeral port and closes it
+/** @return the port, or -1 if no port could be reserved
+*/
+static int ut_reserve_closed_port() {
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) {
+        return -1;
+    }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    socklen_t alen = sizeof(addr);
+    // ::bind() and not bind(): where namespace std is used, bind() is std::bind(), which binds nothing
+    int rc = ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    if (!rc) {
+        rc = getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    }
+    ::close(sfd);
+    return rc ? -1 : ntohs(addr.sin_port);
+}
+
 #define UT_ASSERT_EQ(counters, expected, actual, msg) do { \
     ++(counters).test_count; \
     if ((expected) == (actual)) { \
@@ -3316,20 +3338,11 @@ static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
     // Pick an ephemeral closed port — connect will be refused, the poll op
     // will transition to CLOSED, and onClosedHook should fire once via the
     // I/O thread setError → setClosed path.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) {
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket succeeds");
         return;
     }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
 
     ReferenceHolder<UtCountingManager> mgr(
         new UtCountingManager(HttpClientConnectionManagerBase::Options{}, &xsink),
@@ -4148,20 +4161,11 @@ static void ut_http2_connection_construct(UnitTestCounters& c) {
     // Bind an ephemeral port and immediately close — the next connect
     // is refused.  H2 socket setup includes ALPN configuration which
     // exercises the SSL code path on construction.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) {
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket succeeds");
         return;
     }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
 
     // Plain HTTP h2c connection (no ALPN required) — verifies the
     // construction path without exercising the SSL setup.
@@ -4187,17 +4191,11 @@ static void ut_http2_connection_alpn_setup(UnitTestCounters& c) {
     // HTTPS H2 — the constructor configures ALPN ("h2") on the socket
     // BEFORE the SSL handshake.  The actual handshake will fail (no
     // server) but we verify that the ALPN setup path doesn't crash.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
+        UT_ASSERT(c, false, "reserve socket");
+        return;
+    }
 
     ReferenceHolder<Http2ClientConnection> conn(
         new Http2ClientConnection("127.0.0.1", dead_port,
@@ -4498,17 +4496,11 @@ static void ut_manager_negotiate_refused_port(UnitTestCounters& c) {
     if (xsink) { xsink.clear(); return; }
 
     // Bind+close an ephemeral port so the next connect is refused.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
+        UT_ASSERT(c, false, "reserve socket");
+        return;
+    }
 
     // https scheme triggers the NEGOTIATE path.  Connect fails at TCP
     // (refused); the error propagates out of the negotiation helper.
@@ -4638,17 +4630,11 @@ static void ut_manager_h2_dispatch(UnitTestCounters& c) {
     // Acquire to a refused port — used to raise PROTOCOL-NOT-IMPLEMENTED
     // before P4; now should attempt the connect and surface a CONNECT
     // error.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
+        UT_ASSERT(c, false, "reserve socket");
+        return;
+    }
 
     HttpClientConnectionBase* conn = mgr->acquireConnection(
         "http", "127.0.0.1", dead_port, &xsink);
@@ -4667,17 +4653,11 @@ static void ut_http3_connection_construct(UnitTestCounters& c) {
     // Use localhost with a closed port — the QUIC handshake will fail but
     // the construction path (UDP bind + SocketQuicClientPollOperation
     // creation + controller submission) is exercised.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
+        UT_ASSERT(c, false, "reserve socket");
+        return;
+    }
 
     ReferenceHolder<Http3ClientConnection> conn(
         new Http3ClientConnection("127.0.0.1", dead_port,
@@ -4706,17 +4686,11 @@ static void ut_manager_h3_dispatch(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "manager(H3) construction succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
+        UT_ASSERT(c, false, "reserve socket");
+        return;
+    }
 
     // H3 requires HTTPS scheme — but we're just testing the manager
     // dispatch path (no PROTOCOL-NOT-IMPLEMENTED anymore)
@@ -4772,17 +4746,11 @@ static void ut_manager_proxy_h1_connect(UnitTestCounters& c) {
     // Reserve an ephemeral port to use as the "proxy" address.  It's closed
     // immediately so the connect will fail — but the error message should
     // reference this port, proving the H1 connection targets the proxy.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) { UT_ASSERT(c, false, "reserve proxy port"); return; }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int proxy_port = ntohs(addr.sin_port);
-    ::close(sfd);
+    int proxy_port = ut_reserve_closed_port();
+    if (proxy_port <= 0) {
+        UT_ASSERT(c, false, "reserve proxy port");
+        return;
+    }
 
     // Create manager with proxy pointing to the dead port
     char proxy_url[128];
