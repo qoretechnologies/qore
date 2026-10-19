@@ -397,7 +397,7 @@ QoreObject* QoreLogger::newEventObject(QoreLoggerEvent* ev, ExceptionSink* xsink
     ReferenceHolder<QoreObject> event(new QoreObject(QC_LOGGEREVENT, getProgram(), ev), xsink);
     // the event references its logger with its logger internal member, as one made with the LoggerEvent constructor;
     // its private data only keeps a pointer to the logger object
-    if (event->setMemberValue("logger", QC_LOGGEREVENT, self->objectRefSelf(), xsink)) {
+    if (event->setMemberValue("logger", QC_LOGGEREVENT, self->objectRefSelf(), xsink) || ev->bind(*event, xsink)) {
         return nullptr;
     }
     return event.release();

@@ -20,4 +20,7 @@
     the classes of its objects.  An event created by a logger references the logger:
     @ref Qore::Logger::LoggerEvent::getLogger() "LoggerEvent::getLogger()" read freed memory for an event kept after
     its logger was destroyed.
+
+    An appender references its layout and filters, and an event its level, arguments and exception information, where
+    the garbage collector can follow the references, so a cycle through any of them is collected.
 */

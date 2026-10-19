@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -49,11 +49,18 @@ public:
     DLLLOCAL QoreValue serializeImpl(ExceptionSink* xsink, const QoreObject* event, QoreLoggerEvent* e);
 
 protected:
+    //! The layout object; referenced by the layout internal member, or here after the object is destroyed
     QoreObject* layout = nullptr;
     QoreLoggerLayoutPattern* llp = nullptr;
 
     using QoreLoggerAppender::derefIntern;
     DLLLOCAL virtual void derefIntern(ExceptionSink* xsink);
+
+    DLLLOCAL virtual void takeRefsLocked() {
+        if (layout) {
+            layout->ref();
+        }
+    }
 };
 
 #endif

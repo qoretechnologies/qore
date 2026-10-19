@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -53,16 +53,69 @@ QoreHashNode* QoreLoggerEvent::getLocationInfo() const {
 }
 
 //! Returns the level of this event
-QoreObject* QoreLoggerEvent::getLevel() {
+QoreObject* QoreLoggerEvent::getLevel(ExceptionSink* xsink) {
+    AutoLocker al(m0);
     if (!level && lvl) {
-        AutoLocker al(m0);
-        // check again in the lock
-        if (!level && lvl) {
-            lvl->ref();
-            level = new QoreObject(QC_LOGGERLEVEL, getProgram(), lvl);
+        lvl->ref();
+        ReferenceHolder<QoreObject> holder(new QoreObject(QC_LOGGERLEVEL, getProgram(), lvl), xsink);
+        if (!owns_refs) {
+            // the level internal member holds the reference
+            if (self->setMemberValue("level", QC_LOGGEREVENT, holder->objectRefSelf(), xsink)) {
+                return nullptr;
+            }
+            level = *holder;
+        } else {
+            level = holder.release();
         }
     }
     return level ? level->objectRefSelf() : nullptr;
+}
+
+int QoreLoggerEvent::bind(QoreObject* obj, ExceptionSink* xsink) {
+    AutoLocker al(m0);
+    assert(owns_refs);
+    assert(!self);
+    // the members get their own references; only when all are set, the private data drops its references
+    if (level && obj->setMemberValue("level", QC_LOGGEREVENT, level->objectRefSelf(), xsink)) {
+        return -1;
+    }
+    if (messageArgs && obj->setMemberValue("messageArgs", QC_LOGGEREVENT, messageArgs->listRefSelf(), xsink)) {
+        return -1;
+    }
+    if (throwableInfo && obj->setMemberValue("throwableInfo", QC_LOGGEREVENT, throwableInfo->hashRefSelf(),
+            xsink)) {
+        return -1;
+    }
+    if (level) {
+        level->deref(xsink);
+    }
+    if (messageArgs) {
+        messageArgs->deref(xsink);
+    }
+    if (throwableInfo) {
+        throwableInfo->deref(xsink);
+    }
+    self = obj;
+    owns_refs = false;
+    return 0;
+}
+
+void QoreLoggerEvent::destructor(ExceptionSink* xsink) {
+    AutoLocker al(m0);
+    if (owns_refs) {
+        return;
+    }
+    if (level) {
+        level->ref();
+    }
+    if (messageArgs) {
+        messageArgs->ref();
+    }
+    if (throwableInfo) {
+        throwableInfo->ref();
+    }
+    owns_refs = true;
+    self = nullptr;
 }
 
 //! Returns the logger level object for this event
