@@ -73,6 +73,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("mutationTest", \mutationTest());
         addTestCase("describeTest", \describeTest());
         addTestCase("headTailSliceTest", \headTailSliceTest());
+        addTestCase("row counts and offsets of 0, omitted and given", \zeroCountTest());
         addTestCase("nullHandlingTest", \nullHandlingTest());
         addTestCase("errorCasesTest", \errorCasesTest());
         addTestCase("selectTest", \selectTest());
@@ -525,6 +526,48 @@ sub invalid_dataframe_api() {
             "head() preserves dense buffer-backed columns");
         assertEq((2, 3, 4), dense_df.slice(1, 4).getColumnBuffer("v").toList(),
             "slice() preserves dense buffer-backed columns");
+    }
+
+    #! A count or offset of 0 is 0; an omitted one is the default; a negative one is refused or read the other way
+    zeroCountTest() {
+        DataFrame::DataFrame df({"v": (1, 2, 3, 4, 5, 6, 7)});
+        # head and tail: 0 rows, the default of 5, or the number given
+        foreach string method in ("head", "tail") {
+            DataFrame::DataFrame zero = call_object_method(df, method, 0);
+            assertEq(0, zero.numRows(), method + "(0)");
+            assertEq(("v",), zero.columnNames(), method + "(0) keeps the columns");
+            assertEq(5, call_object_method(df, method).numRows(), method + "()");
+            assertEq(5, call_object_method(df, method, NOTHING).numRows(), method + "(NOTHING)");
+            assertEq(3, call_object_method(df, method, 3).numRows(), method + "(3)");
+            assertEq(7, call_object_method(df, method, 100).numRows(), method + "(100)");
+            assertEq(0, call_object_method(df, method, -1).numRows(), method + "(-1)");
+        }
+        assertEq((1, 2, 3), df.head(3).getColumn("v"));
+        assertEq((5, 6, 7), df.tail(3).getColumn("v"));
+        assertEq((1, 2, 3, 4, 5), df.head().getColumn("v"));
+        assertEq((3, 4, 5, 6, 7), df.tail().getColumn("v"));
+
+        # toString: no rows, the default of 10, or the number given
+        DataFrame::DataFrame big({"v": (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)});
+        assertEq(("DataFrame(7 rows x 1 cols)", "v"), df.toString(0).split("\n")[0..1]);
+        assertFalse(df.toString(0) =~ /^1$/m, "toString(0) shows no row");
+        assertTrue(big.toString() =~ /^10$/m, "toString() shows 10 rows");
+        assertFalse(big.toString() =~ /^11$/m, "toString() shows only 10 rows");
+        assertTrue(big.toString(NOTHING) =~ /^10$/m, "toString(NOTHING) shows 10 rows");
+        assertTrue(big.toString(2) =~ /^2$/m, "toString(2) shows 2 rows");
+        assertFalse(big.toString(2) =~ /^3$/m, "toString(2) shows only 2 rows");
+
+        # lag and lead: offset 0 is the row itself, an omitted one is 1, a negative one reads the other way
+        DataFrame::DataFrame w({"v": (10, 20, 30)});
+        assertEq((10, 20, 30), w.lag("v", 0), "lag(0)");
+        assertEq((10, 20, 30), w.lead("v", 0), "lead(0)");
+        assertEq((NOTHING, 10, 20), w.lag("v"), "lag()");
+        assertEq((20, 30, NOTHING), w.lead("v"), "lead()");
+        assertEq((NOTHING, NOTHING, 10), w.lag("v", 2), "lag(2)");
+        assertEq((20, 30, NOTHING), w.lag("v", -1), "lag(-1) reads the next row");
+        assertEq((NOTHING, 10, 20), w.lead("v", -1), "lead(-1) reads the previous row");
+        assertEq((NOTHING, NOTHING, NOTHING), w.lag("v", 3), "lag(3)");
+        assertEq((NOTHING, NOTHING, NOTHING), w.lead("v", -3), "lead(-3)");
     }
 
     nullHandlingTest() {

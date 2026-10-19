@@ -42,6 +42,7 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         addTestCase("computed field comparison ColumnarResult filter", \computedFieldComparisonBufferColumns());
         addTestCase("truthy and inRange DataFrame filter", \truthyAndRangeDataFrame());
         addTestCase("membership DataFrame and ColumnarResult filters", \membershipFilters());
+        addTestCase("a condition evaluated row by row that matches no row", \noMatchRowFilters());
         addTestCase("string transform DataFrame filter", \stringTransformDataFrame());
         addTestCase("string transform ColumnarResult filter", \stringTransformBufferColumns());
         addTestCase("computed string predicate filters", \computedStringPredicateFilters());
@@ -204,6 +205,23 @@ class ColumnarExpressionFilterTest inherits QUnit::Test {
         DataFrame::DataFrame filtered = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
 
         assertEq((1, 3), dataframeIds(filtered));
+    }
+
+    #! A condition that is not vectorized is evaluated for each row; when no row matches, no row is returned
+    private noMatchRowFilters() {
+        # substr() and length() are evaluated row by row
+        foreach string dpql in ('substr(@status, 0, 1) == "z"', 'length(@status) > 100') {
+            hash<DataProviderExpression> expr = DataProvider::parseDpqlExpression(dpql);
+            assertShapeFilterIds(expr, (), dpql);
+            DataFrame::DataFrame filtered = ColumnarExpressionFilter::filterDataFrame(
+                new DataFrame::DataFrame(makeColumns()), expr);
+            assertEq(0, filtered.numRows(), dpql);
+            # the empty block keeps its columns
+            assertEq(keys makeColumns(), filtered.columnNames(), dpql);
+        }
+        # when some rows match, they are returned
+        assertShapeFilterIds(DataProvider::parseDpqlExpression('substr(@status, 0, 1) == "V"'), (3,),
+            "one row matches");
     }
 
     private membershipFilters() {

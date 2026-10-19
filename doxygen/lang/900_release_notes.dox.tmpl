@@ -4836,6 +4836,15 @@ while (*binary chunk = input.read(65536)) {
       \c 0, as for every other string.  This affects strings read from \c buffer<string> values, including the
       columns of \c DataFrame and \c ColumnarResult values
 
+    - Fixed a count or an offset of \c 0 given to a method of the @ref dataframeintro "dataframe" module's
+      \c DataFrame class being read as no value: \c DataFrame::head(0) and \c DataFrame::tail(0) returned 5 rows
+      instead of none, \c DataFrame::toString(0) showed 10 rows, and \c DataFrame::lag() and
+      \c DataFrame::lead() with an offset of \c 0 read the previous or next row instead of the row itself.  As the
+      @ref dataproviderintro "DataProvider" filter of a DataFrame block returns \c head(0) when no row matches a
+      condition that it evaluates row by row (such as one with \c substr() or \c length()), the \c filter-records
+      pipeline processor passed up to 5 records of the block that did not match.  A negative offset of \c lag() or
+      \c lead() also read beyond the rows; it now looks the other way
+
     - Fixed a @ref sandboxing "sandbox" whose network policy blocks private networks or the local host, such as
       with @ref Qore::SandboxManager::blockPrivateNetworks() "SandboxManager::blockPrivateNetworks()", denying a
       bind to a loopback address (\c 127.0.0.0/8 or \c ::1): a socket bound there can only be reached from the

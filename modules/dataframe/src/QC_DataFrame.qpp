@@ -553,7 +553,8 @@ ColumnRef DataFrame::column(string name) [flags=RET_VALUE_ONLY] {
 }
 
 //! Returns the first n rows as a new DataFrame (default 5)
-/** @param n number of rows (default 5)
+/** @param n number of rows (default 5); 0 or a negative number gives no rows, with the columns of the
+    DataFrame
     @return new DataFrame object with the first n rows
 
     @par Example:
@@ -562,9 +563,8 @@ ColumnRef DataFrame::column(string name) [flags=RET_VALUE_ONLY] {
     printf("Top 3: %d rows\n", top3.numRows());
     @endcode
 */
-DataFrame DataFrame::head(*int n) [flags=RET_VALUE_ONLY] {
-    int64_t rows = n ? (int64_t)n : 5;
-    QoreDataFrame* result = df->head(rows, xsink);
+DataFrame DataFrame::head(int n = 5) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->head(n, xsink);
     if (!result) {
         return QoreValue();
     }
@@ -575,12 +575,12 @@ DataFrame DataFrame::head(*int n) [flags=RET_VALUE_ONLY] {
 }
 
 //! Returns the last n rows as a new DataFrame (default 5)
-/** @param n number of rows (default 5)
+/** @param n number of rows (default 5); 0 or a negative number gives no rows, with the columns of the
+    DataFrame
     @return new DataFrame object with the last n rows
 */
-DataFrame DataFrame::tail(*int n) [flags=RET_VALUE_ONLY] {
-    int64_t rows = n ? (int64_t)n : 5;
-    QoreDataFrame* result = df->tail(rows, xsink);
+DataFrame DataFrame::tail(int n = 5) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->tail(n, xsink);
     if (!result) {
         return QoreValue();
     }
@@ -1071,11 +1071,11 @@ list<hash<ColumnStats>> DataFrame::describe() [flags=RET_VALUE_ONLY] {
 }
 
 //! Returns a string representation for display
-/** @param max_rows maximum number of rows to show (default 10)
+/** @param max_rows maximum number of rows to show (default 10); 0 or a negative number shows no rows, only the
+    size and the column names
 */
-string DataFrame::toString(*int max_rows) [flags=RET_VALUE_ONLY] {
-    int64_t rows = max_rows ? (int64_t)max_rows : 10;
-    return df->toString(rows, xsink);
+string DataFrame::toString(int max_rows = 10) [flags=RET_VALUE_ONLY] {
+    return df->toString(max_rows, xsink);
 }
 
 //! Adds a new column to the DataFrame (in-place)
@@ -1606,26 +1606,26 @@ list<int> DataFrame::rowNumber(*hash<auto> spec) [flags=RET_VALUE_ONLY] {
 
 //! Returns previous row's value within partitions (window function)
 /** @param column column to access
-    @param offset number of rows to look back (default 1)
+    @param offset number of rows to look back (default 1); 0 gives each row's own value, and a negative offset looks
+    ahead as lead() does
     @param spec optional WindowSpec hash
     @return list of values (NOTHING at partition boundaries)
 
 */
-list<auto> DataFrame::lag(string column, *int offset, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
-    int64_t off = offset ? (int64_t)offset : 1;
-    return df->lag(column->c_str(), off, spec, xsink);
+list<auto> DataFrame::lag(string column, int offset = 1, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
+    return df->lag(column->c_str(), offset, spec, xsink);
 }
 
 //! Returns next row's value within partitions (window function)
 /** @param column column to access
-    @param offset number of rows to look ahead (default 1)
+    @param offset number of rows to look ahead (default 1); 0 gives each row's own value, and a negative offset looks
+    back as lag() does
     @param spec optional WindowSpec hash
     @return list of values (NOTHING at partition boundaries)
 
 */
-list<auto> DataFrame::lead(string column, *int offset, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
-    int64_t off = offset ? (int64_t)offset : 1;
-    return df->lead(column->c_str(), off, spec, xsink);
+list<auto> DataFrame::lead(string column, int offset = 1, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
+    return df->lead(column->c_str(), offset, spec, xsink);
 }
 
 //! Returns cumulative sum within partitions (window function)

@@ -1297,8 +1297,9 @@ QoreListNode* QoreDataFrame::describe(ExceptionSink* xsink) const {
 QoreStringNode* QoreDataFrame::toString(int64_t max_rows, ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
 
-    if (max_rows <= 0) {
-        max_rows = 10;
+    // no rows are shown for 0 or a negative number; the default is applied by the caller
+    if (max_rows < 0) {
+        max_rows = 0;
     }
 
     std::ostringstream oss;
