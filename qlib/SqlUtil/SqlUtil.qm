@@ -132,6 +132,11 @@ module SqlUtil {
     - fixed @ref SqlUtil::AbstractTable::getCreateTableSql() "AbstractTable::getCreateTableSql()" refusing its
       \c omit option with \c OPTION-ERROR: the options were validated after the omission options had been converted
       to a hash, which is not a valid value of the option
+    - fixed @ref SqlUtil::AbstractTable::getCreateSql() "AbstractTable::getCreateSql()",
+      @ref SqlUtil::AbstractTable::getCreateSqlString() "AbstractTable::getCreateSqlString()" and
+      @ref SqlUtil::AbstractTable::create() "AbstractTable::create()" raising \c RUNTIME-TYPE-ERROR for options given
+      in a hash literal, such as <tt>{"omit": "indexes"}</tt>: a hash literal is typed by its values, and the methods
+      set values of other types in the options they were given; they now set them in a copy that takes any value
 
     @subsection sqlutilv3_10_0 SqlUtil v3.10.0
     - Added an offline table rewrite transaction that limits only lock waits, for single schema statements

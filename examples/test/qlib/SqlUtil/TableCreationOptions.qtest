@@ -21,6 +21,7 @@
 class TableCreationOptionsTest inherits QUnit::Test {
     constructor() : Test("TableCreationOptionsTest", "1.0", \ARGV) {
         addTestCase("getCreateTableSql() takes the omit option", \createTableSqlOmit());
+        addTestCase("the creation methods take options in a hash literal", \createSqlHashLiteral());
         set_return_value(main());
     }
 
@@ -62,5 +63,35 @@ class TableCreationOptionsTest inherits QUnit::Test {
         opt.omit = "columns";
         assertThrows("CREATE-TABLE-ERROR", \t.getCreateTableSql(), (opt,));
         assertThrows("OPTION-ERROR", \t.getCreateTableSql(), ({"no_such_option": True},));
+    }
+
+    #! A hash literal is typed by its values, such as hash<string, string> for {"omit": "indexes"}; the creation
+    #! methods set other options in the hash they are given, so they work with a copy that takes values of any type
+    private createSqlHashLiteral() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        Sqlite3Table t = template(ds);
+        string table_sql = "create table options_test (\n  id integer not null,\n  name text\n)";
+        string index_sql = "create index ix_options_test_name on options_test (name)";
+        assertEq((table_sql, index_sql), t.getCreateSql());
+
+        # the omit option in a hash literal (hash<string, string> and hash<string, list<string>>)
+        assertEq((table_sql,), t.getCreateSql({"omit": "indexes"}));
+        assertEq((table_sql,), t.getCreateSql({"omit": ("indexes",)}));
+        hash<auto> opt = {};
+        opt.omit = "indexes";
+        assertEq(t.getCreateSqlString(opt), t.getCreateSqlString({"omit": "indexes"}));
+        assertEq(Sqlite3Database::getCreateSql((table_sql,)), t.getCreateSqlString({"omit": "indexes"}));
+
+        # another option in a hash literal (hash<string, code>)
+        list<string> sqls;
+        assertEq((table_sql, index_sql), t.getCreateSql({"sql_callback": sub (string sql) { push sqls, sql; }}));
+        assertEq((table_sql, index_sql), sqls);
+
+        # and the table is created with them
+        t.create({"omit": "indexes"});
+        Sqlite3Table live(ds, "options_test");
+        assertEq(("id", "name"), live.describe().keys());
+        assertEq(0, live.getIndexes().size());
     }
 }

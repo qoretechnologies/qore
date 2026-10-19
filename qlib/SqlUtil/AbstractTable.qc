@@ -9724,6 +9724,8 @@ printf("%s\n", table.getCreateSql());
         @return an SQL string that could be used to create the table and all known properties of the table
     */
     string getCreateSqlString(*hash<auto> opt) {
+        # other values are set in the options
+        opt = AbstractTable::getAnyValueOptions(opt);
         # convert table alignment omission options to a hash and check
         if (opt.omit) opt.omit = getCheckOmissionOptions(opt.omit, "CREATE-TABLE-ERROR");
 
@@ -9747,6 +9749,8 @@ map printf("$1;\n", $1), table.getCreateSql();
         @return a list of SQL strings that could be used to create the table and all known properties of the table
     */
     list<auto> getCreateSql(*hash<auto> opt) {
+        # other values are set in the options
+        opt = AbstractTable::getAnyValueOptions(opt);
         # convert table alignment omission options to a hash and check
         if (opt.omit) opt.omit = getCheckOmissionOptions(opt.omit, "CREATE-TABLE-ERROR");
 
@@ -12342,6 +12346,21 @@ on_exit printf("SQL> %s\n", sql);
                 "partition", pi.name, name);
         }
         return l;
+    }
+
+    #! returns the options in a hash that takes values of any type
+    /** An option hash given as a hash literal is typed by its values: <tt>{"omit": "indexes"}</tt> is a
+        <tt>hash<string, string></tt>, so a value of another type, such as the hash of omissions or a flag, cannot be
+        set in it.  A method that sets values in the options it is given sets them in the hash this returns.
+
+        @param opt the options as they are given
+
+        @return the options in a <tt>hash<auto></tt>, or @ref nothing if none are given
+
+        @since %SqlUtil 3.11.0
+    */
+    private static *hash<auto> getAnyValueOptions(*hash<auto> opt) {
+        return exists opt ? {} + opt : NOTHING;
     }
 
     private list<auto> getCreateSqlUnlocked(*hash<auto> opt, bool cache = True) {
