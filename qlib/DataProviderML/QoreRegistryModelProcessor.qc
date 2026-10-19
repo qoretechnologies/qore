@@ -972,7 +972,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         string required_type = sprintf("buffer<%s>", dtype);
         list<auto> columns;
         foreach string field in (tensor_fields) {
-            if (field.find(".") >= 0) {
+            if (!DataProvider::AbstractDataProvider::isPlainFieldPath(field)) {
                 return;
             }
 
@@ -1337,7 +1337,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         }
 
         foreach string f in (fields) {
-            if (f.find(".") >= 0) {
+            if (!DataProvider::AbstractDataProvider::isPlainFieldPath(f)) {
                 continue;
             }
             switch (shape) {
@@ -1494,7 +1494,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
     #! Reads causal-LM prompt strings directly from a shaped column block when possible
     private list<string> causalLmPromptsFromShape(auto records,
             DataProvider::DataProviderShape shape, int count) {
-        if (prompt_field.find(".") < 0) {
+        if (DataProvider::AbstractDataProvider::isPlainFieldPath(prompt_field)) {
             *auto column = causalLmPromptColumnFromShape(records, shape);
             if (exists column) {
                 return QoreRegistryModelProcessor::columnToStrings(column, count, prompt_field);
@@ -1563,7 +1563,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         }
 
         foreach string field in (fields) {
-            if (field.find(".") >= 0 || result.hasKey(field)) {
+            if (!DataProvider::AbstractDataProvider::isPlainFieldPath(field) || result.hasKey(field)) {
                 continue;
             }
             if (field == prompt_field) {

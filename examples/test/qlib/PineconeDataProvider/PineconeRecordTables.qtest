@@ -237,6 +237,13 @@ class PineconeTablesTest inherits QUnit::Test {
             "args": (<DataProviderFieldReference>{"field": "metadata.release\\.year"}, 2026)};
         assertTrue(f.canRender(escaped));
         assertEq({"release.year": {"$eq": 2026}}, PineconeRecordTables::renderQuery(escaped));
+        # a key ending with a backslash is one key; an escaped backslash before a dot does not escape the dot
+        hash<DataProviderExpression> backslash = <DataProviderExpression>{"exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "metadata.dir\\\\"}, "x")};
+        assertTrue(f.canRender(backslash));
+        assertEq({"dir\\": {"$eq": "x"}}, PineconeRecordTables::renderQuery(backslash));
+        assertFalse(f.canRender(<DataProviderExpression>{"exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "metadata.a\\\\.b"}, "x")}));
     }
     # Pinecone is eventually consistent. Run prepare, read, updated, and deleted as separate
     # integration stages once the preceding writes have become visible. Each stage makes one

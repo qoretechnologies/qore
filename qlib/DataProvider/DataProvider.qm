@@ -1606,7 +1606,11 @@ fetch
       escapes a key as one part of a path, and a path joined from escaped keys reads them back exactly.  DPQL
       validation reads the first key of a path with an escaped dot as evaluation does, and
       @ref DataProvider::AbstractDataProvider::getFieldValue() "AbstractDataProvider::getFieldValue()", which the
-      processors read their field options with, reads an escaped dot as part of a key
+      processors read their field options with, reads an escaped dot as part of a key; the new
+      @ref DataProvider::AbstractDataProvider::isPlainFieldPath() "AbstractDataProvider::isPlainFieldPath()" tells
+      whether a field path is the one key it is written as, and the processors read a column of a column block by a
+      field name directly only then, so a field path with a backslash is no longer read as a column with the
+      backslashes in its name
     - fixed @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
       dropping the \c input_field_names marker, so the options of the registered processor actions that take field
       names of the input (such as \c group_by of \c group-by and \c fields of \c select-fields) did not have it, and

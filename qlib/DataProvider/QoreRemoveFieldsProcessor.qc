@@ -95,7 +95,7 @@ public class QoreRemoveFieldsProcessor inherits AbstractDataProvider {
 
     #! Returns True if configured fields can be removed from a column block directly
     private bool canUseColumnShapes() {
-        return all $1.find(".") < 0, field_list;
+        return all AbstractDataProvider::isPlainFieldPath($1), field_list;
     }
 
     #! Removes fields from a DataFrame by selecting the remaining columns

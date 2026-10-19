@@ -563,7 +563,7 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
     private *hash<auto> getAnalyticsFieldColumns(auto records, DataProviderShape shape) {
         if (shape == DataProviderShape::HashOfLists) {
             foreach string field in (fields) {
-                if (field.find(".") >= 0) {
+                if (!AbstractDataProvider::isPlainFieldPath(field)) {
                     return;
                 }
             }

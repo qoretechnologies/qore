@@ -287,7 +287,7 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
 
     #! Returns True if a field can be read from a column block without row materialization
     private bool isColumnBlockField(string field) {
-        return field.find(".") < 0;
+        return AbstractDataProvider::isPlainFieldPath(field);
     }
 
     #! Returns True if all configured group and aggregate fields can use column-block accumulation
@@ -619,7 +619,7 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
 
     #! Returns True when a field name can be evaluated directly by DataFrame native methods
     private bool isNativeDataFrameField(string field) {
-        return field.find(".") < 0;
+        return AbstractDataProvider::isPlainFieldPath(field);
     }
 
     #! Returns True if the aggregate set can use the native DataFrame aggregation path

@@ -64,6 +64,8 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("escapeFieldPathKey - a key as one part of a field path", \escapeFieldPathKeyTest());
         addTestCase("escapeFieldPathKey - any keys round-trip", \escapeFieldPathKeyRoundTripTest());
         addTestCase("getTypeForActionOptions - a field for each option", \typeForActionOptions());
+        addTestCase("isPlainFieldPath - a path read as it is written", \isPlainFieldPathTest());
+        addTestCase("column blocks - a field path with a backslash", \columnBlockEscapedKeyTest());
 
         # Processor backward compatibility tests
         addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
@@ -389,6 +391,45 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
 
         # an action without options has no option type
         assertNothing(DataProviderActionCatalog::getTypeForActionOptions(action - "options"));
+    }
+
+    #! Only a path with no dot and no backslash is the one key it is written as
+    isPlainFieldPathTest() {
+        foreach string path in ("name", "order-id", "a b", "Unit Price", "") {
+            assertTrue(AbstractDataProvider::isPlainFieldPath(path), path);
+            assertEq(1, AbstractDataProvider::getFieldValue({path: 1}, path), path);
+        }
+        foreach string path in ("order.id", "Unit\\.Price", "p\\\\q", "p\\q", "a\\", ".", "a.") {
+            assertFalse(AbstractDataProvider::isPlainFieldPath(path), path);
+        }
+    }
+
+    #! A processor reads a column block by a field name directly only when the field path is that one key
+    columnBlockEscapedKeyTest() {
+        # the path p\\q is the one key p\q; the block also has a column named p\\q, which the path does not read
+        hash<auto> records = {"p\\q": ("A", "B", "A"), "p\\\\q": ("x", "y", "z"), "n": (1, 2, 3)};
+        assertNothing(AbstractDataProcessor::getShapeColumn(records, DataProviderShape::HashOfLists, "p\\\\q"));
+        ColumnarResult columns = ColumnarResult::fromColumnHash(records);
+        assertNothing(AbstractDataProcessor::getTopLevelShapeColumns(columns, DataProviderShape::BufferColumns,
+            ("n", "p\\\\q")));
+        assertEq((1, 2, 3), AbstractDataProcessor::getTopLevelShapeColumns(columns, DataProviderShape::BufferColumns,
+            ("n",)).n.toList());
+
+        # select-fields
+        QoreSelectFieldsProcessor sel({"fields": "v=p\\\\q"});
+        assertEq({"v": ("A", "B", "A")}, sel.processRecordsShape(records, DataProviderShape::HashOfLists));
+
+        # group-by
+        QoreGroupByProcessor grp({"group_by": "p\\\\q", "aggregates": "n=count()"});
+        grp.processRecordsShape(records, DataProviderShape::HashOfLists);
+        list<auto> rows = grp.flushRecords();
+        assertEq((1, 2), sort(map $1.n, rows));
+
+        # the columnar filter
+        QoreFilterRecordsProcessor flt({"dpql_where": '@"p\\\\q" == "B"'});
+        auto filtered = flt.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq({"p\\q": ("B",), "p\\\\q": ("y",), "n": (2,)},
+            map {$1.key: $1.value.toList()}, filtered.toColumnHash().pairIterator());
     }
 
     #! A key escaped for a field path is read back as the one key, and a path joined from escaped keys reads each

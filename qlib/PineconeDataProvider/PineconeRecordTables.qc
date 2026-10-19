@@ -202,12 +202,9 @@ public class PineconeRecordTables {
         @return whether Pinecone can evaluate this predicate
     */
     static bool canRenderField(hash<DataProviderExpression> exp, string prefix) {
-        string field = exp.args[0].field;
-        if (!field.startsWith(prefix) || field.size() == prefix.size()) {
-            return False;
-        }
-        string name = field.substr(prefix.size());
-        if (name =~ /(?<!\\)\./ || name.startsWith("$")) {
+        # one key in the container: metadata.year, or metadata.release\.year for the key release.year
+        list<string> path = AbstractDataProvider::getFieldPath(exp.args[0].field);
+        if (path.size() != 2 || path[0] + "." != prefix || path[1] == "" || path[1].startsWith("$")) {
             return False;
         }
         if (inlist(exp.exp, (DP_OP_IS_NULL, DP_OP_IS_NOT_NULL))) {
@@ -249,8 +246,8 @@ public class PineconeRecordTables {
         if (!op.val()) {
             throw "REST-SCHEMA-RECORD-ERROR", sprintf("unsupported Pinecone operator %y", exp.exp);
         }
-        string field = exp.args[0].field;
-        string name = replace(field.substr(field.find(".") + 1), "\\.", ".");
+        # the key in the container (canRenderField())
+        string name = AbstractDataProvider::getFieldPath(exp.args[0].field)[1];
         auto value;
         if (exp.exp == DP_OP_IS_NULL || exp.exp == DP_OP_IS_NOT_NULL) {
             value = exp.exp == DP_OP_IS_NOT_NULL;

@@ -245,7 +245,8 @@ public class QoreClassificationMetricsProcessor inherits AbstractDataProviderMLP
 
     #! Returns @ref True if either configured field requires row materialization
     private bool hasNestedFields() {
-        return predicted_field.find(".") >= 0 || true_field.find(".") >= 0;
+        return !DataProvider::AbstractDataProvider::isPlainFieldPath(predicted_field)
+            || !DataProvider::AbstractDataProvider::isPlainFieldPath(true_field);
     }
 
     #! Reads configured label fields directly from shaped columns

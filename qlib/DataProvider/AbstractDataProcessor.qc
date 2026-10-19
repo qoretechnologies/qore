@@ -583,7 +583,7 @@ public class AbstractDataProcessor inherits Qore::Serializable {
     */
     static *hash<auto> getTopLevelShapeColumns(auto data, DataProviderShape shape, list<string> fields) {
         foreach string field in (fields) {
-            if (field.find(".") >= 0) {
+            if (!AbstractDataProvider::isPlainFieldPath(field)) {
                 return;
             }
         }
@@ -721,7 +721,7 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         @since %DataProvider 3.5
     */
     static *auto getShapeColumn(auto data, DataProviderShape shape, string field) {
-        if (field.find(".") >= 0) {
+        if (!AbstractDataProvider::isPlainFieldPath(field)) {
             return;
         }
 

@@ -207,7 +207,7 @@ public class QoreOcrProcessor inherits AbstractDataProviderMLProcessor {
             return processRecordImpl(records);
         }
 
-        if (image_field.find(".") >= 0) {
+        if (!DataProvider::AbstractDataProvider::isPlainFieldPath(image_field)) {
             return processShapeRowsFallback(records, shape);
         }
 

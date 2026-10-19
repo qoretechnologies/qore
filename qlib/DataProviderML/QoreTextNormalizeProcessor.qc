@@ -210,7 +210,7 @@ public class QoreTextNormalizeProcessor inherits AbstractDataProviderMLProcessor
             return processRecordImpl(records);
         }
 
-        if (text_field.find(".") >= 0) {
+        if (!DataProvider::AbstractDataProvider::isPlainFieldPath(text_field)) {
             return processShapeRowsFallback(records, shape);
         }
 

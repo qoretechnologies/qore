@@ -123,7 +123,8 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
     private bool canUseColumnShapes() {
         hash<string, bool> input_names;
         foreach hash<auto> i in (field_map.pairIterator()) {
-            if (i.key.find(".") >= 0 || i.value.find(".") >= 0 || input_names{i.value}) {
+            # the output name is a key; the input name is a field path
+            if (i.key.find(".") >= 0 || !AbstractDataProvider::isPlainFieldPath(i.value) || input_names{i.value}) {
                 return False;
             }
             input_names{i.value} = True;

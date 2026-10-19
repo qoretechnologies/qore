@@ -6461,6 +6461,29 @@ string path = "order." + AbstractDataProvider::escapeFieldPathKey("Unit.Price");
         return replace(replace(key, "\\", "\\\\"), ".", "\\.");
     }
 
+    #! Returns @ref True if a field path is one key, read as it is written
+    /** A field path with no dot and no backslash is the one key it is written as, so a record or a column block can
+        be read by it directly.  Any other path is read with @ref getFieldPath(), as @ref getFieldValue() reads it:
+        <tt>Unit\\.Price</tt> is the one key <tt>Unit.Price</tt>, <tt>p\\\\q</tt> the one key <tt>p\\q</tt>, and
+        \c order.id the key \c id of the key \c order.
+
+        @param field the field path
+
+        @return @ref True if the path is one key, read as it is written; @ref False if it must be read with
+        @ref getFieldPath()
+
+        @par Example:
+        @code{.py}
+# a column block can be read by the field name directly
+auto column = AbstractDataProvider::isPlainFieldPath(field) ? block{field} : NOTHING;
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static bool isPlainFieldPath(string field) {
+        return field.find(".") < 0 && field.find("\\") < 0;
+    }
+
     #! Pre-processes a single expression argument for repeated evaluation
     /** @param arg the argument to prepare (field reference, sub-expression, or literal)
         @return the prepared argument with pre-computed paths where applicable
@@ -9026,8 +9049,7 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
         # Strip hashdecl type to plain hash<auto> so that accessing unknown members returns
         # NOTHING instead of throwing INVALID-MEMBER
         hash<auto> rec = {} + record;
-        # a path with no dot and no backslash is the one key as it is written
-        if (field_path.find(".") < 0 && field_path.find("\\") < 0) {
+        if (AbstractDataProvider::isPlainFieldPath(field_path)) {
             return rec{field_path};
         }
         # traverse dot-notation path

@@ -233,7 +233,7 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
             throw "PROCESSOR-ERROR", "QoreSearchReplaceProcessor: not configured; provide 'field', "
                 "'search', and 'replace' options";
         }
-        if (field.find(".") >= 0) {
+        if (!AbstractDataProvider::isPlainFieldPath(field)) {
             list<auto> rows = shape == DataProviderShape::RowRecords
                 ? (records,) : AbstractDataProcessor::convertShape(records, shape, DataProviderShape::RowRecords);
             *list<auto> processed = processRecordsImpl(rows);

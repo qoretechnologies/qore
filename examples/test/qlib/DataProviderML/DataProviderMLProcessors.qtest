@@ -258,6 +258,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         # TextNormalize tests
         addTestCase("text-normalize - DataFrameBlock shape", \textNormalizeDataFrameShape());
         addTestCase("text-normalize - BufferColumns shape", \textNormalizeBufferColumnsShape());
+        addTestCase("text-normalize - a text field path with a backslash", \textNormalizeEscapedKey());
 
         # SchemaValidation tests
         addTestCase("schema-validation - type check", \schemaValidTypeCheck());
@@ -6338,6 +6339,22 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "text-normalize should preserve BufferColumns output");
         assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
         assertEq(("hello world", "enterprise ai"), result.getColumn("body_normalized").toList());
+    }
+
+    #! A text field path with a backslash is read as getFieldValue() reads it, not as the column with that name
+    textNormalizeEscapedKey() {
+        # the path p\\q is the one key p\q; the block also has a column named p\\q, which the path does not read
+        hash<auto> opts = {"text_field": "p\\\\q", "operations": ("strip_html", "lowercase")};
+        DataProviderML::QoreTextNormalizeProcessor proc(opts);
+        auto result = proc.processRecordsShape(ColumnarResult::fromColumnHash({"p\\q": ("<b>A</b>",),
+            "p\\\\q": ("<b>B</b>",)}), DataProviderShape::BufferColumns);
+
+        # the same as the record processed as a row
+        DataProviderML::QoreTextNormalizeProcessor row_proc(opts);
+        hash<auto> row = row_proc.processRecord({"p\\q": "<b>A</b>", "p\\\\q": "<b>B</b>"});
+        assertTrue(inlist("a", row.values()));
+        assertEq((map {$1.key: ($1.value,)}, row.pairIterator()),
+            (map {$1.key: $1.value.toList()}, result.toColumnHash().pairIterator()));
     }
 
     # ===================== SchemaValidation Tests =====================

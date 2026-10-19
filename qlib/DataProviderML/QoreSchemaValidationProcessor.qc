@@ -368,7 +368,7 @@ public class QoreSchemaValidationProcessor inherits AbstractDataProviderMLProces
     private *hash<auto> getShapeColumns(auto records, DataProvider::DataProviderShape shape) {
         list<string> fields = keys schema;
         foreach string field in (fields) {
-            if (field.find(".") >= 0) {
+            if (!DataProvider::AbstractDataProvider::isPlainFieldPath(field)) {
                 return;
             }
         }

@@ -210,7 +210,7 @@ public class QorePdfOcrProcessor inherits AbstractDataProviderMLProcessor {
             return processRecordImpl(records);
         }
 
-        if (pdf_field.find(".") >= 0) {
+        if (!DataProvider::AbstractDataProvider::isPlainFieldPath(pdf_field)) {
             return processShapeRowsFallback(records, shape);
         }
 
