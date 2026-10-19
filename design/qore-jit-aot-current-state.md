@@ -3571,3 +3571,14 @@ Rejected; the three candidate source/fixture files are archived, restored and re
 The rejected compiler candidate followed boxed PHIs used as receivers to enable existing guarded object-parameter reuse. Ownership, strong-slot identity, reflective invalidation, reference/weak fallback, dispatch, frames and locks remain unchanged. It was an AOT code-generation optimization requiring recompilation; no IR/JIT gain is claimed. See RESULTS and `results-aot-phi-receiver-param-cache-rejected-macos-arm64.json` for all results, qualification, diagnostic limits and audit. Java parity and a global ceiling remain unestablished.
 
 Next independently investigate a cheap exact-`NOTHING` exit in the existing late AOT scalar cleanup guard, without changing real cleanup ordering or exception behavior. Inspect generated code before committing to another timing campaign; no benefit is established yet. Preserve the separate baseline IR reflective-frame limitation.
+
+
+## Rejected exact-empty AOT cleanup exit (post-d7e14c3af)
+
+Optimized screen integer monomorphic calls: 3.402371 -> 3.469285 ns/item (+1.966691% versus before; +3.006283% versus compile-disabled). Floating monomorphic calls: 3.443219 -> 3.305041 ns/item (-4.013055% / -1.214391%). Both fail the predeclared 5% target against both controls; not every fixed layout improves.
+
+Rejected with no confirmation or rescue run. All 4455 windows across 55 workloads / three layouts / three modes are preserved. Sources are archived and restored; fresh selected Release/Debug builds pass 69 core files / 112 cases / 17595 assertions each plus lvalue/DGC, merged-module, thread, native and reference coverage, with 64 rebuilt qmods and exact Release-alias restoration. No runtime change is retained.
+
+The candidate tested an exact-empty shortcut in late AOT cleanup guards, retaining all nonempty cleanup ordering and existing ABI/context/lock/cancellation contracts. Generated functions grew, and indirect float/integer-result calls also lost in the screen. See RESULTS and `results-aot-empty-cleanup-rejected-macos-arm64.json` for all data, baseline lineage, qualification, inspection erratum and audit. This is branch before/after/control, not fresh Java/develop or isolated-call timing; no Java parity or global ceiling is claimed.
+
+Next: independently investigate fixed-hash scalar replacement for a finite PHI of literal keys, with all-key presence, dominance and inline-value lifetime proofs. Preserve existing missing/arbitrary-key and mutable/reflective/reference fallbacks. No implementation or measured benefit is established yet; the baseline IR reflective-frame discrepancy remains a separate correctness follow-up.
