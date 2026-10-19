@@ -1,0 +1,309 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a line break in a quoted string (a mailbox name, for example), in an argument that is not quoted (a message set,
+# a flag, search criteria) or in a credential would end an IMAP command line and start another command, and a ^A
+# character would end a field of a bearer-token SASL message; a local IMAP server that accepts a bare LF as a line
+# ending records the commands that it receives, so that the test shows that no injected command reaches the wire;
+# a message appended to a mailbox is stored as it is, with no "." added to the lines that start with "."
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Mime
+%requires MailMessage
+%requires ImapClient
+%requires QUnit
+
+%exec-class ImapInjectionTest
+
+#! the commands, SASL payloads and appended messages that the server received
+hashdecl ImapSessionInfo {
+    list<string> commands = ();
+    list<string> auth = ();
+    list<binary> appended = ();
+}
+
+#! an IMAP server that takes a CR LF or a bare LF as the end of a line
+class LenientImapServer {
+    private {
+        Socket listener();
+        Queue sessions();
+        Counter done(1);
+        const ReadTimeout = 10s;
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        background run();
+    }
+
+    int getPort() {
+        return listener.getPort();
+    }
+
+    string getUrl() {
+        return sprintf("imap://127.0.0.1:%d", getPort());
+    }
+
+    #! ends the server and returns what it received in all sessions
+    hash<ImapSessionInfo> stop() {
+        Socket s();
+        s.connectINET("127.0.0.1", getPort());
+        s.send("STOP\r\n");
+        done.waitForZero();
+        s.close();
+        hash<ImapSessionInfo> rv();
+        while (sessions.size()) {
+            hash<ImapSessionInfo> session = sessions.get();
+            rv.commands += session.commands;
+            rv.auth += session.auth;
+            rv.appended += session.appended;
+        }
+        return rv;
+    }
+
+    private run() {
+        on_exit done.dec();
+        while (True) {
+            Socket s = listener.accept();
+            hash<ImapSessionInfo> session();
+            bool stop;
+            try {
+                stop = serve(s, \session);
+            } catch (hash<ExceptionInfo> ex) {
+                # the client closed the connection: the session ends with what was received
+            }
+            try {
+                s.close();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            if (stop) {
+                break;
+            }
+            sessions.push(session);
+        }
+    }
+
+    #! returns the next line, without its line ending: CR LF or a bare LF, or NOTHING if the connection was closed
+    private *string readLine(Socket s) {
+        binary line = binary();
+        while (True) {
+            binary c;
+            try {
+                c = s.recvBinary(1, ReadTimeout);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            if (!c.size()) {
+                return;
+            }
+            if (c == <0a>) {
+                break;
+            }
+            line += c;
+        }
+        string rv = line.toString();
+        if (rv =~ /\r$/) {
+            splice rv, -1;
+        }
+        return rv;
+    }
+
+    #! serves a session; returns True for the session that stops the server
+    private bool serve(Socket s, reference<hash<ImapSessionInfo>> session) {
+        s.send("* OK IMAP4rev1 ready\r\n");
+        while (True) {
+            *string line = readLine(s);
+            if (!exists line) {
+                break;
+            }
+            if (line == "STOP") {
+                return True;
+            }
+            session.commands += line;
+            (*string tag, *string cmd, *string args) = (line =~ x/^(\S+)\s+(\S+)\s*(.*)$/);
+            if (!exists cmd) {
+                continue;
+            }
+            switch (cmd.upr()) {
+                case "CAPABILITY":
+                    s.send("* CAPABILITY IMAP4rev1 SASL-IR AUTH=PLAIN AUTH=OAUTHBEARER\r\n");
+                    s.send(sprintf("%s OK CAPABILITY completed\r\n", tag));
+                    break;
+                case "AUTHENTICATE": {
+                    *string payload = (args =~ x/^\S+\s+(\S+)$/)[0];
+                    session.auth += payload ? parse_base64_string_to_string(payload) : "";
+                    s.send(sprintf("%s OK authenticated\r\n", tag));
+                    break;
+                }
+                case "SELECT":
+                case "EXAMINE":
+                    s.send("* 1 EXISTS\r\n* OK [UIDVALIDITY 1] valid\r\n");
+                    s.send(sprintf("%s OK [READ-WRITE] SELECT completed\r\n", tag));
+                    break;
+                case "SEARCH":
+                    s.send(sprintf("* SEARCH 1\r\n%s OK SEARCH completed\r\n", tag));
+                    break;
+                case "APPEND": {
+                    int count = (args =~ x/\{([0-9]+)\}$/)[0].toInt();
+                    s.send("+ Ready for literal data\r\n");
+                    binary payload = binary();
+                    while (payload.size() < count) {
+                        payload += s.recvBinary(count - payload.size(), ReadTimeout);
+                    }
+                    session.appended += payload;
+                    # the CRLF that ends the APPEND command
+                    readLine(s);
+                    s.send(sprintf("%s OK APPEND completed\r\n", tag));
+                    break;
+                }
+                case "LOGOUT":
+                    s.send(sprintf("* BYE\r\n%s OK LOGOUT completed\r\n", tag));
+                    return False;
+                default:
+                    s.send(sprintf("%s OK completed\r\n", tag));
+                    break;
+            }
+        }
+        return False;
+    }
+}
+
+class ImapInjectionTest inherits QUnit::Test {
+    constructor() : Test("ImapInjectionTest", "1.0") {
+        addTestCase("commands", \commands());
+        addTestCase("append", \append());
+        addTestCase("credentials", \credentials());
+        addTestCase("poll operations", \pollOperations());
+        set_return_value(main());
+    }
+
+    #! returns the commands that delete a mailbox: the injected command of every case
+    private list<string> injected(hash<ImapSessionInfo> session) {
+        return cast<list<string>>(select session.commands, $1 =~ /DELETE/);
+    }
+
+    commands() {
+        LenientImapServer server();
+        hash<ImapSessionInfo> session;
+        {
+            on_exit session = server.stop();
+            ImapClient imap(server.getUrl(), {"username": "user", "password": "password"});
+            on_exit imap.disconnect();
+            imap.connect();
+            # a quoted string with a line break
+            assertThrows("IMAP-SERVER-ERROR", "IMAP quoted string \"box\\\\x0d\\\\x0aA1 DELETE INBOX\" contains a line "
+                "break", \imap.createMailbox(), "box\r\nA1 DELETE INBOX");
+            assertThrows("IMAP-SERVER-ERROR", "contains a line break", \imap.renameMailbox(),
+                ("a", "b\nA1 DELETE INBOX"));
+            assertThrows("IMAP-SERVER-ERROR", "contains a NUL character", \imap.subscribe(), "a\x00b");
+            # arguments that are not quoted
+            assertThrows("IMAP-SERVER-ERROR", "IMAP command .* contains a line break", \imap.sendCommand(),
+                "NOOP\r\nA1 DELETE INBOX");
+            imap.selectMailbox("INBOX");
+            assertThrows("IMAP-SERVER-ERROR", "contains a line break", \imap.search(), "ALL\r\nA1 DELETE INBOX");
+            assertThrows("IMAP-SERVER-ERROR", "contains a line break", \imap.setFlags(),
+                ("1\r\nA1 DELETE INBOX", ("\\Seen",)));
+            assertThrows("IMAP-SERVER-ERROR", "contains a line break", \imap.addFlags(),
+                ("1", ("\\Seen)\r\nA1 DELETE INBOX (",)));
+            assertThrows("IMAP-SERVER-ERROR", "contains a line break", \imap.copyMessages(),
+                ("1\nA1 DELETE INBOX", "Archive"));
+            # the arguments themselves
+            imap.createMailbox("box");
+            assertEq((1,), imap.search("ALL"));
+        }
+        assertEq((), injected(session));
+        assertEq(1, (select session.commands, $1 =~ /CREATE "box"$/).size());
+    }
+
+    append() {
+        LenientImapServer server();
+        hash<ImapSessionInfo> session;
+        {
+            on_exit session = server.stop();
+            ImapClient imap(server.getUrl(), {"username": "user", "password": "password"});
+            on_exit imap.disconnect();
+            imap.connect();
+            # a flag with a line break
+            assertThrows("IMAP-SERVER-ERROR", "IMAP command .* contains a line break", \imap.appendRawMessage(),
+                ("INBOX", binary("Subject: x\r\n\r\nbody\r\n"), ("\\Seen)\r\nA1 DELETE INBOX (",)));
+            # a message is stored as it is: a line that starts with "." keeps its single "."
+            MailMessage::Message msg("sender@example.com", "test");
+            msg.addTO("to@example.com");
+            msg.setBody(".hello\r\n.\r\nbye", ContentEncoding::None);
+            imap.appendMessage("INBOX", msg);
+        }
+        assertEq((), injected(session));
+        assertEq(1, session.appended.size());
+        string stored = session.appended[0].toString();
+        assertRegex("\r\n\r\n\\.hello\r\n\\.\r\nbye\r\n$", stored);
+        assertFalse(regex(stored, "\\.\\."));
+    }
+
+    credentials() {
+        LenientImapServer server();
+        hash<ImapSessionInfo> session;
+        {
+            on_exit session = server.stop();
+            # a password or user name with a line break would end the LOGIN command
+            assertThrows("IMAP-CONFIG-ERROR", "^IMAP password contains a line break; it cannot contain CR or LF "
+                "characters$", sub () {
+                ImapClient imap(server.getUrl(), {"username": "user", "password": "pass\r\nA1 DELETE INBOX"});
+            });
+            assertThrows("IMAP-CONFIG-ERROR", "IMAP user name .* contains a line break", sub () {
+                ImapClient imap(server.getUrl(), {"username": "user\r\nA1 DELETE INBOX", "password": "password"});
+            });
+            # a NUL character separates the fields of the PLAIN message
+            assertThrows("IMAP-CONFIG-ERROR", "^IMAP password contains a NUL character", sub () {
+                ImapClient imap(server.getUrl(), {"username": "user", "password": "pass\x00word"});
+            });
+            assertThrows("IMAP-URL-ERROR", "IMAP password contains a line break", sub () {
+                ImapClient imap(sprintf("imap://user:pass\nA1 DELETE INBOX@127.0.0.1:%d", server.getPort()));
+            });
+            # a ^A character would end a field of the bearer-token message
+            assertThrows("IMAP-CONFIG-ERROR", "bearer token contains a NUL or \\^A character", sub () {
+                ImapClient imap(server.getUrl(), {"username": "user", "token": "token\x01\x01"});
+            });
+            assertThrows("IMAP-CONFIG-ERROR", "bearer-token login contains a \\^A character", sub () {
+                ImapClient imap(server.getUrl(), {"username": "user\x01auth=Bearer other", "token": "token"});
+            });
+            {
+                ImapClient imap(server.getUrl(), {"username": "user", "token": "token"});
+                assertThrows("IMAP-CONFIG-ERROR", "bearer token contains a NUL or \\^A character", \imap.setToken(),
+                    "token\x01");
+                assertEq("token", imap.getToken());
+            }
+
+            # OAUTHBEARER: "=" and "," in the user name are escaped in the GS2 header
+            ImapClient imap(server.getUrl(), {"username": "a,b=c@example.com", "token": "token",
+                "auth_mechanism": "OAUTHBEARER"});
+            imap.connect();
+            imap.disconnect();
+        }
+        assertEq((), injected(session));
+        assertEq(1, session.auth.size());
+        assertRegex("^n,a=a=2Cb=3Dc@example\\.com,\x01host=127\\.0\\.0\\.1\x01port=[0-9]+\x01auth=Bearer token\x01\x01$",
+            session.auth[0]);
+    }
+
+    pollOperations() {
+        assertThrows("IMAP-SERVER-ERROR", "contains a line break", \ImapClient::quoteString(), "a\nb");
+        assertEq("\"a\\\\b\\\"c\"", ImapClient::quoteString("a\\b\"c"));
+        assertThrows("IMAP-SERVER-ERROR", "IMAP command .* contains a line break",
+            sub () { ImapCommandPollOperation op(new Socket(), "t1", "NOOP\r\nA1 DELETE INBOX"); });
+        assertThrows("IMAP-SERVER-ERROR", "IMAP command .* contains a line break",
+            sub () { ImapCommandPollOperation op(new Socket(), "t1\r\nA1 DELETE INBOX", "NOOP"); });
+        assertThrows("IMAP-SERVER-ERROR", "IMAP command .* contains a line break",
+            sub () { ImapAppendPollOperation op(new Socket(), "t1", "INBOX", <00>, ("\\Seen\r\nA1 DELETE INBOX",)); });
+        assertThrows("IMAP-IDLE-ERROR", "IMAP tag .* contains a line break",
+            sub () { ImapIdleStartPollOperation op(new Socket(), "t1\r\nA1 DELETE INBOX"); });
+        # the credentials are checked where the authentication is built, for a client whose connection info has a
+        # line break
+        assertThrows("IMAP-CONFIG-ERROR", "IMAP password contains a line break", \ImapClient::getAuthInfo(),
+            {"user": "user", "pass": "pass\r\nA1 DELETE INBOX", "target": "127.0.0.1:143"});
+    }
+}

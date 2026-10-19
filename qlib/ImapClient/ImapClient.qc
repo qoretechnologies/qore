@@ -34,6 +34,11 @@ public namespace ImapClient {
     All I/O is non-blocking and executed through the async I/O controller; no thread is held per
     connection while waiting for the server.
 
+    A command is written to one line, so a string that is written to a command with a NUL, CR or LF character,
+    which would end the line and start another command (a mailbox name, a message set, a flag, search criteria or
+    a command given to @ref sendCommand()), raises \c IMAP-SERVER-ERROR before anything is sent; see
+    @ref quoteString() and @ref ImapClient::ImapCommandPollOperation "ImapCommandPollOperation".
+
     @since %ImapClient 1.0
 */
 public class ImapClient inherits Logger::LoggerWrapper, ConnectionProvider::OptionHelper {
@@ -159,8 +164,10 @@ ImapClient imap("imaps://imap.example.com", {
         - \c username (string): the username for authentication; always required
 
         @throw PARSE-URL-ERROR the URL could not be parsed
-        @throw IMAP-URL-ERROR the scheme is unknown, or no target or username was given
-        @throw IMAP-CONFIG-ERROR conflicting or incomplete authentication options were given
+        @throw IMAP-URL-ERROR the scheme is unknown, or no target or username was given, or the username or
+        password in the URL cannot be sent as it is (see @ref checkCredentials())
+        @throw IMAP-CONFIG-ERROR conflicting or incomplete authentication options were given, or the \c username,
+        \c password or \c token option cannot be sent as it is (see @ref checkCredentials())
     */
     constructor(string url, *hash<auto> opts) {
         logger = remove opts.logger;
@@ -260,6 +267,9 @@ ImapClient imap("imaps://imap.example.com", {
             starttls = True;
         }
 
+        # credentials that would end a command line or a SASL field are refused before they are used
+        ImapClient::checkCredentials(user, pass, token, hurl.username ? "IMAP-URL-ERROR" : "IMAP-CONFIG-ERROR");
+
         logDbg("user: %y server: %y (%s)", user, connect, token ? "bearer token" : "password");
     }
 
@@ -309,10 +319,13 @@ ImapClient imap("imaps://imap.example.com", {
         - any password set for the connection is cleared, since the two are mutually exclusive
         - the new token takes effect on the next connection; it does not re-authenticate an open session
         - this method is subject to thread serialization
+
+        @throw IMAP-CONFIG-ERROR the token contains a NUL or \c ^A character; see @ref checkCredentials()
     */
     setToken(*string tok) {
         AutoLock am(mutex);
         if (tok.val()) {
+            ImapClient::checkCredentials(user, NOTHING, tok, "IMAP-CONFIG-ERROR");
             pass = NOTHING;
         }
         token = tok;
@@ -865,7 +878,9 @@ imap.appendMessage("Sent", msg, ("\\Seen",));
             *date internal_date) {
         AutoLock am(mutex);
         checkConnectedIntern();
-        appendIntern(mailbox, binary(message.serialize()), flags, internal_date);
+        # the message is stored as it is, so it is serialized without SMTP transparency: an SMTP server removes the
+        # "." added at the start of a line, but a mailbox does not
+        appendIntern(mailbox, binary(message.serializeRaw()), flags, internal_date);
     }
 
     #! Appends a raw RFC 822 message to a mailbox
@@ -999,7 +1014,8 @@ while (True) {
 
         @return the parsed response
 
-        @throw IMAP-SERVER-ERROR the server returned a \c NO or \c BAD completion
+        @throw IMAP-SERVER-ERROR the server returned a \c NO or \c BAD completion, or the command contains a NUL,
+        CR or LF character, which would end the command line and start another command
     */
     hash<ImapResponse> sendCommand(string command) {
         AutoLock am(mutex);
@@ -1013,10 +1029,15 @@ while (True) {
         @return the authentication setup used to drive the poll operation pipelines
 
         @throw IMAP-CONFIG-ERROR a bearer mechanism was forced without a token, or
-        @ref AuthMechanismPlain was forced with a token
+        @ref AuthMechanismPlain was forced with a token, or a credential cannot be sent as it is (see
+        @ref checkCredentials())
+
+        @note a \c "=" or \c "," in the user name is written as \c "=3D" or \c "=2C" in the \c OAUTHBEARER GS2
+        header, as RFC 7628 and RFC 5801 require, since \c "," ends the authorization identity
     */
     static hash<ImapAuthInfo> getAuthInfo(hash<auto> info) {
         hash<ImapAuthInfo> rv();
+        ImapClient::checkCredentials(info.user, info.pass, info.token, "IMAP-CONFIG-ERROR");
 
         string mech = info.auth_mechanism ?? AuthMechanismAuto;
         bool wants_bearer = mech == AuthMechanismXoauth2 || mech == AuthMechanismOauthBearer;
@@ -1041,8 +1062,11 @@ while (True) {
 
             string xoauth2 = sprintf("user=%s%sauth=Bearer %s%s%s", info.user, CtrlA, info.token, CtrlA,
                 CtrlA).toBase64();
+            # "=" and "," in the authorization identity are written as "=3D" and "=2C" (RFC 5801 section 4),
+            # since "," ends it
+            string saslname = replace(replace(info.user, "=", "=3D"), ",", "=2C");
             (*string host, *string port) = ImapClient::splitTarget(info.target);
-            string oauthbearer = sprintf("n,a=%s,%shost=%s%sport=%s%sauth=Bearer %s%s%s", info.user,
+            string oauthbearer = sprintf("n,a=%s,%shost=%s%sport=%s%sauth=Bearer %s%s%s", saslname,
                 CtrlA, host, CtrlA, port, CtrlA, info.token, CtrlA, CtrlA).toBase64();
 
             if (mech == AuthMechanismXoauth2) {
@@ -1084,12 +1108,52 @@ while (True) {
         return caps;
     }
 
+    #! Raises an exception if a credential cannot be sent to the server as it is
+    /** The user name and password are written to the \c LOGIN command as quoted strings and to the
+        \c AUTHENTICATE \c PLAIN message, where a NUL character separates the fields, so they cannot contain a
+        NUL, CR or LF character; the user name and token of a bearer-token login cannot contain a NUL or \c ^A
+        (\c "\x01") character either, since \c ^A ends a field of the \c XOAUTH2 and \c OAUTHBEARER messages.
+        The password and the token are not shown in the exception.
+
+        @param user the user name
+        @param pass the password, if any
+        @param token the OAuth2 bearer token, if any
+        @param err the error code of the exception to raise
+
+        @throw err the user name, the password or the token contains a character that cannot be sent
+
+        @since %ImapClient 1.0
+    */
+    static checkCredentials(*string user, *string pass, *string token, string err) {
+        if (exists user) {
+            check_line_text(user, "IMAP user name", err);
+        }
+        if (exists pass) {
+            check_line_text(pass, "IMAP password", err, True);
+        }
+        if (token.val()) {
+            if (user =~ /\x01/) {
+                throw err, "the IMAP user name for a bearer-token login contains a ^A character, which would end its "
+                    "field of the SASL message";
+            }
+            if (token =~ /[\x00\x01]/) {
+                throw err, "the OAuth2 bearer token contains a NUL or ^A character, which would end its field of the "
+                    "SASL message";
+            }
+        }
+    }
+
     #! Quotes a string for use as an IMAP argument
     /** @param str the string to quote
 
         @return the quoted string with backslashes and double quotes escaped
+
+        @throw IMAP-SERVER-ERROR the string contains a NUL, CR or LF character, which cannot be in a quoted string
+        (<a href="https://datatracker.ietf.org/doc/html/rfc3501#section-4.3">RFC 3501 section 4.3</a>) and would
+        end the command line and start another command
     */
     static string quoteString(string str) {
+        check_line_text(str, "IMAP quoted string", "IMAP-SERVER-ERROR");
         string rv = str;
         rv =~ s/\\/\\\\/g;
         rv =~ s/"/\\"/g;
