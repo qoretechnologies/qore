@@ -2458,8 +2458,13 @@ Socket::destructor() {
     does not add latency.
 
     @since %Qore 1.12
+
+    @throw SOCKET-CONNECT-ERROR the target contains a NUL character; see @ref path_nul_characters
 */
 AbstractPollOperation<auto> Socket::startPollConnect(string target) [flags=NAMED_ARGS] {
+    if (q_check_no_nul(target->c_str(), target->size(), "socket target", "socket targets", "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketConnectPollOperation(xsink, false, target->c_str(), s),
         xsink);
@@ -2487,8 +2492,13 @@ AbstractPollOperation<auto> Socket::startPollConnect(string target) [flags=NAMED
     does not add latency.
 
     @since %Qore 1.12
+
+    @throw SOCKET-CONNECT-ERROR the target contains a NUL character; see @ref path_nul_characters
 */
 AbstractPollOperation<auto> Socket::startPollConnectSsl(string target) [flags=NAMED_ARGS] {
+    if (q_check_no_nul(target->c_str(), target->size(), "socket target", "socket targets", "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketConnectPollOperation(xsink, true, target->c_str(), s),
         xsink);
@@ -3578,11 +3588,16 @@ sock.connect("/tmp/socket");@endcode
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no
     listener, timeout exceeded, etc).
+    @throw SOCKET-CONNECT-ERROR the target contains a NUL character; see @ref path_nul_characters
 
     @see Socket::connectUNIX(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINETSSL(), and
     Socket::connectUNIXSSL()
 */
 nothing Socket::connect(string target, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    // a target with a NUL character would be cut at the NUL character, so "/tmp/s\x00:80" would be a UNIX socket
+    if (q_check_no_nul(target->c_str(), target->size(), "socket target", "socket targets", "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     socket_exec_connect(self, s, target->c_str(), timeout_ms, false, xsink);
 }
 
@@ -3636,6 +3651,7 @@ sock.connectUNIX("/tmp/socket"); @endcode
     @param protocol The protocol number for the socket (if not sure leave this 0)
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the socket
+    @throw SOCKET-CONNECT-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @see Socket::connect(), Socket::connectINET(), Socket::connectSSL(), Socket::connectINETSSL(), and Socket::connectUNIXSSL()
 
@@ -3643,6 +3659,9 @@ sock.connectUNIX("/tmp/socket"); @endcode
 */
 nothing Socket::connectUNIX(string path, softint socket_type = SOCK_STREAM,
         softint protocol = 0) [flags=NAMED_ARGS] {
+    if (q_check_path(*path, "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     socket_exec_connect_unix(self, s, path->c_str(), socket_type, protocol, -1, false, xsink);
 }
 
@@ -3672,10 +3691,14 @@ sock.connectSSL("/tmp/socket"); @endcode
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no listener, timeout exceeded, etc)
     @throw SOCKET-SSL-ERROR An error occurred establishing the TLS/SSL connection
+    @throw SOCKET-CONNECT-ERROR the target contains a NUL character; see @ref path_nul_characters
 
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectUNIXSSL(), Socket::connectINETSSL(), and Socket::connectINET()
 */
 nothing Socket::connectSSL(string target, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    if (q_check_no_nul(target->c_str(), target->size(), "socket target", "socket targets", "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     socket_exec_connect(self, s, target->c_str(), timeout_ms, true, xsink);
 }
 
@@ -3732,6 +3755,7 @@ sock.connectUNIXSSL("/tmp/socket"); @endcode
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the socket
     @throw SOCKET-SSL-ERROR An error occurred establishing the TLS/SSL connection
+    @throw SOCKET-CONNECT-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINETSSL(), and Socket::connectINET()
 
@@ -3739,6 +3763,9 @@ sock.connectUNIXSSL("/tmp/socket"); @endcode
 */
 nothing Socket::connectUNIXSSL(string path, softint socket_type = SOCK_STREAM,
         softint protocol = 0) [flags=NAMED_ARGS] {
+    if (q_check_path(*path, "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     socket_exec_connect_unix(self, s, path->c_str(), socket_type, protocol, -1, true, xsink);
 }
 
@@ -3766,8 +3793,15 @@ if (sock.bind("/tmp/my-socket", True))
     @see Socket::bindINET() and Socket::bindUNIX()
 
     @note UNIX domain sockets are not available on native Windows ports
+
+    @note a target containing a NUL character fails: -1 is returned and errno() returns \c EINVAL; see
+    @ref path_nul_characters
 */
 int Socket::bind(string target, softbool reuse_address = False) [flags=NAMED_ARGS] {
+    // a target with a NUL character would be cut at the NUL character; the bind fails with EINVAL
+    if (q_check_path(*target)) {
+        return -1;
+    }
     return s->bind(target->c_str(), reuse_address);
 }
 
@@ -3808,6 +3842,7 @@ sock.bindUNIX("/tmp/socket"); @endcode
     @param protocol the protocol number for the socket; use 0 for the default protocol
 
     @throw SOCKET-BIND-ERROR Error opening socket for bind; error binding on socket
+    @throw SOCKET-BIND-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @see Socket::bind() and Socket::bindINET()
 
@@ -3815,6 +3850,9 @@ sock.bindUNIX("/tmp/socket"); @endcode
 */
 nothing Socket::bindUNIX(string path, softint socket_type = SOCK_STREAM,
         softint protocol = 0) [flags=NAMED_ARGS] {
+    if (q_check_path(*path, "SOCKET-BIND-ERROR", xsink)) {
+        return QoreValue();
+    }
     s->bindUNIX(path->c_str(), socket_type, protocol, xsink);
 }
 
@@ -6753,6 +6791,7 @@ sock.connectSSL("server.example.com:443");
     again
 
     @throw SOCKET-SSL-ERROR raised by the TLS handshake if the CA certificates cannot be loaded
+    @throw SOCKET-SSL-ERROR a path contains a NUL character; see @ref path_nul_characters
 
     @see
     - @ref Qore::Socket::setSslVerifyMode() "Socket::setSslVerifyMode()"
@@ -6761,6 +6800,10 @@ sock.connectSSL("server.example.com:443");
     @since %Qore 3.0
 */
 nothing Socket::setSslCaLocations(*string ca_file, *string ca_path) [dom=FILESYSTEM;flags=NAMED_ARGS] {
+    if ((ca_file && q_check_path(*ca_file, "SOCKET-SSL-ERROR", xsink))
+            || (ca_path && q_check_path(*ca_path, "SOCKET-SSL-ERROR", xsink))) {
+        return QoreValue();
+    }
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         if (ca_file && !smh->checkFilesystemAccess(ca_file->c_str(), QSEC_READ, xsink)) {

@@ -2470,7 +2470,8 @@ DateTimeNode* QoreSerializable::deserializeAbsDateFromStream(StreamReader& reade
 #endif
 
         QoreString region;
-        if (readStringFromStream(reader, region, "absolute date region", xsink)) {
+        if (readStringFromStream(reader, region, "absolute date region", xsink)
+                || QoreTimeZoneManager::checkRegion(region, xsink)) {
             return nullptr;
         }
 

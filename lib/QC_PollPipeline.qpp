@@ -2202,8 +2202,14 @@ PollPipeline::copy() {
     @return the step index
 
     @since %Qore 3.0
+
+    @throw POLL-PIPELINE-ERROR the target contains a NUL character; see @ref path_nul_characters
 */
 int PollPipeline::addConnect(string target) [dom=NETWORK; flags=NAMED_ARGS] {
+    if (q_check_no_nul(target->c_str(), target->size(), "socket target", "socket targets", "POLL-PIPELINE-ERROR",
+            xsink)) {
+        return -1;
+    }
     return priv->addConnect(target->c_str());
 }
 
@@ -2212,8 +2218,14 @@ int PollPipeline::addConnect(string target) [dom=NETWORK; flags=NAMED_ARGS] {
     @return the step index
 
     @since %Qore 3.0
+
+    @throw POLL-PIPELINE-ERROR the target contains a NUL character; see @ref path_nul_characters
 */
 int PollPipeline::addConnectSsl(string target) [dom=NETWORK; flags=NAMED_ARGS] {
+    if (q_check_no_nul(target->c_str(), target->size(), "socket target", "socket targets", "POLL-PIPELINE-ERROR",
+            xsink)) {
+        return -1;
+    }
     return priv->addConnectSsl(target->c_str());
 }
 

@@ -207,11 +207,15 @@ ReadOnlyFile f("/tmp/my-file.txt", "iso-8859-1");
     @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow the file to
     be read
     @throw ILLEGAL-EXPRESSION ReadOnlyFile::constructor() cannot be called with a TTY target when
+    @throw READONLYFILE-OPEN-ERROR the path contains a NUL character; see @ref path_nul_characters
     @ref no-terminal-io "%no-terminal-io" is set
 
     @see ReadOnlyFile::open()
  */
 ReadOnlyFile::constructor(string path, *string encoding) [flags=NAMED_ARGS] {
+    if (q_check_path(*path, "READONLYFILE-OPEN-ERROR", xsink)) {
+        return;
+    }
     const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
 
     SimpleRefHolder<File> f(new File(qe));
@@ -282,11 +286,16 @@ try {
     @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow the file to
     be read
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin,
+    @throw READONLYFILE-OPEN-ERROR the path contains a NUL character; see @ref path_nul_characters
     @ref stdout, @ref stderr) when @ref no-terminal-io is set
 */
 nothing ReadOnlyFile::open(string path, *string encoding) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::open", xsink))
         return QoreValue();
+
+    if (q_check_path(*path, "READONLYFILE-OPEN-ERROR", xsink)) {
+        return QoreValue();
+    }
 
     const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : f->getEncoding();
     if (f->openCheckAccess(xsink, path->c_str(), O_RDONLY, 0, qe) && !*xsink) {
@@ -1085,11 +1094,15 @@ bool ReadOnlyFile::isTty() [flags=CONSTANT] {
     @throw FILE-OPEN-ERROR the file could not be opened; the exception argument is the \c errno value
     @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow the file to
     be read
+    @throw FILE-OPEN-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @since %Qore 1.19
 */
 AbstractPollOperation<auto> ReadOnlyFile::startPollRead(string path, bool as_string = True, int max_bytes = -1) [flags=NAMED_ARGS;dom=FILESYSTEM] {
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
+    if (*xsink || q_check_path(**npath, "FILE-OPEN-ERROR", xsink)) {
+        return QoreValue();
+    }
     return f->startPollRead(xsink, self, npath->c_str(), max_bytes, as_string);
 }
 
@@ -1109,6 +1122,7 @@ string data = File::readTextFile(path);
     @ref character_encoding "character encoding" or @ref nothing if the file is empty or cannot be read
 
     @throw FILE-READ-ERROR an I/O or other error occurred when reading the file
+    @throw FILE-OPEN2-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @since
     - %Qore 0.8.8 introduced this method
@@ -1118,6 +1132,10 @@ string data = File::readTextFile(path);
 */
 static string ReadOnlyFile::readTextFile(string path, *string encoding, int max_file_len = -1) [flags=NAMED_ARGS;dom=FILESYSTEM] {
     const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
+
+    if (q_check_path(*path, "FILE-OPEN2-ERROR", xsink)) {
+        return QoreValue();
+    }
 
     QoreFile qf;
 
@@ -1142,6 +1160,7 @@ binary data = File::readBinaryFile(path);
     @return the contents of a binary file as a binary object
 
     @throw FILE-READ-ERROR an I/O or other error occurred when reading the file
+    @throw FILE-OPEN2-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @since
     - %Qore 0.8.8 introduced this method
@@ -1150,6 +1169,10 @@ binary data = File::readBinaryFile(path);
     - %Qore 0.9.3 added the \a max_file_len parameter
 */
 static binary ReadOnlyFile::readBinaryFile(string path, int max_file_len = -1) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+    if (q_check_path(*path, "FILE-OPEN2-ERROR", xsink)) {
+        return QoreValue();
+    }
+
     QoreFile qf;
 
     if (qf.open2(xsink, path->c_str())) {
@@ -1174,12 +1197,16 @@ int mode = ReadOnlyFile::stat(path)[2];
     @return a @ref stat_list "list of file status values" for the given file
 
     @throw FILE-STAT-ERROR stat() call failed
+    @throw FILE-STAT-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @see @ref file_stat_constants
 
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
 static list<auto> ReadOnlyFile::stat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   if (q_check_path(*path, "FILE-STAT-ERROR", xsink)) {
+      return QoreValue();
+   }
    struct stat sbuf;
    if (stat(path->c_str(), &sbuf))
       return xsink->raiseErrnoException("FILE-STAT-ERROR", errno, "stat() command failed");
@@ -1201,6 +1228,7 @@ int mode = ReadOnlyFile::lstat(path)[2];
     @return a @ref stat_list "list of file status values" for the given file
 
     @throw FILE-LSTAT-ERROR stat() call failed
+    @throw FILE-LSTAT-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @see lstat() for a similar function that does not throw exceptions when errors occur, but rather returns @ref nothing
     @see @ref file_stat_constants
@@ -1208,6 +1236,9 @@ int mode = ReadOnlyFile::lstat(path)[2];
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
 static list<auto> ReadOnlyFile::lstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   if (q_check_path(*path, "FILE-LSTAT-ERROR", xsink)) {
+      return QoreValue();
+   }
    struct stat sbuf;
 #ifdef HAVE_LSTAT
    if (lstat(path->c_str(), &sbuf))
@@ -1232,6 +1263,7 @@ hash<StatInfo> h = ReadOnlyFile::hstat(path);
     @return a @ref Qore::StatInfo "StatInfo" hash about the file's status
 
     @throw FILE-HSTAT-ERROR stat() call failed
+    @throw FILE-HSTAT-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @see hstat() for a normal function returns @ref nothing instead of throwing an exception when errors occur
     @see @ref file_stat_constants
@@ -1239,6 +1271,9 @@ hash<StatInfo> h = ReadOnlyFile::hstat(path);
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
 static hash<StatInfo> ReadOnlyFile::hstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   if (q_check_path(*path, "FILE-HSTAT-ERROR", xsink)) {
+      return QoreValue();
+   }
    struct stat sbuf;
    if (stat(path->c_str(), &sbuf))
       return xsink->raiseErrnoException("FILE-HSTAT-ERROR", errno, "stat() command failed");
@@ -1260,6 +1295,7 @@ hash<StatInfo> h = ReadOnlyFile::hstat(path);
     @return a @ref Qore::StatInfo "StatInfo" hash about the file's status
 
     @throw FILE-HSTAT-ERROR stat() call failed
+    @throw FILE-HLSTAT-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @see hstat() for a normal function returns @ref nothing instead of throwing an exception when errors occur
     @see @ref file_stat_constants
@@ -1267,6 +1303,9 @@ hash<StatInfo> h = ReadOnlyFile::hstat(path);
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
 static hash<StatInfo> ReadOnlyFile::hlstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   if (q_check_path(*path, "FILE-HLSTAT-ERROR", xsink)) {
+      return QoreValue();
+   }
    struct stat sbuf;
 #ifdef HAVE_LSTAT
    if (lstat(path->c_str(), &sbuf))
@@ -1294,11 +1333,15 @@ hash<FilesystemInfo> h = ReadOnlyFile::statvfs(path);
 
     @throw FILE-STATVFS-ERROR statvfs() call failed
     @throw MISSING-FEATURE-ERROR this method is not supported on this platform; check Option::HAVE_STATVFS before calling this method to avoid this exception
+    @throw FILE-STATVFS-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
 static hash<FilesystemInfo> ReadOnlyFile::statvfs(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef Q_HAVE_STATVFS
+   if (q_check_path(*path, "FILE-STATVFS-ERROR", xsink)) {
+      return QoreValue();
+   }
    struct statvfs vfs;
    if (statvfs(path->c_str(), &vfs))
       return xsink->raiseErrnoException("FILE-STATVFS-ERROR", errno, "statvfs() call failed");

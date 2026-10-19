@@ -2210,8 +2210,14 @@ nothing Program::replaceParseOptions(softint parse_options) [flags=NAMED_ARGS] {
     @code{.py}
 pgm.setScriptPath("/users/test/test.q");
     @endcode
+
+    @throw PROGRAM-ERROR the path contains a NUL character; see @ref path_nul_characters
  */
 nothing Program::setScriptPath(*string path) [flags=NAMED_ARGS] {
+   // the script directory becomes part of paths (get_script_dir(), $dir$ in parse directives)
+   if (path && q_check_path(*path, "PROGRAM-ERROR", xsink)) {
+      return QoreValue();
+   }
    p->setScriptPath(path ? path->c_str() : nullptr);
 }
 
@@ -2312,8 +2318,12 @@ pgm.setTimeZoneRegion("Europe/Prague");
     @endcode
 
     @throw TZINFO-ERROR Unable to read zoneinfo file; invalid file magic; error parsing zoneinfo file, etc
+    @throw TZINFO-ERROR the region contains a NUL character; see @ref path_nul_characters
  */
 nothing Program::setTimeZoneRegion(string region) [flags=NAMED_ARGS] {
+    if (QoreTimeZoneManager::checkRegion(*region, xsink)) {
+        return QoreValue();
+    }
     const AbstractQoreZoneInfo *zone = QTZM.findLoadRegion(region->c_str(), xsink);
     if (!*xsink) {
         p->setTZ(zone);
@@ -2562,6 +2572,7 @@ pgm.loadModule("mysql");
     @endcode
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: API incompatibility, module defines symbols already defined in the target object, etc
+    @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     @see
     - Program::loadApplyToPrivateUserModule()
@@ -2579,6 +2590,9 @@ pgm.loadModule("mysql");
     - %Qore 0.9 added the \c warning_mask parameter
 */
 Program::loadModule(string module_name, int warning_mask = WARN_MODULES) [dom=MODULES; flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
+        return QoreValue();
+    }
     QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), p, nullptr, QMLO_NONE, warning_mask);
 }
 
@@ -2598,6 +2612,7 @@ pgm.loadModule("mysql");
     @endcode
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: API incompatibility, module defines symbols already defined in the target object, etc
+    @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     @see
     - Program::loadApplyToPrivateUserModule()
@@ -2614,6 +2629,9 @@ pgm.loadModule("mysql");
 */
 *hash<ExceptionInfo> Program::loadModuleWarn(
         string module_name, int warning_mask = WARN_MODULES) [dom=MODULES; flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
+        return QoreValue();
+    }
     ExceptionSink wsink;
     QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), p, nullptr, QMLO_NONE, warning_mask);
     if (!*xsink && wsink) {
@@ -2638,6 +2656,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
     @param warning_mask the warning mask to use when loading the module; note that warnings are treated as errors
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
+    @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     @see
     - Program::loadApplyToPrivateUserModule()
@@ -2656,6 +2675,11 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 */
 Program::loadUserModuleWithProgram(string module_name, !Qore::Program[QoreProgram] program,
         int warning_mask = WARN_MODULES) [dom=MODULES,INJECTION; flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
+        // the Program container has been taken from its object and is owned by this call
+        ReferenceHolder<QoreProgram> holder(program, xsink);
+        return QoreValue();
+    }
     QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), p, program, QMLO_INJECT, warning_mask);
 }
 
@@ -2677,6 +2701,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
     @return any warnings found while parsing the module (if the module is a user module)
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
+    @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     @see
     - Program::loadApplyToPrivateUserModule()
@@ -2694,6 +2719,11 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 *hash<ExceptionInfo> Program::loadUserModuleWithProgramWarn(string module_name,
         !Qore::Program[QoreProgram] program, int warning_mask = WARN_MODULES)
         [dom=MODULES,INJECTION; flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
+        // the Program container has been taken from its object and is owned by this call
+        ReferenceHolder<QoreProgram> holder(program, xsink);
+        return QoreValue();
+    }
     ExceptionSink wsink;
     QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), p, program, QMLO_INJECT, warning_mask);
     if (!*xsink && wsink) {
@@ -2711,6 +2741,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
     @param reexport reexport symbols from the imported module (only valid when used in a user module)
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
+    @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     @note
     - it is not an error to set the \a reinject argument to @ref True "True" when the given module has not already been loaded
@@ -2733,6 +2764,9 @@ pgm.loadUserModuleWithProgram("MyModule", p);
  */
 Program::loadApplyToUserModule(string module_name, *softbool reinject,
         int warning_mask = WARN_MODULES, bool reexport = False) [dom=MODULES,INJECTION; flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
+        return QoreValue();
+    }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: %d, self: %p\n", p, p->getProgramId(), self);
 #ifdef DEBUG
@@ -2762,6 +2796,7 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     @return any warnings found while parsing the module (if the module is a user module)
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
+    @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     @note
     - it is not an error to set the \a reinject argument to @ref True "True" when the given module has not already been loaded
@@ -2784,6 +2819,9 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
  */
 *hash<ExceptionInfo> Program::loadApplyToUserModuleWarn(string module_name, *softbool reinject,
         int warning_mask = WARN_MODULES, bool reexport = False) [dom=MODULES,INJECTION; flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
+        return QoreValue();
+    }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: %d, self: %p\n", p, p->getProgramId(), self);
 #ifdef DEBUG
@@ -2814,6 +2852,7 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     @param warning_mask the warning mask to use when loading the module; note that warnings are treated as errors
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
+    @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     @note
     - after this call the Program object will be owned by the user module and will no longer be valid, so any accesses to the object after this call will result in an exception
@@ -2834,6 +2873,9 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
  */
 Program::loadApplyToPrivateUserModule(
         string module_name, int warning_mask = WARN_MODULES) [dom=MODULES; flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
+        return QoreValue();
+    }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: %d, self: %p\n", p, p->getProgramId(), self);
 #ifdef DEBUG
@@ -2861,6 +2903,7 @@ Program::loadApplyToPrivateUserModule(
     @return any warnings found while parsing the module (if the module is a user module)
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
+    @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     @note
     - after this call the Program object will be owned by the user module and will no longer be valid, so any accesses to the object after this call will result in an exception
@@ -2881,6 +2924,9 @@ Program::loadApplyToPrivateUserModule(
  */
 *hash<ExceptionInfo> Program::loadApplyToPrivateUserModuleWarn(
         string module_name, int warning_mask = WARN_MODULES) [dom=MODULES; flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
+        return QoreValue();
+    }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: %d, self: %p\n", p, p->getProgramId(), self);
 #ifdef DEBUG

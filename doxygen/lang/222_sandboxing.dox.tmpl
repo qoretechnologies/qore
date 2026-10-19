@@ -212,6 +212,37 @@ sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
     policy decision, and is deliberately distinct from the \c FILESYSTEM-ACCESS-DENIED raised
     when the sandbox rules deny an access.
 
+    @subsection path_nul_characters Paths With NUL Characters
+
+    An operating system path is a NUL-terminated string, so a string with a NUL character cannot
+    name a file: passed to the operating system, it would be cut at the NUL character and name
+    another file than the string does, after any check made by %Qore code on the whole string (for
+    example a check that the path ends with \c ".txt").  Every %Qore API that passes a string to
+    the operating system as a file or directory path, a UNIX domain socket path or socket target, a
+    module name or path, or a time zone region or zoneinfo file therefore refuses a string with a
+    NUL character, before any sandbox check and before any system call:
+    - an API that raises exceptions raises its own error code (for example \c FILE-OPEN2-ERROR
+      from @ref Qore::File::open2() "File::open2()"), with \c EINVAL as the exception argument and a
+      description giving the string (escaped, with at most its first 64 characters) and the byte
+      offset of the NUL character
+    - an API that reports errors with its return value and @ref Qore::errno() "errno()" returns its
+      failure value (for example @ref False "False" from @ref Qore::is_file() "is_file()",
+      @ref nothing from @ref Qore::hstat() "hstat()", or -1 from @ref Qore::unlink() "unlink()"),
+      and @ref Qore::errno() "errno()" returns \c EINVAL
+
+    Because the string is refused before the sandbox check, the result is the same with or without
+    a sandbox: the error is never a \c FILESYSTEM-ACCESS-DENIED for the path cut at the NUL
+    character.
+
+    @code{.py}
+string path = "/data/report.csv\x00.txt";
+# the string ends with ".txt", but cut at the NUL character it would name "/data/report.csv"
+bool b = is_file(path);  # False; errno() returns EINVAL
+string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
+    @endcode
+
+    @since %Qore 3.0
+
     @subsection sandbox_fs_allow_deny Allow and Deny Lists
 
     For more granular control, use allow and deny lists:

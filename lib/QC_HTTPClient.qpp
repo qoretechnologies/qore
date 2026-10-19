@@ -533,6 +533,9 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     @throw HTTP-CLIENT-UNKNOWN-PROTOCOL unknown protocol passed in URL
     @throw ILLEGAL-FILESYSTEM-ACCESS if the calling context is restricted with the @ref Qore::PO_NO_FILESYSTEM
     sandboxing restriction and one of the following options is used: \c ssl_cert_path or \c ssl_key_path
+    @throw HTTP-CLIENT-URL-ERROR the URL host contains a NUL character; see @ref path_nul_characters
+    @throw HTTP-CLIENT-OPTION-ERROR a path given with \c ssl_cert_path, \c ssl_key_path, \c ssl_ca_file or
+    \c ssl_ca_path contains a NUL character; see @ref path_nul_characters
 
     @note
     - URLs with UNIX sockets are generally supported in Qore with the following syntax:
@@ -2873,6 +2876,8 @@ httpclient.setURL("https://user:password@hostname:8080/path");
 
     @throw HTTP-CLIENT-URL-ERROR invalid URL string; invalid authorization credentials in  URL (username without password or vice-versa)
     @throw HTTP-CLIENT-UNKNOWN-PROTOCOL unknown protocol (scheme) passed in URL
+    @throw HTTP-CLIENT-URL-ERROR the URL host (for example a decoded UNIX socket path) contains a NUL character;
+    see @ref path_nul_characters
 
     @see HTTPClient::getURL()
 

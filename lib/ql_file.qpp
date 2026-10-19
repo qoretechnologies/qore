@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -55,6 +55,10 @@
 #endif
 
 static bool check_stat(unsigned code, const QoreString& path, ExceptionSink* xsink) {
+   // a path with a NUL character names no file; it fails with EINVAL before the sandbox check
+   if (q_check_path(path)) {
+      return false;
+   }
    QoreSandboxManagerHelper smh;
    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
       return false;
@@ -65,6 +69,10 @@ static bool check_stat(unsigned code, const QoreString& path, ExceptionSink* xsi
 
 #ifdef HAVE_LSTAT
 static bool check_lstat(unsigned code, const QoreString& path, ExceptionSink* xsink) {
+   // a path with a NUL character names no file; it fails with EINVAL before the sandbox check
+   if (q_check_path(path)) {
+      return false;
+   }
    QoreSandboxManagerHelper smh;
    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
       return false;
@@ -81,6 +89,10 @@ static bool check_lstat(unsigned code, const QoreString& path, ExceptionSink* xs
 #endif
 
 static bool is_writable_intern(const QoreStringNode* path, ExceptionSink* xsink) {
+   // a path with a NUL character names no file; it fails with EINVAL before the sandbox check
+   if (q_check_path(*path)) {
+      return false;
+   }
 #if defined HAVE_PWD_H
    struct stat sbuf;
    int rc;
@@ -274,6 +286,9 @@ hashdecl FilesystemInfo {
     @code{.py}
 bool b = is_file("/etc/hosts");
     @endcode
+
+    @note a path containing a NUL character names no file: @ref False "False" is returned and errno() returns
+    \c EINVAL; see @ref path_nul_characters
  */
 bool is_file(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
    return check_stat(S_IFREG, *path, xsink);
@@ -289,6 +304,9 @@ bool is_file(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
     @code{.py}
 bool b = is_dir("/tmp/mydir");
     @endcode
+
+    @note a path containing a NUL character names no file: @ref False "False" is returned and errno() returns
+    \c EINVAL; see @ref path_nul_characters
  */
 bool is_dir(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
    return check_stat(S_IFDIR, *path, xsink);
@@ -306,6 +324,9 @@ bool is_dir(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
     @code{.py}
 bool b = is_socket("/tmp/X0");
     @endcode
+
+    @note a path containing a NUL character names no file: @ref False "False" is returned and errno() returns
+    \c EINVAL; see @ref path_nul_characters
  */
 bool is_socket(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef S_IFSOCK
@@ -326,6 +347,9 @@ bool is_socket(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
     @code{.py}
 bool b = is_pipe("/tmp/mypipe");
     @endcode
+
+    @note a path containing a NUL character names no file: @ref False "False" is returned and errno() returns
+    \c EINVAL; see @ref path_nul_characters
  */
 bool is_pipe(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
    return check_stat(S_IFIFO, *path, xsink);
@@ -341,6 +365,9 @@ bool is_pipe(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
     @code{.py}
 bool b = is_cdev("/tmp/tty");
     @endcode
+
+    @note a path containing a NUL character names no file: @ref False "False" is returned and errno() returns
+    \c EINVAL; see @ref path_nul_characters
  */
 bool is_cdev(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
    return check_stat(S_IFCHR, *path, xsink);
@@ -356,6 +383,9 @@ bool is_cdev(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
     @code{.py}
 bool b = is_bdev("/tmp/sda1");
     @endcode
+
+    @note a path containing a NUL character names no file: @ref False "False" is returned and errno() returns
+    \c EINVAL; see @ref path_nul_characters
  */
 bool is_bdev(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
    return check_stat(S_IFBLK, *path, xsink);
@@ -371,8 +401,14 @@ bool is_bdev(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
     @code{.py}
 bool b = is_dev("/tmp/scanner");
     @endcode
+
+    @note a path containing a NUL character names no file: @ref False "False" is returned and errno() returns
+    \c EINVAL; see @ref path_nul_characters
  */
 bool is_dev(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
+   if (q_check_path(*path)) {
+      return false;
+   }
    QoreSandboxManagerHelper smh;
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return false;
@@ -403,6 +439,9 @@ bool is_dev(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
     @code{.py}
 bool b = is_link("/etc/hosts");
     @endcode
+
+    @note a path containing a NUL character names no file: @ref False "False" is returned and errno() returns
+    \c EINVAL; see @ref path_nul_characters
  */
 bool is_link(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef HAVE_LSTAT
@@ -423,8 +462,14 @@ bool is_link(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
     @code{.py}
 bool b = is_readable("/etc/hosts");
     @endcode
+
+    @note a path containing a NUL character names no file: @ref False "False" is returned and errno() returns
+    \c EINVAL; see @ref path_nul_characters
  */
 bool is_readable(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
+   if (q_check_path(*path)) {
+      return false;
+   }
    QoreSandboxManagerHelper smh;
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return false;
@@ -444,6 +489,9 @@ bool b = is_writable("/etc/hosts");
     @endcode
 
     @since %Qore 0.8.12 this function works properly on Windows
+
+    @note a path containing a NUL character names no file: @ref False "False" is returned and errno() returns
+    \c EINVAL; see @ref path_nul_characters
  */
 bool is_writable(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
    return is_writable_intern(path, xsink);
@@ -461,6 +509,9 @@ bool b = is_writeable("/etc/hosts");
     @endcode
 
     @since %Qore 0.8.12 this function works properly on Windows
+
+    @note a path containing a NUL character names no file: @ref False "False" is returned and errno() returns
+    \c EINVAL; see @ref path_nul_characters
  */
 bool is_writeable(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
    return is_writable_intern(path, xsink);
@@ -478,9 +529,15 @@ bool is_writeable(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
     @code{.py}
 bool b = is_executable("/bin/login");
     @endcode
+
+    @note a path containing a NUL character names no file: @ref False "False" is returned and errno() returns
+    \c EINVAL; see @ref path_nul_characters
  */
 bool is_executable(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef HAVE_PWD_H
+   if (q_check_path(*path)) {
+      return false;
+   }
    QoreSandboxManagerHelper smh;
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ | QSEC_EXECUTE, xsink)) {
       return false;
@@ -522,6 +579,7 @@ rename("/tmp/myfile", "/tmp/myfile.txt");
     @endcode
 
     @throw RENAME-ERROR empty string passed for one of the arguments or the operating system returned an error
+    @throw RENAME-ERROR a path contains a NUL character; see @ref path_nul_characters
 
     @note Some operating systems do not allow moving files between filesystems (ex Solaris)
  */
@@ -532,6 +590,10 @@ nothing rename(string source_path, string target_path) [flags=NAMED_ARGS;dom=FIL
    // new file name
    if (target_path->empty())
       return xsink->raiseException("RENAME-ERROR", "empty target_path argument");
+
+   if (q_check_path(*source_path, "RENAME-ERROR", xsink) || q_check_path(*target_path, "RENAME-ERROR", xsink)) {
+      return QoreValue();
+   }
 
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
@@ -567,9 +629,15 @@ nothing rename(string source_path, string target_path) [flags=NAMED_ARGS;dom=FIL
     @endcode
 
     @see File::statvfs() for a static method in the @ref Qore::File "File class" that throws an exception instead of returning @ref nothing when errors occur
+
+    @note a path containing a NUL character names no file: @ref nothing is returned and errno() returns \c EINVAL;
+    see @ref path_nul_characters
  */
 *hash<FilesystemInfo> statvfs(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef Q_HAVE_STATVFS
+    if (q_check_path(*path)) {
+        return QoreValue();
+    }
     QoreSandboxManagerHelper smh;
     if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
         return QoreValue();
@@ -600,8 +668,14 @@ if (!exists l)
     @see lstat() for a version of this function that does not follow symbolic links\n\n
     hstat() for a version of this function that returns a user-friendly hash instead of a list\n\n
     File::stat() for a static method in the File class that throws an exception instead of returning @ref nothing when errors occur
+
+    @note a path containing a NUL character names no file: @ref nothing is returned and errno() returns \c EINVAL;
+    see @ref path_nul_characters
  */
 *list<auto> stat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+    if (q_check_path(*path)) {
+        return QoreValue();
+    }
     QoreSandboxManagerHelper smh;
     if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
         return QoreValue();
@@ -636,8 +710,14 @@ if (!exists l)
     @see stat() for a version of this function that follows symbolic links\n\n
     hlstat() for a version of this function that returns a user-friendly hash instead of a list\n\n
     File::lstat() for a static method in the File class that throws an exception instead of returning @ref nothing when errors occur
+
+    @note a path containing a NUL character names no file: @ref nothing is returned and errno() returns \c EINVAL;
+    see @ref path_nul_characters
  */
 *list<auto> lstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   if (q_check_path(*path)) {
+      return QoreValue();
+   }
    QoreSandboxManagerHelper smh;
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return QoreValue();
@@ -675,8 +755,14 @@ if (!h)
     @see hlstat() for a version of this function that does not follow symbolic links\n\n
     stat() for a version of this function that returns a traditional @ref stat_list "list" instead of a user-friendly hash\n\n
     File::hstat() for a static method in the File class that throws an exception instead of returning @ref nothing when errors occur
+
+    @note a path containing a NUL character names no file: @ref nothing is returned and errno() returns \c EINVAL;
+    see @ref path_nul_characters
  */
 *hash<StatInfo> hstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   if (q_check_path(*path)) {
+      return QoreValue();
+   }
    QoreSandboxManagerHelper smh;
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return QoreValue();
@@ -710,8 +796,14 @@ if (!exists h)
     @see hstat() for a version of this function that follows symbolic links\n\n
     lstat() for a version of this function that returns a traditional @ref stat_list "list" instead of a user-friendly hash\n\n
     File::hlstat() for a static method in the File class that throws an exception instead of returning @ref nothing when errors occur
+
+    @note a path containing a NUL character names no file: @ref nothing is returned and errno() returns \c EINVAL;
+    see @ref path_nul_characters
  */
 *hash<StatInfo> hlstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   if (q_check_path(*path)) {
+      return QoreValue();
+   }
    QoreSandboxManagerHelper smh;
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return QoreValue();
@@ -746,8 +838,14 @@ nothing hlstat() [flags=RUNTIME_NOOP;dom=FILESYSTEM] {
 if (!gl)
     printf("failed to glob *.txt: %s\n", strerror());
     @endcode
+
+    @note a pattern containing a NUL character matches no file: @ref nothing is returned and errno() returns
+    \c EINVAL; see @ref path_nul_characters
  */
 *list<string> glob(string pattern) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+    if (q_check_path(*pattern)) {
+        return QoreValue();
+    }
     QoreSandboxManagerHelper smh;
     if (smh) {
         std::string check_path = get_glob_sandbox_path(pattern->c_str());
@@ -801,8 +899,14 @@ nothing glob() [flags=RUNTIME_NOOP;dom=FILESYSTEM] {
 if (unlink(path))
     printf("%s: %s\n", path, strerror());
     @endcode
+
+    @note a path containing a NUL character names no file: -1 is returned and errno() returns \c EINVAL; see
+    @ref path_nul_characters
  */
 int unlink(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   if (q_check_path(*path)) {
+      return -1;
+   }
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
    if (smh) {
@@ -863,8 +967,14 @@ if (mkdir("/tmp/newdir", 0755)) {
     @since
     - %Qore 0.8.13 added the <i>parents</i> parameter
     - %Qore 0.9.5 fixed error-handling and the return value to be sane and consistent independently of the args
+
+    @note a path containing a NUL character names no file: -1 is returned and errno() returns \c EINVAL; see
+    @ref path_nul_characters
  */
 int mkdir(string path, softint mode = 0777, bool parents = False) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+    if (q_check_path(*path)) {
+        return -1;
+    }
     // Check sandbox security restrictions (for non-parent case; parent case checked by QoreDir)
     QoreSandboxManagerHelper smh;
     if (smh && !parents) {
@@ -912,8 +1022,14 @@ mkdir_ex("/tmp/newdir", 0755);
     - umask()
 
     @since %Qore 0.9.5
+
+    @throw DIR-CREATE-FAILURE the directory cannot be created
+    @throw DIR-CREATE-FAILURE the path contains a NUL character; see @ref path_nul_characters
  */
 nothing mkdir_ex(string path, softint mode = 0777, bool parents = False) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+    if (q_check_path(*path, "DIR-CREATE-FAILURE", xsink)) {
+        return QoreValue();
+    }
     if (parents) {
         QoreDir dir(xsink);
         if (dir.chdir(path->c_str(), xsink) == -1) {
@@ -953,8 +1069,14 @@ if (rmdir("/tmp/newdir"))
     @endcode
 
     @see @ref Qore::Dir::rmdir()
+
+    @note a path containing a NUL character names no file: -1 is returned and errno() returns \c EINVAL; see
+    @ref path_nul_characters
  */
 int rmdir(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   if (q_check_path(*path)) {
+      return -1;
+   }
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
    if (smh) {
@@ -976,8 +1098,14 @@ int rmdir(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 if (chmod("/bin/login", 0755))
     printf("rmdir /tmp/newdir: %s\n", strerror());
     @endcode
+
+    @note a path containing a NUL character names no file: -1 is returned and errno() returns \c EINVAL; see
+    @ref path_nul_characters
  */
 int chmod(string path, softint mode) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   if (q_check_path(*path)) {
+      return -1;
+   }
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
    if (smh) {
@@ -1001,8 +1129,14 @@ if (chdir(dir))
     @endcode
 
     @since %Qore 0.8.4 this function is tagged with @ref Qore::PO_NO_PROCESS_CONTROL
+
+    @note a path containing a NUL character names no file: -1 is returned and errno() returns \c EINVAL; see
+    @ref path_nul_characters
  */
 int chdir(string path) [flags=NAMED_ARGS;dom=PROCESS,FILESYSTEM] {
+   if (q_check_path(*path)) {
+      return -1;
+   }
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
    if (smh) {
@@ -1059,9 +1193,15 @@ string getcwd2() [flags=RET_VALUE_ONLY;dom=FILESYSTEM,EXTERNAL_INFO] {
 if (mkfifo("/tmp/pipe"))
     printf("mkfifo /tmp/pipe: %s\n", strerror());
     @endcode
+
+    @note a path containing a NUL character names no file: -1 is returned and errno() returns \c EINVAL; see
+    @ref path_nul_characters
  */
 int mkfifo(string path, softint mode = 0600) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef HAVE_MKFIFO
+   if (q_check_path(*path)) {
+      return -1;
+   }
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
    if (smh) {
@@ -1092,9 +1232,15 @@ if (chown("/bin/login", 0, 0))
     @endcode
 
     @see lchown() for a version of this function that does not follow symbolic links
+
+    @note a path containing a NUL character names no file: -1 is returned and errno() returns \c EINVAL; see
+    @ref path_nul_characters
  */
 int chown(string path, softint owner = -1, softint group = -1) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef HAVE_CHOWN
+   if (q_check_path(*path)) {
+      return -1;
+   }
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
    if (smh) {
@@ -1125,9 +1271,15 @@ if (lchown("/tmp/socket", 0, 0))
     @endcode
 
     @see chown() for a version of this function that follows symbolic links (ie operates on the target instead of on the link itself)
+
+    @note a path containing a NUL character names no file: -1 is returned and errno() returns \c EINVAL; see
+    @ref path_nul_characters
  */
 int lchown(string path, softint owner = -1, softint group = -1) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef HAVE_LCHOWN
+   if (q_check_path(*path)) {
+      return -1;
+   }
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
    if (smh) {
@@ -1155,9 +1307,13 @@ string str = readlink("/tmp/symbolic_link");
     @endcode
 
     @throw READLINK-ERROR Invalid arguments or a system error occured (ex: file does not exist or is not a symbolic link)
+    @throw READLINK-ERROR the path contains a NUL character; see @ref path_nul_characters
  */
 string readlink(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef HAVE_READLINK
+   if (q_check_path(*path, "READLINK-ERROR", xsink)) {
+      return QoreValue();
+   }
    QoreSandboxManagerHelper smh;
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return QoreValue();
@@ -1191,6 +1347,7 @@ symlink("/tmp/temporary-dir", "/users/oracle/install");
     @endcode
 
     @throw SYMLINK-ERROR empty string passed for one of the arguments or the operating system returned an error
+    @throw SYMLINK-ERROR a path contains a NUL character; see @ref path_nul_characters
 
     @since %Qore 0.8.5
  */
@@ -1202,6 +1359,10 @@ nothing symlink(string target_path, string link_path) [flags=NAMED_ARGS;dom=FILE
    // new file name
    if (link_path->empty())
       return xsink->raiseException("SYMLINK-ERROR", "empty link_path argument");
+
+   if (q_check_path(*target_path, "SYMLINK-ERROR", xsink) || q_check_path(*link_path, "SYMLINK-ERROR", xsink)) {
+      return QoreValue();
+   }
 
    QoreSandboxManagerHelper smh;
    if (smh && !smh->checkFilesystemAccess(link_path->c_str(), QSEC_CREATE, xsink)) {
@@ -1289,10 +1450,14 @@ string realpath = realpath(path);
     @return the corresponding absolute path with all relative references removed and all symbolic links resolved (if applicable for the current platform)
 
     @throw REALPATH-ERROR if an error occurs calculating the return value then this exception is thrown
+    @throw REALPATH-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @since %Qore 0.8.12
  */
 string realpath(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   if (q_check_path(*path, "REALPATH-ERROR", xsink)) {
+      return QoreValue();
+   }
    QoreSandboxManagerHelper smh;
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return QoreValue();

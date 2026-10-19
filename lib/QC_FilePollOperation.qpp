@@ -54,11 +54,12 @@ qclass FilePollOperation [arg=SocketPollOperationBase* op; vparent=SocketPollOpe
 
     @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow the file to
     be read
+    @throw FILE-OPEN-ERROR the path contains a NUL character; see @ref path_nul_characters
 */
 FilePollOperation::constructor(ReadOnlyFile[File] file, string path, bool as_string, int num_bytes = -1)
         [flags=NAMED_ARGS] {
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
-    if (*xsink) {
+    if (*xsink || q_check_path(**npath, "FILE-OPEN-ERROR", xsink)) {
         return;
     }
     ReferenceHolder<SocketPollOperationBase> poller(new FileReadPollOperation(xsink, file.release(), npath->c_str(),

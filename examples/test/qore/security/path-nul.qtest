@@ -1,0 +1,581 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# An operating system path is a NUL-terminated string, so a path with a NUL character was cut at the NUL character
+# and named another file than the string: ReadOnlyFile::readTextFile(path + "\x00.txt") read the file named by the
+# path before the NUL character, although the string passed an extension check on ".txt".  A path with a NUL
+# character is now refused before any sandbox check and before the system call: an API with an error code raises it
+# with a description showing the path and the offset of the NUL character, and an API reporting errors with its
+# return value and errno() fails with EINVAL.
+
+%modern
+%no-child-restrictions
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class PathNulTest
+
+class PathNulTest inherits QUnit::Test {
+    private {
+        #! the test directory
+        string dir;
+        #! a regular file with known content in the test directory
+        string real;
+        #! the regular file's path with a NUL character and a ".txt" extension after it
+        string nulpath;
+        #! the offset of the NUL character in nulpath
+        int nul_offset;
+        #! a symbolic link to the regular file
+        string link;
+        #! a short path for UNIX domain sockets
+        string sock_path;
+    }
+
+    #! the content of the regular file
+    const Content = "secret\n";
+
+    constructor() : QUnit::Test("path NUL characters", "1.0", \ARGV) {
+        addTestCase("the error description", \testDescription());
+        addTestCase("File, ReadOnlyFile, FileLineIterator, streams, poll operations", \testFile());
+        addTestCase("ReadOnlyFile static stat methods", \testStaticStat());
+        addTestCase("query functions fail with EINVAL", \testQueryFunctions());
+        addTestCase("functions changing the filesystem fail with EINVAL", \testErrnoFunctions());
+        addTestCase("functions raising an exception", \testExceptionFunctions());
+        addTestCase("Dir", \testDir());
+        addTestCase("module loader", \testModuleLoader());
+        addTestCase("Program script path and time zone", \testProgram());
+        addTestCase("TimeZone regions and date deserialization", \testTimeZone());
+        addTestCase("Socket targets and UNIX domain sockets", \testSocket());
+        addTestCase("HTTPClient URL hosts and SSL file options", \testHttpClient());
+        addTestCase("FtpClient local paths", \testFtpClient());
+        addTestCase("SandboxManager path rules", \testSandboxManager());
+        addTestCase("the NUL check comes before the sandbox check", \testSandboxOrder());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = tmp_location() + DirSep + "qore-path-nul-" + get_random_string(8);
+        mkdir_ex(dir);
+        real = dir + "/data.csv";
+        File f();
+        f.open2(real, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        f.write(Content);
+        f.close();
+        nul_offset = real.size();
+        nulpath = real + "\x00.txt";
+        if (Option::HAVE_UNIX_FILEMGT) {
+            link = dir + "/link";
+            symlink(real, link);
+        }
+        # UNIX socket paths are limited to around 100 bytes
+        sock_path = "/tmp/qpn-" + get_random_string(8) + ".sock";
+    }
+
+    globalTearDown() {
+        if (dir.val()) {
+            try {
+                remove_tree(dir);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        if (sock_path.val()) {
+            unlink(sock_path);
+        }
+    }
+
+    #! returns the expected description of the NUL error for the given string
+    static string nulDesc(string str, string what = "path", string plural = "paths") {
+        # the offset of the first NUL byte
+        int offset = -1;
+        for (int i = 0; i < str.size(); ++i) {
+            if (!get_byte(str, i)) {
+                offset = i;
+                break;
+            }
+        }
+        # all the strings tested are ASCII, so characters are bytes; at most 64 are shown, escaped
+        string shown;
+        int show = str.size() > 64 ? 64 : str.size();
+        for (int i = 0; i < show; ++i) {
+            int c = get_byte(str, i);
+            if (c < 0x20 || c == 0x7f) {
+                shown += sprintf("\\x%02x", c);
+            } else if (c == 0x22 || c == 0x5c) {
+                shown += "\\" + chr(c);
+            } else {
+                shown += chr(c);
+            }
+        }
+        if (show < str.size()) {
+            shown += "...";
+        }
+        return sprintf("%s \"%s\" contains a NUL character at byte offset %d; %s cannot contain NUL characters", what,
+            shown, offset, plural);
+    }
+
+    #! asserts that the code raises the given error with the NUL description of the given string
+    /** @param suffix context that the API adds to the description after it, if any
+    */
+    assertNul(string err, string str, code c, string label, string what = "path", string plural = "paths",
+            string suffix = "") {
+        try {
+            c();
+            assertTrue(False, label + ": an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(err, ex.err, label + ": error code");
+            assertEq(nulDesc(str, what, plural) + suffix, ex.desc, label + ": description");
+            assertEq(EINVAL, ex.arg, label + ": the argument is EINVAL");
+        }
+    }
+
+    #! asserts that the code returns the given failure value and leaves errno() set to EINVAL
+    assertEinval(auto expected, code c, string label) {
+        auto rv = c();
+        assertEq(expected, rv, label + ": failure value");
+        assertEq(EINVAL, errno(), label + ": errno() is EINVAL");
+    }
+
+    testDescription() {
+        # control characters, quotes and backslashes are escaped; the offset is the byte offset of the first NUL
+        string odd = "a\"b\\c\td\x00e\x00";
+        assertNul("FILE-OPEN2-ERROR", odd, sub () { ReadOnlyFile::readTextFile(odd); }, "escaped path");
+        assertEq("path \"a\\\"b\\\\c\\x09d\\x00e\\x00\" contains a NUL character at byte offset 7; paths cannot "
+            "contain NUL characters", nulDesc(odd), "escaping as expected");
+        # a NUL character as the first character
+        assertNul("FILE-OPEN2-ERROR", "\x00" + real, sub () { ReadOnlyFile::readTextFile("\x00" + real); },
+            "offset 0");
+        # at most 64 characters of the path are shown
+        string long_path = strmul("x", 100) + "\x00.txt";
+        try {
+            ReadOnlyFile::readTextFile(long_path);
+            assertTrue(False, "long path: an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FILE-OPEN2-ERROR", ex.err);
+            assertEq("path \"" + strmul("x", 64) + "...\" contains a NUL character at byte offset 100; paths cannot "
+                "contain NUL characters", ex.desc, "a long path is cut after 64 characters");
+        }
+        # the bytes of a path that is not valid UTF-8 are escaped, so that the description is valid UTF-8
+        string latin1 = binary_to_string(<e974e9002e747874>, "ISO-8859-1");
+        try {
+            ReadOnlyFile::readTextFile(latin1);
+            assertTrue(False, "ISO-8859-1 path: an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FILE-OPEN2-ERROR", ex.err);
+            assertEq("path \"\\xe9t\\xe9\\x00.txt\" contains a NUL character at byte offset 3; paths cannot contain "
+                "NUL characters", ex.desc, "the bytes that are not ASCII are escaped");
+        }
+        # a path without a NUL character is not affected
+        assertEq(Content, ReadOnlyFile::readTextFile(real), "the file without the NUL character is read");
+    }
+
+    testFile() {
+        # File::open() reports errors with its return value and errno()
+        {
+            File f();
+            assertEinval(-1, auto sub () { return f.open(nulpath); }, "File::open()");
+            assertFalse(f.isOpen(), "File::open(): the file is not open");
+            assertEq(0, f.open(real), "File::open() without the NUL character");
+        }
+        {
+            File f();
+            assertNul("FILE-OPEN2-ERROR", nulpath, sub () { f.open2(nulpath); }, "File::open2()");
+            string out = dir + "/out.csv";
+            assertNul("FILE-OPEN2-ERROR", out + "\x00.log", sub () {
+                f.open2(out + "\x00.log", O_CREAT | O_TRUNC | O_WRONLY);
+            }, "File::open2() for writing");
+            assertFalse(is_file(out), "File::open2() for writing: no file is created");
+        }
+        assertNul("READONLYFILE-OPEN-ERROR", nulpath, sub () { ReadOnlyFile f(nulpath); },
+            "ReadOnlyFile::constructor()");
+        {
+            ReadOnlyFile f(real);
+            assertNul("READONLYFILE-OPEN-ERROR", nulpath, sub () { f.open(nulpath); }, "ReadOnlyFile::open()");
+        }
+        assertNul("FILE-OPEN2-ERROR", nulpath, sub () { ReadOnlyFile::readTextFile(nulpath); },
+            "ReadOnlyFile::readTextFile()");
+        assertNul("FILE-OPEN2-ERROR", nulpath, sub () { ReadOnlyFile::readBinaryFile(nulpath); },
+            "ReadOnlyFile::readBinaryFile()");
+        assertNul("FILE-OPEN2-ERROR", nulpath, sub () { File::readTextFile(nulpath); }, "File::readTextFile()");
+        {
+            File f();
+            assertNul("FILE-OPEN-ERROR", nulpath, sub () { f.startPollRead(nulpath); },
+                "ReadOnlyFile::startPollRead()");
+            assertNul("FILE-OPEN-ERROR", nulpath, sub () { FilePollOperation op(f, nulpath, True); },
+                "FilePollOperation::constructor()");
+            # a path that cannot be converted to the default encoding raises the conversion error (it crashed
+            # startPollRead() before)
+            string bad = force_encoding(binary_to_string(<2f746d702f8280ff>), "SHIFT_JIS");
+            assertThrows("ENCODING-CONVERSION-ERROR", sub () { f.startPollRead(bad); }, NOTHING,
+                "ReadOnlyFile::startPollRead() with a path that cannot be converted");
+            assertThrows("ENCODING-CONVERSION-ERROR", sub () { FilePollOperation op(f, bad, True); }, NOTHING,
+                "FilePollOperation::constructor() with a path that cannot be converted");
+        }
+        assertNul("FILE-OPEN2-ERROR", nulpath, sub () { FileLineIterator i(nulpath); },
+            "FileLineIterator::constructor()");
+        assertNul("FILE-OPEN2-ERROR", nulpath, sub () { FileInputStream s(nulpath); },
+            "FileInputStream::constructor()");
+        string out = dir + "/out-stream.csv";
+        assertNul("FILE-OPEN2-ERROR", out + "\x00.log", sub () { FileOutputStream s(out + "\x00.log"); },
+            "FileOutputStream::constructor()");
+        assertFalse(is_file(out), "FileOutputStream::constructor(): no file is created");
+    }
+
+    testStaticStat() {
+        assertNul("FILE-STAT-ERROR", nulpath, sub () { ReadOnlyFile::stat(nulpath); }, "ReadOnlyFile::stat()");
+        assertNul("FILE-STAT-ERROR", nulpath, sub () { File::stat(nulpath); }, "File::stat()");
+        assertNul("FILE-LSTAT-ERROR", nulpath, sub () { ReadOnlyFile::lstat(nulpath); }, "ReadOnlyFile::lstat()");
+        assertNul("FILE-HSTAT-ERROR", nulpath, sub () { ReadOnlyFile::hstat(nulpath); }, "ReadOnlyFile::hstat()");
+        assertNul("FILE-HLSTAT-ERROR", nulpath, sub () { ReadOnlyFile::hlstat(nulpath); },
+            "ReadOnlyFile::hlstat()");
+        if (Option::HAVE_STATVFS) {
+            assertNul("FILE-STATVFS-ERROR", nulpath, sub () { ReadOnlyFile::statvfs(nulpath); },
+                "ReadOnlyFile::statvfs()");
+        }
+        assertEq("REGULAR", ReadOnlyFile::hstat(real).type, "ReadOnlyFile::hstat() without the NUL character");
+    }
+
+    testQueryFunctions() {
+        if (PlatformOS == "Windows") {
+            testSkip("UNIX paths");
+        }
+        # each would be True for the path before the NUL character
+        assertEinval(False, auto sub () { return is_file(nulpath); }, "is_file()");
+        assertEinval(False, auto sub () { return is_dir(dir + "\x00.txt"); }, "is_dir()");
+        assertEinval(False, auto sub () { return is_readable(nulpath); }, "is_readable()");
+        assertEinval(False, auto sub () { return is_writable(nulpath); }, "is_writable()");
+        assertEinval(False, auto sub () { return is_writeable(nulpath); }, "is_writeable()");
+        assertEinval(False, auto sub () { return is_writable(dir + "\x00.txt"); }, "is_writable() for a directory");
+        assertEinval(False, auto sub () { return is_executable("/bin/sh\x00.txt"); }, "is_executable()");
+        assertEinval(False, auto sub () { return is_cdev("/dev/null\x00.txt"); }, "is_cdev()");
+        assertEinval(False, auto sub () { return is_dev("/dev/null\x00.txt"); }, "is_dev()");
+        assertEinval(False, auto sub () { return is_bdev("/dev/null\x00.txt"); }, "is_bdev()");
+        if (Option::HAVE_UNIX_FILEMGT) {
+            assertEinval(False, auto sub () { return is_link(link + "\x00.txt"); }, "is_link()");
+            string fifo = dir + "/fifo";
+            assertEq(0, mkfifo(fifo), "mkfifo() without the NUL character");
+            assertEinval(False, auto sub () { return is_pipe(fifo + "\x00.txt"); }, "is_pipe()");
+            string query_sock = "/tmp/qpn-" + get_random_string(8) + ".sock";
+            Socket s();
+            s.bindUNIX(query_sock);
+            on_exit {
+                s.close();
+                unlink(query_sock);
+            }
+            assertEinval(False, auto sub () { return is_socket(query_sock + "\x00.txt"); }, "is_socket()");
+        }
+        assertEinval(NOTHING, auto sub () { return stat(nulpath); }, "stat()");
+        assertEinval(NOTHING, auto sub () { return lstat(nulpath); }, "lstat()");
+        assertEinval(NOTHING, auto sub () { return hstat(nulpath); }, "hstat()");
+        assertEinval(NOTHING, auto sub () { return hlstat(nulpath); }, "hlstat()");
+        if (Option::HAVE_STATVFS) {
+            assertEinval(NOTHING, auto sub () { return statvfs(dir + "\x00.txt"); }, "statvfs()");
+        }
+        assertEinval(NOTHING, auto sub () { return glob(dir + "/*.csv\x00.txt"); }, "glob()");
+        # without the NUL character
+        assertTrue(is_file(real), "is_file() without the NUL character");
+        assertEq((real,), glob(dir + "/*.csv"), "glob() without the NUL character");
+    }
+
+    testErrnoFunctions() {
+        if (PlatformOS == "Windows") {
+            testSkip("UNIX paths");
+        }
+        assertEinval(-1, auto sub () { return unlink(nulpath); }, "unlink()");
+        assertTrue(is_file(real), "unlink(): the file is not deleted");
+
+        string new_dir = dir + "/new";
+        assertEinval(-1, auto sub () { return mkdir(new_dir + "\x00.txt"); }, "mkdir()");
+        assertEinval(-1, auto sub () { return mkdir(new_dir + "\x00.txt", 0755, True); }, "mkdir() with parents");
+        assertFalse(is_dir(new_dir), "mkdir(): no directory is created");
+
+        string sub_dir = dir + "/sub";
+        assertEq(0, mkdir(sub_dir), "mkdir() without the NUL character");
+        assertEinval(-1, auto sub () { return rmdir(sub_dir + "\x00.txt"); }, "rmdir()");
+        assertTrue(is_dir(sub_dir), "rmdir(): the directory is not removed");
+
+        int mode = hstat(real).mode;
+        assertEinval(-1, auto sub () { return chmod(nulpath, 0); }, "chmod()");
+        assertEq(mode, hstat(real).mode, "chmod(): the mode is not changed");
+
+        *string cwd = getcwd();
+        assertEinval(-1, auto sub () { return chdir(dir + "\x00.txt"); }, "chdir()");
+        assertEq(cwd, getcwd(), "chdir(): the current directory is not changed");
+
+        if (Option::HAVE_UNIX_FILEMGT) {
+            string fifo = dir + "/fifo2";
+            assertEinval(-1, auto sub () { return mkfifo(fifo + "\x00.txt"); }, "mkfifo()");
+            assertFalse(exists hlstat(fifo), "mkfifo(): no pipe is created");
+            assertEinval(-1, auto sub () { return chown(nulpath); }, "chown()");
+            assertEinval(-1, auto sub () { return lchown(link + "\x00.txt"); }, "lchown()");
+        }
+    }
+
+    testExceptionFunctions() {
+        if (PlatformOS == "Windows") {
+            testSkip("UNIX paths");
+        }
+        string moved = dir + "/moved.csv";
+        assertNul("RENAME-ERROR", nulpath, sub () { rename(nulpath, moved); }, "rename() source");
+        assertNul("RENAME-ERROR", moved + "\x00.txt", sub () { rename(real, moved + "\x00.txt"); },
+            "rename() target");
+        assertTrue(is_file(real), "rename(): the file is not moved");
+        assertFalse(is_file(moved), "rename(): the file is not moved");
+
+        string new_dir = dir + "/new-ex";
+        assertNul("DIR-CREATE-FAILURE", new_dir + "\x00.txt", sub () { mkdir_ex(new_dir + "\x00.txt"); },
+            "mkdir_ex()");
+        assertNul("DIR-CREATE-FAILURE", new_dir + "\x00.txt", sub () { mkdir_ex(new_dir + "\x00.txt", 0755, True); },
+            "mkdir_ex() with parents");
+        assertFalse(is_dir(new_dir), "mkdir_ex(): no directory is created");
+
+        assertNul("REALPATH-ERROR", nulpath, sub () { realpath(nulpath); }, "realpath()");
+
+        if (Option::HAVE_UNIX_FILEMGT) {
+            string new_link = dir + "/new-link";
+            assertNul("SYMLINK-ERROR", new_link + "\x00.txt", sub () { symlink(real, new_link + "\x00.txt"); },
+                "symlink() link path");
+            assertNul("SYMLINK-ERROR", nulpath, sub () { symlink(nulpath, new_link); }, "symlink() target path");
+            assertFalse(exists hlstat(new_link), "symlink(): no link is created");
+            assertNul("READLINK-ERROR", link + "\x00.txt", sub () { readlink(link + "\x00.txt"); }, "readlink()");
+            assertEq(real, readlink(link), "readlink() without the NUL character");
+        }
+    }
+
+    testDir() {
+        if (PlatformOS == "Windows") {
+            testSkip("UNIX paths");
+        }
+        Dir d();
+        d.chdir(dir);
+        assertNul("DIR-CHDIR-ERROR", dir + "\x00/zzz", sub () { d.chdir(dir + "\x00/zzz"); }, "Dir::chdir()");
+        assertEq(dir, d.path(), "Dir::chdir(): the directory is not changed");
+
+        # a path separator after the NUL character would have passed the check for one
+        assertNul("DIR-MKDIR-PARAMETER-ERROR", "dsub\x00/../x", sub () { d.mkdir("dsub\x00/../x"); },
+            "Dir::mkdir()");
+        assertFalse(is_dir(dir + "/dsub"), "Dir::mkdir(): no directory is created");
+
+        d.mkdir("dsub2");
+        assertNul("DIR-RMDIR-PARAMETER-ERROR", "dsub2\x00.txt", sub () { d.rmdir("dsub2\x00.txt"); },
+            "Dir::rmdir()");
+        assertTrue(is_dir(dir + "/dsub2"), "Dir::rmdir(): the directory is not removed");
+
+        assertNul("DIR-OPENFILE-PARAMETER-ERROR", "data.csv\x00.txt", sub () { d.openFile("data.csv\x00.txt"); },
+            "Dir::openFile()");
+        assertNul("DIR-OPENDIR-PARAMETER-ERROR", "dsub2\x00.txt", sub () { d.openDir("dsub2\x00.txt"); },
+            "Dir::openDir()");
+        assertNul("DIR-REMOVEFILE-PARAMETER-ERROR", "data.csv\x00.txt", sub () { d.removeFile("data.csv\x00.txt"); },
+            "Dir::removeFile()");
+        assertTrue(is_file(real), "Dir::removeFile(): the file is not removed");
+    }
+
+    testModuleLoader() {
+        # QUnit and Util are already loaded, so a name cut at the NUL character would load nothing and raise nothing
+        string name = "Util\x00.txt";
+        string what = "module name or path";
+        string plural = "module names and paths";
+        assertNul("LOAD-MODULE-ERROR", name, sub () { load_module(name); }, "load_module()", what, plural);
+        assertNul("LOAD-MODULE-ERROR", name, sub () { load_module_warn(name); }, "load_module_warn()", what, plural);
+        assertNul("LOAD-MODULE-ERROR", name, sub () { reload_module(name); }, "reload_module()", what, plural);
+        assertNul("LOAD-MODULE-ERROR", name, sub () { load_user_module_with_program(name, new Program(PO_NEW_STYLE)); },
+            "load_user_module_with_program()", what, plural);
+
+        Program p(PO_NEW_STYLE);
+        assertNul("LOAD-MODULE-ERROR", name, sub () { p.loadModule(name); }, "Program::loadModule()", what, plural);
+        assertNul("LOAD-MODULE-ERROR", name, sub () { p.loadModuleWarn(name); }, "Program::loadModuleWarn()", what,
+            plural);
+        # the Program container passed is owned by the call in any case
+        assertNul("LOAD-MODULE-ERROR", name, sub () { p.loadUserModuleWithProgram(name, new Program(PO_NEW_STYLE)); },
+            "Program::loadUserModuleWithProgram()", what, plural);
+        assertNul("LOAD-MODULE-ERROR", name,
+            sub () { p.loadUserModuleWithProgramWarn(name, new Program(PO_NEW_STYLE)); },
+            "Program::loadUserModuleWithProgramWarn()", what, plural);
+        assertNul("LOAD-MODULE-ERROR", name, sub () { p.loadApplyToUserModule(name); },
+            "Program::loadApplyToUserModule()", what, plural);
+        assertNul("LOAD-MODULE-ERROR", name, sub () { p.loadApplyToUserModuleWarn(name); },
+            "Program::loadApplyToUserModuleWarn()", what, plural);
+        assertNul("LOAD-MODULE-ERROR", name, sub () { p.loadApplyToPrivateUserModule(name); },
+            "Program::loadApplyToPrivateUserModule()", what, plural);
+        assertNul("LOAD-MODULE-ERROR", name, sub () { p.loadApplyToPrivateUserModuleWarn(name); },
+            "Program::loadApplyToPrivateUserModuleWarn()", what, plural);
+        # the name is refused before the Program is handed to the module, so the Program can still be used
+        p.parse("int sub f() { return 1; }", "after-load-error");
+        assertEq(1, p.callFunction("f"), "the Program is still usable after the module load error");
+    }
+
+    testProgram() {
+        Program p(PO_NEW_STYLE);
+        p.setScriptPath(real);
+        assertNul("PROGRAM-ERROR", nulpath, sub () { p.setScriptPath(nulpath); }, "Program::setScriptPath()");
+        assertEq(real, p.getScriptPath(), "Program::setScriptPath(): the script path is not changed");
+
+        string what = "time zone region or path";
+        string plural = "time zone regions and paths";
+        assertNul("TZINFO-ERROR", "UTC\x00.txt", sub () { p.setTimeZoneRegion("UTC\x00.txt"); },
+            "Program::setTimeZoneRegion()", what, plural);
+    }
+
+    testTimeZone() {
+        string what = "time zone region or path";
+        string plural = "time zone regions and paths";
+        # a region cut at the NUL character would silently be UTC
+        assertNul("TZINFO-ERROR", "UTC\x00/Europe/Prague", sub () { TimeZone tz("UTC\x00/Europe/Prague"); },
+            "TimeZone::constructor()", what, plural);
+        assertNul("TZINFO-ERROR", "UTC\x00/Europe/Prague", sub () { TimeZone::setRegion("UTC\x00/Europe/Prague"); },
+            "TimeZone::setRegion()", what, plural);
+
+        # a serialized date names its time zone region; one with a NUL character in the region is refused
+        date d = (new TimeZone("Europe/Prague")).date("2026-01-15T10:00:00");
+        string hex = make_hex_string(Serializable::serialize(d));
+        string region_hex = make_hex_string(binary("Europe/Prague"));
+        string nul_region = "UTC\x00pe/Prague";
+        assertEq(region_hex.size(), make_hex_string(binary(nul_region)).size(), "same length");
+        assertTrue(hex.find(region_hex) >= 0, "the region is in the serialized data");
+        binary data = parse_hex_string(replace(hex, region_hex, make_hex_string(binary(nul_region))));
+        assertNul("TZINFO-ERROR", nul_region, auto sub () { return Serializable::deserialize(data); },
+            "Serializable::deserialize() of a date", what, plural,
+            " (while deserializing hashdecl 'SerializationInfo')");
+        assertEq(d, Serializable::deserialize(Serializable::serialize(d)), "the date without the NUL character");
+    }
+
+    testSocket() {
+        if (!Option::HAVE_UNIX_FILEMGT) {
+            testSkip("no UNIX domain sockets");
+        }
+        string what = "socket target";
+        string plural = "socket targets";
+        Socket server();
+        server.bindUNIX(sock_path);
+        server.listen();
+        on_exit server.close();
+
+        # cut at the NUL character, the target would have no colon and connect to the UNIX socket
+        string target = sock_path + "\x00:80";
+        {
+            Socket s();
+            assertNul("SOCKET-CONNECT-ERROR", target, sub () { s.connect(target, 5s); }, "Socket::connect()", what,
+                plural);
+            assertFalse(s.isOpen(), "Socket::connect(): the socket is not connected");
+            assertNul("SOCKET-CONNECT-ERROR", target, sub () { s.startPollConnect(target); },
+                "Socket::startPollConnect()", what, plural);
+            assertNul("SOCKET-CONNECT-ERROR", sock_path + "\x00.txt", sub () { s.connectUNIX(sock_path + "\x00.txt"); },
+                "Socket::connectUNIX()");
+            assertFalse(s.isOpen(), "Socket::connectUNIX(): the socket is not connected");
+            # the TLS variants use a path without a listener, so that a target cut at the NUL character fails
+            # instead of waiting for a TLS handshake
+            string no_listener = "/tmp/qpn-" + get_random_string(8) + ".sock";
+            string ssl_target = no_listener + "\x00:443";
+            assertNul("SOCKET-CONNECT-ERROR", ssl_target, sub () { s.connectSSL(ssl_target, 5s); },
+                "Socket::connectSSL()", what, plural);
+            assertNul("SOCKET-CONNECT-ERROR", ssl_target, sub () { s.startPollConnectSsl(ssl_target); },
+                "Socket::startPollConnectSsl()", what, plural);
+            assertNul("SOCKET-CONNECT-ERROR", no_listener + "\x00.txt",
+                sub () { s.connectUNIXSSL(no_listener + "\x00.txt"); }, "Socket::connectUNIXSSL()");
+            assertNul("SOCKET-SSL-ERROR", nulpath, sub () { s.setSslCaLocations(nulpath); },
+                "Socket::setSslCaLocations() file");
+            assertNul("SOCKET-SSL-ERROR", dir + "\x00.txt", sub () { s.setSslCaLocations(NOTHING, dir + "\x00.txt"); },
+                "Socket::setSslCaLocations() path");
+        }
+        {
+            PollPipeline pp(new Socket());
+            assertNul("POLL-PIPELINE-ERROR", target, sub () { pp.addConnect(target); }, "PollPipeline::addConnect()",
+                what, plural);
+            assertNul("POLL-PIPELINE-ERROR", target, sub () { pp.addConnectSsl(target); },
+                "PollPipeline::addConnectSsl()", what, plural);
+        }
+        {
+            Socket s();
+            s.connect(sock_path);
+            assertTrue(s.isOpen(), "Socket::connect() without the NUL character");
+            s.close();
+        }
+
+        # binding creates the socket file, so a path cut at the NUL character would create another file
+        string bind_path = "/tmp/qpn-" + get_random_string(8) + ".sock";
+        on_exit unlink(bind_path);
+        {
+            Socket s();
+            assertNul("SOCKET-BIND-ERROR", bind_path + "\x00.txt", sub () { s.bindUNIX(bind_path + "\x00.txt"); },
+                "Socket::bindUNIX()");
+            assertEinval(-1, auto sub () { return s.bind(bind_path + "\x00.txt"); }, "Socket::bind()");
+            assertFalse(exists hlstat(bind_path), "no socket file is created");
+        }
+    }
+
+    testHttpClient() {
+        # a percent-encoded NUL character in a "socket=" URL host would cut the UNIX socket path
+        string url = "http://socket=" + encode_url(sock_path, True) + "%00.txt/path";
+        assertNul("HTTP-CLIENT-URL-ERROR", sock_path + "\x00.txt", sub () { HTTPClient hc({"url": url}); },
+            "HTTPClient URL host", "URL host", "URL hosts");
+        {
+            HTTPClient hc();
+            assertNul("HTTP-CLIENT-URL-ERROR", sock_path + "\x00.txt", sub () { hc.setURL(url); },
+                "HTTPClient::setURL()", "URL host", "URL hosts");
+        }
+        foreach string opt in ("ssl_cert_path", "ssl_key_path", "ssl_ca_file", "ssl_ca_path") {
+            hash<auto> opts = {"url": "https://localhost:1"};
+            opts{opt} = nulpath;
+            assertNul("HTTP-CLIENT-OPTION-ERROR", nulpath, sub () { HTTPClient hc(opts); }, "HTTPClient option " + opt);
+        }
+    }
+
+    testFtpClient() {
+        FtpClient fc("ftp://localhost:1");
+        assertNul("FTP-FILE-OPEN-ERROR", nulpath, sub () { fc.put(nulpath, "remote.txt"); }, "FtpClient::put()");
+        string out = dir + "/ftp-out.csv";
+        assertNul("FTP-FILE-OPEN-ERROR", out + "\x00.txt", sub () { fc.get("remote.txt", out + "\x00.txt"); },
+            "FtpClient::get() local path");
+        # without a local path, the remote path is also the local path
+        assertNul("FTP-FILE-OPEN-ERROR", "remote.csv\x00.txt", sub () { fc.get("remote.csv\x00.txt"); },
+            "FtpClient::get() without a local path");
+        assertFalse(fc.isConnected(), "no connection is made");
+    }
+
+    testSandboxManager() {
+        SandboxManager sm();
+        # cut at the NUL character, the rule would cover the whole test directory instead of one subdirectory
+        string rule = dir + "\x00/allowed";
+        assertNul("SANDBOX-PATH-ERROR", rule, sub () { sm.addFilesystemAllowedPath(rule, QSEC_READ); },
+            "SandboxManager::addFilesystemAllowedPath()");
+        assertNul("SANDBOX-PATH-ERROR", rule, sub () { sm.addFilesystemDeniedPath(rule); },
+            "SandboxManager::addFilesystemDeniedPath()");
+        assertNul("SANDBOX-PATH-ERROR", rule, sub () { sm.setFilesystemSandboxRoot(rule); },
+            "SandboxManager::setFilesystemSandboxRoot()");
+    }
+
+    testSandboxOrder() {
+        # every filesystem access is denied, so a sandbox check made first would raise FILESYSTEM-ACCESS-DENIED
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(sm);
+        p.parse("
+            auto sub read(string path) { return ReadOnlyFile::readTextFile(path); }
+            hash<auto> sub query(string path) { bool b = is_file(path); return {\"rv\": b, \"errno\": errno()}; }
+            hash<auto> sub del(string path) { int rv = unlink(path); return {\"rv\": rv, \"errno\": errno()}; }
+            hash<auto> sub fopen(string path) {
+                File f();
+                int rv = f.open(path);
+                return {\"rv\": rv, \"errno\": errno()};
+            }
+            auto sub chdir_obj(string path) { Dir d(); return d.chdir(path); }
+        ", "path-nul-sandbox");
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("read", real),
+            "the sandbox denies the file without the NUL character");
+        assertNul("FILE-OPEN2-ERROR", nulpath, sub () { p.callFunction("read", nulpath); },
+            "sandboxed ReadOnlyFile::readTextFile()");
+        assertEq({"rv": False, "errno": EINVAL}, p.callFunction("query", nulpath), "sandboxed is_file()");
+        assertEq({"rv": -1, "errno": EINVAL}, p.callFunction("del", nulpath), "sandboxed unlink()");
+        assertTrue(is_file(real), "sandboxed unlink(): the file is not deleted");
+        assertEq({"rv": -1, "errno": EINVAL}, p.callFunction("fopen", nulpath), "sandboxed File::open()");
+        assertNul("DIR-CHDIR-ERROR", dir + "\x00.txt", sub () { p.callFunction("chdir_obj", dir + "\x00.txt"); },
+            "sandboxed Dir::chdir()");
+    }
+}

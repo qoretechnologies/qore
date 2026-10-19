@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -242,8 +242,12 @@ if (!d.chdir("../doc")) {
     @note calls to change to the current directory \c "." have no effect
 
     @throw DIR-CHDIR-ERROR cannot change to relative directory because no current directory is set
+    @throw DIR-CHDIR-ERROR the path contains a NUL character; see @ref path_nul_characters
  */
 bool Dir::chdir(string path) [flags=NAMED_ARGS] {
+    if (q_check_path(*path, "DIR-CHDIR-ERROR", xsink)) {
+        return false;
+    }
     return !d->chdir(path->getBuffer(), xsink);
 }
 
@@ -455,8 +459,13 @@ try {
 
     @throw DIR-MKDIR-PARAMETER-ERROR only direct subdirectories are allowed
     @throw DIR-MKDIR-FAILURE error creating directory (\c arg will be assigned to the errno value)
+    @throw DIR-MKDIR-PARAMETER-ERROR the name contains a NUL character; see @ref path_nul_characters
  */
 nothing Dir::mkdir(string subdir, softint mode = 0777) [flags=NAMED_ARGS] {
+   // a NUL character would cut the name before any path separator after it
+   if (q_check_path(*subdir, "DIR-MKDIR-PARAMETER-ERROR", xsink)) {
+      return QoreValue();
+   }
    // check if there is a path delimiter
    if (strchr(subdir->getBuffer(), QORE_DIR_SEP))
       xsink->raiseException("DIR-MKDIR-PARAMETER-ERROR", "only single, direct subdirectories are allowed");
@@ -478,10 +487,15 @@ try {
 
     @throw DIR-RMDIR-PARAMETER-ERROR only direct subdirectories are allowed
     @throw DIR-RMDIR-FAILURE error removing directory (\c arg will be assigned to the errno value)
+    @throw DIR-RMDIR-PARAMETER-ERROR the name contains a NUL character; see @ref path_nul_characters
 
     @see @ref Qore::rmdir()
  */
 nothing Dir::rmdir(string subdir) [flags=NAMED_ARGS] {
+   // a NUL character would cut the name before any path separator after it
+   if (q_check_path(*subdir, "DIR-RMDIR-PARAMETER-ERROR", xsink)) {
+      return QoreValue();
+   }
    // check if there is a path delimiter
    if (strchr(subdir->getBuffer(), QORE_DIR_SEP))
       xsink->raiseException("DIR-RMDIR-PARAMETER-ERROR", "only direct subdirectories are allowed");
@@ -1126,10 +1140,15 @@ File f = d.openFile("myfile.txt", O_CREAT|O_WRONLY, 0644, "utf-8");
     @endcode
 
     @throw DIR-OPENFILE-PARAMETER-ERROR only direct subdirectory names without path separators are allowed
+    @throw DIR-OPENFILE-PARAMETER-ERROR the name contains a NUL character; see @ref path_nul_characters
 
     @note see File::open2() for additional exceptions that can be thrown opening the file
  */
 File Dir::openFile(string filename, int flags = O_RDONLY, int mode = 0666, *string encoding) [flags=NAMED_ARGS] {
+   // a NUL character would cut the name before any path separator after it
+   if (q_check_path(*filename, "DIR-OPENFILE-PARAMETER-ERROR", xsink)) {
+      return QoreValue();
+   }
    if (strchr(filename->getBuffer(), QORE_DIR_SEP))
       return xsink->raiseException("DIR-OPENFILE-PARAMETER-ERROR", "only filenames without path (i.e. without '%c' characters) are allowed", QORE_DIR_SEP);
 
@@ -1160,8 +1179,13 @@ Dir sd = d.openDir("mysubdir");
     @endcode
 
     @throw DIR-OPENDIR-PARAMETER-ERROR only direct subdirectory names without path separators are allowed
+    @throw DIR-OPENDIR-PARAMETER-ERROR the name contains a NUL character; see @ref path_nul_characters
  */
 Dir Dir::openDir(string subdir, *string encoding) [flags=NAMED_ARGS] {
+   // a NUL character would cut the name before any path separator after it
+   if (q_check_path(*subdir, "DIR-OPENDIR-PARAMETER-ERROR", xsink)) {
+      return QoreValue();
+   }
    // check if there is a path delimiter in
    if (strchr(subdir->getBuffer(), QORE_DIR_SEP))
       return xsink->raiseException("DIR-OPENDIR-PARAMETER-ERROR", "only direct directory names without path (i.e. without '%c' characters) are allowed", QORE_DIR_SEP);
@@ -1190,8 +1214,13 @@ try {
 
     @throw DIR-REMOVEFILE-PARAMETER-ERROR only filenames without path (i.e. without path separator characters) are allowed
     @throw DIR-REMOVEFILE-FAILURE the unlink() function returned an error (\c arg will be assigned to the errno value)
+    @throw DIR-REMOVEFILE-PARAMETER-ERROR the name contains a NUL character; see @ref path_nul_characters
  */
 bool Dir::removeFile(string filename) [flags=NAMED_ARGS] {
+   // a NUL character would cut the name before any path separator after it
+   if (q_check_path(*filename, "DIR-REMOVEFILE-PARAMETER-ERROR", xsink)) {
+      return QoreValue();
+   }
    // check if there is a path delimiter in
    if (strchr(filename->getBuffer(), QORE_DIR_SEP))
       return xsink->raiseException("DIR-REMOVEFILE-PARAMETER-ERROR", "only filenames without path (i.e. without '%c' characters) are allowed", QORE_DIR_SEP);

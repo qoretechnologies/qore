@@ -3030,7 +3030,76 @@ int q_get_mode(const QoreString& path) {
     return sbuf.st_mode;
 }
 
+int q_check_no_nul(const char* str, size_t len, const char* what, const char* what_plural, const char* err,
+        ExceptionSink* xsink) {
+    assert(str || !len);
+    assert(what);
+    assert(what_plural);
+    assert(err);
+    assert(xsink);
+    const char* nul = len ? static_cast<const char*>(memchr(str, '\0', len)) : nullptr;
+    if (!nul) {
+        return 0;
+    }
+    size_t offset = nul - str;
+    // the string is shown with at most its first 64 characters, with control characters, quotes and backslashes
+    // escaped, so that the NUL character and where it is can be seen; a string that is not valid in the default
+    // encoding is shown with at most its first 64 bytes, with the bytes that are not ASCII escaped as well, so that
+    // the description is valid in the default encoding
+    static constexpr size_t max_chars = 64;
+    bool invalid = false;
+    size_t show = QCS_DEFAULT->getByteLen(str, str + len, max_chars, invalid);
+    if (invalid || show > len) {
+        invalid = true;
+        show = len < max_chars ? len : max_chars;
+    }
+    QoreStringNode* desc = new QoreStringNodeMaker("%s \"", what);
+    for (size_t i = 0; i < show; ++i) {
+        unsigned char c = static_cast<unsigned char>(str[i]);
+        if (c < 0x20 || c == 0x7f || (invalid && c >= 0x80)) {
+            desc->sprintf("\\x%02x", c);
+        } else if (c == '"' || c == '\\') {
+            desc->concat('\\');
+            desc->concat(static_cast<char>(c));
+        } else {
+            desc->concat(static_cast<char>(c));
+        }
+    }
+    if (show < len) {
+        desc->concat("...");
+    }
+    desc->sprintf("\" contains a NUL character at byte offset %zu; %s cannot contain NUL characters", offset,
+        what_plural);
+    xsink->raiseExceptionArg(err, EINVAL, desc);
+    return -1;
+}
+
+int q_check_path(const char* path, size_t len, const char* err, ExceptionSink* xsink) {
+    return q_check_no_nul(path, len, "path", "paths", err, xsink);
+}
+
+int q_check_path(const QoreString& path, const char* err, ExceptionSink* xsink) {
+    return q_check_path(path.c_str(), path.size(), err, xsink);
+}
+
+int q_check_no_nul(const char* str, size_t len) {
+    assert(str || !len);
+    if (len && memchr(str, '\0', len)) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+int q_check_path(const QoreString& path) {
+    return q_check_no_nul(path.c_str(), path.size());
+}
+
 int q_realpath(const QoreString& path, QoreString& rv, ExceptionSink* xsink) {
+    // a path with a NUL character would be cut at the NUL character by realpath()
+    if (xsink ? q_check_path(path, "REALPATH-ERROR", xsink) : q_check_path(path)) {
+        return -1;
+    }
 #ifdef HAVE_REALPATH
 #if defined(SOLARIS) || (defined(__NetBSD_Version__) && (__NetBSD_Version__ < 601000000))
     char buf[PATH_MAX];

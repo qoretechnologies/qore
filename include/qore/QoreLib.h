@@ -916,7 +916,105 @@ DLLEXPORT bool q_absolute_path(const char* path);
 DLLEXPORT void q_normalize_path(QoreString& path, const char* cwd = 0);
 
 //! normalizes the given path and resolves any symlinks
+/** @since %Qore 3.0 a path containing a NUL character fails: \c REALPATH-ERROR is raised in \a xsink if given,
+    otherwise \c errno is set to \c EINVAL
+*/
 DLLEXPORT int q_realpath(const QoreString& path, QoreString& rv, ExceptionSink* xsink = 0);
+
+//! checks that a string has no NUL character, raising the given exception if it has one
+/** A string passed to an operating system or C library call taking a <tt>const char*</tt> (a path, a host name, a
+    command, an environment variable name, ...) is NUL-terminated, so a string with a NUL character would be cut at
+    the NUL character and name something else than the string names, after any check made on the whole string.  Code
+    passing a string with a length to such a call must check it with this function (or q_check_path() for paths)
+    first, before any @ref QoreSandboxManager "sandbox" check.
+
+    The exception raised has the given error code, \c EINVAL as its argument, and a description like:
+    <tt>hostname "evil.example\x00.trusted.example" contains a NUL character at byte offset 12; hostnames cannot
+    contain NUL characters</tt>; the string is shown escaped, with at most its first 64 characters.
+
+    @param str the string, which need not be NUL-terminated
+    @param len the byte length of the string
+    @param what what the string is, in the singular, for the description (ex: \c "hostname")
+    @param what_plural what the string is, in the plural, for the description (ex: \c "hostnames")
+    @param err the error code of the exception to raise, normally the error code of the API being called
+    @param xsink the exception is raised here if the string contains a NUL character
+
+    @return 0 if the string has no NUL character, -1 if it has one and an exception was raised
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int q_check_no_nul(const char* str, size_t len, const char* what, const char* what_plural, const char* err,
+        ExceptionSink* xsink);
+
+//! checks that a string has no NUL character, setting \c errno to \c EINVAL if it has one
+/** For APIs that report errors with a return value and \c errno instead of an exception
+
+    @param str the string, which need not be NUL-terminated
+    @param len the byte length of the string
+
+    @return 0 if the string has no NUL character, -1 if it has one, in which case \c errno is set to \c EINVAL
+
+    @see q_check_no_nul(const char*, size_t, const char*, const char*, const char*, ExceptionSink*)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int q_check_no_nul(const char* str, size_t len);
+
+//! checks that a string can be used as a filesystem path, raising the given exception if not
+/** An operating system path is a NUL-terminated string, so a string with a NUL character cannot be a path; it
+    would be cut at the NUL character and name a different file than the one the string names.  Code that passes a
+    string with a length (a QoreString, a std::string, a value read from serialized data) to an operating system
+    call taking a <tt>const char*</tt> path must check it with this function first, before any
+    @ref QoreSandboxManager "sandbox" check, so that the sandbox and the operating system never see a path cut at a
+    NUL character.
+
+    The exception raised has the given error code, a description showing the path (escaped, at most 64 characters)
+    and the byte offset of the NUL character, and \c EINVAL as its argument.
+
+    @param path the path, which need not be NUL-terminated
+    @param len the byte length of the path
+    @param err the error code of the exception to raise, normally the error code of the API being called
+    @param xsink the exception is raised here if the path contains a NUL character
+
+    @return 0 if the string can be a path, -1 if it contains a NUL character and an exception was raised
+
+    @par Example:
+    @code{.cpp}
+if (q_check_path(path->c_str(), path->size(), "FILE-OPEN2-ERROR", xsink)) {
+    return QoreValue();
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int q_check_path(const char* path, size_t len, const char* err, ExceptionSink* xsink);
+
+//! checks that a string can be used as a filesystem path, raising the given exception if not
+/** @param path the path to check
+    @param err the error code of the exception to raise, normally the error code of the API being called
+    @param xsink the exception is raised here if the path contains a NUL character
+
+    @return 0 if the string can be a path, -1 if it contains a NUL character and an exception was raised
+
+    @see q_check_path(const char*, size_t, const char*, ExceptionSink*)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int q_check_path(const QoreString& path, const char* err, ExceptionSink* xsink);
+
+//! checks that a string can be used as a filesystem path, setting \c errno to \c EINVAL if not
+/** For APIs that report errors with a return value and \c errno instead of an exception
+
+    @param path the path to check
+
+    @return 0 if the string can be a path, -1 if it contains a NUL character, in which case \c errno is set to
+    \c EINVAL
+
+    @see q_check_path(const char*, size_t, const char*, ExceptionSink*)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int q_check_path(const QoreString& path);
 
 //! finds a memory sequence in a larger memory sequence
 /** @return a pointer to the first occurrence of \a little in \a big, or nullptr if there is none; an empty

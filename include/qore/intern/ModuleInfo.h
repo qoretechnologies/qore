@@ -578,6 +578,17 @@ public:
             QoreProgram* mpgm = nullptr, unsigned load_opt = QMLO_NONE, int warning_mask = QP_WARN_MODULES,
             bool reexport = false, qore_binary_module_desc_t mod_desc_func = nullptr);
 
+    //! checks a module name or path given as a string before it is passed to runTimeLoadModule()
+    /** A name with a NUL character would be cut at the NUL character and load another module or file; raises
+        \c LOAD-MODULE-ERROR in this case
+
+        @return 0 if the name can be loaded, -1 if it contains a NUL character and an exception was raised
+    */
+    DLLLOCAL static int checkModuleName(const QoreString& name, ExceptionSink* xsink) {
+        return q_check_no_nul(name.c_str(), name.size(), "module name or path", "module names and paths",
+            "LOAD-MODULE-ERROR", xsink);
+    }
+
     //! Ensure a dependency provider is loaded globally without importing its namespace into a Program
     /** @param path_pgm supplies module search paths, parse options, and sandbox context for a cold provider load
         @return 0 on success, -1 on error

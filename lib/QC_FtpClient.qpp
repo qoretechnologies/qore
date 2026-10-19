@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -340,12 +340,16 @@ ftp.put("/tmp/file-1.txt", "file.txt");
     @throw FTP-FILE-OPEN-ERROR Could not open local file for reading
     @throw FTP-FILE-PUT-ERROR Could not determine file size of local file (stat() failed)
     @throw FTP-PUT-ERROR An error occurred while sending the file
+    @throw FTP-FILE-OPEN-ERROR the local path contains a NUL character; see @ref path_nul_characters
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 
     @see FtpClient::putData()
 */
 nothing FtpClient::put(string local_path, *string remote_path) [dom=FILESYSTEM;flags=NAMED_ARGS] {
+    if (q_check_path(*local_path, "FTP-FILE-OPEN-ERROR", xsink)) {
+        return QoreValue();
+    }
     f->put(local_path->c_str(), remote_path ? remote_path->c_str() : 0, xsink);
 }
 
@@ -411,14 +415,20 @@ ftp.get("file.txt", "/tmp/file-1.txt");
     @throw FTP-FILE-OPEN-ERROR Could not create the local file
     @throw FTP-FILE-WRITE-ERROR Could not replace the local file after transfer
     @throw FTP-GET-ERROR There was an error retrieving the file
+    @throw FTP-FILE-OPEN-ERROR the local path (or without one, the remote path) contains a NUL character; see
 
     @note
     - see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
     - any existing file with the same name is opened and truncated only after the transfer succeeds
 
     @see FtpClient::getAsString(), FtpClient::getAsData()
+    @ref path_nul_characters
 */
 nothing FtpClient::get(string remote_path, *string local_path) [dom=FILESYSTEM;flags=NAMED_ARGS] {
+    // without a local path, the remote path is also the local path
+    if (q_check_path(local_path ? *local_path : *remote_path, "FTP-FILE-OPEN-ERROR", xsink)) {
+        return QoreValue();
+    }
     f->get(remote_path->c_str(), local_path ? local_path->c_str() : 0, xsink);
 }
 

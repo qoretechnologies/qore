@@ -2966,6 +2966,7 @@ load_module("mysql");
     @endcode
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: API incompatibility, module defines symbols already defined in the target object, etc
+    @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     @see
     - get_module_hash()
@@ -2976,6 +2977,9 @@ load_module("mysql");
     - %Qore 0.9 added the \c warning_mask parameter
 */
 nothing load_module(string name, int warning_mask = WARN_MODULES) [dom=MODULES;flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*name, xsink)) {
+        return QoreValue();
+    }
     QoreProgram* pgm = q_get_runtime_call_program(runtime_cfg);
     QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), pgm, nullptr, QMLO_NONE, warning_mask);
 }
@@ -2994,6 +2998,7 @@ load_module("mysql");
     @endcode
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: API incompatibility, module defines symbols already defined in the target object, etc
+    @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     @see
     - get_module_hash()
@@ -3004,6 +3009,9 @@ load_module("mysql");
     - %Qore 0.9 added the \c warning_mask parameter
 */
 *hash<ExceptionInfo> load_module_warn(string name, int warning_mask = WARN_MODULES) [dom=MODULES;flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*name, xsink)) {
+        return QoreValue();
+    }
     ExceptionSink wsink;
     QMM.runTimeLoadModule(*xsink, wsink, name->c_str(), q_get_runtime_call_program(runtime_cfg), nullptr, QMLO_NONE,
         warning_mask);
@@ -3076,10 +3084,16 @@ load_user_module_with_program("MyModule", p);
     @param program the @ref Qore::Program "Program" object to use as a container for the new user module, presumably this has a custom API that the user module can use; note that after this call the @ref Qore::Program "Program" object will be owned by the user module, therefore the object itself will no longer be valid and any accesses to the object after this call will result in an exception
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
+    @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     @since %Qore 0.8.12
  */
 nothing load_user_module_with_program(string name, !Qore::Program[QoreProgram] program) [dom=MODULES;flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*name, xsink)) {
+        // the Program container has been taken from its object and is owned by this call
+        ReferenceHolder<QoreProgram> holder(program, xsink);
+        return QoreValue();
+    }
     QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), q_get_runtime_call_program(runtime_cfg), program);
 }
 
@@ -3093,6 +3107,7 @@ reload_module("FixedLengthUtil");
     @endcode
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: API incompatibility, etc
+    @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     @note
     - unlike load_module(), this function does not cause the given module's code to be loaded in the current Program object
@@ -3104,6 +3119,9 @@ reload_module("FixedLengthUtil");
     @since %Qore 0.8.12
 */
 nothing reload_module(string name) [dom=MODULES,INJECTION;flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*name, xsink)) {
+        return QoreValue();
+    }
     QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), 0, 0, QMLO_RELOAD);
 }
 

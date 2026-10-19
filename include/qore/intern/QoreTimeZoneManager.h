@@ -348,6 +348,17 @@ public:
 
     DLLLOCAL const AbstractQoreZoneInfo* findLoadRegion(const char* name, ExceptionSink* xsink);
     DLLLOCAL const AbstractQoreZoneInfo* findLoadRegionFromPath(const char* name, ExceptionSink* xsink);
+
+    //! checks a region name or zoneinfo file path given as a string before it is passed to findLoadRegion*()
+    /** A region with a NUL character would be cut at the NUL character and load another zoneinfo file; raises
+        \c TZINFO-ERROR in this case
+
+        @return 0 if the region can be loaded, -1 if it contains a NUL character and an exception was raised
+    */
+    DLLLOCAL static int checkRegion(const QoreString& region, ExceptionSink* xsink) {
+        return q_check_no_nul(region.c_str(), region.size(), "time zone region or path",
+            "time zone regions and paths", "TZINFO-ERROR", xsink);
+    }
 };
 
 DLLLOCAL extern QoreTimeZoneManager QTZM;

@@ -3801,6 +3801,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 return -1;
             }
             QoreStringValueHelper path(n);
+            if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
+                return -1;
+            }
             if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"ssl_cert_path\" option = \"%s\" "
                     "when sandboxing restriction PO_NO_FILESYSTEM is set", path->c_str());
@@ -3874,6 +3877,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 return -1;
             }
             QoreStringValueHelper path(n);
+            if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
+                return -1;
+            }
             if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"ssl_key_path\" option = \"%s\" "
                     "when sandboxing restriction PO_NO_FILESYSTEM is set", path->c_str());
@@ -3915,6 +3921,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         if (n.getType() != NT_STRING) {
             xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting a string value for the \"%s\" key in the "
                 "options hash; got type \"%s\" instead", key, n.getTypeName());
+            return -1;
+        }
+        if (q_check_path(*n.get<const QoreStringNode>(), "HTTP-CLIENT-OPTION-ERROR", xsink)) {
             return -1;
         }
         const char* path = n.get<const QoreStringNode>()->c_str();

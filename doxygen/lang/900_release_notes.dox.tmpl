@@ -674,6 +674,41 @@
     code that makes a key from a string with a length checks it with the new QoreHashNode::checkKey().
     @endparblock
 
+    @par A Path Cannot Contain a NUL Character
+    @parblock
+    A path is passed to the operating system as a NUL-terminated string, so a path with a NUL character was cut at the
+    NUL character and named another file than the string: <tt>ReadOnlyFile::readTextFile(path + "\\x00.txt")</tt>
+    read the file named by \c path although the string passed a check on its \c ".txt" extension,
+    <tt>unlink(path + "\\x00.zzz")</tt> deleted \c path, and <tt>Dir::chdir(dir + "\\x00/zzz")</tt> changed to
+    \c dir.  Every API that passes a string to the operating system as a file or directory path, a UNIX domain socket
+    path or socket target, a module name or path, or a time zone region now refuses a string with a NUL character,
+    before any @ref sandboxing "sandbox" check and before any system call (see @ref path_nul_characters):
+    - an API with an error code raises it, with \c EINVAL as the argument and a description giving the string and
+      the byte offset of its first NUL character: the @ref Qore::File "File", @ref Qore::ReadOnlyFile "ReadOnlyFile",
+      @ref Qore::FileLineIterator "FileLineIterator", @ref Qore::FileInputStream "FileInputStream",
+      @ref Qore::FileOutputStream "FileOutputStream", @ref Qore::FilePollOperation "FilePollOperation" and
+      @ref Qore::Dir "Dir" methods, @ref Qore::rename() "rename()", @ref Qore::mkdir_ex() "mkdir_ex()",
+      @ref Qore::readlink() "readlink()", @ref Qore::symlink() "symlink()", @ref Qore::realpath() "realpath()",
+      @ref Qore::load_module() "load_module()" and the other module loading functions and
+      @ref Qore::Program "Program" methods, @ref Qore::Program::setScriptPath() "Program::setScriptPath()",
+      @ref Qore::TimeZone "TimeZone" regions (also in deserialized dates), the @ref Qore::Socket "Socket" connect
+      and bind methods, @ref Qore::Socket::setSslCaLocations() "Socket::setSslCaLocations()",
+      @ref Qore::PollPipeline "PollPipeline" connect steps, the @ref Qore::HTTPClient "HTTPClient" URL host (such as
+      a decoded \c "socket=" path) and SSL file options, the @ref Qore::FtpClient "FtpClient" local paths, and the
+      @ref Qore::SandboxManager "SandboxManager" path rules
+    - an API that reports errors with its return value and @ref Qore::errno() "errno()" returns its failure value and
+      sets @ref Qore::errno() "errno()" to \c EINVAL: the \c is_*() functions return @ref False "False";
+      @ref Qore::stat() "stat()", @ref Qore::lstat() "lstat()", @ref Qore::hstat() "hstat()",
+      @ref Qore::hlstat() "hlstat()", @ref Qore::statvfs() "statvfs()" and @ref Qore::glob() "glob()" return
+      @ref nothing; @ref Qore::unlink() "unlink()", @ref Qore::mkdir() "mkdir()", @ref Qore::rmdir() "rmdir()",
+      @ref Qore::chmod() "chmod()", @ref Qore::chdir() "chdir()", @ref Qore::mkfifo() "mkfifo()",
+      @ref Qore::chown() "chown()", @ref Qore::lchown() "lchown()", @ref Qore::File::open() "File::open()" and
+      @ref Qore::Socket::bind() "Socket::bind()" return -1
+
+    C++ code that passes a string with a length to the operating system checks it with the new q_check_path(), or
+    q_check_no_nul() for other strings.
+    @endparblock
+
     @par Modules Export Only Their Own Declarations and Reexported Modules
     @parblock
     Constants, enums and their members, and typedefs that a module received from another module it imported with a
@@ -4510,6 +4545,9 @@ while (*binary chunk = input.read(65536)) {
       multiplication added the precisions of the two numbers), so that a loop of in-place multiplications used memory
       and time without limit and crashed when the precision outgrew the stack; their result now has at most the
       maximum precision of a number (8192 bits), as the result of the other operations has
+    - Fixed a crash in @ref Qore::ReadOnlyFile::startPollRead() "ReadOnlyFile::startPollRead()" when the path could
+      not be converted to the @ref default_encoding "default character encoding"; the \c ENCODING-CONVERSION-ERROR
+      exception is now raised
     - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
       @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
       thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in
