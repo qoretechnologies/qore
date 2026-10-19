@@ -5917,11 +5917,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             size_t scope_start = scope_stack.back();
             scope_stack.pop_back();
             if (on_block_exit_handlers.size() > scope_start) {
+                // a scope left without an exception, such as by a thread_exit, runs its on_success handlers, as
+                // in the AST (StatementBlock::execIntern()) and in compiled code (qore_rt_exec_on_block_exit())
                 bool error = xsink && xsink->isException();
                 ExceptionSink obe_xsink;
                 for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
                     obe_type_e type = on_block_exit_handlers[i - 1].type;
-                    if (type == OBE_Unconditional || (error && type == OBE_Error)) {
+                    if (type == OBE_Unconditional || (!error && type == OBE_Success)
+                            || (error && type == OBE_Error)) {
                         if (on_block_exit_handlers[i - 1].code || on_block_exit_handlers[i - 1].handler_ir) {
                             std::unique_ptr<SingleArgvContextHelper> argv_helper;
                             std::unique_ptr<CatchExceptionHelper> ex_helper;
@@ -7919,13 +7922,16 @@ next_instruction:
                 while (scope_stack.size() > lp_inst->scope_depth) {
                     size_t scope_start = scope_stack.back();
                     scope_stack.pop_back();
-                    // Execute on_error/on_exit handlers in reverse order (LIFO)
+                    // Execute on_error/on_exit/on_success handlers in reverse order (LIFO); a block left by a
+                    // thread_exit, which is not an exception, runs its on_success handlers, as in the AST
+                    // (StatementBlock::execIntern()) and in compiled code (qore_rt_exec_on_block_exit())
                     if (on_block_exit_handlers.size() > scope_start) {
                         bool error = xsink && xsink->isException();
                         ExceptionSink obe_xsink;
                         for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
                             obe_type_e type = on_block_exit_handlers[i - 1].type;
-                            if (type == OBE_Unconditional || (error && type == OBE_Error)) {
+                            if (type == OBE_Unconditional || (!error && type == OBE_Success)
+                                    || (error && type == OBE_Error)) {
                                 if (on_block_exit_handlers[i - 1].code || on_block_exit_handlers[i - 1].handler_ir) {
                                     std::unique_ptr<SingleArgvContextHelper> argv_helper;
                                     std::unique_ptr<CatchExceptionHelper> ex_helper;
@@ -7972,7 +7978,18 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::CatchException: {
-                if (!xsink || !*xsink) {
+                // A thread_exit is not an exception: the catch block is not entered, and the unwind continues
+                // through the propagation block; an exception pending with it is deleted, as
+                // TryStatement::execImpl() does (qore_catch_thread_exit())
+                if (inst->exception_target && qore_catch_thread_exit(xsink)) {
+                    prev_block = block;
+                    block = inst->exception_target;
+                    ip = 0;
+                    break;
+                }
+                // every CatchException has the propagation block, so a thread_exit never gets here
+                assert(!xsink || !xsink->isThreadExit());
+                if (!xsink || !xsink->isException()) {
                     setValueSlot(values, inst->result.id, QoreValue(), xsink);
                     // Push empty entry for consistent push/pop with CatchCleanup
                     catch_exception_stack.push_back({nullptr, nullptr});

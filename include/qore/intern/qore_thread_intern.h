@@ -421,6 +421,13 @@ DLLLOCAL QoreObject* substituteObject(QoreObject* o);
 DLLLOCAL QoreException* catch_swap_exception(QoreException* e);
 DLLLOCAL QoreException* catch_get_exception();
 
+//! Returns true if the sink holds a thread_exit, which a try statement does not catch
+/** An exception pending with the thread_exit is caught and deleted, as TryStatement::execImpl() does: it catches
+    the exception, but the catch block does not run, since a statement block is not executed while the thread is
+    exiting.  The IR interpreter and compiled code branch past the catch block when this returns true.
+*/
+DLLLOCAL bool qore_catch_thread_exit(ExceptionSink* xsink);
+
 DLLLOCAL VLock* getVLock();
 DLLLOCAL void end_signal_thread(ExceptionSink* xsink);
 DLLLOCAL void delete_thread_local_data();

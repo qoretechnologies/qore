@@ -4464,6 +4464,17 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
+      @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
+      thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in
+      AST execution, a try block does not catch a thread_exit; an exception pending with it, such as one raised by an
+      \c on_exit handler while the thread exits, is discarded without running the catch block.  Since tiered
+      execution is the default for code with \c %%modern, a script whose thread_exit passed through a try block
+      crashed without an execution mode option
+    - Fixed IR and tiered execution not running \c on_success handlers when a
+      @ref thread_exit "thread_exit statement" left their block; a thread_exit is not an exception, so the
+      \c on_success and \c on_exit handlers of each block it leaves are run, as in AST and JIT execution and in
+      compiled (\c qcc) code
     - The errors of URLs no longer contain the password of the URL: the \c PARSE-URL-ERROR exceptions of
       @ref Qore::parse_url() "parse_url()", @ref Qore::get_safe_url() "get_safe_url()" and every other parser of a
       URL, the \c RESOLVE-URL-ERROR exceptions of @ref Qore::resolve_url() "resolve_url()", and the URL errors of

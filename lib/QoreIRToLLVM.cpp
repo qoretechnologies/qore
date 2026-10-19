@@ -17994,6 +17994,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
         // === Catch exception ===
         case QoreIROpcode::CatchException: {
+            // A thread_exit is not an exception: the catch block is not entered, and the unwind continues
+            // through the instruction's exception target, the try statement's propagation block; an exception
+            // pending with it is deleted, as TryStatement::execImpl() does (qore_catch_thread_exit())
+            if (inst->exception_target) {
+                auto propagate_it = block_map.find(inst->exception_target);
+                if (propagate_it == block_map.end()) {
+                    error = "CatchException: the thread_exit propagation block has no LLVM block";
+                    return false;
+                }
+                auto thread_exit_fn = module.getOrInsertFunction("qore_rt_catch_thread_exit",
+                        llvm::FunctionType::get(i64_type, {ptr_type}, false));
+                llvm::Value* is_thread_exit = builder->CreateICmpNE(
+                        builder->CreateCall(thread_exit_fn, {xsink_arg}),
+                        llvm::ConstantInt::get(i64_type, 0), "catch_is_thread_exit");
+                llvm::BasicBlock* catch_enter = llvm::BasicBlock::Create(ctx, "catch_enter", llvm_func);
+                emitCondBrWithSsaPreamble(module, llvm_func, is_thread_exit, propagate_it->second, catch_enter);
+                builder->SetInsertPoint(catch_enter);
+            }
             // qore_rt_catch_exception: sets td->catchException for rethrow support,
             // returns NaN-boxed exception info hash
             catch_entry_blocks.insert(builder->GetInsertBlock());

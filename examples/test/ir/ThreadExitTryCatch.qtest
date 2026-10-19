@@ -1,0 +1,311 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# A thread_exit unwinds through try blocks, but it is not an exception: a try block does not catch it, and an
+# exception pending with it is deleted without running the catch block (TryStatement::execImpl()).  IR, JIT and
+# tiered execution, and AOT-compiled code, entered the catch block whenever the exception sink was set, and
+# dereferenced the null exception that ExceptionSink::catchException() returns for a thread_exit, so any thread whose
+# thread_exit passed through a try block crashed.  A block left by a thread_exit runs its on_exit and on_success
+# handlers, not its on_error handlers; IR execution did not run the on_success handlers, also without a try block.
+# The program below runs each case in its own thread, in every execution mode and as an AOT binary, and must give the
+# same output as AST execution.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires Util
+%requires ../ExecModeHarness.qm
+
+%exec-class ThreadExitTryCatchTest
+
+class ThreadExitTryCatchTest inherits QUnit::Test {
+    public {
+        const Code = "%modern
+
+#! each case runs in its own thread; the trace shows which blocks run
+class Cases {
+    static log(string msg) {
+        printf(\"%s\\n\", msg);
+        flush();
+    }
+
+    static exitNow() {
+        thread_exit;
+    }
+
+    #! thread_exit from a call in a try block
+    static case1() {
+        on_exit Cases::log(\"1 on_exit\");
+        on_success Cases::log(\"1 on_success\");
+        on_error Cases::log(\"1 on_error\");
+        try {
+            Cases::exitNow();
+        } catch (hash<ExceptionInfo> ex) {
+            Cases::log(\"1 caught \" + ex.err);
+        }
+        Cases::log(\"1 after try\");
+    }
+
+    #! the thread_exit statement in a try block
+    static case2() {
+        on_exit Cases::log(\"2 on_exit\");
+        try {
+            thread_exit;
+        } catch (hash<ExceptionInfo> ex) {
+            Cases::log(\"2 caught \" + ex.err);
+        }
+        Cases::log(\"2 after try\");
+    }
+
+    #! nested try blocks
+    static case3() {
+        on_exit Cases::log(\"3 on_exit\");
+        try {
+            try {
+                Cases::exitNow();
+            } catch (hash<ExceptionInfo> ex) {
+                Cases::log(\"3 inner caught\");
+            }
+            Cases::log(\"3 after inner try\");
+        } catch (hash<ExceptionInfo> ex) {
+            Cases::log(\"3 outer caught\");
+        }
+        Cases::log(\"3 after outer try\");
+    }
+
+    #! thread_exit in a catch block
+    static case4() {
+        on_exit Cases::log(\"4 on_exit\");
+        try {
+            throw \"ERR\", \"x\";
+        } catch (hash<ExceptionInfo> ex) {
+            Cases::log(\"4 caught \" + ex.err);
+            Cases::exitNow();
+            Cases::log(\"4 after thread_exit in catch\");
+        }
+        Cases::log(\"4 after try\");
+    }
+
+    #! the handlers of a block in the try body
+    static case5() {
+        try {
+            on_exit Cases::log(\"5 inner on_exit\");
+            on_success Cases::log(\"5 inner on_success\");
+            on_error Cases::log(\"5 inner on_error\");
+            Cases::exitNow();
+            Cases::log(\"5 after call\");
+        } catch (hash<ExceptionInfo> ex) {
+            Cases::log(\"5 caught\");
+        }
+        Cases::log(\"5 after try\");
+    }
+
+    #! a try block in a loop
+    static case6() {
+        for (int i = 0; i < 3; ++i) {
+            on_exit Cases::log(\"6 loop on_exit \" + i);
+            try {
+                if (i == 1) {
+                    Cases::exitNow();
+                }
+                Cases::log(\"6 iteration \" + i);
+            } catch (hash<ExceptionInfo> ex) {
+                Cases::log(\"6 caught\");
+            }
+        }
+        Cases::log(\"6 after loop\");
+    }
+
+    #! a try block in the catch block of another
+    static case7() {
+        on_exit Cases::log(\"7 on_exit\");
+        try {
+            throw \"OUTER\", \"x\";
+        } catch (hash<ExceptionInfo> ex) {
+            try {
+                Cases::exitNow();
+            } catch (hash<ExceptionInfo> ex2) {
+                Cases::log(\"7 inner caught\");
+            }
+            Cases::log(\"7 after inner try\");
+        }
+        Cases::log(\"7 after outer try\");
+    }
+
+    #! a catch block without a parameter, and a closure call
+    static case8() {
+        code c = sub () { Cases::exitNow(); };
+        try {
+            c();
+        } catch () {
+            Cases::log(\"8 caught\");
+        }
+        Cases::log(\"8 after try\");
+    }
+
+    #! rethrow in a catch block is still caught by the outer try
+    static case9() {
+        try {
+            try {
+                throw \"E9\", \"x\";
+            } catch (hash<ExceptionInfo> ex) {
+                Cases::log(\"9 inner caught \" + ex.err);
+                rethrow;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            Cases::log(\"9 outer caught \" + ex.err);
+        }
+        Cases::log(\"9 done\");
+    }
+
+    #! an exception from an on_exit handler while thread_exit unwinds through a try block
+    static case10() {
+        try {
+            on_exit throw \"E10\", \"from on_exit\";
+            Cases::exitNow();
+        } catch (hash<ExceptionInfo> ex) {
+            Cases::log(\"10 caught \" + ex.err);
+        }
+        Cases::log(\"10 after try\");
+    }
+
+    #! the handlers of a function left by a thread_exit from a call, without a try block
+    static case12() {
+        on_success Cases::log(\"12 on_success\");
+        on_error Cases::log(\"12 on_error\");
+        on_exit Cases::log(\"12 on_exit\");
+        Cases::exitNow();
+        Cases::log(\"12 after call\");
+    }
+
+    #! the handlers of a function left by the thread_exit statement, without a try block
+    static case13() {
+        on_success Cases::log(\"13 on_success\");
+        on_exit Cases::log(\"13 on_exit\");
+        thread_exit;
+    }
+
+    #! thread_exit in an on_error handler of a block in a try body
+    static case11() {
+        on_exit Cases::log(\"11 on_exit\");
+        try {
+            on_error Cases::exitNow();
+            throw \"E11\", \"x\";
+        } catch (hash<ExceptionInfo> ex) {
+            Cases::log(\"11 caught \" + ex.err);
+        }
+        Cases::log(\"11 after try\");
+    }
+}
+
+sub run(code c, Counter done) {
+    on_exit done.dec();
+    c();
+    Cases::log(\"returned\");
+}
+
+list<code> cases = (
+    \\Cases::case1(), \\Cases::case2(), \\Cases::case3(), \\Cases::case4(), \\Cases::case5(), \\Cases::case6(),
+    \\Cases::case7(), \\Cases::case8(), \\Cases::case9(), \\Cases::case10(), \\Cases::case11(), \\Cases::case12(),
+    \\Cases::case13(),
+);
+foreach code c in (cases) {
+    Counter done(1);
+    background run(c, done);
+    done.waitForZero();
+}
+Cases::log(\"done\");
+";
+
+        const Expected = "1 on_success
+1 on_exit
+2 on_exit
+3 on_exit
+4 caught ERR
+4 on_exit
+5 inner on_success
+5 inner on_exit
+6 iteration 0
+6 loop on_exit 0
+6 loop on_exit 1
+7 on_exit
+9 inner caught E9
+9 outer caught E9
+9 done
+returned
+11 on_exit
+12 on_exit
+12 on_success
+13 on_exit
+13 on_success
+done
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string src;
+    }
+
+    constructor() : QUnit::Test("ThreadExitTryCatchTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # a qore run from the PATH has no directory in its name; its library and qcc are found next to it
+        if (qore_bin !~ /\//) {
+            foreach string dir in ((ENV.PATH ?? "").split(":")) {
+                if (dir && is_executable(dir + "/" + qore_bin)) {
+                    qore_bin = dir + "/" + qore_bin;
+                    break;
+                }
+            }
+        }
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        src = tmp_location() + sprintf("/qore-thread-exit-try-catch-%d.qr", getpid());
+        File f();
+        f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Code);
+        f.close();
+
+        addTestCase("execution modes", \modeTest());
+        addTestCase("AOT", \aotTest());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        unlink(src);
+    }
+
+    private string run(string cmd) {
+        return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir,
+            cmd));
+    }
+
+    private modeTest() {
+        foreach string mode in ("ast", "ir", "tiered", "jit") {
+            assertEq(Expected, run(sprintf("%s --exec-mode=%s %s", qore_bin, mode, src)), mode);
+        }
+        # tiered execution after promotion to IR and JIT
+        assertEq(Expected, run(sprintf("%s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 %s",
+            qore_bin, src)), "tiered, promoted");
+    }
+
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip(sprintf("no qcc binary at %y", qcc_bin));
+        }
+        string bin = src + ".bin";
+        on_exit if (is_file(bin)) {
+            unlink(bin);
+        }
+        string compile = run(sprintf("%s -o %s %s", qcc_bin, bin, src));
+        assertTrue(is_file(bin), compile);
+        assertEq(Expected, run(bin), "AOT");
+    }
+}

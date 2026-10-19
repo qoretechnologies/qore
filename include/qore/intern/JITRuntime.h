@@ -233,6 +233,11 @@ uint64_t qore_rt_background_call_ref_value_aot(uint64_t callee_bits, uint64_t* a
 uint64_t qore_rt_background_call_ref_value_aot_throwing(uint64_t callee_bits,
     uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Returns 1 if the sink holds a thread_exit, else 0; CatchException branches past the catch block when it does.
+//! An exception pending with the thread_exit is caught and deleted, as TryStatement::execImpl() does when the
+//! catch block does not run because the thread is exiting.
+uint64_t qore_rt_catch_thread_exit(ExceptionSink* xsink);
+
 //! Get exception info hash from ExceptionSink; returns NaN-boxed QoreValue (hash or NOTHING).
 //! Also clears the exception from the sink and sets td->catchException for rethrow support.
 uint64_t qore_rt_catch_exception(ExceptionSink* xsink);
