@@ -78,6 +78,7 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("group-by - output names of field paths", \groupByOutputNamesTest());
         addTestCase("field options - wildcards are refused", \fieldOptionWildcardTest());
         addTestCase("pushdown split - field references the provider names", \pushdownFieldReferenceTest());
+        addTestCase("getFieldPathName - a path in a query language", \fieldPathNameTest());
 
         # Processor backward compatibility tests
         addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
@@ -598,6 +599,30 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
             "give the output field \"sum_Unit.Price\"", sub () {
                 new QoreGroupByProcessor({"aggregates": "sum(Unit\\.Price),sum(Unit.Price)"});
             });
+    }
+
+    #! A field path is written with the separator of a query language, never as its escaped text
+    fieldPathNameTest() {
+        # one key is the key itself, without the escapes of the path
+        assertEq("price", AbstractDataProvider::getFieldPathName("price"));
+        assertEq("a\\b", AbstractDataProvider::getFieldPathName("a\\\\b"));
+        # the keys of a path are joined with the separator of the language
+        assertEq("order.id", AbstractDataProvider::getFieldPathName("order.id"));
+        assertEq("order/id", AbstractDataProvider::getFieldPathName("order.id", "/"));
+        assertEq("order/Unit.Price", AbstractDataProvider::getFieldPathName("order.Unit\\.Price", "/"));
+        # a key with the separator cannot be written in the language
+        assertNothing(AbstractDataProvider::getFieldPathName("Unit\\.Price"));
+        assertNothing(AbstractDataProvider::getFieldPathName("order.Unit\\.Price"));
+        assertNothing(AbstractDataProvider::getFieldPathName("a/b.c", "/"));
+        # the keys already read are used as they are
+        assertEq("x.y", AbstractDataProvider::getFieldPathName("ignored", ".", ("x", "y")));
+        assertNothing(AbstractDataProvider::getFieldPathName("ignored", ".", ("x.y",)));
+        # every key of a path round-trips through its escaped form
+        list<list<string>> paths = (("a.b", "c"), ("a\\", "b"), ("\\.", "x"), ("p", "q\\r"));
+        foreach list<string> path in (paths) {
+            string field = (foldl $1 + "." + $2, (map AbstractDataProvider::escapeFieldPathKey($1), path));
+            assertEq(path.join("/"), AbstractDataProvider::getFieldPathName(field, "/"), field);
+        }
     }
 
     #! A provider names the field references it can push down; an expression with any other is evaluated client-side

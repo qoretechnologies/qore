@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore SalesforceRestRecordIterator class definition
 
-/** SalesforceRestRecordIterator.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** SalesforceRestRecordIterator.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -317,7 +317,14 @@ public class SalesforceRestRecordIterator inherits AbstractDataProviderRecordIte
             throw "WHERE-ERROR", sprintf("the first argument to expression %y must be a field reference",
                 exp.exp);
         }
-        string field = cast<hash<DataProviderFieldReference>>(exp.args[0]).field;
+        hash<DataProviderFieldReference> field_ref = cast<hash<DataProviderFieldReference>>(exp.args[0]);
+        # the field is a field path, written with the nesting syntax of SOQL; a key with the separator cannot
+        # be written in it
+        *string field = AbstractDataProvider::getFieldPathName(field_ref.field, ".", field_ref.field_path);
+        if (!exists field) {
+            throw "WHERE-ERROR", sprintf("the field \"%s\" has a key with a dot, which SOQL cannot name",
+                field_ref.field);
+        }
 
         # Validate argument count for comparison operators (need at least field + value)
         if (exp.exp != DP_SEARCH_OP_IN && exp.exp != SOQL_OP_NOT_IN && exp.exp != SOQL_OP_INCLUDES

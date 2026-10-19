@@ -1434,8 +1434,15 @@ hash<auto> processExpressionArg(hash<DataProviderExpression> exp) {
         return call_function_args(expinfo.impl, (self, exp.args));
     }
 
-    # Comparison operators: first arg is field reference, rest are values
-    string field = cast<hash<DataProviderFieldReference>>(exp.args[0]).field;
+    # Comparison operators: first arg is field reference, rest are values.  Its field is a field path
+    # (Unit\.Price is the one key Unit.Price): name it by its keys joined with the separator of the
+    # query language, never by its escaped text; a key that has the separator cannot be named
+    hash<DataProviderFieldReference> field_ref = cast<hash<DataProviderFieldReference>>(exp.args[0]);
+    *string field = AbstractDataProvider::getFieldPathName(field_ref.field, ".", field_ref.field_path);
+    if (!exists field) {
+        throw "WHERE-ERROR", sprintf("the field \"%s\" has a key with a dot, which this API cannot name",
+            field_ref.field);
+    }
 
     # IN operator: collect all value args into a list
     if (exp.exp == DP_SEARCH_OP_IN) {

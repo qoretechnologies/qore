@@ -746,6 +746,14 @@ public class SharePointDataProviderTest inherits QUnit::Test {
         # a single quote is escaped by doubling it, so a value cannot break out of the literal
         assertEq("fields/Title eq 'O''Brien'",
             SharePointRecordTableDataProvider::getODataFilter({"Title": "O'Brien"}));
+        # a key that is not one column without a dot cannot be named in OData, where a dot in a property path is a cast
+        # to a type: such a condition is evaluated locally
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter({"Unit\\.Price": 1}),
+            "a key with a dot is not sent");
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter({"order.id": 1}),
+            "a path of more than one key is not sent");
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter({"Title": "x", "a\\\\b": 1}),
+            "a key with a backslash is not sent as its escaped text");
 
         # anything the translation cannot express returns nothing, so that the caller filters
         # locally rather than silently returning the wrong rows

@@ -503,6 +503,8 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         addTestCase("a search option and a predicate on one listing option", \reservedOptionTest());
         addTestCase("filter expression rendering", \queryRenderTest());
         addTestCase("prefix-call and self-rendered query languages", \callAndHookRenderTest());
+        addTestCase("field paths in pushed-down predicates", \fieldPathPushdownTest());
+        addTestCase("the fields a table declares are field paths", \declaredFieldPathTest());
         addTestCase("a search naming an absent record", \readOneNotFoundTest());
         addTestCase("a write option spelled differently from the column", \writeFieldMapTest());
         addTestCase("published expression metadata", \expressionInfoTest());
@@ -669,6 +671,21 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         assertEq({}, s.options);
         assertEq(DP_SEARCH_OP_EQ, s.client.exp);
         assertEq("count", s.client.args[0].field);
+        # each key of a plain search hash is one comparison, so the predicate left for the client side is always
+        # an expression
+        s = f.split({"count": 5, "name": "x"});
+        assertEq({}, s.options);
+        assertEq(DP_OP_AND, s.client.exp);
+        assertEq((DP_SEARCH_OP_EQ, DP_SEARCH_OP_EQ), (map $1.exp, s.client.args));
+
+        # a conjunct that is not a comparison - a field reference read as a truth value - is left for the client
+        # side as an expression, never as the field reference on its own
+        s = f.split(logic(DP_OP_AND, (<DataProviderFieldReference>{"field": "flag"}, eq("status", "open"))));
+        assertEq({"status": "open"}, s.options);
+        assertEq(DP_OP_AND, s.client.exp);
+        assertEq(1, s.client.args.size());
+        assertTrue(AbstractDataProvider::evalGenericExpression({"flag": True}, s.client));
+        assertFalse(AbstractDataProvider::evalGenericExpression({"flag": False}, s.client));
 
         # an option the caller is already sending is not overwritten by a predicate: the two together mean
         # the intersection, so the predicate goes to the client side instead
@@ -752,6 +769,129 @@ public class RestSchemaRecordTableTest inherits QUnit::Test {
         # a string value must be escaped, or a name containing a quote would end the literal early
         s = f.split(eq("name", "the \"best\" item"));
         assertEq("name == \"the \\\"best\\\" item\"", s.options.q.value);
+    }
+
+    #! A table names a field by the keys of its path, and the check of what it declares reads the name so
+    declaredFieldPathTest() {
+        HashDataType owner_type(AutoHashOrNothingType, "owner");
+        owner_type.addField(new QoreDataField("uuid", "the UUID of the owner", StringOrNothingType));
+        hash<string, AbstractDataField> rt = {
+            "id": new QoreDataField("id", "the ID", StringOrNothingType),
+            "status": new QoreDataField("status", "the status", StringOrNothingType),
+            "owner": new QoreDataField("owner", "the owner", owner_type),
+            "meta": new QoreDataField("meta", "an open hash", AutoHashOrNothingType),
+            "a\\b": new QoreDataField("a\\b", "a key with a backslash", StringOrNothingType),
+            "Unit.Price": new QoreDataField("Unit.Price", "a key with a dot", FloatOrNothingType),
+        };
+        code<nothing(hash<RestSchemaRecordTableInfo>)> check = sub (hash<RestSchemaRecordTableInfo> t) {
+            RestSchemaTablesDataProvider::checkTableFields(t, rt);
+        };
+
+        # a name is the keys of a path joined with dots: each key is a field of the type of the one before it
+        assertTrue(RestSchemaTableDataProvider::hasRecordField(rt, "status"));
+        assertTrue(RestSchemaTableDataProvider::hasRecordField(rt, "owner.uuid"));
+        assertTrue(RestSchemaTableDataProvider::hasRecordField(rt, "a\\b"), "a key with a backslash");
+        assertFalse(RestSchemaTableDataProvider::hasRecordField(rt, "owner.nope"));
+        assertFalse(RestSchemaTableDataProvider::hasRecordField(rt, "nope"));
+        assertFalse(RestSchemaTableDataProvider::hasRecordField(rt, "nope.uuid"), "the first key is a column");
+        assertFalse(RestSchemaTableDataProvider::hasRecordField(rt, ""));
+        assertFalse(RestSchemaTableDataProvider::hasRecordField(NOTHING, "status"), "no record type has no field");
+        # the path Unit -> Price, not the key "Unit.Price"
+        assertFalse(RestSchemaTableDataProvider::hasRecordField(rt, "Unit.Price"));
+        # a type that describes no fields cannot be checked below its own key
+        assertTrue(RestSchemaTableDataProvider::hasRecordField(rt, "meta.anything.below"), "an open hash");
+
+        # a filter rule, a query field and a per-field operator matrix name a nested field by its keys, as the
+        # filter matches them, and an open hash cannot be checked below its own key
+        hash<RestSchemaRecordTableInfo> t = QueryTable;
+        t.filters = (<RestSchemaRecordFilterInfo>{
+            "field": "owner.uuid", "operator": DP_SEARCH_OP_EQ, "option": "owner", "exact": True,
+        },);
+        t.query.fields = {"owner.uuid": True, "status": True, "a\\b": True, "meta.anything": True};
+        check(t);
+        t.query.fields = NOTHING;
+        t.query.field_ops = {"owner.uuid": {DP_SEARCH_OP_EQ: True}, "status": {DP_SEARCH_OP_EQ: True}};
+        check(t);
+
+        # a key the type of the field before it does not declare is not a field of the record
+        t = QueryTable;
+        t.filters = (<RestSchemaRecordFilterInfo>{
+            "field": "owner.nope", "operator": DP_SEARCH_OP_EQ, "option": "owner", "exact": True,
+        },);
+        t.query.fields = {"status": True};
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "owner\\.nope", check, t);
+
+        # "Unit.Price" is the path Unit -> Price, so it does not name the key "Unit.Price": a predicate on that
+        # key is never pushed down, and declaring it would be a declaration that is never used
+        t = QueryTable;
+        t.query.fields = {"Unit.Price": True};
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "Unit\\.Price", check, t);
+
+        # the operator matrix is a declaration of the fields the API filters on, too
+        t = QueryTable;
+        t.query.fields = NOTHING;
+        t.query.field_ops = {"nope": {DP_SEARCH_OP_EQ: True}};
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "nope", check, t);
+
+        # an identity is read by the keys of its path as well
+        t = ItemTable;
+        t.filters = NOTHING;
+        t.id_field = "owner.uuid";
+        check(t);
+        t.id_field = "owner.nope";
+        assertThrows("REST-SCHEMA-RECORD-ERROR", "owner\\.nope", check, t);
+    }
+
+    #! A field reference is a field path: its keys are the names the service is sent, never its escaped text
+    fieldPathPushdownTest() {
+        # a query language writes a nested field with a dot, so a path of two keys is written so
+        hash<RestSchemaRecordTableInfo> t = QueryTable;
+        t.name = "path-query-items";
+        t.query.fields = {"owner.uuid": True, "status": True, "a\\b": True};
+        RestSchemaRecordFilter f(t);
+        hash<RestSchemaRecordFilterSplit> s = f.split(eq("owner.uuid", "u1"));
+        assertEq("owner.uuid == \"u1\"", s.options.q.value);
+        assertNothing(s.client);
+
+        # one key with a backslash is named as the key, not as its escaped text
+        s = f.split(eq("a\\\\b", "x"));
+        assertEq("a\\b == \"x\"", s.options.q.value, "the key is sent, not its escaped text");
+        assertNothing(s.client);
+
+        # a key with a dot cannot be written in a language that writes a nested field with a dot: the predicate is
+        # evaluated client-side, even where the table does not restrict its query fields
+        t.query.fields = NOTHING;
+        f = new RestSchemaRecordFilter(t);
+        s = f.split(logic(DP_OP_AND, (eq("status", "open"), eq("Unit\\.Price", 5))));
+        assertEq("status == \"open\"", s.options.q.value);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp, "the key with a dot is not sent");
+        assertEq("Unit\\.Price", s.client.args[0].field);
+        s = f.split(eq("Unit\\.Price", 5));
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
+
+        # a query-argument rule matches the keys of the path, too
+        t = ItemTable;
+        t.name = "path-items";
+        t.filters += (
+            <RestSchemaRecordFilterInfo>{
+                "field": "owner.uuid", "operator": DP_SEARCH_OP_EQ, "option": "owner", "exact": True,
+            },
+            <RestSchemaRecordFilterInfo>{
+                "field": "a\\b", "operator": DP_SEARCH_OP_EQ, "option": "ab", "exact": True,
+            },
+        );
+        f = new RestSchemaRecordFilter(t);
+        s = f.split(eq("owner.uuid", "u1"));
+        assertEq({"owner": "u1"}, s.options);
+        assertNothing(s.client);
+        s = f.split(eq("a\\\\b", "x"));
+        assertEq({"ab": "x"}, s.options, "the rule is matched by the key, not by its escaped text");
+        assertNothing(s.client);
+        # the one key "owner.uuid" is not the path owner -> uuid, so the rule does not apply to it
+        s = f.split(eq("owner\\.uuid", "u1"));
+        assertEq({}, s.options);
+        assertEq(DP_SEARCH_OP_EQ, s.client.exp);
     }
 
     #! The three rendering forms and the two ways a language can be smaller than the renderer assumes

@@ -1060,7 +1060,8 @@ public hashdecl DataProviderFieldReference {
         of a key is escaped with a backslash, and so is a backslash: \c "order.id" is the key \c id of the key
         \c order, and <tt>"Unit\\\\.Price"</tt> (the text <tt>Unit\\.Price</tt>) the key \c Unit.Price
         (@ref AbstractDataProvider::getFieldPath(), @ref AbstractDataProvider::escapeFieldPathKey(),
-        @ref dpql_field_paths)
+        @ref dpql_field_paths).  A query language names it by its keys, never by this text
+        (@ref AbstractDataProvider::getFieldPathName())
     */
     string field;
 
@@ -6557,6 +6558,37 @@ string path = "order." + AbstractDataProvider::escapeFieldPathKey("Unit.Price");
     */
     static string escapeFieldPathKey(string key) {
         return replace(replace(key, "\\", "\\\\"), ".", "\\.");
+    }
+
+    #! Returns the keys of a field path joined with the separator of a query language, or @ref nothing
+    /** A query language that writes a nested field with a separator (\c "." in SOQL, ServiceNow, Qdrant and most REST
+        query languages, \c "/" in OData) writes the path of a field reference with it: \c order.id is \c order.id, or
+        \c order/id in OData, and the escaped key <tt>p\\\\q</tt> is <tt>p\\q</tt>.  A key that has the separator
+        (<tt>Unit\\.Price</tt>, the key \c Unit.Price) cannot be written in such a language, so @ref nothing is
+        returned; the escaped text of the path is never a name in the language.
+
+        @param field the field path
+        @param separator the separator of the nested fields in the query language
+        @param field_path the keys of the path, if already read (the \c field_path of a
+        @ref DataProviderFieldReference)
+
+        @return the keys joined with the separator, or @ref nothing if a key has the separator
+
+        @par Example:
+        @code{.py}
+*string name = AbstractDataProvider::getFieldPathName(ref.field, ".", ref.field_path);
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static *string getFieldPathName(string field, string separator = ".", *list<string> field_path) {
+        list<string> path = field_path ?? AbstractDataProvider::getFieldPath(field);
+        foreach string key in (path) {
+            if (key.find(separator) >= 0) {
+                return;
+            }
+        }
+        return path.join(separator);
     }
 
     #! Returns @ref True if a field path is one key, read as it is written

@@ -93,6 +93,12 @@ the keys of a path, and `AbstractDataProvider::escapeFieldPathKey()` escapes a k
 exactly, also for a key ending with a backslash (the keys `a\` and `b` are the path `a\\.b`).
 Processor field options and other plain field paths use this form.
 
+A provider that renders a field into a query language names it by its keys, never by this text:
+`AbstractDataProvider::getFieldPathName()` joins them with the separator of the language
+(`order.id`, or `order/id` in OData) and gives no value for a key that has the separator, which
+that language cannot name; the provider then evaluates the predicate client-side or raises
+`WHERE-ERROR`.
+
 The serializer writes a path as it is read back: bare when every part is a bare name, otherwise
 quoted with each `\` that precedes a dot written as it is and every other backslash `\\`, and each
 quote `\"`. `DpqlSerializer::fieldReferenceForKey()` writes the field reference to one key, such

@@ -251,6 +251,11 @@ public class SharePointRecordTableDataProvider inherits SharePointDataProviderBa
             if (p.value.typeCode() == NT_HASH || p.value.typeCode() == NT_LIST) {
                 return;
             }
+            # the key is a field path: only a key that is one column without a dot can be named in OData, where a
+            # dot in a property path is a cast to a type; any other is evaluated locally
+            if (!AbstractDataProvider::isPlainFieldPath(p.key)) {
+                return;
+            }
             string field = p.key == RecordKeyField ? "id" : "fields/" + p.key;
             parts += sprintf("%s eq %s", field,
                 SharePointRecordTableDataProvider::getODataLiteral(p.value));

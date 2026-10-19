@@ -128,6 +128,8 @@ public hashdecl RestSchemaRecordPagingInfo {
 */
 public hashdecl RestSchemaRecordFilterInfo {
     #! The record field this rule filters on
+    /** Named by the keys of its path joined with dots (\c owner.uuid); see @ref restschemaquerysyntax_fields
+    */
     string field;
 
     #! The generic data provider operator this rule implements
@@ -194,6 +196,22 @@ public hashdecl RestSchemaRecordFilterInfo {
     alongside it and still decide what is pushed down, so
     @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search" and the residual
     predicate stay declarative; only the spelling moves into the hook.
+
+    @section restschemaquerysyntax_fields A Field Is Named by Its Keys
+
+    The field of a predicate is a field path (@ref dpql_field_paths): \c owner.uuid is the key \c uuid of the key
+    \c owner, and <tt>Unit\\.Price</tt> the one key \c Unit.Price.  A query language writes a nested field with a
+    dot, so a field is named in it by the keys of its path joined with dots
+    (@ref RestSchemaActions::RestSchemaRecordFilter::getFieldName() "RestSchemaRecordFilter::getFieldName()"), never
+    by the escaped text of the path.  That name is what a table declares in
+    @ref RestSchemaActions::RestSchemaRecordQueryInfo::fields "fields",
+    @ref RestSchemaActions::RestSchemaRecordQueryInfo::field_ops "field_ops",
+    @ref RestSchemaActions::RestSchemaRecordQueryInfo::field_map "field_map" and the
+    @ref RestSchemaActions::RestSchemaRecordFilterInfo::field "field" of a filter rule, and the name that
+    @ref render_value receives.  A key that has a dot cannot be named so: a predicate on it is evaluated
+    client-side, unless the syntax declares @ref render_query and the table declares neither \c fields nor
+    \c field_ops, in which case the hook receives the predicate and reads the keys of its path with
+    @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()".
 */
 public hashdecl RestSchemaQuerySyntaxInfo {
     #! The syntax name, used in error messages
@@ -262,7 +280,9 @@ public hashdecl RestSchemaQuerySyntaxInfo {
     *code<string(auto, string)> render_value;
 
     #! Renders one field reference as the query language spells it
-    /** Absent when the field name is used unchanged.
+    /** Receives the name of the field (@ref restschemaquerysyntax_fields), or the name
+        @ref RestSchemaActions::RestSchemaRecordQueryInfo::field_map "field_map" gives it.  Absent when the name is
+        used unchanged.
     */
     *code<string(string)> render_field;
 
@@ -274,7 +294,13 @@ public hashdecl RestSchemaQuerySyntaxInfo {
         Returns the value to place on the query option, which need <b>not</b> be a string: Intercom's search
         takes a hash
 
-        @see @ref restschemaquerysyntax_hook
+        The field of a predicate is a field path; a table that declares neither
+        @ref RestSchemaActions::RestSchemaRecordQueryInfo::fields "fields" nor
+        @ref RestSchemaActions::RestSchemaRecordQueryInfo::field_ops "field_ops" passes the hook a path whose key
+        has a dot, so the hook reads the keys of the path with
+        @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()"
+
+        @see @ref restschemaquerysyntax_hook, @ref restschemaquerysyntax_fields
     */
     *code<auto(hash<DataProviderExpression>)> render_query;
 }
@@ -293,6 +319,8 @@ public hashdecl RestSchemaRecordQueryInfo {
     /** A predicate naming a field absent from this set is evaluated client-side.  Both Xero and Bitbucket
         reject a filter naming a field they do not index, so offering one would turn a search into an error.
 
+        Keyed by the name of the field: the keys of its path joined with dots (@ref restschemaquerysyntax_fields).
+
         Declare this <b>or</b> @ref field_ops, not both.
     */
     *hash<string, bool> fields;
@@ -305,8 +333,8 @@ public hashdecl RestSchemaRecordQueryInfo {
         with an error rather than with records.
 
         @ref fields cannot say that: it admits a field for every operator the language can spell.  Where a
-        vendor publishes the finer matrix, declare it here instead, keyed by record field and then by generic
-        search operator.
+        vendor publishes the finer matrix, declare it here instead, keyed by the name of the field (the keys of its
+        path joined with dots, @ref restschemaquerysyntax_fields) and then by generic search operator.
 
         @code{.py}
 "field_ops": {
@@ -342,6 +370,8 @@ public hashdecl RestSchemaRecordQueryInfo {
     *hash<string, bool> inexact_ops;
 
     #! Record field to the name the query language uses for it, where the two differ
+    /** Keyed by the name of the field: the keys of its path joined with dots (@ref restschemaquerysyntax_fields)
+    */
     *hash<string, string> field_map;
 }
 

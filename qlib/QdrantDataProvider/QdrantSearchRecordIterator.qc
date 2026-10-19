@@ -125,7 +125,14 @@ public class QdrantSearchRecordIterator inherits DataProvider::AbstractDataProvi
             throw "WHERE-ERROR", sprintf("the first argument to expression %y must be a field reference",
                 exp.exp);
         }
-        string field = cast<hash<DataProviderFieldReference>>(exp.args[0]).field;
+        hash<DataProviderFieldReference> field_ref = cast<hash<DataProviderFieldReference>>(exp.args[0]);
+        # the field is a field path, written with the nesting syntax of Qdrant; a key with the separator cannot
+        # be written in it
+        *string field = AbstractDataProvider::getFieldPathName(field_ref.field, ".", field_ref.field_path);
+        if (!exists field) {
+            throw "WHERE-ERROR", sprintf("the field \"%s\" has a key with a dot, which Qdrant cannot name",
+                field_ref.field);
+        }
 
         # For IN operator, collect all values into a single list
         if (exp.exp == DP_SEARCH_OP_IN) {

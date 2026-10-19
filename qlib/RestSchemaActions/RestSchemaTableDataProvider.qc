@@ -370,6 +370,47 @@ public class RestSchemaTableDataProvider inherits DataProvider::AbstractDataProv
         }
     }
 
+    #! Returns @ref True if a record type has the field a table names
+    /** A table names a field by the keys of its path joined with dots, as a query language writes it
+        (@ref restschemaquerysyntax_fields): \c owner.uuid is the key \c uuid of the column \c owner, as
+        @ref RestSchemaActions::RestSchemaRecordFilter "RestSchemaRecordFilter" matches it.  The first key is a
+        column, and each key after it is looked up in the fields of the type of the one before it; a type that
+        describes no fields - a union, an open hash or a scalar - cannot be checked against, so the rest of the
+        name is accepted, as @ref checkRecordPaths() accepts the rest of a path.
+
+        @param rt the record type
+        @param name the name of the field
+
+        @return @ref True if the record type has the field, or has its keys as far as its types describe them
+
+        @par Example:
+        @code{.py}
+# True when the record type has the column "owner" and the type of "owner" has the field "uuid"
+bool known = RestSchemaTableDataProvider::hasRecordField(provider.getRecordType(), "owner.uuid");
+        @endcode
+
+        @since RestSchemaActions 1.0
+    */
+    static bool hasRecordField(*hash<string, AbstractDataField> rt, string name) {
+        list<string> path = name.split(".");
+        if (!path) {
+            return False;
+        }
+        *hash<string, AbstractDataField> fields = rt;
+        foreach string key in (path) {
+            *AbstractDataField field = fields{key};
+            if (!field) {
+                return False;
+            }
+            fields = RestSchemaTableDataProvider::getTypeFields(field.getType());
+            if (!fields) {
+                # a union, an open hash or a scalar describes no fields, so there is nothing to check against
+                return True;
+            }
+        }
+        return True;
+    }
+
     #! Returns the fields a type describes, reading through a collection to the type of its elements
     /** The element type is preferred and the type's own fields are the fallback, because a description does
         not always say that a collection is a collection: GitLab declares the 200 response of every listing

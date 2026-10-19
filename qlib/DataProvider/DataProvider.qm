@@ -977,6 +977,13 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     @ref DataProvider::DpqlSerializer::fieldReferenceForKey() "DpqlSerializer::fieldReferenceForKey()" writes the
     field reference to one key, such as the name of a field of a record type.
 
+    A provider that searches on its server names a field in its query language by the keys of the path, never by
+    the escaped text of the path:
+    @ref DataProvider::AbstractDataProvider::getFieldPathName() "AbstractDataProvider::getFieldPathName()" joins
+    them with the separator of the language (\c order.id, or \c order/id in OData).  A key that has the separator
+    cannot be named in that language (<tt>\@\"Unit\\.Price\"</tt> in SOQL): depending on the provider, a
+    predicate on it is evaluated on the client or raises \c WHERE-ERROR.
+
     @par Comparison Operators
     These are standard DPQL operators; individual data providers can expose additional or different operators.
     DPQL is translated to native server-side queries whenever possible to ensure maximum performance.
@@ -1566,6 +1573,10 @@ fetch
       expression is then evaluated client-side; the pushdown part has the field references the closure gives; added
       @ref DataProvider::AbstractDataProvider::translateFieldReferences()
       "AbstractDataProvider::translateFieldReferences()"
+    - added @ref DataProvider::AbstractDataProvider::getFieldPathName() "AbstractDataProvider::getFieldPathName()",
+      which gives the keys of a field path joined with the separator of a query language (\c order.id, or
+      \c order/id in OData), or no value for a key that has the separator, so that a query is never sent the
+      escaped text of a field path
     - added the private method \c readLocationGrid() to
       @ref DataProvider::AbstractTabularProfileDataProvider "AbstractTabularProfileDataProvider", which a profile
       provider whose reader streams its input overrides to read a location as a stream, so that the content of a

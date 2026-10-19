@@ -1116,6 +1116,51 @@ sub invalid_dataframe_api() {
 
         assertTrue(prov.supportsSearchExpressions(), "DataFrame provider supports DPQL search expressions");
 
+        # the field of an expression is a field path: an escaped dot is part of the column name
+        {
+            DataFrame::DataFrame dotted(({"id": 1, "Unit.Price": 1.5}, {"id": 2, "Unit.Price": 2.5}));
+            DataProviderDataFrame::DataFrameDataProvider dotted_prov(dotted);
+            list<int> ids;
+            auto dotted_it = dotted_prov.searchRecords(<DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "Unit\\.Price"}, {">": 2}),
+            });
+            while (dotted_it.next()) {
+                push ids, dotted_it.getValue().id;
+            }
+            assertEq((2,), ids, "the escaped dotted key is the column");
+        }
+
+        # a comparison hash on a path of more than one key compares the nested value with each of its operators,
+        # never with the hash itself
+        {
+            DataFrame::DataFrame nested(({"id": 1, "a": {"b": 1, "s": "xyz"}}, {"id": 2, "a": {"b": 3, "s": "abc"}}));
+            DataProviderDataFrame::DataFrameDataProvider nested_prov(nested);
+            code<list<int>(hash<auto>)> get_ids = list<int> sub (hash<auto> wc) {
+                list<int> ids();
+                auto nested_it = nested_prov.searchRecords(wc);
+                while (nested_it.next()) {
+                    push ids, nested_it.getValue().id;
+                }
+                return ids;
+            };
+            assertEq((2,), get_ids({"a.b": {">": 2}}), "a nested value greater than");
+            assertEq((1,), get_ids({"a.b": {"<=": 1}}), "a nested value less than or equal");
+            assertEq((1, 2), get_ids({"a.b": {">=": 1, "<": 5}}), "two comparisons on a nested value");
+            assertEq((2,), get_ids({"a.b": {"==": 3}}), "a nested value equal");
+            assertEq((1,), get_ids({"a.b": {"!=": 3}}), "a nested value not equal");
+            assertEq((2,), get_ids({"a.s": {"startswith": "ab"}}), "a nested value starts with");
+            assertEq((1,), get_ids({"a.s": {"endswith": "yz"}}), "a nested value ends with");
+            assertEq((1,), get_ids({"a.s": {"contains": "y"}}), "a nested value contains");
+            assertEq(0, get_ids({"a.b": {"is_null": True}}).size(), "no nested value is null");
+            assertEq((1, 2), get_ids({"a.b": {"not_null": True}}), "every nested value is not null");
+            # the same comparison in an expression
+            assertEq((2,), get_ids(<DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "a.b"}, {">": 2}),
+            }), "a nested value greater than, in an expression");
+        }
+
         # Search with a DPQL expression string
         auto dpql_it = prov.searchRecords('@score >= 90 && @age >= 30');
         list<string> dpql_names();

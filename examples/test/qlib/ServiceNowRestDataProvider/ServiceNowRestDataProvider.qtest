@@ -63,10 +63,32 @@ class FakeServiceNowHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A ServiceNow client that records the query of a search and answers it with no records
+class QueryCaptureClient inherits ServiceNowRestClientIo {
+    public {
+        #! the query of the last search
+        string last_query;
+    }
+
+    constructor() : ServiceNowRestClientIo({"url": "https://acme.service-now.example.com", "apikey": "key"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        *list<string> m = (path =~ x/[?&]sysparm_query=([^&]*)/);
+        last_query = m[0] ?? "";
+        return <RestClient::RestResponseInfo>{
+            "status_code": 200,
+            "headers": {},
+            "body": {"response": {"result": ()}},
+        };
+    }
+}
+
 public class ServiceNowRestDataProviderTest inherits QUnit::Test {
     constructor() : Test("ServiceNowRestDataProvider test", "1.0") {
         addTestCase("action data dependent options", \testActionDataDependentOptions());
         addTestCase("local server", \testLocalServer());
+        addTestCase("encoded query field paths", \testQueryFieldPaths());
 
         set_return_value(main());
     }
@@ -153,5 +175,30 @@ public class ServiceNowRestDataProviderTest inherits QUnit::Test {
             assertTrue(action_map{action_name}.data_dependent_options,
                 sprintf("action %y has data_dependent_options", action_name));
         }
+    }
+
+    #! The field of an expression is a field path, written with the dot-walking syntax of an encoded query
+    testQueryFieldPaths() {
+        QueryCaptureClient rest();
+        ServiceNowTableDataProvider incident(rest, "incident", {
+            "read_access": True, "create_access": False, "update_access": False,
+        }, {
+            "short_description": {"internal_type": {"value": "string"}},
+            "caller_id": {"internal_type": {"value": "reference"}},
+        });
+        code<string(string)> get_query = string sub (string field) {
+            map $1, incident.searchRecords(<DataProviderExpression>{
+                "exp": QUERY_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": field}, "Acme"),
+            });
+            return rest.last_query;
+        };
+
+        # a path of two keys is a reference field and a field of the record it references
+        assertEq("caller_id.name=Acme", get_query("caller_id.name"));
+        # one key is the field
+        assertEq("short_description=Acme", get_query("short_description"));
+        # a key with a dot cannot be written in an encoded query, so it is never sent as its escaped text
+        assertThrows("WHERE-ERROR", "has a key with a dot", get_query, "Unit\\.Price");
     }
 }
