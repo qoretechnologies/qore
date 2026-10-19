@@ -279,6 +279,36 @@ FilesystemSshServerHostKeyProviderData* FilesystemSshServerHostKeyProviderData::
     return new FilesystemSshServerHostKeyProviderData(*this);
 }
 
+// moves the objects of the map that belong to the Program to the list
+static void sshutil_take_program_objects(SshUtilObjectMap& m, const QoreProgram* pgm, std::vector<QoreObject*>& l) {
+    for (SshUtilObjectMap::iterator i = m.begin(); i != m.end();) {
+        if (i->second->getProgram() == pgm) {
+            l.push_back(i->second);
+            i = m.erase(i);
+        } else {
+            ++i;
+        }
+    }
+}
+
+void SshUtilRegistry::releaseProgram(QoreProgram* pgm) {
+    std::vector<QoreObject*> l;
+    {
+        AutoLocker al(sshutil_registry_lock);
+        sshutil_take_program_objects(client_identity_providers, pgm, l);
+        sshutil_take_program_objects(server_host_key_providers, pgm, l);
+        sshutil_take_program_objects(host_key_stores, pgm, l);
+    }
+    if (l.empty()) {
+        return;
+    }
+    // released outside the lock, as a destructor runs Qore code
+    ExceptionSink xsink;
+    for (QoreObject* obj : l) {
+        obj->deref(&xsink);
+    }
+}
+
 void SshUtilRegistry::clear(ExceptionSink* xsink) {
     SshUtilObjectMap old_client_identity_providers;
     SshUtilObjectMap old_server_host_key_providers;

@@ -31,6 +31,9 @@
 /** Higher-level configuration should store stable registry names; runtime code resolves those names
     to process-local provider/store objects through this registry.
 
+    A registration ends when the @ref Qore::Program "Program" that created the registered object is destroyed: the
+    object is deregistered and released while its Program can still run its destructor.
+
     @since sshutil 1.0
 */
 qclass SshUtilRegistry [arg=SshUtilRegistryData* p; ns=Qore::SshUtil];
