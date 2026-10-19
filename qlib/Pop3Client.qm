@@ -23,7 +23,7 @@
 */
 
 # minimum qore version
-%requires qore >= 2.0
+%requires qore >= 3.0
 
 %requires Mime >= 1.7
 %requires Util
@@ -113,10 +113,21 @@ if (!h) {
       - @ref Pop3Client::Pop3Client::uidl() "Pop3Client::uidl()": get unique IDs for messages (RFC 1939)
       - @ref Pop3Client::Pop3Client::top() "Pop3Client::top()": retrieve message headers and partial body (RFC 1939)
       - @ref Pop3Client::Pop3Client::getMessageHeaders() "Pop3Client::getMessageHeaders()": get parsed message headers
-    - Now requires Qore >= 2.0, Mime >= 1.7, and MailMessage >= 1.5
+    - Now requires Qore >= 3.0, Mime >= 1.7, and MailMessage >= 1.5
     - Fixed typo in documentation example
     - Fixed incorrect log message in SASL XOAUTH2 login
       (<a href="https://github.com/qoretechnologies/qore/issues/5163">issue 5163</a>)
+    - A command or message ID with a NUL, CR or LF character, which would end the command line and start another
+      command (for example \c "1\r\nDELE 2" given to @ref Pop3Client::Pop3Client::getMessage()
+      "Pop3Client::getMessage()"), raises \c POP3-SERVER-ERROR (\c POP3-FETCH-ERROR in
+      @ref Pop3Client::Pop3RetrPollOperation "Pop3RetrPollOperation") before anything is sent; the list variant
+      of @ref Pop3Client::Pop3Client::del() "Pop3Client::del()" checks every ID before it deletes any message
+    - A user name or password with a NUL, CR or LF character, which would end the \c USER, \c PASS or \c APOP
+      command, or an \c XOAUTH2 user name or token with a NUL or \c ^A character, which would end its field of the
+      SASL message, raises \c POP3-URL-ERROR (from the URL) or \c POP3-CONFIG-ERROR (from the options or in the
+      poll operations) before anything is sent; the password and the token are not shown in the exception
+    - Added @ref Pop3Client::Pop3Client::checkCredentials() "Pop3Client::checkCredentials()" and
+      @ref Pop3Client::Pop3Client::getAuthCommands() "Pop3Client::getAuthCommands()", used by the poll operations
 
     @subsection pop3client_v2_0 Pop3Client 2.0
     - Added a data provider and application actions
@@ -296,7 +307,10 @@ Pop3Client pop3("pop3s://pop.gmail.com", {
         @endcode
 
         @throw PARSE-URL-ERROR the URL given could not be parsed
-        @throw POP3-URL-ERROR the protocol given was unknown, no target, username or password in URL
+        @throw POP3-URL-ERROR the protocol given was unknown, no target, username or password in URL, or the
+        username or password in the URL cannot be sent as it is (see @ref checkCredentials())
+        @throw POP3-CONFIG-ERROR conflicting credentials were given, or the \c username, \c password or \c token
+        option cannot be sent as it is (see @ref checkCredentials())
     */
     constructor(string url, *hash<auto> opts) {
         # set logger, if any
@@ -380,6 +394,9 @@ Pop3Client pop3("pop3s://pop.gmail.com", {
             }
         }
 
+        # credentials that would end a command line or a SASL field are refused before they are used
+        Pop3Client::checkCredentials(user, pass, self.token, hurl.username ? "POP3-URL-ERROR" : "POP3-CONFIG-ERROR");
+
         connectTimeout = getInt(opts, "connect_timeout", False, DefaultConnectTimeout.durationMilliseconds());
         ioTimeout = getInt(opts, "io_timeout", False, DefaultIoTimeout.durationMilliseconds());
 
@@ -427,6 +444,67 @@ Pop3Client pop3("pop3s://pop.gmail.com", {
             "user": user,
             "pass": pass,
             "token": token,
+        };
+    }
+
+    #! Raises an exception if a credential cannot be sent to the server as it is
+    /** The user name and password are written to the \c USER, \c PASS and \c APOP command lines, so they cannot
+        contain a NUL, CR or LF character, which would end the command and start another one; the user name and
+        token of an \c XOAUTH2 login cannot contain a NUL or \c ^A (\c "\x01") character either, since \c ^A ends
+        a field of the SASL message.  The password and the token are not shown in the exception.
+
+        @param user the user name
+        @param pass the password, if any
+        @param token the OAuth2 bearer token, if any
+        @param err the error code of the exception to raise
+
+        @throw err the user name, the password or the token contains a character that cannot be sent
+
+        @since %Pop3Client 2.1
+    */
+    static checkCredentials(*string user, *string pass, *string token, string err) {
+        if (exists user) {
+            check_line_text(user, "POP3 user name", err);
+        }
+        if (exists pass) {
+            check_line_text(pass, "POP3 password", err, True);
+        }
+        if (token.val()) {
+            if (user =~ /[\x00\x01]/) {
+                throw err, "the POP3 user name for an XOAUTH2 login contains a NUL or ^A character, which would end "
+                    "its field of the SASL message";
+            }
+            if (token =~ /[\x00\x01]/) {
+                throw err, "the OAuth2 bearer token contains a NUL or ^A character, which would end its field of the "
+                    "SASL message";
+            }
+        }
+    }
+
+    #! Returns the authentication commands for a connection info hash, each including the trailing CRLF
+    /** @param info a connection info hash as returned by @ref getInfo()
+
+        @return a hash with the following keys:
+        - \c xoauth2_cmd: the SASL \c XOAUTH2 command if a token is set, otherwise an empty string
+        - \c user_cmd: the \c USER command
+        - \c pass_cmd: the \c PASS command
+
+        @throw POP3-CONFIG-ERROR a credential cannot be sent as it is; see @ref checkCredentials()
+
+        @since %Pop3Client 2.1
+    */
+    static hash<string, string> getAuthCommands(hash<auto> info) {
+        Pop3Client::checkCredentials(info.user, info.pass, info.token, "POP3-CONFIG-ERROR");
+        string xoauth2_cmd = "";
+        if (info.token.val()) {
+            string login = sprintf("user=%s%sauth=Bearer %s%s%s", info.user, CtrlA, info.token, CtrlA, CtrlA)
+                .toBase64();
+            xoauth2_cmd = sprintf("AUTH XOAUTH2 %s\r\n", login);
+        }
+        return {
+            "xoauth2_cmd": xoauth2_cmd,
+            "user_cmd": sprintf("USER %s\r\n", info.user),
+            "pass_cmd": sprintf("PASS %s\r\n", info.pass),
         };
     }
 
@@ -593,7 +671,8 @@ pop3.connect();
 
         @return the mail message object corresponding to the argument
 
-        @throw POP3-SERVER-ERROR the POP3 server responded with an error message
+        @throw POP3-SERVER-ERROR the POP3 server responded with an error message, or the message ID contains a
+        NUL, CR or LF character, which would end the command line and start another command
     */
     MailMessage::Message getMessage(string id) {
         AutoLock am(mutex);
@@ -674,7 +753,8 @@ map printf("%s: %d byte%s\n", $1.getKey(), $1.getValue(), $1.getValue() == 1 ? "
 pop3.del(msgid);
         @endcode
 
-        @throw POP3-SERVER-ERROR the POP3 server responded with an error message
+        @throw POP3-SERVER-ERROR the POP3 server responded with an error message, or the message ID contains a
+        NUL, CR or LF character, which would end the command line and start another command
 
         @note This method communicates with the POP3 server with the internal @ref Qore::Socket "Socket" object and
         therefore is subject to thread serialization
@@ -704,14 +784,22 @@ pop3.del(msgidlist);
 
         @see <a href="http://tools.ietf.org/html/rfc1939#page-8">http://tools.ietf.org/html/rfc1939#page-8</a> for
         more information about this command
+
+        @throw POP3-SERVER-ERROR the POP3 server responded with an error message, or a message ID contains a NUL,
+        CR or LF character, which would end the command line and start another command; the IDs are checked before
+        any command is sent
     */
     del(list<auto> l) {
+        # every command is checked before any is sent, so that no message is deleted if one ID is refused
+        list<string> cmds = map sprintf("DELE %s", $1), l;
+        map check_line_text($1, "POP3 command", "POP3-SERVER-ERROR"), cmds;
+
         AutoLock am(mutex);
         if (!isConnected()) {
             connectAsyncIntern();
         }
 
-        map connectedCommandAsyncIntern(sprintf("DELE %s", $1)), l;
+        map connectedCommandAsyncIntern($1), cmds;
     }
 
     #! send a \c "NOOP" command to the POP3 server
@@ -892,7 +980,8 @@ printf("Message 1 has UIDL: %s\n", uid);
 
         @return the unique ID string for the message, or @ref nothing if not available
 
-        @throw POP3-SERVER-ERROR the POP3 server responded with an error message
+        @throw POP3-SERVER-ERROR the POP3 server responded with an error message, or the message ID contains a
+        NUL, CR or LF character, which would end the command line and start another command
 
         @note This method communicates with the POP3 server with the internal @ref Qore::Socket "Socket" object and
         therefore is subject to thread serialization
@@ -925,7 +1014,8 @@ string preview = pop3.top("1", 10);
 
         @return the message headers and the specified number of body lines
 
-        @throw POP3-SERVER-ERROR the POP3 server responded with an error message
+        @throw POP3-SERVER-ERROR the POP3 server responded with an error message, or the message ID contains a
+        NUL, CR or LF character, which would end the command line and start another command
 
         @note
         - This method communicates with the POP3 server with the internal @ref Qore::Socket "Socket" object and
@@ -957,7 +1047,8 @@ printf("From: %s\nSubject: %s\n", msg.getFrom(), msg.getSubject());
 
         @return a MailMessage::Message object with headers populated (body may be empty or partial)
 
-        @throw POP3-SERVER-ERROR the POP3 server responded with an error message
+        @throw POP3-SERVER-ERROR the POP3 server responded with an error message, or the message ID contains a
+        NUL, CR or LF character, which would end the command line and start another command
 
         @note
         - This method communicates with the POP3 server with the internal @ref Qore::Socket "Socket" object and
@@ -1609,6 +1700,7 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
         @param pop3 the Pop3Client whose connection info drives the pipeline
 
         @throw POP3-POLL-ERROR if the POP3 server returns an error response
+        @throw POP3-CONFIG-ERROR a credential cannot be sent as it is; see @ref Pop3Client::checkCredentials()
 
         @since %Pop3Client 2.2
     */
@@ -1624,6 +1716,7 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
         @param send_noop if True, send a NOOP after authentication
 
         @throw POP3-POLL-ERROR if the POP3 server returns an error response
+        @throw POP3-CONFIG-ERROR a credential cannot be sent as it is; see @ref Pop3Client::checkCredentials()
 
         @since %Pop3Client 2.2
     */
@@ -1638,15 +1731,11 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
         bool has_token = info.token.val();
         bool need_stls = !info.ssl && info.tls ? True : False;
 
-        # Pre-compute auth commands
-        string xoauth2_cmd = "";
-        if (has_token) {
-            string login = sprintf("user=%s%sauth=Bearer %s%s%s", info.user, Pop3Client::CtrlA, info.token,
-                Pop3Client::CtrlA, Pop3Client::CtrlA).toBase64();
-            xoauth2_cmd = sprintf("AUTH XOAUTH2 %s\r\n", login);
-        }
-        string user_cmd = sprintf("USER %s\r\n", info.user);
-        string pass_cmd = sprintf("PASS %s\r\n", info.pass);
+        # Pre-compute auth commands; credentials that would end a command line or a SASL field are refused
+        hash<string, string> auth = Pop3Client::getAuthCommands(info);
+        string xoauth2_cmd = auth.xoauth2_cmd;
+        string user_cmd = auth.user_cmd;
+        string pass_cmd = auth.pass_cmd;
 
         # Pipeline step layout (step indices in comments):
         #   0: setContextBool("need_stls")
@@ -1788,9 +1877,12 @@ public class Pop3CommandPollOperation inherits Qore::PollPipeline {
         @param command command text without trailing CRLF
         @param multi if True, read a dot-terminated response body after the +OK line
 
-        @throw POP3-SERVER-ERROR if the POP3 server returns an error response
+        @throw POP3-SERVER-ERROR if the POP3 server returns an error response, or the command contains a NUL, CR or
+        LF character, which would end the command line and start another command (for example in a message ID)
+        @throw POP3-CONFIG-ERROR a credential cannot be sent as it is; see @ref Pop3Client::checkCredentials()
     */
     constructor(Pop3Client pop3, string command, bool multi = False) : PollPipeline(new Socket()) {
+        check_line_text(command, "POP3 command", "POP3-SERVER-ERROR");
         hash<auto> info = pop3.getInfo();
         goal = "command";
         multi_response = multi;
@@ -1802,14 +1894,11 @@ public class Pop3CommandPollOperation inherits Qore::PollPipeline {
         bool has_token = info.token.val();
         bool need_stls = !info.ssl && info.tls ? True : False;
 
-        string xoauth2_cmd = "";
-        if (has_token) {
-            string login = sprintf("user=%s%sauth=Bearer %s%s%s", info.user, Pop3Client::CtrlA, info.token,
-                Pop3Client::CtrlA, Pop3Client::CtrlA).toBase64();
-            xoauth2_cmd = sprintf("AUTH XOAUTH2 %s\r\n", login);
-        }
-        string user_cmd = sprintf("USER %s\r\n", info.user);
-        string pass_cmd = sprintf("PASS %s\r\n", info.pass);
+        # Pre-compute auth commands; credentials that would end a command line or a SASL field are refused
+        hash<string, string> auth = Pop3Client::getAuthCommands(info);
+        string xoauth2_cmd = auth.xoauth2_cmd;
+        string user_cmd = auth.user_cmd;
+        string pass_cmd = auth.pass_cmd;
 
         addSetContextBool("need_stls", need_stls);
         addSetContextBool("has_token", has_token);
@@ -1948,9 +2037,11 @@ public class Pop3ConnectedCommandPollOperation inherits Qore::PollPipeline {
         @param command command text without trailing CRLF
         @param multi if True, read a dot-terminated response body after the +OK line
 
-        @throw POP3-SERVER-ERROR if the POP3 server returns an error response
+        @throw POP3-SERVER-ERROR if the POP3 server returns an error response, or the command contains a NUL, CR or
+        LF character, which would end the command line and start another command (for example in a message ID)
     */
     constructor(Socket sock, string command, bool multi = False) : PollPipeline(sock) {
+        check_line_text(command, "POP3 command", "POP3-SERVER-ERROR");
         goal = "connected-command";
         multi_response = multi;
         response_queue_id = addQueue();
@@ -2054,6 +2145,8 @@ public class Pop3StatPollOperation inherits Qore::PollPipeline {
 
     #! Creates the stat pipeline
     /** @param pop3 the Pop3Client whose connection info drives the pipeline
+
+        @throw POP3-CONFIG-ERROR a credential cannot be sent as it is; see @ref Pop3Client::checkCredentials()
     */
     constructor(Pop3Client pop3) : PollPipeline(my_sock = Pop3StatPollOperation::makeSocket()) {
         hash<auto> info = pop3.getInfo();
@@ -2064,15 +2157,11 @@ public class Pop3StatPollOperation inherits Qore::PollPipeline {
         bool has_token = info.token.val();
         bool need_stls = !info.ssl && info.tls ? True : False;
 
-        # Pre-compute auth commands
-        string xoauth2_cmd = "";
-        if (has_token) {
-            string login = sprintf("user=%s%sauth=Bearer %s%s%s", info.user, Pop3Client::CtrlA, info.token,
-                Pop3Client::CtrlA, Pop3Client::CtrlA).toBase64();
-            xoauth2_cmd = sprintf("AUTH XOAUTH2 %s\r\n", login);
-        }
-        string user_cmd = sprintf("USER %s\r\n", info.user);
-        string pass_cmd = sprintf("PASS %s\r\n", info.pass);
+        # Pre-compute auth commands; credentials that would end a command line or a SASL field are refused
+        hash<string, string> auth = Pop3Client::getAuthCommands(info);
+        string xoauth2_cmd = auth.xoauth2_cmd;
+        string user_cmd = auth.user_cmd;
+        string pass_cmd = auth.pass_cmd;
 
         # --- Steps 0-4: configuration transforms ---
         addSetContextBool("need_stls", need_stls);
@@ -2232,9 +2321,13 @@ public class Pop3RetrPollOperation inherits Qore::PollPipeline {
     /** @param sock already-connected POP3 socket
         @param ids list of message IDs to fetch (from LIST output)
         @param do_delete if True, send DELE after each RETR
+
+        @throw POP3-FETCH-ERROR a message ID contains a NUL, CR or LF character, which would end the command line and
+        start another command
     */
     constructor(Socket sock, list<string> ids, bool do_delete = False)
             : PollPipeline(sock) {
+        map check_line_text($1, "POP3 message ID", "POP3-FETCH-ERROR"), ids;
         msg_ids = ids;
         goal = "retr";
         body_queue_id = addQueue();

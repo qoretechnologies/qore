@@ -1,0 +1,242 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a message ID or a credential with a line break would end a POP3 command and start another one (for example
+# "1\r\nDELE 2" given as the ID of a message to retrieve), and a credential with a ^A character would end a field of
+# the SASL XOAUTH2 message; a local POP3 server that accepts a bare LF as a line ending records the commands that it
+# receives, so that the test shows that no injected command reaches the wire
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Mime
+%requires MailMessage
+%requires Pop3Client
+%requires QUnit
+
+%exec-class Pop3InjectionTest
+
+#! a POP3 server that takes a CR LF or a bare LF as the end of a line and records the commands of every session
+class LenientPop3Server {
+    private {
+        Socket listener();
+        Queue sessions();
+        Counter done(1);
+        const ReadTimeout = 10s;
+        const Message = "From: a@example.com\r\nTo: b@example.com\r\nSubject: test\r\n\r\nbody\r\n";
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        background run();
+    }
+
+    int getPort() {
+        return listener.getPort();
+    }
+
+    string getUrl() {
+        return sprintf("pop3://127.0.0.1:%d", getPort());
+    }
+
+    #! ends the server and returns the commands received in all sessions
+    list<string> stop() {
+        Socket s();
+        s.connectINET("127.0.0.1", getPort());
+        s.send("STOP\r\n");
+        done.waitForZero();
+        s.close();
+        list<string> rv = ();
+        while (sessions.size()) {
+            rv += sessions.get();
+        }
+        return rv;
+    }
+
+    private run() {
+        on_exit done.dec();
+        while (True) {
+            Socket s = listener.accept();
+            list<string> commands = ();
+            bool stop;
+            try {
+                stop = serve(s, \commands);
+            } catch (hash<ExceptionInfo> ex) {
+                # the client closed the connection: the session ends with what was received
+            }
+            try {
+                s.close();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            if (stop) {
+                break;
+            }
+            sessions.push(commands);
+        }
+    }
+
+    #! returns the next line, without its line ending: CR LF or a bare LF, or NOTHING if the connection was closed
+    private *string readLine(Socket s) {
+        binary line = binary();
+        while (True) {
+            binary c;
+            try {
+                c = s.recvBinary(1, ReadTimeout);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            if (!c.size()) {
+                return;
+            }
+            if (c == <0a>) {
+                break;
+            }
+            line += c;
+        }
+        string rv = line.toString();
+        if (rv =~ /\r$/) {
+            splice rv, -1;
+        }
+        return rv;
+    }
+
+    #! serves a session; returns True for the session that stops the server
+    private bool serve(Socket s, reference<list<string>> commands) {
+        s.send("+OK POP3 server ready\r\n");
+        while (True) {
+            *string line = readLine(s);
+            if (!exists line) {
+                break;
+            }
+            if (line == "STOP") {
+                return True;
+            }
+            commands += line;
+            if (line =~ /^(RETR|TOP) /i) {
+                s.send("+OK message follows\r\n" + Message + ".\r\n");
+            } else if (line =~ /^STAT$/i) {
+                s.send("+OK 1 " + Message.size() + "\r\n");
+            } else if (line =~ /^LIST$/i) {
+                s.send("+OK\r\n1 " + Message.size() + "\r\n.\r\n");
+            } else if (line =~ /^UIDL$/i) {
+                s.send("+OK\r\n1 uid-1\r\n.\r\n");
+            } else if (line =~ /^UIDL /i) {
+                s.send("+OK 1 uid-1\r\n");
+            } else if (line =~ /^CAPA$/i) {
+                s.send("-ERR not supported\r\n");
+            } else if (line =~ /^QUIT$/i) {
+                s.send("+OK bye\r\n");
+                break;
+            } else {
+                s.send("+OK\r\n");
+            }
+        }
+        return False;
+    }
+}
+
+class Pop3InjectionTest inherits QUnit::Test {
+    constructor() : Test("Pop3InjectionTest", "1.0") {
+        addTestCase("message IDs", \messageIds());
+        addTestCase("credentials", \credentials());
+        addTestCase("poll operations", \pollOperations());
+        set_return_value(main());
+    }
+
+    #! returns the commands that are not part of a login, a retrieval, a listing or a logout
+    private list<string> extraCommands(list<string> commands) {
+        return cast<list<string>>(select commands,
+            $1 !~ /^(USER user|PASS password|AUTH XOAUTH2 \S+|NOOP|STAT|LIST|UIDL|UIDL 1|RETR 1|TOP 1 0|QUIT)$/);
+    }
+
+    messageIds() {
+        LenientPop3Server server();
+        list<string> commands;
+        {
+            on_exit commands = server.stop();
+            Pop3Client pop3(server.getUrl(), {"username": "user", "password": "password"});
+            on_exit pop3.disconnect();
+            # an ID with a line break is refused before it is sent, whether or not the client is connected
+            assertThrows("POP3-SERVER-ERROR", "POP3 command \"RETR 1\\\\x0d\\\\x0aDELE 2\" contains a line break",
+                \pop3.getMessage(), "1\r\nDELE 2");
+            assertThrows("POP3-SERVER-ERROR", "contains a line break", \pop3.getMessageHeaders(), "1\nDELE 2");
+            assertThrows("POP3-SERVER-ERROR", "contains a line break", \pop3.top(), ("1\r\nDELE 2", 0));
+            assertThrows("POP3-SERVER-ERROR", "contains a line break", \pop3.del(), "1\r\nRSET");
+            assertThrows("POP3-SERVER-ERROR", "contains a line break", \pop3.del(), (("1", "2\r\nRSET"),));
+            assertThrows("POP3-SERVER-ERROR", "contains a NUL character", \pop3.top(), ("1\x00", 0));
+            # the IDs themselves
+            assertEq("test", pop3.getMessage("1").getSubject());
+        }
+        assertEq((), extraCommands(commands));
+        assertEq(0, (select commands, $1 =~ /^(DELE|RSET)/).size());
+    }
+
+    credentials() {
+        LenientPop3Server server();
+        list<string> commands;
+        {
+            on_exit commands = server.stop();
+            # a password or user name with a line break would end the PASS or USER command
+            assertThrows("POP3-CONFIG-ERROR", "^POP3 password contains a line break; it cannot contain CR or LF "
+                "characters$", sub () {
+                Pop3Client pop3(server.getUrl(), {"username": "user", "password": "password\r\nDELE 1"});
+            });
+            assertThrows("POP3-CONFIG-ERROR", "POP3 user name \"user\\\\x0d\\\\x0aDELE 1\" contains a line break",
+                sub () { Pop3Client pop3(server.getUrl(), {"username": "user\r\nDELE 1", "password": "password"}); });
+            assertThrows("POP3-URL-ERROR", "POP3 password contains a line break", sub () {
+                Pop3Client pop3(sprintf("pop3://user:pass\nDELE 1@127.0.0.1:%d", server.getPort()));
+            });
+            # a ^A character would end a field of the XOAUTH2 message
+            assertThrows("POP3-CONFIG-ERROR", "bearer token contains a NUL or \\^A character", sub () {
+                Pop3Client pop3(server.getUrl(), {"username": "user", "token": "token\x01\x01"});
+            });
+            assertThrows("POP3-CONFIG-ERROR", "XOAUTH2 login contains a NUL or \\^A character", sub () {
+                Pop3Client pop3(server.getUrl(), {"username": "user\x01auth=Bearer other", "token": "token"});
+            });
+            # valid credentials log in
+            Pop3Client pop3(server.getUrl(), {"username": "user", "password": "password"});
+            assertEq(1, pop3.stat().num);
+            pop3.disconnect();
+        }
+        assertEq((), extraCommands(commands));
+        assertEq(1, (select commands, $1 == "PASS password").size());
+    }
+
+    pollOperations() {
+        LenientPop3Server server();
+        list<string> commands;
+        {
+            on_exit commands = server.stop();
+            Pop3Client pop3(server.getUrl(), {"username": "user", "password": "password"});
+            assertThrows("POP3-SERVER-ERROR", "contains a line break",
+                sub () { Pop3CommandPollOperation op(pop3, "STAT\r\nDELE 1"); });
+            assertThrows("POP3-SERVER-ERROR", "contains a line break",
+                sub () { Pop3ConnectedCommandPollOperation op(new Socket(), "STAT\r\nDELE 1"); });
+            assertThrows("POP3-FETCH-ERROR", "POP3 message ID .* contains a line break",
+                sub () { Pop3RetrPollOperation op(new Socket(), ("1", "2\r\nDELE 1")); });
+            # the credentials are checked where the poll operations build their commands, for a client whose
+            # connection info has a line break
+            BadPop3Client bad(server.getUrl());
+            assertThrows("POP3-CONFIG-ERROR", "POP3 password contains a line break",
+                sub () { Pop3PingPollOperation op(bad); });
+            assertThrows("POP3-CONFIG-ERROR", "POP3 password contains a line break",
+                sub () { Pop3StatPollOperation op(bad); });
+            assertThrows("POP3-CONFIG-ERROR", "POP3 password contains a line break",
+                sub () { Pop3CommandPollOperation op(bad, "STAT"); });
+        }
+        assertEq((), commands);
+    }
+}
+
+#! a client whose connection info has a password with a line break
+class BadPop3Client inherits Pop3Client {
+    constructor(string url) : Pop3Client(url, {"username": "user", "password": "password"}) {
+    }
+
+    hash<auto> getInfo() {
+        return Pop3Client::getInfo() + {"pass": "password\r\nDELE 1"};
+    }
+}

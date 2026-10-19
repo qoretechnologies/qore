@@ -843,10 +843,10 @@
     Header values, request targets, passwords and URLs are not shown in the exception.
     @endparblock
 
-    @par Mail Is Sent With SMTP Transparency, and a Line Break Cannot Start Another SMTP Command or Header
+    @par Mail Is Sent With SMTP Transparency, and a Line Break Cannot Start Another Mail Command or Header
     @parblock
-    The @ref smtpclientintro "SmtpClient", @ref mailmessageintro "MailMessage" and @ref mimeintro "Mime" modules no
-    longer let a string in a message start another SMTP command or header:
+    The @ref smtpclientintro "SmtpClient", @ref mailmessageintro "MailMessage", @ref mimeintro "Mime" and
+    @ref pop3clientintro "Pop3Client" modules no longer let a string start another command or header:
     - a message is always sent with SMTP transparency: every CR or LF that is not part of a CRLF line break is sent as
       CRLF, and a \c "." is added at the start of every line that starts with \c "."; a message created with SMTP
       mode off, or a bare LF before a line with only \c ".", let that line end the data and the lines after it be
@@ -859,6 +859,10 @@
       part header name or value with one raises \c PART-ERROR
     - a SASL credential with a character that separates the fields of the SASL message raises
       \c SMTPCLIENT-INVALID-AUTHENTICATION, and the \c OAUTHBEARER user name is escaped as RFC 7628 requires
+    - a POP3 command or message ID with a NUL, CR or LF character (for example \c "1\r\nDELE 2" as the ID of a
+      message to retrieve) raises \c POP3-SERVER-ERROR, and a POP3 user name or password with one, or an
+      \c XOAUTH2 user name or token with a NUL or \c ^A character, raises \c POP3-URL-ERROR or
+      \c POP3-CONFIG-ERROR, before anything is sent
 
     Use @ref MailMessage::Message::serializeRaw() "Message::serializeRaw()" for a message that is stored or uploaded
     rather than sent with SMTP.  @ref MailMessage::Message::getFrom() "Message::getFrom()" of a parsed message now
