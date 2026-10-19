@@ -18268,3 +18268,170 @@ Qualification rebuilds all 64 owned qmods and restores their Release aliases wit
 See `results-aot-getter-signature-admission-rejected-macos-arm64.json` for every measured window, exact sources/artifacts, commands, logs, any development attempts, independent replay and all 62 audit-changes checks. No new Java ratio or global performance ceiling is established.
 
 The next independent investigation is compiler recognition of stable auto parameters selected by boxed PHIs feeding method receivers. Existing entry-owner, strong-slot identity and reflective-mutation epoch guards must remain; the direct receiver-only ownership set must not be widened. This addresses repeated receiver-local reloads visible in the historical optimized profile, not signature admission. It is a hypothesis, not an implemented or measured improvement, and does not revive the rejected all-auto-parameter heuristic.
+
+
+## Rejected guarded conditional-receiver parameter cache (post-815eeb761)
+
+The candidate is rejected; all three existing source/fixture files are archived and restored, with fresh Release/Debug qualification. This is an optimized AOT branch before/after/control experiment, not fresh Java/develop timing.
+
+Qualified baseline revision: `815eeb76120d6cded9a1bea8caca78041149c85a`; candidate base: `815eeb76120d6cded9a1bea8caca78041149c85a`. They are the same revision, freshly rebuilt and qualified after merging origin/develop. The merge includes origin/develop `1b60534a9027cb055970f9ec72f85eba0c3103dc`. Upstream runtime, CSV and DataProvider changes are present in both sides, not attributed to this optimization.
+
+Both runtimes use Release `-O3 -DNDEBUG`; all AOT artifacts use qcc `-O3`. The three modes are the frozen baseline, candidate, and candidate compiled with `QORE_DISABLE_AOT_PHI_RECEIVER_PARAM_CACHE=1`. The diagnostic key is absent during execution; the old direct-receiver cache remains enabled in the control. These 55 synthetic workloads use no external Qore modules, services or timed file I/O.
+
+Three fixed layouts are used: default, reverse and shuffle-487. Reverse and shuffle share exact order files derived from baseline symbols across modes; default uses the linker's default placement. Each job uses 4096 items / seed 7, three warmup and three measured 300 ms windows. The three-fork screen has 1485 jobs / 4455 measured windows. The five-fork confirmation adds 2475 jobs / 7425 windows; epochs remain separate.
+
+Values are ns/item: the median of three layout medians of fork means. Negative percentage means less elapsed time. These whole-workload costs include loop, callback, dispatch and setup work, not isolated call latency or a production-throughput score.
+
+### Screen
+
+|!Workload|!Before|!Compile-disabled|!Candidate|!Time change vs before|!Time change vs disabled
+|arithmetic|1.415093|1.412937|1.411740|-0.236983%|-0.084738%
+|direct_call|1.418861|1.418214|1.421010|+0.151457%|+0.197102%
+|method_call|1.514552|1.512308|1.507571|-0.460932%|-0.313224%
+|indirect_call|6.591725|6.480213|6.522882|-1.044389%|+0.658440%
+|polymorphic_call|22.045461|21.956434|22.050005|+0.020610%|+0.426167%
+|polymorphic_expression_call|10.120836|10.185126|10.308014|+1.849435%|+1.206540%
+|monomorphic_call|3.409072|3.432895|3.590195|+5.312952%|+4.582140%
+|optional_method_call|10.374087|10.287422|10.194773|-1.728483%|-0.900601%
+|polymorphic_float_call|22.106075|22.294251|22.150451|+0.200738%|-0.645012%
+|polymorphic_float_expression_call|10.236304|10.380164|10.414962|+1.745338%|+0.335233%
+|monomorphic_float_call|3.356032|3.363182|3.430583|+2.221412%|+2.004083%
+|optional_float_method_call|10.463883|10.353199|10.416701|-0.450904%|+0.613352%
+|boxed_float_method_call|19.089269|19.034249|19.167964|+0.412246%|+0.702500%
+|dynamic_int_result_call|10.157184|10.351803|10.330408|+1.705440%|-0.206678%
+|dynamic_int_result_fallback|20.958516|21.024959|21.101277|+0.681160%|+0.362988%
+|boxed_int_method_call|15.545885|15.326856|15.580524|+0.222822%|+1.655061%
+|boxed_int_method_fallback|31.070699|29.929097|30.422114|-2.087448%|+1.647283%
+|boxed_float_method_fallback|31.206497|31.239955|30.983626|-0.714182%|-0.820518%
+|boxed_int_method_effect|84.758402|86.491460|84.843145|+0.099981%|-1.905754%
+|dynamic_float_result_call|11.171041|11.195906|11.286197|+1.030844%|+0.806468%
+|indirect_wide|6.484466|6.639335|6.507842|+0.360504%|-1.980515%
+|indirect_float|6.382398|6.419770|6.426180|+0.685985%|+0.099852%
+|indirect_int_result|6.205793|6.112946|6.149165|-0.912495%|+0.592500%
+|indirect_float_result|6.913621|7.192420|7.025486|+1.618038%|-2.320972%
+|indirect_tagged_float|6.580867|6.466613|6.582686|+0.027648%|+1.794957%
+|indirect_branch_float|6.504618|6.491119|6.484308|-0.312243%|-0.104929%
+|indirect_affine|6.540703|6.600752|6.610199|+1.062527%|+0.143117%
+|indirect_affine_wide|6.612652|6.658755|6.612835|+0.002765%|-0.689626%
+|indirect_branch_int|6.447093|6.541363|6.606897|+2.478700%|+1.001847%
+|dispatch_control|1.563039|1.556880|1.555896|-0.456960%|-0.063212%
+|list_read|2.546982|2.571064|2.598996|+2.042163%|+1.086376%
+|list_build|24.877478|25.000603|24.898963|+0.086365%|-0.406547%
+|list_mutate|176.740676|174.416847|175.996250|-0.421196%|+0.905534%
+|temporary_list|1.513259|1.511509|1.506213|-0.465621%|-0.350374%
+|temporary_hash|309.448965|309.121830|306.784801|-0.860938%|-0.756022%
+|closure_call|17.232248|17.214612|17.275109|+0.248727%|+0.351428%
+|closure_capture|23.535098|22.608224|22.795595|-3.142128%|+0.828770%
+|csv_report|891.962345|884.496933|902.025444|+1.128198%|+1.981749%
+|object_orders|1703.253522|1720.412660|1715.282653|+0.706244%|-0.298185%
+|callback_pipeline|79.240210|78.616149|78.502059|-0.931536%|-0.145123%
+|text_index|1248.906586|1246.293384|1241.856060|-0.564536%|-0.356042%
+|object_loop|157.629433|159.126240|123.875428|-21.413517%|-22.152734%
+|object_short|1001.315914|1007.068074|1014.864786|+1.353107%|+0.774199%
+|float_loop|161.968870|164.621650|130.243126|-19.587556%|-20.883355%
+|float_short|1014.350105|1028.910688|1048.088942|+3.326153%|+1.863938%
+|string_loop|350.323728|347.085916|348.082154|-0.639858%|+0.287029%
+|string_short|1180.647645|1166.148722|1185.981978|+0.451814%|+1.700748%
+|effect_loop|330.787452|348.771154|307.522083|-7.033329%|-11.826973%
+|effect_short|1180.629998|1227.338399|1204.582678|+2.028805%|-1.854071%
+|two_read_loop|380.421515|380.026379|337.933737|-11.168606%|-11.076242%
+|two_read_short|1250.399798|1245.602664|1260.316784|+0.793105%|+1.181285%
+|default_loop|664.002621|681.934747|618.338111|-6.877158%|-9.325912%
+|default_short|1531.760841|1530.383107|1550.748712|+1.239611%|+1.330752%
+|string_result_loop|414.017783|443.147426|376.066191|-9.166658%|-15.137453%
+|string_result_short|1270.284528|1299.551684|1300.325475|+2.364899%|+0.059543%
+
+Against `before`: 32 aggregate losses and 86 adverse workload/layout comparisons. Largest layout loss: `indirect_int_result` / `default`, +8.352108%. All losses and observed fork-mean ranges are retained.
+
+Against `compile_disabled`: 30 aggregate losses and 84 adverse workload/layout comparisons. Largest layout loss: `indirect_int_result` / `default`, +6.044780%. All losses and observed fork-mean ranges are retained.
+
+### Confirmation
+
+|!Workload|!Before|!Compile-disabled|!Candidate|!Time change vs before|!Time change vs disabled
+|arithmetic|1.447470|1.445143|1.442888|-0.316510%|-0.155990%
+|direct_call|1.427258|1.425592|1.428075|+0.057227%|+0.174167%
+|method_call|1.511339|1.512508|1.510175|-0.077063%|-0.154300%
+|indirect_call|6.472798|6.603554|6.707860|+3.631528%|+1.579534%
+|polymorphic_call|22.027186|22.069094|21.980171|-0.213439%|-0.402927%
+|polymorphic_expression_call|10.366917|10.292590|10.295932|-0.684726%|+0.032471%
+|monomorphic_call|3.359555|3.409931|3.557076|+5.879396%|+4.315208%
+|optional_method_call|10.349536|10.317015|10.293547|-0.540986%|-0.227470%
+|polymorphic_float_call|22.110736|22.467589|22.447962|+1.525169%|-0.087356%
+|polymorphic_float_expression_call|10.316290|10.344690|10.430690|+1.108929%|+0.831343%
+|monomorphic_float_call|3.372286|3.379411|3.442815|+2.091434%|+1.876185%
+|optional_float_method_call|10.404171|10.465477|10.420331|+0.155322%|-0.431380%
+|boxed_float_method_call|18.877649|18.895843|18.893371|+0.083284%|-0.013083%
+|dynamic_int_result_call|10.257264|10.386549|10.272566|+0.149188%|-1.097407%
+|dynamic_int_result_fallback|21.179044|21.157057|21.278669|+0.470394%|+0.574807%
+|boxed_int_method_call|15.333812|15.426454|15.504878|+1.115613%|+0.508375%
+|boxed_int_method_fallback|31.117205|29.955975|30.265421|-2.737341%|+1.033002%
+|boxed_float_method_fallback|31.278257|31.273790|31.472558|+0.621200%|+0.635573%
+|boxed_int_method_effect|85.396922|85.611071|85.198413|-0.232454%|-0.482014%
+|dynamic_float_result_call|11.339660|11.305705|11.258426|-0.716371%|-0.418184%
+|indirect_wide|6.639486|6.628510|6.517240|-1.841195%|-1.678651%
+|indirect_float|6.404316|6.345402|6.396050|-0.129064%|+0.798194%
+|indirect_int_result|6.109877|6.048436|6.159952|+0.819572%|+1.843711%
+|indirect_float_result|7.095917|7.278916|7.122605|+0.376099%|-2.147448%
+|indirect_tagged_float|6.589693|6.513638|6.527615|-0.942049%|+0.214572%
+|indirect_branch_float|6.515265|6.523912|6.500145|-0.232077%|-0.364310%
+|indirect_affine|6.584672|6.642042|6.636097|+0.780983%|-0.089498%
+|indirect_affine_wide|6.552464|6.611618|6.641612|+1.360527%|+0.453649%
+|indirect_branch_int|6.513238|6.538942|6.500038|-0.202663%|-0.594956%
+|dispatch_control|1.573797|1.573709|1.574193|+0.025188%|+0.030727%
+|list_read|2.610074|2.649908|2.638586|+1.092356%|-0.427269%
+|list_build|25.159427|25.329687|25.199770|+0.160348%|-0.512904%
+|list_mutate|175.698041|174.967791|175.732822|+0.019796%|+0.437241%
+|temporary_list|1.551876|1.560534|1.552826|+0.061205%|-0.493928%
+|temporary_hash|318.296339|318.434662|314.958184|-1.048757%|-1.091740%
+|closure_call|17.449768|17.085465|17.162784|-1.644630%|+0.452543%
+|closure_capture|23.919237|23.070286|23.170811|-3.128971%|+0.435733%
+|csv_report|897.645281|901.926925|901.054505|+0.379796%|-0.096728%
+|object_orders|1738.578382|1719.073628|1730.986681|-0.436661%|+0.692993%
+|callback_pipeline|80.094869|79.014907|79.346632|-0.934188%|+0.419827%
+|text_index|1285.436428|1281.809249|1278.687431|-0.525035%|-0.243548%
+|object_loop|160.142621|158.885164|124.405986|-22.315505%|-21.700691%
+|object_short|1035.272416|1043.441950|1054.072533|+1.815958%|+1.018800%
+|float_loop|165.721997|166.835780|130.870006|-21.030396%|-21.557591%
+|float_short|1032.450006|1032.001065|1049.163048|+1.618775%|+1.662981%
+|string_loop|347.114391|348.534005|351.868394|+1.369578%|+0.956690%
+|string_short|1188.313698|1179.663709|1186.657695|-0.139357%|+0.592880%
+|effect_loop|338.027869|354.491806|305.593289|-9.595238%|-13.793977%
+|effect_short|1205.409994|1221.124790|1228.244580|+1.894342%|+0.583052%
+|two_read_loop|381.408550|392.204178|347.926934|-8.778413%|-11.289335%
+|two_read_short|1240.705231|1256.379834|1265.009940|+1.958943%|+0.686903%
+|default_loop|648.821717|668.355711|621.068867|-4.277423%|-7.075101%
+|default_short|1539.566870|1559.859472|1560.338158|+1.349164%|+0.030688%
+|string_result_loop|429.801230|436.822923|396.058812|-7.850703%|-9.331953%
+|string_result_short|1318.102155|1326.084840|1344.015939|+1.965992%|+1.352183%
+
+Against `before`: 29 aggregate losses and 86 adverse workload/layout comparisons. Largest layout loss: `monomorphic_call` / `default`, +6.741990%. All losses and observed fork-mean ranges are retained.
+
+Against `compile_disabled`: 28 aggregate losses and 79 adverse workload/layout comparisons. Largest layout loss: `monomorphic_call` / `default`, +6.531488%. All losses and observed fork-mean ranges are retained.
+
+### Predeclared decision and limits
+
+Both getter-loop targets must use at least 5% less aggregate time than both before and compile-disabled, with every fixed layout faster, in both epochs. Reject a non-target workload with at least 3% aggregate slowdown against the same comparator in both epochs, regardless of observed range overlap; also reject a repeated same-workload/comparator/layout slowdown of at least 3% with disjoint observed ranges. No dropped window, epoch pooling, rescue trial or layout search is allowed.
+
+Repeated aggregate adverse comparisons: `monomorphic_call` / `before`, `monomorphic_call` / `compile_disabled`. Repeated disjoint adverse layout comparisons: `indirect_call` / `before` / `default`, `monomorphic_call` / `before` / `default`, `monomorphic_float_call` / `compile_disabled` / `shuffle-487`.
+
+Observed ranges are not confidence intervals; overlap does not prove non-regression. Host frequency, thermals and unrelated load are uncontrolled. No task-owned builds, tests, profiles, source reads, edits or analysis overlapped timing. No new Java ratio or global performance ceiling is established.
+
+### Compiler proof, generated code and qualification
+
+The rejected candidate used a separate iterative, cycle-safe compiler worklist following only boxed PHIs that feed method receivers. It extended the profitability heuristic for otherwise eligible read-only auto parameters; it does not prove an object type or method target. The direct receiver-only ownership set is unchanged. Missing definitions, native PHIs and other value-producing operations stop traversal; roots, vertices and edges check cancellation every 100 iterations. Expected hash-table complexity is linear in visited values and edges.
+
+Existing entry ownership, actual strong-slot identity, private-entry exclusions and reflective mutation epochs remain required. References, weak values and non-objects keep ordinary reloads. A reflective write permanently defeats reuse for that invocation; newly installed references remain live on later reads. No runtime helper ABI, serialized IR, method dispatch, Program/access/binding guard, frame, member lock or cleanup contract changes. The candidate applied when producing AOT code and required recompilation; no IR/JIT timing benefit is claimed.
+
+Actual probe LLVM shows three guarded receiver parameters in each candidate object, float and string probe, absent in baseline and compile-disabled. The disabled and baseline bodies match after removing only debug-metadata IDs. Ordinary reload fallback calls remain emitted. Exact executable/runtime assembly and every operand are archived; static counts include cold paths and are not executed instruction counts or timing causality. Exported runtime function names match, and actual baseline executables pass all three reference grids on the candidate runtime with loaded-library identity checked.
+
+In the default layout, each selected object, float and string probe grows from 1534 to 1666 static instructions and from a 768-byte to an 848-byte stack frame. These whole-function counts include cold paths; they do not establish why unrelated fast-call workloads regressed.
+
+All 27 executable/object byte sizes and single-build compile durations are recorded. These are diagnostics, not a statistically controlled compilation-throughput or application-memory comparison; no zero-cost footprint claim is made.
+
+Fresh baseline Release/Debug each pass 69 core files / 112 cases / 17595 assertions; candidate each passes 69 / 112 / 18219. Restored Release/Debug each pass 69 / 112 / 17595. The expanded fixture is checked in AST and AOT at `-O0`/`-O3` on the unchanged baseline. The initial IR check failed reflective variable lookup in the existing `objectCacheOptional`; the unchanged fixture reproduces it, and reduced new cases also fail in `phiCacheReflect`. Disabling IR context elision does not repair it. Those failures are preserved; no full-fixture IR pass is claimed for this AOT-only change. Candidate checks cover nested conditional receivers, reflective backedges, mutable references, weak/non-object and pseudo receivers, written/captured/address-escaped parameters, scalar-only PHIs, one-read exclusions and the compile-disable control. Existing direct-receiver/private-entry checks remain.
+
+Qualification rebuilds all 64 owned qmods and restores exactly their Release aliases with unrelated links unchanged. Each runtime also runs ten newly merged CSV/DataProvider/line-iterator suites in AST and IR, the existing DataProvider/local HTTP/REST/offline LLM/thread checks, 13 lvalue/DGC suites and 555 IR + 555 AOT references; Debug runs 1985 native checks in each enabled/disabled mode. Filtered REST summaries include skips; only the selected case per module is claimed. No external database suite was run. This is selected macOS arm64 coverage, not full-suite/sanitizer/cross-platform certification.
+
+See `results-aot-phi-receiver-param-cache-rejected-macos-arm64.json` for all 11880 measured windows, commands, exact sources/artifacts, development attempts, independent replay and all 62 audit-changes checks. Further optimization and a fresh Java/develop checkpoint require independent validation; this experiment does not establish Java parity or a global ceiling.
+
+Next independently test an exact `NOTHING` exit before the late scalar cleanup guard in existing AOT native-call continuations. Current monomorphic assembly still tests scalar tag families on empty cleanup values after merging native and generic paths. The proposed change must retain every nonempty cleanup operation at its original point; emitted-code inspection and fresh measurements are required before claiming a benefit. The baseline IR reflective-frame discrepancy remains a separate correctness follow-up.

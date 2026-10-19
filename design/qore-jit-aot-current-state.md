@@ -3558,3 +3558,16 @@ Rejected; candidate sources archived and the runtime/fixtures restored and requa
 The experiment moved only immutable zero-argument signature facts into existing PIC admission. Caller lowering/ABI, positive live companion binding, body/readiness/Program guards, TLS acquisition, locks, observable frames and cancellation were unchanged. See RESULTS and `results-aot-getter-signature-admission-rejected-macos-arm64.json` for footprint, all results and the complete audit. Java parity and a global ceiling remain unestablished.
 
 Next: investigate extending the existing guarded object-parameter cache through boxed PHIs used as method receivers, retaining all ownership and reflective invalidation checks. This is distinct from the rejected all-auto heuristic and is not yet implemented or measured.
+
+
+## Rejected guarded conditional-receiver parameter cache (post-815eeb761)
+
+Confirmation integer getter loop: before 160.142621, compile-disabled 158.885164, candidate 124.405986 ns/item (-22.315505% vs before, -21.700691% vs disabled).
+
+Confirmation floating getter loop: before 165.721997, compile-disabled 166.835780, candidate 130.870006 ns/item (-21.030396% vs before, -21.557591% vs disabled).
+
+Rejected; the three candidate source/fixture files are archived, restored and requalified. Monomorphic calls regress +5.312952% / +5.879396% against before in screen / confirmation. Monomorphic calls regress +4.582140% / +4.315208% against compile_disabled in screen / confirmation. Repeated disjoint adverse layout comparisons also occur for indirect calls and integer/floating monomorphic calls; all rejection gates and losses are preserved in RESULTS. All 11880 optimized windows across 55 workloads / three layouts / three modes are preserved. This is whole-workload branch before/after/control, not fresh Java/develop or isolated-call timing.
+
+The rejected compiler candidate followed boxed PHIs used as receivers to enable existing guarded object-parameter reuse. Ownership, strong-slot identity, reflective invalidation, reference/weak fallback, dispatch, frames and locks remain unchanged. It was an AOT code-generation optimization requiring recompilation; no IR/JIT gain is claimed. See RESULTS and `results-aot-phi-receiver-param-cache-rejected-macos-arm64.json` for all results, qualification, diagnostic limits and audit. Java parity and a global ceiling remain unestablished.
+
+Next independently investigate a cheap exact-`NOTHING` exit in the existing late AOT scalar cleanup guard, without changing real cleanup ordering or exception behavior. Inspect generated code before committing to another timing campaign; no benefit is established yet. Preserve the separate baseline IR reflective-frame limitation.
