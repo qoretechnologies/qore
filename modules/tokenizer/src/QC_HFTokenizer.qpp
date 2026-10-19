@@ -87,15 +87,19 @@ int HFTokenizer::getVocabSize() [flags=CONSTANT] {
 }
 
 //! Converts a token ID to its string representation
-/** @param id the token ID
-    @return the token string
+/** As in Hugging Face tokenizers, an added token with the ID is found before the model vocabulary.
+
+    @param id the token ID
+    @return the token string, or an empty string if the ID is not known
 */
 string HFTokenizer::idToToken(int id) [flags=CONSTANT] {
     return tok->idToToken(id, xsink);
 }
 
 //! Converts a token string to its ID
-/** @param token the token string
+/** As in Hugging Face tokenizers, an added token with the content is found before the model vocabulary.
+
+    @param token the token string
     @return the token ID, or -1 if not found
 */
 int HFTokenizer::tokenToId(string token) [flags=CONSTANT] {

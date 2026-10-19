@@ -54,6 +54,7 @@ class TokenizerTest inherits QUnit::Test {
         addTestCase("chat templates", \chatTemplateTest());
         addTestCase("chat template values are not template text", \chatTemplateInjectionTest());
         addTestCase("configuration loaded while it is read", \concurrentConfigTest());
+        addTestCase("added tokens are looked up before the model vocabulary", \addedTokenPrecedenceTest());
 
         set_return_value(main());
     }
@@ -1155,5 +1156,52 @@ class TokenizerTest inherits QUnit::Test {
         assertEq((), bad, "a reader sees one of the loaded configurations while loadConfig() runs");
         assertEq("A<a1><a2>", tok.applyChatTemplate(({"role": "user", "content": "x"},)),
             "the configuration loaded last is used");
+    }
+
+    # as in Hugging Face tokenizers, a token or ID of an added token is looked up before the model vocabulary
+    addedTokenPrecedenceTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        # the added token "<sep>" has the ID of the model's "world", the added token "world" has an ID of its own, and
+        # the added token "<x>" has the ID of the model's "hello"
+        Tokenizer::HFTokenizer tok({
+            "model": {
+                "type": "WordPiece",
+                "vocab": {"[UNK]": 0, "hello": 1, "world": 2},
+                "unk_token": "[UNK]",
+            },
+            "added_tokens": (
+                {"id": 2, "content": "<sep>", "special": True},
+                {"id": 5, "content": "world", "special": False},
+                {"id": 1, "content": "<x>", "special": False},
+            ),
+            "pre_tokenizer": {"type": "Whitespace"},
+        });
+
+        # tokens and IDs
+        assertEq(5, tok.tokenToId("world"), "tokenToId() returns the ID of the added token, not the model's");
+        assertEq(2, tok.tokenToId("<sep>"), "tokenToId() returns the ID of an added token");
+        assertEq(1, tok.tokenToId("hello"), "tokenToId() returns the model's ID of a token that is not added");
+        assertEq(1, tok.tokenToId("<x>"), "tokenToId() returns the ID of an added token with a model ID");
+        assertEq("<x>", tok.idToToken(1), "idToToken() returns the added token with a model ID");
+        assertEq("<sep>", tok.idToToken(2), "idToToken() returns the added token, not the model's token");
+        assertEq("world", tok.idToToken(5), "idToToken() returns the content of an added token");
+        assertEq(5, tok.getVocab().world, "getVocab() gives the ID of the added token");
+
+        # encoding and decoding
+        hash<auto> enc = tok.encode("hello world");
+        assertEq((1, 5), enc.input_ids, "encode() matches the added token in the text");
+        assertEq(("hello", "world"), enc.tokens,
+            "encode() returns the model's token for an ID the model made, and the matched added token");
+        assertEq("<x> <sep> world", tok.decode((1, 2, 5)), "decode() writes the added token of an ID");
+        assertEq("<x> world", tok.decode((1, 2, 5), True), "decode() skips the special added token of an ID");
+        assertEq(("<x> <sep> world",), tok.decodeBatch(((1, 2, 5),)),
+            "decodeBatch() writes the added token of an ID");
+
+        # special tokens of a configuration
+        tok.loadConfig({"bos_token": "<sep>", "eos_token": "world"});
+        assertEq(2, tok.getBosTokenId(), "loadConfig() finds a special token that is an added token");
+        assertEq(5, tok.getEosTokenId(), "loadConfig() finds the added token before the model's token");
     }
 }

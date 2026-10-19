@@ -201,17 +201,29 @@ private:
     std::vector<AddedToken> added_tokens;
     //! Added token ID -> index in added_tokens; the first added token with an ID is used
     std::unordered_map<int, size_t> added_token_index;
+    //! Added token content -> index in added_tokens; the first added token with a content is used
+    std::unordered_map<std::string, size_t> added_token_by_content;
 
     //! Adds an added token, which is matched before the model, and indexes its ID
     void addAddedToken(AddedToken&& tok);
 
-    //! Returns the token string of an ID: the model's token, else the content of the added token with the ID
-    /** The model does not know the IDs of added tokens that are not in its vocabulary, so every conversion of an
-        ID to a token string must use this function.
+    //! Returns the token string of an ID: the content of the added token with the ID, else the model's token
+    /** As in Hugging Face tokenizers, added tokens are looked up before the model vocabulary.  The model does not
+        know the IDs of added tokens, so every conversion of an ID given to the tokenizer (decoding, idToToken(), the
+        special token IDs) must use this function; only a token the model makes while encoding has the model's token
+        string.
 
         @return the token string, or an empty string if the ID is not known
     */
     std::string tokenForId(int id) const;
+
+    //! Returns the ID of a token: the ID of the added token with the content, else the model's ID
+    /** As in Hugging Face tokenizers, added tokens are looked up before the model vocabulary; every lookup of a
+        token string must use this function.
+
+        @return the ID, or -1 if the token is not known
+    */
+    int idForToken(const std::string& token) const;
 
     //! Pad token ID (-1 if no pad token found)
     int pad_token_id = -1;

@@ -150,20 +150,27 @@ std::vector<int> QoreHFTokenizer::tokenizePreToken(const std::string& pre_token)
 
 void QoreHFTokenizer::addAddedToken(AddedToken&& tok) {
     int id = tok.id;
-    // the token is stored first, so that the index never has an entry for a token that is not stored
+    // the token is stored first, so that the indexes never have an entry for a token that is not stored
     added_tokens.push_back(std::move(tok));
-    added_token_index.emplace(id, added_tokens.size() - 1);
+    size_t index = added_tokens.size() - 1;
+    added_token_index.emplace(id, index);
+    added_token_by_content.emplace(added_tokens.back().content, index);
 }
 
 std::string QoreHFTokenizer::tokenForId(int id) const {
-    if (model) {
-        std::string token = model->idToToken(id);
-        if (!token.empty()) {
-            return token;
-        }
-    }
     auto i = added_token_index.find(id);
-    return i == added_token_index.end() ? std::string() : added_tokens[i->second].content;
+    if (i != added_token_index.end()) {
+        return added_tokens[i->second].content;
+    }
+    return model ? model->idToToken(id) : std::string();
+}
+
+int QoreHFTokenizer::idForToken(const std::string& token) const {
+    auto i = added_token_by_content.find(token);
+    if (i != added_token_by_content.end()) {
+        return added_tokens[i->second].id;
+    }
+    return model ? model->tokenToId(token) : -1;
 }
 
 // Internal: tokenize a text segment through normalize + pre-tokenize + model
@@ -186,7 +193,8 @@ QoreHFTokenizer::InternalEncoding QoreHFTokenizer::encodeSegment(
                 auto toks = model->tokenizeWithOffsets(pt.text);
                 for (const auto& t : toks) {
                     result.ids.push_back(t.id);
-                    result.tokens.push_back(tokenForId(t.id));
+                    // the model made the ID, so the token is the model's, even if an added token has the ID
+                    result.tokens.push_back(model->idToToken(t.id));
                     // Compose: pre-token offset + model-internal offset
                     result.offsets.push_back({pt.start + t.start, pt.start + t.end});
                     result.word_ids.push_back(word_idx);
@@ -198,7 +206,8 @@ QoreHFTokenizer::InternalEncoding QoreHFTokenizer::encodeSegment(
         auto toks = model->tokenizeWithOffsets(normalized);
         for (const auto& t : toks) {
             result.ids.push_back(t.id);
-            result.tokens.push_back(tokenForId(t.id));
+            // the model made the ID, so the token is the model's, even if an added token has the ID
+            result.tokens.push_back(model->idToToken(t.id));
             result.offsets.push_back({t.start, t.end});
             result.word_ids.push_back(0);
         }
@@ -432,18 +441,7 @@ int QoreHFTokenizer::tokenToId(const QoreStringNode* token) const {
     if (!model || !token) {
         return -1;
     }
-    std::string tok_str = qoreStdString(token);
-    int id = model->tokenToId(tok_str);
-    if (id >= 0) {
-        return id;
-    }
-    // Check added tokens
-    for (const auto& at : added_tokens) {
-        if (at.content == tok_str) {
-            return at.id;
-        }
-    }
-    return -1;
+    return idForToken(qoreStdString(token));
 }
 
 QoreHashNode* QoreHFTokenizer::getVocab(ExceptionSink* xsink) const {
@@ -1370,7 +1368,8 @@ QoreHFTokenizer::InternalEncoding QoreHFTokenizer::encodePreTokenizedWords(
             auto toks = model->tokenizeWithOffsets(word);
             for (const auto& t : toks) {
                 result.ids.push_back(t.id);
-                result.tokens.push_back(tokenForId(t.id));
+                // the model made the ID, so the token is the model's, even if an added token has the ID
+                result.tokens.push_back(model->idToToken(t.id));
                 result.offsets.push_back({byte_offset + t.start, byte_offset + t.end});
                 result.word_ids.push_back(word_idx);
             }
@@ -1400,7 +1399,12 @@ int QoreHFTokenizer::addTokens(const QoreListNode* tokens, ExceptionSink* xsink)
     }
 
     ConstListIterator li(tokens);
+    size_t count = 0;
     while (li.next()) {
+        if (count && !(count % 100) && qore_check_cancel(xsink, "adding tokens")) {
+            return added;
+        }
+        ++count;
         QoreValue v = li.getValue();
         std::string content;
         bool special = false;
@@ -1421,19 +1425,8 @@ int QoreHFTokenizer::addTokens(const QoreListNode* tokens, ExceptionSink* xsink)
             continue;
         }
 
-        // Skip if already in model vocab
-        if (model->tokenToId(content) >= 0) {
-            continue;
-        }
-        // Skip if already in added_tokens
-        bool already_added = false;
-        for (const auto& at : added_tokens) {
-            if (at.content == content) {
-                already_added = true;
-                break;
-            }
-        }
-        if (already_added) {
+        // Skip if already an added token or in the model vocab
+        if (idForToken(content) >= 0) {
             continue;
         }
 
@@ -1529,7 +1522,7 @@ void QoreHFTokenizer::loadConfig(const QoreHashNode* config, ExceptionSink* xsin
             s = safeGetStdString(v.get<const QoreHashNode>()->getKeyValue("content"));
         }
         if (s.empty()) return -1;
-        return model ? model->tokenToId(s) : -1;
+        return idForToken(s);
     };
 
     int id;
