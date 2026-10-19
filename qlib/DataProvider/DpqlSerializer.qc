@@ -648,12 +648,66 @@ public class DpqlSerializer {
 
         # A name the tokenizer reads bare, in any script, is written bare; any other is quoted
         if (!DpqlTokenizer::isBareFieldName(field)) {
-            # Escape special characters: backslash first, then quote
-            # Note: use '\"' not '\\"' - in single quotes, \\ is two backslashes
-            field = replace(replace(field, "\\", "\\\\"), '"', '\"');
-            return '@"' + field + '"';
+            return '@"' + DpqlSerializer::escapeFieldPath(field) + '"';
         }
         return "@" + field;
+    }
+
+    #! Returns the DPQL field reference to one key of a record
+    /** A key that the tokenizer reads bare and that has no dot is written <tt>\@key</tt>; any other is quoted, with
+        its dots escaped, as a dot in a field reference separates the parts of a path: the key <tt>Unit.Price</tt> is
+        <tt>\@"Unit\\.Price"</tt>, and the key <tt>order-id</tt> is <tt>\@"order-id"</tt>
+
+        @param key the key, such as the name of a field of a record type
+
+        @return the field reference, which the parser reads as the field reference to the key
+
+        @par Example:
+        @code{.py}
+# @"Unit\.Price" == 10
+string dpql = DpqlSerializer::fieldReferenceForKey("Unit.Price") + " == 10";
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static string fieldReferenceForKey(string key) {
+        if (DpqlTokenizer::isBareFieldName(key) && index(key, ".") < 0) {
+            return "@" + key;
+        }
+        # the field path of the key has its dots escaped
+        return '@"' + DpqlSerializer::escapeFieldPath(replace(key, ".", "\\.")) + '"';
+    }
+
+    #! Returns a field path as it is written between the quotes of <tt>\@"..."</tt>
+    /** The dots of the path are written as they are, as they separate its parts in a quoted name too; a dot that
+        is part of a key is escaped in the path (<tt>a\\.b</tt>) and is written so (<tt>\@"a\\.b"</tt>); any other
+        backslash is written <tt>\\\\</tt>, and a quote <tt>\\"</tt>
+
+        @param field the field path
+
+        @return the text between the quotes, which the parser reads as the same field path
+
+        @since DataProvider 3.11
+    */
+    static string escapeFieldPath(string field) {
+        if (index(field, "\\") < 0 && index(field, '"') < 0) {
+            return field;
+        }
+        string rv = "";
+        list<string> chars = map $1, field.iterator();
+        for (int i = 0; i < chars.size(); ++i) {
+            string ch = chars[i];
+            if (ch == '"') {
+                # in single quotes, a backslash is itself
+                rv += '\"';
+            } else if (ch == "\\") {
+                # an escaped dot stays escaped; any other backslash is itself
+                rv += (i + 1 < chars.size() && chars[i + 1] == ".") ? "\\" : "\\\\";
+            } else {
+                rv += ch;
+            }
+        }
+        return rv;
     }
 
     #! Serializes a wildcard accessor as it is written: the source, \c [*] or \c {*}, and the accessors after it
@@ -762,7 +816,7 @@ public class DpqlSerializer {
         @since DataProvider 3.10
     */
     private *string serializeWildcardFieldPath(string field, string op) {
-        list<string> path = map regex_subst($1, "\\\\.", ".", RE_Global), field.splitRegex("(?<!\\\\)\\.");
+        list<string> path = AbstractDataProvider::getFieldPath(field);
         if (op == DP_FUNC_HASH_WILDCARD) {
             if (path[0] !== "value") {
                 return;

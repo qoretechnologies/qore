@@ -594,6 +594,7 @@ public class MapperTest inherits QUnit::Test {
         addTestCase("Test mapAll() with hash arg", \testMapperMapAllHash());
         addTestCase("Test mapFieldType", \testMapperMapFieldType());
         addTestCase("Dot test", \dotTest());
+        addTestCase("escaped dots in field names", \escapedDotFieldTest());
         addTestCase("field length test", \testFieldLength());
         addTestCase("typed output hash test", \typedOutputHashTest());
         set_return_value(main());
@@ -1353,6 +1354,14 @@ public class MapperTest inherits QUnit::Test {
         });
         list<auto> l = m.mapAll(MapInput3);
         assertEq(MapOutput2, l);
+    }
+
+    #! An escaped dot is part of a key; any other backslash is itself
+    escapedDotFieldTest() {
+        assertEq(("a", "b"), Mapper::splitDottedFields("a.b"));
+        assertEq(("a.b", "c"), Mapper::splitDottedFields("a\\.b.c"));
+        assertEq(("a\\b", "c"), Mapper::splitDottedFields("a\\b.c"));
+        assertEq(("p\\q",), Mapper::splitDottedFields("p\\q"));
     }
 
     dotTest() {

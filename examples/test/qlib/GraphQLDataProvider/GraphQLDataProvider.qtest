@@ -939,6 +939,14 @@ class GraphQLDataProviderTest inherits QUnit::Test {
         # name sanitization transform
         assertEq("first_name", DataProviderGraphQLSchema::sanitizeName("first-name"));
 
+        # a filter on a provider field is a DPQL field reference to one key: a dot in the name is escaped, as a dot in
+        # a field reference separates the parts of a path
+        assertEq('@"full-name"', DataProviderGraphQLSchema::quoteFieldRef("full-name"));
+        assertEq('@"unit\.price"', DataProviderGraphQLSchema::quoteFieldRef("unit.price"));
+        assertEq('@"unit\.price" == 1', DataProviderGraphQLSchema::filterFieldToDpql("unit.price", {"eq": 1}));
+        assertEq(True, AbstractDataProvider::evalGenericExpression({"unit.price": 1},
+            DataProvider::parseDpqlExpression(DataProviderGraphQLSchema::filterFieldToDpql("unit.price", {"eq": 1}))));
+
         # field-name round-tripping: an arg whose GraphQL name was sanitized maps back to the
         # provider's native field name when creating a record
         HyphenProvider hp();

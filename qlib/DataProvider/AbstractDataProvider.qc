@@ -1055,7 +1055,12 @@ public hashdecl DataProviderRangeSpec {
 
 #! Data provider field reference
 public hashdecl DataProviderFieldReference {
-    #! The name of the field being referenced
+    #! The field path of the field being referenced
+    /** Dots separate the parts of the path, the keys read one after the other from the record; a dot that is part
+        of a key is escaped with a backslash: \c "order.id" is the key \c id of the key \c order, and
+        <tt>"Unit\\\\.Price"</tt> (the text <tt>Unit\\.Price</tt>) the key \c Unit.Price
+        (@ref AbstractDataProvider::getFieldPath(), @ref dpql_field_paths)
+    */
     string field;
 
     #! Pre-computed split field path segments (populated by @ref AbstractDataProvider::prepareExpression())
@@ -6139,7 +6144,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         if (val instanceof hash<DataProviderFieldReference>) {
             # Use pre-computed field path if available (from prepareExpression); otherwise compute on the fly
             list<string> f = val.field_path
-                ?? (map regex_subst($1, "\\\\.", ".", RE_Global), val.field.splitRegex("(?<!\\\\)\\."));
+                ?? AbstractDataProvider::getFieldPath(val.field);
             auto rv = rec;
             foreach string field in (f) {
                 if (rv.typeCode() != NT_HASH && rv.typeCode() != NT_OBJECT) {
@@ -6374,6 +6379,22 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         };
     }
 
+    #! Returns the parts of a field path: the keys it reads, in order
+    /** The parts of a field path (the \c field of a @ref DataProviderFieldReference) are separated by dots; a dot
+        that is part of a key is escaped with a backslash (<tt>a\\.b</tt> is the key <tt>a.b</tt>), and any other
+        backslash is part of its key
+
+        @param field the field path, such as \c "order.id" or \c "create.order-id"
+
+        @return the keys of the path: \c ("order", "id") and \c ("create", "order-id") for these, and \c ("a.b",)
+        for <tt>a\\.b</tt>
+
+        @since DataProvider 3.11
+    */
+    static list<string> getFieldPath(string field) {
+        return map regex_subst($1, "\\\\\\.", ".", RE_Global), field.splitRegex("(?<!\\\\)\\.");
+    }
+
     #! Pre-processes a single expression argument for repeated evaluation
     /** @param arg the argument to prepare (field reference, sub-expression, or literal)
         @return the prepared argument with pre-computed paths where applicable
@@ -6384,8 +6405,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         if (arg instanceof hash<DataProviderFieldReference>) {
             return <DataProviderFieldReference>{
                 "field": arg.field,
-                "field_path": (map regex_subst($1, "\\\\.", ".", RE_Global),
-                    arg.field.splitRegex("(?<!\\\\)\\.")),
+                "field_path": AbstractDataProvider::getFieldPath(arg.field),
             };
         }
         if (arg instanceof hash<DataProviderExpression>) {
@@ -6656,8 +6676,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         if (!fields) {
             return;
         }
-        list<string> path = ref.field_path ?? (map regex_subst($1, "\\\\.", ".", RE_Global),
-            ref.field.splitRegex("(?<!\\\\)\\."));
+        list<string> path = ref.field_path ?? AbstractDataProvider::getFieldPath(ref.field);
         *AbstractDataField field = fields{path[0]};
         if (!field) {
             return;
@@ -7163,7 +7182,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         hash<auto> rv;
         foreach hash<auto> i in (h.pairIterator()) {
             if (!rec{i.key}) {
-                list<string> f = map regex_subst($1, "\\\\.", ".", RE_Global), i.key.splitRegex("(?<!\\\\)\\.");
+                list<string> f = AbstractDataProvider::getFieldPath(i.key);
                 if (rec && !rec{f[0]} && !searchAcceptsForeignField(f[0])) {
                     error("INVALID-FIELD", "field %y is not a defined field; valid fields: %y", f[0], keys rec);
                 }
@@ -8928,23 +8947,24 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
 
     #! Returns the value of a field in a record, supporting dot-notation for nested hash access
     /** @param record the record hash to read from
-        @param field_path the field name or dot-notation path (e.g. \c "address.city")
+        @param field_path the field name or dot-notation path (e.g. \c "address.city"); a dot that is part of a key is
+        escaped (<tt>Unit\\.Price</tt>), as in a field reference (@ref getFieldPath())
 
         @return the field value, or @ref NOTHING if any intermediate is not a hash or the field is missing
 
         @since %DataProvider 3.4
+        @since %DataProvider 3.11 an escaped dot is part of a key
     */
     static auto getFieldValue(hash<auto> record, string field_path) {
         # Strip hashdecl type to plain hash<auto> so that accessing unknown members returns
         # NOTHING instead of throwing INVALID-MEMBER
         hash<auto> rec = {} + record;
-        int dot = field_path.find(".");
-        if (dot < 0) {
+        if (field_path.find(".") < 0) {
             return rec{field_path};
         }
         # traverse dot-notation path
         auto current = rec;
-        list<string> parts = field_path.split(".");
+        list<string> parts = AbstractDataProvider::getFieldPath(field_path);
         foreach string part in (parts) {
             if (current.typeCode() != NT_HASH) {
                 return;

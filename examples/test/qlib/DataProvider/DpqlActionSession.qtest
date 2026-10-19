@@ -122,6 +122,7 @@ class DpqlActionSessionTest inherits QUnit::Test {
         addTestCase("dpql-eval parse error", \testEvalParseError());
         addTestCase("dpql-eval push-down", \testEvalPushdown());
         addTestCase("exists: token types, completions and push-down", \testExists());
+        addTestCase("field completion of a key with a dot", \testDottedFieldCompletion());
 
         set_return_value(main());
     }
@@ -475,6 +476,28 @@ class DpqlActionSessionTest inherits QUnit::Test {
         assertEq(1, e100.size(), "DPQL-E100 is reported");
         assertEq("error", e100[0].severity);
         assertRegex("^The search condition could not be checked here: DIVISION-BY-ZERO: ", e100[0].message);
+    }
+
+    #! A field of the record is one key: completion writes a dot in its name escaped, as a dot in a field reference
+    #! separates the parts of a path
+    testDottedFieldCompletion() {
+        DataProvider::DpqlActionSession session = newSession();
+        hash<string, hash<auto>> fields = {
+            "Unit.Price": {"type": "float", "desc": "Unit price"},
+            "order-id": {"type": "string", "desc": "Order id"},
+            "name": {"type": "string", "desc": "Name"},
+        };
+        hash<string, string> inserts = map {$1.label: $1.insert_text}, session.handleAction("dpql-get-completions", {
+            "text": "@",
+            "position": 1,
+            "fields": fields,
+        }).completions, $1.kind == "field";
+        assertEq({"Unit.Price": '@"Unit\.Price"', "order-id": '@"order-id"', "name": '@name'}, inserts);
+        # the inserted reference is the key
+        assertEq((), session.handleAction("dpql-validate", {
+            "text": inserts."Unit.Price" + " > 1",
+            "fields": fields,
+        }).diagnostics);
     }
 
     #! exists is an operator where it is read as one, it is offered where a condition starts, a field reference

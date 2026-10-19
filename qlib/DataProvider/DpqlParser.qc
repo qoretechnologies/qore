@@ -55,6 +55,11 @@ const hash<auto> DpqlPrefixOperatorSpecs = {
     DP_OP_TAKEUNTIL: {"min": 2, "max": 2},
 };
 
+#! The escapes of a quoted field name, as listed in messages
+/** @since DataProvider 3.11
+*/
+public const DPQL_FIELD_NAME_ESCAPES = "\\\", \\\\, \\., \\n, \\r and \\t";
+
 #! The tokens that start a value and that cannot follow a value
 /** An identifier can follow a value as an operator word (\c in, \c between, \c and, \c like)
 
@@ -652,9 +657,8 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                 if (arg.hasKey("field")) {
                     # Field reference - validate field exists
                     string field_name = arg.field;
-                    # Handle dotted field names
-                    int dot_pos = index(field_name, ".");
-                    string base_field = dot_pos >= 0 ? substr(field_name, 0, dot_pos) : field_name;
+                    # the first key of the path is a field of the record
+                    string base_field = AbstractDataProvider::getFieldPath(field_name)[0];
                     if (!fields.hasKey(base_field)) {
                         diags += <DpqlDiagnostic>{
                             "severity": "error",
@@ -1581,7 +1585,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                     throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
                 }
                 # @field or @"field" after the dot is the name of the field
-                string member_name = id_tok.type == DPQL_TOK_FIELD ? getFieldTokenName(id_tok) : id_tok.value;
+                string member_name = id_tok.type == DPQL_TOK_FIELD ? getFieldTokenKey(id_tok) : id_tok.value;
                 nextToken();  # consume identifier
                 # Member access is a single-key expression node
                 result = <DataProviderExpression>{
@@ -1675,7 +1679,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                 if (id_tok.value.size() > 1 && id_tok.value[1] == '"') {
                     # a quoted name is one key, as with {"key"}
                     return parseAccessorChain(<DataProviderFieldReference>{
-                        "field": DpqlParser::escapeFieldPathKey(getFieldTokenName(id_tok)),
+                        "field": DpqlParser::escapeFieldPathKey(getFieldTokenKey(id_tok)),
                     });
                 }
                 return parseWildcardFieldPath(getFieldTokenName(id_tok));
@@ -1734,7 +1738,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                 nextToken();
                 return parseAccessorChain(<DataProviderExpression>{
                     "exp": DP_FUNC_KEY,
-                    "args": (<DataProviderFieldReference>{"field": path}, getFieldTokenName(id_tok)),
+                    "args": (<DataProviderFieldReference>{"field": path}, getFieldTokenKey(id_tok)),
                 });
             }
             addError("Expected identifier after '.'", "DPQL-E020", id_tok);
@@ -1743,21 +1747,108 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
         return parseAccessorChain(<DataProviderFieldReference>{"field": path});
     }
 
-    #! Returns the name of a field token: the text after \c @, or the unescaped text between the quotes of
-    #! <tt>\@"..."</tt>
-    /** @param tok a @ref DPQL_TOK_FIELD token
+    #! Returns the field path of a field token: the text after \c @, or the text between the quotes of
+    #! <tt>\@"..."</tt> with its escapes decoded
+    /** Dots separate the parts of the path in quoted names as in bare ones; quotes are only for characters that a
+        bare name cannot hold.  In a quoted name, \c \\" is a quote, \c \\\\ a backslash, \c \\n, \c \\r and
+        \c \\t a line feed, a carriage return and a tab, and \c \\. a dot that is part of a key, which the path
+        keeps escaped (<tt>\@"a\\.b"</tt> is the field path <tt>a\\.b</tt>, the key <tt>a.b</tt>); any other escape
+        is an error (@ref DPQL_FIELD_NAME_ESCAPES)
 
-        @return the field name
+        @param tok a @ref DPQL_TOK_FIELD token
+
+        @return the field path
+
+        @throw DPQL-PARSE-ERROR a quoted name has an escape that field names do not have
 
         @since DataProvider 3.10.1
+        @since DataProvider 3.11 an escaped dot is part of a key, and an unknown escape is an error; the backslash of
+        an escaped dot was dropped, so it separated the parts of the path, as was the backslash of any unknown escape
     */
     private string getFieldTokenName(hash<DpqlTokenInfo> tok) {
         string value = tok.value;
         if (value.size() > 1 && value[1] == '"') {
-            # Process escape sequences (same handling as parseStringLiteral)
-            return unescapeString(substr(value, 2, -1));
+            return unescapeFieldName(tok, substr(value, 2, -1), True);
         }
         return substr(value, 1);
+    }
+
+    #! Returns the key that a field token names after a dot that follows an accessor
+    /** As getFieldTokenName(), but the name is one key, in which an escaped dot is a dot
+        (<tt>\@r[0].\@"a\\.b"</tt> and <tt>\@r[0].\@"a.b"</tt> are both the key <tt>a.b</tt>)
+
+        @param tok a @ref DPQL_TOK_FIELD token
+
+        @return the key
+
+        @throw DPQL-PARSE-ERROR a quoted name has an escape that field names do not have
+
+        @since DataProvider 3.11
+    */
+    private string getFieldTokenKey(hash<DpqlTokenInfo> tok) {
+        string value = tok.value;
+        if (value.size() > 1 && value[1] == '"') {
+            return unescapeFieldName(tok, substr(value, 2, -1), False);
+        }
+        return substr(value, 1);
+    }
+
+    #! Decodes the escapes of a quoted field name
+    /** @param tok the field token, for the error
+        @param content the text between the quotes
+        @param path True to keep an escaped dot escaped, as a field path holds a dot that is part of a key; False to
+        decode it to a dot, for a key
+
+        @return the field name
+
+        @throw DPQL-PARSE-ERROR an escape that field names do not have
+
+        @since DataProvider 3.11
+    */
+    private string unescapeFieldName(hash<DpqlTokenInfo> tok, string content, bool path) {
+        if (index(content, "\\") < 0) {
+            return content;
+        }
+        string result = "";
+        bool escaped = False;
+        foreach string ch in (content.iterator()) {
+            if (!escaped) {
+                if (ch == "\\") {
+                    escaped = True;
+                } else {
+                    result += ch;
+                }
+                continue;
+            }
+            escaped = False;
+            switch (ch) {
+                case "n":
+                    result += "\n";
+                    break;
+                case "r":
+                    result += "\r";
+                    break;
+                case "t":
+                    result += "\t";
+                    break;
+                case ".":
+                    result += path ? "\\." : ".";
+                    break;
+                case '"':
+                case "\\":
+                    result += ch;
+                    break;
+                default:
+                    addError(sprintf("Unknown escape '\\%s' in a quoted field name; the escapes are %s", ch,
+                        DPQL_FIELD_NAME_ESCAPES), "DPQL-E003", tok);
+                    throw "DPQL-PARSE-ERROR", "Unknown escape in a quoted field name";
+            }
+        }
+        if (escaped) {
+            addError("A quoted field name cannot end with a backslash", "DPQL-E003", tok);
+            throw "DPQL-PARSE-ERROR", "Unknown escape in a quoted field name";
+        }
+        return result;
     }
 
     #! Returns a key as one step of a field reference path: its dots are escaped

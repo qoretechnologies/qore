@@ -153,6 +153,8 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("exists: serialization", \existsSerializationTests());
         addTestCase("exists: typing, validation and verification", \existsValidationTests());
         addTestCase("exists: searches", \existsSearchTests());
+        addTestCase("quoted field names: dots, escapes and round trips", \quotedFieldNameTests());
+        addTestCase("quoted field names: a reference to one key", \fieldReferenceForKeyTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -9259,5 +9261,90 @@ public class DpqlTest inherits QUnit::Test {
             {"id": new QoreDataField("id", "id", AbstractDataProviderType::get(IntType))}, NOTHING, server);
         assertEq(("DPQL-E041",), (map $1.code, diags));
         assertRegex("Operator 'exists' is evaluated locally", diags[0].message);
+    }
+
+    #! Dots separate the parts of a field path in quoted names as in bare ones; an escaped dot is part of a key
+    quotedFieldNameTests() {
+        # a quoted name with a dot is a path, as a bare one is
+        assertEq(DataProvider::parseDpqlExpression('@a.b == 1'), DataProvider::parseDpqlExpression('@"a.b" == 1'));
+        assertEq(<DataProviderFieldReference>{"field": "create.order-id"},
+            DataProvider::parseDpqlExpression('@"create.order-id" == 1').args[0]);
+        assertEq(True, evalDpql('@"create.order-id" == 1', {"create": {"order-id": 1}}));
+        assertEq(True, evalDpql('@"a.b" == 1', {"a": {"b": 1}}));
+
+        # an escaped dot is part of a key, written \. or \\.
+        hash<DataProviderFieldReference> key_ab = <DataProviderFieldReference>{"field": "a\\.b"};
+        assertEq(key_ab, DataProvider::parseDpqlExpression('@"a\.b" == 1').args[0]);
+        assertEq(key_ab, DataProvider::parseDpqlExpression('@"a\\.b" == 1').args[0]);
+        assertEq(True, evalDpql('@"a\.b" == 1', {"a.b": 1}));
+        assertEq(True, evalDpql('@"a\\.b" == 1', {"a.b": 1}));
+        assertThrows("INVALID-OPERATION", "invalid key \"a\\.b\"", \evalDpql(), ('@"a\.b" == 1', {"a": {"b": 1}}));
+        assertEq(True, evalDpql('@"x.a\.b" == 1', {"x": {"a.b": 1}}));
+        assertEq(True, evalDpql('exists @"a\.b"', {"a.b": NOTHING}));
+        # after an accessor, a quoted name is one key, also with an escaped dot
+        assertEq(DataProvider::parseDpqlExpression('@r[0].@"a.b"'), DataProvider::parseDpqlExpression('@r[0].@"a\.b"'));
+        assertEq(2, evalDpql('@r[0].@"a\.b"', {"r": ({"a.b": 2},)}));
+        assertEq((1, 2), evalDpql('@o[*].@"a\.b"', {"o": ({"a.b": 1}, {"a.b": 2})}));
+
+        # the parts of a field path: an escaped dot is part of a key, and any other backslash is itself
+        assertEq(("a", "b"), AbstractDataProvider::getFieldPath("a.b"));
+        assertEq(("a.b", "c"), AbstractDataProvider::getFieldPath("a\\.b.c"));
+        assertEq(("a\\b", "c"), AbstractDataProvider::getFieldPath("a\\b.c"));
+        assertEq(True, evalDpql('@"p\\q" == 1', {"p\\q": 1}));
+
+        # the other escapes
+        assertEq("q\"x", DataProvider::parseDpqlExpression('@"q\"x"').args[0].field);
+        assertEq("p\\q", DataProvider::parseDpqlExpression('@"p\\q"').args[0].field);
+        assertEq("t\tx\ny\rz", DataProvider::parseDpqlExpression('@"t\tx\ny\rz"').args[0].field);
+        # any other escape is an error
+        foreach string text in ('@"a\x" == 1', '@"a\-b" == 1', '@"\q"', '@r[0].@"a\x"', '@o[*].@"a\x"') {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text);
+            assertFalse(result.success, text);
+            assertEq(("DPQL-E003",), (map $1.code, result.diagnostics), text);
+            assertRegex("^Unknown escape '\\\\.' in a quoted field name; the escapes are \\\\\", \\\\\\\\, \\\\., "
+                "\\\\n, \\\\r and \\\\t$", result.diagnostics[0].message, text);
+        }
+
+        # the serializer writes a field path as it is read back: an escaped dot as \., any other backslash as \\
+        foreach hash<auto> i in ((
+                {"field": "a\\.b", "dpql": '@"a\.b"'},
+                {"field": "x.a\\.b", "dpql": '@"x.a\.b"'},
+                {"field": "create.order-id", "dpql": '@"create.order-id"'},
+                {"field": "Unit.Price", "dpql": '@Unit.Price'},
+                {"field": "p\\q", "dpql": '@"p\\q"'},
+                {"field": "a\\\\.b", "dpql": '@"a\\\.b"'},
+                {"field": "q\"x", "dpql": '@"q\"x"'},
+            )) {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": i.field}, 1),
+            };
+            string text = DataProvider::serializeDpqlExpression(exp);
+            assertEq(i.dpql + " == 1", text, i.field);
+            assertEq(exp, DataProvider::parseDpqlExpression(text), i.field);
+            assertEq(text, DataProvider::serializeDpqlExpression(DataProvider::parseDpqlExpression(text)), i.field);
+        }
+        # \\. is read as \., and written so
+        assertEq('@"a\.b" == 1', DataProvider::serializeDpqlExpression(DataProvider::parseDpqlExpression(
+            '@"a\\.b" == 1')));
+    }
+
+    #! The field reference to one key of a record escapes the dots of the key
+    fieldReferenceForKeyTests() {
+        foreach hash<auto> i in ((
+                {"key": "name", "dpql": '@name'},
+                {"key": "größe", "dpql": '@größe'},
+                {"key": "Unit.Price", "dpql": '@"Unit\.Price"'},
+                {"key": "order-id", "dpql": '@"order-id"'},
+                {"key": "a b.c", "dpql": '@"a b\.c"'},
+                {"key": "p\\q", "dpql": '@"p\\q"'},
+                {"key": "q\"x", "dpql": '@"q\"x"'},
+                {"key": "1st", "dpql": '@"1st"'},
+            )) {
+            string ref = DpqlSerializer::fieldReferenceForKey(i.key);
+            assertEq(i.dpql, ref, i.key);
+            # the reference reads the key
+            assertEq(True, evalDpql(ref + " == 1", {i.key: 1}), i.key);
+        }
     }
 }

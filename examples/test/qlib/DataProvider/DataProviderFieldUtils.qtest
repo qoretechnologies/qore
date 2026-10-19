@@ -60,6 +60,7 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("input_field_names - BaseOptionInfo marker", \inputFieldNamesMarker());
         addTestCase("input_field_names - action options from option info", \inputFieldNamesActionOptions());
         addTestCase("input_field_names - registered processor actions", \inputFieldNamesProcessorActions());
+        addTestCase("getFieldValue - paths and escaped dots", \getFieldValueTest());
 
         # Processor backward compatibility tests
         addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
@@ -318,6 +319,16 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         hash<DataProviderActionInfo> group_by = DataProviderActionCatalog::getAppActionEx(QoreApp::AppName,
             "group-by");
         assertEq(True, group_by.options.group_by.input_field_names);
+    }
+
+    #! A field path reads nested keys; an escaped dot is part of a key
+    getFieldValueTest() {
+        hash<auto> rec = {"a": {"b": 1}, "a.b": 2, "x": 3};
+        assertEq(3, AbstractDataProvider::getFieldValue(rec, "x"));
+        assertEq(1, AbstractDataProvider::getFieldValue(rec, "a.b"));
+        assertEq(2, AbstractDataProvider::getFieldValue(rec, "a\\.b"));
+        assertNothing(AbstractDataProvider::getFieldValue(rec, "a.c"));
+        assertNothing(AbstractDataProvider::getFieldValue(rec, "x.y"));
     }
 
     # ===================== Processor Backward Compatibility Tests =====================
