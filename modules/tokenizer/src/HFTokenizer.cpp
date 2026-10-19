@@ -12,8 +12,10 @@
 #include "utils/qore_helpers.h"
 
 #include <algorithm>
+#include <cassert>
 #include <limits>
 #include <mutex>
+#include <string_view>
 
 extern const TypedHashDecl* hashdeclTokenizerModelInputBatch;
 
@@ -1498,6 +1500,9 @@ void QoreHFTokenizer::loadConfig(const QoreHashNode* config, ExceptionSink* xsin
         return;
     }
 
+    // the configuration is read by other threads under the shared lock
+    std::unique_lock<std::shared_mutex> lock(rw_mutex);
+
     // Extract model_max_length
     QoreValue mml = config->getKeyValue("model_max_length");
     if (!mml.isNullOrNothing()) {
@@ -1534,165 +1539,392 @@ void QoreHFTokenizer::loadConfig(const QoreHashNode* config, ExceptionSink* xsin
     if ((id = resolveToken(config, "sep_token")) >= 0) sep_token_id = id;
 }
 
+namespace {
+// the chat template engine: a template is parsed once into nodes, and the nodes are rendered for the messages in a
+// single forward pass, so a value inserted into the output (a message, a role or a token) is never read as template
+// text
+
+//! a variable of a chat template
+enum class ChatVar {
+    BOS,        //!< {{ bos_token }}
+    EOS,        //!< {{ eos_token }}
+    ROLE,       //!< {{ message['role'] }}
+    CONTENT,    //!< {{ message['content'] }}
+};
+
+struct ChatNode;
+typedef std::vector<ChatNode> ChatNodes;
+
+//! a branch of an if block
+struct ChatBranch {
+    //! false for {% else %}
+    bool has_condition = false;
+    //! true if the condition is a comparison of the role of the message with a string, false if it is not supported
+    bool role_condition = false;
+    //! the role the condition compares with
+    std::string role;
+    //! the nodes rendered when the branch is taken
+    ChatNodes body;
+};
+
+//! a node of a parsed chat template
+struct ChatNode {
+    enum class Kind {
+        TEXT,   //!< literal text
+        VAR,    //!< a variable
+        IF,     //!< {% if %} ... {% elif %} ... {% else %} ... {% endif %}
+        LOOP,   //!< {% for message in messages %} ... {% endfor %}
+    };
+
+    Kind kind;
+    //! the text of a TEXT node
+    std::string text;
+    //! the variable of a VAR node
+    ChatVar var = ChatVar::BOS;
+    //! the branches of an IF node
+    std::vector<ChatBranch> branches;
+    //! the body of a LOOP node
+    ChatNodes body;
+
+    explicit ChatNode(Kind kind) : kind(kind) {
+    }
+};
+
+//! the maximum nesting depth of the blocks of a chat template
+constexpr size_t CHAT_TEMPLATE_MAX_DEPTH = 100;
+
+constexpr std::string_view CHAT_VAR_OPEN = "{{";
+constexpr std::string_view CHAT_VAR_CLOSE = "}}";
+constexpr std::string_view CHAT_TAG_OPEN = "{%";
+constexpr std::string_view CHAT_TAG_CLOSE = "%}";
+
+//! returns the string without leading and trailing whitespace
+std::string_view chatTrim(std::string_view s) {
+    size_t start = s.find_first_not_of(" \t\r\n");
+    if (start == std::string_view::npos) {
+        return {};
+    }
+    size_t end = s.find_last_not_of(" \t\r\n");
+    return s.substr(start, end - start + 1);
+}
+
+//! returns true if the string starts with the given keyword followed by whitespace
+bool chatStartsWithKeyword(std::string_view s, std::string_view keyword) {
+    return s.size() > keyword.size() && s.substr(0, keyword.size()) == keyword
+        && (s[keyword.size()] == ' ' || s[keyword.size()] == '\t' || s[keyword.size()] == '\r'
+            || s[keyword.size()] == '\n');
+}
+
+//! returns the variable named by the inside of a {{ }} tag, or false if it is not a known variable
+bool chatParseVar(std::string_view name, ChatVar& var) {
+    if (name == "bos_token") {
+        var = ChatVar::BOS;
+    } else if (name == "eos_token") {
+        var = ChatVar::EOS;
+    } else if (name == "message['role']" || name == "message[\"role\"]") {
+        var = ChatVar::ROLE;
+    } else if (name == "message['content']" || name == "message[\"content\"]") {
+        var = ChatVar::CONTENT;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+//! parses the condition of an if or elif tag: message['role'] == 'xxx' is supported; any other condition is false
+void chatParseCondition(std::string_view condition, ChatBranch& branch) {
+    branch.has_condition = true;
+    size_t eq = condition.find("==");
+    if (eq == std::string_view::npos) {
+        return;
+    }
+    std::string_view lhs = chatTrim(condition.substr(0, eq));
+    std::string_view rhs = chatTrim(condition.substr(eq + 2));
+    if (lhs != "message['role']" && lhs != "message[\"role\"]") {
+        return;
+    }
+    if (rhs.size() < 2 || (rhs.front() != '\'' && rhs.front() != '"') || rhs.back() != rhs.front()) {
+        return;
+    }
+    std::string_view role = rhs.substr(1, rhs.size() - 2);
+    if (role.find(rhs.front()) != std::string_view::npos) {
+        return;
+    }
+    branch.role_condition = true;
+    branch.role = std::string(role);
+}
+
+//! a block being parsed
+struct ChatFrame {
+    //! the IF or LOOP node of the block, nullptr for the top level
+    ChatNode* node;
+    //! the nodes the next node is added to
+    ChatNodes* nodes;
+    //! true if the IF block has an {% else %} branch
+    bool has_else = false;
+};
+
+//! parses a chat template
+/** @param tmpl the template
+    @param nodes the parsed nodes
+    @param has_loop set to true if the template has a {% for message in messages %} loop
+    @param xsink a TOKENIZER-ERROR is raised here for a malformed template
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+int chatParseTemplate(const std::string& tmpl, ChatNodes& nodes, bool& has_loop, ExceptionSink* xsink) {
+    has_loop = false;
+    std::vector<ChatFrame> stack;
+    stack.push_back({nullptr, &nodes});
+
+    auto addText = [&stack](std::string_view text) {
+        ChatNodes& cur = *stack.back().nodes;
+        if (cur.empty() || cur.back().kind != ChatNode::Kind::TEXT) {
+            cur.emplace_back(ChatNode::Kind::TEXT);
+        }
+        cur.back().text.append(text.data(), text.size());
+    };
+    auto malformed = [xsink](const char* desc) {
+        xsink->raiseException("TOKENIZER-ERROR", "malformed chat_template: %s", desc);
+        return -1;
+    };
+
+    std::string_view t(tmpl);
+    size_t pos = 0;
+    size_t count = 0;
+    while (pos < t.size()) {
+        if (++count % 100 == 0 && qore_check_cancel(xsink, "parsing chat template")) {
+            return -1;
+        }
+        size_t var_pos = t.find(CHAT_VAR_OPEN, pos);
+        size_t tag_pos = t.find(CHAT_TAG_OPEN, pos);
+        size_t next = std::min(var_pos, tag_pos);
+        if (next == std::string_view::npos) {
+            addText(t.substr(pos));
+            break;
+        }
+        if (next > pos) {
+            addText(t.substr(pos, next - pos));
+        }
+        bool is_var = next == var_pos;
+        std::string_view close = is_var ? CHAT_VAR_CLOSE : CHAT_TAG_CLOSE;
+        size_t inner_start = next + CHAT_VAR_OPEN.size();
+        size_t end = t.find(close, inner_start);
+        if (end == std::string_view::npos) {
+            // an unclosed tag is text
+            addText(t.substr(next));
+            break;
+        }
+        std::string_view whole = t.substr(next, end + close.size() - next);
+        std::string_view inner = chatTrim(t.substr(inner_start, end - inner_start));
+        pos = end + close.size();
+
+        if (is_var) {
+            ChatVar var;
+            if (chatParseVar(inner, var)) {
+                stack.back().nodes->emplace_back(ChatNode::Kind::VAR);
+                stack.back().nodes->back().var = var;
+            } else {
+                // an unsupported expression is text
+                addText(whole);
+            }
+            continue;
+        }
+
+        if (inner == "for message in messages") {
+            for (const ChatFrame& frame : stack) {
+                if (frame.node && frame.node->kind == ChatNode::Kind::LOOP) {
+                    return malformed("a {% for message in messages %} loop cannot be in another one");
+                }
+            }
+            if (stack.size() > CHAT_TEMPLATE_MAX_DEPTH) {
+                return malformed("blocks are nested too deeply");
+            }
+            ChatNodes& cur = *stack.back().nodes;
+            cur.emplace_back(ChatNode::Kind::LOOP);
+            ChatNode* loop = &cur.back();
+            stack.push_back({loop, &loop->body});
+            has_loop = true;
+        } else if (inner == "endfor") {
+            if (!stack.back().node || stack.back().node->kind != ChatNode::Kind::LOOP) {
+                return malformed(stack.back().node ? "missing {% endif %}" : "unexpected {% endfor %}");
+            }
+            stack.pop_back();
+        } else if (chatStartsWithKeyword(inner, "if")) {
+            if (stack.size() > CHAT_TEMPLATE_MAX_DEPTH) {
+                return malformed("blocks are nested too deeply");
+            }
+            ChatNodes& cur = *stack.back().nodes;
+            cur.emplace_back(ChatNode::Kind::IF);
+            ChatNode* block = &cur.back();
+            block->branches.emplace_back();
+            chatParseCondition(inner.substr(2), block->branches.back());
+            stack.push_back({block, &block->branches.back().body});
+        } else if (chatStartsWithKeyword(inner, "elif") || inner == "else") {
+            ChatFrame& frame = stack.back();
+            if (!frame.node || frame.node->kind != ChatNode::Kind::IF) {
+                return malformed(inner == "else" ? "unexpected {% else %}" : "unexpected {% elif %}");
+            }
+            if (frame.has_else) {
+                return malformed(inner == "else" ? "more than one {% else %} in an if block"
+                    : "{% elif %} after {% else %}");
+            }
+            frame.node->branches.emplace_back();
+            if (inner == "else") {
+                frame.has_else = true;
+            } else {
+                chatParseCondition(inner.substr(4), frame.node->branches.back());
+            }
+            frame.nodes = &frame.node->branches.back().body;
+        } else if (inner == "endif") {
+            if (!stack.back().node || stack.back().node->kind != ChatNode::Kind::IF) {
+                return malformed("unexpected {% endif %}");
+            }
+            stack.pop_back();
+        } else {
+            // an unsupported statement is text
+            addText(whole);
+        }
+    }
+
+    if (stack.size() > 1) {
+        return malformed(stack.back().node->kind == ChatNode::Kind::LOOP ? "missing {% endfor %}"
+            : "missing {% endif %}");
+    }
+    return 0;
+}
+
+//! what a chat template is rendered with
+struct ChatContext {
+    const std::string& bos;
+    const std::string& eos;
+    const QoreListNode* messages;
+    ExceptionSink* xsink;
+};
+
+//! renders the nodes of a chat template; a value is appended to the output and never read as template text
+/** @param nodes the nodes to render
+    @param ctx what the template is rendered with
+    @param role the role of the current message; nullptr outside a loop
+    @param content the content of the current message; nullptr outside a loop
+    @param out the output
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+int chatRender(const ChatNodes& nodes, const ChatContext& ctx, const std::string* role, const std::string* content,
+        std::string& out) {
+    for (const ChatNode& node : nodes) {
+        switch (node.kind) {
+            case ChatNode::Kind::TEXT:
+                out += node.text;
+                break;
+            case ChatNode::Kind::VAR:
+                switch (node.var) {
+                    case ChatVar::BOS:
+                        out += ctx.bos;
+                        break;
+                    case ChatVar::EOS:
+                        out += ctx.eos;
+                        break;
+                    case ChatVar::ROLE:
+                        if (role) {
+                            out += *role;
+                        }
+                        break;
+                    case ChatVar::CONTENT:
+                        if (content) {
+                            out += *content;
+                        }
+                        break;
+                }
+                break;
+            case ChatNode::Kind::IF:
+                for (const ChatBranch& branch : node.branches) {
+                    if (!branch.has_condition || (branch.role_condition && role && *role == branch.role)) {
+                        if (chatRender(branch.body, ctx, role, content, out)) {
+                            return -1;
+                        }
+                        break;
+                    }
+                }
+                break;
+            case ChatNode::Kind::LOOP: {
+                // the parser does not allow a loop in a loop
+                assert(!role);
+                size_t n = ctx.messages ? ctx.messages->size() : 0;
+                for (size_t i = 0; i < n; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(ctx.xsink, "applying chat template")) {
+                        return -1;
+                    }
+                    const QoreHashNode* msg = ctx.messages->retrieveEntry(i).get<const QoreHashNode>();
+                    if (!msg) {
+                        continue;
+                    }
+                    std::string msg_role = safeGetStdString(msg->getKeyValue("role"));
+                    std::string msg_content = safeGetStdString(msg->getKeyValue("content"));
+                    if (chatRender(node.body, ctx, &msg_role, &msg_content, out)) {
+                        return -1;
+                    }
+                }
+                break;
+            }
+        }
+    }
+    return 0;
+}
+}
+
 QoreStringNode* QoreHFTokenizer::applyChatTemplate(const QoreListNode* messages,
         ExceptionSink* xsink) {
+    std::shared_lock<std::shared_mutex> lock(rw_mutex);
+
     if (chat_template.empty()) {
         xsink->raiseException("TOKENIZER-ERROR",
             "no chat_template configured; load tokenizer_config.json first");
         return nullptr;
     }
 
-    // Resolve token strings for template substitution
-    auto tokenStr = [this](int id) -> std::string {
-        if (id < 0) return "";
-        return tokenForId(id);
-    };
-    std::string bos_str = tokenStr(bos_token_id);
-    std::string eos_str = tokenStr(eos_token_id);
+    // Supported template patterns:
+    //     {% for message in messages %} ... {% endfor %}
+    //     {% if message['role'] == 'xxx' %} ... {% elif message['role'] == 'yyy' %} ... {% else %} ... {% endif %}
+    //     {{ bos_token }}, {{ eos_token }}, {{ message['role'] }}, {{ message['content'] }}
+    // Any other tag is copied to the output as it is, and any other condition is false.
+    ChatNodes nodes;
+    bool has_loop;
+    if (chatParseTemplate(chat_template, nodes, has_loop, xsink)) {
+        return nullptr;
+    }
 
-    // Simple template engine for common chat template patterns
-    // Handles: {% for message in messages %} ... {% endfor %}
-    //          {% if message['role'] == 'xxx' %} ... {% elif %} ... {% else %} ... {% endif %}
-    //          {{ bos_token }}, {{ eos_token }}, {{ message['role'] }}, {{ message['content'] }}
     std::string result;
-
-    // Check if template has the standard message loop
-    size_t loop_start = chat_template.find("{% for message in messages %}");
-    if (loop_start == std::string::npos) {
+    if (!has_loop) {
         // No standard loop — try simple message concatenation
-        ConstListIterator li(messages);
-        while (li.next()) {
-            const QoreHashNode* msg = li.getValue().get<const QoreHashNode>();
-            if (!msg) continue;
+        size_t n = messages ? messages->size() : 0;
+        for (size_t i = 0; i < n; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "applying chat template")) {
+                return nullptr;
+            }
+            const QoreHashNode* msg = messages->retrieveEntry(i).get<const QoreHashNode>();
+            if (!msg) {
+                continue;
+            }
             std::string content = safeGetStdString(msg->getKeyValue("content"));
             if (!content.empty()) {
-                if (!result.empty()) result += "\n";
+                if (!result.empty()) {
+                    result += "\n";
+                }
                 result += content;
             }
         }
         return new QoreStringNode(result);
     }
 
-    // Find the loop body
-    size_t body_start = loop_start + 28; // len("{% for message in messages %}")
-    size_t loop_end = chat_template.find("{% endfor %}", body_start);
-    if (loop_end == std::string::npos) {
-        xsink->raiseException("TOKENIZER-ERROR",
-            "malformed chat_template: missing {% endfor %}");
+    // the BOS and EOS tokens may be added tokens
+    std::string bos_str = bos_token_id < 0 ? std::string() : tokenForId(bos_token_id);
+    std::string eos_str = eos_token_id < 0 ? std::string() : tokenForId(eos_token_id);
+    ChatContext ctx{bos_str, eos_str, messages, xsink};
+    if (chatRender(nodes, ctx, nullptr, nullptr, result)) {
         return nullptr;
     }
-
-    std::string before_loop = chat_template.substr(0, loop_start);
-    std::string loop_body = chat_template.substr(body_start, loop_end - body_start);
-    std::string after_loop = chat_template.substr(loop_end + 12); // len("{% endfor %}")
-
-    // Process before-loop content
-    auto substitute = [&](std::string& s) {
-        size_t pos;
-        while ((pos = s.find("{{ bos_token }}")) != std::string::npos)
-            s.replace(pos, 14, bos_str);
-        while ((pos = s.find("{{ eos_token }}")) != std::string::npos)
-            s.replace(pos, 14, eos_str);
-    };
-
-    substitute(before_loop);
-    result += before_loop;
-
-    // Process each message through the loop body
-    ConstListIterator li(messages);
-    while (li.next()) {
-        const QoreHashNode* msg = li.getValue().get<const QoreHashNode>();
-        if (!msg) continue;
-
-        std::string role = safeGetStdString(msg->getKeyValue("role"));
-        std::string content = safeGetStdString(msg->getKeyValue("content"));
-
-        std::string expanded = loop_body;
-
-        // Handle {% if message['role'] == 'xxx' %} ... {% endif %} blocks
-        // Simple approach: process if/elif/else/endif blocks
-        // For now, just do variable substitution
-        substitute(expanded);
-
-        // Replace message variables
-        size_t pos;
-        while ((pos = expanded.find("{{ message['role'] }}")) != std::string::npos)
-            expanded.replace(pos, 20, role);
-        while ((pos = expanded.find("{{ message[\"role\"] }}")) != std::string::npos)
-            expanded.replace(pos, 20, role);
-        while ((pos = expanded.find("{{ message['content'] }}")) != std::string::npos)
-            expanded.replace(pos, 23, content);
-        while ((pos = expanded.find("{{ message[\"content\"] }}")) != std::string::npos)
-            expanded.replace(pos, 23, content);
-
-        // Process {% if %} blocks for role checks
-        std::string processed;
-        size_t cursor = 0;
-        while (cursor < expanded.size()) {
-            size_t if_pos = expanded.find("{% if ", cursor);
-            if (if_pos == std::string::npos) {
-                processed += expanded.substr(cursor);
-                break;
-            }
-            processed += expanded.substr(cursor, if_pos - cursor);
-
-            // Parse condition: message['role'] == 'xxx'
-            size_t cond_end = expanded.find(" %}", if_pos);
-            if (cond_end == std::string::npos) {
-                processed += expanded.substr(if_pos);
-                break;
-            }
-            std::string condition = expanded.substr(if_pos + 6, cond_end - if_pos - 6);
-
-            // Find endif
-            size_t endif_pos = expanded.find("{% endif %}", cond_end);
-            if (endif_pos == std::string::npos) {
-                processed += expanded.substr(if_pos);
-                break;
-            }
-
-            // Find else
-            size_t else_pos = expanded.find("{% else %}", cond_end);
-            bool else_in_block = (else_pos != std::string::npos && else_pos < endif_pos);
-
-            std::string if_body, else_body;
-            size_t body_begin = cond_end + 3;
-            if (else_in_block) {
-                if_body = expanded.substr(body_begin, else_pos - body_begin);
-                else_body = expanded.substr(else_pos + 10, endif_pos - else_pos - 10);
-            } else {
-                if_body = expanded.substr(body_begin, endif_pos - body_begin);
-            }
-
-            // Evaluate condition (simple: message['role'] == 'xxx')
-            bool cond_result = false;
-            // Extract quoted value from condition
-            size_t eq_pos = condition.find("==");
-            if (eq_pos != std::string::npos) {
-                std::string rhs = condition.substr(eq_pos + 2);
-                // Find quoted string
-                size_t q1 = rhs.find('\'');
-                size_t q2 = rhs.find('\'', q1 + 1);
-                if (q1 == std::string::npos) {
-                    q1 = rhs.find('"');
-                    q2 = rhs.find('"', q1 + 1);
-                }
-                if (q1 != std::string::npos && q2 != std::string::npos) {
-                    std::string expected = rhs.substr(q1 + 1, q2 - q1 - 1);
-                    cond_result = (role == expected);
-                }
-            }
-
-            processed += cond_result ? if_body : else_body;
-            cursor = endif_pos + 11; // len("{% endif %}")
-        }
-
-        result += processed;
-    }
-
-    substitute(after_loop);
-    result += after_loop;
-
     return new QoreStringNode(result);
 }
 

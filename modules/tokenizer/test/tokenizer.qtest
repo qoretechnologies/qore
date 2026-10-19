@@ -51,6 +51,8 @@ class TokenizerTest inherits QUnit::Test {
         addTestCase("NUL characters in text and tokens", \nulTextTest());
         addTestCase("NUL characters in tokenizer configurations", \nulConfigTest());
         addTestCase("added tokens have their token strings", \addedTokenStringTest());
+        addTestCase("chat templates", \chatTemplateTest());
+        addTestCase("chat template values are not template text", \chatTemplateInjectionTest());
 
         set_return_value(main());
     }
@@ -966,5 +968,131 @@ class TokenizerTest inherits QUnit::Test {
         assertEq("hello world", tok.decode((1, 3, 2), True), "decode() skips a special added token");
         assertEq(("hello <|custom|> world", "<s> hello"), tok.decodeBatch(((1, custom_id, 2), (4, 1))),
             "decodeBatch() returns the token strings of added tokens");
+
+        # chat templates use the BOS and EOS token strings
+        tok.loadConfig({"chat_template": "{% for message in messages %}{{ bos_token }}{{ message['content'] }}"
+            "{{ eos_token }}{% endfor %}"});
+        assertEq("<s>hello</s>", tok.applyChatTemplate(({"role": "user", "content": "hello"},)),
+            "applyChatTemplate() writes the BOS and EOS tokens when they are added tokens");
+    }
+
+    # returns a tokenizer with the given chat template
+    private Tokenizer::HFTokenizer chatTokenizer(string chat_template) {
+        Tokenizer::HFTokenizer tok({
+            "model": {
+                "type": "WordPiece",
+                "vocab": {"[UNK]": 0, "hello": 1},
+                "unk_token": "[UNK]",
+                "continuing_subword_prefix": "##",
+            },
+            "added_tokens": (
+                {"id": 2, "content": "<s>", "special": True},
+                {"id": 3, "content": "</s>", "special": True},
+            ),
+        });
+        tok.loadConfig({"chat_template": chat_template});
+        return tok;
+    }
+
+    # a chat template writes each tag's value exactly, and a value is never read as template text
+    chatTemplateTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        list<hash<auto>> messages = (
+            {"role": "system", "content": "be brief"},
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "yo"},
+        );
+
+        # the tags are replaced whole
+        Tokenizer::HFTokenizer tok = chatTokenizer("{% for message in messages %}[{{ message['role'] }}:"
+            "{{ message[\"content\"] }}]{% endfor %}");
+        assertEq("[system:be brief][user:hi][assistant:yo]", tok.applyChatTemplate(messages),
+            "a chat template replaces the role and content tags whole");
+
+        # the BOS and EOS tokens are added tokens that are not in the model vocabulary
+        tok = chatTokenizer("{{ bos_token }}{% for message in messages %}{{ message['content'] }}{{ eos_token }}"
+            "{% endfor %}!");
+        assertEq("<s>be brief</s>hi</s>yo</s>!", tok.applyChatTemplate(messages),
+            "a chat template writes the BOS and EOS tokens before, in and after the loop");
+        tok = chatTokenizer("{%for message in messages%}{{bos_token}}{{  message['content']  }}{%endfor%}");
+        assertEq("<s>be brief<s>hi<s>yo", tok.applyChatTemplate(messages),
+            "the whitespace inside a tag is optional");
+
+        # if, elif and else
+        tok = chatTokenizer("{% for message in messages %}{% if message['role'] == 'system' %}S:"
+            "{% elif message['role'] == \"user\" %}U:{% else %}A:{% endif %}{{ message['content'] }}|{% endfor %}");
+        assertEq("S:be brief|U:hi|A:yo|", tok.applyChatTemplate(messages),
+            "a chat template takes the if, elif or else branch for the role of each message");
+        tok = chatTokenizer("{% for message in messages %}{% if message['role'] == 'user' %}"
+            "{% if message['content'] == 'hi' %}never{% else %}U:{% endif %}{% endif %}{{ message['content'] }}|"
+            "{% endfor %}");
+        assertEq("be brief|U:hi|yo|", tok.applyChatTemplate(messages),
+            "if blocks can be nested, and a condition that is not a role comparison is false");
+
+        # tags that are not supported are written as they are
+        tok = chatTokenizer("{% for message in messages %}{{ loop.index }}{% set x = 1 %}{% endfor %}");
+        assertEq("{{ loop.index }}{% set x = 1 %}{{ loop.index }}{% set x = 1 %}{{ loop.index }}{% set x = 1 %}",
+            tok.applyChatTemplate(messages), "a chat template writes a tag that is not supported as it is");
+
+        # malformed templates
+        foreach list<string> bad in ((
+                ("{% for message in messages %}x", "missing \\{% endfor %\\}"),
+                ("{% for message in messages %}{% if message['role'] == 'user' %}x{% endfor %}",
+                    "missing \\{% endif %\\}"),
+                ("{% for message in messages %}x{% endif %}{% endfor %}", "unexpected \\{% endif %\\}"),
+                ("{% for message in messages %}{% else %}{% endfor %}", "unexpected \\{% else %\\}"),
+                ("{% for message in messages %}{% if message['role'] == 'user' %}{% else %}{% else %}{% endif %}"
+                    "{% endfor %}", "more than one"),
+                ("{% for message in messages %}{% for message in messages %}{% endfor %}{% endfor %}",
+                    "in another one"),
+                ("{% endfor %}{% for message in messages %}{% endfor %}", "unexpected \\{% endfor %\\}"),
+            )) {
+            Tokenizer::HFTokenizer bad_tok = chatTokenizer(bad[0]);
+            assertThrows("TOKENIZER-ERROR", bad[1], \bad_tok.applyChatTemplate(), (messages,),
+                sprintf("malformed chat template %d of the list is refused", $# + 1));
+        }
+        # blocks nested too deeply
+        tok = chatTokenizer("{% for message in messages %}" + strmul("{% if message['role'] == 'user' %}", 101)
+            + strmul("{% endif %}", 101) + "{% endfor %}");
+        assertThrows("TOKENIZER-ERROR", "nested too deeply", \tok.applyChatTemplate(), (messages,),
+            "a chat template with blocks nested too deeply is refused");
+    }
+
+    # a value inserted by a chat template is never read as template text, so a message cannot change the template
+    # or make it run forever
+    chatTemplateInjectionTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        Tokenizer::HFTokenizer tok = chatTokenizer("{% for message in messages %}{% if message['role'] == 'user' %}"
+            "U{% else %}O{% endif %}({{ message['role'] }}):{{ message['content'] }};{% endfor %}");
+
+        # a message with template tags in its content or role
+        string tags = "{% if message['role'] == 'user' %}X{% endif %}{{ bos_token }}";
+        assertEq("U(user):" + tags + ";", tok.applyChatTemplate(({"role": "user", "content": tags},)),
+            "template tags in the content of a message are written as they are");
+        string role = "{{ message['content'] }}";
+        assertEq("O(" + role + "):c;", tok.applyChatTemplate(({"role": role, "content": "c"},)),
+            "template tags in the role of a message are written as they are");
+
+        # a message whose content is the content tag; before, the tag was replaced in the inserted content again and
+        # again, forever
+        string content_tag = "{{ message['content'] }}";
+        *string result;
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            result = tok.applyChatTemplate(({"role": "user", "content": content_tag},));
+        }();
+        # a hang guard, not synchronization: the call ends deterministically and the wait returns as soon as it does;
+        # if it never ends, the thread can never end and the program would wait for it forever, so the test fails and
+        # the process exits at once
+        if (done.waitForZero(60s)) {
+            stderr.print("FAILURE: applyChatTemplate() did not finish within 60 seconds: it loops forever\n");
+            exit(1);
+        }
+        assertEq("U(user):" + content_tag + ";", result, "a message whose content is the content tag is written once");
     }
 }

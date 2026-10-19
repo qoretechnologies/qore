@@ -374,10 +374,25 @@ nothing HFTokenizer::loadConfig(hash<auto> config) {
 /** Uses the chat_template from tokenizer_config.json to format a list of
     role/content message pairs into the prompt format expected by the model.
 
+    The template can use:
+    - <tt>{% for message in messages %} ... {% endfor %}</tt>: renders its body for each message; loops cannot be
+      nested
+    - <tt>{% if message['role'] == 'user' %} ... {% elif message['role'] == 'system' %} ... {% else %} ...
+      {% endif %}</tt>: if blocks, which can be nested; any condition other than a comparison of the role with a
+      string is false
+    - <tt>{{ bos_token }}</tt>, <tt>{{ eos_token }}</tt>, <tt>{{ message['role'] }}</tt> and
+      <tt>{{ message['content'] }}</tt>
+
+    Any other tag is written to the output as it is.  The role and content of a message and the tokens are written
+    as they are and are never read as template text, so a message cannot change the template.  A template without
+    a message loop gives the contents of the messages, one per line.
+
     @param messages list of hashes with \c role and \c content keys
     @return the formatted prompt string ready for tokenization
 
-    @throw TOKENIZER-ERROR if no chat_template is configured
+    @throw TOKENIZER-ERROR if no chat_template is configured, or the template is malformed: a block that is not
+    closed or is closed without being opened, an \c elif or \c else outside an if block, a loop in a loop, or
+    blocks nested more than 100 deep
 
     @par Example:
     @code{.py}
