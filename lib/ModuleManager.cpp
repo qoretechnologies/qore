@@ -2012,6 +2012,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
             return nullptr;
         }
+        int file_warning_mask = qore_program_private::getModuleFileWarningMask(userModule->getProgram());
         for (size_t i = 0; i < fileList->size(); ++i) {
             if (!(i % 10) && qore_check_cancel(&xsink, "module source parsing")) {
                 return nullptr;
@@ -2022,7 +2023,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             filePath += file->c_str();
 
             std::string fileCode = QoreDir::get_file_content(filePath);
-            userModule->getProgram()->parsePending(fileCode.c_str(), filePath.c_str(), &xsink, &xsink, warning_mask);
+            userModule->getProgram()->parsePending(fileCode.c_str(), filePath.c_str(), &xsink, &xsink,
+                file_warning_mask);
             if (xsink) {
                 xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
                 return nullptr;

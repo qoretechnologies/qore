@@ -3065,6 +3065,15 @@ public:
         return pgm->priv->pwo;
     }
 
+    //! Returns the warning mask to parse the other files of a separated module with, after its .qm file was parsed
+    /** This is the mask the .qm file left: its warning directives (such as \%modern or \%disable-warning) apply to
+        the whole module, as its parse options do.  Each file starts from this mask, so a file's own directives apply
+        only to that file.  The module loader and qcc both use it, so a module gets the same warnings either way.
+    */
+    DLLLOCAL static int getModuleFileWarningMask(const QoreProgram* pgm) {
+        return pgm->priv->pwo.warn_mask;
+    }
+
     DLLLOCAL static bool setSaveParseWarnOptions(const QoreProgram* pgm, const ParseWarnOptions &new_opts,
             ParseWarnOptions &old_opts) {
         if (new_opts == pgm->priv->pwo)

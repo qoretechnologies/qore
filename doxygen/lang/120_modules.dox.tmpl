@@ -34,6 +34,10 @@ ModuleName/
     |-SomeModuleFunction.ql
     @endcode \n
 
+    The \c .qm file is parsed first, then the other files in the bytewise order of their names.  Parse directives
+    belong in the \c .qm file: the parse options and the warnings it sets apply to every file of the module.  A warning
+    directive in another file, such as @ref disable-warning "%disable-warning", applies only to that file.
+
     Use the load_module() function to load %Qore modules at run-time; however, note that any module providing parse support (classes, constants, functions, etc) must be loaded at parse time using the @ref requires "%requires" or @ref try-module "%try-module" parse directive.
 
     From %Qore 0.7.1 onwards, you can specify a comparison operator (one of < <=, =, >=, or >) and version information after the module name as well. Version numbers are compared via integer comparisons of each element, where elements are separated by a '.'. If one of the versions does not have as many elements as another, the missing elements are assumed to be '0' (i.e. version \c "1.0" compared with version \c "1.0.1" will be extended to \c "1.0.0").

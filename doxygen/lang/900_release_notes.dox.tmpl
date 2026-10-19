@@ -4486,6 +4486,12 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
+      warnings of the code loading the module (with \c qcc, the default warnings), not those the \c .qm file sets, so
+      \c %%modern in the \c .qm file did not enable all warnings in the other files.  The module loader accepted an
+      unknown warning name in a @ref disable-warning "%disable-warning" directive there, for example, and \c qcc did
+      not report a duplicate local variable.  Each file now starts with the warnings the \c .qm file sets, and a
+      warning directive in a file applies only to that file
     - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
       @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
       thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in

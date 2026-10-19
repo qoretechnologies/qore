@@ -26287,6 +26287,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // to properly register AOT functions on all classes and functions from .qc/.ql files.
         std::string combined_source = main_source;
 
+        int file_warn_mask = qore_program_private::getModuleFileWarningMask(*qpgm);
         // Parse each .qc/.ql file for compilation and add to combined source
         if (fileList && fileList->size() > 0) {
             for (size_t i = 0; i < fileList->size(); ++i) {
@@ -26310,7 +26311,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                     continue;
                 }
 
-                qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink, QP_WARN_DEFAULT);
+                qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     xsink.handleExceptions();
@@ -30384,6 +30385,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
 
         std::string combined_source = main_source;
 
+        int file_warn_mask = qore_program_private::getModuleFileWarningMask(*qpgm);
         // Parse siblings in the same order as whole-module compilation and source loading.
         size_t source_index = 0;
         for (const std::string& fname : sorted_secondary_names) {
@@ -30400,7 +30402,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 continue;
             }
             qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink,
-                QP_WARN_DEFAULT);
+                file_warn_mask);
             if (xsink.isException()) {
                 mod_ctx.close();
                 xsink.handleExceptions();
@@ -30931,6 +30933,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         }
 
         std::string combined_source = main_source;
+        int file_warn_mask = qore_program_private::getModuleFileWarningMask(*qpgm);
         if (fileList && fileList->size() > 0) {
             for (size_t i = 0; i < fileList->size(); ++i) {
                 if (!(i % 10) && qore_check_cancel(&xsink, "AOT module source parsing")) {
@@ -30950,7 +30953,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                     continue;
                 }
                 qpgm->parsePending(file_source.c_str(), file_path.c_str(),
-                    &xsink, &wsink, QP_WARN_DEFAULT);
+                    &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     xsink.handleExceptions();
@@ -31449,6 +31452,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         }
 
         std::string combined_source = main_source;
+        int file_warn_mask = qore_program_private::getModuleFileWarningMask(*qpgm);
         if (fileList && fileList->size() > 0) {
             for (size_t i = 0; i < fileList->size(); ++i) {
                 if (!(i % 10) && qore_check_cancel(&xsink, "AOT module source parsing")) {
@@ -31468,7 +31472,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                     continue;
                 }
                 qpgm->parsePending(file_source.c_str(), file_path.c_str(),
-                    &xsink, &wsink, QP_WARN_DEFAULT);
+                    &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     xsink.handleExceptions();
