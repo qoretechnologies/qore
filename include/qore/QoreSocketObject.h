@@ -109,8 +109,8 @@ public:
 
     DLLEXPORT QoreSocketObject(QoreSocketObject& orig, int descriptor);
 
-    DLLEXPORT virtual void deref(ExceptionSink* xsink);
-    DLLEXPORT virtual void deref();
+    DLLEXPORT virtual void deref(ExceptionSink* xsink) override;
+    DLLEXPORT virtual void deref() override;
 
     //! Shuts down and closes the socket
     DLLEXPORT void closeIo(ExceptionSink* xsink) override;
@@ -372,7 +372,7 @@ public:
 
         @since %Qore 1.12
     */
-    DLLEXPORT int getPollableDescriptor() const;
+    DLLEXPORT int getPollableDescriptor() const override;
 
 #ifdef DARWIN
     //! Sets the write end of a notification pipe for kqueue poll on macOS

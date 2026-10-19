@@ -58,7 +58,7 @@ public:
     DLLLOCAL SocketUpgradeServerSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
     DLLLOCAL SocketUpgradeServerSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -69,15 +69,15 @@ public:
         }
     }
 
-    DLLLOCAL virtual bool goalReached() const {
+    DLLLOCAL virtual bool goalReached() const override {
         return done;
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
     DLLLOCAL virtual QoreValue getOutput() const override;
 
-    DLLLOCAL virtual const char* getStateImpl() const {
+    DLLLOCAL virtual const char* getStateImpl() const override {
         return "accepting-ssl";
     }
 
@@ -96,7 +96,7 @@ public:
     DLLLOCAL SocketShutdownSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
     DLLLOCAL SocketShutdownSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -146,7 +146,7 @@ class SocketLingeringClosePollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketLingeringClosePollOperation(ExceptionSink* xsink, QoreSocketObject* sock, int64 max_discard);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -206,7 +206,7 @@ class SocketShutdownPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketShutdownPollOperation(QoreSocketObject* sock);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             poll_state.reset();
             sock->deref(xsink);
@@ -301,7 +301,7 @@ public:
         int64 value = 0);
     DLLLOCAL ~SocketSetupPollOperation() override;
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -385,7 +385,7 @@ public:
     DLLLOCAL SocketDataAvailablePollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
     DLLLOCAL SocketDataAvailablePollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink);
+    DLLLOCAL void deref(ExceptionSink* xsink) override;
 
     DLLLOCAL virtual bool goalReached() const override {
         return ready;
@@ -468,7 +468,7 @@ public:
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl,
             SocketSource* source, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block_accept) {
                 AutoLocker al(sock->priv->m);
@@ -631,7 +631,7 @@ public:
 
     DLLLOCAL ~SocketHttp2ServerPollOperation();
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -730,7 +730,7 @@ public:
 
     DLLLOCAL ~SocketHttp2SendResponsePollOperation();
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -800,7 +800,7 @@ public:
 
     DLLLOCAL ~SocketHttp2SendStreamingResponsePollOperation();
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -905,7 +905,7 @@ public:
 
     DLLLOCAL int initLocked(ExceptionSink* xsink);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -960,7 +960,7 @@ public:
     DLLLOCAL SocketSendAndReadHeaderPollOperation(ExceptionSink* xsink, BinaryNode* response_data,
         QoreSocketObject* sock, int64 idle_timeout_ms);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -1019,7 +1019,7 @@ public:
         InputStream* input_stream, QoreObject* input_stream_obj, int64 size, int timeout_ms,
         bool emit_data_events, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock(NB_SEND);
@@ -1115,7 +1115,7 @@ public:
         InputStream* input_stream, QoreObject* input_stream_obj, size_t max_chunk_size, int timeout_ms,
         bool send_terminal_chunk, int source, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock(NB_SEND);
@@ -1213,7 +1213,7 @@ public:
         OutputStream* output_stream, QoreObject* output_stream_obj, int64 size, int timeout_ms,
         bool emit_data_events, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock(NB_RECV);
@@ -1305,7 +1305,7 @@ public:
     DLLLOCAL SocketWriteOutputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
         OutputStream* output_stream, QoreObject* output_stream_obj, BinaryNode* data, int timeout_ms);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (output_stream && !need_reassign) {
                 output_stream->unassignThread(xsink);
@@ -1383,7 +1383,7 @@ public:
         QoreSocketObject* sock, InputStream* input_stream, QoreObject* input_stream_obj,
         int64 content_length, int64 idle_timeout_ms, bool fused, bool chunked = false);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -1489,7 +1489,7 @@ public:
 
     DLLLOCAL ~SocketHttp2ClientMultiplexPollOperation();
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -1602,7 +1602,7 @@ class SocketRecvFromPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketRecvFromPollOperation(ExceptionSink* xsink, size_t max_size, QoreSocketObject* sock);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -1654,7 +1654,7 @@ public:
         BinaryNode* data, QoreSocketObject* sock);
     DLLLOCAL ~SocketSendToPollOperation() override;
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             cleanup(xsink);
             delete this;
@@ -1733,7 +1733,7 @@ public:
                                            int64_t not_before_ns_abs = 0);
     DLLLOCAL ~SocketQuicClientPollOperation() override;
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 AutoLocker al(sock->priv->m);
@@ -1970,7 +1970,7 @@ class SocketQuicServerPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketQuicServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 AutoLocker al(sock->priv->m);
@@ -2193,7 +2193,7 @@ public:
                                                   const QoreHashNode* headers,
                                                   const AbstractQoreNode* body);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 AutoLocker al(sock->priv->m);
@@ -2308,7 +2308,7 @@ public:
                                                            QoreObject* input_stream_obj,
                                                            int64 chunk_size = 16384);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             poll_state.reset();
             if (input_stream && !need_reassign) {

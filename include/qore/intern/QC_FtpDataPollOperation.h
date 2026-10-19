@@ -152,7 +152,7 @@ public:
     DLLLOCAL virtual ~FtpDataPollOperationPriv();
 
     //! Releases inner op, data socket, and any accumulated data on last ref
-    DLLLOCAL void deref(ExceptionSink* xsink);
+    DLLLOCAL void deref(ExceptionSink* xsink) override;
 
     // --- SocketPollOperationBase interface ---
     DLLLOCAL bool goalReached() const override;

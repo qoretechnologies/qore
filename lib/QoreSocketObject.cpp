@@ -169,7 +169,7 @@ public:
         return 0;
     }
 
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             clearNonBlock();
             sock->deref(xsink);
@@ -311,7 +311,7 @@ public:
         return 0;
     }
 
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             clearNonBlock();
             sock->deref(xsink);
@@ -1715,7 +1715,7 @@ public:
         qore_socket_object_set_h2_headers(header_map, headers);
     }
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             sock->deref(xsink);
             delete this;
@@ -1995,7 +1995,7 @@ public:
         setInputStream(input_stream, ref_input_stream);
     }
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (queue) {
                 queue->deref(xsink);
@@ -2312,7 +2312,7 @@ public:
             : sock(sock), action(action), host_lookup(host_lookup) {
     }
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             sock->deref(xsink);
             delete this;

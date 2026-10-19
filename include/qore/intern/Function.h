@@ -564,23 +564,23 @@ public:
     }
 
     //! returns the source location of the element
-    DLLLOCAL virtual const QoreProgramLocation& getLocation() const {
+    DLLLOCAL virtual const QoreProgramLocation& getLocation() const override {
         // loc can be null during IR/JIT execution when swap_runtime_statement_location
         // sets runtime_loc to nullptr; fall back to loc_builtin to avoid null dereference
         return loc ? *loc : loc_builtin;
     }
 
     //! returns the name of the function or method call (ex: "[Class::]method")
-    DLLLOCAL virtual const std::string& getCallName() const {
+    DLLLOCAL virtual const std::string& getCallName() const override {
         return callName;
     }
 
-    DLLLOCAL virtual qore_call_t getCallType() const {
+    DLLLOCAL virtual qore_call_t getCallType() const override {
         return ct;
     }
 
     //! returns the QoreProgram container
-    DLLLOCAL virtual QoreProgram* getProgram() const {
+    DLLLOCAL virtual QoreProgram* getProgram() const override {
         return pgm;
     }
 
@@ -588,7 +588,7 @@ public:
         return exec_pgm;
     }
 
-    DLLLOCAL virtual const AbstractStatement* getStatement() const {
+    DLLLOCAL virtual const AbstractStatement* getStatement() const override {
         return stmt;
     }
 
@@ -1279,17 +1279,17 @@ public:
 };
 
 // the following defines the pure virtual functions that are common to all user variants
-#define COMMON_USER_VARIANT_FUNCTIONS DLLLOCAL virtual int64 getFunctionality() const {\
+#define COMMON_USER_VARIANT_FUNCTIONS DLLLOCAL virtual int64 getFunctionality() const override {\
         const QoreClass* cls = getClass(); return QDOM_DEFAULT | (cls ? cls->getDomain() : 0);\
     }\
     using AbstractQoreFunctionVariant::getUserVariantBase; \
-    DLLLOCAL virtual UserVariantBase* getUserVariantBase() { return static_cast<UserVariantBase*>(this); } \
+    DLLLOCAL virtual UserVariantBase* getUserVariantBase() override { return static_cast<UserVariantBase*>(this); } \
     DLLLOCAL virtual const AbstractQoreFunctionVariant* getAbstractFunctionVariant() const override { return this; } \
-    DLLLOCAL virtual AbstractFunctionSignature* getSignature() const { return const_cast<UserSignature*>(&signature); } \
-    DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const { return signature.parseGetReturnTypeInfo(err); } \
-    DLLLOCAL virtual void setRecheck() { recheck = true; } \
-    DLLLOCAL virtual void parseCommit() { UserVariantBase::parseCommit(); } \
-    DLLLOCAL virtual bool hasVarargs() const { if (signature.hasVarargs()) return true; return AbstractQoreFunctionVariant::hasVarargs(); }
+    DLLLOCAL virtual AbstractFunctionSignature* getSignature() const override { return const_cast<UserSignature*>(&signature); } \
+    DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const override { return signature.parseGetReturnTypeInfo(err); } \
+    DLLLOCAL virtual void setRecheck() override { recheck = true; } \
+    DLLLOCAL virtual void parseCommit() override { UserVariantBase::parseCommit(); } \
+    DLLLOCAL virtual bool hasVarargs() const override { if (signature.hasVarargs()) return true; return AbstractQoreFunctionVariant::hasVarargs(); }
 
 // this class ensures that instantiated variables in user code are uninstantiated, even if an exception occurs
 class UserVariantExecHelper : ProgramThreadCountContextHelper, ThreadFrameBoundaryHelper {
@@ -1346,13 +1346,13 @@ public:
     // the following defines the virtual functions that are common to all user variants
     COMMON_USER_VARIANT_FUNCTIONS
 
-    DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const {
+    DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const override {
         return eval(ceh.getName(), &ceh, nullptr, xsink);
     }
 
-    DLLLOCAL virtual int parseInit(QoreFunction* f);
+    DLLLOCAL virtual int parseInit(QoreFunction* f) override;
 
-    DLLLOCAL virtual bool isModulePublic() const {
+    DLLLOCAL virtual bool isModulePublic() const override {
         return mod_pub;
     }
 

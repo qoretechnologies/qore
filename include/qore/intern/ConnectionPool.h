@@ -92,7 +92,7 @@ public:
         int64 idle_timeout);
     DLLLOCAL virtual ~ConnectionPool();
 
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             delete this;
         }

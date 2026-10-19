@@ -91,7 +91,7 @@ public:
     }
 
     using AbstractPrivateData::deref;
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             current_value.discard(xsink);
             channel->deref(xsink);

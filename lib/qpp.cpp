@@ -5397,7 +5397,7 @@ public:
         }
     }
 
-    virtual int serializeCpp(FILE* fp) {
+    virtual int serializeCpp(FILE* fp) override {
         std::string ns_path;
         if (ns.empty()) {
             ns_path = "::Qore::";
@@ -5483,7 +5483,7 @@ public:
         return 0;
     }
 
-    virtual int serializeDox(FILE* fp) {
+    virtual int serializeDox(FILE* fp) override {
         if (ns.empty())
             fputs("\n//! main Qore-language namespace\nnamespace Qore {\n", fp);
         else {
@@ -5547,15 +5547,15 @@ public:
         return 0;
     }
 
-    virtual int serializeUnitTest(FILE* fp) {
+    virtual int serializeUnitTest(FILE* fp) override {
         return 0;
     }
 
-    virtual int serializeJavadoc() {
+    virtual int serializeJavadoc() override {
         return 0;
     }
 
-    virtual strlist_t precalculateUnitTest() {
+    virtual strlist_t precalculateUnitTest() override {
         return strlist_t();
     }
 
@@ -7166,7 +7166,7 @@ public:
         return !*m;
     }
 
-    virtual strlist_t precalculateUnitTest() {
+    virtual strlist_t precalculateUnitTest() override {
         strlist_t ret;
 
         std::string v = "test_" + (ns.empty()? "Qore" : ns) + "_" + name;
@@ -7175,7 +7175,7 @@ public:
         return ret;
     }
 
-    virtual int serializeUnitTest(FILE* fp) {
+    virtual int serializeUnitTest(FILE* fp) override {
         //fprintf(fp, "# ClassElement::serializeUnitTest\n");
         fprintf(fp, "    # Qore class %s::%s\n", ns.empty()? "Qore" : ns.c_str(), name.c_str());
         strlist_t names = precalculateUnitTest();
@@ -7194,7 +7194,7 @@ public:
         return 0;
     }
 
-    virtual int serializeJavadoc() {
+    virtual int serializeJavadoc() override {
         // do not serialize pseudo classes
         if (is_pseudo || opts.javadoc_fn.empty()) {
             return 0;
@@ -7237,7 +7237,7 @@ public:
         return 0;
     }
 
-    virtual int serializeCpp(FILE* fp) {
+    virtual int serializeCpp(FILE* fp) override {
         fprintf(fp, "/* Qore class %s::%s */\n\n", ns.empty()? "Qore" : ns.c_str(), name.c_str());
 
         std::string ns_path;
@@ -7450,7 +7450,7 @@ public:
         return 0;
     }
 
-    virtual int serializeDox(FILE* fp) {
+    virtual int serializeDox(FILE* fp) override {
         if (ns.empty())
             fputs("\n//! main Qore-language namespace\nnamespace Qore {\n", fp);
         else {

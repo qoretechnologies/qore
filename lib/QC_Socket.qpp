@@ -1340,7 +1340,7 @@ public:
         return 0;
     }
 
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             clearNonBlock();
             sock->deref(xsink);

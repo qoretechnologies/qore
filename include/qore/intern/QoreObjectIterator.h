@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -69,7 +69,7 @@ public:
     DLLLOCAL QoreObjectReverseIterator(const QoreObjectReverseIterator& old) : QoreObjectIterator(old) {
     }
 
-    DLLLOCAL virtual const char* getName() const {
+    DLLLOCAL virtual const char* getName() const override {
         return "ObjectReverseIterator";
     }
 

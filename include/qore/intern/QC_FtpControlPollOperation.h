@@ -100,7 +100,7 @@ public:
     DLLLOCAL virtual ~FtpControlPollOperationPriv();
 
     //! Releases inner op and control socket on last ref
-    DLLLOCAL void deref(ExceptionSink* xsink);
+    DLLLOCAL void deref(ExceptionSink* xsink) override;
 
     // --- SocketPollOperationBase interface ---
     DLLLOCAL bool goalReached() const override;
@@ -239,7 +239,7 @@ public:
         SocketPollOperationBase* accept_op, QoreSocketObject* listener, bool secure_data);
 
     DLLLOCAL virtual ~FtpPortAcceptPollOperationPriv();
-    DLLLOCAL void deref(ExceptionSink* xsink);
+    DLLLOCAL void deref(ExceptionSink* xsink) override;
 
     DLLLOCAL bool goalReached() const override { return state == AcceptState::COMPLETE; }
     DLLLOCAL QoreHashNode* continuePoll(ExceptionSink* xsink) override;

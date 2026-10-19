@@ -227,7 +227,7 @@ public:
             int protocol, QoreSocketObject* sock, bool defer_init);
 
     //! Dereferences the operation; clears non-block and deref's the socket on last ref
-    DLLEXPORT void deref(ExceptionSink* xsink);
+    DLLEXPORT void deref(ExceptionSink* xsink) override;
 
     DLLEXPORT virtual bool goalReached() const override;
 
@@ -314,7 +314,7 @@ public:
             bool defer_init);
 
     //! Dereferences the operation; clears non-block send flag and deref's the socket on last ref
-    DLLEXPORT void deref(ExceptionSink* xsink);
+    DLLEXPORT void deref(ExceptionSink* xsink) override;
 
     DLLEXPORT virtual bool goalReached() const override;
 
@@ -369,7 +369,7 @@ public:
     DLLEXPORT SocketRecvPollOperationBase(QoreSocketObject* sock, bool to_string);
 
     //! Dereferences the operation; clears non-block recv flag and deref's the socket on last ref
-    DLLEXPORT virtual void deref(ExceptionSink* xsink);
+    DLLEXPORT virtual void deref(ExceptionSink* xsink) override;
 
     //! Aborts: clears data buffer then delegates to base abort
     DLLEXPORT virtual void abort(ExceptionSink* xsink) override;
@@ -566,7 +566,7 @@ public:
             SslUpgradeMode mode);
 
     //! Dereferences the operation; clears non-block and deref's the socket on last ref
-    DLLEXPORT void deref(ExceptionSink* xsink);
+    DLLEXPORT void deref(ExceptionSink* xsink) override;
 
     DLLEXPORT virtual bool goalReached() const override;
 
@@ -808,7 +808,7 @@ public:
     DLLEXPORT virtual ~SocketReadHttpBodyPollOperation();
 
     //! Dereferences the operation; cleans up socket ref and inner ops on last ref
-    DLLEXPORT void deref(ExceptionSink* xsink);
+    DLLEXPORT void deref(ExceptionSink* xsink) override;
 
     DLLEXPORT virtual bool goalReached() const override;
 

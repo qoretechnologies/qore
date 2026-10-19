@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -57,7 +57,7 @@ public:
     }
 
     using AbstractPrivateData::deref;
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             const_cast<QoreListNode*>(l)->deref(xsink);
             delete this;
@@ -70,11 +70,11 @@ public:
         return ConstListIterator::getReferencedValue();
     }
 
-    DLLLOCAL virtual const char* getName() const {
+    DLLLOCAL virtual const char* getName() const override {
         return "ListIterator";
     }
 
-    DLLLOCAL virtual const QoreTypeInfo* getElementType() const {
+    DLLLOCAL virtual const QoreTypeInfo* getElementType() const override {
         return myElementTypeInfo;
     }
 

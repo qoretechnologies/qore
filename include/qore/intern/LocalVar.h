@@ -447,11 +447,11 @@ public:
     DLLLOCAL const void* getLValueId() const;
 
     // returns true if the value could contain an object or a closure
-    DLLLOCAL virtual bool needsScan(bool scan_now) {
+    DLLLOCAL virtual bool needsScan(bool scan_now) override {
         return QoreTypeInfo::needsScan(typeInfo);
     }
 
-    DLLLOCAL virtual bool scanMembers(RSetHelper& rsh);
+    DLLLOCAL virtual bool scanMembers(RSetHelper& rsh) override;
 
     DLLLOCAL int getLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment = false) const;
     DLLLOCAL void remove(LValueRemoveHelper& lvrh);
@@ -581,7 +581,7 @@ public:
     DLLLOCAL AbstractQoreNode* getReference(const QoreProgramLocation* loc, const char* name, const void*& lvalue_id);
 
     // deletes the object itself
-    DLLLOCAL virtual void deleteObject() {
+    DLLLOCAL virtual void deleteObject() override {
         delete this;
     }
 
@@ -594,14 +594,14 @@ public:
     DLLLOCAL static std::atomic<dbg_after_rescan_t> dbg_after_rescan;
 #endif
 
-    DLLLOCAL virtual void releaseCycleReference(ExceptionSink* xsink) {
+    DLLLOCAL virtual void releaseCycleReference(ExceptionSink* xsink) override {
         deref(xsink);
     }
 
     //! Releases the value of a variable whose last reference has been released; see RObject::deleteOrDefer()
     /** Releases the weak reference that keeps the variable allocated until its deletion is made.
     */
-    DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) {
+    DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) override {
         // releasing the value can re-enter deref() for this variable (a closure that captured it), which the weak
         // reference keeps allocated
         del(xsink);
@@ -609,7 +609,7 @@ public:
     }
 
     // returns the name of the object
-    DLLLOCAL virtual const char* getName() const {
+    DLLLOCAL virtual const char* getName() const override {
         return id;
     }
 };

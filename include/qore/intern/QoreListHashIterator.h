@@ -99,11 +99,11 @@ public:
         return rv.release();
     }
 
-    DLLLOCAL virtual const char* getName() const {
+    DLLLOCAL virtual const char* getName() const override {
         return "ListHashIterator";
     }
 
-    DLLLOCAL virtual const QoreTypeInfo* getElementType() const {
+    DLLLOCAL virtual const QoreTypeInfo* getElementType() const override {
         return myHashTypeInfo;
     }
 
