@@ -151,6 +151,7 @@ public class QorePCAProcessor inherits AbstractDataProviderMLProcessor {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         fields = DataProvider::AbstractDataProvider::parseFieldList(
             DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         if (fields.lsize() < 2) {
@@ -329,7 +330,8 @@ public class QorePCAProcessor inherits AbstractDataProviderMLProcessor {
         for (int i = 0; i < records.lsize(); ++i) {
             hash<auto> record_values;
             foreach string f in (fields) {
-                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
+                record_values{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} =
+                    DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
             }
             push events, <PCAEventInfo>{
                 "event_type": "pca",
@@ -348,7 +350,8 @@ public class QorePCAProcessor inherits AbstractDataProviderMLProcessor {
             throw "PROCESSOR-ERROR",
                 "QorePCAProcessor: not configured; provide constructor options";
         }
-        if (buffer) {
+        # a field that is not a top-level key is read from the rows at its path
+        if (buffer || AbstractDataProviderMLProcessor::hasNestedFieldPath(fields)) {
             return;
         }
 
@@ -479,10 +482,12 @@ public class QorePCAProcessor inherits AbstractDataProviderMLProcessor {
         ML::PCA pca(pca_opts);
         list<hash<ML::PCAResult>> pca_results = pca.fitTransformMatrix(matrix);
 
+        # the values are named as the fields are written
+        list<string> value_names = map AbstractDataProviderMLProcessor::getDerivedFieldName($1), fields;
         for (int i = 0; i < matrix.lsize(); ++i) {
             hash<auto> record_values;
             for (int j = 0; j < fields.lsize(); ++j) {
-                record_values{fields[j]} = matrix[i][j];
+                record_values{value_names[j]} = matrix[i][j];
             }
             push result{"event_type"}, "pca";
             push result{"components"}, pca_results[i].components;

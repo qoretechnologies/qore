@@ -155,6 +155,7 @@ public class QoreRandomForestRegressionProcessor inherits AbstractDataProviderML
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         fields = DataProvider::AbstractDataProvider::parseFieldList(
             DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         if (!fields) {
@@ -265,10 +266,11 @@ public class QoreRandomForestRegressionProcessor inherits AbstractDataProviderML
         for (int i = 0; i < records.lsize(); ++i) {
             hash<auto> record_values;
             foreach string f in (fields) {
-                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
+                record_values{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} =
+                    DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
             }
-            record_values{target_field} = DataProvider::AbstractDataProvider::getFieldValue(
-                records[i], target_field);
+            record_values{AbstractDataProviderMLProcessor::getDerivedFieldName(target_field)} =
+                DataProvider::AbstractDataProvider::getFieldValue(records[i], target_field);
             push events, <RandomForestRegressionEventInfo>{
                 "event_type": "random-forest-regression",
                 "prediction": predictions[i].prediction,

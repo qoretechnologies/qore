@@ -127,6 +127,7 @@ public class QoreEWMAProcessor inherits AbstractDataProviderMLProcessor {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         fields = DataProvider::AbstractDataProvider::parseFieldList(
             DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         if (!fields) {
@@ -181,7 +182,7 @@ public class QoreEWMAProcessor inherits AbstractDataProviderMLProcessor {
                     + (1.0 - alpha) * ewma_values{field};
             }
 
-            result{field + "_ewma"} = ewma_values{field};
+            result{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_ewma")} = ewma_values{field};
         }
 
         if (!initialized) {
@@ -231,7 +232,7 @@ public class QoreEWMAProcessor inherits AbstractDataProviderMLProcessor {
             foreach string field in (fields) {
                 float ewma = calculateNextEwma(field, shape_values{field}[row].toFloat(),
                     \next_values, next_initialized);
-                output_columns{field + "_ewma"}[row] = ewma;
+                output_columns{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_ewma")}[row] = ewma;
             }
             if (!next_initialized) {
                 next_initialized = True;
@@ -293,7 +294,8 @@ public class QoreEWMAProcessor inherits AbstractDataProviderMLProcessor {
     private hash<auto> makeOutputColumns(int count) {
         hash<auto> result;
         foreach string field in (fields) {
-            result{field + "_ewma"} = buffer<float64>::sized(count);
+            result{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_ewma")} =
+                buffer<float64>::sized(count);
         }
         return result;
     }

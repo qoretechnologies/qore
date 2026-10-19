@@ -134,6 +134,7 @@ public class QoreTextNormalizeProcessor inherits AbstractDataProviderMLProcessor
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         text_field = copts.text_field;
         if (!text_field.val()) {
             throw "CONSTRUCTOR-ERROR", "text_field option is required";
@@ -186,7 +187,7 @@ public class QoreTextNormalizeProcessor inherits AbstractDataProviderMLProcessor
             text = applyOperation(op, text);
         }
 
-        result{text_field + "_normalized"} = text;
+        result{AbstractDataProviderMLProcessor::getDerivedFieldName(text_field, "", "_normalized")} = text;
 
         return result;
     }
@@ -308,7 +309,7 @@ public class QoreTextNormalizeProcessor inherits AbstractDataProviderMLProcessor
     #! Appends normalized text to a shaped block while preserving the input shape
     private auto addNormalizedColumn(auto records, DataProvider::DataProviderShape shape,
             list<string> normalized) {
-        string output_field = text_field + "_normalized";
+        string output_field = AbstractDataProviderMLProcessor::getDerivedFieldName(text_field, "", "_normalized");
         switch (shape) {
             case DataProvider::DataProviderShape::DataFrameBlock:
                 return records.withColumn(output_field, normalized);

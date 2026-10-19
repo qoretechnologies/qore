@@ -35,7 +35,7 @@ public namespace DataProviderML {
     converted back to the negotiated input shape when possible so downstream
     shape-aware processors can continue in columnar bulk mode.
 
-    @since DataProviderML 1.3
+    @since DataProviderML 1.0
 */
 public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractDataProvider {
     public {
@@ -109,7 +109,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
 
         @return constructor options for @ref QoreModelRegistry::ModelRegistry
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static hash<auto> buildModelRegistryOptions(hash<auto> copts) {
         return {
@@ -128,7 +128,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
 
         @return the normalized task name, or @ref NOTHING when no task is declared
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static *string getRegistryExecutionTask(
             hash<QoreModelRegistry::ModelVersionInfo> manifest) {
@@ -159,7 +159,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
 
         @return the plan artifact name, or @ref NOTHING when none is declared
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static *string getRegistryExecutionPlanArtifactName(
             hash<QoreModelRegistry::ModelVersionInfo> manifest) {
@@ -182,7 +182,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         @return selected output tensor names, or @ref NOTHING when no safe
             selection is declared
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static *list<string> getRegistryExecutionPlanOutputNames(
             hash<QoreModelRegistry::ModelVersionInfo> manifest,
@@ -228,7 +228,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
 
         @throw CONSTRUCTOR-ERROR if the manifest task is incompatible
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static validateRegistryExecutionTask(hash<QoreModelRegistry::ModelVersionInfo> manifest,
             string expected_task, string processor_name, bool required) {
@@ -332,7 +332,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
 
         @return the converted bulk output, the unchanged value, or @ref NOTHING if \a data is @ref NOTHING
 
-        @since DataProviderML 1.3
+        @since DataProviderML 1.0
     */
     static *auto convertBulkOutputShape(*auto data, DataProvider::DataProviderShape shape, bool already_shaped = False) {
         if (!exists data) {
@@ -352,7 +352,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
 
         @return the converted bulk output, or @ref NOTHING if \a records is empty
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static *auto convertRecordListOutputShape(*list<auto> records, DataProvider::DataProviderShape shape) {
         if (!records) {
@@ -371,7 +371,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
 
         @return row-record hashes for the selected range
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static list<hash<auto>> materializeShapeRows(auto records, DataProvider::DataProviderShape shape,
             int offset, int count) {
@@ -390,10 +390,109 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         return result;
     }
 
+    #! Checks the field options of the processor
+    /** The options named \c fields or ending in \c _field name fields of the input by their paths: a path with the
+        DPQL wildcard <tt>[*]</tt> or <tt>{*}</tt> is refused
+        (@ref DataProvider::AbstractDataProvider::checkFieldPathOption()
+        "AbstractDataProvider::checkFieldPathOption()"), and so are two fields in \c fields that give the same output
+        field name (@ref checkDerivedFieldNames()), or a \c target_field that gives the same name as a different field
+        in \c fields: the events give the target with the fields, named the same way
+
+        @param options the options as they were given
+        @param copts the options as they were checked
+
+        @throw CONSTRUCTOR-ERROR a field option has a field path with a wildcard, two fields in \c fields are written
+        the same way, or \c target_field is written the same way as a different field in \c fields
+
+        @since DataProviderML 1.0
+    */
+    private checkFieldPathOptions(*hash<auto> options, *hash<auto> copts) {
+        foreach hash<auto> i in (copts.pairIterator()) {
+            if (i.key != "fields" && i.key !~ /_field$/) {
+                continue;
+            }
+            switch (i.value.typeCode()) {
+                case NT_STRING:
+                    DataProvider::AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", i.key, i.value);
+                    break;
+                case NT_LIST:
+                    DataProvider::AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", i.key,
+                        map $1, i.value, $1.typeCode() == NT_STRING);
+                    break;
+            }
+        }
+        if (exists copts.fields) {
+            list<string> fields = DataProvider::AbstractDataProvider::parseFieldList(
+                DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "fields"));
+            AbstractDataProviderMLProcessor::checkDerivedFieldNames("fields", fields);
+            # the events give the value of the target with the values of the fields, named the same way
+            if (copts.target_field.typeCode() == NT_STRING) {
+                AbstractDataProviderMLProcessor::checkDerivedFieldNames("target_field", fields + copts.target_field);
+            }
+        }
+    }
+
+    #! Returns the name of an output field derived from an input field: its path as it is written, with a prefix or
+    #! a suffix
+    /** The path is written as its keys joined with dots
+        (@ref DataProvider::AbstractDataProvider::getFieldPathDisplayName()
+        "AbstractDataProvider::getFieldPathDisplayName()"): the field <tt>Unit\\.Price</tt> gives
+        \c Unit.Price_normalized, and \c order.id gives \c order.id_ewma
+
+        @param field_path the field path of the input field
+        @param prefix the prefix of the name
+        @param suffix the suffix of the name
+
+        @return the name of the output field
+
+        @par Example:
+        @code{.py}
+# the moving average of the key "Unit.Price" is written to "Unit.Price_ewma"
+string output_field = AbstractDataProviderMLProcessor::getDerivedFieldName("Unit\\.Price", "", "_ewma");
+        @endcode
+
+        @since DataProviderML 1.0
+    */
+    static string getDerivedFieldName(string field_path, string prefix = "", string suffix = "") {
+        return prefix + DataProvider::AbstractDataProvider::getFieldPathDisplayName(field_path) + suffix;
+    }
+
+    #! Checks that the fields of an option give different output field names
+    /** Output fields are named after the input fields as their paths are written
+        (@ref getDerivedFieldName()), so two different paths written the same way (\c order.id and
+        <tt>order\\.id</tt>) would give the same output field; one would overwrite the other
+
+        @param option the name of the option
+        @param fields the field paths given
+
+        @throw CONSTRUCTOR-ERROR two different fields are written the same way; the message names both
+
+        @par Example:
+        @code{.py}
+# refused: the price of the order and the key "order.price" would both be scaled to "scaled_order.price"
+AbstractDataProviderMLProcessor::checkDerivedFieldNames("fields", ("order.price", "order\\.price"));
+        @endcode
+
+        @since DataProviderML 1.0
+    */
+    static checkDerivedFieldNames(string option, list<string> fields) {
+        hash<string, string> seen;
+        foreach string field in (fields) {
+            string name = DataProvider::AbstractDataProvider::getFieldPathDisplayName(field);
+            if (exists seen{name} && seen{name} != field) {
+                # the paths are given as they are written
+                throw "CONSTRUCTOR-ERROR", sprintf("option \"%s\": the fields \"%s\" and \"%s\" are both written "
+                    "\"%s\", so the output fields named after them would be the same; give only one of them", option,
+                    seen{name}, field, name);
+            }
+            seen{name} = field;
+        }
+    }
+
     #! Returns True when any configured field needs row materialization for nested lookup
     /** @param fields configured field names
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static bool hasNestedFieldPath(list<string> fields) {
         foreach string field in (fields) {
@@ -413,7 +512,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         @param fields configured top-level fields
         @param count expected logical row count
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static hash<auto> getShapeFieldValueLists(auto records, DataProvider::DataProviderShape shape,
             list<string> fields, int count) {
@@ -436,7 +535,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         @param field configured top-level field
         @param count expected logical row count
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static list<auto> getShapeFieldValues(auto records, DataProvider::DataProviderShape shape,
             string field, int count) {
@@ -452,7 +551,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         @param field configured top-level field
         @param count expected logical row count
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static list<string> getShapeFieldStringValues(auto records, DataProvider::DataProviderShape shape,
             string field, int count) {
@@ -476,7 +575,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
 
         @return the shaped output block, or @ref NOTHING when no rows are selected
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static *auto appendGeneratedShapeRows(auto records, DataProvider::DataProviderShape shape,
             list<int> selected_indices, hash<auto> generated_columns) {
@@ -496,7 +595,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         @param offset first row offset
         @param count number of rows to include
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static list<list<float>> fieldValueListsToMatrix(hash<auto> field_values, list<string> fields,
             int offset, int count) {
@@ -516,12 +615,12 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         @param fields configured field order
         @param row zero-based row index
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     static hash<auto> recordValuesFromFieldValueLists(hash<auto> field_values, list<string> fields, int row) {
         hash<auto> record_values;
         foreach string field in (fields) {
-            record_values{field} = field_values{field}[row];
+            record_values{AbstractDataProviderMLProcessor::getDerivedFieldName(field)} = field_values{field}[row];
         }
         return record_values;
     }

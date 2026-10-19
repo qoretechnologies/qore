@@ -143,6 +143,7 @@ public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         text_field = copts.text_field;
         if (!text_field.val()) {
             throw "CONSTRUCTOR-ERROR", "text_field option is required";
@@ -193,7 +194,7 @@ public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
             DataProvider::AbstractDataProvider::getFieldValue(record, text_field).toString();
 
         int count = token_counter.countTokens(text, add_special_tokens);
-        result{text_field + "_token_count"} = count;
+        result{AbstractDataProviderMLProcessor::getDerivedFieldName(text_field, "", "_token_count")} = count;
 
         return result;
     }
@@ -312,7 +313,7 @@ public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
     #! Appends token counts to a shaped block while preserving the input shape
     private auto addTokenCountColumn(auto records, DataProvider::DataProviderShape shape,
             list<int> token_counts) {
-        string output_field = text_field + "_token_count";
+        string output_field = AbstractDataProviderMLProcessor::getDerivedFieldName(text_field, "", "_token_count");
         switch (shape) {
             case DataProvider::DataProviderShape::DataFrameBlock:
                 return records.withColumn(output_field, token_counts);

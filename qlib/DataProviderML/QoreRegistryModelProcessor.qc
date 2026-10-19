@@ -44,7 +44,7 @@ public namespace DataProviderML {
     });
     @endcode
 
-    @since DataProviderML 1.2
+    @since DataProviderML 1.0
 */
 public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor {
     public {
@@ -363,6 +363,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
     */
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
 
         model_name = copts.model_name;
         fields = ();
@@ -373,6 +374,8 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         if (exists copts.input_map) {
             input_map = QoreRegistryModelProcessor::parseInputMap(copts.input_map);
             fields = QoreRegistryModelProcessor::mergeInputMapFields(fields, input_map);
+            # the events give the values of the mapped fields with the other fields, named as they are written
+            AbstractDataProviderMLProcessor::checkDerivedFieldNames("input_map", fields);
         }
         input_tensor = copts.input_tensor;
         if (exists copts.output_names) {
@@ -468,7 +471,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         @return provider diagnostics, manifest metadata, inference counters, and
         optional profile summary
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     hash<auto> getDiagnostics(bool finish_profile = False) {
         if (!configured) {
@@ -519,6 +522,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 throw "CONSTRUCTOR-ERROR",
                     sprintf("input_map entry %y does not contain any valid field names", i.key);
             }
+            DataProvider::AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "input_map", tensor_fields);
             rv{i.key} = tensor_fields;
         }
         return rv;
@@ -623,10 +627,11 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         list<auto> events();
 
         foreach hash<auto> rec in (records) {
-            # Extract input features from the record
+            # Extract input features from the record: each field is read at its path and named as it is written
             hash<auto> input;
             foreach string f in (fields) {
-                input{f} = rec{f};
+                input{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} =
+                    DataProvider::AbstractDataProvider::getFieldValue(rec, f);
             }
 
             # Run prediction
@@ -664,7 +669,8 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         for (int i = 0; i < records.lsize(); ++i) {
             hash<auto> record_values;
             foreach string f in (fields) {
-                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
+                record_values{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} =
+                    DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
             }
 
             hash<auto> model_output;
@@ -708,7 +714,8 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         for (int i = 0; i < count; ++i) {
             hash<auto> record_values;
             foreach string f in (fields) {
-                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
+                record_values{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} =
+                    DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
             }
 
             hash<auto> model_output;
@@ -815,6 +822,11 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
 
         if (execution_task == "causal-lm") {
             return processCausalLmShapeWindows(records, shape, count);
+        }
+
+        # a field that is not a top-level key is read from the rows at its path
+        if (AbstractDataProviderMLProcessor::hasNestedFieldPath(fields)) {
+            return;
         }
 
         if (exists input_map) {
@@ -1380,10 +1392,12 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         hash<auto> outputs = runModelFeatureMatrix(matrix);
         int count = matrix.lsize();
 
+        # the values are named as the fields are written
+        list<string> value_names = map AbstractDataProviderMLProcessor::getDerivedFieldName($1), fields;
         for (int i = 0; i < count; ++i) {
             hash<auto> record_values;
             for (int j = 0; j < fields.lsize(); ++j) {
-                record_values{fields[j]} = matrix[i][j];
+                record_values{value_names[j]} = matrix[i][j];
             }
 
             hash<auto> model_output;
@@ -1419,11 +1433,13 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             output_values{okey} = tensorOutputToRows(cast<ML::Tensor>(outputs{okey}), count);
         }
 
+        # the values are named as the fields are written
+        list<string> value_names = map AbstractDataProviderMLProcessor::getDerivedFieldName($1), fields;
         for (int i = 0; i < count; ++i) {
             int row = start + i;
             hash<auto> record_values;
             for (int j = 0; j < fields.lsize(); ++j) {
-                record_values{fields[j]} = record_matrix[row][j];
+                record_values{value_names[j]} = record_matrix[row][j];
             }
 
             hash<auto> model_output;
@@ -1457,7 +1473,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
             hash<auto> prediction = generateCausalLmText(prompt);
 
             hash<auto> record_values = {
-                prompt_field: prompt,
+                AbstractDataProviderMLProcessor::getDerivedFieldName(prompt_field): prompt,
             };
 
             hash<RegistryModelEventInfo> event = <RegistryModelEventInfo>{
@@ -1644,7 +1660,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         foreach string prompt in (prompts) {
             hash<auto> prediction = generateCausalLmText(prompt);
             hash<auto> record_values = {
-                prompt_field: prompt,
+                AbstractDataProviderMLProcessor::getDerivedFieldName(prompt_field): prompt,
             };
 
             push result{"event_type"}, "registry-model";

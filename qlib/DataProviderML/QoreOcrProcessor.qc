@@ -124,6 +124,7 @@ public class QoreOcrProcessor inherits AbstractDataProviderMLProcessor {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         image_field = copts.image_field;
         if (!image_field.val()) {
             throw "CONSTRUCTOR-ERROR", "image_field option is required";

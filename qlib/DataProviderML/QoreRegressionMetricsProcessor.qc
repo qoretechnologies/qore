@@ -101,6 +101,7 @@ public class QoreRegressionMetricsProcessor inherits AbstractDataProviderMLProce
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         predicted_field = copts.predicted_field;
         true_field = copts.true_field;
         window_size = copts.window_size;

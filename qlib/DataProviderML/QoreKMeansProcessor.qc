@@ -172,6 +172,7 @@ public class QoreKMeansProcessor inherits AbstractDataProviderMLProcessor {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         fields = DataProvider::AbstractDataProvider::parseFieldList(
             DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         if (!fields) {
@@ -364,7 +365,8 @@ public class QoreKMeansProcessor inherits AbstractDataProviderMLProcessor {
         for (int i = 0; i < records.lsize(); ++i) {
             hash<auto> record_values;
             foreach string f in (fields) {
-                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
+                record_values{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} =
+                    DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
             }
             push events, <KMeansClusteringEventInfo>{
                 "event_type": "kmeans-clustering",
@@ -384,7 +386,8 @@ public class QoreKMeansProcessor inherits AbstractDataProviderMLProcessor {
             throw "PROCESSOR-ERROR",
                 "QoreKMeansProcessor: not configured; provide constructor options";
         }
-        if (buffer) {
+        # a field that is not a top-level key is read from the rows at its path
+        if (buffer || AbstractDataProviderMLProcessor::hasNestedFieldPath(fields)) {
             return;
         }
 
@@ -529,10 +532,12 @@ public class QoreKMeansProcessor inherits AbstractDataProviderMLProcessor {
         }
 
         list<hash<ML::KMeansResult>> predictions = kmeans.predictMatrix(matrix);
+        # the values are named as the fields are written
+        list<string> value_names = map AbstractDataProviderMLProcessor::getDerivedFieldName($1), fields;
         for (int i = 0; i < matrix.lsize(); ++i) {
             hash<auto> record_values;
             for (int j = 0; j < fields.lsize(); ++j) {
-                record_values{fields[j]} = matrix[i][j];
+                record_values{value_names[j]} = matrix[i][j];
             }
             push result{"event_type"}, "kmeans-clustering";
             push result{"cluster"}, predictions[i].cluster;

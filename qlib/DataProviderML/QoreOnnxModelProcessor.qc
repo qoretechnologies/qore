@@ -406,6 +406,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         fields = ();
         if (exists copts.fields) {
             fields = DataProvider::AbstractDataProvider::parseFieldList(
@@ -414,6 +415,8 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         if (exists copts.input_map) {
             input_map = QoreOnnxModelProcessor::parseInputMap(copts.input_map);
             fields = QoreOnnxModelProcessor::mergeInputMapFields(fields, input_map);
+            # the events give the values of the mapped fields with the other fields, named as they are written
+            AbstractDataProviderMLProcessor::checkDerivedFieldNames("input_map", fields);
         }
         if (!fields) {
             throw "CONSTRUCTOR-ERROR",
@@ -583,7 +586,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         @return provider diagnostics, input/output metadata, inference counters,
         and optional profile summary
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     hash<auto> getDiagnostics(bool finish_profile = False) {
         if (!configured) {
@@ -639,6 +642,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                 throw "CONSTRUCTOR-ERROR",
                     sprintf("input_map entry %y does not contain any valid field names", i.key);
             }
+            DataProvider::AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "input_map", tensor_fields);
             rv{i.key} = tensor_fields;
         }
         return rv;
@@ -764,7 +768,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         host/device transfer counters so mixed CPU/GPU pipelines can explain where
         transfers happen
 
-        @since DataProviderML 1.4
+        @since DataProviderML 1.0
     */
     private hash<auto> getDeviceBindingDiagnostics() {
         hash<auto> rv = {
@@ -820,7 +824,8 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         for (int i = 0; i < records.lsize(); ++i) {
             hash<auto> record_values;
             foreach string f in (fields) {
-                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
+                record_values{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} =
+                    DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
             }
             # Build per-record output from model outputs
             hash<auto> model_output;
@@ -860,7 +865,8 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         for (int i = 0; i < count; ++i) {
             hash<auto> record_values;
             foreach string f in (fields) {
-                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
+                record_values{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} =
+                    DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
             }
 
             hash<auto> model_output;
@@ -951,7 +957,8 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             throw "PROCESSOR-ERROR",
                 "QoreOnnxModelProcessor: not configured; provide constructor options";
         }
-        if (buffer) {
+        # a field that is not a top-level key is read from the rows at its path
+        if (buffer || AbstractDataProviderMLProcessor::hasNestedFieldPath(fields)) {
             return;
         }
 
@@ -1272,10 +1279,12 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             output_values{okey} = tensorOutputToRows(cast<ML::Tensor>(outputs{okey}), count);
         }
 
+        # the values are named as the fields are written
+        list<string> value_names = map AbstractDataProviderMLProcessor::getDerivedFieldName($1), fields;
         for (int i = 0; i < count; ++i) {
             hash<auto> record_values;
             for (int j = 0; j < fields.lsize(); ++j) {
-                record_values{fields[j]} = matrix[i][j];
+                record_values{value_names[j]} = matrix[i][j];
             }
             hash<auto> model_output;
             foreach string okey in (keys output_values) {
@@ -1305,11 +1314,13 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             output_values{okey} = tensorOutputToRows(cast<ML::Tensor>(outputs{okey}), count);
         }
 
+        # the values are named as the fields are written
+        list<string> value_names = map AbstractDataProviderMLProcessor::getDerivedFieldName($1), fields;
         for (int i = 0; i < count; ++i) {
             int row = start + i;
             hash<auto> record_values;
             for (int j = 0; j < fields.lsize(); ++j) {
-                record_values{fields[j]} = record_matrix[row][j];
+                record_values{value_names[j]} = record_matrix[row][j];
             }
             hash<auto> model_output;
             foreach string okey in (keys output_values) {

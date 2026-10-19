@@ -146,6 +146,7 @@ public class QoreDocumentOcrProcessor inherits AbstractDataProviderMLProcessor {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         document_field = copts.document_field;
         if (!document_field.val()) {
             throw "CONSTRUCTOR-ERROR", "document_field option is required";

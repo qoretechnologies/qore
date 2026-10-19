@@ -259,6 +259,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("text-normalize - DataFrameBlock shape", \textNormalizeDataFrameShape());
         addTestCase("text-normalize - BufferColumns shape", \textNormalizeBufferColumnsShape());
         addTestCase("text-normalize - a text field path with a backslash", \textNormalizeEscapedKey());
+        addTestCase("field paths: output names, writes, wildcards and collisions", \mlFieldPathTests());
+        addTestCase("field paths: the target, a native registry model and input_map", \mlFieldPathEventKeyTests());
+        addTestCase("field paths: windows read from a block of columns", \mlFieldPathBulkTests());
 
         # SchemaValidation tests
         addTestCase("schema-validation - type check", \schemaValidTypeCheck());
@@ -6448,6 +6451,165 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(inlist("a", row.values()));
         assertEq((map {$1.key: ($1.value,)}, row.pairIterator()),
             (map {$1.key: $1.value.toList()}, result.toColumnHash().pairIterator()));
+    }
+
+    #! The fields of the ML processors are field paths: the output fields named after them use the path as it is
+    #! written, a field is written where it was read, a wildcard is refused, and two paths written the same way in
+    #! one option are refused
+    mlFieldPathTests() {
+        # output fields named after a field: the path as it is written, with the suffix or prefix
+        DataProviderML::QoreTextNormalizeProcessor tn({"text_field": "Unit\\.Name", "operations": ("lowercase",)});
+        hash<auto> r = tn.processRecord({"Unit.Name": "ABC"});
+        assertEq("abc", r."Unit.Name_normalized");
+        assertFalse(r.hasKey("Unit\\.Name_normalized"));
+        DataProviderML::QoreTextNormalizeProcessor tn_nested({"text_field": "doc.body", "operations": ("lowercase",)});
+        assertEq("abc", tn_nested.processRecord({"doc": {"body": "ABC"}})."doc.body_normalized");
+
+        DataProviderML::QoreEWMAProcessor ewma({"fields": ("Unit\\.Price",), "alpha": 0.5});
+        r = ewma.processRecord({"Unit.Price": 2.0});
+        assertFloat(2.0, r."Unit.Price_ewma", 0.001);
+        assertFalse(r.hasKey("Unit\\.Price_ewma"));
+
+        DataProviderML::QoreRollingStatsProcessor rs({"fields": ("Unit\\.Price",), "window_size": 2,
+            "statistics": ("mean",)});
+        r = rs.processRecord({"Unit.Price": 2.0});
+        assertFloat(2.0, r."Unit.Price_mean", 0.001);
+
+        DataProviderML::QoreMinMaxScalerProcessor mm({"fields": ("Unit\\.Price",), "window_size": 2});
+        list<auto> results;
+        foreach hash<auto> rec in (({"Unit.Price": 0.0}, {"Unit.Price": 10.0})) {
+            collectResult(\results, mm.processRecord(rec));
+        }
+        assertFloat(1.0, results[1].scaled_values."Unit.Price", 1e-10);
+        assertEq(10.0, results[1].record_values."Unit.Price");
+
+        # guardrail-transform writes the redacted text where it read it
+        DataProviderML::QoreGuardrailTransformProcessor gt({
+            "text_field": "doc.body",
+            "rules": ({"type": "pii", "severity": "high", "params": {"action": "redact"}},),
+        });
+        r = gt.processRecord({"doc": {"body": "email test@example.com"}});
+        assertFalse(r.doc.body =~ /test@example\.com/, "the nested text is redacted");
+        assertFalse(r.hasKey("doc.body"), "no top-level key named by the path");
+
+        # a wildcard in a field option is refused
+        assertThrows("CONSTRUCTOR-ERROR", "option \"text_field\": the field \"doc.*body\" has the wildcard",
+            sub () { new DataProviderML::QoreTextNormalizeProcessor({"text_field": "doc[*].body",
+                "operations": ("lowercase",)}); });
+        assertThrows("CONSTRUCTOR-ERROR", "option \"fields\": the field \"prices.*\" has the wildcard",
+            sub () { new DataProviderML::QoreEWMAProcessor({"fields": ("x", "prices{*}"), "alpha": 0.5}); });
+        assertThrows("CONSTRUCTOR-ERROR", "option \"predicted_field\": the field \"p.*\" has the wildcard",
+            sub () { new DataProviderML::QoreClassificationMetricsProcessor({"predicted_field": "p[*]",
+                "true_field": "actual", "window_size": 5}); });
+
+        # two paths written the same way in one option would give the same output field
+        assertThrows("CONSTRUCTOR-ERROR", "option \"fields\": the fields \"order.id\" and \"order.*id\" are both "
+            "written \"order.id\"", sub () { new DataProviderML::QoreEWMAProcessor({"fields": ("order.id",
+                "order\\.id"), "alpha": 0.5}); });
+        # the same field twice is one field
+        DataProviderML::QoreEWMAProcessor twice({"fields": ("x", "x"), "alpha": 0.5});
+        assertFloat(1.0, twice.processRecord({"x": 1.0}).x_ewma, 0.001);
+    }
+
+    #! The target of a supervised processor, the input of a native registry model and the fields of input_map are
+    #! field paths too: the events name them as they are written, and two paths written the same way are refused
+    mlFieldPathEventKeyTests() {
+        # the target is named as it is written, as the fields are
+        DataProviderML::QoreLinearRegressionProcessor lr({"fields": ("Unit\\.Qty",), "target_field": "Unit\\.Price",
+            "window_size": 3});
+        list<auto> results;
+        foreach hash<auto> rec in (({"Unit.Qty": 1.0, "Unit.Price": 2.0}, {"Unit.Qty": 2.0, "Unit.Price": 4.0},
+                {"Unit.Qty": 3.0, "Unit.Price": 6.0})) {
+            collectResult(\results, lr.processRecord(rec));
+        }
+        assertEq(3, results.size());
+        assertEq({"Unit.Qty": 3.0, "Unit.Price": 6.0}, results[2].record_values);
+
+        # a target written the same way as a different field would give the same value name
+        assertThrows("CONSTRUCTOR-ERROR", "option \"target_field\": the fields \"order.id\" and \"order.*id\" are "
+            "both written \"order.id\"", sub () { new DataProviderML::QoreLinearRegressionProcessor({
+                "fields": ("order.id",), "target_field": "order\\.id", "window_size": 3}); });
+
+        # a native registry model is given each field read at its path, named as it is written
+        string dir = tmp_location() + DirSep + "reg_model_path_test_" + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            DataProviderMLProcessorsTest::cleanupDir(dir);
+        }
+        ML::KMeans km({"k": 2, "seed": 42});
+        km.fit(({"Unit.Price": 1.0, "order.qty": 1.0}, {"Unit.Price": 1.1, "order.qty": 1.1},
+            {"Unit.Price": 5.0, "order.qty": 5.0}, {"Unit.Price": 5.1, "order.qty": 5.1}));
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        registry.register(km, {"name": "path_km", "description": "a model of a field with a dot in its name"});
+        DataProviderML::QoreRegistryModelProcessor reg({"registry_path": dir, "model_name": "path_km",
+            "fields": ("Unit\\.Price", "order.qty"), "window_size": 1});
+        list<auto> low = reg.processRecord({"Unit.Price": 1.05, "order": {"qty": 1.05}});
+        list<auto> high = reg.processRecord({"Unit.Price": 5.05, "order": {"qty": 5.05}});
+        assertEq({"Unit.Price": 1.05, "order.qty": 1.05}, low[0].record_values);
+        assertEq({"Unit.Price": 5.05, "order.qty": 5.05}, high[0].record_values);
+        assertNeq(low[0].prediction.cluster, high[0].prediction.cluster, "the model is given Unit.Price and order.qty");
+
+        # the fields of input_map are field paths: a wildcard is refused, and so are two paths written the same way
+        assertThrows("CONSTRUCTOR-ERROR", "option \"input_map\": the field \"x.*\" has the wildcard",
+            sub () { new DataProviderML::QoreOnnxModelProcessor({"model_path": "unused.onnx",
+                "input_map": {"X": ("x[*]",)}, "window_size": 1}); });
+        assertThrows("CONSTRUCTOR-ERROR", "option \"input_map\": the fields \"order.id\" and \"order.*id\" are both "
+            "written \"order.id\"", sub () { new DataProviderML::QoreOnnxModelProcessor({"model_path": "unused.onnx",
+                "input_map": {"X": ("order.id",), "Y": ("order\\.id",)}, "window_size": 1}); });
+        assertThrows("CONSTRUCTOR-ERROR", "option \"input_map\": the field \"x.*\" has the wildcard",
+            sub () { new DataProviderML::QoreRegistryModelProcessor({"registry_path": dir, "model_name": "path_km",
+                "input_map": {"X": ("x{*}",)}, "window_size": 1}); });
+        assertThrows("CONSTRUCTOR-ERROR", "option \"input_map\": the fields \"order.id\" and \"order.*id\" are both "
+            "written \"order.id\"", sub () { new DataProviderML::QoreRegistryModelProcessor({"registry_path": dir,
+                "model_name": "path_km", "fields": ("order.id",), "input_map": {"X": ("order\\.id",)},
+                "window_size": 1}); });
+    }
+
+    #! The processors that read whole windows from a block of columns read a field that is not a top-level key at its
+    #! path, as they read a record, and name it as it is written
+    mlFieldPathBulkTests() {
+        hash<auto> block = {
+            "Unit.Price": (1.0, 2.0, 10.0, 11.0),
+            "order": ({"qty": 1.0}, {"qty": 1.0}, {"qty": 5.0}, {"qty": 5.0}),
+        };
+        list<hash<auto>> values = (
+            {"Unit.Price": 1.0, "order.qty": 1.0},
+            {"Unit.Price": 2.0, "order.qty": 1.0},
+            {"Unit.Price": 10.0, "order.qty": 5.0},
+            {"Unit.Price": 11.0, "order.qty": 5.0},
+        );
+        list<string> fields = ("Unit\\.Price", "order.qty");
+
+        DataProviderML::QoreKMeansProcessor km({"fields": fields, "k": 2, "window_size": 4});
+        hash<auto> r = km.processRecordsBulk(block);
+        assertEq(values, r.record_values);
+        assertEq(r.cluster[0], r.cluster[1]);
+        assertNeq(r.cluster[1], r.cluster[2]);
+
+        DataProviderML::QorePCAProcessor pca({"fields": fields, "n_components": 1, "window_size": 4});
+        assertEq(values, pca.processRecordsBulk(block).record_values);
+
+        DataProviderML::QoreMinMaxScalerProcessor mm({"fields": fields, "window_size": 4});
+        r = mm.processRecordsBulk(block);
+        assertEq(values, r.record_values);
+        assertFloat(0.1, r.scaled_values[1]."Unit.Price", 1e-10);
+        assertFloat(1.0, r.scaled_values[2]."order.qty", 1e-10);
+
+        DataProviderML::QoreStandardScalerProcessor ss({"fields": fields, "window_size": 4});
+        r = ss.processRecordsBulk(block);
+        assertEq(values, r.record_values);
+        assertFloat(-1.0, r.scaled_values[0]."order.qty", 1e-10);
+
+        if (skipOnnx()) {
+            return;
+        }
+        # the test model is y = 2 * x + 1
+        DataProviderML::QoreOnnxModelProcessor onnx({"model_path": getTestModelPath(), "fields": "Unit\\.Price",
+            "window_size": 2});
+        r = onnx.processRecordsBulk({"Unit.Price": (1.0, 2.0)});
+        assertEq(({"Unit.Price": 1.0}, {"Unit.Price": 2.0}), r.record_values);
+        assertFloat(3.0, r.model_output[0].Y, 0.01);
+        assertFloat(5.0, r.model_output[1].Y, 0.01);
     }
 
     # ===================== SchemaValidation Tests =====================

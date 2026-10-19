@@ -132,13 +132,14 @@ public class QoreStandardScalerProcessor inherits AbstractDataProviderMLProcesso
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         fields = DataProvider::AbstractDataProvider::parseFieldList(
             DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         if (!fields) {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
         }
         foreach string f in (fields) {
-            push scaled_fields, sprintf("scaled_%s", f);
+            push scaled_fields, AbstractDataProviderMLProcessor::getDerivedFieldName(f, "scaled_");
         }
         window_size = copts.window_size;
         if (window_size < 2) {
@@ -307,8 +308,9 @@ public class QoreStandardScalerProcessor inherits AbstractDataProviderMLProcesso
             hash<auto> scaled_values;
             for (int j = 0; j < fields.lsize(); ++j) {
                 string f = fields[j];
-                record_values{f} = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
-                scaled_values{f} = scaled[i][j];
+                record_values{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} =
+                    DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
+                scaled_values{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} = scaled[i][j];
             }
             push events, <StandardScalerEventInfo>{
                 "event_type": "standard-scaler",
@@ -326,7 +328,8 @@ public class QoreStandardScalerProcessor inherits AbstractDataProviderMLProcesso
             throw "PROCESSOR-ERROR",
                 "QoreStandardScalerProcessor: not configured; provide constructor options";
         }
-        if (buffer) {
+        # a field that is not a top-level key is read from the rows at its path
+        if (buffer || AbstractDataProviderMLProcessor::hasNestedFieldPath(fields)) {
             return;
         }
 
@@ -458,8 +461,8 @@ public class QoreStandardScalerProcessor inherits AbstractDataProviderMLProcesso
             hash<auto> scaled_values;
             for (int j = 0; j < fields.lsize(); ++j) {
                 string f = fields[j];
-                record_values{f} = matrix[i][j];
-                scaled_values{f} = scaled[i][j];
+                record_values{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} = matrix[i][j];
+                scaled_values{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} = scaled[i][j];
             }
             push result{"event_type"}, "standard-scaler";
             push result{"record_values"}, record_values;
