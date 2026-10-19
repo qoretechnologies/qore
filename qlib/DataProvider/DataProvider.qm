@@ -1700,6 +1700,11 @@ fetch
       \c group-by, \c correlation, \c cross-correlation and the analytics processors) refuse a field with a DPQL
       wildcard (<tt>[*]</tt> or <tt>{*}</tt>) when they are created; it was read as a key with the wildcard in its
       name, which matched nothing
+    - the \c correlation processor refuses fields that would give two pairs the same key of the
+      @ref DataProvider::CorrelationEventInfo "correlations" of its events when it is created, naming both pairs: the
+      key of a pair is its two fields joined with \c _, so \c a with \c b_c and \c a_b with \c c both gave
+      \c a_b_c, and one correlation replaced the other; a field given more than once is one field, where its values
+      were read once for each time it was given, which made the correlations of the window wrong
     - fixed @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
       dropping the \c input_field_names marker, so the options of the registered processor actions that take field
       names of the input (such as \c group_by of \c group-by and \c fields of \c select-fields) did not have it, and

@@ -68,6 +68,7 @@ class QoreStatisticalProcessorsTest inherits QUnit::Test {
         addTestCase("correlation - flush partial", \correlationFlushPartial());
         addTestCase("correlation - flush single record", \correlationFlushSingleRecord());
         addTestCase("correlation - capabilities", \correlationCapabilities());
+        addTestCase("correlation - two pairs with the same key", \correlationKeyCollision());
 
         # Cross-correlation tests
         addTestCase("cross-correlation - known delay", \crossCorrKnownDelay());
@@ -326,6 +327,40 @@ class QoreStatisticalProcessorsTest inherits QUnit::Test {
     correlationCapabilities() {
         QoreCorrelationProcessor proc({"fields": "x,y", "window_size": 5});
         assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+    }
+
+    correlationKeyCollision() {
+        # (a, b_c) and (a_b, c) both give the key a_b_c: one correlation would replace the other
+        assertThrows("CONSTRUCTOR-ERROR", "option \"fields\": the pairs of fields \"a\" and \"b_c\", and \"a_b\" and "
+            + "\"c\", both give the correlation key \"a_b_c\"", sub () {
+            new QoreCorrelationProcessor({"fields": ("a", "a_b", "b_c", "c"), "window_size": 5});
+        });
+        # also in a string of fields
+        assertThrows("CONSTRUCTOR-ERROR", "the correlation key \"x_y_z\"", sub () {
+            new QoreCorrelationProcessor({"fields": "x_y,z,x,y_z", "window_size": 5});
+        });
+
+        # a field with _ in its name has its own key when no other pair gives it
+        QoreCorrelationProcessor proc({"fields": ("a_b", "c"), "window_size": 3});
+        *hash<auto> result;
+        for (int i = 0; i < 3; ++i) {
+            result = proc.processRecord({"a_b": float(i), "c": float(i * 2)});
+        }
+        assertEq(("a_b_c",), keys result.correlations);
+        assertTrue(abs(result.correlations.a_b_c - 1.0) < 0.0001, "the correlation of a_b_c");
+
+        # a field given twice is one field
+        QoreCorrelationProcessor twice({"fields": ("x", "y", "x", "y"), "window_size": 3});
+        for (int i = 0; i < 3; ++i) {
+            result = twice.processRecord({"x": float(i), "y": float(i * 2)});
+        }
+        assertEq(("x_y",), keys result.correlations);
+        assertTrue(abs(result.correlations.x_y - 1.0) < 0.0001, "the correlation of x_y");
+        assertEq(("x", "y"), keys result.matrix);
+        assertEq(3, result.count);
+        assertThrows("CONSTRUCTOR-ERROR", "at least 2 fields are required for correlation; got 1", sub () {
+            new QoreCorrelationProcessor({"fields": ("x", "x"), "window_size": 5});
+        });
     }
 
     # --- Cross-Correlation Tests ---

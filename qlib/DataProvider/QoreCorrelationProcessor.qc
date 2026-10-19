@@ -28,6 +28,10 @@ public namespace DataProvider {
 /** Accumulates records in windows and computes the Pearson correlation coefficient
     between all pairs of configured fields when the window is full or on flush.
 
+    A field given more than once in \c fields is one field.  The correlation of each pair is given in the event under
+    the key of its two field paths joined with \c _ (@ref CorrelationEventInfo); two pairs that would give the same
+    key, such as \c a with \c b_c and \c a_b with \c c, are refused when the processor is created.
+
     @since %DataProvider 3.3
 */
 public class QoreCorrelationProcessor inherits AbstractDataProvider {
@@ -99,13 +103,21 @@ public class QoreCorrelationProcessor inherits AbstractDataProvider {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = AbstractDataProvider::parseFieldList(
-            AbstractDataProvider::getFieldListOption(options, copts, "fields"));
+        # a field given twice is one field
+        hash<string, bool> given;
+        foreach string field in (AbstractDataProvider::parseFieldList(
+                AbstractDataProvider::getFieldListOption(options, copts, "fields"))) {
+            if (!given{field}) {
+                push fields, field;
+                given{field} = True;
+            }
+        }
         AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields);
         if (fields.lsize() < 2) {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("at least 2 fields are required for correlation; got %d", fields.lsize());
         }
+        QoreCorrelationProcessor::checkCorrelationKeys(fields);
         window_size = copts.window_size;
         if (window_size < 2) {
             throw "CONSTRUCTOR-ERROR",
@@ -113,6 +125,39 @@ public class QoreCorrelationProcessor inherits AbstractDataProvider {
         }
         buffer = ();
         configured = True;
+    }
+
+    #! Returns the key of the correlation of two fields in the event: their field paths joined with \c _
+    private static string getCorrelationKey(string field_a, string field_b) {
+        return field_a + "_" + field_b;
+    }
+
+    #! Checks that each pair of fields gives its own key of the correlations in the event
+    /** The key of a pair is its two field paths joined with \c _, so two pairs can give the same key: the fields
+        \c a, \c a_b, \c b_c and \c c give \c a_b_c for \c a with \c b_c and for \c a_b with \c c, and the
+        correlation of one pair would replace the other
+
+        @param fields the field paths, each given once, in the order given
+
+        @throw CONSTRUCTOR-ERROR two pairs of fields give the same key; the message names both pairs
+    */
+    private static checkCorrelationKeys(list<string> fields) {
+        # key -> the pair that gives it
+        hash<string, list<string>> pairs;
+        for (int i = 0; i < fields.lsize(); ++i) {
+            for (int j = i + 1; j < fields.lsize(); ++j) {
+                string key = QoreCorrelationProcessor::getCorrelationKey(fields[i], fields[j]);
+                *list<string> pair = pairs{key};
+                if (pair) {
+                    # the paths are given as they are written
+                    throw "CONSTRUCTOR-ERROR", sprintf("option \"fields\": the pairs of fields \"%s\" and \"%s\", and "
+                        "\"%s\" and \"%s\", both give the correlation key \"%s\", so one correlation would replace the "
+                        "other; remove one of these fields from the option", pair[0], pair[1], fields[i], fields[j],
+                        key);
+                }
+                pairs{key} = (fields[i], fields[j]);
+            }
+        }
     }
 
     #! Records the shape of accumulated input for shape-preserving flushes
@@ -258,7 +303,7 @@ public class QoreCorrelationProcessor inherits AbstractDataProvider {
                 }
                 matrix{fi}{fj} = r;
                 if (i < j) {
-                    correlations{fi + "_" + fj} = r;
+                    correlations{QoreCorrelationProcessor::getCorrelationKey(fi, fj)} = r;
                 }
             }
         }

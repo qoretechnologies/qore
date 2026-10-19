@@ -152,7 +152,9 @@ public hashdecl CorrelationEventInfo {
     #! Pairwise correlations keyed by <tt>fieldA_fieldB</tt>: the field paths of the two fields joined with \c _
     /** Each pair is given once, its first field being the one given first in the \c fields option.  Each field is
         its @ref dpql_field_paths "field path" as it is given in the \c fields option, with a dot that is part of a
-        key escaped: the fields \c order.id and <tt>Unit\\.Price</tt> give the key <tt>order.id_Unit\\.Price</tt>
+        key escaped: the fields \c order.id and <tt>Unit\\.Price</tt> give the key <tt>order.id_Unit\\.Price</tt>.
+        Each pair has its own key: fields that would give two pairs the same key (\c a, \c a_b, \c b_c and \c c,
+        where \c a with \c b_c and \c a_b with \c c both give \c a_b_c) are refused when the processor is created
     */
     hash<auto> correlations;
     #! Full correlation matrix: <tt>matrix{fieldA}{fieldB}</tt> is the correlation of two fields
