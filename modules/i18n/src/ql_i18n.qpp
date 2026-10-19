@@ -341,7 +341,9 @@ static bool i18n_value_to_decimal_info(QoreValue value, I18nDecimalInfo& info, E
             if (*xsink) {
                 return false;
             }
-            return i18n_parse_decimal_string(str->c_str(), info, xsink, "value", value.getType() != NT_STRING);
+            // the string is kept whole, so a NUL character makes it an invalid number
+            return i18n_parse_decimal_string(std::string(str->c_str(), str->size()), info, xsink, "value",
+                value.getType() != NT_STRING);
         }
     }
 
@@ -350,9 +352,15 @@ static bool i18n_value_to_decimal_info(QoreValue value, I18nDecimalInfo& info, E
     return false;
 }
 
+// converts a locale argument to UTF-8; a locale with a NUL character would be cut at the NUL character and name
+// another locale, so it is refused
 static std::string i18n_qore_string_to_utf8(const QoreStringNode* str, ExceptionSink* xsink, const char* arg_name) {
     TempEncodingHelper tmp(str, QCS_UTF8, xsink);
     if (*xsink) {
+        return std::string();
+    }
+
+    if (tmp && q_check_no_nul(tmp->c_str(), tmp->size(), "locale", "locales", "I18N-LOCALE-ERROR", xsink)) {
         return std::string();
     }
 
@@ -382,6 +390,11 @@ static std::string i18n_accept_language_to_utf8(const QoreStringNode* str, Excep
     if (tmp->strlen() > 8192) {
         xsink->raiseException("I18N-ACCEPT-LANGUAGE-ERROR",
             "Accept-Language header is too long; maximum supported length is 8192 bytes");
+        return std::string();
+    }
+    // the header names locales; cut at a NUL character, it would name others
+    if (q_check_no_nul(tmp->c_str(), tmp->size(), "Accept-Language header", "Accept-Language headers",
+            "I18N-ACCEPT-LANGUAGE-ERROR", xsink)) {
         return std::string();
     }
     return tmp->c_str();
@@ -443,7 +456,8 @@ static std::string i18n_get_locale_from_context(const QoreHashNode* context, Exc
     }
 
     QoreStringValueHelper str(locale_value, QCS_UTF8, xsink);
-    if (*xsink) {
+    if (*xsink || q_check_no_nul(str->c_str(), str->size(), "locale", "locales", "I18N-LOCALE-CONTEXT-ERROR",
+            xsink)) {
         return std::string();
     }
     if (!str->c_str()[0]) {
@@ -701,7 +715,8 @@ static QoreStringNode* i18n_negotiate_locale(const QoreStringNode* header, const
             return nullptr;
         }
         QoreStringValueHelper value(available->retrieveEntry(i), QCS_UTF8, xsink);
-        if (*xsink) {
+        if (*xsink || q_check_no_nul(value->c_str(), value->size(), "locale", "locales", "I18N-LOCALE-ERROR",
+                xsink)) {
             return nullptr;
         }
         std::string locale = i18n_canonicalize_locale_tag(value->c_str(), xsink, true);
@@ -748,8 +763,10 @@ static QoreStringNode* i18n_negotiate_locale(const QoreStringNode* header, const
     return new QoreStringNode(default_str, QCS_UTF8);
 }
 
+// converts a string option value to UTF-8; text is kept whole, and when \a nul_err is set, the value names something
+// (ex: a style), and one with a NUL character, which would be cut at the NUL character, is refused with that error
 static bool i18n_qore_value_to_utf8_string(QoreValue value, std::string& out, ExceptionSink* xsink,
-        const char* arg_name) {
+        const char* arg_name, const char* nul_err) {
     if (value.getType() != NT_STRING) {
         xsink->raiseException("I18N-TYPE-ERROR", "%s must be a string; got type '%s'", arg_name, value.getTypeName());
         return false;
@@ -759,8 +776,11 @@ static bool i18n_qore_value_to_utf8_string(QoreValue value, std::string& out, Ex
     if (*xsink) {
         return false;
     }
+    if (nul_err && q_check_no_nul(str->c_str(), str->size(), arg_name, "option values", nul_err, xsink)) {
+        return false;
+    }
 
-    out = str->c_str();
+    out.assign(str->c_str(), str->size());
     return true;
 }
 
@@ -842,7 +862,7 @@ static bool i18n_append_catalog_paths_option(std::vector<std::string>& paths, co
             return false;
         }
         std::string path;
-        if (!i18n_qore_value_to_utf8_string(value, path, xsink, key)) {
+        if (!i18n_qore_value_to_utf8_string(value, path, xsink, key, nullptr)) {
             return false;
         }
         i18n_push_catalog_search_path(paths, path);
@@ -1306,16 +1326,16 @@ static std::string i18n_string_arg_to_utf8(const QoreStringNode* str, ExceptionS
             arg_name, max_len);
         return std::string();
     }
-    return tmp->c_str();
+    // the string is kept whole; a caller with a string naming something checks it for NUL characters
+    return std::string(tmp->c_str(), tmp->size());
 }
 
 // Native catalog discovery entry point shared by I18n::discover_catalog_files() and
 // I18n::CatalogDiscoveryIndex::discover(); \a index is optional and only reuses directory reads.
 QoreListNode* i18n_discover_catalog_files_api(const QoreStringNode* domain, const QoreStringNode* locale,
         const QoreHashNode* opts, I18nCatalogDirIndex* index, ExceptionSink* xsink) {
-    // the domain and the locale are components of the catalog file paths
-    if (i18n_check_catalog_domain_nul(*domain, xsink) || q_check_no_nul(locale->c_str(), locale->size(), "locale",
-            "locales", "I18N-LOCALE-ERROR", xsink)) {
+    // the domain is a component of the catalog file paths; the locale is checked when it is converted
+    if (i18n_check_catalog_domain_nul(*domain, xsink)) {
         return nullptr;
     }
     std::string domain_str = i18n_string_arg_to_utf8(domain, xsink, "domain", 128);
@@ -1457,7 +1477,7 @@ static UPluralType i18n_get_plural_type(const QoreHashNode* opts, ExceptionSink*
     }
 
     std::string type;
-    if (!i18n_qore_value_to_utf8_string(value, type, xsink, "opts.type")) {
+    if (!i18n_qore_value_to_utf8_string(value, type, xsink, "opts.type", "I18N-PLURAL-TYPE-ERROR")) {
         return UPLURAL_TYPE_CARDINAL;
     }
 
@@ -1650,7 +1670,8 @@ static QoreStringNode* i18n_format_currency_value(QoreValue value, const QoreStr
     }
 
     std::string currency_code = i18n_string_arg_to_utf8(currency_arg, xsink, "currency", 16);
-    if (*xsink) {
+    if (*xsink || q_check_no_nul(currency_code.data(), currency_code.size(), "currency code", "currency codes",
+            "I18N-CURRENCY-ERROR", xsink)) {
         return nullptr;
     }
 
@@ -1783,7 +1804,7 @@ static bool i18n_get_datetime_style(const QoreHashNode* opts, const char* key, i
     }
 
     std::string style;
-    if (!i18n_qore_value_to_utf8_string(value, style, xsink, key)) {
+    if (!i18n_qore_value_to_utf8_string(value, style, xsink, key, "I18N-FORMAT-ERROR")) {
         return false;
     }
 
@@ -1816,7 +1837,7 @@ static bool i18n_get_optional_datetime_skeleton(const QoreHashNode* opts, std::s
     if (value.isNullOrNothing()) {
         return true;
     }
-    if (!i18n_qore_value_to_utf8_string(value, skeleton, xsink, "skeleton")) {
+    if (!i18n_qore_value_to_utf8_string(value, skeleton, xsink, "skeleton", "I18N-FORMAT-ERROR")) {
         return false;
     }
     if (skeleton.empty() || skeleton.size() > 128) {
@@ -1943,7 +1964,7 @@ static bool i18n_get_string_option(const QoreHashNode* opts, const char* key, st
     if (value.isNullOrNothing()) {
         return true;
     }
-    if (!i18n_qore_value_to_utf8_string(value, out, xsink, key)) {
+    if (!i18n_qore_value_to_utf8_string(value, out, xsink, key, i18n_option_error_name(context).c_str())) {
         if (*xsink) {
             return false;
         }
@@ -2140,7 +2161,7 @@ static bool i18n_string_predicate_value(QoreValue value, const std::string& op, 
         return false;
     }
 
-    return i18n_string_predicate_match(str->c_str(), op, needle, collator, xsink);
+    return i18n_string_predicate_match(std::string(str->c_str(), str->size()), op, needle, collator, xsink);
 }
 
 static bool i18n_string_predicate_impl(const QoreStringNode* value, const QoreStringNode* op_arg,
@@ -2151,7 +2172,8 @@ static bool i18n_string_predicate_impl(const QoreStringNode* value, const QoreSt
         return false;
     }
     std::string raw_op = i18n_string_arg_to_utf8(op_arg, xsink, "op", 64);
-    if (*xsink) {
+    if (*xsink || q_check_no_nul(raw_op.data(), raw_op.size(), "string predicate", "string predicates",
+            "I18N-STRING-PREDICATE-ERROR", xsink)) {
         return false;
     }
     std::string op;
@@ -2180,7 +2202,8 @@ static QoreBufferNode* i18n_string_predicate_mask_impl(QoreValue values, const Q
     }
 
     std::string raw_op = i18n_string_arg_to_utf8(op_arg, xsink, "op", 64);
-    if (*xsink) {
+    if (*xsink || q_check_no_nul(raw_op.data(), raw_op.size(), "string predicate", "string predicates",
+            "I18N-STRING-PREDICATE-ERROR", xsink)) {
         return nullptr;
     }
     std::string op;
@@ -2275,7 +2298,8 @@ static bool i18n_get_form_value(const QoreHashNode* forms, const char* key, std:
         return false;
     }
 
-    return i18n_qore_value_to_utf8_string(value, out, xsink, key);
+    // a form is text
+    return i18n_qore_value_to_utf8_string(value, out, xsink, key, nullptr);
 }
 
 static QoreStringNode* i18n_select_plural_form(QoreValue value, const QoreStringNode* locale_arg,
@@ -2305,7 +2329,7 @@ static QoreStringNode* i18n_select_plural_form(QoreValue value, const QoreString
         }
 
         std::string form_value;
-        if (!i18n_qore_value_to_utf8_string(hi.get(), form_value, xsink, key)) {
+        if (!i18n_qore_value_to_utf8_string(hi.get(), form_value, xsink, key, nullptr)) {
             return nullptr;
         }
 
@@ -2688,8 +2712,9 @@ static bool i18n_get_function_words_option(const QoreHashNode* opts, std::vector
     const QoreListNode* list = value.get<const QoreListNode>();
     for (size_t i = 0, e = list->size(); i < e; ++i) {
         std::string word;
+        // a word is text compared with the words of the string
         if (!i18n_qore_value_to_utf8_string(list->retrieveEntry(i), word, xsink,
-            "CASE option 'function_words' element")) {
+            "CASE option 'function_words' element", nullptr)) {
             return false;
         }
         icu::UnicodeString folded = i18n_utf8_to_unicode_string(word);
@@ -2806,7 +2831,7 @@ hash<auto> get_backend_info() [flags=CONSTANT] {
     @param locale BCP 47 locale tag
     @return a @ref Qore::I18n::LocaleDataInfo "LocaleDataInfo" hash describing the locale data used for \a locale
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
 
     @par Example:
     @code{.py}
@@ -2852,7 +2877,7 @@ hash<LocaleDataInfo> get_locale_data_info(string locale) [flags=RET_VALUE_ONLY] 
     @return @ref True if ICU has data for the language of \a locale (the root locale \c "und" always has data);
     @ref False if ICU would use the data of the default or root locale instead
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
 
     @par Example:
     @code{.py}
@@ -3046,7 +3071,7 @@ int get_catalog_file_parse_count() [flags=RET_VALUE_ONLY] {
 /** @param locale locale tag such as \c "en_US" or \c "iw"
     @return canonical BCP 47 locale tag
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
 
     @par Example:
     @code{.py}
@@ -3069,7 +3094,7 @@ string canonicalize_locale(string locale) [flags=RET_VALUE_ONLY] {
 /** @param locale locale tag
     @return canonical locale tag with likely language, script, and region subtags added
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid or ICU cannot maximize the locale
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character, or ICU cannot maximize the locale
 
     @par Example:
     @code{.py}
@@ -3094,7 +3119,7 @@ string add_likely_subtags(string locale) [flags=RET_VALUE_ONLY] {
 
     @param locale BCP 47 locale tag
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
 */
 nothing set_thread_locale(string locale) [dom=LOCALE_CONTROL] {
     std::string tag = i18n_qore_string_to_utf8(locale, xsink, "locale");
@@ -3125,7 +3150,7 @@ string get_thread_locale() [flags=RET_VALUE_ONLY] {
     @param locale BCP 47 locale tag
     @return hash containing the canonical catalog locale
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
 */
 hash<auto> make_locale_context(string locale) [flags=RET_VALUE_ONLY] {
     std::string tag = i18n_qore_string_to_utf8(locale, xsink, "locale");
@@ -3149,7 +3174,7 @@ hash<auto> capture_locale_context() [flags=RET_VALUE_ONLY] {
 //! Applies a previously captured or constructed locale context to the current thread.
 /** @param context hash returned by I18n::make_locale_context() or I18n::capture_locale_context()
 
-    @throw I18N-LOCALE-CONTEXT-ERROR if \a context is malformed
+    @throw I18N-LOCALE-CONTEXT-ERROR if \a context is malformed, or its locale contains a NUL character
     @throw I18N-LOCALE-ERROR if the context locale is invalid
 */
 nothing apply_locale_context(hash<auto> context) [dom=LOCALE_CONTROL] {
@@ -3177,7 +3202,7 @@ nothing clear_thread_locale() [dom=LOCALE_CONTROL] {
     @param locale locale tag
     @return fallback chain such as \c ("fr-CA", "fr", "root")
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
 */
 list<string> get_locale_fallback_chain(string locale) [flags=RET_VALUE_ONLY] {
     std::string tag = i18n_qore_string_to_utf8(locale, xsink, "locale");
@@ -3207,7 +3232,7 @@ list<string> get_locale_fallback_chain(string locale) [flags=RET_VALUE_ONLY] {
 /** @param header Accept-Language header value
     @return list of hashes sorted by preference; each hash has \c locale, \c q, \c index, and \c wildcard keys
 
-    @throw I18N-ACCEPT-LANGUAGE-ERROR if \a header is malformed
+    @throw I18N-ACCEPT-LANGUAGE-ERROR if \a header is malformed or contains a NUL character
     @throw I18N-LOCALE-ERROR if a language range is invalid
 */
 list<hash<auto>> parse_accept_language(string header) [flags=RET_VALUE_ONLY] {
@@ -3246,8 +3271,9 @@ list<hash<auto>> parse_accept_language(string header) [flags=RET_VALUE_ONLY] {
     @param available available catalog locales
     @return best matching locale, or \c "root" if no match is found
 
-    @throw I18N-ACCEPT-LANGUAGE-ERROR if \a header is malformed
-    @throw I18N-LOCALE-ERROR if a language range or available locale is invalid
+    @throw I18N-ACCEPT-LANGUAGE-ERROR if \a header is malformed or contains a NUL character
+    @throw I18N-LOCALE-ERROR if a language range or available locale is invalid, or an available locale contains a
+        NUL character
 */
 string negotiate_locale(string header, list<string> available) [flags=RET_VALUE_ONLY] {
     return i18n_negotiate_locale(header, available, nullptr, xsink);
@@ -3259,8 +3285,9 @@ string negotiate_locale(string header, list<string> available) [flags=RET_VALUE_
     @param default_locale default locale returned when no language range matches
     @return best matching locale, or \a default_locale if no match is found
 
-    @throw I18N-ACCEPT-LANGUAGE-ERROR if \a header is malformed
-    @throw I18N-LOCALE-ERROR if a language range, available locale, or default locale is invalid
+    @throw I18N-ACCEPT-LANGUAGE-ERROR if \a header is malformed or contains a NUL character
+    @throw I18N-LOCALE-ERROR if a language range, available locale, or default locale is invalid, or an available
+        or default locale contains a NUL character
 */
 string negotiate_locale(string header, list<string> available, string default_locale) [flags=RET_VALUE_ONLY] {
     return i18n_negotiate_locale(header, available, default_locale, xsink);
@@ -3303,7 +3330,7 @@ list<string> get_catalog_search_path(*hash<auto> opts) [flags=RET_VALUE_ONLY;dom
 
     @throw I18N-CATALOG-ERROR if \a domain or \a opts is invalid (including a NUL character in the domain or a path),
     or a catalog fragment directory cannot be read
-    @throw I18N-LOCALE-ERROR if \a locale is invalid (including a NUL character)
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
 
     @par Example
     @code{.qc}
@@ -3356,7 +3383,7 @@ list<string> discover_catalog_locales(string domain, *hash<auto> opts) [flags=RE
 
     @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
         fraction digits
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-FORMAT-ERROR if formatting options are invalid
     @throw I18N-ICU-ERROR if ICU cannot format the value
 
@@ -3377,7 +3404,7 @@ string format_number(auto value, string locale) [flags=RET_VALUE_ONLY] {
 
     @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
         fraction digits
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-FORMAT-ERROR if \a opts is invalid
     @throw I18N-ICU-ERROR if ICU cannot format the value
 */
@@ -3392,7 +3419,7 @@ string format_number(auto value, string locale, *hash<auto> opts) [flags=RET_VAL
 
     @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
         fraction digits
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-FORMAT-ERROR if formatting options are invalid
     @throw I18N-ICU-ERROR if ICU cannot format the value
 
@@ -3416,7 +3443,7 @@ string format_percent(auto value, string locale) [flags=RET_VALUE_ONLY] {
 
     @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
         fraction digits
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-FORMAT-ERROR if \a opts is invalid
     @throw I18N-ICU-ERROR if ICU cannot format the value
 
@@ -3441,7 +3468,7 @@ string format_percent(auto value, string locale, *hash<auto> opts) [flags=RET_VA
     @param locale BCP 47 locale tag, including supported Unicode numbering-system extensions
     @return parsed Qore integer or number value
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-PARSE-ERROR if \a text cannot be parsed completely as a number
     @throw I18N-ICU-ERROR if ICU cannot parse or convert the value
 
@@ -3460,7 +3487,7 @@ auto parse_number(string text, string locale) [flags=RET_VALUE_ONLY] {
     @param opts optional hash; supported key: \c integer_only
     @return parsed Qore integer or number value
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-PARSE-ERROR if \a text cannot be parsed completely as a number
     @throw I18N-ICU-ERROR if ICU cannot parse or convert the value
 */
@@ -3476,8 +3503,8 @@ auto parse_number(string text, string locale, *hash<auto> opts) [flags=RET_VALUE
 
     @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
         fraction digits
-    @throw I18N-CURRENCY-ERROR if \a currency is invalid
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-CURRENCY-ERROR if \a currency is invalid or contains a NUL character
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-FORMAT-ERROR if formatting options are invalid
     @throw I18N-ICU-ERROR if ICU cannot format the value
 */
@@ -3494,8 +3521,8 @@ string format_currency(auto value, string currency, string locale) [flags=RET_VA
 
     @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
         fraction digits
-    @throw I18N-CURRENCY-ERROR if \a currency is invalid
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-CURRENCY-ERROR if \a currency is invalid or contains a NUL character
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-FORMAT-ERROR if \a opts is invalid
     @throw I18N-ICU-ERROR if ICU cannot format the value
 */
@@ -3509,7 +3536,7 @@ string format_currency(auto value, string currency, string locale, *hash<auto> o
     @return locale-formatted date/time with medium date and short time styles
 
     @throw I18N-DATETIME-ERROR if \a dt is relative
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-FORMAT-ERROR if formatting options are invalid
     @throw I18N-ICU-ERROR if ICU cannot create a date/time formatter
 */
@@ -3525,8 +3552,8 @@ string format_datetime(date dt, string locale) [flags=RET_VALUE_ONLY] {
     @return locale-formatted date/time
 
     @throw I18N-DATETIME-ERROR if \a dt is relative
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
-    @throw I18N-FORMAT-ERROR if \a opts is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
+    @throw I18N-FORMAT-ERROR if \a opts is invalid, or a style or the skeleton contains a NUL character
     @throw I18N-ICU-ERROR if ICU cannot create a date/time formatter
 */
 string format_datetime(date dt, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
@@ -3540,7 +3567,7 @@ string format_datetime(date dt, string locale, *hash<auto> opts) [flags=RET_VALU
     @return \c -1 if \a left sorts before \a right, \c 1 if after, or \c 0 if equal under the collator
 
     @throw I18N-STRING-ERROR if either string cannot be converted to UTF-8
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-ICU-ERROR if ICU cannot create a collator
 */
 int compare_strings(string left, string right, string locale) [flags=RET_VALUE_ONLY] {
@@ -3570,8 +3597,9 @@ int compare_strings(string left, string right, string locale) [flags=RET_VALUE_O
     @return @ref True if \a value matches the predicate under the locale collator
 
     @throw I18N-STRING-ERROR if either string cannot be converted to UTF-8
-    @throw I18N-STRING-PREDICATE-ERROR if \a op or an option is invalid
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-PREDICATE-ERROR if \a op or an option is invalid, or \a op or the \c strength option
+        contains a NUL character
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-ICU-ERROR if ICU cannot create or apply the collator
 
     @par Example:
@@ -3596,8 +3624,9 @@ bool string_predicate(string value, string op, string needle, string locale) [fl
     @return @ref True if \a value matches the predicate under the locale collator
 
     @throw I18N-STRING-ERROR if either string cannot be converted to UTF-8
-    @throw I18N-STRING-PREDICATE-ERROR if \a op or an option is invalid
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-PREDICATE-ERROR if \a op or an option is invalid, or \a op or the \c strength option
+        contains a NUL character
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-ICU-ERROR if ICU cannot create or apply the collator
 
     @par Example:
@@ -3619,8 +3648,9 @@ bool string_predicate(string value, string op, string needle, string locale, *ha
     @param locale BCP 47 locale tag, including supported Unicode collation extensions
     @return a dense \c buffer<bool> mask
 
-    @throw I18N-STRING-PREDICATE-ERROR if \a values, \a op, or an option is invalid
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-PREDICATE-ERROR if \a values, \a op, or an option is invalid, or \a op or the \c strength
+        option contains a NUL character
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-ICU-ERROR if ICU cannot create or apply the collator
 
     @par Example:
@@ -3640,8 +3670,9 @@ auto string_predicate_mask(auto values, string op, string needle, string locale)
     @param opts optional hash with the same keys accepted by \ref string_predicate()
     @return a dense \c buffer<bool> mask
 
-    @throw I18N-STRING-PREDICATE-ERROR if \a values, \a op, or an option is invalid
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-PREDICATE-ERROR if \a values, \a op, or an option is invalid, or \a op or the \c strength
+        option contains a NUL character
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-ICU-ERROR if ICU cannot create or apply the collator
 
     @par Example:
@@ -3662,7 +3693,7 @@ auto string_predicate_mask(auto values, string op, string needle, string locale,
     @return binary ICU sort key
 
     @throw I18N-STRING-ERROR if \a value cannot be converted to UTF-8 or the sort key is too large
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-ICU-ERROR if ICU cannot create a collator
 
     @note Sort keys are not stable across ICU/CLDR versions, locales, or collation options. Persistent keys must be
@@ -3701,7 +3732,7 @@ binary get_sort_key(string value, string locale) [flags=RET_VALUE_ONLY] {
 /** @param locale BCP 47 locale tag
     @return collation version string
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-ICU-ERROR if ICU cannot create a collator
 */
 string get_collation_version(string locale) [flags=RET_VALUE_ONLY] {
@@ -3722,7 +3753,7 @@ string get_collation_version(string locale) [flags=RET_VALUE_ONLY] {
 
     @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
         fraction digits
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
 
     @note String values preserve visible fraction digits, so \c "1", \c "1.0", and \c "1.00" can select different
@@ -3750,8 +3781,8 @@ string plural_category(auto value, string locale) [flags=RET_VALUE_ONLY] {
 
     @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string or a decimal string with more than 100
         fraction digits
-    @throw I18N-PLURAL-TYPE-ERROR if \c opts.type is unsupported
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-PLURAL-TYPE-ERROR if \c opts.type is unsupported or contains a NUL character
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
 
     @par Example:
@@ -3777,7 +3808,7 @@ string plural_category(auto value, string locale, *hash<auto> opts) [flags=RET_V
     @throw I18N-FORMS-ERROR if \a forms is invalid or does not include an \c "other" fallback
     @throw I18N-NUMBER-ERROR if \a value or an exact-value key is malformed, or is a decimal string with more
         than 100 fraction digits
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
 
     @note This function only selects among forms supplied by the caller. A locale string alone cannot localize an
@@ -3803,8 +3834,8 @@ string plural_form(auto value, string locale, hash<auto> forms) [flags=RET_VALUE
     @throw I18N-FORMS-ERROR if \a forms is invalid or does not include an \c "other" fallback
     @throw I18N-NUMBER-ERROR if \a value or an exact-value key is malformed, or is a decimal string with more
         than 100 fraction digits
-    @throw I18N-PLURAL-TYPE-ERROR if \c opts.type is unsupported
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-PLURAL-TYPE-ERROR if \c opts.type is unsupported or contains a NUL character
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
 
     @note Exact-value keys take precedence over CLDR categories.
@@ -3824,7 +3855,7 @@ string plural_form(auto value, string locale, hash<auto> forms, *hash<auto> opts
     @param locale locale tag whose case mappings are used (ex: \c "tr" for Turkish)
     @return the string in upper case
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
 
     @note Full case mappings are used, so the result can be longer than the input
@@ -3849,7 +3880,7 @@ string to_upper(string str, string locale) [flags=RET_VALUE_ONLY] {
 
     @return the string in upper case
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
     @throw I18N-CASE-ERROR if an option has an invalid type
 
@@ -3868,7 +3899,7 @@ string to_upper(string str, string locale, *hash<auto> opts) [flags=RET_VALUE_ON
     @param locale locale tag whose case mappings are used
     @return the string in lower case
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
 
     @note The Greek final sigma is produced where it belongs, so this is preferred over a manual
@@ -3892,7 +3923,7 @@ string to_lower(string str, string locale) [flags=RET_VALUE_ONLY] {
 
     @return the string in lower case
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
     @throw I18N-CASE-ERROR if an option has an invalid type
 
@@ -3913,7 +3944,7 @@ string to_lower(string str, string locale, *hash<auto> opts) [flags=RET_VALUE_ON
     @param locale locale tag whose case mappings are used
     @return the string with its initial letter capitalized
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
 
     @note The initial <i>letter</i> is capitalized rather than the initial character, so a string beginning
@@ -3942,7 +3973,7 @@ string capitalize(string str, string locale) [flags=RET_VALUE_ONLY] {
 
     @return the string with its initial letter capitalized
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
     @throw I18N-CASE-ERROR if an option has an invalid type
 
@@ -3961,7 +3992,7 @@ string capitalize(string str, string locale, *hash<auto> opts) [flags=RET_VALUE_
     @param locale locale tag whose case mappings are used
     @return the string with the first letter of every word capitalized and the rest in lower case
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
 
     @note This is the Unicode titlecase operation, <b>not</b> the typographic title case of any language: it
@@ -3991,7 +4022,7 @@ string to_title(string str, string locale) [flags=RET_VALUE_ONLY] {
 
     @return the titlecased string
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
     @throw I18N-CASE-ERROR if an option has an invalid type
 
@@ -4049,7 +4080,7 @@ string fold_case(string str, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
     @param locale locale tag whose convention is applied
     @return the phrase capitalized according to the locale's convention
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
 
     @note Initial letters are capitalized and the remainder of each word is left as written, so acronyms
@@ -4087,9 +4118,10 @@ string to_display_case(string str, string locale) [flags=RET_VALUE_ONLY] {
 
     @return the phrase capitalized according to the requested convention
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
     @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
-    @throw I18N-CASE-ERROR if an option has an invalid type or \c style has an unknown value
+    @throw I18N-CASE-ERROR if an option has an invalid type, or \c style has an unknown value or contains a NUL
+        character
 
     @par Example:
     @code{.py}
@@ -4104,7 +4136,7 @@ string to_display_case(string str, string locale, *hash<auto> opts) [flags=RET_V
 /** @param locale locale tag
     @return one of \c "title", \c "sentence", or \c "preserve"
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
 
     @note A locale with no entry uses \c "sentence", which is the majority convention.  The root locale uses
     \c "title" for compatibility: @ref Qore::I18n::get_thread_locale() "get_thread_locale()" returns
@@ -4134,7 +4166,7 @@ string get_capitalization_style(string locale) [flags=RET_VALUE_ONLY] {
     @return the function words for the locale, in lower case; empty for every locale whose style is not
     \c "title", because no other convention lower-cases them
 
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
 
     @note These words are Qore data rather than CLDR data; see
     @ref Qore::I18n::to_display_case() "to_display_case()"

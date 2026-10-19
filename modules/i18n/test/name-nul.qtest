@@ -1,0 +1,194 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Locales, headers, currency codes, predicate operators, option values, message ids and message states with a NUL
+# character are refused instead of being cut at the NUL character; text is processed whole.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires i18n
+
+%exec-class I18nNameNulTest
+
+class I18nNameNulTest inherits QUnit::Test {
+    constructor() : QUnit::Test("i18n name NUL characters", "1.0", \ARGV) {
+        addTestCase("locales", \testLocales());
+        addTestCase("names and option values", \testNames());
+        addTestCase("text", \testText());
+        addTestCase("message catalog names", \testCatalogNames());
+        addTestCase("message catalog text", \testCatalogText());
+        set_return_value(main());
+    }
+
+    #! asserts that the code raises the given error for a string with a NUL character at the given byte offset
+    /** @param what what the string is in the description, ex: \c "locale"
+        @param what_plural the plural of \a what, ex: \c "locales"
+    */
+    assertNul(string err, string what, string what_plural, int offset, code c, string label) {
+        try {
+            c();
+            assertTrue(False, label + ": an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(err, ex.err, label + ": error code");
+            assertEq(0, ex.desc.find(what + " \""), label + ": the description names the " + what);
+            assertTrue(ex.desc.find(sprintf("\" contains a NUL character at byte offset %d; ", offset)) > 0,
+                label + ": the description gives the offset of the NUL character");
+            string why = what_plural + " cannot contain NUL characters";
+            assertEq(why, ex.desc.substr(ex.desc.size() - why.size()), label + ": the description says why");
+            assertEq(EINVAL, ex.arg, label + ": the argument is EINVAL");
+        }
+    }
+
+    testLocales() {
+        # cut at the NUL character, each locale would be valid
+        assertNul("I18N-LOCALE-ERROR", "locale", "locales", 5,
+            auto sub () { return I18n::canonicalize_locale("de-DE\x00x"); }, "canonicalize_locale()");
+        assertNul("I18N-LOCALE-ERROR", "locale", "locales", 2, auto sub () { return I18n::format_number(1, "de\x00x"); },
+            "format_number()");
+        assertNul("I18N-LOCALE-ERROR", "locale", "locales", 2,
+            auto sub () { return I18n::compare_strings("a", "b", "en\x00x"); }, "compare_strings()");
+        list<string> available = ("de\x00x",);
+        assertNul("I18N-LOCALE-ERROR", "locale", "locales", 2,
+            auto sub () { return I18n::negotiate_locale("de", available); }, "negotiate_locale() available locale");
+        assertNul("I18N-LOCALE-ERROR", "locale", "locales", 2,
+            auto sub () { return I18n::negotiate_locale("fr", ("de",), "de\x00x"); }, "negotiate_locale() default locale");
+        assertNul("I18N-ACCEPT-LANGUAGE-ERROR", "Accept-Language header", "Accept-Language headers", 2,
+            auto sub () { return I18n::parse_accept_language("de\x00, en"); }, "parse_accept_language()");
+        assertNul("I18N-ACCEPT-LANGUAGE-ERROR", "Accept-Language header", "Accept-Language headers", 2,
+            auto sub () { return I18n::negotiate_locale("de\x00, en", ("de", "en")); }, "negotiate_locale() header");
+        {
+            on_exit I18n::clear_thread_locale();
+            assertNul("I18N-LOCALE-CONTEXT-ERROR", "locale", "locales", 2,
+                sub () { I18n::apply_locale_context({"locale": "de\x00x"}); }, "apply_locale_context()");
+        }
+
+        # the locales without the NUL character are valid
+        assertEq("de-DE", I18n::canonicalize_locale("de-DE"));
+        assertEq("de", I18n::negotiate_locale("de", ("de",)));
+    }
+
+    testNames() {
+        assertNul("I18N-CURRENCY-ERROR", "currency code", "currency codes", 3,
+            auto sub () { return I18n::format_currency(1, "USD\x00x", "en-US"); }, "format_currency()");
+        assertNul("I18N-STRING-PREDICATE-ERROR", "string predicate", "string predicates", 8,
+            auto sub () { return I18n::string_predicate("abc", "contains\x00x", "b", "en"); }, "string_predicate() op");
+        assertNul("I18N-STRING-PREDICATE-ERROR", "string predicate", "string predicates", 8,
+            auto sub () { return I18n::string_predicate_mask(("abc",), "contains\x00x", "b", "en"); },
+            "string_predicate_mask() op");
+        assertNul("I18N-STRING-PREDICATE-ERROR", "strength", "option values", 7,
+            auto sub () { return I18n::string_predicate("abc", "contains", "b", "en", {"strength": "primary\x00x"}); },
+            "string_predicate() strength");
+        assertNul("I18N-PLURAL-TYPE-ERROR", "opts.type", "option values", 7,
+            auto sub () { return I18n::plural_category(1, "en", {"type": "ordinal\x00x"}); }, "plural_category() type");
+        assertNul("I18N-FORMAT-ERROR", "date_style", "option values", 5,
+            auto sub () { return I18n::format_datetime(2026-01-01T10:00:00Z, "en", {"date_style": "short\x00x"}); },
+            "format_datetime() date_style");
+        assertNul("I18N-FORMAT-ERROR", "skeleton", "option values", 3,
+            auto sub () { return I18n::format_datetime(2026-01-01T10:00:00Z, "en", {"skeleton": "yMd\x00x"}); },
+            "format_datetime() skeleton");
+        assertNul("I18N-CASE-ERROR", "style", "option values", 5,
+            auto sub () { return I18n::to_display_case("x", "en", {"style": "title\x00x"}); }, "to_display_case() style");
+
+        # the names without the NUL character are valid
+        assertEq("$1.00", I18n::format_currency(1, "USD", "en-US"));
+        assertTrue(I18n::string_predicate("abc", "contains", "b", "en", {"strength": "primary"}));
+        assertEq("one", I18n::plural_category(1, "en", {"type": "ordinal"}));
+    }
+
+    testText() {
+        assertEq("A\x00B", I18n::to_upper("a\x00b", "en"), "to_upper()");
+        assertEq("a\x00b", I18n::fold_case("A\x00B"), "fold_case()");
+        assertEq(-1, I18n::compare_strings("a\x00b", "a\x00c", "en"), "compare_strings()");
+        assertTrue(I18n::get_sort_key("a\x00b", "en") != I18n::get_sort_key("a", "en"), "get_sort_key()");
+        assertTrue(I18n::string_predicate("x\x00abc", "contains", "abc", "en"), "string_predicate() value");
+        assertTrue(I18n::string_predicate("abc", "contains", "x\x00abc", "en") == False,
+            "string_predicate() needle");
+        assertEq((True, False), I18n::string_predicate_mask(("x\x00abc", "x"), "contains", "abc", "en").toList(),
+            "string_predicate_mask() values");
+        assertEq("a\x00b", I18n::plural_form(1, "en", {"one": "a\x00b", "other": "c"}), "plural_form()");
+        # a word of the option is compared whole with the words of the string
+        assertEq("Alpha Zz Beta", I18n::to_display_case("alpha zz beta", "en", {"function_words": ("zz\x00x",)}),
+            "to_display_case() function_words");
+
+        # a number with a NUL character is malformed
+        assertThrows("I18N-PARSE-ERROR", \I18n::parse_number(), ("12\x00x", "en"));
+        assertThrows("I18N-NUMBER-ERROR", \I18n::plural_category(), ("1\x00x", "en"));
+        assertThrows("I18N-NUMBER-ERROR", \I18n::format_number(), ("1\x00x", "en"));
+    }
+
+    #! returns a catalog with a Czech translation
+    static hash<auto> getCatalog() {
+        return {
+            "schema_version": 1,
+            "locales": {
+                "root": {
+                    "messages": {
+                        "Hello, {name}": "Hello, {name}",
+                        "workflow.greeting": {"source": "Hello, {name}", "message": "Hello, {name}"},
+                        "1 file": {"plural_source": "{count} files", "forms": {"one": "1 file",
+                            "other": "{count} files"}},
+                    },
+                },
+                "cs": {
+                    "messages": {
+                        "Hello, {name}": "Ahoj, {name}",
+                        "workflow.greeting": {"source": "Hello, {name}", "message": "Nazdar, {name}"},
+                        "Bye": "Na\x00shledanou",
+                    },
+                },
+            },
+        };
+    }
+
+    testCatalogNames() {
+        I18n::MessageCatalog catalog(I18nNameNulTest::getCatalog());
+        hash<auto> args = {"name": "Petr"};
+
+        # cut at the NUL character, each id would name workflow.greeting
+        assertNul("I18N-CATALOG-ERROR", "message id", "message ids", 17,
+            sub () { catalog.tc("workflow.greeting\x00x", "Hello, {name}", "cs", args); }, "tc()");
+        assertNul("I18N-CATALOG-ERROR", "message id", "message ids", 17,
+            sub () { catalog.getMessageLocale("workflow.greeting\x00x", "cs"); }, "getMessageLocale()");
+        assertNul("I18N-CATALOG-ERROR", "message id", "message ids", 17,
+            sub () { catalog.getMessageSource("workflow.greeting\x00x", "cs"); }, "getMessageSource()");
+
+        # cut at the NUL character, each locale would name cs
+        assertNul("I18N-CATALOG-ERROR", "locale", "locales", 2,
+            sub () { catalog.t("Hello, {name}", "cs\x00x", args); }, "t()");
+        assertNul("I18N-CATALOG-ERROR", "locale", "locales", 2,
+            sub () { catalog.tn(1, "1 file", "{count} files", "cs\x00x"); }, "tn()");
+        assertNul("I18N-CATALOG-ERROR", "locale", "locales", 2,
+            sub () { catalog.getFallbackChain("cs\x00x"); }, "getFallbackChain()");
+        assertNul("I18N-CATALOG-ERROR", "locale", "locales", 2,
+            sub () { catalog.getEffectiveLocale("cs\x00x"); }, "getEffectiveLocale()");
+        assertNul("I18N-CATALOG-ERROR", "locale", "locales", 2,
+            sub () { catalog.getStats("cs\x00x"); }, "getStats()");
+
+        # cut at the NUL character, the state would be valid
+        hash<auto> def = I18nNameNulTest::getCatalog();
+        def.locales.cs.messages.Bye = {"message": "Na shledanou", "state": "translated\x00x"};
+        assertNul("I18N-CATALOG-ERROR", "message state", "message states", 10,
+            sub () { I18n::MessageCatalog c(def); }, "message state");
+
+        # the names without the NUL character are found
+        assertEq("Nazdar, Petr", catalog.tc("workflow.greeting", "Hello, {name}", "cs", args));
+        assertEq("cs", catalog.getMessageLocale("workflow.greeting", "cs"));
+    }
+
+    testCatalogText() {
+        I18n::MessageCatalog catalog(I18nNameNulTest::getCatalog());
+
+        # a source string with a NUL character matches no message and is returned whole
+        assertEq("Hello, Petr\x00x", catalog.t("Hello, {name}\x00x", "cs", {"name": "Petr"}), "t() source");
+        assertEq("2 files\x00x", catalog.tn(2, "1 file\x00x", "{count} files\x00x", "cs"), "tn() source");
+        # placeholder values and messages are text
+        assertEq("Ahoj, Pe\x00tr", catalog.t("Hello, {name}", "cs", {"name": "Pe\x00tr"}), "placeholder value");
+        assertEq("Na\x00shledanou", catalog.t("Bye", "cs"), "message");
+        # a plural selector with a NUL character is malformed
+        assertThrows("I18N-NUMBER-ERROR", sub () { catalog.tn("1\x00x", "1 file", "{count} files", "cs"); });
+    }
+}

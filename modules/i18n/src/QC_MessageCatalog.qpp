@@ -87,12 +87,37 @@ static bool i18n_catalog_is_allowed_state(const std::string& state) {
     return state == "translated" || state == "fuzzy" || state == "needs-review" || state == "stale";
 }
 
-static bool i18n_catalog_check_locale_length(const std::string& locale, ExceptionSink* xsink, const char* field) {
+// checks a message state; one with a NUL character is refused, as cut at the NUL character, it would name another
+// state
+static bool i18n_catalog_check_state(const std::string& id, const std::string& state, ExceptionSink* xsink) {
+    if (q_check_no_nul(state.data(), state.size(), "message state", "message states", "I18N-CATALOG-ERROR",
+            xsink)) {
+        return false;
+    }
+    if (!i18n_catalog_is_allowed_state(state)) {
+        xsink->raiseException("I18N-CATALOG-ERROR", "message '%s' has unsupported state '%s'", id.c_str(),
+            state.c_str());
+        return false;
+    }
+    return true;
+}
+
+// checks a locale; one with a NUL character is refused, as cut at the NUL character, it would name another locale
+static bool i18n_catalog_check_locale(const std::string& locale, ExceptionSink* xsink, const char* field) {
+    if (q_check_no_nul(locale.data(), locale.size(), field, "locales", "I18N-CATALOG-ERROR", xsink)) {
+        return false;
+    }
     if (locale.size() > 255) {
         xsink->raiseException("I18N-CATALOG-ERROR", "%s is too long; maximum supported length is 255 bytes", field);
         return false;
     }
     return true;
+}
+
+// checks a symbolic message id; one with a NUL character is refused, as cut at the NUL character, it would name
+// another message
+static bool i18n_catalog_check_message_id(const std::string& id, ExceptionSink* xsink) {
+    return !q_check_no_nul(id.data(), id.size(), "message id", "message ids", "I18N-CATALOG-ERROR", xsink);
 }
 
 static bool i18n_catalog_trim_ascii(const std::string& s, std::string& out, ExceptionSink* xsink) {
@@ -231,7 +256,8 @@ static bool i18n_catalog_value_to_decimal_info(QoreValue value, I18nCatalogDecim
             if (*xsink) {
                 return false;
             }
-            return i18n_catalog_parse_decimal_string(str->c_str(), info, xsink, "value");
+            // the string is kept whole, so a NUL character makes it an invalid number
+            return i18n_catalog_parse_decimal_string(std::string(str->c_str(), str->size()), info, xsink, "value");
         }
     }
 
@@ -268,7 +294,7 @@ static bool i18n_catalog_is_rtl_locale(const std::string& raw) {
         || language == "ug" || language == "ur" || language == "yi";
 }
 
-static void i18n_catalog_append_placeholder_value(std::string& out, const char* value, bool bidi_isolate) {
+static void i18n_catalog_append_placeholder_value(std::string& out, const std::string& value, bool bidi_isolate) {
     if (bidi_isolate) {
         out += I18N_BIDI_FSI;
     }
@@ -291,7 +317,8 @@ static bool i18n_catalog_qore_value_to_utf8(QoreValue value, std::string& out, E
         return false;
     }
 
-    out = str->c_str();
+    // a message, a form, or a source is text, kept whole; a caller with a string naming something checks it
+    out.assign(str->c_str(), str->size());
     return true;
 }
 
@@ -305,7 +332,8 @@ static std::string i18n_catalog_qore_string_to_utf8(const QoreStringNode* str, E
         xsink->raiseException("I18N-CATALOG-ERROR", "%s could not be converted to UTF-8", field);
         return std::string();
     }
-    return tmp->c_str();
+    // kept whole; a caller with a string naming something checks it
+    return std::string(tmp->c_str(), tmp->size());
 }
 
 static bool i18n_catalog_collect_placeholders(const std::string& text, std::set<std::string>& placeholders,
@@ -545,7 +573,7 @@ public:
             }
 
             std::string locale_name = li.getKey();
-            if (!i18n_catalog_check_locale_length(locale_name, xsink, "catalog locale")) {
+            if (!i18n_catalog_check_locale(locale_name, xsink, "catalog locale")) {
                 return;
             }
             loadLocale(i18n_catalog_normalize_locale(locale_name), locale_value.get<const QoreHashNode>(), layer,
@@ -568,10 +596,12 @@ public:
         loadCatalog(*catalog, xsink, name->c_str());
     }
 
-    DLLLOCAL QoreStringNode* translate(const QoreStringNode* id_arg, const QoreStringNode* source_arg,
+    // a symbolic id names a message; a source string used as the id is text, and with a NUL character, it matches no
+    // message, so the source string is returned
+    DLLLOCAL QoreStringNode* translate(const QoreStringNode* id_arg, bool symbolic_id, const QoreStringNode* source_arg,
             const QoreStringNode* locale_arg, const QoreHashNode* args, ExceptionSink* xsink) const {
         std::string id = i18n_catalog_qore_string_to_utf8(id_arg, xsink, "id");
-        if (*xsink) {
+        if (*xsink || (symbolic_id && !i18n_catalog_check_message_id(id, xsink))) {
             return nullptr;
         }
         std::string source = i18n_catalog_qore_string_to_utf8(source_arg, xsink, "source");
@@ -582,7 +612,7 @@ public:
         if (*xsink) {
             return nullptr;
         }
-        if (!i18n_catalog_check_locale_length(locale, xsink, "locale")) {
+        if (!i18n_catalog_check_locale(locale, xsink, "locale")) {
             return nullptr;
         }
 
@@ -622,7 +652,7 @@ public:
         if (*xsink) {
             return nullptr;
         }
-        if (!i18n_catalog_check_locale_length(locale, xsink, "locale")) {
+        if (!i18n_catalog_check_locale(locale, xsink, "locale")) {
             return nullptr;
         }
 
@@ -657,7 +687,7 @@ public:
         if (*xsink) {
             return nullptr;
         }
-        if (!i18n_catalog_check_locale_length(locale, xsink, "locale")) {
+        if (!i18n_catalog_check_locale(locale, xsink, "locale")) {
             return nullptr;
         }
 
@@ -680,7 +710,7 @@ public:
         if (*xsink) {
             return nullptr;
         }
-        if (!i18n_catalog_check_locale_length(locale, xsink, "locale")) {
+        if (!i18n_catalog_check_locale(locale, xsink, "locale")) {
             return nullptr;
         }
 
@@ -698,14 +728,14 @@ public:
     DLLLOCAL QoreStringNode* getMessageLocale(const QoreStringNode* id_arg, const QoreStringNode* locale_arg,
             ExceptionSink* xsink) const {
         std::string id = i18n_catalog_qore_string_to_utf8(id_arg, xsink, "id");
-        if (*xsink) {
+        if (*xsink || !i18n_catalog_check_message_id(id, xsink)) {
             return nullptr;
         }
         std::string locale = i18n_catalog_qore_string_to_utf8(locale_arg, xsink, "locale");
         if (*xsink) {
             return nullptr;
         }
-        if (!i18n_catalog_check_locale_length(locale, xsink, "locale")) {
+        if (!i18n_catalog_check_locale(locale, xsink, "locale")) {
             return nullptr;
         }
 
@@ -729,14 +759,14 @@ public:
     DLLLOCAL QoreStringNode* getMessageSource(const QoreStringNode* id_arg, const QoreStringNode* locale_arg,
             ExceptionSink* xsink) const {
         std::string id = i18n_catalog_qore_string_to_utf8(id_arg, xsink, "id");
-        if (*xsink) {
+        if (*xsink || !i18n_catalog_check_message_id(id, xsink)) {
             return nullptr;
         }
         std::string locale = i18n_catalog_qore_string_to_utf8(locale_arg, xsink, "locale");
         if (*xsink) {
             return nullptr;
         }
-        if (!i18n_catalog_check_locale_length(locale, xsink, "locale")) {
+        if (!i18n_catalog_check_locale(locale, xsink, "locale")) {
             return nullptr;
         }
 
@@ -788,7 +818,7 @@ public:
         if (*xsink) {
             return nullptr;
         }
-        if (!i18n_catalog_check_locale_length(locale, xsink, "locale")) {
+        if (!i18n_catalog_check_locale(locale, xsink, "locale")) {
             return nullptr;
         }
         locale = i18n_catalog_normalize_locale(locale);
@@ -958,12 +988,8 @@ private:
                     return false;
                 }
 
-                if (!i18n_catalog_get_optional_string(h, "state", msg.state, xsink)) {
-                    return false;
-                }
-                if (!i18n_catalog_is_allowed_state(msg.state)) {
-                    xsink->raiseException("I18N-CATALOG-ERROR",
-                        "message '%s' has unsupported state '%s'", id.c_str(), msg.state.c_str());
+                if (!i18n_catalog_get_optional_string(h, "state", msg.state, xsink)
+                        || !i18n_catalog_check_state(id, msg.state, xsink)) {
                     return false;
                 }
                 return validatePluralPlaceholders(id, msg, xsink);
@@ -979,12 +1005,8 @@ private:
                 return false;
             }
 
-            if (!i18n_catalog_get_optional_string(h, "state", msg.state, xsink)) {
-                return false;
-            }
-            if (!i18n_catalog_is_allowed_state(msg.state)) {
-                xsink->raiseException("I18N-CATALOG-ERROR",
-                    "message '%s' has unsupported state '%s'", id.c_str(), msg.state.c_str());
+            if (!i18n_catalog_get_optional_string(h, "state", msg.state, xsink)
+                    || !i18n_catalog_check_state(id, msg.state, xsink)) {
                 return false;
             }
         } else {
@@ -1163,7 +1185,7 @@ private:
 
             std::string name = text.substr(i + 1, end - i - 1);
             if (count && name == "count") {
-                i18n_catalog_append_placeholder_value(out, count->formatted.c_str(), bidi_isolate);
+                i18n_catalog_append_placeholder_value(out, count->formatted, bidi_isolate);
                 i = end;
                 continue;
             }
@@ -1185,7 +1207,8 @@ private:
             if (*xsink) {
                 return nullptr;
             }
-            i18n_catalog_append_placeholder_value(out, str->c_str(), bidi_isolate);
+            // an argument is text
+            i18n_catalog_append_placeholder_value(out, std::string(str->c_str(), str->size()), bidi_isolate);
             i = end;
         }
 
@@ -1502,9 +1525,10 @@ MessageCatalog::copy() {
     @return translated string, or the source string if no translated runtime-usable entry is found
 
     @throw I18N-FORMAT-ERROR if the selected message requires missing placeholder arguments
+    @throw I18N-CATALOG-ERROR if \a locale contains a NUL character or exceeds the catalog bound
 */
 string MessageCatalog::t(string source, string locale) [flags=RET_VALUE_ONLY] {
-    return catalog->translate(source, source, locale, nullptr, xsink);
+    return catalog->translate(source, false, source, locale, nullptr, xsink);
 }
 
 //! Translates and formats a source-string key for an explicit locale.
@@ -1514,9 +1538,10 @@ string MessageCatalog::t(string source, string locale) [flags=RET_VALUE_ONLY] {
     @return translated and formatted string, or the formatted source string if no runtime-usable entry is found
 
     @throw I18N-FORMAT-ERROR if a required placeholder argument is missing
+    @throw I18N-CATALOG-ERROR if \a locale contains a NUL character or exceeds the catalog bound
 */
 string MessageCatalog::t(string source, string locale, *hash<auto> vars) [flags=RET_VALUE_ONLY] {
-    return catalog->translate(source, source, locale, vars, xsink);
+    return catalog->translate(source, false, source, locale, vars, xsink);
 }
 
 //! Translates and formats a source-string plural message for an explicit locale.
@@ -1526,7 +1551,8 @@ string MessageCatalog::t(string source, string locale, *hash<auto> vars) [flags=
     @param locale requested locale
     @return translated plural form, or the selected source fallback if no runtime-usable entry is found
 
-    @throw I18N-CATALOG-ERROR if the selected catalog entry is not plural-capable
+    @throw I18N-CATALOG-ERROR if the selected catalog entry is not plural-capable, or \a locale contains a NUL
+    character or exceeds the catalog bound
     @throw I18N-FORMAT-ERROR if a required placeholder argument is missing
     @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
     @throw I18N-LOCALE-ERROR if \a locale is invalid
@@ -1544,7 +1570,8 @@ string MessageCatalog::tn(auto value, string singular, string plural, string loc
     @param vars placeholder values; \c count is supplied by \a value when used in the selected form
     @return translated plural form, or the selected source fallback if no runtime-usable entry is found
 
-    @throw I18N-CATALOG-ERROR if the selected catalog entry is not plural-capable
+    @throw I18N-CATALOG-ERROR if the selected catalog entry is not plural-capable, or \a locale contains a NUL
+    character or exceeds the catalog bound
     @throw I18N-FORMAT-ERROR if a required placeholder argument is missing
     @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
     @throw I18N-LOCALE-ERROR if \a locale is invalid
@@ -1562,9 +1589,11 @@ string MessageCatalog::tn(auto value, string singular, string plural, string loc
     @return translated string, or \a source if no runtime-usable entry is found
 
     @throw I18N-FORMAT-ERROR if the selected message requires missing placeholder arguments
+    @throw I18N-CATALOG-ERROR if \a id or \a locale contains a NUL character, or \a locale exceeds the catalog
+    bound
 */
 string MessageCatalog::tc(string id, string source, string locale) [flags=RET_VALUE_ONLY] {
-    return catalog->translate(id, source, locale, nullptr, xsink);
+    return catalog->translate(id, true, source, locale, nullptr, xsink);
 }
 
 //! Translates and formats a symbolic-id message for an explicit locale.
@@ -1575,9 +1604,11 @@ string MessageCatalog::tc(string id, string source, string locale) [flags=RET_VA
     @return translated and formatted string, or formatted \a source if no runtime-usable entry is found
 
     @throw I18N-FORMAT-ERROR if a required placeholder argument is missing
+    @throw I18N-CATALOG-ERROR if \a id or \a locale contains a NUL character, or \a locale exceeds the catalog
+    bound
 */
 string MessageCatalog::tc(string id, string source, string locale, *hash<auto> vars) [flags=RET_VALUE_ONLY] {
-    return catalog->translate(id, source, locale, vars, xsink);
+    return catalog->translate(id, true, source, locale, vars, xsink);
 }
 
 //! Returns the locale fallback chain for a requested locale.
@@ -1585,6 +1616,8 @@ string MessageCatalog::tc(string id, string source, string locale, *hash<auto> v
 
     @param locale requested locale
     @return list such as \c ("fr-CA", "fr", "root")
+
+    @throw I18N-CATALOG-ERROR if \a locale contains a NUL character or exceeds the catalog bound
 */
 list<string> MessageCatalog::getFallbackChain(string locale) [flags=RET_VALUE_ONLY] {
     return catalog->getFallbackChain(locale, xsink);
@@ -1593,6 +1626,8 @@ list<string> MessageCatalog::getFallbackChain(string locale) [flags=RET_VALUE_ON
 //! Returns the first catalog locale available in the fallback chain.
 /** @param locale requested locale
     @return effective catalog locale, or \c "root" if no specific catalog is available
+
+    @throw I18N-CATALOG-ERROR if \a locale contains a NUL character or exceeds the catalog bound
 */
 string MessageCatalog::getEffectiveLocale(string locale) [flags=RET_VALUE_ONLY] {
     return catalog->getEffectiveLocale(locale, xsink);
@@ -1608,7 +1643,8 @@ string MessageCatalog::getEffectiveLocale(string locale) [flags=RET_VALUE_ONLY] 
     @return the selected message locale, including \c root for a source fallback, or @ref nothing when the message is
         absent from the full fallback chain
 
-    @throw I18N-CATALOG-ERROR if an argument cannot be converted to UTF-8 or the locale exceeds the catalog bound
+    @throw I18N-CATALOG-ERROR if an argument cannot be converted to UTF-8, \a id or \a locale contains a NUL
+    character, or the locale exceeds the catalog bound
     @throw I18N-LOCALE-ERROR if \a locale is invalid
 */
 *string MessageCatalog::getMessageLocale(string id, string locale) [flags=RET_VALUE_ONLY] {
@@ -1625,7 +1661,8 @@ string MessageCatalog::getEffectiveLocale(string locale) [flags=RET_VALUE_ONLY] 
     @return the selected message's recorded source text, or @ref nothing when the message is absent from the full
         fallback chain
 
-    @throw I18N-CATALOG-ERROR if an argument cannot be converted to UTF-8 or the locale exceeds the catalog bound
+    @throw I18N-CATALOG-ERROR if an argument cannot be converted to UTF-8, \a id or \a locale contains a NUL
+    character, or the locale exceeds the catalog bound
     @throw I18N-LOCALE-ERROR if \a locale is invalid
 */
 *string MessageCatalog::getMessageSource(string id, string locale) [flags=RET_VALUE_ONLY] {
@@ -1642,6 +1679,8 @@ list<string> MessageCatalog::availableLocales() [flags=RET_VALUE_ONLY] {
 //! Returns message-state statistics for one locale.
 /** @param locale locale to inspect after catalog-locale normalization
     @return hash with \c total, \c translated, \c fuzzy, \c needs_review, \c stale, and \c usable counts
+
+    @throw I18N-CATALOG-ERROR if \a locale contains a NUL character or exceeds the catalog bound
 */
 hash<auto> MessageCatalog::getStats(string locale) [flags=RET_VALUE_ONLY] {
     return catalog->getStats(locale, xsink);
