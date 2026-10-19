@@ -75,6 +75,7 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("getFieldPathDisplayName - a path as it is written", \fieldPathDisplayNameTest());
         addTestCase("select-fields - output names of field paths", \selectFieldsOutputNamesTest());
         addTestCase("group-by - output names of field paths", \groupByOutputNamesTest());
+        addTestCase("field options - wildcards are refused", \fieldOptionWildcardTest());
 
         # Processor backward compatibility tests
         addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
@@ -561,6 +562,49 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
             "give the output field \"sum_Unit.Price\"", sub () {
                 new QoreGroupByProcessor({"aggregates": "sum(Unit\\.Price),sum(Unit.Price)"});
             });
+    }
+
+    #! A field option names one field by its path; a DPQL wildcard in it is refused when the processor is created
+    fieldOptionWildcardTest() {
+        foreach string wildcard in ("[*]", "{*}") {
+            string path = "orders" + wildcard + ".id";
+            list<hash<auto>> procs = (
+                {"option": "field", "code": sub () {
+                    new QoreSearchReplaceProcessor({"field": path, "search": "a", "replace": "b"});
+                }},
+                {"option": "fields", "code": sub () { new QoreRemoveFieldsProcessor({"fields": ("id", path)}); }},
+                {"option": "fields", "code": sub () {
+                    new QoreSelectFieldsProcessor({"fields": ("id", "x=" + path)});
+                }},
+                {"option": "group_by", "code": sub () {
+                    new QoreGroupByProcessor({"group_by": path, "aggregates": "count()"});
+                }},
+                {"option": "aggregates", "code": sub () {
+                    new QoreGroupByProcessor({"aggregates": "sum(" + path + ")"});
+                }},
+                {"option": "fields", "code": sub () {
+                    new QoreCorrelationProcessor({"fields": ("x", path), "window_size": 3});
+                }},
+                {"option": "field_x", "code": sub () {
+                    new QoreCrossCorrelationProcessor({"field_x": path, "field_y": "y", "window_size": 3});
+                }},
+                {"option": "field_y", "code": sub () {
+                    new QoreCrossCorrelationProcessor({"field_x": "x", "field_y": path, "window_size": 3});
+                }},
+                {"option": "fields", "code": sub () {
+                    new QoreMovingAverageProcessor({"fields": path, "window_size": 3});
+                }},
+            );
+            foreach hash<auto> i in (procs) {
+                assertThrows("CONSTRUCTOR-ERROR", sprintf("option \"%s\": the field \"orders.*id\" has the "
+                    "wildcard .*; a field option names one field by its path", i.option), i.code, NOTHING,
+                    sprintf("%s %d %s", i.option, $#, wildcard));
+            }
+        }
+        # the helper itself: a field path without a wildcard is accepted
+        AbstractDataProvider::checkFieldPathOption("ERR", "opt", ("a", "a.b", "Unit\\.Price", "a[0]", "*"));
+        assertThrows("ERR", "option \"opt\": the field \"a.*\" has the wildcard",
+            \AbstractDataProvider::checkFieldPathOption(), ("ERR", "opt", ("b", "a[*]")));
     }
 
     #! A field path is removed as getFieldValue() reads it; a path with no value is left as it is

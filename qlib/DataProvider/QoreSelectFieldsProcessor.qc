@@ -105,6 +105,7 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
                 input_name = spec;
                 output_name = AbstractDataProvider::getFieldPathDisplayName(spec);
             }
+            AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", input_name);
             # one field must not overwrite another; the paths are given as they are written
             if (exists result{output_name} && result{output_name} != input_name) {
                 throw "CONSTRUCTOR-ERROR", sprintf("the fields \"%s\" and \"%s\" both give the output field "

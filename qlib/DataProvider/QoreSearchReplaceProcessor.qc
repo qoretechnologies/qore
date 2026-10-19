@@ -115,6 +115,7 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (copts.field.val()) {
             field = copts.field;
+            AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "field", field);
             search = copts.search;
             replace_str = copts.replace;
             is_regex = copts.is_regex ?? False;

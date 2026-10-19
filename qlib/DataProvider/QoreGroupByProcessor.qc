@@ -166,12 +166,15 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         # parse group_by fields
         if (copts.group_by.val()) {
             group_by_fields = AbstractDataProvider::parseFieldList(copts.group_by);
+            AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "group_by", group_by_fields);
         } else {
             group_by_fields = ();
         }
         group_by_output_names = map AbstractDataProvider::getFieldPathDisplayName($1), group_by_fields;
         # parse aggregate expressions
         agg_specs = parseAggregates(copts.aggregates);
+        AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "aggregates",
+            map $1.field, agg_specs, $1.field);
         QoreGroupByProcessor::checkOutputNames(group_by_fields, agg_specs);
         configured = True;
     }

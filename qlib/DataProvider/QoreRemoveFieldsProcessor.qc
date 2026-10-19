@@ -66,6 +66,7 @@ public class QoreRemoveFieldsProcessor inherits AbstractDataProvider {
             if (!field_list) {
                 throw "CONSTRUCTOR-ERROR", "no valid field names found in 'fields' option";
             }
+            AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", field_list);
         }
     }
 

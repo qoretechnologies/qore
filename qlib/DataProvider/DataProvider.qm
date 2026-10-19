@@ -1636,6 +1636,12 @@ fetch
       under that name (<tt>Unit\\.Price</tt> as \c Unit.Price), and so is the field in the default name of a
       \c group-by aggregate; two fields, or a field and an aggregate, that give the same output name are refused when
       the processor is created, as are two aggregates with the same name, which were accumulated into one
+    - added @ref DataProvider::AbstractDataProvider::checkFieldPathOption()
+      "AbstractDataProvider::checkFieldPathOption()": a field option of a processor names one field by its path, and
+      the processors whose options take fields of the input (\c select-fields, \c remove-fields, \c search-replace,
+      \c group-by, \c correlation, \c cross-correlation and the analytics processors) refuse a field with a DPQL
+      wildcard (<tt>[*]</tt> or <tt>{*}</tt>) when they are created; it was read as a key with the wildcard in its
+      name, which matched nothing
     - fixed @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
       dropping the \c input_field_names marker, so the options of the registered processor actions that take field
       names of the input (such as \c group_by of \c group-by and \c fields of \c select-fields) did not have it, and

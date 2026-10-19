@@ -6508,6 +6508,36 @@ string name = AbstractDataProvider::getFieldPathDisplayName("Unit\\.Price");
             : AbstractDataProvider::getFieldPath(field_path).join(".");
     }
 
+    #! Checks that the field paths given in a field option of a processor have no wildcard
+    /** A field option names one field by its path (@ref getFieldPath()).  The DPQL wildcards <tt>[*]</tt> and
+        <tt>{*}</tt>, which take every element of a list or every value of a hash in an expression, are not part of a
+        field path: a path with one would be read as a key with \c [*] or \c {*} in its name, so it is refused.
+
+        @param err the exception code to throw
+        @param option the name of the option
+        @param field_paths the field paths given in the option
+
+        @throw err a field path has a wildcard; the message names the option and the field
+
+        @par Example:
+        @code{.py}
+AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields);
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static checkFieldPathOption(string err, string option, softlist<string> field_paths) {
+        foreach string field_path in (field_paths) {
+            foreach string wildcard in ("[*]", "{*}") {
+                if (field_path.find(wildcard) >= 0) {
+                    # the path is given as it is written
+                    throw err, sprintf("option \"%s\": the field \"%s\" has the wildcard %s; a field option names "
+                        "one field by its path, and wildcards are not supported", option, field_path, wildcard);
+                }
+            }
+        }
+    }
+
     #! Pre-processes a single expression argument for repeated evaluation
     /** @param arg the argument to prepare (field reference, sub-expression, or literal)
         @return the prepared argument with pre-computed paths where applicable

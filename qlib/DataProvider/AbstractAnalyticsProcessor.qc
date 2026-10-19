@@ -358,6 +358,7 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
         if (!fields) {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
         }
+        AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields);
         window_size = copts.window_size;
         if (window_size < 1) {
             throw "CONSTRUCTOR-ERROR", sprintf("window_size must be >= 1; got %d", window_size);
