@@ -191,7 +191,6 @@
 
 #include <cassert>
 #include <algorithm>
-#include <array>
 #include <cctype>
 #include <cstring>
 #include <string>
@@ -13381,18 +13380,25 @@ static bool aotHashSourceFile(const char* label, uint64_t& hash) {
         return false;
     }
 
+    // the read buffer is on the heap rather than the stack of the calling thread, which can be a small one; the
+    // check is advisory, so without the buffer the source is not hashed and the check is skipped
+    constexpr size_t buf_size = 64 * 1024;
+    std::unique_ptr<char[]> buffer(new (std::nothrow) char[buf_size]);
+    if (!buffer) {
+        return false;
+    }
+
     XXH64_state_t state;
     XXH64_reset(&state, 0);
-    std::array<char, 64 * 1024> buffer;
     bool have_data = false;
     while (source) {
         if (qore_check_cancel(nullptr, "AOT source staleness hashing")) {
             return false;
         }
-        source.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        source.read(buffer.get(), static_cast<std::streamsize>(buf_size));
         std::streamsize count = source.gcount();
         if (count > 0) {
-            XXH64_update(&state, buffer.data(), static_cast<size_t>(count));
+            XXH64_update(&state, buffer.get(), static_cast<size_t>(count));
             have_data = true;
         }
     }
