@@ -64,30 +64,58 @@ class AOTQoLockTest inherits QUnit::Test {
         return "'" + replace(s, "'", "'\\''") + "'";
     }
 
-    #! Starts a command in the background and returns immediately.
-    private startBackground(string command) {
-        # The shell backgrounds the job and exits, so system() returns at once.
-        system("{ " + command + "; } &");
+    #! Returns the next line written to the FIFO open for reading in \a f, or @ref nothing at its end
+    /** Opening a FIFO for reading blocks until a writer opens it, and a read blocks until the writer writes, so
+        this is a handshake with the process at the other end rather than a condition polled for: the cases wait
+        for exactly the event they depend on, however loaded the machine is.
+    */
+    private *string readFifoLine(ReadOnlyFile f) {
+        return f.readLine(False);
     }
 
-    #! Blocks until \a path contains \a needle, or fails the test.
-    /** A condition rather than a duration: the point of these cases is what the
-        lock does when two processes really are inside it at once, and a fixed sleep
-        would make that depend on how loaded the machine is.
+    #! Writes a line to the FIFO at \a path, blocking until its reader opens it
+    private writeFifoLine(string path, string line) {
+        File f();
+        f.open2(path, O_WRONLY);
+        f.write(line + "\n");
+        f.close();
+    }
+
+    #! Lets a command blocked reading the FIFO at \a path go on, if one is; for the cleanup of a case
+    /** A non-blocking open for writing fails when the FIFO has no reader, so this never blocks.
     */
-    private awaitContent(string path, string needle) {
-        int spins = 0;
-        while (True) {
-            if (is_file(path)
-                && ReadOnlyFile::readTextFile(path).find(needle) != -1) {
-                return;
-            }
-            usleep(20000);
-            if (++spins > 1500) {
-                throw "LOCK-TEST-ERROR",
-                    sprintf("%y never appeared in %y", needle, path);
-            }
+    private release(string path) {
+        try {
+            File f();
+            f.open2(path, O_WRONLY | O_NONBLOCK);
+            f.write("go\n");
+            f.close();
+        } catch (hash<ExceptionInfo> ex) {
+            # no reader: nothing is blocked on it
         }
+    }
+
+    #! Creates a FIFO in the case's temporary directory and returns its path
+    private string fifo(TmpDir tmp, string name) {
+        string path = tmp.path + DirSep + name;
+        if (mkfifo(path)) {
+            throw "LOCK-TEST-ERROR", sprintf("cannot create FIFO %y: %s", path, strerror());
+        }
+        return path;
+    }
+
+    #! Runs a shell command in a background thread; its exit status and output are put on the queue returned
+    /** The case continues while the command runs and later waits for it on the queue, so it never sleeps and
+        never polls for the command's end.
+    */
+    private Queue runInBackground(string command) {
+        Queue q();
+        background sub () {
+            int rc;
+            string output = backquote(command, \rc);
+            q.push({"rc": rc, "output": output});
+        }();
+        return q;
     }
 
     #! Runs the helper, returning its exit status and combined output.
@@ -136,34 +164,48 @@ class AOTQoLockTest inherits QUnit::Test {
         may have published exactly that.  It is taken from a non-blocking attempt
         made before blocking, so it reports contention rather than inferring it from
         how long the wait took.
+
+        Every step is a handshake through a FIFO, never a duration: the holder says
+        when it is inside its critical section and leaves only when the case lets it,
+        and the waiter's trace says when it found the lock held and blocked on it.
     */
     testContendedSerialises() {
         TmpDir tmp("qore-qo-lock-contended-");
         string lock = lockPath(tmp, "l");
         string log = tmp.path + DirSep + "order";
+        string inside = fifo(tmp, "inside");
+        string leave = fifo(tmp, "leave");
+        string trace = fifo(tmp, "trace");
+        on_exit release(leave);
 
-        # The holder stays in its critical section long enough that a waiter which
-        # did not block would interleave visibly rather than by a hair.
-        string holder = sprintf("%s %s %s /bin/sh -c %s",
+        # the holder stays in its critical section until the case writes to "leave"
+        Queue holder = runInBackground(sprintf("%s %s %s /bin/sh -c %s 2>&1",
             q(qore_bin), q(lock_tool), q(lock),
-            q(sprintf("echo A-enter-$QORE_QO_LOCK_WAITED >> %s; sleep 3; "
-                "echo A-leave >> %s", log, log)));
-        startBackground(holder);
-        # Wait for the holder to be INSIDE its critical section before asking for
-        # the lock, so the case observes contention rather than racing to decide
-        # which of the two was first.
-        awaitContent(log, "A-enter");
+            q(sprintf("echo A-enter-$QORE_QO_LOCK_WAITED >> %s; echo in > %s; cat %s > /dev/null; "
+                "echo A-leave >> %s", log, inside, leave, log))));
+        # the holder is inside its critical section
+        {
+            ReadOnlyFile f(inside);
+            assertEq("in", readFifoLine(f));
+        }
 
-        int started = clock_getmicros_monotonic();
-        hash<auto> waiter = run((lock, "/bin/sh", "-c",
-            sprintf("echo B-enter-$QORE_QO_LOCK_WAITED >> %s; echo B-leave >> %s",
-                log, log)));
-        int waited_us = clock_getmicros_monotonic() - started;
+        # the waiter's trace goes to a FIFO
+        Queue waiter = runInBackground(sprintf("QORE_QO_LOCK_TRACE=1 %s %s %s /bin/sh -c %s 2> %s",
+            q(qore_bin), q(lock_tool), q(lock),
+            q(sprintf("echo B-enter-$QORE_QO_LOCK_WAITED >> %s; echo B-leave >> %s", log, log)), q(trace)));
+        ReadOnlyFile trace_reader(trace);
+        # the waiter found the lock held and is blocked on it
+        assertEq("qore-qo-lock: waiting for " + lock, readFifoLine(trace_reader),
+            "the waiter blocks on the held lock");
 
-        assertEq(0, waiter.rc, "the waiter ran: " + waiter.output);
-        assertTrue(waited_us > 500000,
-            sprintf("the waiter blocked on the holder rather than running "
-                "immediately (%d us)", waited_us));
+        # the holder leaves, and the waiter then gets the lock and runs its command
+        writeFifoLine(leave, "go");
+        hash<auto> h = holder.get();
+        assertEq(0, h.rc, "the holder ran: " + h.output);
+        hash<auto> w = waiter.get();
+        assertEq(0, w.rc, "the waiter ran: " + w.output);
+        assertEq("qore-qo-lock: locked " + lock + " pid", (readFifoLine(trace_reader) =~ x/^(.* pid) [0-9]+$/)[0],
+            "the waiter held the lock after the holder left");
 
         list<string> order = ();
         foreach string line in (ReadOnlyFile::readTextFile(log).split("\n")) {
@@ -181,33 +223,48 @@ class AOTQoLockTest inherits QUnit::Test {
         killed builder had to be recognised and removed by somebody else.  Here
         there is nothing to recognise -- the next waiter simply gets the lock, and
         reports that it did not even have to wait for it.
+
+        The holder is killed by its own pid, which its trace gives, and the case continues when the shell that
+        started it reports that it has exited: killing by a pattern would also kill the holders of any other run of
+        this test, and a kill is only certain once the process is gone.
     */
     testKilledHolderReleasesTheLock() {
         TmpDir tmp("qore-qo-lock-killed-");
         string lock = lockPath(tmp, "l");
-        string pidfile = tmp.path + DirSep + "pid";
+        string trace = fifo(tmp, "trace");
+        string inside = fifo(tmp, "inside");
+        string hold = fifo(tmp, "hold");
+        # the command of the holder waits for "hold"
+        on_exit release(hold);
 
-        startBackground(sprintf("%s %s %s /bin/sh -c %s",
+        # the shell's report that the holder was killed goes to the output of the shell, not to the test's
+        Queue holder = runInBackground(sprintf("{ QORE_QO_LOCK_TRACE=1 %s %s %s /bin/sh -c %s 2> %s; } 2>&1",
             q(qore_bin), q(lock_tool), q(lock),
-            q(sprintf("echo held > %s; sleep 30", pidfile))));
+            q(sprintf("echo held > %s; cat %s > /dev/null", inside, hold)), q(trace)));
+        ReadOnlyFile trace_reader(trace);
+        *string line = readFifoLine(trace_reader);
+        *list<*string> m = (line =~ x/^qore-qo-lock: locked .* pid ([0-9]+)$/);
+        assertTrue(exists m[0], sprintf("the holder reports its pid: %y", line));
+        int pid = m[0].toInt();
         # Wait for the holder to be inside its critical section before killing it;
         # killing it earlier would prove nothing about a held lock.
-        awaitContent(pidfile, "held");
+        {
+            ReadOnlyFile f(inside);
+            assertEq("held", readFifoLine(f));
+        }
         # SIGKILL: no handler, no cleanup, nothing the process itself can do.
-        system("pkill -9 -f " + q(lock_tool) + " >/dev/null 2>&1 || true");
-        system("pkill -9 -f 'sleep 30' >/dev/null 2>&1 || true");
+        assertEq(0, kill(pid, SIGKILL), "the holder is killed");
+        # its command outlives it, waiting for "hold"; once that ends, the shell that ran the holder returns, after
+        # reaping the killed holder
+        writeFifoLine(hold, "go");
+        hash<auto> h = holder.get();
+        assertNeq(0, h.rc, "the holder was killed: " + h.output);
 
-        int started = clock_getmicros_monotonic();
         hash<auto> result = run((lock, "/bin/sh", "-c",
             "printf '%s' \"$QORE_QO_LOCK_WAITED\""));
-        int elapsed_us = clock_getmicros_monotonic() - started;
-
         assertEq(0, result.rc, "the next builder acquires the lock: " + result.output);
         assertEq("0", result.output,
             "the lock of a killed holder is free, not abandoned-and-reclaimed");
-        assertTrue(elapsed_us < 2000000,
-            sprintf("the kernel released it at once rather than after a poll "
-                "(%d us)", elapsed_us));
     }
 
     #! Unlinking a held lock would let two builders into the critical section.
