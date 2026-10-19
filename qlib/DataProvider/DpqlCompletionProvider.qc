@@ -106,6 +106,7 @@ const list<auto> DpqlPrefixExpressionOperators = (
     DP_OP_DROP,
     DP_OP_TAKEWHILE,
     DP_OP_TAKEUNTIL,
+    DP_OP_EXISTS,
 );
 
 #! DPQL Completion context structure
@@ -145,6 +146,7 @@ const string DPQL_CTX_IN_INDEX = "in_index";        # Inside index accessor [...
 const string DPQL_CTX_IN_KEY = "in_key";            # Inside key accessor {...}
 const string DPQL_CTX_AFTER_ACCESSOR = "after_acc"; # After ] or } - can add more accessors
 const string DPQL_CTX_IN_TEMPLATE = "in_template"; # Inside a template reference (after $)
+const string DPQL_CTX_AFTER_EXISTS = "after_exists"; # After exists, which takes only a field reference
 
 #! Completion provider for DPQL expressions
 /** This class provides context-aware code completion for DPQL query expressions.
@@ -408,6 +410,11 @@ public class DpqlCompletionProvider {
                 items += getFieldCompletions(ctx.fields, analysis.prefix);
                 break;
 
+            case DPQL_CTX_AFTER_EXISTS:
+                # exists takes only a field reference
+                items += getFieldCompletions(ctx.fields, analysis.prefix);
+                break;
+
             case DPQL_CTX_AFTER_FIELD:
                 # After field, suggest accessors and comparison operators
                 items += getAccessorCompletions(analysis.prefix);
@@ -517,6 +524,15 @@ public class DpqlCompletionProvider {
         if (!trimmed) {
             return {
                 "ctx": DPQL_CTX_START,
+                "prefix": prefix,
+            };
+        }
+
+        # After exists, or exists and a parenthesis, only its field reference can follow
+        if (rtrim(substr(before, 0, token_start)) =~ /(?:^|[^\p{L}\p{M}\p{N}_@.$"'-])exists(?:\s*\()?$/i
+                && token_start > 0 && before[token_start - 1] =~ /[\s(]/) {
+            return {
+                "ctx": DPQL_CTX_AFTER_EXISTS,
                 "prefix": prefix,
             };
         }

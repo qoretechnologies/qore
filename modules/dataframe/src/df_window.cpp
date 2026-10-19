@@ -690,7 +690,8 @@ QoreListNode* QoreDataFrame::lag(const std::string& column, int64_t offset,
     for (int64_t orig = 0; orig < n_rows; ++orig) {
         int64_t pos = orig_to_out[orig];
         int64_t src_pos = pos - offset;
-        if (src_pos < 0 || !samePartition(columns, part_col_idx,
+        // a negative offset looks ahead: the source row can be on either side
+        if (src_pos < 0 || src_pos >= n_rows || !samePartition(columns, part_col_idx,
                 indices[pos], indices[src_pos])) {
             list->push(QoreValue(), xsink);  // NOTHING — out of partition
         } else {
@@ -733,7 +734,8 @@ QoreListNode* QoreDataFrame::lead(const std::string& column, int64_t offset,
     for (int64_t orig = 0; orig < n_rows; ++orig) {
         int64_t pos = orig_to_out[orig];
         int64_t src_pos = pos + offset;
-        if (src_pos >= n_rows || !samePartition(columns, part_col_idx,
+        // a negative offset looks back: the source row can be on either side
+        if (src_pos < 0 || src_pos >= n_rows || !samePartition(columns, part_col_idx,
                 indices[pos], indices[src_pos])) {
             list->push(QoreValue(), xsink);
         } else {

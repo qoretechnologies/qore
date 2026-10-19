@@ -1030,6 +1030,15 @@ class QoreProcessorsTest inherits QUnit::Test {
         assertEq({"name": "z$local:x"}, proc.processRecord({"name": "z$local:x"}));
         assertEq(NOTHING, proc.processRecord({"name": "z"}));
         assertEq({"name": "two words"}, proc.processRecord({"name": "two words"}));
+
+        # records of different shapes
+        proc = new QoreFilterRecordsProcessor({"dpql_where": "exists @type && @type == \"return\""});
+        assertEq({"type": "return"}, proc.processRecord({"type": "return"}));
+        assertEq(NOTHING, proc.processRecord({"type": "order"}));
+        assertEq(NOTHING, proc.processRecord({"id": 1}));
+        proc = new QoreFilterRecordsProcessor({"dpql_where": "!exists @type"});
+        assertEq({"id": 1}, proc.processRecord({"id": 1}));
+        assertEq(NOTHING, proc.processRecord({"type": NOTHING}));
     }
 
     filterBulkPipeline() {

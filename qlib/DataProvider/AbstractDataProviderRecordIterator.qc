@@ -443,6 +443,13 @@ public const string DP_OP_IS_NULL = "isNull";
 #! Returns True if the argument is not NOTHING (not null)
 public const string DP_OP_IS_NOT_NULL = "isNotNull";
 
+#! Returns True if the record has the field that a field reference names, also when the field has no value
+/** Written in DPQL as <tt>exists \@field</tt>; see @ref dpql_exists
+
+    @since DataProvider 3.11
+*/
+public const string DP_OP_EXISTS = "exists";
+
 #! Returns True if the first argument is not found in the second argument (list)
 public const string DP_OP_NOT_IN = "notIn";
 

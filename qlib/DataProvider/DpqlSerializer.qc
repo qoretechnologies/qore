@@ -94,6 +94,8 @@ public const DpqlOperatorPrecedence = {
         DP_OP_DROP: DPQL_PREC_PREFIX,
         DP_OP_TAKEWHILE: DPQL_PREC_PREFIX,
         DP_OP_TAKEUNTIL: DPQL_PREC_PREFIX,
+        # exists takes only a field reference, so nothing can come between it and its operand
+        DP_OP_EXISTS: DPQL_PREC_PRIMARY,
 };
 
 #! Operators whose grouping cannot change the result
@@ -372,6 +374,10 @@ public class DpqlSerializer {
                 result = serializeWildcard(exp);
                 break;
 
+            case DP_OP_EXISTS:
+                result = serializeExists(exp.args);
+                break;
+
             default:
                 # Check for provider-specific infix comparison operators (e.g. "like")
                 if (expressions{op} && expressions{op}.type == DET_Operator
@@ -389,6 +395,22 @@ public class DpqlSerializer {
             return "(" + result + ")";
         }
         return result;
+    }
+
+    #! Serializes \c exists and its field reference
+    /** @throw DPQL-SERIALIZE-ERROR the operand is not a field reference with accessors that each read one key or one
+        position
+
+        @since DataProvider 3.11
+    */
+    private string serializeExists(list<auto> args) {
+        if (args.size() != 1) {
+            throw "DPQL-SERIALIZE-ERROR", sprintf("exists takes one field reference; got %d arguments", args.size());
+        }
+        if (*string issue = dp_exists_operand_issue(args[0])) {
+            throw "DPQL-SERIALIZE-ERROR", sprintf("exists %s; got %y", issue, args[0]);
+        }
+        return "exists " + serializeArg(args[0], DPQL_PREC_PRIMARY);
     }
 
     #! Serializes a prefix expression operator
