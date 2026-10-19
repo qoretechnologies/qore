@@ -1521,7 +1521,8 @@ nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [d
 }
 
 //! Returns a new DataFrame with an added or replaced column
-/** @param name column name (replaces if already exists)
+/** @param name column name; a column with this name is replaced in its position, otherwise the new column is added
+    after the last column
     @param data list of values (must match row count)
     @return new DataFrame object
 
@@ -1530,6 +1531,7 @@ nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [d
     DataFrame df2 = df.withColumn("rank", df.rowNumber({"order_by": ("score",)}));
     @endcode
 
+    @throw DATAFRAME-COLUMN-ERROR if the number of values is not the number of rows
 */
 DataFrame DataFrame::withColumn(string name, list<auto> data) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->withColumn(name->c_str(), data, xsink);

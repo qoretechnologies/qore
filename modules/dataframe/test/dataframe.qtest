@@ -103,6 +103,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("windowFunctionsTest", \windowFunctionsTest());
         addTestCase("fillna() fills every form of a column", \fillnaStorageTest());
         addTestCase("concat() of the same DataFrames, also in other threads", \concatLockTest());
+        addTestCase("withColumn() replaces a column in its position", \withColumnPositionTest());
 
         set_return_value(main());
     }
@@ -3070,5 +3071,16 @@ sub invalid_dataframe_api() {
         assertEq((1, 2, 1, 2), self_rows, "concat() of a DataFrame with itself");
         assertEq((1, 2, 3, 1, 2), repeat_rows, "concat() of a DataFrame given twice with another between");
         assertEq(2000, rows_ok.getCount(), "concurrent concat() calls in opposite orders each have all rows");
+    }
+
+    # withColumn() replaces a column in its position, and adds a new column last
+    withColumnPositionTest() {
+        DataFrame::DataFrame df({"a": (1,), "b": (2,), "c": (3,)});
+        DataFrame::DataFrame replaced = df.withColumn("b", (20,));
+        assertEq(("a", "b", "c"), replaced.columnNames(), "withColumn() replaces a column in its position");
+        assertEq(({"a": 1, "b": 20, "c": 3},), replaced.toRecords(), "withColumn() replaces the column values");
+        assertEq((20,), replaced.getColumn("b"), "withColumn() finds the replaced column by its name");
+        assertEq(("a", "b", "c", "d"), df.withColumn("d", (4,)).columnNames(), "withColumn() adds a new column last");
+        assertEq(("a", "b", "c"), df.columnNames(), "withColumn() leaves the original DataFrame unchanged");
     }
 }

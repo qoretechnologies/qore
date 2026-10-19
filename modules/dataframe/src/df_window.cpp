@@ -199,28 +199,38 @@ QoreDataFrame* QoreDataFrame::withColumn(const std::string& name,
         return nullptr;
     }
 
-    auto* df = new QoreDataFrame();
-    df->n_rows = n_rows;
-
-    // Copy all existing columns (shared_ptr — COW)
-    for (const auto& col : columns) {
-        if (col.name == name) {
-            continue;  // skip if replacing
-        }
-        df->col_index[col.name] = df->columns.size();
-        df->columns.push_back(col);
-    }
-
-    // Add the new/replacement column
+    // the new or replacement column
     Column new_col;
     new_col.name = name;
     new_col.data = buildColumnDataAuto(data, xsink);
     if (*xsink) {
-        delete df;
         return nullptr;
     }
-    df->col_index[name] = df->columns.size();
-    df->columns.push_back(std::move(new_col));
+
+    auto* df = new QoreDataFrame();
+    df->n_rows = n_rows;
+
+    // Copy all existing columns (shared_ptr — COW); a replaced column keeps its position
+    bool replaced = false;
+    for (size_t i = 0; i < columns.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "copying DataFrame columns")) {
+            delete df;
+            return nullptr;
+        }
+        df->col_index[columns[i].name] = df->columns.size();
+        if (columns[i].name == name) {
+            df->columns.push_back(std::move(new_col));
+            replaced = true;
+        } else {
+            df->columns.push_back(columns[i]);
+        }
+    }
+
+    // a new column is added last
+    if (!replaced) {
+        df->col_index[name] = df->columns.size();
+        df->columns.push_back(std::move(new_col));
+    }
 
     return df;
 }
