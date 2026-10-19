@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -115,9 +115,9 @@ hash getpwuid2(softint uid) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] 
    QoreHashNode *h = q_getpwuid(uid);
    if (!h) {
       if (!errno)
-         xsink->raiseException("GETPPWUID2-ERROR", "uid %d not found", uid);
+         xsink->raiseException("GETPWUID2-ERROR", "uid %d not found", uid);
       else
-         xsink->raiseException("GETPPWUID2-ERROR", q_strerror(errno));
+         xsink->raiseException("GETPWUID2-ERROR", q_strerror(errno));
    }
    return h;
 #else
@@ -173,9 +173,9 @@ hash getpwnam2(string name) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] 
    QoreHashNode *h = q_getpwnam(name->getBuffer());
    if (!h) {
       if (!errno)
-         xsink->raiseException("GETPPWNAM2-ERROR", "user '%s' not found", name->getBuffer());
+         xsink->raiseException("GETPWNAM2-ERROR", "user '%s' not found", name->getBuffer());
       else
-         xsink->raiseException("GETPPWNAM2-ERROR", q_strerror(errno));
+         xsink->raiseException("GETPWNAM2-ERROR", q_strerror(errno));
    }
    return h;
 #else
@@ -289,9 +289,9 @@ hash getgrnam2(string name) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] 
    QoreHashNode *h = q_getgrnam(name->getBuffer());
    if (!h) {
       if (!errno)
-         xsink->raiseException("GETPGRNAM2-ERROR", "group '%s' not found", name->getBuffer());
+         xsink->raiseException("GETGRNAM2-ERROR", "group '%s' not found", name->getBuffer());
       else
-         xsink->raiseException("GETPGRNAM2-ERROR", q_strerror(errno));
+         xsink->raiseException("GETGRNAM2-ERROR", q_strerror(errno));
    }
    return h;
 #else

@@ -734,6 +734,12 @@
     - a time zone region with a \c ".." or an empty path component or a backslash, which could name a file outside of
       the zoneinfo directory, raises \c TZINFO-ERROR; see @ref sandbox_fs_tz_regions
     @endparblock
+    @par getpwuid2(), getpwnam2() and getgrnam2() Raise Their Documented Error Codes
+    @ref Qore::getpwuid2() "getpwuid2()", @ref Qore::getpwnam2() "getpwnam2()" and
+    @ref Qore::getgrnam2() "getgrnam2()" raised exceptions with misspelled error codes for an unknown user or group
+    or a lookup error: \c GETPPWUID2-ERROR, \c GETPPWNAM2-ERROR and \c GETPGRNAM2-ERROR.  They now raise the error
+    codes they document: \c GETPWUID2-ERROR, \c GETPWNAM2-ERROR and \c GETGRNAM2-ERROR.  Code that catches the
+    misspelled error codes must catch the documented ones instead.
 
     @par Modules Export Only Their Own Declarations and Reexported Modules
     @parblock
