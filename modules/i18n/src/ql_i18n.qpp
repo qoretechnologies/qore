@@ -2895,6 +2895,7 @@ list<string> get_locale_data_fallbacks() [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO
     @return native catalog hash suitable for I18n::MessageCatalog
 
     @throw I18N-CATALOG-JSON-ERROR if \a json is malformed, not UTF-8, or does not contain a JSON object
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 
     @par Example:
     @code{.py}
@@ -2920,6 +2921,7 @@ hash<auto> parse_native_catalog_json(string json) [flags=RET_VALUE_ONLY] {
     @throw FILE-READ-ERROR if the file cannot be read
     @throw I18N-CATALOG-ERROR if the file exceeds the default size limit
     @throw I18N-CATALOG-JSON-ERROR if the file is not valid native catalog JSON
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 
     @par Example:
     @code{.py}
@@ -2942,6 +2944,7 @@ hash<auto> load_native_catalog(string path) [dom=FILESYSTEM] {
     @throw FILE-READ-ERROR if the file cannot be read
     @throw I18N-CATALOG-ERROR if \a max_file_len is invalid or the file exceeds it
     @throw I18N-CATALOG-JSON-ERROR if the file is not valid native catalog JSON
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
 hash<auto> load_native_catalog(string path, int max_file_len) [dom=FILESYSTEM] {
     QoreHashNode* catalog = i18n_load_native_catalog_json(path, max_file_len, xsink);

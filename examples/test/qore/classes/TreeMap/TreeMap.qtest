@@ -28,6 +28,7 @@ public class TreeMapTest inherits QUnit::Test {
         addTestCase("generic value typing", \testGenericTyping());
         addTestCase("unmatched", \testUnmatched());
         addTestCase("DGC tests", \testDgc());
+        addTestCase("paths with a NUL character", \testNulPath());
 
         set_return_value(main());
     }
@@ -157,6 +158,17 @@ public class TreeMapTest inherits QUnit::Test {
         Program p2(PO_NEW_STYLE);
         assertThrows("PARSE-TYPE-ERROR", \p2.parse(), (
             "sub t() { TreeMap<int> tm(); string s = tm.get(\"a\"); }", "TreeMapGeneric"));
+    }
+
+    #! A path is a key of the hash getAll() returns, so a path with a NUL character is refused; it was cut at the NUL
+    testNulPath() {
+        TreeMap tm();
+        tm.put("a", 1);
+        string err = "key \"a\\\\x00b\" contains a NUL character at byte offset 1";
+        assertThrows("HASH-KEY-ERROR", err, \tm.put(), ("a\x00b", 2));
+        assertThrows("HASH-KEY-ERROR", err, \tm.get(), "a\x00b");
+        assertThrows("HASH-KEY-ERROR", err, \tm.take(), "a\x00b");
+        assertEq({"a": 1}, tm.getAll());
     }
 
     testUnmatched() {

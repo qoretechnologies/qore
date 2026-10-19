@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologoes, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -87,6 +87,10 @@ public:
     DLLLOCAL QoreValue get(const QoreStringNode* key, const ReferenceNode* unmatched, ExceptionSink* xsink) const {
         TempEncodingHelper keyStr(key, QCS_DEFAULT, xsink);
         if (!keyStr) {
+            return QoreValue();
+        }
+        // a path with a NUL character cannot be a key of the map
+        if (QoreHashNode::checkKey(keyStr->c_str(), keyStr->size(), xsink)) {
             return QoreValue();
         }
 

@@ -652,6 +652,19 @@
     a string for an empty search string, as before.
     @endparblock
 
+    @par A Hash Key Cannot Contain a NUL Character
+    @parblock
+    A hash key or object member name is a NUL-terminated string, so a string with a NUL character used as a key was
+    cut at the NUL character and named another key: <tt>{"a\\x00b": 1}</tt> made a hash with the key \c "a", and
+    <tt>h{"order\\x00id"}</tt> read and wrote \c h.order.  Such a key now raises a \c HASH-KEY-ERROR exception,
+    which gives the key and the byte offset of its first NUL character.  A constant key of a hash literal is reported
+    when the code is parsed; a key computed at run time is reported when the hash or object is read or written, in
+    every execution mode.  The same error is raised by \c hash() from a list, \c has_key(), the thread-local data
+    functions, the slice of a hash or an object, deserialization, @ref Qore::TreeMap "TreeMap" paths, and the JSON,
+    CBOR, TOON, YAML and i18n catalog parsers; a JSON Pointer with a NUL character raises \c JSON-POINTER-ERROR.  C++
+    code that makes a key from a string with a length checks it with the new QoreHashNode::checkKey().
+    @endparblock
+
     @par Modules Export Only Their Own Declarations and Reexported Modules
     @parblock
     Constants, enums and their members, and typedefs that a module received from another module it imported with a

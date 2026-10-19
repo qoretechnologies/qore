@@ -2117,11 +2117,18 @@ bool b = has_key(hash, "key");
     @note no exception is thrown when checking an invalid key in a @ref hashdecl "hashdecl"-derived hash
 
     @throw ENCODING-CONVERSION-ERROR this error is thrown if the given key cannot be converted to the @ref default_encoding "default character encoding"
+    @throw HASH-KEY-ERROR the key has a NUL character, which a hash key cannot contain
+
+    @since %Qore 3.0 a key with a NUL character raises \c HASH-KEY-ERROR instead of being cut at the NUL character
 */
 bool has_key(hash<auto> container, string key) [flags=NAMED_ARGS] {
     TempEncodingHelper tmp(key, QCS_DEFAULT, xsink);
     if (*xsink)
         return QoreValue();
+    // a key with a NUL character cannot be a hash key
+    if (QoreHashNode::checkKey(tmp->c_str(), tmp->size(), xsink)) {
+        return QoreValue();
+    }
     bool exists;
     container->getKeyValueExistence(tmp->c_str(), exists);
     return exists;

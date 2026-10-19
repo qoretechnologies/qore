@@ -693,6 +693,7 @@ string makeFormattedJSONString(auto data, *string encoding) [flags=RET_VALUE_ONL
 
     @throw JSON-PARSE-ERROR syntax error parsing JSON string
     @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 
     @par Example:
     @code auto data = parse_json(json); @endcode
@@ -1114,7 +1115,7 @@ namespace Qore::Json;
 
     @return the value at the specified location, or NOTHING if not found
 
-    @throw JSON-POINTER-ERROR invalid pointer format or array index
+    @throw JSON-POINTER-ERROR invalid pointer format or array index, or the pointer has a NUL character
 
     @note This function follows RFC 6901 for JSON Pointer syntax:
     - Pointers must start with "/" or be empty (empty returns the root)
@@ -1130,6 +1131,12 @@ auto json_pointer_get(auto data, string pointer) [flags=RET_VALUE_ONLY,NAMED_ARG
     }
 
     const char* p = pointer->c_str();
+    // the pointer is read as a C string; a NUL character would end it and name another value
+    if (strlen(p) != pointer->size()) {
+        xsink->raiseException("JSON-POINTER-ERROR", "JSON Pointer has a NUL character at byte offset %zu; a hash "
+            "key cannot contain a NUL character", strlen(p));
+        return QoreValue();
+    }
     if (*p != '/') {
         xsink->raiseException("JSON-POINTER-ERROR", "JSON Pointer must start with '/' or be empty; got: %s",
             pointer->c_str());
@@ -1208,7 +1215,7 @@ auto json_pointer_get(auto data, string pointer) [flags=RET_VALUE_ONLY,NAMED_ARG
 
     @return True if a value exists at the location (even if the value is NOTHING), False otherwise
 
-    @throw JSON-POINTER-ERROR invalid pointer format
+    @throw JSON-POINTER-ERROR invalid pointer format, or the pointer has a NUL character
 
     @since json 1.10
 */
@@ -1218,6 +1225,12 @@ bool json_pointer_exists(auto data, string pointer) [flags=RET_VALUE_ONLY,NAMED_
     }
 
     const char* p = pointer->c_str();
+    // the pointer is read as a C string; a NUL character would end it and name another value
+    if (strlen(p) != pointer->size()) {
+        xsink->raiseException("JSON-POINTER-ERROR", "JSON Pointer has a NUL character at byte offset %zu; a hash "
+            "key cannot contain a NUL character", strlen(p));
+        return QoreValue();
+    }
     if (*p != '/') {
         xsink->raiseException("JSON-POINTER-ERROR", "JSON Pointer must start with '/' or be empty; got: %s",
             pointer->c_str());

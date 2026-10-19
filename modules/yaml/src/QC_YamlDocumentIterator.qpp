@@ -182,6 +182,7 @@ YamlDocumentIterator::copy() {
 /** @return True if a document was found, False if no more documents
 
     @throw YAML-PARSER-ERROR if a document cannot be parsed
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
 bool YamlDocumentIterator::next() {
     return iter->next(xsink);

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -392,6 +392,7 @@ auto val = Serializable::deserialize(stream);
 
     @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
     reference to an unknown class or @ref hashdecl
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
  */
 static auto Serializable::deserialize(InputStream[InputStream] input_stream,
         *int flags) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
@@ -410,6 +411,7 @@ auto val = Serializable::deserialize(bin);    @endcode
 
     @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
     reference to an unknown class or @ref hashdecl
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
  */
 static auto Serializable::deserialize(binary binary_data, *int flags) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     ReferenceHolder<BinaryInputStream> stream(new BinaryInputStream(binary_data), xsink);
@@ -429,6 +431,7 @@ auto val = Serializable::deserialize(bin);
 
     @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
     reference to an unknown class or @ref hashdecl
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 
     @since %Qore 0.9.2
  */
@@ -450,6 +453,7 @@ auto val = Serializable::deserialize(h);
 
     @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
     reference to an unknown class or @ref hashdecl
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
  */
 static auto Serializable::deserialize(hash<SerializationInfo> serialization_info,
         *int flags) [flags=RET_VALUE_ONLY,NAMED_ARGS] {

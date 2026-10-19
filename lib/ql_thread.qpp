@@ -34,6 +34,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/ql_thread.h"
+#include "qore/intern/QoreHashKeyHelper.h"
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QC_AbstractThreadResource.h"
@@ -153,12 +154,13 @@ static QoreHashNode* remove_thread_data_intern(const QoreListNode* args, Excepti
         }
         QoreValue p = args->retrieveEntry(i);
         if (!p.isNothing()) {
-            QoreStringValueHelper t(p, QCS_DEFAULT, xsink);
+            // the key in the default encoding; a key with a NUL character raises HASH-KEY-ERROR
+            QoreHashKeyHelper key(p, xsink);
             if (*xsink) {
                 return nullptr;
             }
 
-            rv->setKeyValue(*t, dh->takeKeyValueIntern((*t)->c_str()), xsink);
+            rv->setKeyValue(key.c_str(), dh->takeKeyValueIntern(key.c_str()), xsink);
             assert(!*xsink);
         }
     }
@@ -280,9 +282,11 @@ nothing save_thread_data(hash<auto> data) [flags=NAMED_ARGS;dom=THREAD_CONTROL] 
 save_thread_data("key1", value);
     @endcode
 
-    @note This function does not throw any exceptions, however if a value is removed from the thread-local data hash
-    by being overwritten with a new value, and the value is an object that goes out of scope, then such an object
-    could throw an exception in its destructor
+    @note Apart from \c HASH-KEY-ERROR, this function does not throw any exceptions, however if a value is removed
+    from the thread-local data hash by being overwritten with a new value, and the value is an object that goes out
+    of scope, then such an object could throw an exception in its destructor
+
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
 nothing save_thread_data(string key, auto value) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
     QoreHashNode* data = getProgram()->getThreadData();
@@ -305,11 +309,13 @@ nothing save_thread_data() [dom=THREAD_CONTROL;flags=RUNTIME_NOOP] {
 delete_thread_data("key1", "key2");
     @endcode
 
-    @note This function does not throw any exceptions, however if an object is deleted from the thread-local data
-    hash, then it could throw an exception in its destructor
+    @note Apart from \c HASH-KEY-ERROR, this function does not throw any exceptions, however if an object is deleted
+    from the thread-local data hash, then it could throw an exception in its destructor
 
     @see remove_thread_data() for a similar function that does not explicitly destroy objects in the thread-local data
     hash
+
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
 nothing delete_thread_data(...) [dom=THREAD_CONTROL] {
     if (num_args(args))
@@ -326,11 +332,13 @@ nothing delete_thread_data(...) [dom=THREAD_CONTROL] {
 delete_thread_data(list_of_keys);
     @endcode
 
-    @note This function does not throw any exceptions, however if an object is deleted from the thread-local data
-    hash, then it could throw an exception in its destructor
+    @note Apart from \c HASH-KEY-ERROR, this function does not throw any exceptions, however if an object is deleted
+    from the thread-local data hash, then it could throw an exception in its destructor
 
     @see remove_thread_data() for a similar function that does not explicitly destroy objects in the thread-local data
     hash
+
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
 nothing delete_thread_data(list<softstring> key_list) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
     delete_thread_data_intern(key_list, xsink);
@@ -349,6 +357,8 @@ hash<auto> h = remove_thread_data("filename");
     @endcode
 
     @since %Qore 0.8.4 this function returns the values it removes
+
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
 *hash<auto> remove_thread_data(...) [dom=THREAD_CONTROL] {
     return num_args(args) ? remove_thread_data_intern(args, xsink) : nullptr;
@@ -367,6 +377,8 @@ hash<auto> h = remove_thread_data(key_list);
     @endcode
 
     @since %Qore 0.8.4 this function returns the values it removes
+
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
 hash<auto> remove_thread_data(list<softstring> key_list) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
     return remove_thread_data_intern(key_list, xsink);
@@ -393,13 +405,17 @@ nothing delete_all_thread_data() [dom=THREAD_CONTROL] {
     @code{.py}
 auto data = get_thread_data("key1");
     @endcode
+
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
 auto get_thread_data(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=THREAD_CONTROL,THREAD_INFO] {
-    TempEncodingHelper tmp(key, QCS_DEFAULT, xsink);
-    if (!tmp)
+    // the key in the default encoding; a key with a NUL character raises HASH-KEY-ERROR
+    QoreHashKeyHelper tmp(*key, xsink);
+    if (*xsink) {
         return QoreValue();
+    }
     const QoreHashNode* h = getProgram()->getThreadData();
-    return qore_hash_private::get(*h)->getReferencedKeyValueIntern(tmp->c_str());
+    return qore_hash_private::get(*h)->getReferencedKeyValueIntern(tmp.c_str());
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments

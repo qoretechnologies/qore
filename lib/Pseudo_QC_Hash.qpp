@@ -203,6 +203,8 @@ bool b = h.hasKey(key);
 
     @note this pseudo-method is also implemented in Qore::zzz8nothingzzz9, so it's safe to use where the value could be a hash or @ref nothing (ex: @ref hash_or_nothing_type "*hash")
 
+    @throw HASH-KEY-ERROR the key has a NUL character, which a hash key cannot contain
+
     @see <hash>::hasKeyValue(softstring)
  */
 bool <hash>::hasKey(softstring key) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
@@ -225,6 +227,8 @@ bool b = h.hasKeyValue(key);
     @endcode
 
     @note this pseudo-method is also implemented in Qore::zzz8nothingzzz9, so it's safe to use where the value could be a hash or @ref nothing (ex: @ref hash_or_nothing_type "*hash")
+
+    @throw HASH-KEY-ERROR the key has a NUL character, which a hash key cannot contain
 
     @see <hash>::hasKey(softstring)
  */

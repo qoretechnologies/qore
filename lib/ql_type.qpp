@@ -37,6 +37,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/StringReaderHelper.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
+#include "qore/intern/QoreHashKeyHelper.h"
 
 #include <memory>
 
@@ -429,6 +430,10 @@ hash<auto> hash(object obj) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     @code{.py}
 hash<auto> h = hash(("a", 1, "b", "two"));
     @endcode
+
+    @throw HASH-KEY-ERROR a key has a NUL character
+
+    @since %Qore 3.0 a key with a NUL character raises \c HASH-KEY-ERROR instead of being cut at the NUL character
 */
 hash<auto> hash(list<auto> value) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
@@ -436,10 +441,15 @@ hash<auto> hash(list<auto> value) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     bool valid = true;
     ConstListIterator li(value);
     while (valid && ((valid = li.next()))) {
-        QoreStringValueHelper str(li.getValue());
-        h->setKeyValue(str->c_str(), ((valid = li.next())) ? li.getReferencedValue() : QoreValue(), xsink);
-        if (*xsink)
+        // the key is in the default encoding; a key with a NUL character raises HASH-KEY-ERROR
+        QoreHashKeyHelper key(li.getValue(), xsink);
+        if (*xsink) {
             return QoreValue();
+        }
+        h->setKeyValue(key.c_str(), ((valid = li.next())) ? li.getReferencedValue() : QoreValue(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
     }
     return h.release();
 }
@@ -456,6 +466,10 @@ hash<auto> hash(list<auto> value) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     @code{.py}
 hash<auto> h = hash(keysv, values);
     @endcode
+
+    @throw HASH-KEY-ERROR a key has a NUL character
+
+    @since %Qore 3.0 a key with a NUL character raises \c HASH-KEY-ERROR instead of being cut at the NUL character
 */
 hash<auto> hash(list<softstring> keys, list<auto> values) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
@@ -468,10 +482,15 @@ hash<auto> hash(list<softstring> keys, list<auto> values) [flags=RET_VALUE_ONLY,
         if (valid)
             valid = vi.next();
 
-        QoreStringValueHelper str(ki.getValue());
-        h->setKeyValue(str->c_str(), valid ? vi.getReferencedValue() : QoreValue(), xsink);
-        if (*xsink)
+        // the key is in the default encoding; a key with a NUL character raises HASH-KEY-ERROR
+        QoreHashKeyHelper key(ki.getValue(), xsink);
+        if (*xsink) {
             return QoreValue();
+        }
+        h->setKeyValue(key.c_str(), valid ? vi.getReferencedValue() : QoreValue(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
     }
 
     return h.release();

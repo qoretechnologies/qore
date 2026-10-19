@@ -333,6 +333,10 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
         QoreStringValueHelper key(li.getValue(), QCS_DEFAULT, xsink);
         if (*xsink)
             return nullptr;
+        // a member name with a NUL character cannot be a key
+        if (QoreHashNode::checkKey(key->c_str(), key->size(), xsink)) {
+            return nullptr;
+        }
 
         const qore_class_private* member_class_ctx = nullptr;
         int rc = checkMemberAccessIntern(key->c_str(), has_public_members, class_ctx, member_class_ctx);

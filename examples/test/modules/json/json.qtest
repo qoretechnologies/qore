@@ -56,6 +56,7 @@ class JsonTest inherits QUnit::Test {
         addTestCase("parse_json UTF-8/Unicode BOM skipping test", \parseJsonBom());
         addTestCase("issue 2655", \issue2655());
         addTestCase("JSON Pointer test", \jsonPointerTest());
+        addTestCase("keys with a NUL character", \nulKeyTest());
         addTestCase("named arguments for codecs", \namedArgumentCodecs());
         addTestCase("deeply nested structures", \testDeeplyNested());
         addTestCase("sandbox depth limit parse_json", \testSandboxDepthLimitParse());
@@ -80,6 +81,20 @@ class JsonTest inherits QUnit::Test {
         addTestCase("TOON sandbox interrupt make_toon", \toonSandboxInterruptMake());
         addTestCase("TOON sandbox interrupt pre-check", \toonSandboxInterruptPreCheck());
         set_return_value(main());
+    }
+
+    #! A hash key cannot contain a NUL character; such a key was cut at the NUL character and replaced another key
+    nulKeyTest() {
+        assertThrows("HASH-KEY-ERROR", "key \"a\\\\x00b\" contains a NUL character at byte offset 1", \parse_json(),
+            '{"a": 1, "a\u0000b": 2}');
+        assertThrows("HASH-KEY-ERROR", "key \"a\\\\x00b\" contains a NUL character at byte offset 1", \parse_toon(),
+            "\"a\x00b\": 1");
+        assertThrows("JSON-POINTER-ERROR", "NUL character at byte offset 2", \json_pointer_get(),
+            ({"a": {"b": 1}}, "/a\x00/b"));
+        assertThrows("JSON-POINTER-ERROR", "NUL character at byte offset 2", \json_pointer_exists(),
+            ({"a": {"b": 1}}, "/a\x00/b"));
+        # a value keeps its NUL character
+        assertEq({"a": "x\x00y"}, parse_json('{"a": "x\u0000y"}'));
     }
 
     formattingTest() {

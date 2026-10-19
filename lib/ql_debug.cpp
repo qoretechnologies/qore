@@ -6284,7 +6284,9 @@ static QoreValue f_dbg_ref_set_unique_remove_key(const QoreListNode* params, Run
     if (*xsink) {
         return QoreValue();
     }
-    if (h->setKeyValue(set_key->c_str(), get_param_value(params, 2).refSelf(), xsink)) {
+    // the QoreString overload converts the key to the default encoding and raises HASH-KEY-ERROR for a key with a
+    // NUL character
+    if (h->setKeyValue(**set_key, get_param_value(params, 2).refSelf(), xsink)) {
         return QoreValue();
     }
     rv = ref.removeHashObjKey(remove_key->c_str());

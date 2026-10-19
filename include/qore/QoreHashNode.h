@@ -286,6 +286,31 @@ public:
     */
     DLLEXPORT int setKeyValue(const QoreString& key, QoreValue value, ExceptionSink* xsink);
 
+    //! checks that a string of the given length can be a hash key
+    /** A hash key is a NUL-terminated string, so a string with a NUL character cannot be a key; it would be cut
+        at the NUL character, and name a different key.  Code that makes a key from a string with a length (a
+        QoreString, a std::string, a key read from serialized data) must check it with this function before
+        passing it to an API taking a <tt>const char*</tt> key; the APIs taking a QoreString key check it
+        themselves.
+
+        @param key the key string, which need not be NUL-terminated
+        @param len the byte length of the key string
+        @param xsink a \c HASH-KEY-ERROR exception is raised here if the key has a NUL character
+
+        @return 0 if the string can be a key, -1 if it has a NUL character and an exception was raised
+
+        @par Example:
+        @code{.cpp}
+if (QoreHashNode::checkKey(name.data(), name.size(), xsink)) {
+    return QoreValue();
+}
+h->setKeyValue(name.c_str(), value, xsink);
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT static int checkKey(const char* key, size_t len, ExceptionSink* xsink);
+
     //! performs a delete operation on the value of the given key
     /** The delete operation means a simple dereference for all types except QoreObject, on this type the destructor will be run immediately.
         A Qore-language exception could occur eitherin converting the key string's encoding to QCS_DEFAULT, or in the destructor of a deleted object.

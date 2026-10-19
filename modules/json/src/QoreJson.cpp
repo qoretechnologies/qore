@@ -270,7 +270,10 @@ static QoreHashNode* get_json_object(const char*& buf, int& line_number, const Q
                 "(expecting JSON value)", line_number);
             break;
         }
-        h->setKeyValue(&str, val, xsink);
+        // the key is converted to the default encoding; a key with a NUL character raises HASH-KEY-ERROR
+        if (h->setKeyValue(str, val, xsink) || *xsink) {
+            break;
+        }
 
         skip_whitespace(buf, line_number);
         if (*buf == '}') {

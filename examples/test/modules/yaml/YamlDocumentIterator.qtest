@@ -15,6 +15,7 @@ class YamlDocumentIteratorTest inherits QUnit::Test {
         addTestCase("basic iteration", \testBasicIteration());
         addTestCase("single document", \testSingleDocument());
         addTestCase("mixed types", \testMixedTypes());
+        addTestCase("keys with a NUL character", \testNulKey());
         addTestCase("stream input", \testStreamInput());
         addTestCase("named argument constructors", \testNamedArgumentConstructors());
         addTestCase("document count", \testDocumentCount());
@@ -60,6 +61,12 @@ class YamlDocumentIteratorTest inherits QUnit::Test {
         addTestCase("complex key error", \testComplexKeyError());
 
         set_return_value(main());
+    }
+
+    #! A mapping key with a NUL character cannot be a hash key; it was cut at the NUL character
+    testNulKey() {
+        YamlDocumentIterator iter("a: 1\n\"a\\0b\": 2\n");
+        assertThrows("HASH-KEY-ERROR", "key \"a\\\\x00b\" contains a NUL character at byte offset 1", \iter.next());
     }
 
     testBasicIteration() {

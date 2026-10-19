@@ -1,0 +1,176 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A hash key or object member name is a NUL-terminated string, so a string with a NUL character used as a key was cut
+# at the NUL character and named another key.  A key with a NUL character raises HASH-KEY-ERROR instead: a constant
+# key of a hash literal when the code is parsed, any other key when it is used, in every execution mode and in AOT
+# binaries alike.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class HashKeyNulTest
+
+class HashKeyNulTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string fixture = get_script_dir() + "/HashKeyNulScenario.qr";
+        string parse_fixture = get_script_dir() + "/HashKeyNulParseScenario.qr";
+        string expected;
+    }
+
+    #! the description of the error, with the key as it is shown in it
+    const ErrorDesc = "HASH-KEY-ERROR: key \"%s\" contains a NUL character at byte offset %d; a hash key or object "
+        "member name cannot contain a NUL character";
+
+    constructor() : QUnit::Test("hash keys with a NUL character", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # a qore run from the PATH has no directory in its name; its library and qcc are found next to it
+        if (qore_bin !~ /\//) {
+            foreach string dir in ((ENV.PATH ?? "").split(":")) {
+                if (dir && is_executable(dir + "/" + qore_bin)) {
+                    qore_bin = dir + "/" + qore_bin;
+                    break;
+                }
+            }
+        }
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? libqore_dir + "/qcc";
+
+        # the key as it is shown: control characters as \xHH, quotes and backslashes escaped
+        string ab = sprintf(ErrorDesc, 'a\x00b', 1);
+        string order_id = sprintf(ErrorDesc, 'order\x00id', 5);
+        list<string> lines = (
+            "assign: " + ab,
+            "assign nested: " + ab,
+            "read: " + ab,
+            "read offset: " + order_id,
+            "read constant: " + ab,
+            "exists: " + ab,
+            "delete: " + ab,
+            "remove: " + ab,
+            "plus: " + ab,
+            "literal: " + ab,
+            "literal second key: " + order_id,
+            "hash list: " + ab,
+            "hash lists: " + ab,
+            "has_key: " + ab,
+            "hasKey: " + ab,
+            "map: " + ab,
+            "slice: " + ab,
+            "hashdecl: " + ab,
+            "member assign: " + ab,
+            "member read: " + ab,
+            "object slice: " + ab,
+            "save_thread_data: " + ab,
+            "get_thread_data: " + ab,
+            "remove_thread_data: " + ab,
+            "delete_thread_data: " + ab,
+            # at most 64 characters of the key are shown
+            "long key: " + sprintf(ErrorDesc, strmul("x", 64) + "...", 70),
+            "escaped: " + sprintf(ErrorDesc, '\"\\\x00', 2),
+            # the hash was not changed by any of the cases
+            "unchanged: {a: 1, order: 2}",
+            "keys without NUL: {a: 1, order: 2, b: 3}",
+        );
+        expected = lines.join("\n") + "\n";
+
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            addTestCase(mode, sub () { checkMode(mode); });
+        }
+        addTestCase("tiered, promoted", \checkPromoted());
+        addTestCase("AOT", \checkAot());
+        addTestCase("constant keys when parsing", \checkParse());
+        addTestCase("constant keys when parsing in each execution mode", \checkParseModes());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+
+    checkMode(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf(
+            "LD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            quote(libqore_dir), quote(qore_bin), mode, quote(fixture)));
+        ExecModeHarness::check_native(r);
+        assertEq(0, r.rc, r.out);
+        assertEq(expected, r.out);
+    }
+
+    checkPromoted() {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf(
+            "LD_LIBRARY_PATH=%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 %s",
+            quote(libqore_dir), quote(qore_bin), quote(fixture)));
+        assertEq(0, r.rc, r.out);
+        assertEq(expected, r.out);
+    }
+
+    checkAot() {
+        if (!is_file(qcc_bin)) {
+            testSkip(sprintf("no qcc binary at %y", qcc_bin));
+        }
+        TmpDir dir("qore-hash-key-nul-");
+        string exe = dir.path + "/hash-key-nul";
+        int rc;
+        string output = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1", quote(libqore_dir), quote(qcc_bin),
+            quote(exe), quote(fixture)), \rc);
+        assertEq(0, rc, output);
+        output = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", quote(libqore_dir), quote(exe)), \rc);
+        assertEq(0, rc, output);
+        assertEq(expected, output);
+
+        # a constant key with a NUL character is an error when the code is compiled
+        output = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1", quote(libqore_dir), quote(qcc_bin),
+            quote(exe + "-parse"), quote(parse_fixture)), \rc);
+        assertNeq(0, rc, output);
+        assertRegex("HASH-KEY-ERROR: key \"a\\\\x00b\" contains a NUL character at byte offset 1", output);
+        assertRegex("HASH-KEY-ERROR: key \"x\\\\x00y\" contains a NUL character at byte offset 1", output);
+    }
+
+    checkParse() {
+        # a literal key
+        Program p(PO_NEW_STYLE);
+        try {
+            p.parse('hash<auto> h = {"ok": 1, "a\x00b": 2};', "literal key");
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HASH-KEY-ERROR", ex.err);
+            assertEq(sprintf(ErrorDesc, 'a\x00b', 1), ex.err + ": " + ex.desc);
+        }
+
+        # a constant resolved when the code is parsed
+        p = new Program(PO_NEW_STYLE);
+        try {
+            p.parse('const K = "order\x00id"; hash<auto> h = {K: 1};', "constant key");
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HASH-KEY-ERROR", ex.err);
+            assertEq(sprintf(ErrorDesc, 'order\x00id', 5), ex.err + ": " + ex.desc);
+        }
+
+        # a key without a NUL character is a key as before
+        p = new Program(PO_NEW_STYLE);
+        p.parse('hash<auto> sub get() { return {"a": 1, "x\\y": 2}; }', "keys");
+        assertEq({"a": 1, "x\\y": 2}, p.callFunction("get"));
+    }
+
+    checkParseModes() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf(
+                "LD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+                quote(libqore_dir), quote(qore_bin), mode, quote(parse_fixture)));
+            assertNeq(0, r.rc, mode);
+            assertEq("", r.stdout, mode);
+            assertRegex("HASH-KEY-ERROR: key \"a\\\\x00b\" contains a NUL character at byte offset 1", r.stderr, mode);
+            assertRegex("HASH-KEY-ERROR: key \"x\\\\x00y\" contains a NUL character at byte offset 1", r.stderr, mode);
+        }
+    }
+}

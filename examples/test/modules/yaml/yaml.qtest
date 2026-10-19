@@ -72,6 +72,7 @@ public class Main inherits QUnit::Test {
         addTestCase("aliases", \testAliases());
         addTestCase("aliases comprehensive", \testAliasesComprehensive());
         addTestCase("aliases negative", \testAliasesNegative());
+        addTestCase("keys with a NUL character", \testNulKey());
         addTestCase("merge keys", \testMergeKeys());
         addTestCase("merge keys comprehensive", \testMergeKeysComprehensive());
         addTestCase("merge keys negative", \testMergeKeysNegative());
@@ -300,6 +301,14 @@ refs:
         result = parse_yaml(yaml);
         assertEq(("a", "b", "c"), result.refs.list_ref);
         assertEq({"x": 1, "y": 2}, result.refs.map_ref);
+    }
+
+    #! A mapping key with a NUL character cannot be a hash key; it was cut at the NUL character
+    testNulKey() {
+        assertThrows("HASH-KEY-ERROR", "key \"a\\\\x00b\" contains a NUL character at byte offset 1", \parse_yaml(),
+            "a: 1\n\"a\\0b\": 2\n");
+        # a value keeps its NUL character
+        assertEq({"a": "x\x00y"}, parse_yaml("a: \"x\\0y\"\n"));
     }
 
     testAliasesNegative() {

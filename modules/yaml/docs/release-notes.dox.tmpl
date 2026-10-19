@@ -6,6 +6,8 @@
 
     @section yaml_bundled_3_0 Qore 3.0
 
+    - a mapping key with a NUL character raises \c HASH-KEY-ERROR, as a hash key cannot contain one: the key was
+      cut at the NUL character and could replace the value of another key
     - bundled the native YAML module and all twelve user modules with Qore
     - @ref Qore::YAML::YamlDocumentIterator "YamlDocumentIterator" and @ref Qore::YAML::YamlSaxParser "YamlSaxParser"
       read a stream in an encoding other than UTF-8 with @ref Qore::StreamReader "StreamReader": text was converted

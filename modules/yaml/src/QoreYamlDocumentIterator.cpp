@@ -354,6 +354,10 @@ QoreHashNode* QoreYamlDocumentIterator::parseMapping(ExceptionSink* xsink) {
         }
 
         std::string key((const char*)event.data.scalar.value, event.data.scalar.length);
+        // a key with a NUL character cannot be a hash key
+        if (QoreHashNode::checkKey(key.c_str(), key.size(), xsink)) {
+            return nullptr;
+        }
 
         // Parse value
         if (getEvent(xsink)) return nullptr;

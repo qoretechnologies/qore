@@ -1,0 +1,13 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Constant keys with a NUL character in hash literals, which are errors when the code is parsed
+
+%modern
+
+const K = "x\x00y";
+
+hash<auto> h = {"a\x00b": 1};
+hash<auto> h2 = {K: 2};
+printf("%y %y\n", h, h2);

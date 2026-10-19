@@ -6,6 +6,9 @@
 
     @section json_v3_0_0 json Module Version 3.0.0
 
+    - a key with a NUL character in a JSON, CBOR or TOON document raises \c HASH-KEY-ERROR, as a hash key cannot
+      contain one: the key was cut at the NUL character and could replace the value of another key; a JSON Pointer
+      with a NUL character raises \c JSON-POINTER-ERROR
     - the json module is now delivered with %Qore itself and versions with it; it was previously
       maintained in a separate \c module-json repository
     - the JSON parser and serializer are published to other binary modules as a versioned C++ API

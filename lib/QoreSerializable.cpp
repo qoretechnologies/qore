@@ -2258,6 +2258,10 @@ QoreHashNode* QoreSerializable::deserializeHashFromStream(ExceptionSink* xsink, 
         if (*xsink) {
             return nullptr;
         }
+        // a key with a NUL character cannot be a hash key
+        if (QoreHashNode::checkKey(tstr->c_str(), tstr->size(), xsink)) {
+            return nullptr;
+        }
 
         ValueHolder val(deserializeValueFromStream(xsink, reader, flags), xsink);
         if (*xsink) {
