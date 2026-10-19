@@ -842,14 +842,16 @@ int qore_string_private::concatEncodeUriRequest(ExceptionSink* xsink, const qore
         } else if (*p == '"') {
             concat("%22");
         } else if (*p > 127) {
-            size_t len = q_UTF8_get_char_len((const char*)p, str.len - ((const char*)p - str.buf));
+            // a negative length means an incomplete character at the end of the string
+            qore_offset_t len = q_UTF8_get_char_len((const char*)p, str.len - ((const char*)p - str.buf));
             if (len <= 0) {
-                xsink->raiseException("INVALID-ENCODING", "invalid UTF-8 getEncoding() found in string");
+                xsink->raiseException("INVALID-ENCODING", "invalid UTF-8 encoding found in string");
                 return -1;
             }
             // add UTF-8 percent-encoded characters
-            for (size_t i = 0; i < len; ++i)
+            for (qore_offset_t i = 0; i < len; ++i) {
                 sprintf("%%%X", (unsigned)p[i]);
+            }
             p += len;
             continue;
         } else if (state == QUS_PATH) {
@@ -3261,13 +3263,14 @@ int QoreString::concatEncodeUrl(ExceptionSink* xsink, const QoreString& url, boo
         } else if ((*p) == '"') {
             concat("%22");
         } else if (*p > 127) {
-            size_t len = q_UTF8_get_char_len((const char*)p, str->size() - ((const char*)p - str->c_str()));
+            // a negative length means an incomplete character at the end of the string
+            qore_offset_t len = q_UTF8_get_char_len((const char*)p, str->size() - ((const char*)p - str->c_str()));
             if (len <= 0) {
                 xsink->raiseException("INVALID-ENCODING", "invalid UTF-8 encoding found in string");
                 return -1;
             }
             // add UTF-8 percent-encoded characters
-            for (size_t i = 0; i < len; ++i) {
+            for (qore_offset_t i = 0; i < len; ++i) {
                 sprintf("%%%X", (unsigned)p[i]);
             }
             p += len;
