@@ -33,7 +33,7 @@
 %requires(reexport) DataProvider
 %requires(reexport) GoogleDataProvider
 %requires(reexport) GoogleRestClient
-%requires MailMessage
+%requires MailMessage >= 1.5.1
 
 module GmailDataProvider {
     version = "1.2";
@@ -737,6 +737,8 @@ module GmailDataProvider {
     @section gmaildataprovider_relnotes Release Notes
 
     @subsection gmaildataprovider_v1_2 GmailDataProvider v1.2
+    - the \c send-message and \c create-draft actions upload the message as it is; a line of the message that
+      starts with \c "." was given another \c "." as for the SMTP \c DATA command, which Gmail stored and showed
     - added the \c create-draft, \c list-drafts, \c get-draft, \c send-draft, and \c delete-draft actions for
       working with drafts; \c get-draft, \c send-draft, and \c delete-draft offer the account's drafts as
       reference data

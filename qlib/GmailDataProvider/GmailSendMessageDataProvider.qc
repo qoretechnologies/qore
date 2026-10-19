@@ -104,8 +104,10 @@ public class GmailMessageSendDataProvider inherits GoogleDataProvider::GoogleApi
             msg.addHeader({"References": references});
         }
 
-        # throws a MESSAGE-ERROR exception if the message cannot be sent
-        return make_base64_url_string(msg.serialize());
+        # throws a MESSAGE-ERROR exception if the message cannot be sent; Gmail takes the whole message as it is, so
+        # it is serialized without SMTP transparency: an SMTP server removes the "." added at the start of a line,
+        # but the Gmail API does not
+        return make_base64_url_string(msg.serializeRaw());
     }
 
     #! Returns the Gmail API \c Message body for a send or draft request
