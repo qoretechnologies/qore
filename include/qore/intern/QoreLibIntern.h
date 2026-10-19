@@ -1604,12 +1604,27 @@ DLLLOCAL QoreListNode* split_intern(const char* pattern, size_t pl, const char* 
     ExceptionSink* xsink = nullptr);
 DLLLOCAL QoreStringNode* join_intern(const QoreStringNode* p0, const QoreListNode* l, int offset,
     ExceptionSink* xsink);
+class QoreLineTerminatorSource;
+//! splits a string at a separator, where fields can be quoted
+/** @param h the line iterator whose next lines continue a quoted field, if any
+    @param eol the line separator joining the lines of a quoted field if \a lts is null; nullptr for \c "\n"
+    @param esc the escape of a quote in a quoted field: a quote preceded by it is part of the field's text; if it is
+    empty or the quote itself, a quote in a quoted field is only escaped by doubling it (RFC 4180), and a doubled
+    quote is an escaped quote in either case
+    @param lts if not null, the source of the line end removed from each line of \a h, which joins the lines of a
+    quoted field as they are in the data
+*/
 DLLLOCAL QoreListNode* split_with_quote(ExceptionSink* xsink, const char* sep, size_t seplen, const QoreString* str,
     const char* quote, size_t quotelen, bool trim_unquoted, AbstractIteratorHelper* h = nullptr,
-    const QoreString* eol = nullptr, bool keep_trailing_empty = false);
+    const QoreString* eol = nullptr, bool keep_trailing_empty = false, const char* esc = "\\", size_t esclen = 1,
+    QoreLineTerminatorSource* lts = nullptr);
+//! splits a string at a separator, where fields can be quoted
+/** @param quote_escape the escape of a quote in a quoted field; nullptr for a backslash; see the other variant
+*/
 DLLLOCAL QoreListNode* split_with_quote(ExceptionSink* xsink, const QoreString* sep, const QoreString* str,
     const QoreString* quote, bool trim_unquoted, AbstractIteratorHelper* h = nullptr,
-    const QoreString* eol = nullptr, bool keep_trailing_empty = false);
+    const QoreString* eol = nullptr, bool keep_trailing_empty = false, const QoreString* quote_escape = nullptr,
+    QoreLineTerminatorSource* lts = nullptr);
 DLLLOCAL bool inlist_intern(const QoreValue arg, const QoreListNode* l, ExceptionSink* xsink);
 DLLLOCAL QoreStringNode* format_float_intern(const QoreString& fmt, double num, ExceptionSink* xsink);
 DLLLOCAL QoreStringNode* format_float_intern(int prec, const QoreString& dsep, const QoreString& tsep, double num,

@@ -54,12 +54,12 @@ qclass InputStreamLineIterator [arg=InputStreamLineIterator* isli; ns=Qore; vpar
 
 //! Creates a buffered InputStreamLineIterator object for iterating over the given \c InputStream
 /** @param input_stream the \c InputStream to iterate over
-    @param encoding character encoding of the data from input stream; if not ASCII-compatible, all data will be
-    converted to UTF-8; if not present, the @ref default_encoding "default character encoding" is assumed
+    @param encoding character encoding of the data from input stream, which the lines are returned in; if not present,
+    the @ref default_encoding "default character encoding" is assumed
     @param line_separator the optional end of line character(s) to use to detect lines in the data; if this string is not passed,
-    then if the character-encoding is ASCII-compatible, the end of line character(s) are detected automatically from
-    \c "\n", \c "\r", or \c "\r\n"; if the stream uses a non-ASCII-compatible character encoding, then \c "\n" is
-    assumed
+    then the end of line character(s) are detected automatically from \c "\n", \c "\r", or \c "\r\n", also in a
+    character encoding that is not ASCII-compatible, such as UTF-16 or UTF-32; in a stateful character encoding that is
+    not ASCII-compatible, \c "\n" is assumed
     @param trim_line if @ref True the string return values for the lines iterated will be trimmed of the line separator bytes
     @param buffer_size the size of the buffer for the internal @ref Qore::BufferedStreamReader "BufferedStreamReader" in
     bytes; must be a positive integer
@@ -88,9 +88,9 @@ InputStreamLineIterator::constructor(Qore::InputStream[InputStream] input_stream
 //! Creates the InputStreamLineIterator for iterating data from the given \c StreamReader.
 /** @param stream_reader the \c StreamReader used as a source of data to iterate over
     @param line_separator the optional end of line character(s) to use to detect lines in the data; if this string is not passed,
-    then if the character-encoding is ASCII-compatible, the end of line character(s) are detected automatically from
-    \c "\n", \c "\r", or \c "\r\n"; if the stream uses a non-ASCII-compatible character encoding, then \c "\n" is
-    assumed
+    then the end of line character(s) are detected automatically from \c "\n", \c "\r", or \c "\r\n", also in a
+    character encoding that is not ASCII-compatible, such as UTF-16 or UTF-32; in a stateful character encoding that is
+    not ASCII-compatible, \c "\n" is assumed
     @param trim_line if @ref True the string return values for the lines iterated will be trimmed of the line separator bytes
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the line_separator argument has a different

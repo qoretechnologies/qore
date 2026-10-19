@@ -23,6 +23,7 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
 %requires ../ExecModeHarness.qm

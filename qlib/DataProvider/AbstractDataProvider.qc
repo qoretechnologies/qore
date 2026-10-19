@@ -3558,13 +3558,26 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     }
 
     #! Makes a request and returns the response
-    /** @param req the request to serialize and make according to the request type
+    /** The request is checked with the request type for the request data (see getRequestTypeWithData()) before the
+        request is made.
+
+        @param req the request to serialize and make according to the request type
         @param request_options the request options; will be processed by validateRequestOptions()
 
         @return the response to the request
 
         @throw INVALID-OPERATION the data provider does not support the request API
-        @throw INVALID-REQUEST the request argument provided do not match the expected request type
+        @throw RUNTIME-TYPE-ERROR the request type does not accept a value of the request: a request that is not a
+        hash for a hash request type, a field with a value of the wrong type, or a value that is not one of a field's
+        allowed values; the description gives the type details; raised by getRequestTypeWithData(), whose default
+        implementation checks the request with the request type
+        @throw INVALID-REQUEST the request type does not accept the request when it is converted to the request type
+        after getRequestTypeWithData(): a required value is missing (which getRequestTypeWithData() accepts, as data
+        can be partial), or, for a data provider whose getRequestTypeWithDataImpl() does not check the request, any
+        value that the request type does not accept; the description names the original error, which is the \c ex
+        key of the exception argument
+
+        @note data providers can raise other errors for requests that they check themselves
     */
     auto doRequest(auto req, *hash<auto> request_options) {
         checkRequest();
@@ -3931,8 +3944,15 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @return the request type for this provider according to any call data passed
 
         @throw INVALID-OPERATION the data provider does not support the request API
+        @throw RUNTIME-TYPE-ERROR the request type does not accept a value of the request data: data that is not a
+        hash for a hash request type, a field with a value of the wrong type, or a value that is not one of a field's
+        allowed values; the description gives the type details; the default implementation checks the data with the
+        request type, and a missing value is accepted, as the data can be partial
 
-        @note This API is meant to provide information about request data types that can depend on the call data
+        @note
+        - This API is meant to provide information about request data types that can depend on the call data
+        - data providers that determine the request type from the data can raise other errors for data that they
+          check themselves
 
         @since DataProvider 3.0
     */

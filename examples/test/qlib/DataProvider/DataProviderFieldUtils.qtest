@@ -58,6 +58,8 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
 
         # input_field_names marker tests
         addTestCase("input_field_names - BaseOptionInfo marker", \inputFieldNamesMarker());
+        addTestCase("input_field_names - action options from option info", \inputFieldNamesActionOptions());
+        addTestCase("input_field_names - registered processor actions", \inputFieldNamesProcessorActions());
 
         # Processor backward compatibility tests
         addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
@@ -238,6 +240,84 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         hash<auto> xcorr_opts = QoreCrossCorrelationProcessor::ConstructorOptions;
         assertTrue(xcorr_opts.field_x.input_field_names);
         assertTrue(xcorr_opts.field_y.input_field_names);
+    }
+
+    #! getActionOptionFromFields() keeps the marker of each form of option definition
+    inputFieldNamesActionOptions() {
+        AbstractDataProviderType list_type = new SoftListDataType(AbstractDataProviderTypeMap."string", True);
+        hash<string, hash<ActionOptionInfo>> opts = DataProviderActionCatalog::getActionOptionFromFields({
+            # option info, as data provider constructor options are given
+            "info": <DataProviderOptionInfo>{
+                "display_name": "Fields",
+                "short_desc": "Field names",
+                "desc": "Field names",
+                "type": list_type,
+                "input_field_names": True,
+            },
+            # a plain hash
+            "plain": {
+                "display_name": "Field",
+                "desc": "A field name",
+                "type": AbstractDataProviderTypeMap."string",
+                "input_field_names": True,
+            },
+            # a data field with the marker as an attribute
+            "field": new QoreDataField({
+                "name": "field",
+                "desc": "A field name",
+                "type": AbstractDataProviderTypeMap."string",
+                "attr": {"input_field_names": True},
+            }),
+            # no marker
+            "other": <DataProviderOptionInfo>{
+                "display_name": "Other",
+                "short_desc": "Other",
+                "desc": "Other",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+        });
+        assertEq(True, opts.info.input_field_names);
+        assertEq(True, opts.plain.input_field_names);
+        assertEq(True, opts.field.input_field_names);
+        assertNothing(opts.other.input_field_names);
+        # the other attributes of the options are unchanged
+        assertEq(list_type.getName(), opts.info.type.getName());
+        assertEq("Field names", opts.info.short_desc);
+    }
+
+    #! Every option of a registered processor action whose constructor option has the marker keeps it, so that
+    #! host applications fill its allowed values with the field names of the input
+    inputFieldNamesProcessorActions() {
+        int checked = 0;
+        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActionsEx(QoreApp::AppName)) {
+            if (!action.cls || !action.options) {
+                continue;
+            }
+            Class cls = Class::forName(action.cls);
+            *hash<auto> ctor_opts;
+            foreach string name in ("ConstructorOptions", "BaseConstructorOptions") {
+                try {
+                    ctor_opts += cls.getConstant(name).getValue();
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "CONSTANT-ERROR" && ex.err != "UNKNOWN-CONSTANT") {
+                        rethrow;
+                    }
+                }
+            }
+            foreach string opt in (keys action.options) {
+                if (!ctor_opts{opt}.input_field_names) {
+                    continue;
+                }
+                assertEq(True, action.options{opt}.input_field_names, sprintf("%s: %s", action.action, opt));
+                ++checked;
+            }
+        }
+        # group-by, select-fields, remove-fields, search-replace, correlation, cross-correlation and the
+        # analytics processors
+        assertGt(10, checked);
+        hash<DataProviderActionInfo> group_by = DataProviderActionCatalog::getAppActionEx(QoreApp::AppName,
+            "group-by");
+        assertEq(True, group_by.options.group_by.input_field_names);
     }
 
     # ===================== Processor Backward Compatibility Tests =====================

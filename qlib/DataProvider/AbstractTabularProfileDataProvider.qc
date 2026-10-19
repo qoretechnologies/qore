@@ -118,6 +118,22 @@ public class AbstractTabularProfileDataProvider inherits AbstractDataProvider {
     */
     abstract private binary readLocation(string location);
 
+    #! Reads the spreadsheet at a location as a raw grid of cells
+    /** The default implementation reads the content of the location with readLocation() and the grid with
+        readGrid().  A provider whose reader streams its input overrides it to read the location as a stream, so that
+        the content of a large file is not held in memory.
+
+        @param location the file location
+        @param max_rows the maximum number of rows read per sheet
+
+        @return the raw grid
+
+        @since DataProvider 3.11
+    */
+    private hash<TabularWorkbookGrid> readLocationGrid(string location, int max_rows) {
+        return readGrid(readLocation(location), max_rows);
+    }
+
     #! Profiles a spreadsheet
     /** @param req the request; see @ref TabularProfileRequestDataType
         @param request_options request options
@@ -135,8 +151,10 @@ public class AbstractTabularProfileDataProvider inherits AbstractDataProvider {
         if (max_rows <= 0) {
             throw "TABULAR-PROFILE-ERROR", sprintf("max_rows must be positive; got %d", max_rows);
         }
-        binary content = exists req.path ? readLocation(req.path) : req.data;
-        return TabularProfiler::profile(readGrid(content, max_rows), <TabularProfileOptions>{
+        hash<TabularWorkbookGrid> grid = exists req.path
+            ? readLocationGrid(req.path, max_rows)
+            : readGrid(req.data, max_rows);
+        return TabularProfiler::profile(grid, <TabularProfileOptions>{
             "sample_rows": req.sample_rows ?? 5,
             "redact": req.redact ?? True,
         });

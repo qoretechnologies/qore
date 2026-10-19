@@ -828,20 +828,35 @@ UK,1234567893,28052012";
 
     escapeTest() {
         list row = ( ( '12"', 'a"bc"', ), );
-        string esc_default = '"12\"","a\"bc\""'+"\n";
+        string esc_backslash = '"12\"","a\"bc\""'+"\n";
         string esc_double = '"12""","a""bc"""'+"\n";
 
+        # quotes are doubled by default (RFC 4180)
         CsvStringWriter w( ("optimal-quotes" : False) );
         string outstr = w.write(row);
-        testAssertion("default escaping", \equals(), (esc_default, outstr));
+        testAssertion("default escaping", \equals(), (esc_double, outstr));
 
         w = new CsvStringWriter(("optimal_quotes": False) );
         outstr = w.write(row);
-        assertEq(esc_default, outstr);
+        assertEq(esc_double, outstr);
 
         w = new CsvStringWriter( ("optimal-quotes" : False, "quote_escape" : '"') );
         outstr = w.write(row);
         testAssertion("double escaping", \equals(), (esc_double, outstr));
+
+        # an empty escape is the quote character
+        w = new CsvStringWriter({"optimal_quotes": False, "quote_escape": ""});
+        assertEq(esc_double, w.write(row));
+
+        # backslash escaping, as before CsvUtil 1.12, read back with the reader's quote_escape option
+        w = new CsvStringWriter({"optimal_quotes": False, "quote_escape": "\\"});
+        outstr = w.write(row);
+        assertEq(esc_backslash, outstr);
+        assertEq(({"0": '12"', "1": 'a"bc"'},), (map $1, new CsvDataIterator(outstr, {"quote_escape": "\\"})));
+        # read as RFC 4180 data, a backslash is an ordinary character, and these fields are malformed
+        assertThrows("SPLIT-ERROR", sub () { map $1, new CsvDataIterator(outstr); });
+        # RFC 4180 output reads back with the default options
+        assertEq(({"0": '12"', "1": 'a"bc"'},), (map $1, new CsvDataIterator(esc_double)));
 
         hash dmh = ("cc": "XX");
         w = new CsvStringWriter({

@@ -721,11 +721,12 @@ AbstractIterator<string> <string>::splitLinesRegex(string separator_pattern, int
 
 //! Splits a string into a list of components based on a separator string and a quote character
 /** The quote character can appear as the first part of a field, in which case it is assumed to designate the entire
-    field. If instances of the quote character are found in the field preceded by a backquote character
-    (<tt>\\</tt>), then these quote characters are included as part of the field's text and not treated as quote
-    characters.
+    field.  A quote character in a quoted field is escaped by doubling it.  Unless \a quote_escape is the quote
+    character or an empty string, a quote character preceded by \a quote_escape (a backslash by default) is also part
+    of the field's text, without the escape.
     Also the separator character can appear as a part of a field with this variant.
-    This variant is useful for parsing CSV files, for example.
+    This variant is useful for parsing CSV files, for example; RFC 4180 CSV data is split with \a quote_escape set to
+    the quote character.
 
     @param separator the separator string; if the separator string is not found in the string to split, then a list with
     only one element containing the entire string argument is returned'; if this string has a different
@@ -735,6 +736,9 @@ AbstractIterator<string> <string>::splitLinesRegex(string separator_pattern, int
     @param trim_unquoted remove leading and trailing whitespace from unquoted fields
     @param keep_trailing_empty keep the empty final field produced by a subject that ends with the separator; see
     @ref split_trailing_empty_fields
+    @param quote_escape the escape of a quote character in a quoted field: \c "\\\\" (the default) for a backslash
+    before the quote; the quote character itself, or an empty string, for RFC 4180 CSV data, where a backslash is an
+    ordinary character
 
     @return a list of each component of a string separated by a separator string, with the separator and any enclosing
     quote characters removed
@@ -755,10 +759,13 @@ list<string> list = "some,'text with spaces, and commas, here is another one! ,'
     @since
     - %Qore 0.8.5 added this pseudo-method
     - %Qore 0.8.6 added the \c trim_unquoted parameter
-    - %Qore 3.0 added the \c keep_trailing_empty parameter
+    - %Qore 3.0 added the \c keep_trailing_empty and \c quote_escape parameters; a quoted field starting with an
+      even number of quotes, such as <tt>""""</tt>, is split as escaped quotes, and a quoted field without its closing
+      quote raises \c SPLIT-ERROR
  */
-list<string> <string>::split(string separator, string quote, bool trim_unquoted = False, bool keep_trailing_empty = False) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    return split_with_quote(xsink, separator, str, quote, trim_unquoted, nullptr, nullptr, keep_trailing_empty);
+list<string> <string>::split(string separator, string quote, bool trim_unquoted = False, bool keep_trailing_empty = False, string quote_escape = "\\") [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return split_with_quote(xsink, separator, str, quote, trim_unquoted, nullptr, nullptr, keep_trailing_empty,
+        quote_escape);
 }
 
 //! Splits a string into a list of components based on a separator regular expression

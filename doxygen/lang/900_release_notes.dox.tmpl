@@ -9,6 +9,33 @@
     \c api-key, \c password or \c auth, are no longer exposed in the exception information, request information or
     logs of the @ref restclientintro "RestClient" and @ref restclientiointro "RestClientIo" modules.
 
+    <b>CSV files are RFC 4180 by default</b>: the @ref csvutilintro "CsvUtil" writers escape a quote in a quoted
+    field by doubling it, as spreadsheet programs and most applications do, instead of with a backslash, and quote
+    fields containing a line break or starting or ending with white space, so that every value is read back as it
+    was written.  The readers read a backslash as an ordinary character, so a field such as <tt>"C:\\data\\"</tt> is
+    read as <tt>C:\\data\\</tt> instead of failing.  Files written by earlier versions with the default
+    \c quote_escape option contain <tt>\\"</tt> for a quote in a field; read them with the new reader option
+    <tt>quote_escape: "\\\\"</tt>, or write the old format with the writer option <tt>quote_escape: "\\\\"</tt>.
+
+    Lines of text in a character encoding that is not ASCII-compatible, such as UTF-16 (the "Unicode text" that
+    spreadsheet programs export) or UTF-32, end at \c "\r\n", \c "\n" or \c "\r" when they are read with
+    @ref Qore::StreamReader::readLine() "StreamReader::readLine()", a
+    @ref Qore::BufferedStreamReader "BufferedStreamReader" or an
+    @ref Qore::InputStreamLineIterator "InputStreamLineIterator" without an end-of-line marker, as in other
+    encodings.  Only \c "\n" ended a line, so each line of a file with Windows line ends kept a \c "\r", and a
+    CSV file with a quoted field at the end of a line could not be read with the @ref csvutilintro "CsvUtil"
+    iterators.
+
+    Quoted fields are split correctly by @ref Qore::AbstractLineIterator::getSplitLine() and
+    @ref Qore::<string>::split(string, string, bool, bool, string) "<string>::split()": a field of escaped quotes,
+    such as <tt>""""</tt> (one quote character), is read instead of raising \c SPLIT-ERROR; a field whose value
+    starts with a line break is no longer split into two records; the line breaks in a field read from a
+    @ref Qore::DataLineIterator "DataLineIterator", @ref Qore::FileLineIterator "FileLineIterator" or
+    @ref Qore::InputStreamLineIterator "InputStreamLineIterator" are kept as they are in the data, where a
+    \c "\r\n" or \c "\r" was read as \c "\n" when line ends are detected automatically; and a field without its
+    closing quote raises \c SPLIT-ERROR when splitting a string, where its text was silently returned.  The new
+    \c quote_escape parameter selects RFC 4180 splitting, where a backslash is an ordinary character.
+
     HttpClientIo and RestClientIo report certificate verification failures from HTTP/1.1 and HTTP/2 requests immediately,
     preserving OpenSSL's certificate verification reason. A refused certificate is no longer retried as a transient
     connection failure, which could delay the call and replace the original reason with a connection timeout.

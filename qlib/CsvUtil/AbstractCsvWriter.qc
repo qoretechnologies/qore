@@ -44,9 +44,9 @@ public namespace CsvUtil {
         |\c "encoding"|@ref string_type "string"|the @ref character_encoding "character encoding" for the file (and for tagging string data read); if the value of this key is not a string then it will be ignored
         |\c "eol"|@ref string_type "string"|the end of line character(s) (default: auto-detect); if the value of this key is not a string then it will be ignored
         |\c "info_log"|@ref code_type "code"|a call reference / closure for informational logging when performing bulk generation with write(Qore::SQL::SQLStatement); must take a single string argument
-        |\c "optimal_quotes"|\c bool_type "bool"|set to @ref False "False" to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting (i.e. they contain a quote or separator character); the default is @ref True "True"
+        |\c "optimal_quotes"|\c bool_type "bool"|set to @ref False "False" to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting: if they contain the quote character, the separator, the end of line, a carriage return or a line feed, or start or end with white space, which a reader strips from unquoted fields; the default is @ref True "True"
         |\c "quote"|@ref string_type "string"|the field quote character (default: \c '\"')
-        |\c "quote_escape"|@ref string_type "string"|the escape character(s) used for \c "quote" (default: \c '\\')
+        |\c "quote_escape"|@ref string_type "string"|the escape character(s) written before a \c "quote" character in a quoted field; if not given or an empty string (the default), the quote character itself, so a quote is escaped by doubling it, as in RFC 4180 CSV data; before %CsvUtil 1.12 the default was a backslash (\c '\\'), which a reader reads with its \c "quote_escape" option set to \c '\\'
         |\c "separator"|@ref string_type "string"|the string separating the fields in the file (default: \c ",")
         |\c "timezone"|@ref string_type "string"|the time zone region (ex: \c "Europe/Prague") whose wall-clock time dates are written in; a field's \c "timezone" attribute overrides it; if not given, dates are written in their own time zone, and dates written with a \c "mask" in the current time zone (@since %CsvUtil 1.12)
         |\c "verify_columns"|\c bool_type "bool"|if @ref True "True" (the default is @ref False "False") then if a line is parsed with a different column count than other lines, a \c CSVFILEWRITER-DATA-ERROR exception is thrown
@@ -66,6 +66,21 @@ public namespace CsvUtil {
         - \c "write-headers"
      */
     public class AbstractCsvWriter inherits private CsvHelper {
+        public {
+            #! white space that a reader strips from the start or end of an unquoted field, by default
+            /** a field starting or ending with one of these characters is quoted
+
+                @since %CsvUtil 1.12
+            */
+            const EdgeWhitespace = {
+                " ": True,
+                "\t": True,
+                "\v": True,
+                "\n": True,
+                "\r": True,
+            };
+        }
+
         private {
             #! valid options for the object (a hash for quick lookups of valid keys)
             const hash<string, int> Options = {
@@ -101,8 +116,11 @@ public namespace CsvUtil {
             #! field content delimiter
             string quote = "\"";
 
-            #! quote escape character
-            string m_quoteEscapeChar = "\\";
+            #! quote escape character(s); an empty string (the default) means the quote character (RFC 4180)
+            string m_quoteEscapeChar = "";
+
+            #! a quote character in a quoted field as it is written: escaped
+            string escapedQuote;
 
             #! end of line sequence
             string eol = EOL_UNIX;
@@ -311,6 +329,7 @@ public namespace CsvUtil {
             }
             # make eg. '"%s",' template
             baseTemplate = sprintf("%s%%s%s%s", quote, quote, separator);
+            escapedQuote = (m_quoteEscapeChar.val() ? m_quoteEscapeChar : quote) + quote;
         }
 
         #! Process specification and set internal variable for mapping
@@ -617,15 +636,12 @@ public namespace CsvUtil {
 
         private string prepareRawLineIntern(list<auto> values) {
             if (!optimal_quotes) {
-                # make full line template
-                string template = strmul(baseTemplate, elements values, 1) + eol;
-                # escape separators in strings; complex types are serialized via csvValueToString()
-                list<auto> row = map replace(csvValueToString($1), quote, m_quoteEscapeChar + quote), values;
-
-                return vsprintf(template, row);
+                # every field is quoted; complex types are serialized via csvValueToString()
+                list<string> row = map quoteField(csvValueToString($1)), values;
+                return (foldl $1 + separator + $2, row) + eol;
             }
 
-            list<auto> l = ();
+            list<string> l = ();
             foreach auto v in (values) {
                 # Convert non-string-printable values (hash, list, etc.) to a string
                 # representation; the result is then quoted like any other string value;
@@ -634,22 +650,31 @@ public namespace CsvUtil {
                     l += "";
                     continue;
                 }
-                if (!v.strp()) {
-                    v = serializeValue(v);
-                }
-                if (v.typeCode() == NT_STRING) {
-                    if (v.find(quote) >= 0) {
-                        v = replace(v, quote, m_quoteEscapeChar + quote);
-                        v = sprintf("\"%s\"", v);
-                    } else if (v.find(separator) >= 0) {
-                        v = sprintf("\"%s\"", v);
-                    }
-                    l += v;
-                    continue;
-                }
-                l += string(v);
+                string sv = v.strp() ? v.toString() : serializeValue(v);
+                l += needsQuotes(sv) ? quoteField(sv) : sv;
             }
             return (foldl $1 + separator + $2, l) + eol;
+        }
+
+        #! Returns True if a field must be quoted to be read back as it is written
+        /** A field is quoted if it contains the quote character, the separator, the end of line, a carriage return or
+            a line feed, or if it starts or ends with white space, which a reader strips from unquoted fields
+
+            @since %CsvUtil 1.12
+        */
+        private bool needsQuotes(string v) {
+            if (!v.val()) {
+                return False;
+            }
+            return v.find(quote) >= 0 || v.find(separator) >= 0 || v.find("\n") >= 0 || v.find("\r") >= 0
+                || (eol.val() && v.find(eol) >= 0) || EdgeWhitespace{v[0]} || EdgeWhitespace{v[v.length() - 1]};
+        }
+
+        #! Returns a quoted field: quote characters in it are escaped
+        /** @since %CsvUtil 1.12
+        */
+        private string quoteField(string v) {
+            return quote + replace(v, quote, escapedQuote) + quote;
         }
 
         #! Converts a value to a string suitable for CSV output

@@ -1,0 +1,138 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires CsvUtil
+
+%exec-class WideLineEndsTest
+
+#! Tests line ends in text in encodings that are not ASCII-compatible (UTF-16, UTF-32), when they are detected
+/** "\r\n", "\n" and "\r" end a line, in the encoding of the text, as in ASCII-compatible text; characters whose
+    code units contain the bytes of a line end (U+010A, U+0A0D) are not line ends
+*/
+class WideLineEndsTest inherits QUnit::Test {
+    public {
+        #! lines with every line end, characters with line end bytes in their code units, and a last line without one
+        const Text = "a\r\nĊb\nc਍\rd\r\n\r\ne";
+
+        #! the lines of the text
+        const Lines = ("a", "Ċb", "c਍", "d", "", "e");
+
+        #! the lines of the text with their line ends
+        const LinesWithEnds = ("a\r\n", "Ċb\n", "c਍\r", "d\r\n", "\r\n", "e");
+
+        #! the encodings and the byte order mark written before the text, if any
+        const Encodings = (
+            {"encoding": "UTF-16LE"},
+            {"encoding": "UTF-16BE"},
+            {"encoding": "UTF-32LE"},
+            {"encoding": "UTF-32BE"},
+            {"encoding": "UTF-16", "data_encoding": "UTF-16LE", "bom": <fffe>},
+            {"encoding": "UTF-16", "data_encoding": "UTF-16BE", "bom": <feff>},
+            {"encoding": "UTF-32", "data_encoding": "UTF-32LE", "bom": <fffe0000>},
+        );
+    }
+
+    constructor() : QUnit::Test("WideLineEnds test", "1.0") {
+        addTestCase("InputStreamLineIterator", \testLineIterator());
+        addTestCase("StreamReader and BufferedStreamReader", \testStreamReaders());
+        addTestCase("a line ending with a carriage return", \testCarriageReturn());
+        addTestCase("quoted fields", \testQuotedFields());
+        addTestCase("CSV data", \testCsv());
+        set_return_value(main());
+    }
+
+    #! Returns the bytes of the text in an encoding case
+    private static binary getBytes(hash<auto> c, string text) {
+        return (c.bom ?? binary()) + binary(convert_encoding(text, c.data_encoding ?? c.encoding));
+    }
+
+    #! Returns the lines read by a line iterator in UTF-8
+    private static list<string> readLines(AbstractLineIterator i) {
+        list<string> rv = ();
+        while (i.next()) {
+            push rv, convert_encoding(i.getValue(), "UTF-8");
+        }
+        return rv;
+    }
+
+    testLineIterator() {
+        foreach hash<auto> c in (Encodings) {
+            string label = c.encoding + (c.bom ? " with a byte order mark" : "");
+            binary data = getBytes(c, Text);
+            InputStreamLineIterator i(new BinaryInputStream(data), c.encoding);
+            assertEq(Lines, readLines(i), label);
+            i = new InputStreamLineIterator(new BinaryInputStream(data), c.encoding, NOTHING, False);
+            assertEq(LinesWithEnds, readLines(i), label + " with line ends");
+        }
+    }
+
+    testStreamReaders() {
+        foreach hash<auto> c in (Encodings) {
+            string label = c.encoding + (c.bom ? " with a byte order mark" : "");
+            binary data = getBytes(c, Text);
+            foreach bool buffered in ((False, True)) {
+                StreamReader sr = buffered
+                    ? new BufferedStreamReader(new BinaryInputStream(data), c.encoding)
+                    : new StreamReader(new BinaryInputStream(data), c.encoding);
+                list<string> lines = ();
+                while (exists (*string line = sr.readLine())) {
+                    push lines, convert_encoding(line, "UTF-8");
+                }
+                assertEq(Lines, lines, sprintf("%s %s", label, buffered ? "buffered" : "unbuffered"));
+            }
+        }
+    }
+
+    #! The character after a carriage return is read to find "\r\n"; it is the start of the next read
+    testCarriageReturn() {
+        foreach string enc in ("UTF-16LE", "UTF-32BE") {
+            binary data = binary(convert_encoding("ab\rcd", enc));
+            StreamReader sr(new BinaryInputStream(data), enc);
+            assertEq("ab", convert_encoding(sr.readLine(), "UTF-8"), enc);
+            assertEq("cd", convert_encoding(sr.readString(2), "UTF-8"), enc);
+            sr = new StreamReader(new BinaryInputStream(data), enc);
+            assertEq("ab", convert_encoding(sr.readLine(), "UTF-8"), enc);
+            assertEq(binary(convert_encoding("cd", enc)), sr.readBinary(-1), enc);
+            # a carriage return at the end of the text
+            sr = new StreamReader(new BinaryInputStream(binary(convert_encoding("ab\r", enc))), enc);
+            assertEq("ab", convert_encoding(sr.readLine(), "UTF-8"), enc);
+            assertNothing(sr.readLine(), enc);
+        }
+    }
+
+    testQuotedFields() {
+        string text = "1,\"a\r\nb\",\"x\"\r\n2,\"c\rd\",\"y\"\r\n3,\"e\nf\",\"z\"\n";
+        list<list<string>> expected = (
+            ("1", "a\r\nb", "x"),
+            ("2", "c\rd", "y"),
+            ("3", "e\nf", "z"),
+        );
+        foreach hash<auto> c in (Encodings) {
+            string label = c.encoding + (c.bom ? " with a byte order mark" : "");
+            InputStreamLineIterator i(new BinaryInputStream(getBytes(c, text)), c.encoding);
+            list<list<string>> rv = ();
+            while (i.next()) {
+                push rv, (map convert_encoding($1, "UTF-8"), i.getSplitLine(",", "\"", quote_escape: "\""));
+            }
+            assertEq(expected, rv, label);
+        }
+    }
+
+    testCsv() {
+        string text = "id,note,state\r\n1,\"two\r\nlines\",\"ok\"\r\n2,plain,\"done\"\r\n";
+        list<hash<auto>> expected = (
+            {"id": "1", "note": "two\r\nlines", "state": "ok"},
+            {"id": "2", "note": "plain", "state": "done"},
+        );
+        foreach string enc in ("UTF-16LE", "UTF-16BE", "UTF-32LE") {
+            CsvIterator i(new BinaryInputStream(binary(convert_encoding(text, enc))), enc, {"header_names": True});
+            list<hash<auto>> recs = map (map {$1.key: convert_encoding($1.value, "UTF-8")}, $1.pairIterator()), i;
+            assertEq(expected, recs, enc);
+        }
+    }
+}

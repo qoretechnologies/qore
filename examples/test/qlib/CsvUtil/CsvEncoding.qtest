@@ -132,7 +132,63 @@ public class CsvEncodingTest inherits QUnit::Test {
         addTestCase("typed fields", \typedFields());
         addTestCase("EBCDIC", \ebcdic());
         addTestCase("custom end-of-line in multi-byte data", \multiByteEol());
+        addTestCase("the writers write in their encoding", \writerEncodings());
         set_return_value(main());
+    }
+
+    #! Returns the record of a row
+    private static hash<auto> rowRecord(list<string> headers, list<string> row) {
+        hash<auto> rv;
+        map rv{$1} = row[$#], headers;
+        return rv;
+    }
+
+    #! The string, file, stream and data provider writers write the text in the encoding of their \c encoding option
+    writerEncodings() {
+        foreach hash<auto> c in (Cases) {
+            string enc = c.encoding;
+            list<string> headers = c.headers;
+            list<list<string>> rows = map ($1, $1 + "-" + headers[0], "x"), headers;
+            string expected = (foldl $1 + "," + $2, headers) + "\n"
+                + (foldl $1 + $2, (map (foldl $1 + "," + $2, $1) + "\n", rows));
+            binary expected_bytes = binary(convert_encoding(expected, enc));
+            hash<auto> opts = {"headers": headers, "encoding": enc};
+
+            CsvStringWriter sw(opts);
+            map sw.writeLine($1), rows;
+            string content = sw.getContent();
+            assertEq(enc, content.encoding(), "string " + enc);
+            assertEq(expected_bytes, binary(content), "string " + enc);
+
+            string path = dir + DirSep + "writer-" + get_random_string(8) + ".csv";
+            on_exit unlink(path);
+            {
+                CsvFileWriter fw(path, opts);
+                map fw.writeLine($1), rows;
+            }
+            assertEq(expected_bytes, ReadOnlyFile::readBinaryFile(path), "file " + enc);
+
+            BinaryOutputStream out();
+            {
+                CsvWriter w(out, opts);
+                map w.writeLine($1), rows;
+            }
+            assertEq(expected_bytes, out.getData(), "stream " + enc);
+
+            BinaryOutputStream dp_out();
+            {
+                CsvWriteDataProvider dp(dp_out, opts);
+                map dp.createRecord(rowRecord(headers, $1)), rows;
+            }
+            binary dp_bytes = dp_out.getData();
+            assertEq(expected_bytes, dp_bytes, "data provider " + enc);
+
+            # read back as the same records
+            list<hash<auto>> recs = map rowRecord(headers, $1), rows;
+            assertEq(recs,
+                (map $1, new CsvIterator(new BinaryInputStream(dp_bytes), enc, {"header_names": True})),
+                "read back " + enc);
+        }
     }
 
     globalSetUp() {

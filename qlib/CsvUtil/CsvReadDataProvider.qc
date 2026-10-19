@@ -377,6 +377,20 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "allowed_values": CsvQuoteValues,
                 "allowed_values_creatable": True,
             },
+            "quote_escape": <DataProviderOptionInfo>{
+                "display_name": "Quote Escape Char(s)",
+                "short_desc": "Characters before a quote that make it part of a field, for older files",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "The escape character(s) before a `quote` character in a quoted field that make it part of "
+                    "the field's text, in addition to doubling it.\n\n"
+                    "By default, a quote in a quoted field is only escaped by doubling it, as in RFC 4180 CSV files "
+                    "that spreadsheet programs and most applications write, and a backslash is an ordinary "
+                    "character, so `\"C:\\data\\\"` is read as `C:\\data\\`.\n\n"
+                    "Set to `\\` to read files that escape quotes with a backslash (`\\\"`), such as files "
+                    "written by Qore's CSV writer before CsvUtil 1.12 with its default `quote_escape`.",
+                "default_value": "",
+                "example_value": "\\",
+            },
             "separator": <DataProviderOptionInfo>{
                 "display_name": "Field Separator",
                 "short_desc": "The field separator character(s)",

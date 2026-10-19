@@ -42,9 +42,8 @@ public namespace CsvUtil {
             @throw CSVSTREAMWRITER-ERROR in the case of incorrect options
         */
         constructor(Qore::OutputStream output, *hash opts) : AbstractCsvWriter("STREAM", opts) {
-            # we do not use the encoding option with the StreamWriter constructor() here, because we always generate output data
-            # with the output encoding in any case
-            self.output = new StreamWriter(output_stream: output);
+            # the lines are written in the output encoding, which they are generated in
+            self.output = new StreamWriter(output, encoding);
             writeHeaders();
         }
 
@@ -57,9 +56,8 @@ public namespace CsvUtil {
             @throw CSVSTREAMWRITER-ERROR in the case of incorrect options
         */
         constructor(Qore::OutputStream output, hash spec, hash opts) : AbstractCsvWriter("STREAM", spec, opts) {
-            # we do not use the encoding option with the StreamWriter constructor() here, because we always generate output data
-            # with the output encoding in any case
-            self.output = new StreamWriter(output_stream: output);
+            # the lines are written in the output encoding, which they are generated in
+            self.output = new StreamWriter(output, encoding);
             writeHeaders();
         }
 

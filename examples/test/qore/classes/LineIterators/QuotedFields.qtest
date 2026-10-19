@@ -1,0 +1,195 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class QuotedFieldsTest
+
+#! A Qore-language subclass of a builtin line iterator
+class CountingLines inherits DataLineIterator {
+    public {
+        int lines;
+    }
+
+    constructor(string data) : DataLineIterator(data) {
+    }
+
+    bool next() {
+        bool rv = DataLineIterator::next();
+        if (rv) {
+            ++lines;
+        }
+        return rv;
+    }
+}
+
+#! Tests the fields of quoted text split by AbstractLineIterator::getSplitLine() and the split() APIs
+/** RFC 4180 CSV data escapes a quote in a quoted field by doubling it, and a quoted field can contain line breaks,
+    which are kept as they are in the data
+*/
+class QuotedFieldsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("QuotedFields test", "1.0") {
+        addTestCase("RFC 4180: a backslash is an ordinary character", \testRfcBackslash());
+        addTestCase("the default: a backslash escapes a quote", \testBackslashEscape());
+        addTestCase("a field of escaped quotes", \testEvenQuotes());
+        addTestCase("a field whose line ends with its opening quote", \testOpeningQuoteAtLineEnd());
+        addTestCase("a quoted field without its closing quote", \testUnterminated());
+        addTestCase("line breaks in fields are kept as they are in the data", \testLineBreaks());
+        addTestCase("line breaks in fields of the other line iterators", \testLineBreaksOtherIterators());
+        addTestCase("line breaks in fields of text in other encodings", \testLineBreaksEncodings());
+        addTestCase("line breaks in fields of a subclass of a line iterator", \testLineBreaksSubclass());
+        set_return_value(main());
+    }
+
+    #! Returns the fields of each line of the data
+    private static list<list<string>> splitLines(AbstractLineIterator i, *string quote_escape) {
+        list<list<string>> rv;
+        while (i.next()) {
+            push rv, exists quote_escape
+                ? i.getSplitLine(",", "\"", quote_escape: quote_escape)
+                : i.getSplitLine(",", "\"");
+        }
+        return rv;
+    }
+
+    testRfcBackslash() {
+        hash<string, list<string>> cases = {
+            "\"C:\\dir\\\",1": ("C:\\dir\\", "1"),
+            "\"a\\\"\"b\",1": ("a\\\"b", "1"),
+            "\"\\\"\"\",1": ("\\\"", "1"),
+            "x\\,\"y\\\"": ("x\\", "y\\"),
+        };
+        foreach hash<auto> c in (cases.pairIterator()) {
+            assertEq((c.value,), splitLines(new DataLineIterator(c.key), "\""), "getSplitLine " + c.key);
+            # an empty escape is RFC 4180 too
+            assertEq((c.value,), splitLines(new DataLineIterator(c.key), ""), "empty escape " + c.key);
+            assertEq(c.value, c.key.split(",", "\"", False, False, "\""), "<string>::split() " + c.key);
+            assertEq(c.value, split(",", c.key, "\"", False, False, "\""), "split() " + c.key);
+        }
+    }
+
+    testBackslashEscape() {
+        assertEq((("a\"b", "1"),), splitLines(new DataLineIterator("\"a\\\"b\",1")));
+        # an escaped quote directly before the closing quote
+        assertEq((("q\"", "1"),), splitLines(new DataLineIterator("\"q\\\"\",1")));
+        assertEq(("q\"", "1"), "\"q\\\"\",1".split(",", "\""));
+        assertEq(("q\"", "1"), split(",", "\"q\\\"\",1", "\""));
+        # doubled quotes are escaped quotes too
+        assertEq((("a\"b", "1"),), splitLines(new DataLineIterator("\"a\"\"b\",1")));
+        # another escape
+        assertEq((("a\"b", "1"),), splitLines(new DataLineIterator("\"a\"\"b\",1"), "'"));
+        assertEq((("a\"b", "1"),), splitLines(new DataLineIterator("\"a'\"b\",1"), "'"));
+    }
+
+    testEvenQuotes() {
+        hash<string, list<string>> cases = {
+            "\"\",1": ("", "1"),
+            "\"\"\"\",1": ("\"", "1"),
+            "\"\"\"\"\"\",1": ("\"\"", "1"),
+            "1,\"\"\"\"": ("1", "\""),
+        };
+        foreach hash<auto> c in (cases.pairIterator()) {
+            assertEq((c.value,), splitLines(new DataLineIterator(c.key), "\""), "RFC " + c.key);
+            assertEq((c.value,), splitLines(new DataLineIterator(c.key)), "default " + c.key);
+            assertEq(c.value, c.key.split(",", "\""), "<string>::split() " + c.key);
+        }
+        assertThrows("SPLIT-ERROR", "separator pattern ',' does not follow end quote in field 1",
+            \splitLines(), (new DataLineIterator("\"\"x,1"), "\""));
+        assertThrows("SPLIT-ERROR", "separator pattern ',' does not follow end quote in field 2",
+            sub () { "1,\"\"\"\"x".split(",", "\""); });
+    }
+
+    testOpeningQuoteAtLineEnd() {
+        assertEq((("1", "\nx", "2"), ("3", "4")), splitLines(new DataLineIterator("1,\"\nx\",2\n3,4\n"), "\""));
+        assertEq((("1", "\n\nx", "2"),), splitLines(new DataLineIterator("1,\"\n\nx\",2\n"), "\""));
+        assertEq((("1", "\"\n", "2"),), splitLines(new DataLineIterator("1,\"\"\"\n\",2\n"), "\""));
+        assertEq((("1", "\nx\"", "2"),), splitLines(new DataLineIterator("1,\"\nx\"\"\",2\n"), "\""));
+        # an escaped quote at the end of a line
+        assertEq((("1", "a\"\nb", "2"),), splitLines(new DataLineIterator("1,\"a\\\"\nb\",2\n")));
+    }
+
+    testUnterminated() {
+        assertThrows("SPLIT-ERROR", "cannot find closing quote '\"' in field 2 \\(starting with 1\\)",
+            sub () { "1,\"".split(",", "\""); });
+        assertThrows("SPLIT-ERROR", "cannot find closing quote", sub () { "1,\"abc".split(",", "\""); });
+        assertThrows("SPLIT-ERROR", "cannot find closing quote '\"' in field 2 \\(starting with 1\\); no more line "
+            "content in iterator", \splitLines(), (new DataLineIterator("1,\"\n"), "\""));
+        assertThrows("SPLIT-ERROR", "no more line content in iterator", \splitLines(),
+            (new DataLineIterator("1,\"a\nb\n"), "\""));
+    }
+
+    testLineBreaks() {
+        # any of "\n", "\r" and "\r\n" ends a line
+        string data = "1,\"a\r\nb\",2\r\n3,\"c\rd\",4\n5,\"e\nf\",6\r7,\"\r\n\",8";
+        list<list<string>> expected = (
+            ("1", "a\r\nb", "2"),
+            ("3", "c\rd", "4"),
+            ("5", "e\nf", "6"),
+            ("7", "\r\n", "8"),
+        );
+        assertEq(expected, splitLines(new DataLineIterator(data), "\""));
+        assertEq(expected, splitLines(new DataLineIterator(data)), "the default escape");
+        # the line separator argument is not used when the iterator reports its line ends
+        DataLineIterator i(data);
+        i.next();
+        assertEq(("1", "a\r\nb", "2"), i.getSplitLine(",", "\"", "|"));
+
+        # a given line end: other line breaks are part of the line
+        i = new DataLineIterator("1,\"a\nb\rc\",2\r\n3,\"d\r\ne\",4\r\n", "\r\n");
+        assertEq((("1", "a\nb\rc", "2"), ("3", "d\r\ne", "4")), splitLines(i, "\""));
+
+        # lines that keep their line ends
+        i = new DataLineIterator("1,\"a\r\nb\",2\n", NOTHING, False);
+        assertEq((("1", "a\r\nb", "2\n"),), splitLines(i, "\""));
+    }
+
+    testLineBreaksOtherIterators() {
+        string data = "1,\"a\r\nb\",2\r\n3,\"c\rd\",4\n5,\"e\nf\",6\n";
+        list<list<string>> expected = (
+            ("1", "a\r\nb", "2"),
+            ("3", "c\rd", "4"),
+            ("5", "e\nf", "6"),
+        );
+        assertEq(expected, splitLines(new InputStreamLineIterator(new StringInputStream(data)), "\""));
+
+        string path = tmp_location() + "/quoted-fields-" + get_random_string(8) + ".csv";
+        on_exit unlink(path);
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(data);
+        f.close();
+        assertEq(expected, splitLines(new FileLineIterator(path), "\""));
+    }
+
+    testLineBreaksEncodings() {
+        string data = "1,\"ä\r\nb\",2\r\n3,\"c\rö\",4\n";
+        list<list<string>> expected = (
+            ("1", "ä\r\nb", "2"),
+            ("3", "c\rö", "4"),
+        );
+        foreach string enc in ("ISO-8859-1", "UTF-16LE", "UTF-16BE") {
+            DataLineIterator i(convert_encoding(data, enc));
+            list<list<string>> rv = map (map convert_encoding($1, "UTF-8"), $1), splitLines(i, "\"");
+            assertEq(expected, rv, enc);
+        }
+        # a stream in another encoding; a stream in an encoding that is not ASCII-compatible ends lines with "\n" only
+        data = "1,\"ä\r\nb\",2\n3,\"c\rö\",4\n";
+        foreach string enc in ("ISO-8859-1", "UTF-16LE") {
+            InputStreamLineIterator i(new BinaryInputStream(binary(convert_encoding(data, enc))), enc);
+            list<list<string>> rv = map (map convert_encoding($1, "UTF-8"), $1), splitLines(i, "\"");
+            assertEq(expected, rv, "stream " + enc);
+        }
+    }
+
+    testLineBreaksSubclass() {
+        CountingLines i("1,\"a\r\nb\",2\r\n3,\"c\rd\",4\n");
+        assertEq((("1", "a\r\nb", "2"), ("3", "c\rd", "4")), splitLines(i, "\""));
+        # the overridden next() reads the lines of the fields
+        assertEq(4, i.lines);
+    }
+}

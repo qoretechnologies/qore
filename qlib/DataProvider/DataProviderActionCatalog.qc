@@ -3635,13 +3635,16 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 if (info.attr.option_type_name) {
                     i.value.option_type_name = info.attr.option_type_name;
                 }
+                if (info.attr.input_field_names) {
+                    i.value.input_field_names = True;
+                }
                 if (raw_info) {
                     i.value += raw_info{"required", "sensitive", "ref_data", "element_ref_data",
                         "default_ref_data", "preselected", "required_groups", "exclusive_with",
                         "validation_regex", "depends_on", "on_change", "metadata", "messages",
                         "icon", "image", "disabled", "readonly", "has_dependents", "supports_custom_values",
                         "supports_templates", "supports_expressions", "server_expression_handling",
-                        "option_type_name", "ui_type"};
+                        "option_type_name", "ui_type", "input_field_names"};
                 }
             }
             on_error rethrow $1.err, sprintf("%s (field: %y)", $1.desc, i.value);
@@ -3685,14 +3688,14 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
                     "depends_on", "has_dependents", "on_change", "metadata", "messages", "icon", "image",
-                    "server_expression_handling", "ui_type"}
+                    "server_expression_handling", "ui_type", "input_field_names"}
                     + additional_fields;
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
                     "validation_regex", "depends_on", "has_dependents", "on_change", "metadata", "icon",
                     "image", "supports_templates", "supports_custom_values", "server_expression_handling",
-                    "ui_type"} +
+                    "ui_type", "input_field_names"} +
                     additional_fields;
                 if (i.value.option_type_name
                     && info.type.getTag("qore.external_name") != i.value.option_type_name) {

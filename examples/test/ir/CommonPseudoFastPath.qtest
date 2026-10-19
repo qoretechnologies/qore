@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 
 # the script runs its code too few times for tiered execution to compile it, so native code is only required with JIT

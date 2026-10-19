@@ -40,10 +40,32 @@
 #include "qore/intern/StreamReader.h"
 #include "qore/intern/EncodingConversionInputStream.h"
 
+//! A line iterator that reports the end-of-line marker it removed from its current line
+/** A quoted field that continues on the next line is joined with this marker, so the line break in the field is the
+    one in the data, also when line ends are detected automatically and any of \c "\n", \c "\r" and \c "\r\n"
+    can end a line
+*/
+class QoreLineTerminatorSource {
+public:
+    DLLLOCAL virtual ~QoreLineTerminatorSource() = default;
+
+    //! Returns the end-of-line marker removed from the current line in UTF-8
+    /** @return the marker; an empty string if the line ended at the end of the data or its marker was not removed
+    */
+    DLLLOCAL virtual const std::string& getRemovedLineTerminator() const = 0;
+
+protected:
+    //! the empty marker
+    DLLLOCAL static const std::string& noLineTerminator() {
+        static const std::string none;
+        return none;
+    }
+};
+
 /**
  * @brief Private data for the Qore::InputStreamLineIterator class.
  */
-class InputStreamLineIterator : public QoreIteratorBase {
+class InputStreamLineIterator : public QoreIteratorBase, public QoreLineTerminatorSource {
 public:
     DLLLOCAL InputStreamLineIterator(ExceptionSink* xsink, InputStream* is, const QoreEncoding* encoding,
             const QoreStringNode* n_eol, bool n_trim, size_t bufsize = DefaultStreamBufferSize) :
@@ -119,21 +141,25 @@ public:
         return *reader;
     }
 
+    DLLLOCAL const std::string& getRemovedLineTerminator() const override {
+        return validp && trim ? reader->getLineTerminator() : noLineTerminator();
+    }
+
     DLLLOCAL const QoreEncoding* getEncoding() const {
         return enc;
     }
 
-    DLLLOCAL virtual void deref() {
+    DLLLOCAL virtual void deref() override {
         if (ROdereference()) {
             delete this;
         }
     }
 
-    DLLLOCAL virtual const char* getName() const {
+    DLLLOCAL virtual const char* getName() const override {
         return "InputStreamLineIterator";
     }
 
-    DLLLOCAL virtual const QoreTypeInfo* getElementType() const {
+    DLLLOCAL virtual const QoreTypeInfo* getElementType() const override {
         return stringTypeInfo;
     }
 

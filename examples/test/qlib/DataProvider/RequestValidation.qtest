@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires DataProvider
+
+%exec-class RequestValidationTest
+
+#! The request of the test data provider
+class OrderRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "order_id": {
+                "display_name": "Order ID",
+                "type": IntType,
+                "desc": "The order ID",
+            },
+            "note": {
+                "display_name": "Note",
+                "type": StringOrNothingType,
+                "desc": "A note",
+            },
+        };
+    }
+
+    constructor() : HashDataType(AutoHashType, "OrderRequest") {
+        addQoreFields(Fields);
+    }
+}
+
+#! A data provider whose requests are validated with a typed request type
+class OrderRequestProvider inherits AbstractDataProvider {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "order-request",
+            "type": "OrderRequestProvider",
+            "supports_request": True,
+        };
+
+        const RequestType = new OrderRequestDataType();
+    }
+
+    private {
+        #! the requests received by doRequestImpl()
+        list<auto> received = ();
+    }
+
+    string getName() {
+        return ProviderInfo.name;
+    }
+
+    list<auto> getReceived() {
+        return received;
+    }
+
+    hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        push received, req;
+        return {"order_id": req.order_id};
+    }
+
+    private *AbstractDataProviderType getRequestTypeImpl() {
+        return RequestType;
+    }
+}
+
+#! A data provider whose request type for the request data does not check the data
+class UncheckedOrderRequestProvider inherits OrderRequestProvider {
+    private *AbstractDataProviderType getRequestTypeWithDataImpl(auto req) {
+        return RequestType;
+    }
+}
+
+#! Tests the errors that doRequest() and getRequestTypeWithData() raise for requests that the request type rejects
+/** A value that the request type does not accept raises the type error (RUNTIME-TYPE-ERROR) with the type details;
+    a missing required value raises INVALID-REQUEST
+*/
+class RequestValidationTest inherits QUnit::Test {
+    constructor() : Test("RequestValidationTest", "1.0", \ARGV) {
+        addTestCase("a valid request", \testValid());
+        addTestCase("a request that is not a hash", \testNotHash());
+        addTestCase("a request with a field of the wrong type", \testWrongFieldType());
+        addTestCase("a request without a required field", \testMissingField());
+        addTestCase("a request type for the data that does not check the data", \testUnchecked());
+        set_return_value(main());
+    }
+
+    testValid() {
+        OrderRequestProvider prov();
+        assertEq({"order_id": 42}, prov.doRequest({"order_id": 42}));
+        assertEq(({"order_id": 42},), prov.getReceived());
+    }
+
+    testNotHash() {
+        OrderRequestProvider prov();
+        foreach auto req in ("order-42", 42, (1, 2)) {
+            *hash<ExceptionInfo> ex;
+            try {
+                prov.doRequest(req);
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+            assertEq("RUNTIME-TYPE-ERROR", ex.err, sprintf("%y", req));
+            assertRegex("expects type 'hash<auto>', but got type '[a-z<>]+' instead", ex.desc, sprintf("%y", req));
+            assertThrows("RUNTIME-TYPE-ERROR", \prov.getRequestTypeWithData(), (req,), sprintf("%y", req));
+        }
+        assertEq((), prov.getReceived(), "no request reaches the data provider");
+    }
+
+    testWrongFieldType() {
+        OrderRequestProvider prov();
+        assertThrows("RUNTIME-TYPE-ERROR", "mandatory int field \"order_id\".*expects type 'int', but got type "
+            "'string'", \prov.doRequest(), {"order_id": "forty-two"});
+        assertThrows("RUNTIME-TYPE-ERROR", "field \"note\"", \prov.doRequest(), {"order_id": 42, "note": {"text": "x"}});
+        assertThrows("RUNTIME-TYPE-ERROR", "field \"order_id\"", \prov.getRequestTypeWithData(),
+            {"order_id": "forty-two"});
+        assertEq((), prov.getReceived(), "no request reaches the data provider");
+    }
+
+    testMissingField() {
+        OrderRequestProvider prov();
+        # partial data is accepted when the request type is determined
+        assertEq("OrderRequest", prov.getRequestTypeWithData({"note": "x"}).getName());
+        *hash<ExceptionInfo> ex;
+        try {
+            prov.doRequest({"note": "x"});
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("INVALID-REQUEST", ex.err);
+        assertRegex("^invalid request argument for request \"order-request\": .*order_id", ex.desc);
+        # the original error is the "ex" key of the argument
+        assertEq("order_id", (ex.arg.ex.desc =~ x/(order_id)/)[0]);
+        assertEq((), prov.getReceived(), "no request reaches the data provider");
+    }
+
+    testUnchecked() {
+        UncheckedOrderRequestProvider prov();
+        # the request is checked when it is converted to the request type
+        *hash<ExceptionInfo> ex;
+        try {
+            prov.doRequest({"order_id": "forty-two"});
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("INVALID-REQUEST", ex.err);
+        assertEq("RUNTIME-TYPE-ERROR", ex.arg.ex.err);
+        assertEq((), prov.getReceived(), "no request reaches the data provider");
+        assertEq({"order_id": 42}, prov.doRequest({"order_id": 42}));
+    }
+}

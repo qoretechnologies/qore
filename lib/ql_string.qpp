@@ -35,6 +35,7 @@
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/UnicodeByteOrder.h"
+#include "qore/intern/InputStreamLineIterator.h"
 
 #include <cctype>
 #include <cfloat>
@@ -374,7 +375,7 @@ static size_t count_quotes(const char*& str, size_t& len, const QoreString& quot
 
 QoreListNode* split_with_quote(ExceptionSink* xsink, const QoreString* sep, const QoreString* str,
         const QoreString* quote, bool trim_unquoted, AbstractIteratorHelper* h, const QoreString* eol,
-        bool keep_trailing_empty) {
+        bool keep_trailing_empty, const QoreString* quote_escape, QoreLineTerminatorSource* lts) {
     // convert pattern encoding to string encoding if necessary
     TempEncodingHelper pat(sep, str->getEncoding(), xsink);
     if (*xsink)
@@ -385,13 +386,23 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const QoreString* sep, cons
     if (*xsink)
         return nullptr;
 
+    if (!quote_escape) {
+        return split_with_quote(xsink, pat->c_str(), pat->size(), str, tquote->c_str(), tquote->size(),
+            trim_unquoted, h, eol, keep_trailing_empty, "\\", 1, lts);
+    }
+
+    // convert the escape encoding to string encoding if necessary
+    TempEncodingHelper tesc(quote_escape, str->getEncoding(), xsink);
+    if (*xsink)
+        return nullptr;
+
     return split_with_quote(xsink, pat->c_str(), pat->size(), str, tquote->c_str(), tquote->size(), trim_unquoted, h,
-        eol, keep_trailing_empty);
+        eol, keep_trailing_empty, tesc->c_str(), tesc->size(), lts);
 }
 
 QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t patlen, const QoreString* str,
         const char* quote, size_t quotelen, bool trim_unquoted, AbstractIteratorHelper* h, const QoreString* eol,
-        bool keep_trailing_empty) {
+        bool keep_trailing_empty, const char* esc, size_t esclen, QoreLineTerminatorSource* lts) {
     const QoreEncoding* enc = str->getEncoding();
     if (!enc->isAsciiCompat()) {
         // the fields of text in an encoding that is not ASCII-compatible are split in its text in UTF-8, and
@@ -404,13 +415,17 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
         }
         QoreString utf8_pat(QCS_UTF8);
         QoreString utf8_quote(QCS_UTF8);
+        QoreString utf8_esc(QCS_UTF8);
         if ((patlen && qore_string_private::convert_encoding_intern(pat, patlen, enc, utf8_pat, QCS_UTF8, xsink))
                 || (quotelen && qore_string_private::convert_encoding_intern(quote, quotelen, enc, utf8_quote,
-                    QCS_UTF8, xsink))) {
+                    QCS_UTF8, xsink))
+                || (esclen && qore_string_private::convert_encoding_intern(esc, esclen, enc, utf8_esc, QCS_UTF8,
+                    xsink))) {
             return nullptr;
         }
         ReferenceHolder<QoreListNode> l(split_with_quote(xsink, utf8_pat.c_str(), utf8_pat.size(), *utf8_str,
-            utf8_quote.c_str(), utf8_quote.size(), trim_unquoted, h, eol, keep_trailing_empty), xsink);
+            utf8_quote.c_str(), utf8_quote.size(), trim_unquoted, h, eol, keep_trailing_empty, utf8_esc.c_str(),
+            utf8_esc.size(), lts), xsink);
         if (!l) {
             return nullptr;
         }
@@ -429,6 +444,10 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
         return split_intern(pat, patlen, str->c_str(), str->strlen(), str->getEncoding(), false,
             keep_trailing_empty);
     }
+
+    // RFC 4180: a quote in a quoted field is only escaped by doubling it; otherwise a quote preceded by the escape
+    // is also part of the field's text
+    const bool rfc = !esclen || (esclen == quotelen && !memcmp(esc, quote, quotelen));
 
     ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), xsink);
     const char* ostr = str->c_str();
@@ -460,10 +479,21 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
 
         size_t num_quotes = count_quotes(ststr, len, quote, quotelen);
         if (num_quotes) {
-            // see if we have empty quotes & we're at the end of the field
-            if (num_quotes == 2 && (!len || (len >= pl && !memcmp(tpattern, ststr, pl)))) {
-                // add an empty string to the list
-                l->push(new QoreStringNode(str->getEncoding()), nullptr);
+            // create the field string
+            QoreStringNodeHolder field(new QoreStringNode(str->getEncoding()));
+
+            // an even number of quotes is an opening quote, doubled quotes, and the closing quote: the whole field
+            if (!(num_quotes & 1)) {
+                for (size_t i = 0; i < (num_quotes - 2) / 2; ++i) {
+                    field->concat(quote, quotelen);
+                }
+                // the field must be followed by a separator or by the end of the line
+                if (len && (len < pl || memcmp(tpattern, ststr, pl))) {
+                    xsink->raiseException("SPLIT-ERROR", "separator pattern '%s' does not follow end quote in "
+                        "field " QSD " (starting with 1)", tpattern, l->size() + 1);
+                    return nullptr;
+                }
+                l->push(field.release(), nullptr);
 
                 if (!len) {
                     break;
@@ -473,35 +503,35 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
                 len -= pl;
                 ended_on_separator = true;
                 continue;
-            } else if (!(num_quotes & 1)) {
-                xsink->raiseException("SPLIT-ERROR", "field with text must begin with an add number of quotes (got "
-                    QSD " quotes at the beginning of the field)", num_quotes);
-                return nullptr;
             }
-
-            // create the field string
-            QoreStringNodeHolder field(new QoreStringNode(str->getEncoding()));
 
             // process double quotes to single quote
             while (num_quotes >= 2) {
-                field->concat(quote);
-                assert(!*xsink);
+                field->concat(quote, quotelen);
                 num_quotes -= 2;
             }
 
             assert(num_quotes == 1);
 
-            // find next quote character, ignore escaped and doubled quotes
+            // find next quote character, ignore escaped and doubled quotes; the field can continue on the next line,
+            // also when its opening quote is the last character of the line
             const char* p;
-            while (len) {
+            while (true) {
                 // make sure len is always calculated correctly
                 assert(len == (str->size() - (ststr - ostr)));
 
-                p = memstr(ststr, quote, quotelen, len, qore_string_private::get_char_alignment(
-                    str->getEncoding()), ststr - ostr);
+                p = len
+                    ? memstr(ststr, quote, quotelen, len, qore_string_private::get_char_alignment(
+                        str->getEncoding()), ststr - ostr)
+                    : nullptr;
                 if (!p) {
                     // retrieve another line and add it to the current one if possible
                     if (h) {
+                        // the line end of the current line, before the iterator moves to the next one
+                        std::string line_end;
+                        if (lts) {
+                            line_end = lts->getRemovedLineTerminator();
+                        }
                         // advance line index to add the next line to the current one
                         if (!h->next(xsink)) {
                             if (!*xsink) {
@@ -534,7 +564,16 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
                         // is converted to the encoding of the buffer, so its length there can differ
                         size_t old_size = buf->size();
                         // add line separator
-                        if (!eol) {
+                        if (lts) {
+                            // the line end in the data, if any
+                            if (!line_end.empty()) {
+                                QoreString le(line_end.data(), line_end.size(), QCS_UTF8);
+                                buf->concat(&le, xsink);
+                                if (*xsink) {
+                                    return nullptr;
+                                }
+                            }
+                        } else if (!eol) {
                             buf->concat('\n');
                         } else {
                             if (!teol && !teol.set(eol, str->getEncoding(), xsink)) {
@@ -572,37 +611,25 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
                 //printd(5, "f " QSD " found closing quote in pos " QSD " (len " QSD ") str: '%s' ('%s')\n",
                 //    l->size() + 1, p - ststr, len, ststr, field->c_str());
 
-                assert(p != ststr);
-
-                // add text up to the quote to the field
+                // the text up to the quote
                 size_t text_len = p - ststr;
-                // if we have an escaped quote, do not copy the escaped quote to the string
-                if (*(p - 1) == '\\') {
-                    --text_len;
+                // a quote preceded by the escape (outside RFC 4180 mode) is part of the field's text; the escape is
+                // not, and the field continues
+                if (!rfc && text_len >= esclen && !memcmp(p - esclen, esc, esclen)) {
+                    field->concat(ststr, text_len - esclen);
+                    field->concat(quote, quotelen);
+                    text_len += quotelen;
+                    ststr += text_len;
+                    len -= text_len;
+                    continue;
                 }
 
                 field->concat(ststr, text_len);
-                {
-                    QoreString fstr(ststr, text_len);
-                    //printd(5, "f " QSD " adding text: '%s' (len " QSD ") ('%s')\n", l->size() + 1, fstr.c_str(), fstr.size(), field->c_str());
-                }
 
                 // skip the quote in the source string
                 text_len += quotelen;
                 ststr += text_len;
                 len -= text_len;
-
-                // add escaped quote to field and keep searching
-                if (*(p - 1) == '\\') {
-                    field->concat(quote);
-                    //printd(5, "f " QSD " adding escaped quote: %s ('%s')\n", l->size() + 1, tquote->c_str(), field->c_str());
-
-                    assert(!*xsink);
-                    // increment text pointer by escape char
-                    ststr += 1;
-                    len -= 1;
-                    continue;
-                }
 
                 // if we have an odd number of quotes, then we have found the end of the field
                 num_quotes = count_quotes(ststr, len, quote, quotelen) + 1;
@@ -611,9 +638,7 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
 
                 // process double quotes to single quote
                 while (num_quotes >= 2) {
-                    field->concat(quote);
-                    //printd(5, "f " QSD " adding quote: %s ('%s')\n", l->size() + 1, tquote->c_str(), field->c_str());
-                    assert(!*xsink);
+                    field->concat(quote, quotelen);
                     num_quotes -= 2;
                 }
 
@@ -1535,10 +1560,13 @@ list<string> split(string separator, string str, bool with_separator = False, bo
     @ref character_encoding "character encoding"
     @param str the string to split
     @param quote the quote character; quotes may be escaped (in quoted fields only) by doubling the quote character or
-    by preceding it with a backslash (<tt>\\</tt>)
+    by preceding it with \a quote_escape
     @param trim_unquoted remove leading and trailing whitespace from unquoted fields
     @param keep_trailing_empty keep the empty final field produced by a subject that ends with the separator; see
     @ref split_trailing_empty_fields
+    @param quote_escape the escape of a quote character in a quoted field: \c "\\\\" (the default) for a backslash
+    before the quote; the quote character itself, or an empty string, for RFC 4180 CSV data, where a backslash is an
+    ordinary character
 
     @return a list of each component of a string separated by a separator string, with the separator and any enclosing
     quote characters removed
@@ -1557,10 +1585,13 @@ list<string> l = split(",", "some,'text with spaces',here", "'"); # returns ("so
     @since
     - %Qore 0.8.6 the \c trim_unquoted parameter was added
     - %Qore 0.9.4 processes doubled quote characters as an escaped quote within a quoted field
-    - %Qore 3.0 added the \c keep_trailing_empty parameter
+    - %Qore 3.0 added the \c keep_trailing_empty and \c quote_escape parameters; a quoted field starting with an
+      even number of quotes, such as <tt>""""</tt>, is split as escaped quotes, and a quoted field without its closing
+      quote raises \c SPLIT-ERROR
  */
-list<string> split(string separator, string str, string quote, bool trim_unquoted = False, bool keep_trailing_empty = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    return split_with_quote(xsink, separator, str, quote, trim_unquoted, nullptr, nullptr, keep_trailing_empty);
+list<string> split(string separator, string str, string quote, bool trim_unquoted = False, bool keep_trailing_empty = False, string quote_escape = "\\") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return split_with_quote(xsink, separator, str, quote, trim_unquoted, nullptr, nullptr, keep_trailing_empty,
+        quote_escape);
 }
 
 //! Returns a list of binary objects representing each component of the binary object separated by the bytes identified by the separator argument, with the separator removed

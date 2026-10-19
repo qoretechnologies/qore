@@ -75,9 +75,8 @@ public namespace CsvUtil {
         }
 
         private openFile(string path) {
-            # we do not use the encoding option with the File constructor() here, because we always generate output data
-            # with the output encoding in any case
-            file = new File();
+            # the lines are written in the output encoding, which they are generated in
+            file = new File(encoding);
             file.open2(path, O_CREAT | O_TRUNC | O_WRONLY, 0644);
             writeHeaders();
         }
