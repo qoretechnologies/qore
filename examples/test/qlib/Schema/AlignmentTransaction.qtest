@@ -13,6 +13,7 @@
 %try-module pgsql
 %define NO_PGSQL
 %endtry
+%requires ../SqlUtil/PgsqlTestIsolation.qm
 %exec-class AlignmentTransactionTest
 
 class AlignmentTransactionTest inherits QUnit::Test {
@@ -355,9 +356,14 @@ class AlignmentTransactionTest inherits QUnit::Test {
         if (!connstr) {
             testSkip("QORE_DB_CONNSTR_PGSQL is not configured");
         }
+        # the tables are created in this run's own schema, so another run of this test never sees them
+        PgsqlRunSchema::setup(connstr, "AlignmentTransaction");
+        # dropped after the transaction below is rolled back
+        on_exit PgsqlRunSchema::teardown();
         Datasource ds(connstr);
         # the alignments run in the caller's transaction, and PostgreSQL DDL is transactional: nothing is left
         on_exit ds.rollback();
+        assertEq(PgsqlRunSchema::getName(), ds.selectRow("select current_schema() as schema").schema);
         string table = sprintf("qtest_populate_%d", getpid());
         string version_table = table + "_version";
         code definition = hash<auto> sub (string version, hash<auto> extra_columns) {

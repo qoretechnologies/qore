@@ -1,0 +1,312 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file PgsqlTestIsolation.qm gives each run of a PostgreSQL test its own schema
+
+/*  PgsqlTestIsolation.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module PgsqlTestIsolation {
+    version = "1.0";
+    desc = "gives each run of a PostgreSQL test its own schema";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+/** @mainpage PgsqlTestIsolation Module
+
+    @section pgsqltestisolationintro Introduction
+
+    Tests that use a shared PostgreSQL database must not share their tables, sequences, indexes, functions,
+    triggers or types with another run of the same test.  @ref PgsqlTestIsolation::PgsqlRunSchema::setup()
+    "PgsqlRunSchema::setup()" creates a schema for the run and makes it the first schema of the \c search_path of
+    every PostgreSQL connection that the process opens afterwards, with the \c PGOPTIONS environment variable that
+    libpq reads when it connects; so every object that the test creates without a schema is created in the run's
+    schema, whatever its name, also on connections opened by worker threads and child processes, and after a
+    reconnection.  The schemas of the installed extensions, other than \c pg_catalog, which is always searched,
+    follow it in the \c search_path, so that their types and functions, such as pgvector's \c vector, can be used;
+    \c public is in the \c search_path only when an extension is installed in it, so that a name that is not in the
+    run's schema does not resolve to an object of another test in \c public, and listings of the \c search_path
+    schemas are only of the run's objects.
+
+    When the environment variable \c PGSQL_TEST_ISOLATION_READY names a file, such as a FIFO that another process
+    reads, @ref PgsqlTestIsolation::PgsqlRunSchema::setup() "setup()" writes the name of the schema to it once the
+    schema is set up, so a test of concurrent runs can start a second run at that point without waiting for a time.
+
+    @ref PgsqlTestIsolation::PgsqlRunSchema::teardown() "PgsqlRunSchema::teardown()" drops the schema with
+    everything in it and restores \c PGOPTIONS; the schema is also dropped when the program ends without calling
+    it.  A run that is killed leaves its
+    schema behind, so @ref PgsqlTestIsolation::PgsqlRunSchema::setup() "setup()" drops the schemas left by runs on
+    this host whose process no longer exists and that are older than
+    @ref PgsqlTestIsolation::PgsqlRunSchema::LeftoverAge "LeftoverAge"; a schema of a live run, or of another host,
+    is never dropped.
+
+    A schema is named <tt>qtest_</tt><em>suite</em><tt>_</tt><em>host</em><tt>_</tt><em>pid</em><tt>_</tt>
+    <em>epoch</em>: the test's name and the first label of the host name (letters and digits only, in lower case,
+    at most 12 of them), the process id, and the time the schema was created, in seconds since the epoch.  A test
+    that needs more schemas, such as one that tests objects in another schema than the current one, names them with
+    @ref PgsqlTestIsolation::PgsqlRunSchema::getAuxName() "PgsqlRunSchema::getAuxName()": the run's schema with a
+    suffix, so they are dropped with it.
+
+    @par Example:
+    @code{.py}
+%requires ./PgsqlTestIsolation.qm
+
+# before the test opens any PostgreSQL connection
+*string schema = PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlSqlUtil");
+# ... run the tests ...
+PgsqlRunSchema::teardown();
+    @endcode
+*/
+
+#! Contains the definitions of the PgsqlTestIsolation module
+public namespace PgsqlTestIsolation {
+#! Holds the run's schema and the connection that created it, and drops the schema when it is destroyed
+/** It holds what it needs to drop the schema, as the program can end without PgsqlRunSchema::teardown() and the
+    static members of PgsqlRunSchema can be destroyed before it
+*/
+class PgsqlRunSchemaGuard {
+    private {
+        #! The connection that created the schema, opened before the search_path was set
+        Datasource ds;
+
+        #! The name of the schema; no value once it is dropped
+        *string schema;
+    }
+
+    constructor(Datasource ds, string schema) {
+        self.ds = ds;
+        self.schema = schema;
+    }
+
+    destructor() {
+        drop();
+    }
+
+    #! Drops the schema and the run's other schemas with everything in them, unless they are already dropped
+    drop() {
+        if (!schema) {
+            return;
+        }
+        string name = remove schema;
+        on_error ds.rollback();
+        on_success ds.commit();
+        ds.exec(sprintf("set local lock_timeout = '%s'", PgsqlRunSchema::DropLockTimeout));
+        # the run's other schemas (PgsqlRunSchema::getAuxName()), then the run's schema
+        *list<string> aux = ds.select("select nspname from pg_catalog.pg_namespace where starts_with(nspname, %v)",
+            name + "_").nspname;
+        map ds.exec("drop schema if exists " + $1 + " cascade"), aux;
+        ds.exec("drop schema if exists " + name + " cascade");
+    }
+}
+
+#! The schema of this run of a PostgreSQL test
+public class PgsqlRunSchema {
+    public {
+        #! The prefix of the name of a run's schema
+        const Prefix = "qtest_";
+
+        #! A schema left by a run whose process is gone is dropped only when it is at least this old
+        /** A process id can be reused, so a schema is never dropped when it is younger than this, whatever its
+            process
+        */
+        const LeftoverAge = 1h;
+
+        #! How long dropping the schema waits for a lock held by a connection still open in the process
+        const DropLockTimeout = "30s";
+    }
+
+    private {
+        #! The name of the run's schema, once it is created
+        static *string name;
+
+        #! Holds the schema and drops it, also when the program ends without teardown()
+        static *PgsqlRunSchemaGuard guard;
+
+        #! The value of PGOPTIONS before setup(), restored by teardown()
+        static *string pgoptions;
+
+        #! Serializes setup and teardown
+        static Mutex lck();
+    }
+
+    #! Creates the schema of this run and makes it the first schema of every PostgreSQL connection opened afterwards
+    /** Call this before the test opens any PostgreSQL connection: a connection that is already open keeps its
+        \c search_path.  A second call returns the same schema.
+
+        @param connstr the datasource string of the test's database; nothing is done when it is not set or not for
+        the \c pgsql driver
+        @param suite the name of the test, used in the name of the schema
+
+        @return the name of the run's schema, or @ref nothing if the connection is not a PostgreSQL connection
+    */
+    static *string setup(*string connstr, string suite) {
+        if (!connstr || parse_datasource(connstr).type != "pgsql") {
+            return;
+        }
+        lck.lock();
+        on_exit lck.unlock();
+        if (name) {
+            return name;
+        }
+
+        # the connection that creates and drops the schema keeps the database's search_path
+        Datasource ds(connstr);
+        ds.open();
+        PgsqlRunSchema::dropLeftovers(ds);
+
+        string schema = sprintf("%s%s_%s_%d_%d", Prefix, PgsqlRunSchema::getLabel(suite, 12),
+            PgsqlRunSchema::getHost(), getpid(), now_us().getEpochSeconds());
+        {
+            on_error ds.rollback();
+            on_success ds.commit();
+            ds.exec("create schema " + schema);
+        }
+
+        # the schemas of the installed extensions after the run's schema; pg_catalog is always searched
+        list<string> search_path = (schema,);
+        search_path += ds.select("select distinct quote_ident(n.nspname) as nspname from pg_catalog.pg_extension e "
+            "join pg_catalog.pg_namespace n on n.oid = e.extnamespace where n.nspname <> 'pg_catalog' order by 1")
+            .nspname ?? ();
+
+        # libpq reads PGOPTIONS when a connection is opened; a space or a backslash in a value is escaped
+        pgoptions = getenv("PGOPTIONS");
+        string value = join(",", search_path);
+        value =~ s/\\/\\\\/g;
+        value =~ s/ /\\ /g;
+        setenv("PGOPTIONS", (pgoptions ? pgoptions + " " : "") + "-c search_path=" + value);
+
+        name = schema;
+        guard = new PgsqlRunSchemaGuard(ds, schema);
+
+        # tells a process that waits for this run to be set up, as one that starts a concurrent run does, that it
+        # is: the file, such as a FIFO the other process reads, gets the schema's name
+        *string ready = getenv("PGSQL_TEST_ISOLATION_READY");
+        if (ready) {
+            # not for the processes that this one starts
+            unsetenv("PGSQL_TEST_ISOLATION_READY");
+            File f();
+            f.open2(ready, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(name + "\n");
+            f.close();
+        }
+        return name;
+    }
+
+    #! Returns the name of the run's schema, or @ref nothing if none was created
+    static *string getName() {
+        return name;
+    }
+
+    #! Returns the name of another schema of the run: the run's schema with a suffix
+    /** A schema with this name is dropped with the run's schema by teardown(), or by the setup of a later run
+        when the run is gone; the test creates it
+
+        @param tag the suffix: its letters and digits, in lower case, at most 8 of them
+
+        @return the run's schema, \c "_" and the suffix
+
+        @throw PGSQL-TEST-ISOLATION-ERROR no run schema was set up
+    */
+    static string getAuxName(string tag) {
+        if (!name) {
+            throw "PGSQL-TEST-ISOLATION-ERROR", "no run schema was set up; call PgsqlRunSchema::setup() first";
+        }
+        return name + "_" + PgsqlRunSchema::getLabel(tag, 8);
+    }
+
+    #! Drops the schema of this run with everything in it
+    /** Call this at the end of the test, after its connections are closed or their transactions ended: dropping
+        the schema waits up to @ref DropLockTimeout for a lock held by an open transaction.  \c PGOPTIONS is restored,
+        so a connection opened afterwards uses the database's \c search_path.  Nothing is done if no schema was
+        created or it is already dropped.
+
+        @throw DBI:PGSQL:ERROR the schema could not be dropped; it is dropped by the setup of a later run once it is
+        older than @ref LeftoverAge
+    */
+    static teardown() {
+        *PgsqlRunSchemaGuard old_guard;
+        {
+            lck.lock();
+            on_exit lck.unlock();
+            if (!name) {
+                return;
+            }
+            old_guard = remove guard;
+            remove name;
+            # a connection opened afterwards uses the database's search_path again
+            *string old_pgoptions = remove pgoptions;
+            if (old_pgoptions) {
+                setenv("PGOPTIONS", old_pgoptions);
+            } else {
+                unsetenv("PGOPTIONS");
+            }
+        }
+        if (old_guard) {
+            old_guard.drop();
+        }
+    }
+
+    #! Drops the schemas left by runs on this host whose process is gone and that are older than LeftoverAge
+    private static dropLeftovers(Datasource ds) {
+        string host = PgsqlRunSchema::getHost();
+        int now = now_us().getEpochSeconds();
+        *list<string> schemas = ds.select("select nspname from pg_catalog.pg_namespace where nspname like %v",
+            Prefix + "%").nspname;
+        foreach string schema in (schemas) {
+            # a run's schema, or another schema of the run (getAuxName())
+            *list<string> parts = (schema =~ x/^qtest_([a-z0-9]+)_([a-z0-9]+)_([0-9]+)_([0-9]+)(?:_[a-z0-9]+)?$/);
+            if (!parts || parts[1] != host) {
+                continue;
+            }
+            int pid = parts[2].toInt();
+            int created = parts[3].toInt();
+            if (PgsqlRunSchema::isProcessAlive(pid) || (now - created) < LeftoverAge.durationSeconds()) {
+                continue;
+            }
+            on_error ds.rollback();
+            on_success ds.commit();
+            ds.exec("drop schema if exists " + schema + " cascade");
+        }
+    }
+
+    #! Returns True if a process with the given id exists on this host
+    private static bool isProcessAlive(int pid) {
+        # signal 0 checks that the process exists; EPERM means it exists and belongs to another user
+        return kill(pid, 0) == 0 || errno() == EPERM;
+    }
+
+    #! Returns the first label of the host name, as a label
+    private static string getHost() {
+        return PgsqlRunSchema::getLabel((gethostname() =~ x/^([^.]+)/)[0] ?? gethostname(), 12);
+    }
+
+    #! Returns the letters and digits of a string, in lower case, at most the given number of them
+    private static string getLabel(string str, int max) {
+        string label = str.lwr();
+        label =~ s/[^a-z0-9]//g;
+        if (!label) {
+            label = "x";
+        }
+        return label.substr(0, max);
+    }
+}
+}

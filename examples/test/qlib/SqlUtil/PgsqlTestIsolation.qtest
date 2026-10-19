@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class PgsqlTestIsolationTest
+
+#! The schema that PgsqlTestIsolation gives a run of a PostgreSQL test
+class PgsqlTestIsolationTest inherits QUnit::Test {
+    private {
+        *string connstr;
+        *string skip_reason;
+        # schemas made for the leftover tests, dropped at the end
+        list<string> made;
+        # PGOPTIONS before the run's schema is set up
+        *string pgoptions_before = getenv("PGOPTIONS");
+    }
+
+    constructor() : Test("PgsqlTestIsolationTest", "1.0", \ARGV) {
+%ifdef NoPgsql
+        skip_reason = "pgsql module unavailable";
+%endif
+        connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!connstr) {
+            skip_reason = "QORE_DB_CONNSTR_PGSQL is not configured";
+        }
+        addTestCase("a non-PostgreSQL connection has no run schema", \notPgsql());
+        addTestCase("the schema is dropped when the program ends without a teardown", \exitWithoutTeardown());
+        addTestCase("a run writes its schema's name to the ready file", \readyFile());
+        # the leftover schemas are made before the run's schema, whose setup drops the ones that may be dropped
+        addTestCase("the setup drops only the schemas of gone runs", \leftovers());
+        addTestCase("every connection opened afterwards uses the run's schema", \runSchema());
+        addTestCase("the teardown drops the run's schema", \teardown());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (connstr && made) {
+            Datasource ds(connstr);
+            on_exit ds.rollback();
+            foreach string schema in (made) {
+                ds.exec("drop schema if exists " + schema + " cascade");
+            }
+            ds.commit();
+        }
+    }
+
+    private checkSkip() {
+        if (skip_reason) {
+            testSkip(skip_reason);
+        }
+    }
+
+    private notPgsql() {
+        assertNothing(PgsqlRunSchema::setup(NOTHING, "x"));
+        assertNothing(PgsqlRunSchema::setup("sqlite3:@:memory:", "x"));
+        assertNothing(PgsqlRunSchema::getName());
+    }
+
+    #! A program that sets up a run schema and ends without calling teardown() leaves no schema behind
+    private exitWithoutTeardown() {
+        checkSkip();
+        string module = get_script_dir() + "PgsqlTestIsolation.qm";
+        string out = backquote(sprintf("qore -ne '%%requires %s\nprintf(\"%%s\\n\", "
+            "PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, \"exitguard\"));' 2>&1", module));
+        string schema = trim(out);
+        assertRegex("^qtest_exitguard_[a-z0-9]+_[0-9]+_[0-9]+$", schema);
+        Datasource ds(connstr);
+        on_exit ds.rollback();
+        assertNothing(ds.selectRow("select nspname from pg_catalog.pg_namespace where nspname = %v", schema));
+    }
+
+    #! A run that is given a file in PGSQL_TEST_ISOLATION_READY writes its schema's name to it when it is set up
+    private readyFile() {
+        checkSkip();
+        string module = get_script_dir() + "PgsqlTestIsolation.qm";
+        string ready = tmp_location() + DirSep + sprintf("pgsql-test-isolation-%d-%s", getpid(),
+            get_random_string(8));
+        on_exit unlink(ready);
+        string out = backquote(sprintf("PGSQL_TEST_ISOLATION_READY=%s qore -ne '%%requires %s\nprintf(\"%%s "
+            "%%y\\n\", PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, \"ready\"), "
+            "getenv(\"PGSQL_TEST_ISOLATION_READY\"));' 2>&1", ready, module));
+        (string schema, string env) = trim(out).split(" ");
+        assertRegex("^qtest_ready_[a-z0-9]+_[0-9]+_[0-9]+$", schema);
+        assertEq(schema + "\n", ReadOnlyFile::readTextFile(ready), "the file gets the schema's name");
+        assertEq("null", env, "the processes that the run starts are not given the file");
+    }
+
+    #! Returns the id of a process that does not exist
+    private static int getGonePid() {
+        for (int pid = 99999; pid > 1000; --pid) {
+            if (kill(pid, 0) == -1 && errno() == ESRCH) {
+                return pid;
+            }
+        }
+        throw "TEST-ERROR", "no free process id found";
+    }
+
+    private leftovers() {
+        checkSkip();
+        # these schemas are made before the run's schema is set up, so this connection uses the database's
+        # search_path
+        Datasource ds(connstr);
+        on_exit ds.rollback();
+        string host = (gethostname() =~ x/^([^.]+)/)[0] ?? gethostname();
+        host = host.lwr();
+        host =~ s/[^a-z0-9]//g;
+        host = host.substr(0, 12);
+        int now = now_us().getEpochSeconds();
+        int old = now - PgsqlRunSchema::LeftoverAge.durationSeconds() - 60;
+        int gone = PgsqlTestIsolationTest::getGonePid();
+        hash<string, bool> expected = {
+            # a gone run, old enough: dropped, with its other schema
+            sprintf("qtest_leftover_%s_%d_%d", host, gone, old): False,
+            sprintf("qtest_leftover_%s_%d_%d_other", host, gone, old): False,
+            # a gone run, too recent: kept, as its process id may have been reused
+            sprintf("qtest_recent_%s_%d_%d", host, gone, now): True,
+            # a live run (this process), old: kept
+            sprintf("qtest_live_%s_%d_%d", host, getpid(), old): True,
+            # another host: kept
+            sprintf("qtest_otherhost_%s_%d_%d", host + "x", gone, old): True,
+            # not a run's schema: kept
+            sprintf("qtest_%d", old): True,
+        };
+        foreach string schema in (keys expected) {
+            ds.exec("create schema " + schema);
+            push made, schema;
+        }
+        ds.commit();
+
+        assertNothing(PgsqlRunSchema::getName());
+        string run = PgsqlRunSchema::setup(connstr, "PgsqlTestIsolation");
+        assertRegex(sprintf("^qtest_pgsqltestiso_%s_%d_[0-9]+$", host, getpid()), run);
+
+        hash<string, bool> present = map {$1: True}, ds.select("select nspname from pg_catalog.pg_namespace "
+            "where nspname = any(%v)", keys expected).nspname;
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, present{i.key} ?? False, i.key);
+        }
+        # a second setup gives the same schema
+        assertEq(run, PgsqlRunSchema::setup(connstr, "PgsqlTestIsolation"));
+    }
+
+    private runSchema() {
+        checkSkip();
+        *string run = PgsqlRunSchema::getName();
+        assertTrue(exists run);
+        # a connection opened after the setup, as by a worker thread, then after a rollback and a reconnection
+        Datasource ds(connstr);
+        on_exit ds.rollback();
+        assertEq(run, ds.selectRow("select current_schema() as schema").schema);
+        ds.exec("create table isolation_test (id int)");
+        ds.exec("create sequence isolation_test_seq");
+        ds.commit();
+        ds.rollback();
+        ds.close();
+        ds.open();
+        assertEq(run, ds.selectRow("select current_schema() as schema").schema);
+        assertEq(({"relname": "isolation_test", "nspname": run}, {"relname": "isolation_test_seq", "nspname": run}),
+            ds.selectRows("select c.relname, n.nspname from pg_catalog.pg_class c join pg_catalog.pg_namespace n "
+            "on n.oid = c.relnamespace where c.relname in ('isolation_test', 'isolation_test_seq') "
+            "and n.nspname = %v order by c.relname", run));
+        # the schemas of the installed extensions follow the run's schema; public only if an extension is in it
+        list<string> ext = ds.select("select distinct n.nspname from pg_catalog.pg_extension e "
+            "join pg_catalog.pg_namespace n on n.oid = e.extnamespace where n.nspname <> 'pg_catalog' order by 1")
+            .nspname ?? ();
+        assertEq((run,) + ext, ds.selectRow("select current_schemas(false) as s").s);
+    }
+
+    private teardown() {
+        checkSkip();
+        string run = PgsqlRunSchema::getName();
+        # another schema of the run, as for a test of objects in another schema
+        string aux = PgsqlRunSchema::getAuxName("Other-Schema");
+        assertEq(run + "_othersch", aux);
+        Datasource ds(connstr);
+        on_exit ds.rollback();
+        ds.exec("create schema " + aux);
+        ds.exec(sprintf("create table %s.t (id int)", aux));
+        ds.commit();
+        PgsqlRunSchema::teardown();
+        assertNothing(PgsqlRunSchema::getName());
+        assertThrows("PGSQL-TEST-ISOLATION-ERROR", \PgsqlRunSchema::getAuxName(), "x");
+        # PGOPTIONS is as it was before the setup, so a connection opened now uses the database's search_path
+        assertEq(pgoptions_before, getenv("PGOPTIONS"));
+        Datasource after(connstr);
+        on_exit after.rollback();
+        assertNeq(run, after.selectRow("select current_schema() as schema").schema);
+        assertEq((), ds.select("select nspname from pg_catalog.pg_namespace where nspname in (%v, %v)", run, aux)
+            .nspname ?? ());
+        # a second teardown does nothing
+        PgsqlRunSchema::teardown();
+    }
+}

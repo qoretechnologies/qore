@@ -17,6 +17,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./SqlUtilTestBase.qm
+%requires ./PgsqlTestIsolation.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -420,12 +421,12 @@ class PgsqlTest inherits SqlTestBase {
             try {
                 on_error ds.rollback();
                 on_success ds.commit();
-                ds.exec("drop table pgsql_test");
+                ds.exec("drop table " + runName("pgsql_test"));
             } catch () {}
             try {
                 on_error ds.rollback();
                 on_success ds.commit();
-                ds.exec("drop sequence pgsql_test_seq");
+                ds.exec("drop sequence " + runName("pgsql_test_seq"));
             } catch () {}
 
             schema_info = schema.alignWithInfo(False, m_options.verbose, m_options.verbose > 0);
@@ -482,9 +483,10 @@ class PgsqlTest inherits SqlTestBase {
     private schemaPhysicalSizeTest() {
         AbstractDatasource ds = getDatasource();
         Database db(ds);
-        const string SizeSchema = "sqlutil_schema_size_test";
-        const string OtherSchema = "sqlutil_schema_size_other";
-        const string EmptySchema = "sqlutil_schema_size_empty";
+        # other schemas of the run, dropped with it
+        string SizeSchema = PgsqlRunSchema::getAuxName("size");
+        string OtherSchema = PgsqlRunSchema::getAuxName("sizeoth");
+        string EmptySchema = PgsqlRunSchema::getAuxName("sizeemp");
 
         code cleanup = sub () {
             on_error ds.rollback();
@@ -580,9 +582,10 @@ class PgsqlTest inherits SqlTestBase {
         Datasource ds(m_options.connstr);
         ds.open();
         Database db(ds);
-        string cur = sprintf("sqlutil_cur_size_%d", getpid());
-        string other = sprintf("sqlutil_cur_size_other_%d", getpid());
-        string empty = sprintf("sqlutil_cur_size_empty_%d", getpid());
+        # other schemas of the run, dropped with it
+        string cur = PgsqlRunSchema::getAuxName("cur");
+        string other = PgsqlRunSchema::getAuxName("curoth");
+        string empty = PgsqlRunSchema::getAuxName("curemp");
 
         code cleanup = sub () {
             on_error ds.rollback();
@@ -616,14 +619,14 @@ class PgsqlTest inherits SqlTestBase {
         int cur_size = db.getSchemaPhysicalSize(cur);
         assertGt(0, cur_size);
         assertEq(cur_size, db.getCurrentSchemaPhysicalSize(), "the first schema of the search_path is measured");
-        ds.exec(sprintf("set search_path to sqlutil_cur_size_missing_%d, %s", getpid(), cur));
+        ds.exec(sprintf("set search_path to %s, %s", PgsqlRunSchema::getAuxName("curmiss"), cur));
         assertEq(cur_size, db.getCurrentSchemaPhysicalSize(), "a schema that does not exist is skipped");
         ds.exec(sprintf("set search_path to %s", other));
         assertEq(db.getSchemaPhysicalSize(other), db.getCurrentSchemaPhysicalSize(),
             "another search_path measures another schema");
         ds.exec(sprintf("set search_path to %s", empty));
         assertEq(0, db.getCurrentSchemaPhysicalSize(), "an empty schema has no physical storage");
-        ds.exec(sprintf("set search_path to sqlutil_cur_size_missing_%d", getpid()));
+        ds.exec(sprintf("set search_path to %s", PgsqlRunSchema::getAuxName("curmiss")));
         assertEq(-1, db.getCurrentSchemaPhysicalSize(), "no schema of the search_path exists");
         ds.rollback();
 
@@ -827,8 +830,8 @@ class PgsqlTest inherits SqlTestBase {
         AbstractDatasource ds = getDatasource();
         on_exit {
             ds.rollback();
-            ds.execRaw("drop table if exists " + DefaultValueFormSchema::TableName);
-            ds.execRaw("drop sequence if exists " + DefaultValueFormSchema::SequenceName);
+            ds.execRaw("drop table if exists " + runName(DefaultValueFormSchema::TableName));
+            ds.execRaw("drop sequence if exists " + runName(DefaultValueFormSchema::SequenceName));
             ds.commit();
         }
 
@@ -902,13 +905,13 @@ class PgsqlTest inherits SqlTestBase {
         on_exit {
             ds.rollback();
             on_error ds.rollback();
-            ds.execRaw("drop table if exists " + TableName);
-            ds.execRaw("drop function if exists " + FunctionName + "()");
+            ds.execRaw("drop table if exists " + runName(TableName));
+            ds.execRaw("drop function if exists " + runName(FunctionName) + "()");
             ds.commit();
         }
 
-        ds.execRaw("drop table if exists " + TableName);
-        ds.execRaw("drop function if exists " + FunctionName + "()");
+        ds.execRaw("drop table if exists " + runName(TableName));
+        ds.execRaw("drop function if exists " + runName(FunctionName) + "()");
         ds.execRaw("create table " + TableName + " (id int)");
         ds.execRaw("create function " + FunctionName + "() returns trigger language plpgsql as "
             "$function$ begin return new; end; $function$");
@@ -1007,8 +1010,8 @@ class PgsqlTest inherits SqlTestBase {
         string orig_search_path = getSearchPath(ds);
 
         # two schemas, each with a sequence of the SAME name: the case a schema-blind lookup gets wrong
-        string mine = ("qore_pgsql_sqm_" + get_random_string()).lwr();
-        string other = ("qore_pgsql_sqo_" + get_random_string()).lwr();
+        string mine = PgsqlRunSchema::getAuxName("sqm");
+        string other = PgsqlRunSchema::getAuxName("sqo");
         string seq_name = ("qore_pgsql_seq_" + get_random_string()).lwr();
         string other_only = ("qore_pgsql_seqo_" + get_random_string()).lwr();
         ds.exec(sprintf("create schema %s", mine));
@@ -1061,8 +1064,8 @@ class PgsqlTest inherits SqlTestBase {
         AbstractDatasource ds = getDatasource();
         on_exit ds.rollback();
 
-        string mine = ("qore_pgsql_ixm_" + get_random_string()).lwr();
-        string other = ("qore_pgsql_ixo_" + get_random_string()).lwr();
+        string mine = PgsqlRunSchema::getAuxName("ixm");
+        string other = PgsqlRunSchema::getAuxName("ixo");
         string tname = ("qore_pgsql_ixt_" + get_random_string()).lwr();
         string iname = ("qore_pgsql_ix_" + get_random_string()).lwr();
         ds.exec(sprintf("create schema %s", mine));
@@ -1106,7 +1109,7 @@ class PgsqlTest inherits SqlTestBase {
         string orig_search_path = getSearchPath(ds);
         string orig_schema = ds.selectRow("select current_schema() as s").s ?? "public";
 
-        string sname = ("qore_pgsql_sp_" + get_random_string()).lwr();
+        string sname = PgsqlRunSchema::getAuxName("sp");
         string tname = ("qore_pgsql_spt_" + get_random_string()).lwr();
         ds.exec(sprintf("create schema %s", sname));
         on_exit {
@@ -1441,7 +1444,7 @@ class PgsqlTest inherits SqlTestBase {
             on_error ds.rollback();
             on_success ds.commit();
             udt_table.drop();
-            ds.execRaw("drop type test_status_enum");
+            ds.execRaw("drop type " + runName("test_status_enum"));
         }
 
         # clean up
@@ -2621,7 +2624,7 @@ class PgsqlTest inherits SqlTestBase {
         string p4 = parent + "_p4";
 
         code drop_if_exists = sub (string table_name) {
-            ds.execRaw(sprintf("drop table if exists %s cascade", table_name));
+            ds.execRaw(sprintf("drop table if exists %s cascade", runName(table_name)));
             ds.commit();
         };
         drop_if_exists(parent);
@@ -2835,7 +2838,7 @@ class PgsqlTest inherits SqlTestBase {
         string source_name = "pgsql_insert_select_source";
         string target_name = "pgsql_insert_select_target";
         code drop_if_exists = sub (string table_name) {
-            ds.execRaw(sprintf("drop table if exists %s", table_name));
+            ds.execRaw(sprintf("drop table if exists %s", runName(table_name)));
             ds.commit();
         };
         drop_if_exists(target_name);
@@ -2938,7 +2941,7 @@ class PgsqlTest inherits SqlTestBase {
         string parent_name = "pgsql_aggregate_parent";
         string child_name = "pgsql_aggregate_child";
         code drop_if_exists = sub (string table_name) {
-            ds.execRaw(sprintf("drop table if exists %s", table_name));
+            ds.execRaw(sprintf("drop table if exists %s", runName(table_name)));
             ds.commit();
         };
         drop_if_exists(child_name);
@@ -3108,7 +3111,7 @@ class PgsqlTest inherits SqlTestBase {
             "pgsql_part_methods_us_h1", "pgsql_part_hash", "pgsql_part_hash_h0", "pgsql_part_hash_h1");
         code cleanup = sub () {
             # pgsql_part_mixed intentionally cannot be represented by PgsqlTable, so remove it natively
-            ds.execRaw("drop table if exists pgsql_part_mixed cascade");
+            ds.execRaw("drop table if exists " + runName("pgsql_part_mixed") + " cascade");
             ds.commit();
             foreach string n in (names) {
                 PgsqlTable t(ds, n);
@@ -3322,9 +3325,25 @@ class PgsqlTest inherits SqlTestBase {
         return ds.selectRow("select current_setting('search_path') as sp").sp;
     }
 
+    #! Drops the test schema, then the run's schema
+    globalTearDown() {
+        SqlTestBase::globalTearDown();
+        PgsqlRunSchema::teardown();
+    }
+
+    #! Returns the name qualified with the run's schema, for SQL that must not reach another schema
+    /** An unqualified name that is not in the run's schema is looked up in \c public, where the search_path
+        continues, so a drop of an object that may not exist is qualified
+    */
+    private static string runName(string name) {
+        return PgsqlRunSchema::getName() + "." + name;
+    }
+
     Datasource getDatasource() {
         if (!m_options.connstr)
             m_options.connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        # every connection that this test opens uses the run's own schema
+        PgsqlRunSchema::setup(m_options.connstr, "PgsqlSqlUtil");
         Datasource ds(m_options.connstr);
         if (ds.getDriverName() != "pgsql")
             throw "PGSQL-ERROR", sprintf("cannot execute the pgsql tests on a connection using driver %y", ds.getDriverName());

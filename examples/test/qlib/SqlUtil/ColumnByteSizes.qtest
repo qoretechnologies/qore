@@ -2,6 +2,8 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
 %requires SqlUtil >= 3.5
 %requires PgsqlSqlUtilBase >= 1.14
 %requires QUnit
@@ -21,11 +23,20 @@ class ColumnByteSizesTest inherits Test {
         addTestCase("measurement leaves pending writes in the caller transaction", \transaction());
         set_return_value(main());
     }
+    globalTearDown() {
+        # drops the run's schema with everything left in it
+        PgsqlRunSchema::teardown();
+    }
+    #! returns the name in the run's schema, so that it can never resolve to an object in another schema
+    private static string q(string name) {
+        return PgsqlRunSchema::getName() + "." + name;
+    }
     private hash<auto> fixture() {
 %ifdef NoPgsql
         testSkip("pgsql module unavailable");
 %endif
         if (!ENV.QORE_DB_CONNSTR_PGSQL) { testSkip("live disposable database required"); }
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "ColumnByteSizes");
         Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
         string name = sprintf("column_bytes_%d_%d", getpid(), ++serial);
         AbstractTable table = AbstractTable::getTable(ds, name);
@@ -113,7 +124,7 @@ class ColumnByteSizesTest inherits Test {
         on_exit {
             f.ds.rollback();
             f.ds.exec("alter table " + f.table.getSqlName() + " drop column custom_payload");
-            f.ds.exec("drop domain " + domain_name); f.ds.commit();
+            f.ds.exec("drop domain " + q(domain_name)); f.ds.commit();
         }
         assertThrows("COLUMN-BYTE-SIZE-ERROR", \f.table.getColumnByteSizes(), (("custom_payload",), {"id": 1}));
     }

@@ -4,6 +4,8 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/PgsqlSqlUtilBase.qm
 %requires ../../../../qlib/JdbcPostgresqlSqlUtil.qm
@@ -25,6 +27,11 @@ class PgsqlBulkBindProtocolsTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    globalTearDown() {
+        # drops the schema of the native PostgreSQL run with everything left in it
+        PgsqlRunSchema::teardown();
+    }
+
     private jdbc() {
 %ifdef NO_JNI
         testSkip("jni is not available");
@@ -42,6 +49,8 @@ class PgsqlBulkBindProtocolsTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_PGSQL) {
             testSkip("QORE_DB_CONNSTR_PGSQL is not configured");
         }
+        # the run's own schema; a JDBC connection does not use libpq, so the JDBC case is not isolated by it
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlBulkBindProtocols");
         runProtocol(ENV.QORE_DB_CONNSTR_PGSQL, "pgsql");
     }
 

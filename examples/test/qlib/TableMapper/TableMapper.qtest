@@ -17,6 +17,8 @@
 %requires Schema
 %requires Mapper
 %requires TableMapper
+# a run on PostgreSQL has its own schema
+%requires ../SqlUtil/PgsqlTestIsolation.qm
 
 public class TableMapperTestSchema inherits AbstractSchema {
     public {
@@ -376,8 +378,13 @@ public class TableMapperTest inherits QUnit::Test {
 
     globalTearDown() {
         # drop the test schema
-        if (schema)
+        if (schema) {
             schema.drop(False, m_options.verbose);
+            # end the transaction of the test's connection before the run's schema is dropped
+            schema.getDatasource().rollback();
+        }
+        # drop the run's schema on PostgreSQL
+        PgsqlRunSchema::teardown();
     }
 
     private usageIntern() {
@@ -1198,6 +1205,8 @@ public class TableMapperTest inherits QUnit::Test {
                 printf("using connection string %y\n", m_options.connstr);
             }
         }
+        # on PostgreSQL, every connection of the run uses the run's own schema
+        PgsqlRunSchema::setup(m_options.connstr, "TableMapper");
         Datasource ds(m_options.connstr);
         ds.open();
         return ds;

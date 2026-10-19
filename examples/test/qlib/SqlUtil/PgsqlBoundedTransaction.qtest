@@ -2,6 +2,8 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
 %requires QUnit
 %requires SqlUtil
 %requires json
@@ -33,12 +35,24 @@ class BoundedTransactionTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    globalTearDown() {
+        # drops the run's schema with everything left in it
+        PgsqlRunSchema::teardown();
+    }
+
+    #! returns the name in the run's schema, so that it can never resolve to an object in another schema
+    private static string q(string name) {
+        return PgsqlRunSchema::getName() + "." + name;
+    }
+
     private Datasource connection(bool supported = True) {
 %ifdef NoPgsql
         testSkip("pgsql module is unavailable");
 %endif
         *string dsn = ENV.QORE_DB_CONNSTR_PGSQL;
         if (!dsn) { testSkip("set QORE_DB_CONNSTR_PGSQL to a disposable test database"); }
+        # every connection of this run, including pooled ones, uses the run's own schema
+        PgsqlRunSchema::setup(dsn, "PgsqlBoundedTransaction");
         Datasource ds(dsn);
         ds.open();
         ds.setAutoCommit(False);
@@ -364,8 +378,9 @@ class BoundedTransactionTest inherits QUnit::Test {
         # credentials are used.  The role is dropped however the case ends: every cleanup step runs even if an
         # earlier one fails, and nothing is left if the role was never created.
         on_exit {
-            foreach string sql in (("reset role", "revoke all on " + f.name + " from " + role,
-                    "revoke usage on schema public from " + role, "drop role if exists " + role)) {
+            foreach string sql in (("reset role", "revoke all on " + q(f.name) + " from " + role,
+                    "revoke usage on schema " + PgsqlRunSchema::getName() + " from " + role,
+                    "drop role if exists " + role)) {
                 try {
                     f.ds.rollback();
                     f.ds.execRaw(sql);
@@ -384,10 +399,11 @@ class BoundedTransactionTest inherits QUnit::Test {
         # "set role" needs membership
         f.ds.execRaw("grant " + role + " to current_user");
         f.ds.commit();
-        f.ds.execRaw("grant usage on schema public to " + role);
-        f.ds.execRaw("grant select on " + f.name + " to " + role);
-        f.ds.execRaw("alter table " + f.name + " enable row level security");
-        f.ds.execRaw("create policy " + f.name + "_policy on " + f.name + " using (id = 999)");
+        # the fixture table is in the run's schema
+        f.ds.execRaw("grant usage on schema " + PgsqlRunSchema::getName() + " to " + role);
+        f.ds.execRaw("grant select on " + q(f.name) + " to " + role);
+        f.ds.execRaw("alter table " + q(f.name) + " enable row level security");
+        f.ds.execRaw("create policy " + f.name + "_policy on " + q(f.name) + " using (id = 999)");
         f.ds.execRaw("set role " + role);
         f.ds.commit();
         assertEq(0, f.table.selectRows().size(), "the ordinary query silently filters the owned row");

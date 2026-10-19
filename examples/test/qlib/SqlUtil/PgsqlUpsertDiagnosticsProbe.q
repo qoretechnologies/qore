@@ -68,6 +68,9 @@ class PgsqlUpsertDiagnosticsProbe {
         admin.exec(sprintf("create table %s (keyname varchar(200) primary key, value varchar(200) not null)",
             table_name));
         admin.commit();
+        # the schema the table is created in: the first schema of the search_path, which a test sets for its run
+        result.schema = admin.selectRow("select current_schema() as schema").schema;
+        admin.commit();
         on_exit {
             # the probe connection must release its locks before the table can be dropped
             try {

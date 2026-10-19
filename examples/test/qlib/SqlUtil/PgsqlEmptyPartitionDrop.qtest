@@ -1,11 +1,13 @@
 #!/usr/bin/env qore
 # Copyright 2026 Qore Technologies, s.r.o.
-# Deterministic database regressions; every case owns a new schema, removed on exit.
+# Deterministic database regressions; every case owns a new schema of the run, removed on exit.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires SqlUtil
 %requires PgsqlSqlUtilBase
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
 %try-module pgsql
 %define NoPgsql
 %endtry
@@ -28,6 +30,10 @@ class EmptyPartitionDropTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+    }
+
     private Datasource connection() {
 %ifdef NoPgsql
         testSkip("pgsql module is unavailable");
@@ -36,6 +42,8 @@ class EmptyPartitionDropTest inherits QUnit::Test {
         if (!dsn) {
             testSkip("set QORE_DB_CONNSTR_PGSQL to a disposable PostgreSQL test database");
         }
+        # the run's own schema, before the first PostgreSQL connection is opened
+        PgsqlRunSchema::setup(dsn, "PgsqlEmptyPartitionDrop");
         Datasource ds(dsn);
         ds.open();
         ds.setAutoCommit(False);
@@ -44,7 +52,8 @@ class EmptyPartitionDropTest inherits QUnit::Test {
 
     private hash<auto> fixture() {
         Datasource ds = connection();
-        string schema = sprintf("empty_drop_%d_%d", getpid(), ++serial);
+        # a schema of the run, so a concurrent run of this test has its own
+        string schema = PgsqlRunSchema::getAuxName(sprintf("case%d", ++serial));
         ds.execRaw("create schema " + schema);
         on_error {
             ds.rollback();

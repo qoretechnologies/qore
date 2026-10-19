@@ -33,6 +33,8 @@
 %requires ../../../../qlib/BulkSqlUtil
 %requires ../../../../qlib/DbDataProvider
 %requires ../../../../qlib/Schema
+# a run on PostgreSQL has its own schema
+%requires ../SqlUtil/PgsqlTestIsolation.qm
 
 %exec-class DbTableDataProviderUpsertBulkTest
 
@@ -96,6 +98,11 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    globalTearDown() {
+        # drop the run's schema on PostgreSQL; each test case's connection is closed when it ends
+        PgsqlRunSchema::teardown();
+    }
+
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--conn=ARG", "set DB connection argument (ex: \"pgsql:user/pass@db\")", OptionColumn);
@@ -107,6 +114,8 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
             # skip the calling test case cleanly (throws TEST-SKIPPED-EXCEPTION); every test method needs a DB
             testSkip("no DB connection string; set -c or QORE_DB_CONNSTR_PGSQL");
         }
+        # on PostgreSQL, every connection of the run uses the run's own schema
+        PgsqlRunSchema::setup(connstr, "DbTableDataProviderUpsertBulk");
         Datasource ds(connstr);
         try {
             ds.open();

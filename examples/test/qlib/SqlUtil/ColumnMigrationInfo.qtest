@@ -2,6 +2,8 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
 %requires SqlUtil >= 3.7
 %requires PgsqlSqlUtilBase >= 1.16
 %requires QUnit
@@ -20,11 +22,20 @@ class ColumnMigrationInfoTest inherits Test {
         addTestCase("invalid identifiers and partitioned layouts reject", \validation());
         set_return_value(main());
     }
+    globalTearDown() {
+        # drops the run's schema with everything left in it
+        PgsqlRunSchema::teardown();
+    }
+    #! returns the name in the run's schema, so that it can never resolve to an object in another schema
+    private static string q(string name) {
+        return PgsqlRunSchema::getName() + "." + name;
+    }
     private hash<auto> fixture() {
 %ifdef NoPgsql
         testSkip("pgsql module unavailable");
 %endif
         if (!ENV.QORE_DB_CONNSTR_PGSQL) { testSkip("live disposable database required"); }
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "ColumnMigrationInfo");
         Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
         ds.setOption("timezone", "America/New_York");
         string name = sprintf("column_migration_%d_%d", getpid(), ++serial);
@@ -63,14 +74,14 @@ class ColumnMigrationInfoTest inherits Test {
         f.table.addIndex(f.name + "_period", False, ("period",)); f.ds.commit();
         assertTrue(f.table.getColumnMigrationInfo(("period",)).columns.period.dependent);
         f.ds.rollback();
-        f.ds.exec("drop index " + f.name + "_period"); f.ds.commit();
+        f.ds.exec("drop index " + q(f.name + "_period")); f.ds.commit();
         foreach string expression in (("period", f.name)) {
             f.ds.exec("create view " + f.name + "_v as select " + expression + " from " + f.name);
             f.ds.commit();
             assertTrue(f.table.getColumnMigrationInfo(("period",)).columns.period.dependent,
                 "column and whole-row views must both block replacement");
             f.ds.rollback();
-            f.ds.exec("drop view " + f.name + "_v"); f.ds.commit();
+            f.ds.exec("drop view " + q(f.name + "_v")); f.ds.commit();
         }
         assertFalse(f.table.getColumnMigrationInfo(("period",)).columns.period.dependent);
     }
@@ -81,8 +92,8 @@ class ColumnMigrationInfoTest inherits Test {
         f.ds.exec("create trigger inspect_update before update on " + f.name
             + " for each row execute function " + f.name + "_fn()");
         f.ds.commit();
-        on_exit { f.ds.rollback(); f.ds.exec("drop trigger inspect_update on " + f.name);
-            f.ds.exec("drop function " + f.name + "_fn()"); f.ds.commit(); }
+        on_exit { f.ds.rollback(); f.ds.exec("drop trigger inspect_update on " + q(f.name));
+            f.ds.exec("drop function " + q(f.name + "_fn") + "()"); f.ds.commit(); }
         hash<auto> info = f.table.getColumnMigrationInfo(("period",));
         assertEq(1, info.triggers.size());
         assertEq("inspect_update", info.triggers[0].name);
@@ -90,10 +101,10 @@ class ColumnMigrationInfoTest inherits Test {
         assertTrue(info.triggers[0].row_trigger);
         assertTrue(info.triggers[0].source.find("return new") >= 0);
         f.ds.rollback();
-        f.ds.exec("alter table " + f.name + " add unique(period)");
+        f.ds.exec("alter table " + q(f.name) + " add unique(period)");
         f.ds.exec("create table " + f.name + "_child (period timestamp references " + f.name + "(period))");
         f.ds.commit();
-        on_exit { f.ds.rollback(); f.ds.exec("drop table " + f.name + "_child"); f.ds.commit(); }
+        on_exit { f.ds.rollback(); f.ds.exec("drop table " + q(f.name + "_child")); f.ds.commit(); }
         assertTrue(f.table.getColumnMigrationInfo(("period",)).columns.period.dependent);
     }
     private transaction() {
@@ -110,17 +121,17 @@ class ColumnMigrationInfoTest inherits Test {
             assertThrows("COLUMN-MIGRATION-ERROR", \f.table.getColumnMigrationInfo(), (names,));
             f.ds.rollback();
         }
-        f.ds.exec("alter table " + f.name + " enable row level security"); f.ds.commit();
+        f.ds.exec("alter table " + q(f.name) + " enable row level security"); f.ds.commit();
         assertThrows("COLUMN-MIGRATION-ERROR", \f.table.getColumnMigrationInfo(), (("period",),));
         f.ds.rollback();
-        f.ds.exec("alter table " + f.name + " disable row level security"); f.ds.commit();
+        f.ds.exec("alter table " + q(f.name) + " disable row level security"); f.ds.commit();
         f.ds.exec("create table " + f.name + "_inherited () inherits (" + f.name + ")"); f.ds.commit();
         assertThrows("COLUMN-MIGRATION-ERROR", \f.table.getColumnMigrationInfo(), (("period",),));
         f.ds.rollback();
-        f.ds.exec("drop table " + f.name + "_inherited"); f.ds.commit();
+        f.ds.exec("drop table " + q(f.name + "_inherited")); f.ds.commit();
         f.ds.exec("create table " + f.name + "_parent (period timestamp) partition by range(period)");
         f.ds.commit();
-        on_exit { f.ds.rollback(); f.ds.exec("drop table " + f.name + "_parent"); f.ds.commit(); }
+        on_exit { f.ds.rollback(); f.ds.exec("drop table " + q(f.name + "_parent")); f.ds.commit(); }
         AbstractTable parent = AbstractTable::getTable(f.ds, f.name + "_parent");
         assertThrows("COLUMN-MIGRATION-ERROR", \parent.getColumnMigrationInfo(), (("period",),));
         f.ds.rollback();

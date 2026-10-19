@@ -7,6 +7,8 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
 %requires QUnit
 %requires Util
 %requires FsUtil
@@ -67,6 +69,11 @@ class PgsqlUpsertDiagnosticsTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    globalTearDown() {
+        # drops the run's schema with everything the probes left in it
+        PgsqlRunSchema::teardown();
+    }
+
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--conn=ARG", "set DB connection argument (ex: \"pgsql:user/pass@db\")", OptionColumn);
@@ -99,6 +106,8 @@ class PgsqlUpsertDiagnosticsTest inherits QUnit::Test {
             "PgsqlSqlUtil module form");
         assertTrue(probe.result.atomic_upsert, "the table uses PostgreSQL's native upsert");
         assertNothing(probe.result.cleanup_error, "the probe transaction was rolled back cleanly");
+        # the probe inherits PGOPTIONS, so it works in this run's schema
+        assertEq(PgsqlRunSchema::getName(), probe.result.schema, "the probe uses the run's schema");
     }
 
     private constraintTest(string form) {
@@ -176,6 +185,8 @@ class PgsqlUpsertDiagnosticsTest inherits QUnit::Test {
                 "skip": "no PostgreSQL connection; use --conn or QORE_DB_CONNSTR_PGSQL",
             };
         }
+        # the probes, child processes, inherit the run's schema with PGOPTIONS
+        PgsqlRunSchema::setup(conn, "PgsqlUpsertDiagnostics");
         if (*string err = checkConnection(conn)) {
             return <PgsqlUpsertDiagnosticsProbeRun>{"skip": err};
         }

@@ -7,6 +7,8 @@
 %requires PgsqlSqlUtilBase
 %requires Schema
 %requires SchemaReverse
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
 %try-module pgsql
 %define NO_PGSQL
 %endtry
@@ -21,6 +23,10 @@ class PgsqlIndexFeaturesTest inherits QUnit::Test {
         addTestCase("catalog and DDL round trip", \roundTrip());
         addTestCase("fresh DataSchema install and repeated alignment", \freshInstall());
         set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
     }
 
     private PgsqlIndex index(*hash<auto> options) {
@@ -96,6 +102,8 @@ class PgsqlIndexFeaturesTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_PGSQL) {
             testSkip("QORE_DB_CONNSTR_PGSQL is not set");
         }
+        # the run's own schema, before the first PostgreSQL connection is opened
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlIndexFeatures");
         Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
         if (ds.getServerVersion() < 150000) {
             ds.rollback();
@@ -107,7 +115,8 @@ class PgsqlIndexFeaturesTest inherits QUnit::Test {
     private roundTrip() {
         Datasource ds = datasource();
         on_exit ds.rollback();
-        string ns = "qore_idx_features_" + getpid();
+        # a schema of the run, so a concurrent run of this test has its own
+        string ns = PgsqlRunSchema::getAuxName("roundtrip");
         ds.execRaw("create schema " + ns);
         ds.execRaw("set local search_path = " + ns);
         ds.execRaw("create table probe (id int not null, a varchar(10), b int, c int, state varchar(10), \"order\" int)");
@@ -170,7 +179,8 @@ class PgsqlIndexFeaturesTest inherits QUnit::Test {
     private freshInstall() {
         Datasource ds = datasource();
         on_exit ds.rollback();
-        string ns = "qore_idx_install_" + getpid();
+        # a schema of the run, so a concurrent run of this test has its own
+        string ns = PgsqlRunSchema::getAuxName("install");
         ds.execRaw("create schema " + ns);
         ds.execRaw("set local search_path = " + ns);
         hash<auto> definition = Schema::DataSchemaLoader::loadHash({

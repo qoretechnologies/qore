@@ -4,6 +4,8 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
 %requires Util
 %requires Logger
 %requires DataProvider
@@ -118,6 +120,8 @@ class PgsqlExpressionTest inherits QUnit::Test {
         if (table) {
             table.dropCommit();
         }
+        # drops the run's schema with everything left in it
+        PgsqlRunSchema::teardown();
     }
 
     private Datasource getDatasource() {
@@ -128,6 +132,7 @@ class PgsqlExpressionTest inherits QUnit::Test {
         if (!connstr.val()) {
             testSkip("no DB connection");
         }
+        PgsqlRunSchema::setup(connstr, "PgsqlExpressions");
         Datasource ds(connstr);
         if (ds.getDriverName() != "pgsql") {
             testSkip("not a pgsql connection");

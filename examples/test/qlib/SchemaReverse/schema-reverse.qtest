@@ -14,6 +14,9 @@
 
 %requires json
 
+# a run on PostgreSQL has its own schema
+%requires ../SqlUtil/PgsqlTestIsolation.qm
+
 %exec-class Main
 
 #
@@ -69,6 +72,8 @@ class Main inherits QUnit::Test {
                         : ENV.QORE_DB_CONNSTR_PGSQL);
             }
 
+            # on PostgreSQL, every connection of the run uses the run's own schema
+            PgsqlRunSchema::setup(m_options.connstr, "SchemaReverse");
             m_ds = new Datasource(m_options.connstr);
             m_ds.open();
             m_db = new Database(m_ds);
@@ -106,6 +111,8 @@ class Main inherits QUnit::Test {
 
     globalTearDown() {
         globalMakeSchema("getDropSchemaSql");
+        # drop the run's schema on PostgreSQL
+        PgsqlRunSchema::teardown();
     }
 
     testSchemaReverseTable() {
@@ -121,7 +128,9 @@ class Main inherits QUnit::Test {
         if (!m_ds)
             testSkip("no DB connection");
 
-        TablesReverse r(m_ds, "schema_reverse_t1");
+        # the mask is anchored: another schema of the search_path can have a table of this name, listed as
+        # "<schema>.schema_reverse_t1"
+        TablesReverse r(m_ds, "^schema_reverse_t1$");
         hash q = r.toQore();
         assertEq(REF_SCHEMA.tables, q, "TableReverse::toQore()");
     }
@@ -140,7 +149,9 @@ class Main inherits QUnit::Test {
             testSkip("no DB connection");
         }
 
-        SequencesReverse r(m_ds, "schema_reverse_seq");
+        # the mask is anchored: another schema of the search_path can have a sequence of this name, listed as
+        # "<schema>.schema_reverse_seq"
+        SequencesReverse r(m_ds, "^schema_reverse_seq$");
         hash q = r.toQore();
         assertEq(REF_SCHEMA.sequences, q, "SequencesReverse::toQore()");
     }
