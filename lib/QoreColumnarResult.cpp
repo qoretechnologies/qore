@@ -1184,12 +1184,23 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
         schema.nullable = nullable.getAsBool();
     }
 
+    // the native type, buffer type, time unit and time zone are passed on as C strings (to the shape and type
+    // lookups and in Arrow format strings), so a value with a NUL character, which would be cut at the NUL character
+    // and name another value, is refused
     std::string native_type = columnar_get_desc_string(desc, "native_type");
+    if (q_check_no_nul(native_type.data(), native_type.size(), "native type", "native types",
+            "COLUMNAR-SCHEMA-ERROR", xsink)) {
+        return schema;
+    }
     if (!native_type.empty()) {
         schema.native_type = native_type;
     }
 
     std::string buffer_type = columnar_get_desc_string(desc, "buffer_type");
+    if (q_check_no_nul(buffer_type.data(), buffer_type.size(), "buffer type", "buffer types",
+            "COLUMNAR-SCHEMA-ERROR", xsink)) {
+        return schema;
+    }
     if (!buffer_type.empty()) {
         QoreBufferElementType parsed = QoreBufferElementType::Invalid;
         if (qore_buffer_element_type_from_name(buffer_type.c_str(), parsed)) {
@@ -1208,10 +1219,18 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
     schema.fixed_size = static_cast<int32_t>(columnar_get_desc_int(desc, "fixed_size", schema.fixed_size));
 
     std::string time_unit = columnar_get_desc_string(desc, "time_unit");
+    if (q_check_no_nul(time_unit.data(), time_unit.size(), "time unit", "time units", "COLUMNAR-SCHEMA-ERROR",
+            xsink)) {
+        return schema;
+    }
     if (!time_unit.empty()) {
         schema.time_unit = std::move(time_unit);
     }
     std::string timezone = columnar_get_desc_string(desc, "timezone");
+    if (q_check_no_nul(timezone.data(), timezone.size(), "time zone", "time zones", "COLUMNAR-SCHEMA-ERROR",
+            xsink)) {
+        return schema;
+    }
     if (!timezone.empty()) {
         schema.timezone = std::move(timezone);
     }
@@ -1609,6 +1628,12 @@ static QoreBufferElementType columnar_required_buffer_type(const QoreHashNode* h
         ExceptionSink* xsink) {
     std::string type_name = columnar_required_string(h, "element_type", context, xsink);
     if (*xsink) {
+        return QoreBufferElementType::Invalid;
+    }
+    // the type name is looked up as a C string, so a name with a NUL character, which would be cut at the NUL
+    // character and name another type, is refused
+    if (q_check_no_nul(type_name.data(), type_name.size(), "buffer element type", "buffer element types",
+            "DESERIALIZATION-ERROR", xsink)) {
         return QoreBufferElementType::Invalid;
     }
 
@@ -4079,6 +4104,12 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* colum
         QoreValue value = i.get();
         const QoreHashNode* column_desc = columnar_get_desc_column(desc, i.getKey());
         std::string native_type = columnar_get_desc_string(column_desc, "native_type");
+        // the native type is passed on as a C string, so a value with a NUL character, which would be cut at the NUL
+        // character, is refused
+        if (q_check_no_nul(native_type.data(), native_type.size(), "native type", "native types",
+                "COLUMNAR-RESULT-ERROR", xsink)) {
+            return nullptr;
+        }
 
         if (value.getType() == NT_BUFFER) {
             const QoreBufferNode* buffer = value.get<const QoreBufferNode>();

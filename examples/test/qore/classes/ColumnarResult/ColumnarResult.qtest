@@ -16,6 +16,7 @@ class ColumnarResultTest inherits QUnit::Test {
         addTestCase("row result round trip", \rowResultRoundTrip());
         addTestCase("scale-0 numeric narrowing", \scaleZeroNumericNarrowing());
         addTestCase("NUL characters in names and descriptions", \nulNames());
+        addTestCase("NUL characters in strings passed on as C strings", \nulCStrings());
         set_return_value(main());
     }
 
@@ -170,5 +171,45 @@ class ColumnarResultTest inherits QUnit::Test {
         bad_schema._index{schema_index}._members.name = "a\x00b";
         assertThrows("HASH-KEY-ERROR", \Serializable::deserialize(), (bad_schema,),
             "a serialized schema name with a NUL character cannot be a hash key");
+    }
+
+    # a description string or operator passed on as a C string would be cut at a NUL character and name another
+    # value, so it is refused
+    private nulCStrings() {
+        assertThrows("COLUMNAR-RESULT-ERROR", "native type", \ColumnarResult::fromColumnHash(),
+            ({"a": (1,)}, {"a": {"native_type": "int8\x00x"}}), "a native type with a NUL character is refused");
+        assertThrows("COLUMNAR-SCHEMA-ERROR", "buffer type", \ColumnarResult::fromColumnHash(),
+            ({"a": (1,)}, {"a": {"schema": {"buffer_type": "int64\x00x"}}}),
+            "a buffer type with a NUL character is refused");
+        assertThrows("COLUMNAR-SCHEMA-ERROR", "time unit", \ColumnarResult::fromColumnHash(),
+            ({"t": (2026-01-01T00:00:00Z,)}, {"t": {"schema": {"kind": "timestamp", "time_unit": "us\x00x"}}}),
+            "a time unit with a NUL character is refused");
+        assertThrows("COLUMNAR-SCHEMA-ERROR", "time zone", \ColumnarResult::fromColumnHash(),
+            ({"t": (2026-01-01T00:00:00Z,)}, {"t": {"schema": {"kind": "timestamp", "timezone": "UTC\x00x"}}}),
+            "a time zone with a NUL character is refused");
+
+        ColumnarResult result = ColumnarResult::fromColumnHash({"a": new buffer<int64>((1, 2)), "s": ("x", "y")});
+        buffer<bool> mask = result.nullMask("a", True);
+        assertThrows("COLUMNAR-RESULT-ERROR", "mask operator", \result.combineMasks(), (mask, mask, "&&\x00x"),
+            "a mask operator with a NUL character is refused");
+        assertThrows("COLUMNAR-RESULT-ERROR", "string predicate", \result.stringPredicateMask(),
+            ("s", "contains\x00x", "x"), "a string predicate with a NUL character is refused");
+
+        # a serialized buffer element type
+        hash<SerializationInfo> data = result.serializeToData();
+        string data_index;
+        foreach hash<auto> i in (data._index.pairIterator()) {
+            if (!i.value.hasKey("_members")) {
+                continue;
+            }
+            hash<auto> members = i.value._members;
+            if (members.element_type == "int64") {
+                data_index = i.key;
+            }
+        }
+        hash<SerializationInfo> bad_type = data;
+        bad_type._index{data_index}._members.element_type = "int64\x00x";
+        assertThrows("DESERIALIZATION-ERROR", "buffer element type", \Serializable::deserialize(), (bad_type,),
+            "a serialized buffer element type with a NUL character is refused");
     }
 }

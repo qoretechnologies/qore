@@ -408,9 +408,14 @@ buffer<bool> large = result.getColumn("amount") >= 1000.0;
 ColumnarResult selected = result.filter(result.combineMasks(active, large, "&&"));
     @endcode
 
-    @throw COLUMNAR-RESULT-ERROR if either mask type or length is invalid
+    @throw COLUMNAR-RESULT-ERROR if either mask type or length is invalid, or the operator is not supported
 */
 auto ColumnarResult::combineMasks(auto lhs, auto rhs, string op) [flags=RET_VALUE_ONLY] {
+    // the operator is passed on as a C string, which would end at a NUL character
+    if (q_check_no_nul(op->c_str(), op->size(), "mask operator", "mask operators", "COLUMNAR-RESULT-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     return QoreColumnarResult::combineMasks(lhs, rhs, op->c_str(), xsink);
 }
 
@@ -461,6 +466,11 @@ auto ColumnarResult::nullMask(string name, *bool invert) [flags=RET_VALUE_ONLY,N
 auto ColumnarResult::stringPredicateMask(string name, string op, softstring value, *bool ignore_case)
         [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (ColumnarResult_check_column_name(name, xsink)) {
+        return QoreValue();
+    }
+    // the predicate is passed on as a C string, which would end at a NUL character
+    if (q_check_no_nul(op->c_str(), op->size(), "string predicate", "string predicates", "COLUMNAR-RESULT-ERROR",
+            xsink)) {
         return QoreValue();
     }
     return result->stringPredicateMask(name->c_str(), op->c_str(), value,
