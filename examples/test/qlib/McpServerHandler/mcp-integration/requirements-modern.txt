@@ -4,5 +4,5 @@
 # NOTE: the mcp 1.x and 2.x SDKs cannot be installed side by side; the legacy-era tests
 # use requirements-legacy.txt in a separate virtual environment.
 
-mcp==2.0.0
+mcp==2.2.0
 httpx>=0.25.0
