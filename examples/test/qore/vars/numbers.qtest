@@ -14,6 +14,7 @@ public class NumbersTest inherits QUnit::Test {
         addTestCase("Test number rounding during string conversions", \roundingTest());
         addTestCase("Test number operations", \opTest());
         addTestCase("Test number precision", \precTest());
+        addTestCase("Test the precision of in-place operations", \inPlacePrecTest());
         addTestCase("Test infp", \infpTests());
         addTestCase("Test nanp", \nanpTests());
         addTestCase("format", \formatTests());
@@ -90,6 +91,44 @@ public class NumbersTest inherits QUnit::Test {
 
         assertEq(False, 1 < 1n);
         assertEq(False, 1 > 1n);
+    }
+
+    #! In-place operations limit the precision of their result to the maximum precision of a number, as the other
+    #! operations do
+    inPlacePrecTest() {
+        number n = 1.0000001n;
+        number m = 1.0000003n;
+        number p = n;
+        number q = m;
+        for (int i = 0; i < 5; ++i) {
+            n *= m;
+            m *= n;
+            p = p * q;
+            q = q * p;
+        }
+        # the maximum precision of a number
+        assertEq(8192, n.prec());
+        assertEq(8192, m.prec());
+        # the same results as the operations that are not in place
+        assertEq(p.prec(), n.prec());
+        assertEq(q.prec(), m.prec());
+        assertEq(p, n);
+        assertEq(q, m);
+
+        # many more operations stay at the maximum precision; each multiplication doubled it before
+        for (int i = 0; i < 20; ++i) {
+            n *= m;
+            m *= n;
+            n /= m;
+            m += n;
+            n -= m;
+        }
+        assertEq(8192, n.prec());
+        assertEq(8192, m.prec());
+
+        # a number with an exponent too large for an int has the maximum precision
+        assertEq(8192, number("1e99999999999999999999").prec());
+        assertEq(8192, number("1e-99999999999999999999").prec());
     }
 
     precTest() {

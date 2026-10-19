@@ -108,8 +108,13 @@ struct qore_number_private_intern {
         } else {
             prec = QORE_MAX(mpfr_get_prec(num), mpfr_get_prec(r)) + 1;
         }
-        if (prec > mpfr_get_prec(num))
+        // as for the result of any other operation, the precision is at most QORE_MAX_PREC
+        if (prec > QORE_MAX_PREC) {
+            prec = QORE_MAX_PREC;
+        }
+        if (prec > mpfr_get_prec(num)) {
             mpfr_prec_round(num, prec, QORE_MPFR_RND);
+        }
     }
 
     DLLLOCAL void setPrec(mpfr_prec_t prec) {
@@ -161,10 +166,14 @@ struct qore_number_private : public qore_number_private_intern {
         // see if number has an exponent and increase the number's precision if necessary
         const char* p = strchrs(str, "eE");
         if (p) {
-            int exp = abs(atoi(p + 1));
-            mpfr_prec_t np = exp * 5;
-            if (np > getPrec())
+            // the precision is at most QORE_MAX_PREC; the exponent is read without overflowing
+            long long exp = strtoll(p + 1, nullptr, 10);
+            mpfr_prec_t np = (exp > QORE_MAX_PREC / 5 || exp < -QORE_MAX_PREC / 5)
+                ? QORE_MAX_PREC
+                : static_cast<mpfr_prec_t>(QORE_MAX(exp, -exp) * 5);
+            if (np > getPrec()) {
                 setPrec(np);
+            }
         }
         if (!str[0])
             mpfr_set_sj(num, 0, QORE_MPFR_RND);

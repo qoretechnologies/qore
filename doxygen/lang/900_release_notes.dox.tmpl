@@ -4500,6 +4500,12 @@ while (*binary chunk = input.read(65536)) {
       unknown warning name in a @ref disable-warning "%disable-warning" directive there, for example, and \c qcc did
       not report a duplicate local variable.  Each file now starts with the warnings the \c .qm file sets, and a
       warning directive in a file applies only to that file
+    - Fixed a crash of in-place arithmetic on @ref number "arbitrary-precision numbers": the
+      @ref plus_equals_operator "+=", @ref minus_equals_operator "-=", @ref multiply_equals_operator "*=" and
+      @ref divide_equals_operator "/=" operators raised the precision of their result without limit (each
+      multiplication added the precisions of the two numbers), so that a loop of in-place multiplications used memory
+      and time without limit and crashed when the precision outgrew the stack; their result now has at most the
+      maximum precision of a number (8192 bits), as the result of the other operations has
     - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
       @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
       thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in
