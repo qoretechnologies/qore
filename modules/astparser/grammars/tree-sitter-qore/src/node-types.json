@@ -296,6 +296,10 @@
           "named": true
         },
         {
+          "type": "discard_statement",
+          "named": true
+        },
+        {
           "type": "do_while_statement",
           "named": true
         },
@@ -588,6 +592,10 @@
           },
           {
             "type": "debug_statement",
+            "named": true
+          },
+          {
+            "type": "discard_statement",
             "named": true
           },
           {
@@ -1094,6 +1102,10 @@
             "named": true
           },
           {
+            "type": "discard_statement",
+            "named": true
+          },
+          {
             "type": "do_while_statement",
             "named": true
           },
@@ -1284,6 +1296,10 @@
           "named": true
         },
         {
+          "type": "discard_statement",
+          "named": true
+        },
+        {
           "type": "do_while_statement",
           "named": true
         },
@@ -1403,6 +1419,10 @@
           "named": true
         },
         {
+          "type": "discard_statement",
+          "named": true
+        },
+        {
           "type": "do_while_statement",
           "named": true
         },
@@ -1501,6 +1521,46 @@
     }
   },
   {
+    "type": "discard_statement",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "assignment_expression",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "postfix_expression",
+            "named": true
+          },
+          {
+            "type": "primary_expression",
+            "named": true
+          },
+          {
+            "type": "sequence_expression",
+            "named": true
+          },
+          {
+            "type": "ternary_expression",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "do_while_statement",
     "named": true,
     "fields": {
@@ -1530,6 +1590,10 @@
           },
           {
             "type": "debug_statement",
+            "named": true
+          },
+          {
+            "type": "discard_statement",
             "named": true
           },
           {
@@ -2162,6 +2226,10 @@
             "named": true
           },
           {
+            "type": "discard_statement",
+            "named": true
+          },
+          {
             "type": "do_while_statement",
             "named": true
           },
@@ -2373,6 +2441,10 @@
           },
           {
             "type": "debug_statement",
+            "named": true
+          },
+          {
+            "type": "discard_statement",
             "named": true
           },
           {
@@ -2893,6 +2965,10 @@
             "named": true
           },
           {
+            "type": "discard_statement",
+            "named": true
+          },
+          {
             "type": "do_while_statement",
             "named": true
           },
@@ -3030,6 +3106,10 @@
           },
           {
             "type": "debug_statement",
+            "named": true
+          },
+          {
+            "type": "discard_statement",
             "named": true
           },
           {
@@ -4137,6 +4217,10 @@
           "named": true
         },
         {
+          "type": "discard_statement",
+          "named": true
+        },
+        {
           "type": "do_while_statement",
           "named": true
         },
@@ -5163,6 +5247,10 @@
           "named": true
         },
         {
+          "type": "discard_statement",
+          "named": true
+        },
+        {
           "type": "do_while_statement",
           "named": true
         },
@@ -5754,6 +5842,10 @@
             "named": true
           },
           {
+            "type": "discard_statement",
+            "named": true
+          },
+          {
             "type": "do_while_statement",
             "named": true
           },
@@ -6012,6 +6104,10 @@
         },
         {
           "type": "debug_statement",
+          "named": true
+        },
+        {
+          "type": "discard_statement",
           "named": true
         },
         {
@@ -6370,6 +6466,10 @@
           },
           {
             "type": "debug_statement",
+            "named": true
+          },
+          {
+            "type": "discard_statement",
             "named": true
           },
           {
@@ -6956,6 +7056,10 @@
           },
           {
             "type": "debug_statement",
+            "named": true
+          },
+          {
+            "type": "discard_statement",
             "named": true
           },
           {
@@ -7790,6 +7894,10 @@
   },
   {
     "type": "@debug",
+    "named": false
+  },
+  {
+    "type": "@discard",
     "named": false
   },
   {

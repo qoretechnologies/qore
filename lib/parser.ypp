@@ -2668,6 +2668,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %token TOK_TRY "try"
 %token TOK_THROW "throw"
 %token TOK_ASSERT "@assert"
+%token TOK_DISCARD "@discard"
 %token TOK_DEBUG "@debug"
 %token TOK_DEBUG_BLOCK "@debug block"
 %token TOK_CATCH "catch"
@@ -3498,6 +3499,12 @@ statement:
     }
     | TOK_THROW exp ';' {
         $$ = new ThrowStatement(@1.first_line, @2.last_line, $2);
+    }
+    | TOK_DISCARD '(' exp ')' ';' {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
+            @1.first_line, @5.last_line, @1.first_col, @5.last_col);
+        ignore_return_value($3);
+        $$ = new ExpressionStatement(loc, $3, true);
     }
     | TOK_ASSERT '(' exp ')' ';' {
         // exp could be: single condition, or list (condition, msg, args...)

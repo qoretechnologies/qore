@@ -3083,6 +3083,7 @@ cast<\*{WS}*({WORD}::)*{WORD}!?{WS}*(<[a-zA-Z<>:_0-9 \t,\*!=?]*>)?{WS}*> yylval-
 {DIGIT}+"."{DIGIT}+[eE][+-]?{DIGIT}+    yylval->decimal = q_strtod(yytext); return QFLOAT;
 @[Nn][Aa][Nn]@n                         yylval->num = new QoreNumberNode("@nan@"); return NUMBER;
 @[Ii][Nn][Ff]@n                         yylval->num = new QoreNumberNode("@inf@"); return NUMBER;
+@discard                               return TOK_DISCARD;
 @assert/{WS}*\(                         {
                                            if (getProgram()->getParseOptions() & PO_ENABLE_DEBUG) {
                                                return TOK_ASSERT;

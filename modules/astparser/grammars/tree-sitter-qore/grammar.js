@@ -658,6 +658,7 @@ module.exports = grammar({
       $.parse_directive,
       $.empty_statement,
       $.expression_statement,
+      $.discard_statement,
       $.block,
       $.if_statement,
       $.while_statement,
@@ -687,6 +688,14 @@ module.exports = grammar({
 
     expression_statement: $ => seq(
       choice($.sequence_expression, $._expression),
+      ';',
+    ),
+
+    discard_statement: $ => seq(
+      '@discard',
+      '(',
+      field('value', choice($.sequence_expression, $._expression)),
+      ')',
       ';',
     ),
 

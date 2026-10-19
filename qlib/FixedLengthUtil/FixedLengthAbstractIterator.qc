@@ -410,8 +410,8 @@ my hash $h = $i.getValue();
         }
         # other encodings: the bytes before the offset are not complete characters
         try {
-            # Only conversion failure matters; assign the result to avoid a return-value-ignored warning.
-            string ignored = convert_encoding(binary_to_string(bytes.substr(0, offset), encoding), "UTF-8");
+            # Only conversion failure matters when validating the character boundary.
+            @discard(convert_encoding(binary_to_string(bytes.substr(0, offset), encoding), "UTF-8"));
             return False;
         } catch (hash<ExceptionInfo> ex) {
             return True;

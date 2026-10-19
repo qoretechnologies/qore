@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -43,7 +43,12 @@ public:
     DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
         return false;
     }
-    DLLLOCAL ExpressionStatement(const QoreProgramLocation* loc, QoreValue v);
+    //! Explicit discards suppress only this statement's unused-result diagnostic.
+    /** @param loc source location of the statement
+        @param v expression whose ownership is transferred to the statement
+        @param explicit_discard true for an intentional discard written as @@discard(expression);
+    */
+    DLLLOCAL ExpressionStatement(const QoreProgramLocation* loc, QoreValue v, bool explicit_discard = false);
 
     DLLLOCAL virtual ~ExpressionStatement();
 

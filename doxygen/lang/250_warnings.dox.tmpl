@@ -203,7 +203,10 @@ NON-EXHAUSTIVE-SWITCH: switch over enum 'Color' does not handle 1 of its values 
 
     <hr>
     @section return-value-ignored return-value-ignored
-    Raised when a function or method call is made with no side effects and the return value is ignored
+    Raised when a function or method call has no side effects other than potentially throwing an exception,
+    and its return value is ignored. Use @ref discard_statement "@@discard(expression);" to acknowledge an
+    intentional discard, for example when calling a conversion function solely to validate its input. The
+    expression still executes with normal exception propagation.
     @since %Qore 0.8.0
 
     <hr>

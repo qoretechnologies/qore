@@ -22,6 +22,7 @@
     |A @ref variable_declarations "local variable declaration"|@code{.py} string var;@endcode @code{.py} my (int a, string b, bool c);@endcode|@ref variables, @ref variable_declarations
     |A @ref variable_declarations "global variable declaration"|@code{.py} our int var;@endcode @code{.py} our (float a, int b, hash c);@endcode|@ref variables, @ref variable_declarations
     |A @ref qore_functions "function call"|@code{.py} calculate(this, that, the_other);@endcode|@ref qore_functions, @ref object_method_calls, @ref static_method_calls, @ref closure, @ref call_reference
+    |An explicit result discard|@code{.py} @discard(convert_encoding(text, "UTF-8"));@endcode|@ref discard_statement
     |A @ref continue "continue statement"|@code{.py} continue;@endcode|@ref continue
     |A @ref break "break statement"|@code{.py} break;@endcode|@ref break
     |A statement block|@code{.py} {}@endcode|zero or more statements enclosed in curly brackets
@@ -35,6 +36,34 @@
     |An @ref on_exit "on_exit statement"|@code{.py} on_exit l.unlock();@endcode|@ref on_exit
     |An @ref on_success "on_success statement"|@code{.py} on_success ds.commit();@endcode|@ref on_success
     |An @ref on_error "on_error statement"|@code{.py} on_error ds.rollback();@endcode|@ref on_error
+
+    <hr>
+    @section discard_statement @@discard Statements
+
+    @par Syntax
+    <tt><b>@@discard</b>(</tt><em>@ref expressions "expression"</em><tt>);</tt>
+
+    @par Description
+    Evaluates an expression and intentionally discards its result. This suppresses the
+    @ref return-value-ignored "return-value-ignored" warning for the statement, while preserving normal
+    argument checks, other warnings, and exceptions. Statements inside a closure in the expression retain their
+    own warning settings.
+
+    No local variable or assignment-related type conversion is introduced. Temporary values are released as
+    for an ordinary expression statement, before the next statement executes. Discarding a value does not remove
+    references held elsewhere. Evaluation follows the expression's normal order and short-circuit rules.
+
+    @par Example
+    Validate a text field's encoding, allowing conversion errors to propagate:
+    @code{.py}
+@discard(convert_encoding(binary_to_string(field_bytes, "UTF-16LE"), "UTF-8"));
+    @endcode
+
+    @note The statement is active regardless of @ref enable-debug "%enable-debug" or
+    @ref disable-debug "%disable-debug". It does not catch or suppress exceptions, and it cannot be used as
+    an expression inside another expression. The operand is required; <tt>@@discard();</tt> is invalid.
+
+    @since %Qore 3.0.0
 
     <hr>
     @section if if and else Statements
