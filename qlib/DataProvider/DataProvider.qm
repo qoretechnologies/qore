@@ -1546,6 +1546,10 @@ fetch
       The list argument accepts no value (which finds nothing) and any other value, as a soft list
       (@ref DataProvider::DataProviderSignatureOptionalSoftListType "DataProviderSignatureOptionalSoftListType"),
       so <tt>findIn(1, null)</tt> passes validation
+    - fixed @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
+      dropping the \c input_field_names marker, so the options of the registered processor actions that take field
+      names of the input (such as \c group_by of \c group-by and \c fields of \c select-fields) did not have it, and
+      host applications did not offer the field names of the input as their values
 
     @subsection dataprovider_v3_10_2 DataProvider v3.10.2
     - the editor token spans of @ref DataProvider::DpqlActionSession "DpqlActionSession" (\c dpql-get-tokens and
