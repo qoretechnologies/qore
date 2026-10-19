@@ -9768,12 +9768,14 @@ string sql = table.getCreateTableSql();
         @return an SQL string that could be used to create the basic table structure without indexes and constraints
 
         @throw OPTION-ERROR invalid or unsupported option passed
+        @throw CREATE-TABLE-ERROR an unknown omission given in the \c omit option
     */
     string getCreateTableSql(*hash<auto> opt) {
+        # the options are validated as they are given, before the omission options are converted to a hash
+        validateOptionsIntern("OPTION-ERROR", getTableCreationOptions(), \opt);
+
         # convert table alignment omission options to a hash and check
         if (opt.omit) opt.omit = getCheckOmissionOptions(opt.omit, "CREATE-TABLE-ERROR");
-
-        validateOptionsIntern("OPTION-ERROR", getTableCreationOptions(), \opt);
         l.lock();
         on_exit l.unlock();
         return getCreateTableSqlUnlocked(opt);

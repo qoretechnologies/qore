@@ -129,6 +129,9 @@ module SqlUtil {
       foreign constraint to an existing table while constructing an in-memory table description, as it did for a
       primary key before 3.2.0; a description of a table with foreign constraints can now be set up on a database
       that cannot add a foreign constraint with \c ALTER \c TABLE, such as SQLite
+    - fixed @ref SqlUtil::AbstractTable::getCreateTableSql() "AbstractTable::getCreateTableSql()" refusing its
+      \c omit option with \c OPTION-ERROR: the options were validated after the omission options had been converted
+      to a hash, which is not a valid value of the option
 
     @subsection sqlutilv3_10_0 SqlUtil v3.10.0
     - Added an offline table rewrite transaction that limits only lock waits, for single schema statements

@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires SqlUtil
+%requires Sqlite3SqlUtil
+%requires QUnit
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class TableCreationOptionsTest
+
+#! The options of the methods that give the SQL to create a table
+class TableCreationOptionsTest inherits QUnit::Test {
+    constructor() : Test("TableCreationOptionsTest", "1.0", \ARGV) {
+        addTestCase("getCreateTableSql() takes the omit option", \createTableSqlOmit());
+        set_return_value(main());
+    }
+
+    #! Returns a template table with an index, on an in-memory database
+    private Sqlite3Table template(Datasource ds) {
+        Sqlite3Table t(ds, "options_test");
+        t.setupTable({
+            "columns": {"id": {"native_type": "integer", "notnull": True}, "name": {"native_type": "text"}},
+            "indexes": {"ix_options_test_name": {"columns": ("name",)}},
+        });
+        return t;
+    }
+
+    private Datasource datasource() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        return new Datasource("sqlite3:@:memory:");
+    }
+
+    #! getCreateTableSql() validates its options before it converts the omit option to the hash that the SQL is
+    #! made with, so an omit option is accepted, as a list, as a string or in a hash literal
+    private createTableSqlOmit() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        Sqlite3Table t = template(ds);
+        string sql = "create table options_test (\n  id integer not null,\n  name text\n)";
+        assertEq(sql, t.getCreateTableSql());
+
+        hash<auto> opt = {};
+        opt.omit = ("indexes",);
+        assertEq(sql, t.getCreateTableSql(opt), "a list");
+        opt.omit = "indexes";
+        assertEq(sql, t.getCreateTableSql(opt), "a string");
+        # a hash literal is typed by its values: hash<string, string>
+        assertEq(sql, t.getCreateTableSql({"omit": "indexes"}), "a hash literal");
+
+        # an unknown omission is still refused, and so is an unknown option
+        opt.omit = "columns";
+        assertThrows("CREATE-TABLE-ERROR", \t.getCreateTableSql(), (opt,));
+        assertThrows("OPTION-ERROR", \t.getCreateTableSql(), ({"no_such_option": True},));
+    }
+}
