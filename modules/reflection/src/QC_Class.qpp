@@ -95,13 +95,11 @@ static void QoreReflectionClass_deserializer(QoreObject& self, const QoreHashNod
 }
 
 int check_constructor(const QoreClass* cls, ExceptionSink* xsink) {
-    if (getProgram()->getParseOptions() & cls->getDomain()) {
-        xsink->raiseException("CREATE-OBJECT-ERROR", "Program sandboxing restrictions do not allow access to the " \
-            "'%s' class", cls->getName());
-        return -1;
-    }
-
-    return 0;
+    // the current Program is the one the reflection object belongs to, which the caller has attached to; its
+    // sandboxing restrictions apply by the same rule as to a class named in source code
+    const QoreProgram* pgm = getProgram();
+    assert(pgm);
+    return pgm ? cls->runtimeCheckDomain(*pgm, xsink) : 0;
 }
 
 static QoreString get_type_parameter_names(const QoreClass* cls) {

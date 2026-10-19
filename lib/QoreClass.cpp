@@ -3380,20 +3380,26 @@ int QoreClass::runtimeCheckInstantiateClass(ExceptionSink* xsink) const {
     return priv->runtimeCheckInstantiateClass(xsink);
 }
 
+int QoreClass::runtimeCheckDomain(const QoreProgram& pgm, ExceptionSink* xsink) const {
+    assert(xsink);
+    // as at parse time (qore_program_private::parseAddDomain()): a restricting domain must not be set in the
+    // Program, and a domain the Program has to allow explicitly (e.g. DEBUGGER) must be set
+    QoreParseOptions dom(priv->domain);
+    QoreParseOptions po = pgm.getParseOptions();
+    QoreParseOptions allow = dom & QoreParseOptions::POSITIVE_OPTIONS;
+    if ((dom & ~QoreParseOptions::POSITIVE_OPTIONS & po) || ((allow & po) != allow)) {
+        xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
+            "access to the '%s' class", getName());
+        return -1;
+    }
+    return 0;
+}
+
 int qore_class_private::runtimeCheckInstantiateClassByName(const QoreClass& qc, const QoreProgram* pgm,
         ExceptionSink* xsink) {
     assert(xsink);
-    if (pgm) {
-        // as at parse time (qore_program_private::parseAddDomain()): a restricting domain must not be set in the
-        // Program, and a domain the Program has to allow explicitly (e.g. DEBUGGER) must be set
-        QoreParseOptions dom(qc.getDomain());
-        QoreParseOptions po = pgm->getParseOptions();
-        QoreParseOptions allow = dom & QoreParseOptions::POSITIVE_OPTIONS;
-        if ((dom & ~QoreParseOptions::POSITIVE_OPTIONS & po) || ((allow & po) != allow)) {
-            xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
-                "access to the '%s' class", qc.getName());
-            return -1;
-        }
+    if (pgm && qc.runtimeCheckDomain(*pgm, xsink)) {
+        return -1;
     }
     return qc.priv->runtimeCheckInstantiateClass(xsink);
 }

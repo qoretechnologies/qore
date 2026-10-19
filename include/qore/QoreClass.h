@@ -1332,6 +1332,27 @@ public:
     */
     DLLEXPORT int runtimeCheckInstantiateClass(ExceptionSink* xsink) const;
 
+    //! Throws a Qore-language exception if a Program's sandboxing restrictions do not allow the class
+    /** The class's functional domain is checked as when a class is named in source code: the Program must not
+        exclude a domain that it can restrict (for example \c FILESYSTEM, excluded by \c PO_NO_FILESYSTEM), and it
+        must allow a domain that it has to allow explicitly (for example \c DEBUGGER, allowed by
+        \c PO_ALLOW_DEBUGGER).
+
+        Code that instantiates a class it resolves at runtime, for example by name or through reflection, must make
+        this check, because the class was not checked when the code was parsed.
+
+        @param pgm the Program whose sandboxing restrictions apply
+        @param xsink raises \c CREATE-OBJECT-ERROR if the Program's sandboxing restrictions do not allow the class
+
+        @return 0 if the Program allows the class, -1 if an exception was raised
+
+        @note this method checks only the Program's sandboxing restrictions; runtimeCheckInstantiateClass() checks
+        whether the class can be instantiated at all
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int runtimeCheckDomain(const QoreProgram& pgm, ExceptionSink* xsink) const;
+
     //! Finds the given constant or returns nullptr if not found
     /** @since %Qore 0.9
     */

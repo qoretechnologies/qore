@@ -5227,6 +5227,17 @@ while (*binary chunk = input.read(65536)) {
       by name: a class declared in a file compiled to a separate <tt>.qo</tt> object, \c new with a dynamic class
       name, or @ref Qore::create_object() "create_object()".  The object was refused with \c CREATE-OBJECT-ERROR in
       exactly the Programs that allow the domain
+    - Fixed creating objects with the @ref reflectionintro "reflection" module in a domain that a Program has to
+      allow explicitly, such as a @ref Qore::DebugProgram "DebugProgram" subclass:
+      @ref Qore::Reflection::Class::newObject() "Class::newObject()",
+      @ref Qore::Reflection::Class::newObjectArgs() "Class::newObjectArgs()",
+      @ref Qore::Reflection::Class::callConstructor() "Class::callConstructor()" and the \c call() and
+      \c callArgs() methods of @ref Qore::Reflection::ConstructorMethod "ConstructorMethod" and
+      @ref Qore::Reflection::ConstructorMethodVariant "ConstructorMethodVariant" refused the object with
+      \c CREATE-OBJECT-ERROR in a Program that allows the domain, and created it in a Program that does not, which
+      bypassed the Program's sandboxing restrictions.  They now check a class as
+      @ref Qore::create_object() "create_object()" does, and the new \c QoreClass::runtimeCheckDomain() C++ API
+      function makes the same check for code that instantiates a class it resolves at runtime
     - Fixed closures created in object methods seeing a live object after it had been destroyed, contrary to the
       documented @ref object_scope "object scope" rules and to AST and JIT execution: the IR interpreter
       (\c ir and \c tiered execution) kept the temporary receiver of a method call (<tt>new C().getClosure()</tt>)

@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-debugger
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
+%requires QUnit
+
+%requires reflection
+
+%exec-class ReflectionClassDomainTest
+
+#! a class in the DEBUGGER functional domain, which a Program has to allow explicitly with PO_ALLOW_DEBUGGER
+public class Watcher inherits DebugProgram {
+    public {
+        string id;
+    }
+
+    constructor(string n_id) {
+        id = n_id;
+    }
+
+    onAttach(ProgramControl pgm, reference rs, reference rtn) {}
+    onDetach(ProgramControl pgm, reference rs, reference rtn) {}
+    onStep(ProgramControl pgm, int bsid, *int sid, *int bpid, reference flow, reference rs, reference rtn) {}
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rtn) {}
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rtn) {}
+    onException(ProgramControl pgm, int sid, hash ex, reference dismiss, reference rs, reference rtn) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rtn) {}
+}
+
+#! a class in the THREAD_CLASS functional domain, which a Program can exclude with PO_NO_THREAD_CLASSES
+public class Guard inherits Mutex {
+    public {
+        string id;
+    }
+
+    constructor(string n_id) {
+        id = n_id;
+    }
+}
+
+/*  A class that code resolves at runtime is checked against the sandboxing restrictions of the Program by the same
+    rule as a class named in source code: a domain the Program can restrict must not be excluded, and a domain the
+    Program has to allow explicitly must be allowed.  create_object() and every construction through the reflection
+    module must agree; the reflection module refused a DEBUGGER class where the Program allows the debugger, and
+    constructed it where the Program does not.
+*/
+class ReflectionClassDomainTest inherits QUnit::Test {
+    public {
+        #! makes an object of the given class in every way that resolves the class at runtime
+        /** Each construction returns the object's \c id or the exception it raised, as \c "err: desc".
+        */
+        const ConstructionCode = "%new-style
+%require-types
+%strict-args
+%requires reflection
+
+string sub attempt(code make) {
+    try {
+        return make().id;
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s: %s\", ex.err, ex.desc);
+    }
+}
+
+hash<string, string> sub construct(string cls_name) {
+    Class cls = Class::forName(cls_name);
+    return {
+        \"create_object\": attempt(object sub () { return create_object(cls_name, \"a\"); }),
+        \"Class::newObject\": attempt(object sub () { return cls.newObject(\"b\"); }),
+        \"Class::newObjectArgs\": attempt(object sub () { return cls.newObjectArgs((\"c\",)); }),
+        \"Class::callConstructor\": attempt(object sub () { return cls.callConstructor((\"d\",)); }),
+        \"ConstructorMethod::call\": attempt(object sub () { return cls.getConstructorMethod().call(\"e\"); }),
+        \"ConstructorMethod::callArgs\": attempt(object sub () {
+            return cls.getConstructorMethod().callArgs((\"f\",));
+        }),
+        \"ConstructorMethodVariant::call\": attempt(object sub () {
+            return cls.getConstructorVariant(StringType).call(\"g\");
+        }),
+        \"ConstructorMethodVariant::callArgs\": attempt(object sub () {
+            return cls.getConstructorVariant(StringType).callArgs((\"h\",));
+        }),
+    };
+}
+";
+
+        #! the parse options of every Program the constructions run in
+        const BaseOptions = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS;
+
+        #! the result of each construction when the Program allows the class
+        const Constructed = {
+            "create_object": "a",
+            "Class::newObject": "b",
+            "Class::newObjectArgs": "c",
+            "Class::callConstructor": "d",
+            "ConstructorMethod::call": "e",
+            "ConstructorMethod::callArgs": "f",
+            "ConstructorMethodVariant::call": "g",
+            "ConstructorMethodVariant::callArgs": "h",
+        };
+    }
+
+    constructor() : QUnit::Test("ReflectionClassDomainTest", "1.0") {
+        addTestCase("a Program that allows the debugger constructs a DEBUGGER class", \allowedDebuggerTest());
+        addTestCase("a Program that does not allow the debugger refuses a DEBUGGER class", \excludedDebuggerTest());
+        addTestCase("a Program constructs a THREAD_CLASS class it does not restrict", \unrestrictedThreadClassTest());
+        addTestCase("a Program that excludes thread classes refuses a THREAD_CLASS class",
+            \restrictedThreadClassTest());
+        set_return_value(main());
+    }
+
+    allowedDebuggerTest() {
+        # the test Program itself allows the debugger, as Programs running a debugger do
+        assertNeq(0, get_parse_options() & PO_ALLOW_DEBUGGER);
+        assertEq(Constructed, construct(BaseOptions | PO_ALLOW_DEBUGGER, "Watcher"));
+    }
+
+    excludedDebuggerTest() {
+        assertEq(refused("Watcher"), construct(BaseOptions, "Watcher"));
+    }
+
+    unrestrictedThreadClassTest() {
+        assertEq(Constructed, construct(BaseOptions, "Guard"));
+    }
+
+    restrictedThreadClassTest() {
+        assertEq(refused("Guard"), construct(BaseOptions | PO_NO_THREAD_CLASSES, "Guard"));
+    }
+
+    #! Returns the result of every construction of the given class in a new Program with the given parse options
+    private hash<string, string> construct(int po, string cls_name) {
+        Program pgm(po);
+        # the Program has exactly the given options; this Program sets %no-child-restrictions
+        assertEq(po, pgm.getParseOptions() & (po | PO_ALLOW_DEBUGGER | PO_NO_THREAD_CLASSES));
+        pgm.parse(ConstructionCode, "construction");
+        return pgm.callFunction("construct", cls_name);
+    }
+
+    #! Returns the result of every construction of a class that the Program's sandboxing restrictions refuse
+    private static hash<string, string> refused(string cls_name) {
+        string err = sprintf("CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to "
+            "the '%s' class", cls_name);
+        return map {$1: err}, keys Constructed;
+    }
+}
