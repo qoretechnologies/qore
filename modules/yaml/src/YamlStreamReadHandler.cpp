@@ -23,12 +23,20 @@
 
 #include "YamlStreamReadHandler.h"
 
-YamlStreamReadHandler::YamlStreamReadHandler(QoreObject* s, const QoreEncoding* enc)
-    : stream(s), encoding(enc ? enc : QCS_UTF8), has_error(false) {
-    stream->ref();
+YamlStreamReadHandler::YamlStreamReadHandler(QoreObject* s, const QoreEncoding* enc, QoreObject* o,
+        const QoreClass* o_cls)
+    : stream(s), encoding(enc ? enc : QCS_UTF8), owner(o), owner_cls(o_cls), has_error(false) {
+    assert(!owner == !owner_cls);
+    if (!owner) {
+        stream->ref();
+    }
 }
 
 YamlStreamReadHandler::~YamlStreamReadHandler() {
+    // an owner releases the stream and the reader with its internal members
+    if (owner) {
+        return;
+    }
     ExceptionSink xsink;
     if (reader) {
         reader->deref(&xsink);
@@ -74,6 +82,13 @@ int YamlStreamReadHandler::readText(size_t size, std::string& utf8) {
                 reader->deref(&xsink);
                 reader = nullptr;
             }
+            setError(xsink, "cannot create a StreamReader");
+            return -1;
+        }
+        // the reader references the stream: the owner references it in an internal member, where the garbage
+        // collector can follow it, and the handler only points to it
+        if (owner && owner->setMemberValue("reader", owner_cls, reader, &xsink)) {
+            reader = nullptr;
             setError(xsink, "cannot create a StreamReader");
             return -1;
         }

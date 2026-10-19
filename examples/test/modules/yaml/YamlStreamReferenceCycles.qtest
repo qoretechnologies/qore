@@ -1,0 +1,178 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A YamlStreamWriter or YamlDocumentIterator references its stream where the garbage collector can follow the
+# reference, so a stream referencing its writer or iterator is collected.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires yaml
+
+%exec-class YamlStreamReferenceCyclesTest
+
+#! counts the streams destroyed
+class Streams {
+    public {
+        #! the number of streams destroyed
+        static int destroyed = 0;
+    }
+}
+
+#! an output stream collecting the data written
+class TestOutputStream inherits OutputStream {
+    public {
+        #! the data written
+        binary data = binary();
+        #! a writer referencing the stream makes a cycle
+        *YamlStreamWriter writer;
+    }
+
+    write(binary data) {
+        self.data += data;
+    }
+
+    close() {
+    }
+
+    destructor() {
+        ++Streams::destroyed;
+    }
+}
+
+#! an input stream reading a binary value
+class TestInputStream inherits InputStream {
+    public {
+        #! an iterator referencing the stream makes a cycle
+        *YamlDocumentIterator iterator;
+    }
+
+    private {
+        binary data;
+        int pos = 0;
+    }
+
+    constructor(binary data) {
+        self.data = data;
+    }
+
+    *binary read(int limit) {
+        if (pos == data.size()) {
+            return;
+        }
+        binary rv = data.substr(pos, limit);
+        pos += rv.size();
+        return rv;
+    }
+
+    int peek() {
+        return pos == data.size() ? -1 : data[pos];
+    }
+
+    destructor() {
+        ++Streams::destroyed;
+    }
+}
+
+class YamlStreamReferenceCyclesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("YAML stream reference cycles", "1.0", \ARGV) {
+        addTestCase("YamlStreamWriter", \testWriter());
+        addTestCase("YamlDocumentIterator", \testIterator());
+        addTestCase("YamlDocumentIterator with an encoding", \testIteratorEncoding());
+        set_return_value(main());
+    }
+
+    #! returns the YAML written for the data, the stream referencing the writer
+    static string writeCycle(auto data) {
+        TestOutputStream os();
+        YamlStreamWriter writer(os);
+        os.writer = writer;
+        writer.startDocument();
+        writer.write(data);
+        writer.endDocument();
+        writer.close();
+        return os.data.toString("UTF-8");
+    }
+
+    #! returns a writer whose stream is referenced only by the writer
+    static YamlStreamWriter makeWriter() {
+        return new YamlStreamWriter(new TestOutputStream());
+    }
+
+    testWriter() {
+        Streams::destroyed = 0;
+        string yaml = YamlStreamReferenceCyclesTest::writeCycle({"a": 1});
+        assertEq({"a": 1}, parse_yaml(yaml), "the writer writes to the stream");
+        assertEq(1, Streams::destroyed, "the stream referencing its writer is collected");
+
+        Streams::destroyed = 0;
+        {
+            YamlStreamWriter writer = YamlStreamReferenceCyclesTest::makeWriter();
+            writer.startDocument();
+            writer.write(("x",));
+            writer.endDocument();
+            writer.close();
+            assertEq(0, Streams::destroyed, "the writer keeps its stream");
+        }
+        assertEq(1, Streams::destroyed, "the stream is released with its writer");
+    }
+
+    #! returns the documents read, the stream referencing the iterator
+    static list<auto> readCycle(binary data, *string encoding) {
+        TestInputStream is(data);
+        YamlDocumentIterator i(is, <YamlDocumentIteratorOptions>{"encoding": encoding ?? "UTF-8"});
+        is.iterator = i;
+        list<auto> rv = ();
+        while (i.next()) {
+            rv += i.getValue();
+        }
+        return rv;
+    }
+
+    #! returns an iterator whose stream is referenced only by the iterator
+    static YamlDocumentIterator makeIterator(binary data, *string encoding) {
+        return new YamlDocumentIterator(new TestInputStream(data), <YamlDocumentIteratorOptions>{"encoding": encoding ?? "UTF-8"});
+    }
+
+    testIterator() {
+        Streams::destroyed = 0;
+        list<auto> docs = YamlStreamReferenceCyclesTest::readCycle(binary("a: 1\n---\nb: 2\n"));
+        assertEq(({"a": 1}, {"b": 2}), docs, "the iterator reads the stream");
+        assertEq(1, Streams::destroyed, "the stream referencing its iterator is collected");
+
+        Streams::destroyed = 0;
+        {
+            YamlDocumentIterator i = YamlStreamReferenceCyclesTest::makeIterator(binary("c: 3\n"));
+            assertEq(0, Streams::destroyed, "the iterator keeps its stream");
+            assertTrue(i.next());
+            assertEq({"c": 3}, i.getValue());
+        }
+        assertEq(1, Streams::destroyed, "the stream is released with its iterator");
+
+        # an iterator from a string has no stream
+        YamlDocumentIterator i("d: 4\n");
+        assertTrue(i.next());
+        assertEq({"d": 4}, i.getValue());
+    }
+
+    testIteratorEncoding() {
+        # text in another encoding is read with a StreamReader, which references the stream as well
+        binary data = binary(convert_encoding("a: é\n---\nb: 2\n", "UTF-16LE"));
+        Streams::destroyed = 0;
+        list<auto> docs = YamlStreamReferenceCyclesTest::readCycle(data, "UTF-16LE");
+        assertEq(({"a": "é"}, {"b": 2}), docs, "the iterator reads the stream in its encoding");
+        assertEq(1, Streams::destroyed, "the stream referencing its iterator is collected");
+
+        Streams::destroyed = 0;
+        {
+            YamlDocumentIterator i = YamlStreamReferenceCyclesTest::makeIterator(data, "UTF-16LE");
+            assertTrue(i.next());
+            assertEq({"a": "é"}, i.getValue());
+            assertEq(0, Streams::destroyed, "the iterator keeps its stream");
+        }
+        assertEq(1, Streams::destroyed, "the stream is released with its iterator");
+    }
+}

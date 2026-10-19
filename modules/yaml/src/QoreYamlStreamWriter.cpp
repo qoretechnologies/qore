@@ -30,12 +30,9 @@
 // Write handler implementation - streams data directly to output stream
 QoreYamlStreamWriteHandler::QoreYamlStreamWriteHandler(QoreObject* stream)
     : output_stream(stream), has_error(false) {
-    output_stream->ref();
 }
 
 QoreYamlStreamWriteHandler::~QoreYamlStreamWriteHandler() {
-    ExceptionSink xsink;
-    output_stream->deref(&xsink);
 }
 
 int QoreYamlStreamWriteHandler::write(unsigned char* buffer, size_t size) {
@@ -76,9 +73,6 @@ QoreYamlStreamWriter::QoreYamlStreamWriter(QoreObject* stream, int flags, int wi
                                            ExceptionSink* xsink)
     : output_stream(stream), emitter_initialized(false), state(YWS_INITIAL),
       emit_flags(flags), document_count(0), write_handler(nullptr) {
-
-    output_stream->ref();
-
     block_style = (flags & QYE_BLOCK_STYLE) != 0;
     explicit_start_doc = (flags & QYE_EXPLICIT_START_DOC) != 0;
     explicit_end_doc = (flags & QYE_EXPLICIT_END_DOC) != 0;
@@ -127,8 +121,6 @@ QoreYamlStreamWriter::~QoreYamlStreamWriter() {
     if (emitter_initialized) {
         yaml_emitter_delete(&emitter);
     }
-    ExceptionSink xsink;
-    output_stream->deref(&xsink);
 }
 
 int QoreYamlStreamWriter::emitEvent(const char* event_name, ExceptionSink* xsink) {

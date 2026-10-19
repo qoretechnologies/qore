@@ -43,10 +43,15 @@ public:
     //! Constructor
     /** @param s the Qore InputStream object to read from
         @param enc the character encoding of the input stream
+        @param owner the object whose \c stream and \c reader internal members hold the references to the stream and
+        to the StreamReader that the handler creates, where the garbage collector can follow them, so that the
+        handler only points to them; with no owner, the handler is used within one call and references them itself
+        @param owner_cls the class of the internal members of \a owner
     */
-    DLLLOCAL YamlStreamReadHandler(QoreObject* s, const QoreEncoding* enc);
+    DLLLOCAL YamlStreamReadHandler(QoreObject* s, const QoreEncoding* enc, QoreObject* owner = nullptr,
+            const QoreClass* owner_cls = nullptr);
 
-    //! Destructor - releases reference to the stream object
+    //! Destructor - releases the references to the stream and the reader when the handler has no owner
     DLLLOCAL ~YamlStreamReadHandler();
 
     //! libyaml read callback - reads from Qore InputStream
@@ -91,6 +96,10 @@ private:
     const QoreEncoding* encoding;
     //! a Qore StreamReader reading the text of the stream in an encoding other than UTF-8, created at the first read
     QoreObject* reader = nullptr;
+    //! the object referencing the stream and the reader in its internal members, if any
+    QoreObject* owner;
+    //! the class of the internal members of the owner
+    const QoreClass* owner_cls;
     bool has_error;
     std::string error_message;
     //! the code of the exception raised while reading, if any

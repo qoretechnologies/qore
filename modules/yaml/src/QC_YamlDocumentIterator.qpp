@@ -115,7 +115,7 @@ while (iter.next()) {
     @note An instance maintains stream position and must be used by one thread at a time.
     If it is shared, callers must synchronize the complete sequence of operations.
 */
-qclass YamlDocumentIterator [arg=QoreYamlDocumentIterator* iter; ns=Qore::YAML];
+qclass YamlDocumentIterator [arg=QoreYamlDocumentIterator* iter; ns=Qore::YAML; internal_members=*InputStream stream,auto reader];
 
 //! Creates an iterator from a YAML string
 /** @param yaml_str the YAML string containing documents
@@ -166,9 +166,14 @@ YamlDocumentIterator::constructor(Qore::InputStream[InputStream] stream, *hash<Y
         }
     }
     const QoreEncoding* encoding = QEM.findCreate(enc.c_str());
-    // Use obj_stream (the QoreObject*) - the C++ class will ref it
+    // the stream internal member holds the reference to the stream, where the garbage collector can follow it (a
+    // stream referencing the iterator is a cycle); the private data only points to the stream
+    if (self->setMemberValue("stream", QC_YAMLDOCUMENTITERATOR, obj_stream->refSelf(), xsink)) {
+        return;
+    }
     self->setPrivate(CID_YAMLDOCUMENTITERATOR,
-        new QoreYamlDocumentIterator(const_cast<QoreObject*>(obj_stream), encoding, skip_empty, max_docs, xsink));
+        new QoreYamlDocumentIterator(self, const_cast<QoreObject*>(obj_stream), encoding, skip_empty, max_docs,
+            xsink));
 }
 
 //! Returns a copy of the YamlDocumentIterator object

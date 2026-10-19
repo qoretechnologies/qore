@@ -150,7 +150,7 @@ writer.close();
     @note An instance maintains stream position and must be used by one thread at a time.
     If it is shared, callers must synchronize the complete sequence of operations.
 */
-qclass YamlStreamWriter [arg=QoreYamlStreamWriter* writer; ns=Qore::YAML];
+qclass YamlStreamWriter [arg=QoreYamlStreamWriter* writer; ns=Qore::YAML; internal_members=OutputStream stream];
 
 //! Creates a YamlStreamWriter for the given output stream
 /** @param stream the output stream to write YAML to
@@ -175,7 +175,11 @@ YamlStreamWriter::constructor(Qore::OutputStream[OutputStream] stream, *hash<Yam
             indent = (int)v.getAsBigInt();
         }
     }
-    // Use obj_stream (the QoreObject*) - the C++ class will ref it
+    // the stream internal member holds the reference to the stream, where the garbage collector can follow it
+    // (a stream referencing the writer is a cycle); the private data only points to the stream
+    if (self->setMemberValue("stream", QC_YAMLSTREAMWRITER, obj_stream->refSelf(), xsink)) {
+        return;
+    }
     self->setPrivate(CID_YAMLSTREAMWRITER,
         new QoreYamlStreamWriter(const_cast<QoreObject*>(obj_stream), flags, width, indent, xsink));
 }

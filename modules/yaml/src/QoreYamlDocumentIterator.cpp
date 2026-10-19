@@ -39,7 +39,7 @@ QoreYamlDocumentIterator::QoreYamlDocumentIterator(const QoreStringNode* yaml_st
     initParser(xsink);
 }
 
-QoreYamlDocumentIterator::QoreYamlDocumentIterator(QoreObject* stream,
+QoreYamlDocumentIterator::QoreYamlDocumentIterator(QoreObject* self, QoreObject* stream,
                                                    const QoreEncoding* encoding,
                                                    bool skip_empty, int max_docs,
                                                    ExceptionSink* xsink)
@@ -47,8 +47,9 @@ QoreYamlDocumentIterator::QoreYamlDocumentIterator(QoreObject* stream,
       max_documents(max_docs), doc_number(0), has_event(false), from_stream(true),
       read_handler(nullptr) {
 
-    // Use shared streaming read handler for true streaming input
-    read_handler.reset(new YamlStreamReadHandler(stream, encoding));
+    // Use shared streaming read handler for true streaming input; the handler only points to the stream and to the
+    // reader, which the internal members of the iterator object reference
+    read_handler.reset(new YamlStreamReadHandler(stream, encoding, self, QC_YAMLDOCUMENTITERATOR));
     initParser(xsink);
 }
 
