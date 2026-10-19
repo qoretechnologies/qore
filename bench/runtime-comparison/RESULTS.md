@@ -18706,3 +18706,159 @@ Initial attempts are preserved separately with actual nonzero terminal statuses:
 See `results-aot-finite-hash-key-rejected-macos-arm64.json` for all 11880 windows, every gain/loss, commands and raw logs, exact source/artifact provenance, independent replay, archived/restored sources and the full 62-item audit. No compiler/test implementation from this experiment is retained.
 
 Next independently investigate elimination of the exclusive literal-selector graph after successful hash projection. The remaining string allocation/refself/decrefs are visible in actual generated code. Start with direct literal PHIs and private exact-string single-store locals whose every consumer is eliminated; retain observable strings, linked/shared/partially projected graphs, exceptional flows and all ownership/cancellation contracts. This is a materially different hypothesis requiring fresh validation and predeclared broad measurements, not an unchanged retry or a demonstrated benefit. A fresh optimized Java/develop checkpoint follows a meaningful retained improvement; the separate baseline IR reflective-frame discrepancy remains a correctness follow-up.
+
+## Rejected finite hash selector elision (post-c80d44b03)
+
+This experiment is **rejected; its compiler and fixture changes are not retained**. It combines finite literal-key integer-hash projection with a complete-use proof that removes private selector strings and their PHI/local storage. Observable, copied, linked, referenced, captured, exceptional, or partially projected cases keep their required operations. No runtime helper ABI, TLS, frame, lock, epoch, or cancellation-poll convention changes. This is distinct from the rejected projection-only predecessor recorded at `0a30967c2`.
+
+The baseline is the resolved `origin/develop` merge committed as `c80d44b03` (develop `f6c33ac63`). It was built and qualified before the merge commit, with `0a30967c2` as Git HEAD and the resolved merge tree in the working directory; every tracked source byte was verified identical after the merge commit. The report distinguishes build-time HEAD from source commit.
+
+All timings use Release `-O3 -DNDEBUG` and `qcc -O3`: 55 workloads, three predetermined link layouts, and four modes. `Before` is the frozen qualified baseline; `Candidate` enables both transformations; `Pass off` disables the entire finite-key projection in the candidate compiler; `Selector off` retains projection but disables selector removal. Both controls use the candidate runtime, and both disabling flags are absent during execution. A three-fork screen is followed by a five-fork confirmation only if the target passes. Each fork uses 4096 items with seed 7 and three warmup plus three measured 300 ms windows. No owned build, test, profile, edit, or analysis overlaps timing.
+
+Values below are ns/item: the median of three layout medians of fork means. Negative changes mean less time. Every sample, workload, layout, gain and loss is retained; epochs are not pooled. Observed ranges are not confidence intervals. These are whole-workload timings, not isolated call latency or a production-throughput score, and they provide no new Java/develop or IR/JIT comparison or global performance ceiling.
+
+### Screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Pass off ns/item|!Selector off ns/item|!Change vs before|!Change vs pass off|!Change vs selector off
+|arithmetic|1.496666|1.483254|1.497092|1.484053|-0.896%|-0.924%|-0.054%
+|direct_call|1.495921|1.501805|1.499593|1.503555|+0.393%|+0.148%|-0.116%
+|method_call|1.549759|1.558765|1.562023|1.562857|+0.581%|-0.209%|-0.262%
+|indirect_call|6.654556|6.583826|6.650781|6.630241|-1.063%|-1.007%|-0.700%
+|polymorphic_call|22.007322|21.958426|21.883659|22.045842|-0.222%|+0.342%|-0.397%
+|polymorphic_expression_call|10.159512|10.353629|10.266667|10.325213|+1.911%|+0.847%|+0.275%
+|monomorphic_call|3.502222|3.577745|3.469321|3.491217|+2.156%|+3.125%|+2.478%
+|optional_method_call|10.393709|10.433346|10.373239|10.399579|+0.381%|+0.579%|+0.325%
+|polymorphic_float_call|22.459807|22.373200|22.233219|22.100303|-0.386%|+0.630%|+1.235%
+|polymorphic_float_expression_call|10.432463|10.506504|10.534090|10.474732|+0.710%|-0.262%|+0.303%
+|monomorphic_float_call|3.335577|3.407191|3.427880|3.361049|+2.147%|-0.604%|+1.373%
+|optional_float_method_call|10.464195|10.473297|10.501463|10.484519|+0.087%|-0.268%|-0.107%
+|boxed_float_method_call|18.778196|18.924082|18.984213|18.893630|+0.777%|-0.317%|+0.161%
+|dynamic_int_result_call|10.268658|10.250749|10.293781|10.284735|-0.174%|-0.418%|-0.330%
+|dynamic_int_result_fallback|21.317696|21.364656|21.272485|21.301903|+0.220%|+0.433%|+0.295%
+|boxed_int_method_call|15.422080|15.483688|15.575097|15.463045|+0.399%|-0.587%|+0.134%
+|boxed_int_method_fallback|29.970345|29.573439|29.508458|30.468725|-1.324%|+0.220%|-2.938%
+|boxed_float_method_fallback|30.752922|31.307419|30.755950|31.327726|+1.803%|+1.793%|-0.065%
+|boxed_int_method_effect|84.019732|84.119856|84.219829|82.481708|+0.119%|-0.119%|+1.986%
+|dynamic_float_result_call|11.792007|11.586207|11.450206|11.436452|-1.745%|+1.188%|+1.309%
+|indirect_wide|6.769794|6.840118|6.695382|6.698488|+1.039%|+2.162%|+2.114%
+|indirect_float|6.500076|6.545503|6.436808|6.404554|+0.699%|+1.689%|+2.201%
+|indirect_int_result|6.069693|5.962827|5.995768|6.056335|-1.761%|-0.549%|-1.544%
+|indirect_float_result|7.520735|7.372288|7.507332|7.440548|-1.974%|-1.799%|-0.917%
+|indirect_tagged_float|6.539361|6.673878|6.644393|6.639306|+2.057%|+0.444%|+0.521%
+|indirect_branch_float|6.582743|6.588406|6.543358|6.562602|+0.086%|+0.688%|+0.393%
+|indirect_affine|6.574957|6.530331|6.608567|6.525287|-0.679%|-1.184%|+0.077%
+|indirect_affine_wide|6.643662|6.753249|6.716182|6.745057|+1.650%|+0.552%|+0.121%
+|indirect_branch_int|6.577746|6.679018|6.737345|6.610455|+1.540%|-0.866%|+1.037%
+|dispatch_control|1.566192|1.564420|1.563938|1.564006|-0.113%|+0.031%|+0.026%
+|list_read|2.627054|2.607347|2.588501|2.706672|-0.750%|+0.728%|-3.670%
+|list_build|25.677417|25.425904|25.500934|25.451366|-0.980%|-0.294%|-0.100%
+|list_mutate|189.417147|189.551149|187.274629|187.128297|+0.071%|+1.216%|+1.295%
+|temporary_list|1.517611|1.517645|1.544822|1.516258|+0.002%|-1.759%|+0.091%
+|temporary_hash|318.255983|1.548015|318.354122|39.908397|-99.514%|-99.514%|-96.121%
+|closure_call|17.187561|17.318961|17.395581|17.270271|+0.765%|-0.440%|+0.282%
+|closure_capture|23.547801|23.471503|23.405641|23.579995|-0.324%|+0.281%|-0.460%
+|csv_report|941.014182|925.307709|948.017071|947.462816|-1.669%|-2.395%|-2.338%
+|object_orders|1783.856482|1774.735562|1744.615208|1758.956329|-0.511%|+1.726%|+0.897%
+|callback_pipeline|79.658678|80.013145|80.691165|80.101425|+0.445%|-0.840%|-0.110%
+|text_index|1283.102544|1280.962363|1281.415837|1287.755346|-0.167%|-0.035%|-0.528%
+|object_loop|163.112088|165.048186|165.113004|164.578696|+1.187%|-0.039%|+0.285%
+|object_short|1025.267592|1014.857591|1020.918938|1015.143500|-1.015%|-0.594%|-0.028%
+|float_loop|175.516429|174.249723|175.935140|174.444065|-0.722%|-0.958%|-0.111%
+|float_short|1014.190727|1021.857690|1011.913429|1023.969460|+0.756%|+0.983%|-0.206%
+|string_loop|359.935991|357.433445|346.673865|348.774093|-0.695%|+3.104%|+2.483%
+|string_short|1179.601390|1187.819770|1190.962080|1172.181285|+0.697%|-0.264%|+1.334%
+|effect_loop|338.986201|346.903287|333.190031|343.537239|+2.336%|+4.116%|+0.980%
+|effect_short|1241.337445|1215.293520|1233.584256|1199.445268|-2.098%|-1.483%|+1.321%
+|two_read_loop|390.502270|383.210872|394.722385|377.420407|-1.867%|-2.916%|+1.534%
+|two_read_short|1269.963621|1243.693314|1226.415460|1230.331760|-2.069%|+1.409%|+1.086%
+|default_loop|667.731606|662.159527|669.459959|646.610608|-0.834%|-1.090%|+2.405%
+|default_short|1571.340254|1581.586181|1582.181514|1576.840570|+0.652%|-0.038%|+0.301%
+|string_result_loop|451.873881|432.670115|444.943789|438.383118|-4.250%|-2.758%|-1.303%
+|string_result_short|1385.995882|1390.924816|1346.624211|1395.959473|+0.356%|+3.290%|-0.361%
+
+### Confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Pass off ns/item|!Selector off ns/item|!Change vs before|!Change vs pass off|!Change vs selector off
+|arithmetic|1.459428|1.447582|1.448053|1.447558|-0.812%|-0.033%|+0.002%
+|direct_call|1.549851|1.545120|1.551739|1.547282|-0.305%|-0.427%|-0.140%
+|method_call|1.547875|1.545121|1.539766|1.545110|-0.178%|+0.348%|+0.001%
+|indirect_call|6.777191|6.846545|6.738244|6.716253|+1.023%|+1.607%|+1.940%
+|polymorphic_call|22.130973|22.048569|21.988258|22.045763|-0.372%|+0.274%|+0.013%
+|polymorphic_expression_call|10.546635|10.691901|10.747755|10.589637|+1.377%|-0.520%|+0.966%
+|monomorphic_call|3.582457|3.608169|3.484526|3.451463|+0.718%|+3.548%|+4.540%
+|optional_method_call|10.474656|10.327618|10.372482|10.419515|-1.404%|-0.433%|-0.882%
+|polymorphic_float_call|23.049333|23.231714|23.027742|23.135476|+0.791%|+0.886%|+0.416%
+|polymorphic_float_expression_call|10.726765|10.701740|10.882172|10.811763|-0.233%|-1.658%|-1.018%
+|monomorphic_float_call|3.474591|3.464578|3.467812|3.447940|-0.288%|-0.093%|+0.483%
+|optional_float_method_call|10.781459|10.769471|10.751456|10.832585|-0.111%|+0.168%|-0.583%
+|boxed_float_method_call|19.428913|19.462618|19.462075|19.421920|+0.173%|+0.003%|+0.210%
+|dynamic_int_result_call|10.349083|10.428327|10.292775|10.232338|+0.766%|+1.317%|+1.915%
+|dynamic_int_result_fallback|21.033270|21.395752|21.060622|21.277084|+1.723%|+1.591%|+0.558%
+|boxed_int_method_call|15.483018|15.547063|15.512884|15.563075|+0.414%|+0.220%|-0.103%
+|boxed_int_method_fallback|29.860784|30.208484|29.878808|30.161687|+1.164%|+1.103%|+0.155%
+|boxed_float_method_fallback|31.520141|31.572655|31.171151|31.353694|+0.167%|+1.288%|+0.698%
+|boxed_int_method_effect|84.203487|84.355941|84.116749|83.941701|+0.181%|+0.284%|+0.493%
+|dynamic_float_result_call|11.495902|11.598712|11.500412|11.420146|+0.894%|+0.855%|+1.564%
+|indirect_wide|6.664677|6.678986|6.636600|6.622402|+0.215%|+0.639%|+0.854%
+|indirect_float|6.444039|6.531665|6.425923|6.445914|+1.360%|+1.646%|+1.330%
+|indirect_int_result|6.154662|6.053337|6.010363|6.009123|-1.646%|+0.715%|+0.736%
+|indirect_float_result|7.300809|7.296207|7.268383|7.376488|-0.063%|+0.383%|-1.088%
+|indirect_tagged_float|6.815510|6.814929|6.763478|6.808023|-0.009%|+0.761%|+0.101%
+|indirect_branch_float|6.626246|6.615066|6.568398|6.763518|-0.169%|+0.711%|-2.195%
+|indirect_affine|6.620735|6.724614|6.627091|6.643279|+1.569%|+1.472%|+1.224%
+|indirect_affine_wide|6.710600|6.814022|6.759660|6.738966|+1.541%|+0.804%|+1.114%
+|indirect_branch_int|6.741804|6.768957|6.702416|6.711331|+0.403%|+0.993%|+0.859%
+|dispatch_control|1.623745|1.618225|1.619858|1.614511|-0.340%|-0.101%|+0.230%
+|list_read|2.766595|2.713007|2.699747|2.717077|-1.937%|+0.491%|-0.150%
+|list_build|25.937385|25.834012|25.977741|25.836262|-0.399%|-0.553%|-0.009%
+|list_mutate|191.481023|189.748165|189.956855|189.594597|-0.905%|-0.110%|+0.081%
+|temporary_list|1.598524|1.584238|1.585996|1.607235|-0.894%|-0.111%|-1.431%
+|temporary_hash|340.723007|1.623138|334.958955|41.266645|-99.524%|-99.515%|-96.067%
+|closure_call|17.789266|17.648436|17.509983|17.721932|-0.792%|+0.791%|-0.415%
+|closure_capture|24.385593|24.521186|24.257731|24.366909|+0.556%|+1.086%|+0.633%
+|csv_report|925.278227|936.548634|928.931952|923.487539|+1.218%|+0.820%|+1.414%
+|object_orders|1763.024709|1727.546610|1757.390098|1774.476066|-2.012%|-1.698%|-2.645%
+|callback_pipeline|83.913530|84.049454|84.255034|84.243170|+0.162%|-0.244%|-0.230%
+|text_index|1361.792595|1343.751480|1358.139884|1364.831857|-1.325%|-1.059%|-1.545%
+|object_loop|169.081638|168.765937|167.528451|167.650433|-0.187%|+0.739%|+0.665%
+|object_short|1074.368467|1073.533505|1072.496131|1069.319089|-0.078%|+0.097%|+0.394%
+|float_loop|167.271972|169.850675|167.491763|167.355297|+1.542%|+1.408%|+1.491%
+|float_short|1049.153302|1040.380024|1046.369216|1042.820115|-0.836%|-0.572%|-0.234%
+|string_loop|355.679749|357.065197|355.764552|358.068485|+0.390%|+0.366%|-0.280%
+|string_short|1258.658835|1237.827958|1245.326058|1251.440016|-1.655%|-0.602%|-1.088%
+|effect_loop|356.081127|337.448960|335.130915|334.147330|-5.233%|+0.692%|+0.988%
+|effect_short|1275.577952|1249.121490|1253.648031|1282.877235|-2.074%|-0.361%|-2.631%
+|two_read_loop|404.216837|377.174948|378.679597|385.358940|-6.690%|-0.397%|-2.124%
+|two_read_short|1274.053485|1252.713894|1270.443793|1266.082270|-1.675%|-1.396%|-1.056%
+|default_loop|652.977357|672.720553|673.714674|668.633846|+3.024%|-0.148%|+0.611%
+|default_short|1583.160861|1568.529097|1553.334265|1595.023777|-0.924%|+0.978%|-1.661%
+|string_result_loop|440.848957|425.279311|423.627074|419.226217|-3.532%|+0.390%|+1.444%
+|string_result_short|1316.525520|1311.286334|1316.070551|1309.804179|-0.398%|-0.364%|+0.113%
+
+### Decision and validation
+
+The target must improve at least 10% in aggregate and improve every layout against all three controls, in both epochs. A repeated non-target aggregate loss of at least 3%, or a repeated same-workload/control/layout loss of at least 3% with disjoint observed fork-mean ranges, rejects the candidate.
+
+Failed target checks: 0. Repeated aggregate adverse results: 1. Repeated disjoint-layout adverse results: 3.
+
+- Repeated aggregate loss: `monomorphic_call` versus `compile_disabled`.
+
+- Repeated disjoint loss: `indirect_float` versus `before` in `shuffle-487`.
+
+- Repeated disjoint loss: `indirect_float` versus `compile_disabled` in `shuffle-487`.
+
+- Repeated disjoint loss: `monomorphic_float_call` versus `projection_only` in `reverse`.
+
+|!Rejected comparison|!Control|!Layout|!Screen change|!Confirmation change
+|monomorphic_call|compile_disabled|aggregate|+3.125223%|+3.548359%
+|indirect_float|before|shuffle-487|+4.837234%|+4.651305%
+|indirect_float|compile_disabled|shuffle-487|+4.036497%|+5.630629%
+|monomorphic_float_call|projection_only|reverse|+4.273668%|+3.312310%
+
+Selected Release/Debug qualification passed (baseline: 70 core fixtures/117 cases/17609 assertions per runtime; candidate: 73 core fixtures/120 cases/18673 assertions per runtime). Each runtime additionally passed 48 upstream AST/IR runs, integration and cancellation suites, 13 lvalue/DGC fixtures, 555 IR plus 555 AOT reference checks; Debug passed 1985 native tests in each control. 79 qmods were rebuilt and their Release aliases restored. Debug ML uses a documented path-only adaptation. This is not full-suite, sanitizer or cross-platform certification.
+
+The prototype sources were archived recoverably and removed/restored; the restored baseline was freshly qualified and independently verified before publication. Experimental gains are not branch gains.
+
+Next, investigate a distinct AOT-only redundant exception-sink check proof. The current generated direct-call loop rechecks the sink after both the slow cancellation helper and the fast polling path. A candidate must prove the sink clear on every incoming fast path, invalidate that proof across any potentially modifying operation, and preserve all live cancellation loads, slow helper calls, thread-exit checks, exception cleanup and entry checks. Inspect actual generated code and negative cases before committing to measurements; no installed implementation or measured benefit is established yet. Do not retry the rejected selector version unchanged.
+
+Full raw samples, controls, source identities, generated-code inspection and qualification evidence: [results-aot-finite-key-selector-rejected-macos-arm64.json](results-aot-finite-key-selector-rejected-macos-arm64.json).
