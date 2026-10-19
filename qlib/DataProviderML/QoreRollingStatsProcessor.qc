@@ -263,7 +263,7 @@ public class QoreRollingStatsProcessor inherits AbstractDataProviderMLProcessor 
     #! Returns @ref True if any configured field requires row materialization
     private bool hasNestedFields() {
         foreach string field in (fields) {
-            if (field.find(".") >= 0) {
+            if (!DataProvider::AbstractDataProvider::isPlainFieldPath(field)) {
                 return True;
             }
         }

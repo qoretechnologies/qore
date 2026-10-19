@@ -100,6 +100,7 @@ public class QoreCorrelationProcessor inherits AbstractDataProvider {
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         fields = AbstractDataProvider::parseFieldList(copts.fields);
+        AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields);
         if (fields.lsize() < 2) {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("at least 2 fields are required for correlation; got %d", fields.lsize());

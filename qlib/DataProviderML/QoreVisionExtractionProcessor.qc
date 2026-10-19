@@ -275,7 +275,8 @@ public class QoreVisionExtractionProcessor inherits AbstractDataProviderMLProces
             return processRecordImpl(records);
         }
 
-        if (image_field.find(".") >= 0 || (mime_type_field.val() && mime_type_field.find(".") >= 0)) {
+        if (!DataProvider::AbstractDataProvider::isPlainFieldPath(image_field)
+            || (mime_type_field.val() && !DataProvider::AbstractDataProvider::isPlainFieldPath(mime_type_field))) {
             return processShapeRowsFallback(records, shape);
         }
 

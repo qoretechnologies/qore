@@ -246,11 +246,11 @@ public class QoreClusteringMetricsProcessor inherits AbstractDataProviderMLProce
 
     #! Returns @ref True if any configured field requires row materialization
     private bool hasNestedFields() {
-        if (cluster_field.find(".") >= 0) {
+        if (!DataProvider::AbstractDataProvider::isPlainFieldPath(cluster_field)) {
             return True;
         }
         foreach string field in (fields) {
-            if (field.find(".") >= 0) {
+            if (!DataProvider::AbstractDataProvider::isPlainFieldPath(field)) {
                 return True;
             }
         }

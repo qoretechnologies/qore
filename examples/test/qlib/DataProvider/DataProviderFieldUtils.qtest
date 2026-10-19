@@ -55,11 +55,27 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("getFieldNamesAsAllowedValues - flat type", \fieldNamesFlat());
         addTestCase("getFieldNamesAsAllowedValues - nested type", \fieldNamesNested());
         addTestCase("getFieldNamesAsAllowedValues - no fields", \fieldNamesNoFields());
+        addTestCase("getFieldNamesAsAllowedValues - names with dots", \fieldNamesEscapedKeys());
 
         # input_field_names marker tests
         addTestCase("input_field_names - BaseOptionInfo marker", \inputFieldNamesMarker());
         addTestCase("input_field_names - action options from option info", \inputFieldNamesActionOptions());
         addTestCase("input_field_names - registered processor actions", \inputFieldNamesProcessorActions());
+        addTestCase("getFieldValue - paths and escaped dots", \getFieldValueTest());
+        addTestCase("escapeFieldPathKey - a key as one part of a field path", \escapeFieldPathKeyTest());
+        addTestCase("escapeFieldPathKey - any keys round-trip", \escapeFieldPathKeyRoundTripTest());
+        addTestCase("getTypeForActionOptions - a field for each option", \typeForActionOptions());
+        addTestCase("isPlainFieldPath - a path read as it is written", \isPlainFieldPathTest());
+        addTestCase("column blocks - a field path with a backslash", \columnBlockEscapedKeyTest());
+        addTestCase("ExpressionTypes::getType - field references are paths", \fieldReferenceTypeTest());
+        addTestCase("setFieldValue - paths, intermediates and errors", \setFieldValueTest());
+        addTestCase("search-replace - writes the field at its path", \searchReplacePathTest());
+        addTestCase("removeFieldValue - paths, missing paths and non-hash values", \removeFieldValueTest());
+        addTestCase("remove-fields - fields are paths", \removeFieldsPathTest());
+        addTestCase("getFieldPathDisplayName - a path as it is written", \fieldPathDisplayNameTest());
+        addTestCase("select-fields - output names of field paths", \selectFieldsOutputNamesTest());
+        addTestCase("group-by - output names of field paths", \groupByOutputNamesTest());
+        addTestCase("field options - wildcards are refused", \fieldOptionWildcardTest());
 
         # Processor backward compatibility tests
         addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
@@ -211,6 +227,33 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         assertTrue(inlist("address.zip", values));
     }
 
+    #! Each value is the field path of the field, with the dots of a name escaped; the display name is the names
+    #! as they are written
+    fieldNamesEscapedKeys() {
+        HashDataType inner("order");
+        inner.addField(new QoreDataField("id", "Id", AbstractDataProviderTypeMap."int"));
+        inner.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderTypeMap."float"));
+        HashDataType zero("zero");
+        zero.addField(new QoreDataField("a", "A", AbstractDataProviderTypeMap."int"));
+        HashDataType outer("rec");
+        outer.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderTypeMap."float"));
+        outer.addField(new QoreDataField("order", "Order", inner));
+        outer.addField(new QoreDataField("0", "Zero", zero));
+        outer.addField(new QoreDataField("p\\q", "Backslash", AbstractDataProviderTypeMap."int"));
+
+        list<hash<AllowedValueInfo>> avs = AbstractDataProviderType::getFieldNamesAsAllowedValues(outer);
+        assertEq(("Unit\\.Price", "order", "order.id", "order.Unit\\.Price", "0", "0.a", "p\\\\q"),
+            (map $1.value, avs));
+        assertEq(("Unit.Price", "order", "order.id", "order.Unit.Price", "0", "0.a", "p\\q"),
+            (map $1.display_name, avs));
+        assertEq("field 'order.Unit.Price' (float)", avs[3].desc);
+
+        # each value reads its field
+        hash<auto> rec = {"Unit.Price": 1.5, "order": {"id": 7, "Unit.Price": 2.5}, "0": {"a": 3}, "p\\q": 4};
+        assertEq((1.5, rec.order, 7, 2.5, rec."0", 3, 4),
+            (map AbstractDataProvider::getFieldValue(rec, $1.value), avs));
+    }
+
     fieldNamesNoFields() {
         # A type with no fields should return empty list
         QoreStringDataTypeBase str_type(StringType);
@@ -318,6 +361,479 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         hash<DataProviderActionInfo> group_by = DataProviderActionCatalog::getAppActionEx(QoreApp::AppName,
             "group-by");
         assertEq(True, group_by.options.group_by.input_field_names);
+    }
+
+    #! A field path reads nested keys; an escaped dot is part of a key
+    getFieldValueTest() {
+        hash<auto> rec = {"a": {"b": 1}, "a.b": 2, "x": 3};
+        assertEq(3, AbstractDataProvider::getFieldValue(rec, "x"));
+        assertEq(1, AbstractDataProvider::getFieldValue(rec, "a.b"));
+        assertEq(2, AbstractDataProvider::getFieldValue(rec, "a\\.b"));
+        assertNothing(AbstractDataProvider::getFieldValue(rec, "a.c"));
+        assertNothing(AbstractDataProvider::getFieldValue(rec, "x.y"));
+    }
+
+    #! The type of the options of an action has a field for each option, with its type and mandatory flag, and
+    #! accepts other keys as it did without fields
+    typeForActionOptions() {
+        hash<DataProviderActionInfo> action = <DataProviderActionInfo>{
+            "app": "test",
+            "action": "send",
+            "path": "/",
+            "display_name": "Send",
+            "short_desc": "Send a message",
+            "desc": "Send a message",
+            "action_code": DPAT_SEND_MESSAGE,
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "id": <DataProviderOptionInfo>{
+                    "display_name": "Id",
+                    "short_desc": "The id",
+                    "desc": "The id",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                },
+                "name": <DataProviderOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The name",
+                    "desc": "The name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "default_value": "none",
+                },
+                "tags": <DataProviderOptionInfo>{
+                    "display_name": "Tags",
+                    "short_desc": "The tags",
+                    "desc": "The tags",
+                    "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
+                },
+            }),
+        };
+        AbstractDataProviderType type = DataProviderActionCatalog::getTypeForActionOptions(action);
+        assertEq("send", type.getName());
+        *hash<string, AbstractDataField> fields = type.getFields();
+        assertEq(("id", "name", "tags"), keys fields);
+        assertTrue(fields.id.isMandatory());
+        assertEq("int", fields.id.getType().getName());
+        assertFalse(fields.name.isMandatory());
+        assertEq("*string", fields.name.getType().getName());
+        assertEq("The name", fields.name.getDescription());
+        assertEq("none", fields.name.getDefaultValue());
+        assertEq("*softlist<string>", fields.tags.getType().getName());
+
+        # the declared options are typed, and other keys are still accepted as they are
+        assertEq({"id": 1, "name": "none", "other": "x"}, type.acceptsValue({"id": 1, "other": "x"}));
+        assertEq({"id": 2, "name": "a", "tags": ("t",)}, type.acceptsValue({"id": 2, "name": "a", "tags": "t"}));
+        assertThrows("MISSING-VALUE-ERROR", "required field \"id\" is absent", \type.acceptsValue(),
+            {"name": "a"});
+        assertThrows("RUNTIME-TYPE-ERROR", "field \"id\"", \type.acceptsValue(), {"id": "x"});
+
+        # an action without options has no option type
+        assertNothing(DataProviderActionCatalog::getTypeForActionOptions(action - "options"));
+    }
+
+    #! A field path is set as getFieldValue() reads it, creating the hashes that are missing
+    setFieldValueTest() {
+        hash<auto> rec = {"x": 1, "order": {"id": 7}};
+        # plain
+        assertEq({"x": 2, "order": {"id": 7}}, AbstractDataProvider::setFieldValue(rec, "x", 2));
+        assertEq({"x": 1, "order": {"id": 7}, "y": 3}, AbstractDataProvider::setFieldValue(rec, "y", 3));
+        # nested, replacing an existing value and adding another
+        assertEq({"x": 1, "order": {"id": 8}}, AbstractDataProvider::setFieldValue(rec, "order.id", 8));
+        assertEq({"x": 1, "order": {"id": 7, "qty": 2}}, AbstractDataProvider::setFieldValue(rec, "order.qty", 2));
+        # a hash value is replaced as a whole
+        assertEq({"x": 1, "order": 5}, AbstractDataProvider::setFieldValue(rec, "order", 5));
+        # an escaped dot is part of a key, and an escaped backslash is one backslash
+        assertEq({"x": 1, "order": {"id": 7}, "Unit.Price": 2.5},
+            AbstractDataProvider::setFieldValue(rec, "Unit\\.Price", 2.5));
+        assertEq({"x": 1, "order": {"id": 7, "Unit.Price": 2.5}},
+            AbstractDataProvider::setFieldValue(rec, "order.Unit\\.Price", 2.5));
+        assertEq({"x": 1, "order": {"id": 7}, "p\\q": 1}, AbstractDataProvider::setFieldValue(rec, "p\\\\q", 1));
+        # the hashes on the path are created when they are missing
+        assertEq({"x": 1, "order": {"id": 7}, "a": {"b": {"c": NOTHING}}},
+            AbstractDataProvider::setFieldValue(rec, "a.b.c", NOTHING));
+        assertEq({"x": 1, "order": {"id": 7, "line": {"no": 1}}},
+            AbstractDataProvider::setFieldValue(rec, "order.line.no", 1));
+        # the empty path is the empty key, as getFieldValue() reads it
+        assertEq({"x": 1, "order": {"id": 7}, "": 0}, AbstractDataProvider::setFieldValue(rec, "", 0));
+        # the value set is read back
+        foreach string path in ("x", "order.id", "Unit\\.Price", "a.b.c", "order.Unit\\.Price", "p\\\\q.r", "") {
+            assertEq("v", AbstractDataProvider::getFieldValue(AbstractDataProvider::setFieldValue(rec, path, "v"),
+                path), path);
+        }
+        # the record passed is not changed
+        assertEq({"x": 1, "order": {"id": 7}}, rec);
+
+        # a value on the path that is not a hash
+        assertThrows("FIELD-PATH-ERROR", "cannot set field \"x.y\": the value at \"x\" is integer, not a hash",
+            \AbstractDataProvider::setFieldValue(), (rec, "x.y", 1));
+        assertThrows("FIELD-PATH-ERROR", "cannot set field \"order.id.z\": the value at \"order.id\" is integer, "
+            "not a hash", \AbstractDataProvider::setFieldValue(), (rec, "order.id.z", 1));
+        # the path is given as it is written (the description is a regular expression)
+        assertThrows("FIELD-PATH-ERROR", "the value at \"Unit\\\\\\.Price\" is list",
+            \AbstractDataProvider::setFieldValue(), ({"Unit.Price": (1,)}, "Unit\\.Price.x", 1));
+    }
+
+    #! The display name of a field path is its keys joined with dots, as they are written
+    fieldPathDisplayNameTest() {
+        assertEq("name", AbstractDataProvider::getFieldPathDisplayName("name"));
+        assertEq("order.id", AbstractDataProvider::getFieldPathDisplayName("order.id"));
+        assertEq("Unit.Price", AbstractDataProvider::getFieldPathDisplayName("Unit\\.Price"));
+        assertEq("order.Unit.Price", AbstractDataProvider::getFieldPathDisplayName("order.Unit\\.Price"));
+        assertEq("p\\q", AbstractDataProvider::getFieldPathDisplayName("p\\\\q"));
+        assertEq("", AbstractDataProvider::getFieldPathDisplayName(""));
+        # it is the display name of the field's allowed value
+        HashDataType order("order");
+        order.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderTypeMap."float"));
+        HashDataType rec("rec");
+        rec.addField(new QoreDataField("order", "Order", order));
+        foreach hash<AllowedValueInfo> av in (AbstractDataProviderType::getFieldNamesAsAllowedValues(rec)) {
+            assertEq(av.display_name, AbstractDataProvider::getFieldPathDisplayName(av.value), av.value);
+        }
+    }
+
+    #! A field that is not renamed is output under its path as it is written; two fields with the same output name
+    #! are refused
+    selectFieldsOutputNamesTest() {
+        hash<auto> rec = {"Unit.Price": 2.5, "order": {"id": 7}, "name": "x"};
+        QoreSelectFieldsProcessor proc({"fields": ("Unit\\.Price", "order.id", "name")});
+        assertEq({"Unit.Price": 2.5, "order.id": 7, "name": "x"}, proc.processRecord(rec));
+        QoreSelectFieldsProcessor renamed({"fields": ("price=Unit\\.Price", "id=order.id")});
+        assertEq({"price": 2.5, "id": 7}, renamed.processRecord(rec));
+        # the same field twice is one field
+        QoreSelectFieldsProcessor twice({"fields": ("name", "name")});
+        assertEq({"name": "x"}, twice.processRecord(rec));
+
+        # two paths with the same output name
+        assertThrows("CONSTRUCTOR-ERROR", "the fields \"order.id\" and \"order.*id\" both give the output field "
+            "\"order.id\"; rename one of them", sub () {
+                new QoreSelectFieldsProcessor({"fields": ("order.id", "order\\.id")});
+            });
+        assertThrows("CONSTRUCTOR-ERROR", "the fields \"a\" and \"b\" both give the output field \"x\"", sub () {
+            new QoreSelectFieldsProcessor({"fields": ("x=a", "x=b")});
+        });
+        assertThrows("CONSTRUCTOR-ERROR", "the fields \"Unit.*Price\" and \"Unit.Price\" both give the output field",
+            sub () {
+                new QoreSelectFieldsProcessor({"fields": ("Unit\\.Price", "Unit.Price")});
+            });
+    }
+
+    #! A group-by field is output under its path as it is written, and so is the field in the default name of an
+    #! aggregate; output names that collide are refused
+    groupByOutputNamesTest() {
+        QoreGroupByProcessor proc({"group_by": ("Unit\\.Price", "order.id"), "aggregates": "n=count(),max(qty)"});
+        proc.processRecord({"Unit.Price": 2.5, "order": {"id": 1}, "qty": 1});
+        proc.processRecord({"Unit.Price": 2.5, "order": {"id": 1}, "qty": 3});
+        proc.processRecord({"Unit.Price": 3.0, "order": {"id": 1}, "qty": 2});
+        list<auto> rows = sort(proc.flushRecords(), int sub (hash<auto> l, hash<auto> r) {
+            return l."Unit.Price" <=> r."Unit.Price";
+        });
+        assertEq(({"Unit.Price": 2.5, "order.id": 1, "n": 2, "max_qty": 3.0},
+            {"Unit.Price": 3.0, "order.id": 1, "n": 1, "max_qty": 2.0}), rows);
+
+        # the default name of an aggregate has the field as it is written
+        QoreGroupByProcessor agg({"aggregates": "sum(Unit\\.Price),max(order.id)"});
+        agg.processRecord({"Unit.Price": 2.5, "order": {"id": 4}});
+        agg.processRecord({"Unit.Price": 1.5, "order": {"id": 2}});
+        assertEq(({"sum_Unit.Price": 4.0, "max_order.id": 4.0},), agg.flushRecords());
+
+        # the same group-by field twice is one field
+        QoreGroupByProcessor twice({"group_by": ("city", "city"), "aggregates": "count()"});
+        twice.processRecord({"city": "Prague"});
+        assertEq(({"city": "Prague", "count": 1},), twice.flushRecords());
+
+        # output names that collide
+        assertThrows("CONSTRUCTOR-ERROR", "the group-by fields \"order.id\" and \"order.*id\" both give the output "
+            "field \"order.id\"", sub () {
+                new QoreGroupByProcessor({"group_by": ("order.id", "order\\.id"), "aggregates": "count()"});
+            });
+        assertThrows("CONSTRUCTOR-ERROR", "the group-by field \"city\" and the aggregate \"first\\(name\\)\" both "
+            "give the output field \"city\"", sub () {
+                new QoreGroupByProcessor({"group_by": "city", "aggregates": "city=first(name)"});
+            });
+        assertThrows("CONSTRUCTOR-ERROR", "the aggregates \"sum\\(a\\)\" and \"max\\(a\\)\" both give the output "
+            "field \"x\"", sub () {
+                new QoreGroupByProcessor({"aggregates": "x=sum(a),x=max(a)"});
+            });
+        # the same aggregate twice would be accumulated twice
+        assertThrows("CONSTRUCTOR-ERROR", "the aggregates \"sum\\(a\\)\" and \"sum\\(a\\)\" both give the output "
+            "field \"sum_a\"", sub () {
+                new QoreGroupByProcessor({"aggregates": "sum(a),sum(a)"});
+            });
+        assertThrows("CONSTRUCTOR-ERROR", "the aggregates \"sum\\(Unit.*Price\\)\" and \"sum\\(Unit.Price\\)\" both "
+            "give the output field \"sum_Unit.Price\"", sub () {
+                new QoreGroupByProcessor({"aggregates": "sum(Unit\\.Price),sum(Unit.Price)"});
+            });
+    }
+
+    #! A field option names one field by its path; a DPQL wildcard in it is refused when the processor is created
+    fieldOptionWildcardTest() {
+        foreach string wildcard in ("[*]", "{*}") {
+            string path = "orders" + wildcard + ".id";
+            list<hash<auto>> procs = (
+                {"option": "field", "code": sub () {
+                    new QoreSearchReplaceProcessor({"field": path, "search": "a", "replace": "b"});
+                }},
+                {"option": "fields", "code": sub () { new QoreRemoveFieldsProcessor({"fields": ("id", path)}); }},
+                {"option": "fields", "code": sub () {
+                    new QoreSelectFieldsProcessor({"fields": ("id", "x=" + path)});
+                }},
+                {"option": "group_by", "code": sub () {
+                    new QoreGroupByProcessor({"group_by": path, "aggregates": "count()"});
+                }},
+                {"option": "aggregates", "code": sub () {
+                    new QoreGroupByProcessor({"aggregates": "sum(" + path + ")"});
+                }},
+                {"option": "fields", "code": sub () {
+                    new QoreCorrelationProcessor({"fields": ("x", path), "window_size": 3});
+                }},
+                {"option": "field_x", "code": sub () {
+                    new QoreCrossCorrelationProcessor({"field_x": path, "field_y": "y", "window_size": 3});
+                }},
+                {"option": "field_y", "code": sub () {
+                    new QoreCrossCorrelationProcessor({"field_x": "x", "field_y": path, "window_size": 3});
+                }},
+                {"option": "fields", "code": sub () {
+                    new QoreMovingAverageProcessor({"fields": path, "window_size": 3});
+                }},
+            );
+            foreach hash<auto> i in (procs) {
+                assertThrows("CONSTRUCTOR-ERROR", sprintf("option \"%s\": the field \"orders.*id\" has the "
+                    "wildcard .*; a field option names one field by its path", i.option), i.code, NOTHING,
+                    sprintf("%s %d %s", i.option, $#, wildcard));
+            }
+        }
+        # the helper itself: a field path without a wildcard is accepted
+        AbstractDataProvider::checkFieldPathOption("ERR", "opt", ("a", "a.b", "Unit\\.Price", "a[0]", "*"));
+        assertThrows("ERR", "option \"opt\": the field \"a.*\" has the wildcard",
+            \AbstractDataProvider::checkFieldPathOption(), ("ERR", "opt", ("b", "a[*]")));
+    }
+
+    #! A field path is removed as getFieldValue() reads it; a path with no value is left as it is
+    removeFieldValueTest() {
+        hash<auto> rec = {"x": 1, "order": {"id": 7, "qty": 2}, "Unit.Price": 2.5, "Unit": {"Price": 3.5},
+            "p\\q": 4, "": 5};
+        # plain
+        assertEq(rec - "x", AbstractDataProvider::removeFieldValue(rec, "x"));
+        # nested; a hash left empty is kept
+        assertEq(rec + {"order": {"qty": 2}}, AbstractDataProvider::removeFieldValue(rec, "order.id"));
+        assertEq(rec + {"Unit": {}}, AbstractDataProvider::removeFieldValue(rec, "Unit.Price"));
+        # a hash is removed as a whole
+        assertEq(rec - "order", AbstractDataProvider::removeFieldValue(rec, "order"));
+        # an escaped dot is part of a key, and an escaped backslash is one backslash
+        assertEq(rec - "Unit.Price", AbstractDataProvider::removeFieldValue(rec, "Unit\\.Price"));
+        assertEq(rec - "p\\q", AbstractDataProvider::removeFieldValue(rec, "p\\\\q"));
+        # any other backslash is itself
+        assertEq(rec - "p\\q", AbstractDataProvider::removeFieldValue(rec, "p\\q"));
+        # the empty path is the empty key, as getFieldValue() reads it
+        assertEq(rec - "", AbstractDataProvider::removeFieldValue(rec, ""));
+        # the value removed is no longer read
+        foreach string path in ("x", "order.id", "Unit.Price", "Unit\\.Price", "p\\\\q", "") {
+            assertNothing(AbstractDataProvider::getFieldValue(AbstractDataProvider::removeFieldValue(rec, path),
+                path), path);
+        }
+
+        # a path with no value: a missing key, or a value on the path that is not a hash
+        foreach string path in ("y", "order.missing", "a.b.c", "x.y", "order.id.z", "Unit\\.Price.x", "q\\\\p") {
+            assertEq(rec, AbstractDataProvider::removeFieldValue(rec, path), path);
+        }
+        assertEq({"l": (1, 2)}, AbstractDataProvider::removeFieldValue({"l": (1, 2)}, "l.0"));
+        assertEq({}, AbstractDataProvider::removeFieldValue({}, ""));
+
+        # the record passed is not changed
+        assertEq({"x": 1, "order": {"id": 7, "qty": 2}, "Unit.Price": 2.5, "Unit": {"Price": 3.5}, "p\\q": 4, "": 5},
+            rec);
+    }
+
+    #! remove-fields reads each field as a path
+    removeFieldsPathTest() {
+        hash<auto> rec = {"id": 1, "address": {"city": "Prague", "zip": "11000"}, "Unit.Price": 2.5,
+            "Unit": {"Price": 3.5}};
+        QoreRemoveFieldsProcessor nested({"fields": "address.city"});
+        assertEq(rec + {"address": {"zip": "11000"}}, nested.processRecord(rec));
+        QoreRemoveFieldsProcessor escaped({"fields": "Unit\\.Price"});
+        assertEq(rec - "Unit.Price", escaped.processRecord(rec));
+        QoreRemoveFieldsProcessor dotted({"fields": "Unit.Price"});
+        assertEq(rec + {"Unit": {}}, dotted.processRecord(rec));
+        QoreRemoveFieldsProcessor several({"fields": ("id", "address.zip", "Unit\\.Price", "missing.field")});
+        assertEq({"address": {"city": "Prague"}, "Unit": {"Price": 3.5}}, several.processRecord(rec));
+
+        # a column block with a field path is processed row by row
+        hash<auto> block = {"id": (1, 2), "address": ({"city": "Prague"}, {"city": "Brno"})};
+        QoreRemoveFieldsProcessor block_proc({"fields": "address.city"});
+        assertEq({"id": (1, 2), "address": ({}, {})},
+            block_proc.processRecordsShape(block, DataProviderShape::HashOfLists));
+
+        # the output type does not have the fields removed
+        HashDataType address("address");
+        address.addField(new QoreDataField("city", "City", AbstractDataProviderTypeMap."string"));
+        address.addField(new QoreDataField("zip", "Zip", AbstractDataProviderTypeMap."string"));
+        HashDataType input("input");
+        input.addField(new QoreDataField("id", "Id", AbstractDataProviderTypeMap."int"));
+        input.addField(new QoreDataField("address", "Address", address));
+        input.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderTypeMap."float"));
+        QoreRemoveFieldsProcessor typed({"fields": ("address.city", "Unit\\.Price")});
+        *AbstractDataProviderType output = typed.getPipelineProcessorOutputTypeWithInputType(input);
+        assertEq(("id", "address"), keys output.getFields());
+        assertEq(("zip",), keys output.getFields().address.getType().getFields());
+        # the input type is not changed
+        assertEq(("city", "zip"), keys address.getFields());
+        assertEq(("id", "address", "Unit.Price"), keys input.getFields());
+    }
+
+    #! search-replace writes the field that it reads, at its path
+    searchReplacePathTest() {
+        hash<auto> rec = {"order": {"name": "old name"}, "Unit.Price": "old price", "Unit": {"Price": "keep"}};
+        QoreSearchReplaceProcessor nested({"field": "order.name", "search": "old", "replace": "new"});
+        assertEq({"order": {"name": "new name"}, "Unit.Price": "old price", "Unit": {"Price": "keep"}},
+            nested.processRecord(rec));
+        QoreSearchReplaceProcessor escaped({"field": "Unit\\.Price", "search": "old", "replace": "new"});
+        assertEq({"order": {"name": "old name"}, "Unit.Price": "new price", "Unit": {"Price": "keep"}},
+            escaped.processRecord(rec));
+        # a missing field leaves the record as it is
+        QoreSearchReplaceProcessor missing({"field": "order.missing", "search": "old", "replace": "new"});
+        assertEq(rec, missing.processRecord(rec));
+    }
+
+    #! The type of a field reference is the type of the field at its path: an escaped dot is part of a key, and a
+    #! dotted path reads nested fields
+    fieldReferenceTypeTest() {
+        HashDataType order("order");
+        order.addField(new QoreDataField("id", "Id", AbstractDataProviderTypeMap."int"));
+        order.addField(new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderTypeMap."float"));
+        hash<string, AbstractDataField> fields = {
+            "Unit.Price": new QoreDataField("Unit.Price", "Unit price", AbstractDataProviderTypeMap."number"),
+            "order": new QoreDataField("order", "Order", order),
+            "name": new QoreDataField("name", "Name", AbstractDataProviderTypeMap."string"),
+        };
+        foreach hash<auto> i in ((
+                {"dpql": '@"Unit\.Price"', "type": "number"},
+                {"dpql": '@"Unit\\.Price"', "type": "number"},
+                {"dpql": '@order.id', "type": "int"},
+                {"dpql": '@"order.id"', "type": "int"},
+                {"dpql": '@"order.Unit\.Price"', "type": "float"},
+                {"dpql": '@name', "type": "string"},
+                {"dpql": '@"Unit\.Price" * 2', "type": "number"},
+            )) {
+            *AbstractDataProviderType type = ExpressionTypes::getType(DataProvider::parseDpqlExpression(i.dpql),
+                fields);
+            assertEq(i.type, type ? type.getName() : NOTHING, i.dpql);
+        }
+        # a path that the fields do not have has no type
+        foreach string dpql in ('@Unit.Price', '@order.qty', '@"order\\\\.id"') {
+            assertNothing(ExpressionTypes::getType(DataProvider::parseDpqlExpression(dpql), fields), dpql);
+        }
+    }
+
+    #! Only a path with no dot and no backslash is the one key it is written as
+    isPlainFieldPathTest() {
+        foreach string path in ("name", "order-id", "a b", "Unit Price", "") {
+            assertTrue(AbstractDataProvider::isPlainFieldPath(path), path);
+            assertEq(1, AbstractDataProvider::getFieldValue({path: 1}, path), path);
+        }
+        foreach string path in ("order.id", "Unit\\.Price", "p\\\\q", "p\\q", "a\\", ".", "a.") {
+            assertFalse(AbstractDataProvider::isPlainFieldPath(path), path);
+        }
+    }
+
+    #! A processor reads a column block by a field name directly only when the field path is that one key
+    columnBlockEscapedKeyTest() {
+        # the path p\\q is the one key p\q; the block also has a column named p\\q, which the path does not read
+        hash<auto> records = {"p\\q": ("A", "B", "A"), "p\\\\q": ("x", "y", "z"), "n": (1, 2, 3)};
+        assertNothing(AbstractDataProcessor::getShapeColumn(records, DataProviderShape::HashOfLists, "p\\\\q"));
+        ColumnarResult columns = ColumnarResult::fromColumnHash(records);
+        assertNothing(AbstractDataProcessor::getTopLevelShapeColumns(columns, DataProviderShape::BufferColumns,
+            ("n", "p\\\\q")));
+        assertEq((1, 2, 3), AbstractDataProcessor::getTopLevelShapeColumns(columns, DataProviderShape::BufferColumns,
+            ("n",)).n.toList());
+
+        # select-fields
+        QoreSelectFieldsProcessor sel({"fields": "v=p\\\\q"});
+        assertEq({"v": ("A", "B", "A")}, sel.processRecordsShape(records, DataProviderShape::HashOfLists));
+
+        # group-by
+        QoreGroupByProcessor grp({"group_by": "p\\\\q", "aggregates": "n=count()"});
+        grp.processRecordsShape(records, DataProviderShape::HashOfLists);
+        list<auto> rows = grp.flushRecords();
+        assertEq((1, 2), sort(map $1.n, rows));
+
+        # the columnar filter
+        QoreFilterRecordsProcessor flt({"dpql_where": '@"p\\\\q" == "B"'});
+        auto filtered = flt.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq({"p\\q": ("B",), "p\\\\q": ("y",), "n": (2,)},
+            map {$1.key: $1.value.toList()}, filtered.toColumnHash().pairIterator());
+    }
+
+    #! A key escaped for a field path is read back as the one key, and a path joined from escaped keys reads each
+    escapeFieldPathKeyTest() {
+        assertEq("name", AbstractDataProvider::escapeFieldPathKey("name"));
+        assertEq("Unit\\.Price", AbstractDataProvider::escapeFieldPathKey("Unit.Price"));
+        assertEq("a\\.b\\.c", AbstractDataProvider::escapeFieldPathKey("a.b.c"));
+        assertEq("p\\\\q", AbstractDataProvider::escapeFieldPathKey("p\\q"));
+        assertEq("a\\\\", AbstractDataProvider::escapeFieldPathKey("a\\"));
+
+        # a key ending with a backslash is not read as an escaped dot: (a\, b) is a\\.b
+        assertEq(("a\\", "b"), AbstractDataProvider::getFieldPath("a\\\\.b"));
+        assertEq(("a.b",), AbstractDataProvider::getFieldPath("a\\.b"));
+        # any other backslash is itself, as before
+        assertEq(("p\\q",), AbstractDataProvider::getFieldPath("p\\q"));
+        # empty parts are kept; the empty path has none
+        assertEq(("a", ""), AbstractDataProvider::getFieldPath("a."));
+        assertEq(("", "a"), AbstractDataProvider::getFieldPath(".a"));
+        assertEq(("a", "", "b"), AbstractDataProvider::getFieldPath("a..b"));
+        assertEq((), AbstractDataProvider::getFieldPath(""));
+
+        foreach string key in ("name", "Unit.Price", "a.b.c", "order-id", "a b", "p\\q", "a\\.b", ".x", "x.", "a\\",
+                "\\", "\\\\", "\\.", "..", "") {
+            string path = AbstractDataProvider::escapeFieldPathKey(key);
+            # an empty key alone is the empty path, which has no parts
+            if (key !== "") {
+                assertEq((key,), AbstractDataProvider::getFieldPath(path), key);
+                assertEq(1, AbstractDataProvider::getFieldValue({key: 1}, path), key);
+            }
+            # as one part of a longer path
+            assertEq(("order", key), AbstractDataProvider::getFieldPath("order." + path), key);
+            assertEq(1, AbstractDataProvider::getFieldValue({"order": {key: 1}}, "order." + path), key);
+        }
+    }
+
+    #! For any keys, the path joined from their escaped forms gives the keys back, and getFieldValue() reads the
+    #! value at them
+    escapeFieldPathKeyRoundTripTest() {
+        # every key of up to 4 characters over an alphabet with the characters that the grammar gives a meaning to
+        list<string> alphabet = ("a", ".", "\\", "x");
+        list<string> all_keys = ("",);
+        list<string> last = ("",);
+        for (int len = 1; len <= 4; ++len) {
+            list<string> next = ();
+            foreach string prefix in (last) {
+                foreach string ch in (alphabet) {
+                    push next, prefix + ch;
+                }
+            }
+            all_keys += next;
+            last = next;
+        }
+        assertEq(341, all_keys.size());
+        int checked = 0;
+        # paths of one to three keys, the keys taken in turn so that each key is in every position
+        for (int i = 0; i < all_keys.size(); ++i) {
+            foreach int n in (1, 2, 3) {
+                list<string> path_keys = map all_keys[(i + $1 * 37) % all_keys.size()], xrange(n);
+                # the empty path is the one list of keys that has no path of its own
+                if (path_keys == ("",)) {
+                    continue;
+                }
+                string path = (map AbstractDataProvider::escapeFieldPathKey($1), path_keys).join(".");
+                assertEq(path_keys, AbstractDataProvider::getFieldPath(path), sprintf("%y", path_keys));
+                # getFieldValue() reads the value at the keys
+                auto rec = "v";
+                foreach string key in (reverse(path_keys)) {
+                    rec = {key: rec};
+                }
+                assertEq("v", AbstractDataProvider::getFieldValue(rec, path), sprintf("%y", path_keys));
+                ++checked;
+            }
+        }
+        assertGt(1000, checked);
     }
 
     # ===================== Processor Backward Compatibility Tests =====================

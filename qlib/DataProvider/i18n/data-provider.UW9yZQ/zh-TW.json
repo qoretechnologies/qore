@@ -120,8 +120,8 @@
           "message": "要移除的欄位名稱"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.desc": {
-          "source": "A list of field names to remove from each record",
-          "message": "要從每筆記錄中移除的欄位名稱清單"
+          "source": "A list of field names to remove from each record; supports dot-notation for nested fields (e.g. `address.city`)",
+          "message": "要從每筆記錄中移除的欄位名稱清單；支援巢狀欄位的點標記法（例如 `address.city`）"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
           "source": "Search and Replace",

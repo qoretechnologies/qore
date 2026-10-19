@@ -1116,7 +1116,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         string required_type = sprintf("buffer<%s>", dtype);
         list<auto> columns;
         foreach string field in (tensor_fields) {
-            if (field.find(".") >= 0) {
+            if (!DataProvider::AbstractDataProvider::isPlainFieldPath(field)) {
                 return;
             }
 
@@ -1223,7 +1223,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         }
 
         foreach string f in (fields) {
-            if (f.find(".") >= 0) {
+            if (!DataProvider::AbstractDataProvider::isPlainFieldPath(f)) {
                 continue;
             }
             switch (shape) {

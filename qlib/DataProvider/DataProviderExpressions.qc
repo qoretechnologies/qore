@@ -98,8 +98,7 @@ auto sub dp_eval_arg(hash<auto> rec, hash<DataProviderExpression> exp, int index
 bool sub dp_field_exists_intern(hash<auto> rec, auto operand, reference<auto> value) {
     if (operand instanceof hash<DataProviderFieldReference>) {
         # the path of the field reference, as it is evaluated
-        list<string> path = operand.field_path
-            ?? (map regex_subst($1, "\\\\.", ".", RE_Global), operand.field.splitRegex("(?<!\\\\)\\."));
+        list<string> path = operand.field_path ?? AbstractDataProvider::getFieldPath(operand.field);
         auto v = rec;
         foreach string key in (path) {
             if (v.typeCode() != NT_HASH || !v.hasKey(key)) {

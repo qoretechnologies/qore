@@ -1055,7 +1055,13 @@ public hashdecl DataProviderRangeSpec {
 
 #! Data provider field reference
 public hashdecl DataProviderFieldReference {
-    #! The name of the field being referenced
+    #! The field path of the field being referenced
+    /** Dots separate the parts of the path, the keys read one after the other from the record; a dot that is part
+        of a key is escaped with a backslash, and so is a backslash: \c "order.id" is the key \c id of the key
+        \c order, and <tt>"Unit\\\\.Price"</tt> (the text <tt>Unit\\.Price</tt>) the key \c Unit.Price
+        (@ref AbstractDataProvider::getFieldPath(), @ref AbstractDataProvider::escapeFieldPathKey(),
+        @ref dpql_field_paths)
+    */
     string field;
 
     #! Pre-computed split field path segments (populated by @ref AbstractDataProvider::prepareExpression())
@@ -6139,7 +6145,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         if (val instanceof hash<DataProviderFieldReference>) {
             # Use pre-computed field path if available (from prepareExpression); otherwise compute on the fly
             list<string> f = val.field_path
-                ?? (map regex_subst($1, "\\\\.", ".", RE_Global), val.field.splitRegex("(?<!\\\\)\\."));
+                ?? AbstractDataProvider::getFieldPath(val.field);
             auto rv = rec;
             foreach string field in (f) {
                 if (rv.typeCode() != NT_HASH && rv.typeCode() != NT_OBJECT) {
@@ -6374,6 +6380,164 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         };
     }
 
+    #! Returns the parts of a field path: the keys it reads, in order
+    /** The parts of a field path (the \c field of a @ref DataProviderFieldReference) are separated by dots.  In a
+        part, <tt>\\.</tt> is a dot and <tt>\\\\</tt> a backslash; any other backslash is itself.  So
+        <tt>a\\.b</tt> is the key <tt>a.b</tt>, <tt>a\\\\.b</tt> the keys <tt>a\\</tt> and \c b, and
+        <tt>p\\q</tt> the key <tt>p\\q</tt>.  @ref escapeFieldPathKey() escapes a key so that this reads it back
+        exactly: for any keys, joining their escaped forms with \c "." gives a path whose parts are the keys.
+
+        The empty path has no parts; an empty part is kept (<tt>a.</tt> is \c ("a", "")).
+
+        @param field the field path, such as \c "order.id" or \c "create.order-id"
+
+        @return the keys of the path: \c ("order", "id") and \c ("create", "order-id") for these, and \c ("a.b",)
+        for <tt>a\\.b</tt>
+
+        @since DataProvider 3.11
+    */
+    static list<string> getFieldPath(string field) {
+        if (field == "") {
+            return ();
+        }
+        list<string> rv;
+        if (field.find("\\") < 0) {
+            rv = field.split(".");
+            # split() drops an empty last part
+            if (field.substr(-1) == ".") {
+                push rv, "";
+            }
+            return rv;
+        }
+        string part = "";
+        bool escaped = False;
+        foreach string ch in (field.iterator()) {
+            if (escaped) {
+                escaped = False;
+                # \. is a dot and \\ a backslash; any other backslash is itself
+                if (ch == "." || ch == "\\") {
+                    part += ch;
+                } else {
+                    part += "\\" + ch;
+                }
+            } else if (ch == "\\") {
+                escaped = True;
+            } else if (ch == ".") {
+                push rv, part;
+                part = "";
+            } else {
+                part += ch;
+            }
+        }
+        if (escaped) {
+            part += "\\";
+        }
+        push rv, part;
+        return rv;
+    }
+
+    #! Returns a key as one part of a field path: its dots and backslashes are escaped
+    /** A dot in a field path separates its parts, so a key with a dot is escaped to be one part of a path: the key
+        <tt>Unit.Price</tt> is <tt>Unit\\.Price</tt>; a backslash is escaped as <tt>\\\\</tt>, so that a key ending
+        with a backslash is not read as an escaped dot.  Join the escaped keys with \c "." to make a path of several
+        keys: <tt>order.Unit\\.Price</tt> is the key <tt>Unit.Price</tt> of the key \c order; @ref getFieldPath()
+        gives the keys back exactly.  Use this for a field path that is a plain value, such as a field option of a
+        processor; for a DPQL field reference to one key, use
+        @ref DataProvider::DpqlSerializer::fieldReferenceForKey() "DpqlSerializer::fieldReferenceForKey()"
+
+        @param key the key
+
+        @return the key as one part of a field path
+
+        @par Example:
+        @code{.py}
+# "order.Unit\.Price"
+string path = "order." + AbstractDataProvider::escapeFieldPathKey("Unit.Price");
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static string escapeFieldPathKey(string key) {
+        return replace(replace(key, "\\", "\\\\"), ".", "\\.");
+    }
+
+    #! Returns @ref True if a field path is one key, read as it is written
+    /** A field path with no dot and no backslash is the one key it is written as, so a record or a column block can
+        be read by it directly.  Any other path is read with @ref getFieldPath(), as @ref getFieldValue() reads it:
+        <tt>Unit\\.Price</tt> is the one key <tt>Unit.Price</tt>, <tt>p\\\\q</tt> the one key <tt>p\\q</tt>, and
+        \c order.id the key \c id of the key \c order.
+
+        @param field the field path
+
+        @return @ref True if the path is one key, read as it is written; @ref False if it must be read with
+        @ref getFieldPath()
+
+        @par Example:
+        @code{.py}
+# a column block can be read by the field name directly
+auto column = AbstractDataProvider::isPlainFieldPath(field) ? block{field} : NOTHING;
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static bool isPlainFieldPath(string field) {
+        return field.find(".") < 0 && field.find("\\") < 0;
+    }
+
+    #! Returns the display name of a field path: its keys joined with dots, as they are written
+    /** <tt>Unit\\.Price</tt> is \c Unit.Price and \c order.id is \c order.id.  This is the display name that
+        @ref AbstractDataProviderType::getFieldNamesAsAllowedValues() gives a field, and the name that a processor
+        gives a field in its output when the field is not renamed.  Two paths can have the same display name, such as
+        \c order.id (the key \c id of \c order) and <tt>order\\.id</tt> (the key \c order.id).
+
+        @param field_path the field path
+
+        @return the keys of the path joined with dots, as they are written
+
+        @par Example:
+        @code{.py}
+# "Unit.Price"
+string name = AbstractDataProvider::getFieldPathDisplayName("Unit\\.Price");
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static string getFieldPathDisplayName(string field_path) {
+        return AbstractDataProvider::isPlainFieldPath(field_path)
+            ? field_path
+            : AbstractDataProvider::getFieldPath(field_path).join(".");
+    }
+
+    #! Checks that the field paths given in a field option of a processor have no wildcard
+    /** A field option names one field by its path (@ref getFieldPath()).  The DPQL wildcards <tt>[*]</tt> and
+        <tt>{*}</tt>, which take every element of a list or every value of a hash in an expression, are not part of a
+        field path: a path with one would be read as a key with \c [*] or \c {*} in its name, so it is refused.
+
+        @param err the exception code to throw
+        @param option the name of the option
+        @param field_paths the field paths given in the option
+
+        @throw err a field path has a wildcard; the message names the option and the field
+
+        @par Example:
+        @code{.py}
+AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields);
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static checkFieldPathOption(string err, string option, softlist<string> field_paths) {
+        foreach string field_path in (field_paths) {
+            foreach string wildcard in ("[*]", "{*}") {
+                if (field_path.find(wildcard) >= 0) {
+                    # the path is given as it is written
+                    throw err, sprintf("option \"%s\": the field \"%s\" has the wildcard %s; a field option names "
+                        "one field by its path, and wildcards are not supported", option, field_path, wildcard);
+                }
+            }
+        }
+    }
+
     #! Pre-processes a single expression argument for repeated evaluation
     /** @param arg the argument to prepare (field reference, sub-expression, or literal)
         @return the prepared argument with pre-computed paths where applicable
@@ -6384,8 +6548,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         if (arg instanceof hash<DataProviderFieldReference>) {
             return <DataProviderFieldReference>{
                 "field": arg.field,
-                "field_path": (map regex_subst($1, "\\\\.", ".", RE_Global),
-                    arg.field.splitRegex("(?<!\\\\)\\.")),
+                "field_path": AbstractDataProvider::getFieldPath(arg.field),
             };
         }
         if (arg instanceof hash<DataProviderExpression>) {
@@ -6656,8 +6819,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         if (!fields) {
             return;
         }
-        list<string> path = ref.field_path ?? (map regex_subst($1, "\\\\.", ".", RE_Global),
-            ref.field.splitRegex("(?<!\\\\)\\."));
+        list<string> path = ref.field_path ?? AbstractDataProvider::getFieldPath(ref.field);
         *AbstractDataField field = fields{path[0]};
         if (!field) {
             return;
@@ -7163,7 +7325,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         hash<auto> rv;
         foreach hash<auto> i in (h.pairIterator()) {
             if (!rec{i.key}) {
-                list<string> f = map regex_subst($1, "\\\\.", ".", RE_Global), i.key.splitRegex("(?<!\\\\)\\.");
+                list<string> f = AbstractDataProvider::getFieldPath(i.key);
                 if (rec && !rec{f[0]} && !searchAcceptsForeignField(f[0])) {
                     error("INVALID-FIELD", "field %y is not a defined field; valid fields: %y", f[0], keys rec);
                 }
@@ -8928,23 +9090,25 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
 
     #! Returns the value of a field in a record, supporting dot-notation for nested hash access
     /** @param record the record hash to read from
-        @param field_path the field name or dot-notation path (e.g. \c "address.city")
+        @param field_path the field name or dot-notation path (e.g. \c "address.city"); a dot that is part of a key is
+        escaped (<tt>Unit\\.Price</tt>), and so is a backslash (<tt>\\\\</tt>), as in a field reference
+        (@ref getFieldPath())
 
         @return the field value, or @ref NOTHING if any intermediate is not a hash or the field is missing
 
         @since %DataProvider 3.4
+        @since %DataProvider 3.11 an escaped dot is part of a key, and an escaped backslash is one backslash
     */
     static auto getFieldValue(hash<auto> record, string field_path) {
         # Strip hashdecl type to plain hash<auto> so that accessing unknown members returns
         # NOTHING instead of throwing INVALID-MEMBER
         hash<auto> rec = {} + record;
-        int dot = field_path.find(".");
-        if (dot < 0) {
+        if (AbstractDataProvider::isPlainFieldPath(field_path)) {
             return rec{field_path};
         }
         # traverse dot-notation path
         auto current = rec;
-        list<string> parts = field_path.split(".");
+        list<string> parts = AbstractDataProvider::getFieldPath(field_path);
         foreach string part in (parts) {
             if (current.typeCode() != NT_HASH) {
                 return;
@@ -8952,6 +9116,117 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
             current = current{part};
         }
         return current;
+    }
+
+    #! Returns a record with the value of a field set, creating the hashes on the field path that are missing
+    /** The field path is read as @ref getFieldValue() reads it (@ref getFieldPath()): dots separate its keys, and a
+        dot or a backslash that is part of a key is escaped (<tt>Unit\\.Price</tt>).  The record passed is not
+        changed; the record returned has the value at the path, and each hash on the path is copied as a plain hash
+        (<tt>hash<auto></tt>).
+
+        @param record the record
+        @param field_path the field name or dot-notation path (e.g. \c "address.city")
+        @param value the value to set; an existing value at the path is replaced
+
+        @return the record with the value set
+
+        @throw FIELD-PATH-ERROR a value on the path before its last key is not a hash; the message gives the path to
+        that value
+
+        @par Example:
+        @code{.py}
+# {"order": {"id": 1, "Unit.Price": 2.5}}
+hash<auto> rec = AbstractDataProvider::setFieldValue({"order": {"id": 1}}, "order.Unit\\.Price", 2.5);
+        @endcode
+
+        @see @ref removeFieldValue()
+
+        @since %DataProvider 3.11
+    */
+    static hash<auto> setFieldValue(hash<auto> record, string field_path, auto value) {
+        # Strip hashdecl type to plain hash<auto> so that any key can be set
+        hash<auto> rec = {} + record;
+        if (AbstractDataProvider::isPlainFieldPath(field_path)) {
+            rec{field_path} = value;
+            return rec;
+        }
+        return AbstractDataProvider::setFieldValueIntern(rec, AbstractDataProvider::getFieldPath(field_path), 0,
+            value, field_path);
+    }
+
+    #! Returns a record without the value of a field
+    /** The field path is read as @ref getFieldValue() reads it (@ref getFieldPath()): dots separate its keys, and a
+        dot or a backslash that is part of a key is escaped (<tt>Unit\\.Price</tt>).  The record passed is not
+        changed; the record returned does not have the last key of the path, and each hash on the path is copied as
+        a plain hash (<tt>hash<auto></tt>).  A hash that the removal leaves empty is kept: removing \c address.city
+        from <tt>{"address": {"city": "Prague"}}</tt> gives <tt>{"address": {}}</tt>.
+
+        When the record has no value at the path, because a key on the path is missing or a value on the path before
+        its last key is not a hash (where @ref getFieldValue() gives @ref nothing), the record is returned as it is.
+
+        @param record the record
+        @param field_path the field name or dot-notation path (e.g. \c "address.city")
+
+        @return the record without the value at the path
+
+        @par Example:
+        @code{.py}
+# {"order": {"id": 1}}
+hash<auto> rec = AbstractDataProvider::removeFieldValue({"order": {"id": 1, "Unit.Price": 2.5}},
+    "order.Unit\\.Price");
+        @endcode
+
+        @since %DataProvider 3.11
+    */
+    static hash<auto> removeFieldValue(hash<auto> record, string field_path) {
+        if (AbstractDataProvider::isPlainFieldPath(field_path)) {
+            # Strip hashdecl type to plain hash<auto> so that any key can be removed
+            return record.hasKey(field_path) ? ({} + record) - field_path : record;
+        }
+        return AbstractDataProvider::removeFieldValueIntern(record, AbstractDataProvider::getFieldPath(field_path), 0)
+            ?? record;
+    }
+
+    #! Sets the value at the given key of a field path in a hash, and returns the hash
+    private static hash<auto> setFieldValueIntern(hash<auto> h, list<string> path, int i, auto value,
+            string field_path) {
+        string key = path[i];
+        if (i == path.size() - 1) {
+            h{key} = value;
+            return h;
+        }
+        auto child = h{key};
+        if (!exists child) {
+            child = {};
+        } else if (child.typeCode() != NT_HASH) {
+            # the paths are given as they are written: %y would double their backslashes
+            throw "FIELD-PATH-ERROR", sprintf("cannot set field \"%s\": the value at \"%s\" is %s, not a hash",
+                field_path, (map AbstractDataProvider::escapeFieldPathKey($1), path[0..i]).join("."), child.type());
+        }
+        h{key} = AbstractDataProvider::setFieldValueIntern({} + child, path, i + 1, value, field_path);
+        return h;
+    }
+
+    #! Returns a copy of a hash without the value at the given key of a field path, or @ref nothing if it has none
+    private static *hash<auto> removeFieldValueIntern(hash<auto> h, list<string> path, int i) {
+        string key = path[i];
+        if (!h.hasKey(key)) {
+            return;
+        }
+        if (i == path.size() - 1) {
+            return ({} + h) - key;
+        }
+        auto child = h{key};
+        if (child.typeCode() != NT_HASH) {
+            return;
+        }
+        *hash<auto> new_child = AbstractDataProvider::removeFieldValueIntern(child, path, i + 1);
+        if (!exists new_child) {
+            return;
+        }
+        hash<auto> rv = {} + h;
+        rv{key} = new_child;
+        return rv;
     }
 
     #! Parses a field list from either a comma-separated string or a list of strings

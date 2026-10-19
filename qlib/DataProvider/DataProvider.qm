@@ -956,12 +956,26 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
 
     DPQL supports the following syntax elements:
 
+    @anchor dpql_field_paths
     @par Field References
-    Fields are referenced using the \c \@ prefix:
+    Fields are referenced using the \c \@ prefix.  A field reference is a path: dots separate its parts, the keys
+    it reads one after the other, in quoted and unquoted names alike:
     - \c \@name - simple field name: a letter of any script or \c _, then letters, combining marks, digits and
       \c _, such as <tt>\@menge_bestätigt</tt>, <tt>\@größe</tt> or <tt>\@名前</tt>
-    - <tt>\@\"field with spaces\"</tt> - quoted field names for special characters, or a name starting with a digit
-    - \c \@user.email - dotted paths for nested fields
+    - \c \@user.email - dotted paths for nested fields: the key \c email of the key \c user
+    - <tt>\@\"field with spaces\"</tt> - quoted field names for characters that an unquoted name cannot hold, or a
+      name starting with a digit; <tt>\@\"create.order-id\"</tt> is the key \c order-id of the key \c create
+    - <tt>\@\"Unit\\.Price\"</tt> - a dot that is part of a key is escaped: this is the key \c Unit.Price
+
+    In a quoted name, <tt>\\"</tt> is a quote, <tt>\\\\</tt> a backslash, <tt>\\.</tt> a dot that is part of a key,
+    and <tt>\\n</tt>, <tt>\\r</tt> and <tt>\\t</tt> a line feed, a carriage return and a tab; any other escape is an
+    error (\c DPQL-E003).  The \c field of a @ref DataProvider::DataProviderFieldReference "DataProviderFieldReference"
+    holds the path, in which <tt>\\.</tt> is a dot and <tt>\\\\</tt> a backslash of a key (<tt>Unit\\.Price</tt>);
+    @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()" gives its keys,
+    and @ref DataProvider::AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()"
+    escapes a key as one part of a path, which \c getFieldPath() reads back exactly;
+    @ref DataProvider::DpqlSerializer::fieldReferenceForKey() "DpqlSerializer::fieldReferenceForKey()" writes the
+    field reference to one key, such as the name of a field of a record type.
 
     @par Comparison Operators
     These are standard DPQL operators; individual data providers can expose additional or different operators.
@@ -995,10 +1009,8 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
       with a character there; a negative position counts from the end
     - wildcards (<tt>[*]</tt>, <tt>{*}</tt>), ranges, and several positions or keys are not accepted
       (\c DPQL-E025); each item is tested with \c any or \c all instead: <tt>any exists \@id, \@orders</tt>
-    - the parts of a field reference are read as they are everywhere else: a quoted name with a dot
-      (<tt>exists \@"x.y"</tt>) is the path \c x, \c y, and an escaped dot is part of a key
-      (<tt>exists \@"a\\\\.b"</tt> is the key <tt>a.b</tt>); the semantics of quoted names are tracked in
-      <a href="https://github.com/qoretechnologies/qore/issues/5480">qore#5480</a>
+    - the field reference is a path as everywhere else (@ref dpql_field_paths): <tt>exists \@"x.y"</tt> is the
+      path \c x, \c y, and <tt>exists \@"a\\.b"</tt> is the key <tt>a.b</tt>
 
     Whether a field has a value is tested with <tt>isNotNull(\@field)</tt>, which needs the record to have the
     field.  A database cannot search with \c exists, as every row has every column: it is not pushed down, and is
@@ -1576,10 +1588,68 @@ fetch
       <tt>exists \@type && \@type == "return"</tt>; the field reference can have accessors that read one key or
       one position (<tt>exists \@a.b</tt>, <tt>exists \@a[0].b</tt>); it is offered by completion, written back by
       the serializer, typed as \c bool, and evaluated locally, as databases cannot search with it
+    - <b>behavior change</b>: in a quoted DPQL field name, \c \\. is a dot that is part of a key
+      (<tt>\@"Unit\\.Price"</tt> is the key \c Unit.Price), as in a Qorus \c $record:{...} path; its backslash was
+      dropped, so it separated the parts of the path.  Dots separate the parts of a field path in quoted names as in
+      unquoted ones (@ref dpql_field_paths); quotes are only for characters that an unquoted name cannot hold.  An
+      escape that field names do not have (other than \c \\", \c \\\\, \c \\., \c \\n, \c \\r and \c \\t) is the
+      error \c DPQL-E003; its backslash was dropped.  The serializer writes an escaped dot as \c \\. and reads it
+      back the same, field completion and the GraphQL data provider bridge escape the dots of a field name, and the
+      new @ref DataProvider::DpqlSerializer::fieldReferenceForKey() "DpqlSerializer::fieldReferenceForKey()" and
+      @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()" write the field
+      reference to a key and give the keys of a field path
+    - fixed a backslash followed by any character other than a dot in a field path being read as a dot: the key
+      <tt>p\\q</tt> was read as <tt>p.</tt>.  In a field path, <tt>\\.</tt> is a dot and <tt>\\\\</tt> a
+      backslash of a key, and any other backslash is itself, so a key ending with a backslash can be followed by more
+      keys (<tt>a\\\\.b</tt> is the keys <tt>a\\</tt> and \c b); the new
+      @ref DataProvider::AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()"
+      escapes a key as one part of a path, and a path joined from escaped keys reads them back exactly.  DPQL
+      validation reads the first key of a path with an escaped dot as evaluation does, and
+      @ref DataProvider::AbstractDataProvider::getFieldValue() "AbstractDataProvider::getFieldValue()", which the
+      processors read their field options with, reads an escaped dot as part of a key; the new
+      @ref DataProvider::AbstractDataProvider::isPlainFieldPath() "AbstractDataProvider::isPlainFieldPath()" tells
+      whether a field path is the one key it is written as, and the processors read a column of a column block by a
+      field name directly only then, so a field path with a backslash is no longer read as a column with the
+      backslashes in its name
+    - @ref DataProvider::AbstractDataProviderType::getFieldNamesAsAllowedValues()
+      "AbstractDataProviderType::getFieldNamesAsAllowedValues()" gives the field path of each field as its value,
+      with the keys escaped by
+      @ref DataProvider::AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()", so
+      that a processor reads the field it names: the field \c Unit.Price is the value <tt>Unit\\.Price</tt>, and the
+      field \c id of \c order is \c order.id; the display name is the names of the path as they are written
+      (\c Unit.Price, \c order.id).  The value was the names joined with dots, which a processor read as a path, so
+      a field whose name has a dot could not be picked
+    - added @ref DataProvider::AbstractDataProvider::setFieldValue() "AbstractDataProvider::setFieldValue()", which
+      sets the value at a field path as
+      @ref DataProvider::AbstractDataProvider::getFieldValue() "AbstractDataProvider::getFieldValue()" reads it,
+      creating the hashes on the path that are missing; \c search-replace writes the value back at the path of its
+      field: it added a top-level key named by the path (\c order.name or <tt>Unit\\.Price</tt>) and left the field
+      unchanged
+    - added @ref DataProvider::AbstractDataProvider::removeFieldValue() "AbstractDataProvider::removeFieldValue()",
+      which removes the value at a field path, leaving the hashes on the path in place; a path with no value is left
+      as it is; \c remove-fields reads each of its fields as a field path, so \c address.city removes the key
+      \c city of \c address (it removed nothing), and <tt>Unit\\.Price</tt> removes the key \c Unit.Price; its
+      output type does not have the fields removed, also from a nested hash type
+    - added @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName()
+      "AbstractDataProvider::getFieldPathDisplayName()", which gives a field path as it is written (the display name
+      of its allowed value); \c select-fields outputs a field that is not renamed, and \c group-by a group-by field,
+      under that name (<tt>Unit\\.Price</tt> as \c Unit.Price), and so is the field in the default name of a
+      \c group-by aggregate; two fields, or a field and an aggregate, that give the same output name are refused when
+      the processor is created, as are two aggregates with the same name, which were accumulated into one
+    - added @ref DataProvider::AbstractDataProvider::checkFieldPathOption()
+      "AbstractDataProvider::checkFieldPathOption()": a field option of a processor names one field by its path, and
+      the processors whose options take fields of the input (\c select-fields, \c remove-fields, \c search-replace,
+      \c group-by, \c correlation, \c cross-correlation and the analytics processors) refuse a field with a DPQL
+      wildcard (<tt>[*]</tt> or <tt>{*}</tt>) when they are created; it was read as a key with the wildcard in its
+      name, which matched nothing
     - fixed @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
       dropping the \c input_field_names marker, so the options of the registered processor actions that take field
       names of the input (such as \c group_by of \c group-by and \c fields of \c select-fields) did not have it, and
       host applications did not offer the field names of the input as their values
+    - fixed @ref DataProvider::DataProviderActionCatalog::getTypeForActionOptions() "getTypeForActionOptions()"
+      returning a hash type without fields: the type of the options of an action has a field for each option, with
+      its type (mandatory for a required option), description, default value and allowed values; other keys are
+      still accepted as they are
 
     @subsection dataprovider_v3_10_2 DataProvider v3.10.2
     - the editor token spans of @ref DataProvider::DpqlActionSession "DpqlActionSession" (\c dpql-get-tokens and

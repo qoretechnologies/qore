@@ -1,0 +1,50 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires astparser
+
+%exec-class DiscardSyntaxTest
+
+class DiscardSyntaxTest inherits QUnit::Test {
+    constructor() : QUnit::Test("astparser explicit discard", "1.0", \ARGV) {
+        addTestCase("discard expressions and existing discard identifiers", \validSyntax());
+        addTestCase("malformed discard statements", \invalidSyntax());
+        set_return_value(main());
+    }
+
+    validSyntax() {
+        string source = "%modern
+int sub discard() { return 1; }
+class C { int discard() { return 2; } }
+sub run() {
+    @discard(discard());
+    @discard /* a comment */ (new C().discard());
+    @discard(1 + 2);
+    @discard((1, 2));
+    @discard(map $1 + 1, (1, 2));
+    @discard(NOTHING);
+    try { @discard(convert_encoding(\"x\", \"UTF-8\")); }
+    catch (hash<ExceptionInfo> ex) { rethrow; }
+}
+";
+        Program runtime(PO_MODERN);
+        assertNothing(runtime.parse(source, "discard", WARN_ALL));
+        AstParser parser();
+        parser.parseString(source);
+        assertEq(0, parser.getErrorCount(), sprintf("%y", parser.getDiagnostics()));
+    }
+
+    invalidSyntax() {
+        foreach string source in (("@discard();", "@discard(1)", "@discard(1;", "@discard 1;",
+                "int x = @discard(1);")) {
+            AstParser parser();
+            parser.parseString(source);
+            assertGt(0, parser.getErrorCount(), source);
+        }
+    }
+}

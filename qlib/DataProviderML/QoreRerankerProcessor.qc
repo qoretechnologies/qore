@@ -438,7 +438,8 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
             return processRecordImpl(records);
         }
 
-        if (buffer || query_field.find(".") >= 0 || passage_field.find(".") >= 0) {
+        if (buffer || !DataProvider::AbstractDataProvider::isPlainFieldPath(query_field)
+            || !DataProvider::AbstractDataProvider::isPlainFieldPath(passage_field)) {
             return processShapeRowsFallback(records, shape);
         }
 

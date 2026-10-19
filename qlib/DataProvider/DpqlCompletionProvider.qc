@@ -830,13 +830,9 @@ public class DpqlCompletionProvider {
                 AbstractDataField field = fields{field_name};
                 *hash<DataFieldInfo> info = field.getInfo();
 
-                # Determine if field name needs quoting
-                string insert_text;
-                if (!DpqlTokenizer::isBareFieldName(field_name)) {
-                    insert_text = '@"' + replace(field_name, '"', '\\"') + '"';
-                } else {
-                    insert_text = "@" + field_name;
-                }
+                # a field of the record is one key: a name with a dot is quoted, with the dot escaped, as a dot in a
+                # field reference separates the parts of a path
+                string insert_text = DpqlSerializer::fieldReferenceForKey(field_name);
 
                 items += <DpqlCompletionItem>{
                     "label": field_name,
@@ -1583,6 +1579,8 @@ public class DpqlCompletionProvider {
         binary bytes = binary(text);
 
         string field_name;
+        # the parts of a quoted path after its first, as key accessors
+        list<hash<auto>> path_keys = ();
         if (chr(text.getByte(pos)) == '"') {
             # Quoted field name
             ++pos;  # Skip opening quote
@@ -1594,8 +1592,11 @@ public class DpqlCompletionProvider {
                     ++pos;
                 }
             }
-            # Unescape the field name to match actual field names in schema
-            field_name = unescapeString(byteSubstr(text, start, pos - start));
+            # dots separate the parts of the path as in a bare name, and an escaped dot is part of a key
+            list<string> parts = AbstractDataProvider::getFieldPath(
+                unescapeFieldPath(byteSubstr(text, start, pos - start)));
+            field_name = shift parts;
+            path_keys = map ("type": DP_FUNC_KEY, "key_list": ($1,)), parts;
             ++pos;  # Skip closing quote
         } else {
             # Unquoted field name: stop at first '.' so nested segments are handled
@@ -1611,7 +1612,7 @@ public class DpqlCompletionProvider {
         }
 
         # Parse accessor chain from pos to end of text
-        list<hash<auto>> accessors = ();
+        list<hash<auto>> accessors = path_keys;
 
         while (pos < text.size()) {
             string c = chr(text.getByte(pos));
@@ -1842,6 +1843,16 @@ public class DpqlCompletionProvider {
         }
 
         return items;
+    }
+
+    #! Unescapes the text between the quotes of a quoted field name to a field path, as the parser reads it
+    /** An escaped dot stays escaped, as it is part of a key; the other escapes are decoded as in
+        unescapeString(), which also takes an unknown escape as its character, as completion reads incomplete text
+
+        @since DataProvider 3.11
+    */
+    private string unescapeFieldPath(string s) {
+        return unescapeString(replace(s, "\\.", "\\\\."));
     }
 
     #! Unescapes DPQL escape sequences in a quoted string

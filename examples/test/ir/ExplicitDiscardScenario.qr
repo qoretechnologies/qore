@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+thread_local list<string> events;
+
+class TrackedDiscardResult {
+    constructor() {
+        events += "created";
+    }
+
+    destructor() {
+        events += "destroyed";
+    }
+}
+
+int sub record(string label) {
+    events += label;
+    return events.size();
+}
+
+TrackedDiscardResult sub makeResult() {
+    events += "called";
+    return new TrackedDiscardResult();
+}
+
+int sub fail(int value) {
+    throw "DISCARD-TEST", string(value);
+}
+
+bool sub splitsCharacter(binary data, int offset) {
+    try {
+        @discard(convert_encoding(binary_to_string(data.substr(0, offset), "UTF-16LE"), "UTF-8"));
+        return False;
+    } catch (hash<ExceptionInfo> ex) {
+        return True;
+    }
+}
+
+sub run() {
+    events = ();
+    @discard(record("first"));
+    @discard((record("left"), record("right")));
+    @discard(True ? record("branch") : record("wrong"));
+    @discard(False && record("wrong"));
+    @discard(map record(string($1)), (1, 2));
+    @discard(makeResult());
+    events += "after";
+    try {
+        @discard(fail(record("argument")));
+        events += "wrong";
+    } catch (hash<ExceptionInfo> ex) {
+        events += ex.err;
+    }
+    @discard(42);
+    @discard(NOTHING);
+    printf("%s | %y %y %y\n", events.join(","), splitsCharacter(<61006200>, 2),
+        splitsCharacter(<61006200>, 1), splitsCharacter(<3dd800de>, 2));
+}
+
+# The execution-mode harness promotes functions synchronously; the third call exercises native tiered code.
+for (int i = 0; i < 3; ++i) {
+    run();
+}

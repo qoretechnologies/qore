@@ -115,6 +115,7 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (copts.field.val()) {
             field = copts.field;
+            AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "field", field);
             search = copts.search;
             replace_str = copts.replace;
             is_regex = copts.is_regex ?? False;
@@ -152,7 +153,8 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         if (!exists field_val || field_val.typeCode() != NT_STRING) {
             return record;
         }
-        return record + {field: replaceStringValue(field_val)};
+        # the field is written where it was read
+        return AbstractDataProvider::setFieldValue(record, field, replaceStringValue(field_val));
     }
 
     #! Applies the configured replacement to one string value
@@ -233,7 +235,7 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
             throw "PROCESSOR-ERROR", "QoreSearchReplaceProcessor: not configured; provide 'field', "
                 "'search', and 'replace' options";
         }
-        if (field.find(".") >= 0) {
+        if (!AbstractDataProvider::isPlainFieldPath(field)) {
             list<auto> rows = shape == DataProviderShape::RowRecords
                 ? (records,) : AbstractDataProcessor::convertShape(records, shape, DataProviderShape::RowRecords);
             *list<auto> processed = processRecordsImpl(rows);

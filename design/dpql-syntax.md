@@ -15,54 +15,89 @@ Field references are prefixed with `@`:
 @age > 18
 ```
 
+### Field Paths
+
+A field reference is a path: its parts are separated by dots, and each part is a key of the
+value before it, starting with the record. Dots separate the parts in quoted and unquoted names
+alike; quotes are only for characters that an unquoted name cannot hold. A dot that is part of a
+key is escaped: `\.`.
+
+```dpql
+@user.email == "john@example.com"     # the key email of the key user
+@"user.email" == "john@example.com"   # the same path
+@"create.order-id" == "A-1"           # the key order-id of the key create
+@"Unit\.Price" > 10                   # the key Unit.Price
+```
+
 ### Unquoted Field Names
 
-Unquoted field names can contain:
-- Letters (a-z, A-Z)
-- Digits (0-9)
-- Underscores (_)
-- Dots (.) for nested field access
+Unquoted field names can contain, in each part:
+- Letters of any script, and `_`, to start the part
+- Letters, combining marks, digits and `_` after the first character
 
 ```dpql
 @user_name == "john"
+@menge_bestätigt == 1
 @user.email == "john@example.com"
 ```
 
-Note: Dots in unquoted field names represent nested field access syntax, not literal
-dots in the field name.
-
 ### Quoted Field Names
 
-Use double quotes for field names that:
+Use double quotes for field names with parts that:
 - Contain spaces
-- Contain special characters (brackets, operators, etc.)
+- Contain other characters, such as brackets, operators or `-`
 - Start with a digit
-- Contain literal dots (not for nested access)
+- Contain a dot that is part of a key, which is escaped (`\.`)
 
 ```dpql
 @"field with spaces" == "value"
-@"items[0]" == 1
+@"items[0]" == 1             # the key items[0]: brackets in quotes are part of the name
 @"123field" == "value"
-@"user.email.address" == "literal.field.name"
+@"order.order-id" == "A-1"   # the key order-id of the key order
+@"Unit\.Price" > 10          # the key Unit.Price
 @"prénom" == "José"          # Unicode field names and string values
 ```
 
+A quoted name after an accessor (`@r[0].@"x.y"`) is one key, as `{"x.y"}` is: its dots are part of
+the key, escaped or not.
+
 ### Escape Sequences
 
-Within quoted field names, use backslash to escape special characters:
+Within quoted field names, a backslash starts an escape:
 
-| Sequence | Meaning |
-|----------|---------|
-| `\"` | Double quote |
-| `\\` | Backslash |
-| `\n` | Newline |
-| `\r` | Carriage return |
-| `\t` | Tab |
+|!Sequence|!Meaning
+|`\"`|Double quote
+|`\\`|Backslash
+|`\.`|A dot that is part of a key, not a separator of the path
+|`\n`|Newline
+|`\r`|Carriage return
+|`\t`|Tab
+
+Any other escape is an error (`DPQL-E003`, "Unknown escape '\x' in a quoted field name"). It is
+not read as its character or as a backslash and its character, as either would give a name that
+the author may not have meant: `\x` is `x` in a string literal, and a backslash in a field path
+already has a meaning before a dot. `\\.` is read as `\.`, so `@"a\\.b"` is also the key `a.b`.
 
 ```dpql
 @"field\"name" == "value"    # Field name contains a quote
 @"path\\file" == "value"     # Field name contains a backslash
+@"a\.b" == 1                 # the key a.b
 ```
+
+In the expression form, the `field` of a field reference holds the path, in which `\.` is a dot
+and `\\` a backslash of a key, and any other backslash is itself: `@"Unit\.Price"` is
+`{"field": "Unit\\.Price"}` (the text `Unit\.Price`). `AbstractDataProvider::getFieldPath()` gives
+the keys of a path, and `AbstractDataProvider::escapeFieldPathKey()` escapes a key (`\` as `\\`,
+`.` as `\.`) so that joining escaped keys with `.` gives a path that `getFieldPath()` reads back
+exactly, also for a key ending with a backslash (the keys `a\` and `b` are the path `a\\.b`).
+Processor field options and other plain field paths use this form.
+
+The serializer writes a path as it is read back: bare when every part is a bare name, otherwise
+quoted with each `\` that precedes a dot written as it is and every other backslash `\\`, and each
+quote `\"`. `DpqlSerializer::fieldReferenceForKey()` writes the field reference to one key, such
+as the name of a field of a record type: `@"Unit\.Price"`, and `@"p\\\\q"` for the key `p\q`
+(the path `p\\q`); `@"p\\q"` also reads the key `p\q`, as a backslash before a character other
+than a dot or a backslash is itself.
 
 ## Field Reference Operators
 
@@ -140,17 +175,16 @@ Field reference operators can be chained:
 is the `map` operator written as an accessor: the accessors after it are the body that `map`
 evaluates for each item, and it evaluates exactly as that `map` expression does.
 
-| Wildcard | Same as | Result |
-|----------|---------|--------|
-| `@orders[*].id` | `map @id, @orders` | The `id` of each order |
-| `@orders[*].customer.name` | `map @customer.name, @orders` | The `.name` steps continue the field |
-| `@orders[*]{"order-id"}` | `map @"order-id", @orders` | A single key is a field too |
-| `@orders[*].tags[0]` | `map @tags[0], @orders` | Ordinary accessors follow |
-| `@orders[*].items[*].sku` | `map (map @sku, @items), @orders` | Nested: a list of lists, never flattened |
-| `@prices{*}` | `map @value, @prices` | The values, in key order |
-| `@prices{*}.amount` | `map @value.amount, @prices` | The accessors apply to `@value` |
-| `@orders[*]` | `@orders` | A trailing `[*]` is the items: the list itself |
-| `@matrix[*][0]` | `map @value[0], @matrix` | Accessors that do not start with a field apply to the item |
+|!Wildcard|!Same as|!Result
+|`@orders[*].id`|`map @id, @orders`|The `id` of each order
+|`@orders[*].customer.name`|`map @customer.name, @orders`|The `.name` steps continue the field
+|`@orders[*]{"order-id"}`|`map @"order-id", @orders`|A single key is a field too
+|`@orders[*].tags[0]`|`map @tags[0], @orders`|Ordinary accessors follow
+|`@orders[*].items[*].sku`|`map (map @sku, @items), @orders`|Nested: a list of lists, never flattened
+|`@prices{*}`|`map @value, @prices`|The values, in key order
+|`@prices{*}.amount`|`map @value.amount, @prices`|The accessors apply to `@value`
+|`@orders[*]`|`@orders`|A trailing `[*]` is the items: the list itself
+|`@matrix[*][0]`|`map @value[0], @matrix`|Accessors that do not start with a field apply to the item
 
 Missing fields, wrong source types (a non-list under `[*]`, a non-hash under `{*}`), empty
 sources and no value give the same results and raise the same errors as the `map` expression.
@@ -170,24 +204,22 @@ and completion offers `[*]` after a list and `{*}` after a hash.
 
 ## Comparison Operators
 
-| Operator | Meaning |
-|----------|---------|
-| `==` | Equal |
-| `!=` | Not equal |
-| `>` | Greater than |
-| `>=` | Greater than or equal |
-| `<` | Less than |
-| `<=` | Less than or equal |
+|!Operator|!Meaning
+|`==`|Equal
+|`!=`|Not equal
+|`>`|Greater than
+|`>=`|Greater than or equal
+|`<`|Less than
+|`<=`|Less than or equal
 
 ## Arithmetic Operators
 
-| Operator | Meaning |
-|----------|---------|
-| `+` | Addition (numbers, strings, dates, lists) |
-| `-` | Subtraction |
-| `*` | Multiplication |
-| `/` | Division |
-| `%` | Modulus (remainder) |
+|!Operator|!Meaning
+|`+`|Addition (numbers, strings, dates, lists)
+|`-`|Subtraction
+|`*`|Multiplication
+|`/`|Division
+|`%`|Modulus (remainder)
 
 Arithmetic follows standard precedence: `*`, `/`, `%` bind tighter than `+`, `-`.
 Use parentheses to override:
@@ -200,11 +232,10 @@ Use parentheses to override:
 
 ## Logical Operators
 
-| Operator | Meaning |
-|----------|---------|
-| `&&` | Logical AND |
-| `\|\|` | Logical OR |
-| `!` | Logical NOT |
+|!Operator|!Meaning
+|`&&`|Logical AND
+|`\|\|`|Logical OR
+|`!`|Logical NOT
 
 ## Field Existence
 
@@ -223,12 +254,10 @@ any exists @id, @orders              # each item is tested with any or all
 |`exists @a.b`, `exists @a{b}`|the record has `a`, which is a hash with the key `b`
 |`exists @a[0]`, `exists @a[-1]`|`a` is a list or a string with an element at that position (negative from the end)
 |`exists @a[0].b`|each step in turn, as above
-|`exists @"a\\.b"`|the record has the key `a.b` (an escaped dot is part of the key)
+|`exists @"a\.b"`|the record has the key `a.b` (an escaped dot is part of the key)
 
-The parts of the field reference are read as everywhere else in DPQL: a quoted name with a dot,
-such as `exists @"x.y"`, is the path `x`, `y`, as `@"x.y"` is when it is evaluated; the semantics
-of quoted names, which this document describes differently above, are tracked in
-[qore#5480](https://github.com/qoretechnologies/qore/issues/5480).
+The field reference is a path as everywhere else in DPQL ([Field Paths](#field-paths)):
+`exists @"x.y"` is the path `x`, `y`, as `exists @x.y` is.
 
 - **Precedence**: `exists` binds tighter than every other operator: `exists @type && @type == "x"`
   is `(exists @type) && (@type == "x")`, `!exists @a` is `!(exists @a)`, and
@@ -432,19 +461,18 @@ hash_map @key, @value, @weights, @value > 0
 
 Supported prefix operator forms:
 
-| Operator | Syntax | Result |
-|----------|--------|--------|
-| `map` | `map body, source[, filter]` | List of evaluated body results |
-| `hash_map` | `hash_map key, value, source[, filter]` | Hash built from evaluated keys and values |
-| `select` | `select source, predicate` | List of matching source items |
-| `first` | `first source` or `first predicate, source` | First item, first matching item, or `nothing` |
-| `any` | `any source` or `any predicate, source` | `true` if any item or predicate result is truthy |
-| `all` | `all predicate, source` | `true` if all predicate results are truthy |
-| `count` | `count source` or `count predicate, source` | Number of source items or matching items |
-| `take` | `take count, source` | First `count` items |
-| `drop` | `drop count, source` | Items after the first `count` items |
-| `takewhile` | `takewhile predicate, source` | Items until the predicate first becomes false |
-| `takeuntil` | `takeuntil predicate, source` | Items until the predicate first becomes true |
+|!Operator|!Syntax|!Result
+|`map`|`map body, source[, filter]`|List of evaluated body results
+|`hash_map`|`hash_map key, value, source[, filter]`|Hash built from evaluated keys and values
+|`select`|`select source, predicate`|List of matching source items
+|`first`|`first source` or `first predicate, source`|First item, first matching item, or `nothing`
+|`any`|`any source` or `any predicate, source`|`true` if any item or predicate result is truthy
+|`all`|`all predicate, source`|`true` if all predicate results are truthy
+|`count`|`count source` or `count predicate, source`|Number of source items or matching items
+|`take`|`take count, source`|First `count` items
+|`drop`|`drop count, source`|Items after the first `count` items
+|`takewhile`|`takewhile predicate, source`|Items until the predicate first becomes false
+|`takeuntil`|`takeuntil predicate, source`|Items until the predicate first becomes true
 
 ```dpql
 select @orders, @amount > 100
@@ -570,27 +598,25 @@ environment variables, and dynamic context without hardcoding values.
 
 ### Syntax
 
-| Form | Example | Description |
-|------|---------|-------------|
-| Simple | `$static:account.id` | Context `static`, value `account.id` |
-| Bracketed | `$qore-expr:{1 + 2}` | Bracketed value (allows special characters) |
-| Fallback | `$static:A??{$static:B}` | Fallback syntax (raw passthrough) |
+|!Form|!Example|!Description
+|Simple|`$static:account.id`|Context `static`, value `account.id`
+|Bracketed|`$qore-expr:{1 + 2}`|Bracketed value (allows special characters)
+|Fallback|`$static:A??{$static:B}`|Fallback syntax (raw passthrough)
 
 ### Template Contexts
 
 Template contexts identify the source of the value. Well-known contexts include:
 
-| Context | Description |
-|---------|-------------|
-| `static` | Static context values |
-| `dynamic` | Dynamic runtime values |
-| `config` | Configuration values |
-| `var` | Variable values |
-| `transient` | Transient context values |
-| `env` | Environment variables |
-| `timestamp` | Timestamp values |
-| `qore-expr` | Qore expression evaluation |
-| `rest` | REST context values |
+|!Context|!Description
+|`static`|Static context values
+|`dynamic`|Dynamic runtime values
+|`config`|Configuration values
+|`var`|Variable values
+|`transient`|Transient context values
+|`env`|Environment variables
+|`timestamp`|Timestamp values
+|`qore-expr`|Qore expression evaluation
+|`rest`|REST context values
 
 ### Usage in Expressions
 
@@ -633,8 +659,11 @@ are passed as raw strings to the callback for handling.
 # With field reference operators
 @users[0].name == "Admin" && @config{timeout} > 30
 
-# Field name with special characters
+# Field names with special characters: the key body of the key response, and the key items[count]
 @"response.body" != null && @"items[count]" > 0
+
+# A key with a dot
+@"Unit\.Price" > 10
 
 # Field name with escaped quote
 @"field\"with\"quotes" == "value"

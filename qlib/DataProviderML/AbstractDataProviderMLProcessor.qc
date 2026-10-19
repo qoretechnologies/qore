@@ -397,7 +397,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
     */
     static bool hasNestedFieldPath(list<string> fields) {
         foreach string field in (fields) {
-            if (field.find(".") >= 0) {
+            if (!DataProvider::AbstractDataProvider::isPlainFieldPath(field)) {
                 return True;
             }
         }

@@ -2173,7 +2173,7 @@ public class ColumnarExpressionFilter {
 
     #! Returns True if the argument is a top-level field reference
     private static bool isTopLevelFieldReference(auto arg) {
-        return arg instanceof hash<DataProviderFieldReference> && arg.field.find(".") < 0;
+        return arg instanceof hash<DataProviderFieldReference> && AbstractDataProvider::isPlainFieldPath(arg.field);
     }
 
     #! Returns the field name for a top-level field expression, including a value wrapper

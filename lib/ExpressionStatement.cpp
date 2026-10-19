@@ -31,8 +31,13 @@
 #include <qore/Qore.h>
 #include "qore/intern/ExpressionStatement.h"
 
-ExpressionStatement::ExpressionStatement(const QoreProgramLocation* loc, QoreValue v)
+ExpressionStatement::ExpressionStatement(const QoreProgramLocation* loc, QoreValue v, bool explicit_discard)
         : AbstractStatement(loc), exp(v) {
+    if (explicit_discard) {
+        // Keep ordinary ignored-result evaluation and cleanup. Nested statements (including closure bodies)
+        // install their own warning masks in AbstractStatement::parseInit(), so their diagnostics are unchanged.
+        pwo.warn_mask &= ~QP_WARN_RETURN_VALUE_IGNORED;
+    }
     // if it is a global variable declaration, then do not register
     if (exp.getType() == NT_VARREF) {
         VarRefNode* vr = exp.get<VarRefNode>();

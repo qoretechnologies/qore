@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DiscardTest
+
+class DiscardTest inherits QUnit::Test {
+    constructor() : QUnit::Test("explicit discard", "1.0", \ARGV) {
+        addTestCase("unused-result warnings are scoped to the statement", \warningScope());
+        addTestCase("nested statements retain their diagnostics", \nestedWarnings());
+        addTestCase("discard runs with debugging enabled and disabled", \debugOptions());
+        addTestCase("discard preserves exceptions", \exceptions());
+        addTestCase("discard syntax is checked even without debugging", \invalidSyntax());
+        set_return_value(main());
+    }
+
+    private list<string> warnings(string source, int mask = WARN_ALL) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        *hash<ExceptionInfo> warning = p.parse(source, "discard", mask);
+        list<string> result = ();
+        while (warning) {
+            push result, warning.err;
+            warning = warning.next;
+        }
+        return result;
+    }
+
+    warningScope() {
+        assertEq(("RETURN-VALUE-IGNORED", "RETURN-VALUE-IGNORED"), warnings("
+            convert_encoding(\"x\", \"UTF-8\");
+            @discard(convert_encoding(\"x\", \"UTF-8\"));
+            convert_encoding(\"x\", \"UTF-8\");
+        ", WARN_RETURN_VALUE_IGNORED));
+        assertEq((), warnings("
+            @discard(convert_encoding(\"x\", \"UTF-8\"));
+            @discard(\"x\".length());
+            @discard(42);
+            @discard(NOTHING);
+            @discard(1 + 2);
+        "));
+    }
+
+    nestedWarnings() {
+        assertEq(("DEPRECATED",), warnings("
+            class C { deprecated int old() { return 1; } }
+            @discard(new C().old());
+        ", WARN_DEPRECATED));
+        assertEq(("RETURN-VALUE-IGNORED",), warnings("
+            @discard(sub () { convert_encoding(\"x\", \"UTF-8\"); });
+        ", WARN_RETURN_VALUE_IGNORED));
+        assertEq(("UNREFERENCED-VARIABLE",), warnings("
+            @discard(sub () { int unused; });
+        ", WARN_UNREFERENCED_VARIABLE));
+        # A discarded call still checks its arguments.
+        Program p(PO_MODERN);
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(),
+            ("@discard(convert_encoding((), \"UTF-8\"));", "discard-type"));
+    }
+
+    debugOptions() {
+        foreach int debug in ((0, PO_ENABLE_DEBUG)) {
+            Program p(PO_MODERN | debug);
+            assertNothing(p.parse("
+                int sub run() {
+                    int calls = 0;
+                    @discard /* a comment before the operand */ (++calls);
+                    @discard(++calls);
+                    return calls;
+                }
+            ", "discard-debug", WARN_ALL));
+            assertEq(2, p.callFunction("run"));
+        }
+    }
+
+    exceptions() {
+        assertThrows("ENCODING-CONVERSION-ERROR", sub () {
+            @discard(convert_encoding(binary_to_string(<61>, "UTF-16LE"), "UTF-8"));
+        });
+        @discard(convert_encoding(binary_to_string(<6100>, "UTF-16LE"), "UTF-8"));
+    }
+
+    invalidSyntax() {
+        foreach string source in (("@discard();", "@discard(1)", "@discard(1;", "@discard 1;",
+                "int x = @discard(1);", "@discard(no_such_discard_function());")) {
+            Program p(PO_MODERN);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (source, "discard-invalid"), source);
+        }
+    }
+}

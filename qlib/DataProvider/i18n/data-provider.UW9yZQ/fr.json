@@ -120,8 +120,8 @@
           "message": "Noms des champs à supprimer"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.desc": {
-          "source": "A list of field names to remove from each record",
-          "message": "Une liste de noms de champs à supprimer de chaque enregistrement"
+          "source": "A list of field names to remove from each record; supports dot-notation for nested fields (e.g. `address.city`)",
+          "message": "Une liste de noms de champs à supprimer de chaque enregistrement ; prend en charge la notation avec point pour les champs imbriqués (ex. `address.city`)"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
           "source": "Search and Replace",

@@ -487,7 +487,7 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
             return processRecordImpl(records);
         }
 
-        if (buffer || text_field.find(".") >= 0) {
+        if (buffer || !DataProvider::AbstractDataProvider::isPlainFieldPath(text_field)) {
             return processShapeRowsFallback(records, shape);
         }
 

@@ -126,6 +126,8 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         field_x = copts.field_x;
         field_y = copts.field_y;
+        AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "field_x", field_x);
+        AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "field_y", field_y);
         if (field_x == field_y) {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("field_x and field_y must be different; both are %y", field_x);

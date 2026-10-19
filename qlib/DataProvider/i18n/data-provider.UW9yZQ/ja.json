@@ -120,8 +120,8 @@
           "message": "削除するフィールド名"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.desc": {
-          "source": "A list of field names to remove from each record",
-          "message": "各レコードから削除するフィールド名のリスト"
+          "source": "A list of field names to remove from each record; supports dot-notation for nested fields (e.g. `address.city`)",
+          "message": "各レコードから削除するフィールド名のリスト。ネストされたフィールドのドット記法（例: `address.city`）をサポートします"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
           "source": "Search and Replace",

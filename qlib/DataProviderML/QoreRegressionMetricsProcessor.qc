@@ -237,7 +237,8 @@ public class QoreRegressionMetricsProcessor inherits AbstractDataProviderMLProce
 
     #! Returns @ref True if either configured field requires row materialization
     private bool hasNestedFields() {
-        return predicted_field.find(".") >= 0 || true_field.find(".") >= 0;
+        return !DataProvider::AbstractDataProvider::isPlainFieldPath(predicted_field)
+            || !DataProvider::AbstractDataProvider::isPlainFieldPath(true_field);
     }
 
     #! Reads configured numeric fields directly from shaped columns

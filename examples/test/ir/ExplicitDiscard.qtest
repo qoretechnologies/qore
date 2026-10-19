@@ -1,0 +1,59 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ExplicitDiscardTest
+
+class ExplicitDiscardTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? libqore_dir + "/qcc";
+        string fixture = get_script_dir() + "/ExplicitDiscardScenario.qr";
+    }
+
+    const Expected = strmul("first,left,right,branch,1,2,called,created,destroyed,after,argument,DISCARD-TEST"
+        " | False True True\n", 3);
+
+    constructor() : QUnit::Test("explicit discard execution modes", "1.0", \ARGV) {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            addTestCase(mode, sub () { checkMode(mode); });
+        }
+        addTestCase("AOT with source stripped", \checkAot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+
+    checkMode(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf(
+            "LD_LIBRARY_PATH=%s %s -W -r --exec-mode=%s %s",
+            quote(libqore_dir), quote(qore_bin), mode, quote(fixture)));
+        ExecModeHarness::check_native(r);
+        assertEq(0, r.rc, r.out);
+        assertEq(Expected, r.out);
+    }
+
+    checkAot() {
+        TmpDir dir("qore-explicit-discard-");
+        foreach int level in ((0, 3)) {
+            string exe = dir.path + "/discard-" + level;
+            int rc;
+            string output = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d --strip-source -o %s %s 2>&1",
+                quote(libqore_dir), quote(qcc_bin), level, quote(exe), quote(fixture)), \rc);
+            assertEq(0, rc, output);
+            output = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", quote(libqore_dir), quote(exe)), \rc);
+            assertEq(0, rc, output);
+            assertEq(Expected, output);
+        }
+    }
+}

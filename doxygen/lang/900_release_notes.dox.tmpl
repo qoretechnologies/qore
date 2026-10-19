@@ -4,6 +4,10 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    The new @ref discard_statement "@@discard(expression);" statement explicitly discards an expression's
+    result without an unused-result warning or a dummy local variable. It preserves evaluation, exceptions,
+    and temporary-value cleanup in all execution modes and remains active when debugging is disabled.
+
     <b>Security</b>: credential headers, including headers a client declares sensitive with the new
     \c sensitive_headers option or \c addSensitiveHeaders() and headers whose names contain \c token, \c secret,
     \c api-key, \c password or \c auth, are no longer exposed in the exception information, request information or

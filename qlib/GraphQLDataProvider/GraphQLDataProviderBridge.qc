@@ -933,15 +933,12 @@ public class DataProviderGraphQLSchema {
         }
     }
 
-    #! renders a DPQL field reference, quoting names that are not simple identifiers
+    #! renders a DPQL field reference to a record field, quoting names that are not simple identifiers
+    /** A field name is one key: a dot in it is escaped, as a dot in a field reference separates the parts of a
+        path (@ref DataProvider::DpqlSerializer::fieldReferenceForKey() "DpqlSerializer::fieldReferenceForKey()")
+    */
     static string quoteFieldRef(string name) {
-        if (name =~ /^[A-Za-z_][A-Za-z0-9_.]*$/) {
-            return "@" + name;
-        }
-        string e = name;
-        e =~ s/\\/\\\\/g;
-        e =~ s/"/\\"/g;
-        return "@\"" + e + "\"";
+        return DpqlSerializer::fieldReferenceForKey(name);
     }
 
     #! returns the per-scalar filter input-type kind for a type, or @ref NOTHING if not filterable
