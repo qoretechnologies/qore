@@ -61,6 +61,8 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("input_field_names - action options from option info", \inputFieldNamesActionOptions());
         addTestCase("input_field_names - registered processor actions", \inputFieldNamesProcessorActions());
         addTestCase("getFieldValue - paths and escaped dots", \getFieldValueTest());
+        addTestCase("escapeFieldPathKey - a key as one part of a field path", \escapeFieldPathKeyTest());
+        addTestCase("escapeFieldPathKey - any keys round-trip", \escapeFieldPathKeyRoundTripTest());
         addTestCase("getTypeForActionOptions - a field for each option", \typeForActionOptions());
 
         # Processor backward compatibility tests
@@ -387,6 +389,80 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
 
         # an action without options has no option type
         assertNothing(DataProviderActionCatalog::getTypeForActionOptions(action - "options"));
+    }
+
+    #! A key escaped for a field path is read back as the one key, and a path joined from escaped keys reads each
+    escapeFieldPathKeyTest() {
+        assertEq("name", AbstractDataProvider::escapeFieldPathKey("name"));
+        assertEq("Unit\\.Price", AbstractDataProvider::escapeFieldPathKey("Unit.Price"));
+        assertEq("a\\.b\\.c", AbstractDataProvider::escapeFieldPathKey("a.b.c"));
+        assertEq("p\\\\q", AbstractDataProvider::escapeFieldPathKey("p\\q"));
+        assertEq("a\\\\", AbstractDataProvider::escapeFieldPathKey("a\\"));
+
+        # a key ending with a backslash is not read as an escaped dot: (a\, b) is a\\.b
+        assertEq(("a\\", "b"), AbstractDataProvider::getFieldPath("a\\\\.b"));
+        assertEq(("a.b",), AbstractDataProvider::getFieldPath("a\\.b"));
+        # any other backslash is itself, as before
+        assertEq(("p\\q",), AbstractDataProvider::getFieldPath("p\\q"));
+        # empty parts are kept; the empty path has none
+        assertEq(("a", ""), AbstractDataProvider::getFieldPath("a."));
+        assertEq(("", "a"), AbstractDataProvider::getFieldPath(".a"));
+        assertEq(("a", "", "b"), AbstractDataProvider::getFieldPath("a..b"));
+        assertEq((), AbstractDataProvider::getFieldPath(""));
+
+        foreach string key in ("name", "Unit.Price", "a.b.c", "order-id", "a b", "p\\q", "a\\.b", ".x", "x.", "a\\",
+                "\\", "\\\\", "\\.", "..", "") {
+            string path = AbstractDataProvider::escapeFieldPathKey(key);
+            # an empty key alone is the empty path, which has no parts
+            if (key !== "") {
+                assertEq((key,), AbstractDataProvider::getFieldPath(path), key);
+                assertEq(1, AbstractDataProvider::getFieldValue({key: 1}, path), key);
+            }
+            # as one part of a longer path
+            assertEq(("order", key), AbstractDataProvider::getFieldPath("order." + path), key);
+            assertEq(1, AbstractDataProvider::getFieldValue({"order": {key: 1}}, "order." + path), key);
+        }
+    }
+
+    #! For any keys, the path joined from their escaped forms gives the keys back, and getFieldValue() reads the
+    #! value at them
+    escapeFieldPathKeyRoundTripTest() {
+        # every key of up to 4 characters over an alphabet with the characters that the grammar gives a meaning to
+        list<string> alphabet = ("a", ".", "\\", "x");
+        list<string> all_keys = ("",);
+        list<string> last = ("",);
+        for (int len = 1; len <= 4; ++len) {
+            list<string> next = ();
+            foreach string prefix in (last) {
+                foreach string ch in (alphabet) {
+                    push next, prefix + ch;
+                }
+            }
+            all_keys += next;
+            last = next;
+        }
+        assertEq(341, all_keys.size());
+        int checked = 0;
+        # paths of one to three keys, the keys taken in turn so that each key is in every position
+        for (int i = 0; i < all_keys.size(); ++i) {
+            foreach int n in (1, 2, 3) {
+                list<string> path_keys = map all_keys[(i + $1 * 37) % all_keys.size()], xrange(n);
+                # the empty path is the one list of keys that has no path of its own
+                if (path_keys == ("",)) {
+                    continue;
+                }
+                string path = (map AbstractDataProvider::escapeFieldPathKey($1), path_keys).join(".");
+                assertEq(path_keys, AbstractDataProvider::getFieldPath(path), sprintf("%y", path_keys));
+                # getFieldValue() reads the value at the keys
+                auto rec = "v";
+                foreach string key in (reverse(path_keys)) {
+                    rec = {key: rec};
+                }
+                assertEq("v", AbstractDataProvider::getFieldValue(rec, path), sprintf("%y", path_keys));
+                ++checked;
+            }
+        }
+        assertGt(1000, checked);
     }
 
     # ===================== Processor Backward Compatibility Tests =====================

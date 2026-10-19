@@ -309,8 +309,11 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
     @section mapperrelnotes Release Notes
 
     @subsection mapperv1_8 Mapper v1.8
-    - fixed a backslash followed by any character other than a dot in a field name with dots being read as a dot: the
-      field <tt>a\\b.c</tt> was the path \c a., \c c; an escaped dot (<tt>\\.</tt>) is still a dot of the key
+    - a field name with dots is split into its parts as
+      @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()" splits a field
+      path: <tt>\\.</tt> is a dot and <tt>\\\\</tt> a backslash of a key, and any other backslash is itself; a
+      backslash followed by any other character was read as a dot (the field <tt>a\\b.c</tt> was the path \c a.,
+      \c c)
     - added @ref DataProvider::DataProviderShape "DataProviderShape" support for \c DataFrameBlock,
       \c BufferColumns, \c HashOfLists, and row-record inputs
     - updated @ref Mapper::Mapper::mapAuto() "Mapper::mapAuto()" to accept
@@ -1483,8 +1486,8 @@ Mapper mapv(DataMap);
 
     #! Splits a dotted field and replaces escaped (\.) dots with plain dots (.)
     static list<string> splitDottedFields(string k) {
-        # an escaped dot (a backslash followed by a dot) is a dot; any other backslash is itself
-        return map regex_subst($1, "\\\\\\.", ".", RE_Global), k.splitRegex("(?<!\\\\)\\.");
+        # the parts of a field path, as DataProvider reads them: \. is a dot and \\ a backslash of a key
+        return DataProvider::AbstractDataProvider::getFieldPath(k);
     }
 
     #! perform per-field pre-processing on the passed map in the constructor

@@ -9337,7 +9337,8 @@ public class DpqlTest inherits QUnit::Test {
                 {"key": "Unit.Price", "dpql": '@"Unit\.Price"'},
                 {"key": "order-id", "dpql": '@"order-id"'},
                 {"key": "a b.c", "dpql": '@"a b\.c"'},
-                {"key": "p\\q", "dpql": '@"p\\q"'},
+                {"key": "p\\q", "dpql": '@"p\\\\q"'},
+                {"key": "a\\", "dpql": '@"a\\\\"'},
                 {"key": "q\"x", "dpql": '@"q\"x"'},
                 {"key": "1st", "dpql": '@"1st"'},
             )) {

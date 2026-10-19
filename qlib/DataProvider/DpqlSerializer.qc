@@ -675,7 +675,7 @@ string dpql = DpqlSerializer::fieldReferenceForKey("Unit.Price") + " == 10";
             return "@" + key;
         }
         # the field path of the key has its dots escaped
-        return '@"' + DpqlSerializer::escapeFieldPath(replace(key, ".", "\\.")) + '"';
+        return '@"' + DpqlSerializer::escapeFieldPath(AbstractDataProvider::escapeFieldPathKey(key)) + '"';
     }
 
     #! Returns a field path as it is written between the quotes of <tt>\@"..."</tt>

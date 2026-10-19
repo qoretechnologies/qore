@@ -85,13 +85,20 @@ already has a meaning before a dot. `\\.` is read as `\.`, so `@"a\\.b"` is also
 @"a\.b" == 1                 # the key a.b
 ```
 
-In the expression form, the `field` of a field reference holds the path with its escaped dots:
-`@"Unit\.Price"` is `{"field": "Unit\\.Price"}` (the text `Unit\.Price`), and
-`AbstractDataProvider::getFieldPath()` gives its keys. The serializer writes a path as it is read
-back: bare when every part is a bare name, otherwise quoted with each escaped dot written `\.`,
-each other backslash `\\` and each quote `\"`; `DpqlSerializer::fieldReferenceForKey()` writes
-the field reference to one key, such as the name of a field of a record type, with its dots
-escaped.
+In the expression form, the `field` of a field reference holds the path, in which `\.` is a dot
+and `\\` a backslash of a key, and any other backslash is itself: `@"Unit\.Price"` is
+`{"field": "Unit\\.Price"}` (the text `Unit\.Price`). `AbstractDataProvider::getFieldPath()` gives
+the keys of a path, and `AbstractDataProvider::escapeFieldPathKey()` escapes a key (`\` as `\\`,
+`.` as `\.`) so that joining escaped keys with `.` gives a path that `getFieldPath()` reads back
+exactly, also for a key ending with a backslash (the keys `a\` and `b` are the path `a\\.b`).
+Processor field options and other plain field paths use this form.
+
+The serializer writes a path as it is read back: bare when every part is a bare name, otherwise
+quoted with each `\` that precedes a dot written as it is and every other backslash `\\`, and each
+quote `\"`. `DpqlSerializer::fieldReferenceForKey()` writes the field reference to one key, such
+as the name of a field of a record type: `@"Unit\.Price"`, and `@"p\\\\q"` for the key `p\q`
+(the path `p\\q`); `@"p\\q"` also reads the key `p\q`, as a backslash before a character other
+than a dot or a backslash is itself.
 
 ## Field Reference Operators
 

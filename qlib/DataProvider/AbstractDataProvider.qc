@@ -1057,9 +1057,10 @@ public hashdecl DataProviderRangeSpec {
 public hashdecl DataProviderFieldReference {
     #! The field path of the field being referenced
     /** Dots separate the parts of the path, the keys read one after the other from the record; a dot that is part
-        of a key is escaped with a backslash: \c "order.id" is the key \c id of the key \c order, and
-        <tt>"Unit\\\\.Price"</tt> (the text <tt>Unit\\.Price</tt>) the key \c Unit.Price
-        (@ref AbstractDataProvider::getFieldPath(), @ref dpql_field_paths)
+        of a key is escaped with a backslash, and so is a backslash: \c "order.id" is the key \c id of the key
+        \c order, and <tt>"Unit\\\\.Price"</tt> (the text <tt>Unit\\.Price</tt>) the key \c Unit.Price
+        (@ref AbstractDataProvider::getFieldPath(), @ref AbstractDataProvider::escapeFieldPathKey(),
+        @ref dpql_field_paths)
     */
     string field;
 
@@ -6380,9 +6381,13 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     }
 
     #! Returns the parts of a field path: the keys it reads, in order
-    /** The parts of a field path (the \c field of a @ref DataProviderFieldReference) are separated by dots; a dot
-        that is part of a key is escaped with a backslash (<tt>a\\.b</tt> is the key <tt>a.b</tt>), and any other
-        backslash is part of its key
+    /** The parts of a field path (the \c field of a @ref DataProviderFieldReference) are separated by dots.  In a
+        part, <tt>\\.</tt> is a dot and <tt>\\\\</tt> a backslash; any other backslash is itself.  So
+        <tt>a\\.b</tt> is the key <tt>a.b</tt>, <tt>a\\\\.b</tt> the keys <tt>a\\</tt> and \c b, and
+        <tt>p\\q</tt> the key <tt>p\\q</tt>.  @ref escapeFieldPathKey() escapes a key so that this reads it back
+        exactly: for any keys, joining their escaped forms with \c "." gives a path whose parts are the keys.
+
+        The empty path has no parts; an empty part is kept (<tt>a.</tt> is \c ("a", "")).
 
         @param field the field path, such as \c "order.id" or \c "create.order-id"
 
@@ -6392,7 +6397,68 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @since DataProvider 3.11
     */
     static list<string> getFieldPath(string field) {
-        return map regex_subst($1, "\\\\\\.", ".", RE_Global), field.splitRegex("(?<!\\\\)\\.");
+        if (field == "") {
+            return ();
+        }
+        list<string> rv;
+        if (field.find("\\") < 0) {
+            rv = field.split(".");
+            # split() drops an empty last part
+            if (field.substr(-1) == ".") {
+                push rv, "";
+            }
+            return rv;
+        }
+        string part = "";
+        bool escaped = False;
+        foreach string ch in (field.iterator()) {
+            if (escaped) {
+                escaped = False;
+                # \. is a dot and \\ a backslash; any other backslash is itself
+                if (ch == "." || ch == "\\") {
+                    part += ch;
+                } else {
+                    part += "\\" + ch;
+                }
+            } else if (ch == "\\") {
+                escaped = True;
+            } else if (ch == ".") {
+                push rv, part;
+                part = "";
+            } else {
+                part += ch;
+            }
+        }
+        if (escaped) {
+            part += "\\";
+        }
+        push rv, part;
+        return rv;
+    }
+
+    #! Returns a key as one part of a field path: its dots and backslashes are escaped
+    /** A dot in a field path separates its parts, so a key with a dot is escaped to be one part of a path: the key
+        <tt>Unit.Price</tt> is <tt>Unit\\.Price</tt>; a backslash is escaped as <tt>\\\\</tt>, so that a key ending
+        with a backslash is not read as an escaped dot.  Join the escaped keys with \c "." to make a path of several
+        keys: <tt>order.Unit\\.Price</tt> is the key <tt>Unit.Price</tt> of the key \c order; @ref getFieldPath()
+        gives the keys back exactly.  Use this for a field path that is a plain value, such as a field option of a
+        processor; for a DPQL field reference to one key, use
+        @ref DataProvider::DpqlSerializer::fieldReferenceForKey() "DpqlSerializer::fieldReferenceForKey()"
+
+        @param key the key
+
+        @return the key as one part of a field path
+
+        @par Example:
+        @code{.py}
+# "order.Unit\.Price"
+string path = "order." + AbstractDataProvider::escapeFieldPathKey("Unit.Price");
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static string escapeFieldPathKey(string key) {
+        return replace(replace(key, "\\", "\\\\"), ".", "\\.");
     }
 
     #! Pre-processes a single expression argument for repeated evaluation
@@ -8948,18 +9014,20 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
     #! Returns the value of a field in a record, supporting dot-notation for nested hash access
     /** @param record the record hash to read from
         @param field_path the field name or dot-notation path (e.g. \c "address.city"); a dot that is part of a key is
-        escaped (<tt>Unit\\.Price</tt>), as in a field reference (@ref getFieldPath())
+        escaped (<tt>Unit\\.Price</tt>), and so is a backslash (<tt>\\\\</tt>), as in a field reference
+        (@ref getFieldPath())
 
         @return the field value, or @ref NOTHING if any intermediate is not a hash or the field is missing
 
         @since %DataProvider 3.4
-        @since %DataProvider 3.11 an escaped dot is part of a key
+        @since %DataProvider 3.11 an escaped dot is part of a key, and an escaped backslash is one backslash
     */
     static auto getFieldValue(hash<auto> record, string field_path) {
         # Strip hashdecl type to plain hash<auto> so that accessing unknown members returns
         # NOTHING instead of throwing INVALID-MEMBER
         hash<auto> rec = {} + record;
-        if (field_path.find(".") < 0) {
+        # a path with no dot and no backslash is the one key as it is written
+        if (field_path.find(".") < 0 && field_path.find("\\") < 0) {
             return rec{field_path};
         }
         # traverse dot-notation path

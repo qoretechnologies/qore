@@ -1679,7 +1679,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                 if (id_tok.value.size() > 1 && id_tok.value[1] == '"') {
                     # a quoted name is one key, as with {"key"}
                     return parseAccessorChain(<DataProviderFieldReference>{
-                        "field": DpqlParser::escapeFieldPathKey(getFieldTokenKey(id_tok)),
+                        "field": AbstractDataProvider::escapeFieldPathKey(getFieldTokenKey(id_tok)),
                     });
                 }
                 return parseWildcardFieldPath(getFieldTokenName(id_tok));
@@ -1697,7 +1697,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             if (key_exp.args.size() == 2) {
                 # a single key is a field of the item: @orders[*]{"order-id"} is map @"order-id", @orders
                 return parseAccessorChain(<DataProviderFieldReference>{
-                    "field": DpqlParser::escapeFieldPathKey(key_exp.args[1]),
+                    "field": AbstractDataProvider::escapeFieldPathKey(key_exp.args[1]),
                 });
             }
             # several keys apply to the item itself
@@ -1849,17 +1849,6 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             throw "DPQL-PARSE-ERROR", "Unknown escape in a quoted field name";
         }
         return result;
-    }
-
-    #! Returns a key as one step of a field reference path: its dots are escaped
-    /** @param key the key
-
-        @return the key with each dot escaped, so that the path reads it as one key
-
-        @since DataProvider 3.10
-    */
-    private static string escapeFieldPathKey(string key) {
-        return replace(key, ".", "\\.");
     }
 
     #! Parses index accessor: [n], [n..m], [n,m,p], [n..m,p], [2..], [..5]

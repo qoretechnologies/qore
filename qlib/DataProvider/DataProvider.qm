@@ -970,8 +970,10 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     In a quoted name, <tt>\\"</tt> is a quote, <tt>\\\\</tt> a backslash, <tt>\\.</tt> a dot that is part of a key,
     and <tt>\\n</tt>, <tt>\\r</tt> and <tt>\\t</tt> a line feed, a carriage return and a tab; any other escape is an
     error (\c DPQL-E003).  The \c field of a @ref DataProvider::DataProviderFieldReference "DataProviderFieldReference"
-    holds the path with its escaped dots (<tt>Unit\\.Price</tt>), and
-    @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()" gives its keys;
+    holds the path, in which <tt>\\.</tt> is a dot and <tt>\\\\</tt> a backslash of a key (<tt>Unit\\.Price</tt>);
+    @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()" gives its keys,
+    and @ref DataProvider::AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()"
+    escapes a key as one part of a path, which \c getFieldPath() reads back exactly;
     @ref DataProvider::DpqlSerializer::fieldReferenceForKey() "DpqlSerializer::fieldReferenceForKey()" writes the
     field reference to one key, such as the name of a field of a record type.
 
@@ -1597,8 +1599,12 @@ fetch
       @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()" write the field
       reference to a key and give the keys of a field path
     - fixed a backslash followed by any character other than a dot in a field path being read as a dot: the key
-      <tt>p\\q</tt> was read as <tt>p.</tt>; DPQL validation reads the first key of a path with an escaped dot as
-      evaluation does, and
+      <tt>p\\q</tt> was read as <tt>p.</tt>.  In a field path, <tt>\\.</tt> is a dot and <tt>\\\\</tt> a
+      backslash of a key, and any other backslash is itself, so a key ending with a backslash can be followed by more
+      keys (<tt>a\\\\.b</tt> is the keys <tt>a\\</tt> and \c b); the new
+      @ref DataProvider::AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()"
+      escapes a key as one part of a path, and a path joined from escaped keys reads them back exactly.  DPQL
+      validation reads the first key of a path with an escaped dot as evaluation does, and
       @ref DataProvider::AbstractDataProvider::getFieldValue() "AbstractDataProvider::getFieldValue()", which the
       processors read their field options with, reads an escaped dot as part of a key
     - fixed @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"

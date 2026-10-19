@@ -1362,6 +1362,8 @@ public class MapperTest inherits QUnit::Test {
         assertEq(("a.b", "c"), Mapper::splitDottedFields("a\\.b.c"));
         assertEq(("a\\b", "c"), Mapper::splitDottedFields("a\\b.c"));
         assertEq(("p\\q",), Mapper::splitDottedFields("p\\q"));
+        # \\ is a backslash of a key, so a key can end with one
+        assertEq(("a\\", "b"), Mapper::splitDottedFields("a\\\\.b"));
     }
 
     dotTest() {
