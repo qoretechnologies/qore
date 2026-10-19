@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
 public namespace Schema {
 
 #! Actions allowed at any access level

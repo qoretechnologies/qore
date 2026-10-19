@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
 public namespace Schema {
 
 #! Column type mapping from .ysm/.jsm shorthand to GenericColumnInfo format

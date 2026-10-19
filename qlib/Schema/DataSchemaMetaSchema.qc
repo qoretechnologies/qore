@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
 public namespace Schema {
 
 #! JSON Schema (Draft 2020-12) for validating .ysm and .jsm data schema files

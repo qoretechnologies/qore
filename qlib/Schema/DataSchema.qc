@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
 public namespace Schema {
 
 #! Access level constants for controlling migration action permissions
