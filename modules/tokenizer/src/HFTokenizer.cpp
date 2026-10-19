@@ -1098,14 +1098,16 @@ static QoreListNode* makeModelInputShapeList(size_t rows, size_t width, Exceptio
     return shape.release();
 }
 
-static int getModelInputPadId(const QoreHFTokenizer& tok, const QoreHashNode* options) {
+// returns the pad token ID of the options, else the default pad token ID; called with the tokenizer's lock held, so
+// it must not call a public method that takes the lock
+static int getModelInputPadId(int default_pad_id, const QoreHashNode* options) {
     if (options) {
         QoreValue pid = options->getKeyValue("pad_token_id");
         if (!pid.isNullOrNothing()) {
             return static_cast<int>(pid.getAsBigInt());
         }
     }
-    return tok.getPadTokenId();
+    return default_pad_id;
 }
 
 QoreHashNode* QoreHFTokenizer::encodeBatchForModelIntern(const QoreListNode* texts,
@@ -1171,7 +1173,7 @@ QoreHashNode* QoreHFTokenizer::encodeBatchForModelIntern(const QoreListNode* tex
         return nullptr;
     }
 
-    int pad_id = getModelInputPadId(*this, options);
+    int pad_id = getModelInputPadId(pad_token_id, options);
     bool needs_padding = false;
     size_t scan_row = 0;
     for (const auto& enc : encodings) {

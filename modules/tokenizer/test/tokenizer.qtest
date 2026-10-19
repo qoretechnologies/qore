@@ -53,6 +53,7 @@ class TokenizerTest inherits QUnit::Test {
         addTestCase("added tokens have their token strings", \addedTokenStringTest());
         addTestCase("chat templates", \chatTemplateTest());
         addTestCase("chat template values are not template text", \chatTemplateInjectionTest());
+        addTestCase("configuration loaded while it is read", \concurrentConfigTest());
 
         set_return_value(main());
     }
@@ -1094,5 +1095,65 @@ class TokenizerTest inherits QUnit::Test {
             exit(1);
         }
         assertEq("U(user):" + content_tag + ";", result, "a message whose content is the content tag is written once");
+    }
+
+    # loadConfig() changes the configuration under the tokenizer's lock, so a thread reading it at the same time sees
+    # one of the loaded configurations, never a mix of two
+    concurrentConfigTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        Tokenizer::HFTokenizer tok({
+            "model": {
+                "type": "WordPiece",
+                "vocab": {"[UNK]": 0, "<a1>": 1, "<a2>": 2, "<b1>": 3, "<b2>": 4},
+                "unk_token": "[UNK]",
+            },
+        });
+        list<hash<auto>> configs = (
+            {
+                "chat_template": "A{% for message in messages %}{{ bos_token }}{{ eos_token }}{% endfor %}",
+                "bos_token": "<a1>", "eos_token": "<a2>", "pad_token": "<a1>", "model_max_length": 100,
+            },
+            {
+                "chat_template": "B{% for message in messages %}{{ bos_token }}{{ eos_token }}{% endfor %}",
+                "bos_token": "<b1>", "eos_token": "<b2>", "pad_token": "<b1>", "model_max_length": 200,
+            },
+        );
+        tok.loadConfig(configs[0]);
+
+        list<string> bad = ();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            for (int i = 0; i < 2000; ++i) {
+                # one call reads the template and the BOS and EOS tokens of one configuration
+                string prompt = tok.applyChatTemplate(({"role": "user", "content": "x"},));
+                if (prompt != "A<a1><a2>" && prompt != "B<b1><b2>") {
+                    push bad, prompt;
+                }
+                int max_length = tok.getModelMaxLength();
+                int bos = tok.getBosTokenId();
+                int eos = tok.getEosTokenId();
+                int pad = tok.getPadTokenId();
+                if (!inlist(max_length, (100, 200)) || !inlist(bos, (1, 3)) || !inlist(eos, (2, 4))
+                        || !inlist(pad, (1, 3))) {
+                    push bad, sprintf("max_length %d bos %d eos %d pad %d", max_length, bos, eos, pad);
+                }
+            }
+        }();
+        for (int i = 1; i <= 2000; ++i) {
+            tok.loadConfig(configs[i % 2]);
+        }
+        # a hang guard, not synchronization: the reader ends deterministically after its reads, and the wait returns
+        # as soon as it does; if it never ends, the program would wait for it forever, so the test fails and the
+        # process exits at once
+        if (done.waitForZero(60s)) {
+            stderr.print("FAILURE: the configuration reader did not finish within 60 seconds\n");
+            exit(1);
+        }
+        assertEq((), bad, "a reader sees one of the loaded configurations while loadConfig() runs");
+        assertEq("A<a1><a2>", tok.applyChatTemplate(({"role": "user", "content": "x"},)),
+            "the configuration loaded last is used");
     }
 }

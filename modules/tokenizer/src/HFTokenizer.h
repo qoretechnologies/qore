@@ -98,25 +98,53 @@ public:
         const QoreListNode* text_pairs, const QoreHashNode* options, ExceptionSink* xsink);
 
     //! Returns the pad token ID (or -1 if no pad token)
-    int getPadTokenId() const { return pad_token_id; }
+    int getPadTokenId() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return pad_token_id;
+    }
 
     //! Returns the EOS token ID (or -1 if not found)
-    int getEosTokenId() const { return eos_token_id; }
+    int getEosTokenId() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return eos_token_id;
+    }
 
     //! Returns the BOS token ID (or -1 if not found)
-    int getBosTokenId() const { return bos_token_id; }
+    int getBosTokenId() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return bos_token_id;
+    }
 
     //! Returns the CLS token ID (or -1 if not found)
-    int getClsTokenId() const { return cls_token_id; }
+    int getClsTokenId() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return cls_token_id;
+    }
 
     //! Returns the SEP token ID (or -1 if not found)
-    int getSepTokenId() const { return sep_token_id; }
+    int getSepTokenId() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return sep_token_id;
+    }
 
     //! Returns the UNK token ID (or -1 if not found)
-    int getUnkTokenId() const { return unk_token_id; }
+    int getUnkTokenId() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return unk_token_id;
+    }
 
     //! Returns the model maximum sequence length (or -1 if not set)
-    int getModelMaxLength() const { return model_max_length; }
+    int getModelMaxLength() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return model_max_length;
+    }
 
     //! Decodes a batch of token ID sequences
     /** @param batch list of token ID lists
