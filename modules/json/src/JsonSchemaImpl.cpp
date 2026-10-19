@@ -239,54 +239,6 @@ jsoncons::json JsonSchemaValidator::qoreToJson(QoreValue val, ExceptionSink* xsi
     }
 }
 
-QoreValue JsonSchemaValidator::jsonToQore(const jsoncons::json& j, ExceptionSink* xsink) const {
-    switch (j.type()) {
-        case jsoncons::json_type::null_value:
-            return QoreValue();
-
-        case jsoncons::json_type::bool_value:
-            return QoreValue(j.as_bool());
-
-        case jsoncons::json_type::int64_value:
-            return QoreValue(j.as<int64_t>());
-
-        case jsoncons::json_type::uint64_value:
-            return QoreValue(static_cast<int64_t>(j.as<uint64_t>()));
-
-        case jsoncons::json_type::half_value:
-        case jsoncons::json_type::double_value:
-            return QoreValue(j.as_double());
-
-        case jsoncons::json_type::string_value:
-            return new QoreStringNode(j.as_string().c_str());
-
-        case jsoncons::json_type::array_value: {
-            ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
-            for (const auto& item : j.array_range()) {
-                list->push(jsonToQore(item, xsink), xsink);
-                if (*xsink) {
-                    return QoreValue();
-                }
-            }
-            return list.release();
-        }
-
-        case jsoncons::json_type::object_value: {
-            ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
-            for (const auto& kv : j.object_range()) {
-                hash->setKeyValue(kv.key().c_str(), jsonToQore(kv.value(), xsink), xsink);
-                if (*xsink) {
-                    return QoreValue();
-                }
-            }
-            return hash.release();
-        }
-
-        default:
-            return QoreValue();
-    }
-}
-
 bool JsonSchemaValidator::validate(QoreValue data, ExceptionSink* xsink) const {
     if (!valid || !schema) {
         xsink->raiseException("JSON-SCHEMA-ERROR", "Schema is not valid");

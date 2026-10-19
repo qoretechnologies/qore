@@ -102,9 +102,6 @@ private:
     */
     DLLLOCAL jsoncons::json qoreToJson(QoreValue val, ExceptionSink* xsink, int depth = 0) const;
 
-    //! Convert jsoncons JSON to Qore value
-    DLLLOCAL QoreValue jsonToQore(const jsoncons::json& j, ExceptionSink* xsink) const;
-
     //! Initialize schema from JSON string
     DLLLOCAL void initFromJsonString(const std::string& json_str, ExceptionSink* xsink);
 
