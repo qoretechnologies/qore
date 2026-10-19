@@ -35,7 +35,6 @@
 
 #include <cmath>
 #include <memory>
-using namespace std;
 
 // the number of consecutive trailing 0 or 9 digits that will be rounded in string output
 #define QORE_MPFR_ROUND_THRESHOLD 9
@@ -464,7 +463,7 @@ struct qore_number_private : public qore_number_private_intern {
 
     // for round functions: round(), ceil(), floor()
     DLLLOCAL qore_number_private* doRoundNR(q_mpfr_unary_nr_func_t func, int prec = 0, ExceptionSink* xsink = NULL) const {
-        unique_ptr<qore_number_private> p0(new qore_number_private(*this));
+        std::unique_ptr<qore_number_private> p0(new qore_number_private(*this));
 
         if (prec == 0) {
             func(p0 -> num, num);
@@ -478,13 +477,13 @@ struct qore_number_private : public qore_number_private_intern {
         qore_number_private* p2;
 
         if (prec > 0) {
-            unique_ptr<qore_number_private> c(new qore_number_private(pow(10, prec)));
-            unique_ptr<qore_number_private> p1(p0 -> doMultiply(*c));
+            std::unique_ptr<qore_number_private> c(new qore_number_private(pow(10, prec)));
+            std::unique_ptr<qore_number_private> p1(p0 -> doMultiply(*c));
             func(p1 -> num, p1 -> num);
             p2 = p1 -> doDivideBy(*c, xsink);
         } else {
-            unique_ptr<qore_number_private> c(new qore_number_private(pow(10, -prec)));
-            unique_ptr<qore_number_private> p1(p0 -> doDivideBy(*c, xsink));
+            std::unique_ptr<qore_number_private> c(new qore_number_private(pow(10, -prec)));
+            std::unique_ptr<qore_number_private> p1(p0 -> doDivideBy(*c, xsink));
             func(p1 -> num, p1 -> num);
             p2 = p1 -> doMultiply(*c);
         }

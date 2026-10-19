@@ -204,7 +204,8 @@ private:
 
     //! returns a function object that reads bytes from the stream
     DLLLOCAL f_read_t getReadFunc() {
-        return std::bind(&StreamReader::readData, this, _3, _1, _2, false);
+        return std::bind(&StreamReader::readData, this, std::placeholders::_3, std::placeholders::_1,
+            std::placeholders::_2, false);
     }
 
     //! reads a line with the decoder
