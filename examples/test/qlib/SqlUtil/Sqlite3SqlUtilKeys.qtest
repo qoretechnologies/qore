@@ -29,6 +29,8 @@ class Sqlite3KeysTest inherits QUnit::Test {
         addTestCase("primary key descriptions round trip", \primaryKeyDescriptions());
         addTestCase("invalid primary key descriptions are rejected", \invalidPrimaryKeyDescriptions());
         addTestCase("unsupported primary key DDL remains explicit", \unsupportedPrimaryKeyDdl());
+        addTestCase("a table is created with its primary key", \createdPrimaryKeys());
+        addTestCase("the primary key of an existing table is not added or dropped", \existingPrimaryKeyChanges());
         addTestCase("automatic indexes are described", \automaticIndexes());
         addTestCase("upsert uses the key", \upsert());
         addTestCase("a select that locks rows is refused", \forUpdateRefused());
@@ -133,6 +135,92 @@ class Sqlite3KeysTest inherits QUnit::Test {
         assertThrows("UNSUPPORTED", \no_pk.addPrimaryKey(), ("PRIMARY", ("x",)),
             "adding a key to an existing SQLite table still fails");
         assertEq((), no_pk.getPrimaryKey().keys(), "failed DDL must not publish a primary key");
+    }
+
+    #! SQLite creates a primary key only with its table, so the key is in the table's CREATE TABLE statement
+    createdPrimaryKeys() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        # a key of one column
+        Sqlite3Table single(ds, "created_single");
+        single.setupTable({"columns": {"id": {"native_type": "integer", "notnull": True},
+            "v": {"native_type": "text"}}, "primary_key": {"name": "pk_created_single", "columns": ("id",)}});
+        assertEq("create table created_single (\n  id integer not null,\n  v text,\n  primary key (id)\n)",
+            single.getCreateTableSql());
+        assertEq((single.getCreateTableSql(),), single.getCreateSql(), "there is no separate primary key SQL");
+
+        # a composite key in another order than its columns, with a reserved word
+        Sqlite3Table composite(ds, "created_composite");
+        composite.setupTable({"columns": {"a": {"native_type": "integer", "notnull": True},
+            "group": {"native_type": "text", "notnull": True}, "v": {"native_type": "text"}},
+            "primary_key": {"name": "pk_created_composite", "columns": ("group", "a")}});
+        assertEq("create table created_composite (\n  a integer not null,\n  'group' text not null,\n  v text,\n"
+            "  primary key ('group', a)\n)", composite.getCreateTableSql());
+
+        # a table without a key
+        Sqlite3Table none(ds, "created_none");
+        none.setupTable({"columns": {"x": {"native_type": "integer"}}});
+        assertEq("create table created_none (\n  x integer\n)", none.getCreateTableSql());
+
+        foreach Sqlite3Table t in ((single, composite, none)) {
+            t.create();
+            # the table in the database has the key, so the template needs no change
+            Sqlite3Table live(ds, t.getName());
+            assertEq(t.getPrimaryKey().keys(), live.getPrimaryKey().keys(), t.getName());
+            assertEq((), live.getAlignSql(t), t.getName());
+        }
+
+        # the keys are enforced
+        Table live_composite(ds, "created_composite");
+        live_composite.insert({"a": 1, "group": "x", "v": "1"});
+        live_composite.insert({"a": 1, "group": "y", "v": "2"});
+        try {
+            live_composite.insert({"a": 1, "group": "x", "v": "3"});
+            fail("a row with a duplicate key was inserted");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(live_composite.isDuplicateRowError(ex), get_exception_string(ex));
+        }
+        live_composite.upsert({"a": 1, "group": "x", "v": "4"});
+        assertEq(("4", "2"), (map $1.v, live_composite.selectRows({"orderby": "group"})));
+
+        # an integer key column of one column is the rowid, so a row inserted without it is given one
+        Sqlite3Table auto(ds, "created_auto");
+        auto.setupTable({"columns": {"id": {"native_type": "integer"}, "v": {"native_type": "text"}},
+            "primary_key": {"name": "pk_created_auto", "columns": ("id",)}});
+        auto.create();
+        Table live_auto(ds, "created_auto");
+        live_auto.insert({"v": "a"});
+        live_auto.insert({"v": "b"});
+        assertEq(({"id": 1, "v": "a"}, {"id": 2, "v": "b"}), live_auto.selectRows({"orderby": "id"}));
+    }
+
+    #! SQLite cannot add a primary key to an existing table, or drop its key: the alignment says so
+    existingPrimaryKeyChanges() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        # adding a key to a table without one
+        Sqlite3Table with_key(ds, "no_pk");
+        with_key.setupTable({"columns": {"x": {"native_type": "integer", "notnull": True}},
+            "primary_key": {"name": "pk_no_pk", "columns": ("x",)}});
+        Sqlite3Table no_pk(ds, "no_pk");
+        assertThrows("UNSUPPORTED", "cannot add the primary key \\(x\\) to table \"no_pk\": SQLite cannot add a "
+            "primary key to an existing table", \no_pk.getAlignSql(), (with_key,));
+
+        # dropping the key of a table: the same table without its key
+        Sqlite3Table single_pk(ds, "single_pk");
+        hash<auto> desc = single_pk.getDescriptionHash();
+        remove desc.primary_key;
+        Sqlite3Table without_key(ds, "single_pk");
+        without_key.setupTable(desc);
+        assertThrows("UNSUPPORTED", "cannot drop the primary key \\(id\\) of table \"single_pk\": SQLite cannot drop "
+            "the primary key of an existing table", \single_pk.getAlignSql(), (without_key,));
+
+        # a key in SQLite has no name, so there is nothing to rename
+        Sqlite3PrimaryKey pk = cast<Sqlite3PrimaryKey>(single_pk.getPrimaryKey());
+        assertFalse(pk.supportsName());
+        assertEq((), pk.getRenameSql("single_pk", "pk_other"));
     }
 
     forUpdateRefused() {

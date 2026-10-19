@@ -3096,6 +3096,9 @@ while (*binary chunk = input.read(65536)) {
         later; any other change to a column of an existing table still raises \c UNSUPPORTED, now with a
         description of what SQLite cannot change (see @ref sqlite3_column_changes)
       - fixed tables reporting no primary key, so \c upsert() always failed
+      - fixed tables being created without their primary key, so that the key was not enforced and every schema
+        upgrade of a table with a primary key raised \c UNSUPPORTED; the primary key is now created with its table
+        (see @ref sqlite3_primary_keys)
       - fixed duplicate-row detection never recognizing a duplicate key
       - fixed describing a table's indexes: automatic indexes failed, lower-case unique indexes were not unique,
         and quoted column names kept their quotes

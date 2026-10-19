@@ -108,6 +108,21 @@ module Sqlite3SqlUtil {
     version of the \c sqlite3 module.  A change that raises \c UNSUPPORTED can only be made by creating the table
     anew and copying its rows, which this module does not do.
 
+    @subsection sqlite3_primary_keys Primary Keys
+
+    SQLite creates a primary key only with its table: a table's primary key is written in its \c CREATE \c TABLE
+    statement as a \c PRIMARY \c KEY table constraint, with the key's columns in the key's order, so
+    @ref SqlUtil::AbstractTable::create() "AbstractTable::create()" and table alignment create a table with its
+    primary key.  A primary key of one column of type \c integer is the table's rowid, so a row inserted without a
+    value for it is given one.
+
+    SQLite has no name for a primary key, so the name given in a table description is not kept, and renaming a
+    primary key needs no SQL.  SQLite cannot add a primary key to an existing table or drop the primary key of one,
+    so aligning an existing table to a template with another primary key raises \c UNSUPPORTED with a description;
+    such a table can only be created anew with the new key and its rows copied, which this module does not do.  A
+    table created by Sqlite3SqlUtil 1.1 or earlier was created without its primary key, so aligning it to its
+    template raises \c UNSUPPORTED in the same way.
+
     @section sqlite3_relnotes Release Notes
 
     @subsection sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
@@ -120,6 +135,11 @@ module Sqlite3SqlUtil {
       \c FORUPDATE-NOT-SUPPORTED, since SQLite cannot lock rows; it failed with an SQL syntax error before
     - fixed tables reporting no primary key, so \c upsert() always failed with \c UPSERT-ERROR; the primary key is
       now read from the table's description
+    - fixed tables being created without their primary key, which was dropped from the \c CREATE \c TABLE
+      statement, so that a primary key was not enforced, \c upsert() failed, and aligning the table to its own
+      template raised a bare \c UNSUPPORTED, as every schema upgrade did for a table with a primary key; the
+      primary key is now created with its table, and adding a primary key to an existing table or dropping it raises
+      \c UNSUPPORTED with a description of what SQLite cannot change; see @ref sqlite3_primary_keys
     - fixed describing indexes: a table with an automatic index (a composite primary key or a unique
       constraint) failed, a unique index created in lower case was reported as not unique, and quoted column
       names kept their quotes; indexes are now described from SQLite's index pragmas instead of their SQL
@@ -431,6 +451,10 @@ auto v = c.name;
     }
 
     #! represents a Sqlite3-specific primary key constraint
+    /** SQLite creates a primary key only with its table: @ref Sqlite3Table writes it in the table's
+        \c CREATE \c TABLE statement (@ref getTableConstraintSql()), and a primary key cannot be added to or dropped
+        from an existing table; see @ref sqlite3_primary_keys
+    */
     public class Sqlite3PrimaryKey inherits SqlUtil::AbstractPrimaryKey {
         constructor() {
         }
@@ -438,12 +462,46 @@ auto v = c.name;
         constructor(hash<auto> c) : AbstractPrimaryKey("PRIMARY", c) {
         }
 
-        string getCreateSql(string table_name, *hash<auto> opts) {
-            throw "UNSUPPORTED";
+        #! returns the \c PRIMARY \c KEY table constraint that creates the primary key with its table
+        /** @par Example:
+            @code{.py}
+# "primary key ('group', id)"
+string sql = pk.getTableConstraintSql();
+            @endcode
+
+            @return the \c PRIMARY \c KEY table constraint, with the key's columns in the key's order
+
+            @since Sqlite3SqlUtil 1.2
+        */
+        string getTableConstraintSql() {
+            return sprintf("primary key (%s)", (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
         }
 
+        #! SQLite cannot add a primary key to an existing table
+        /** The primary key of a table is created with the table (@ref getTableConstraintSql())
+
+            @throw UNSUPPORTED SQLite cannot add a primary key to an existing table
+        */
+        string getCreateSql(string table_name, *hash<auto> opts) {
+            throw "UNSUPPORTED", sprintf("cannot add the primary key (%s) to table %y: SQLite cannot add a primary "
+                "key to an existing table; a table has the primary key that it was created with",
+                join(", ", self.keys()), table_name);
+        }
+
+        #! returns an empty list: a primary key in SQLite has no name (@ref supportsName())
+        /** @return an empty list; there is nothing to rename
+        */
         list<string> getRenameSql(string table_name, string new_name) {
-            throw "UNSUPPORTED";
+            return ();
+        }
+
+        #! SQLite cannot drop the primary key of an existing table
+        /** @throw UNSUPPORTED SQLite cannot drop the primary key of an existing table
+        */
+        string getDropSql(string table_name) {
+            throw "UNSUPPORTED", sprintf("cannot drop the primary key (%s) of table %y: SQLite cannot drop the "
+                "primary key of an existing table; a table has the primary key that it was created with",
+                join(", ", self.keys()), table_name);
         }
 
         #! returns @ref False "False" since primary key constraints in Sqlite3 have no name
@@ -1205,6 +1263,7 @@ auto v = c.name;
             return new Columns(rv);
         }
 
+        #! returns no SQL: the primary key is created with the table (@ref getCreateTableSqlImpl())
         private *string getCreatePrimaryKeySqlUnlocked(*hash<auto> opt, bool cache = True) {
         }
 
@@ -1300,7 +1359,13 @@ auto v = c.name;
 
         string getCreateTableSqlImpl(*hash<auto> opt) {
             string sql = sprintf("%s (\n", getCreateTableStartSql());
-            sql += foldl $1 + ",\n" + $2, (map "  " + $1.getCreateSql(self), columns.iterator());
+            list<string> defs = map "  " + $1.getCreateSql(self), columns.iterator();
+            # SQLite cannot add a primary key to an existing table, so it is created with the table
+            getPrimaryKeyUnlocked();
+            if (!primaryKey.empty()) {
+                defs += "  " + cast<Sqlite3PrimaryKey>(primaryKey).getTableConstraintSql();
+            }
+            sql += foldl $1 + ",\n" + $2, defs;
             sql += "\n)";
             sql += getCreateTableTempClauseSql();
             return sql;

@@ -32,6 +32,7 @@ class AlignmentTransactionTest inherits QUnit::Test {
             \populateNotNullExistingTable());
         addTestCase("a populate NOT NULL column added to a PostgreSQL table is made NOT NULL",
             \populateNotNullPgsql());
+        addTestCase("a SQLite table is created with its primary key, and an upgrade keeps it", \primaryKeyUpgrade());
         set_return_value(main());
     }
     #! Returns an in-memory SQLite datasource; with a version, the datasource reports it as the SQLite version
@@ -184,6 +185,73 @@ class AlignmentTransactionTest inherits QUnit::Test {
                 "required", server_version), \v2.alignWithInfo(), (True, -1, False));
             assertEq(("id", "order"), new SqlUtil::Table(ds, "inventory").describe().keys(),
                 "the column added by the failed alignment is rolled back");
+        }
+    }
+
+    #! A table with a primary key is created with it on SQLite, which cannot add one later, so an upgrade that
+    #! changes nothing, or adds an unrelated column, leaves the key as it is
+    private primaryKeyUpgrade() {
+        AbstractDatasource ds = datasource();
+        on_exit ds.rollback();
+        code definition = hash<auto> sub (string version, hash<auto> extra_columns) {
+            return Schema::DataSchemaLoader::loadHash({
+                "schema": {"name": "inventory", "version": version, "version_table": "inventory_version",
+                    "version_column": "version", "version_where": {"name": "inventory"}},
+                "tables": {
+                    # the version is recorded by an upsert, which needs the table's key
+                    "inventory_version": {
+                        "columns": {"name": {"type": "text"}, "version": {"type": "text"}},
+                        "primary_key": {"name": "pk_inventory_version", "columns": ("name",)},
+                    },
+                    "inventory": {
+                        "columns": {"id": {"type": "int"}, "order": {"type": "text"}} + extra_columns,
+                        "primary_key": {"name": "pk_inventory", "columns": ("id",)},
+                    },
+                    # a composite key in another order than its columns, one of them a reserved word
+                    "inventory_item": {
+                        "columns": {"id": {"type": "int"}, "group": {"type": "text"}, "qty": {"type": "int"}},
+                        "primary_key": {"name": "pk_inventory_item", "columns": ("group", "id")},
+                    },
+                },
+                "reference_data": {"normal": {"inventory_version": {"columns": ("name", "version"),
+                    "rows": (("inventory", version),)}}},
+            });
+        };
+        code get_version = string sub () {
+            return new SqlUtil::Table(ds, "inventory_version").selectRow({"where": {"name": "inventory"}}).version;
+        };
+
+        Schema::DataSchema v1(ds, definition("1.0", {}));
+        v1.alignWithInfo(True, -1, False);
+        assertEq(("id",), new SqlUtil::Table(ds, "inventory").getPrimaryKey().keys());
+        assertEq(("group", "id"), new SqlUtil::Table(ds, "inventory_item").getPrimaryKey().keys());
+        assertEq("1.0", get_version());
+        new SqlUtil::Table(ds, "inventory").insert({"id": 1, "order": "first"});
+        ds.commit();
+
+        # the same schema again: nothing is changed, so a key that SQLite cannot add is not added
+        Schema::DataSchema same(ds, definition("1.0", {}));
+        hash<SchemaAlignmentInfo> info = same.alignWithInfo(True, -1, False);
+        assertEq(("unchanged",), keys info.change_map, sprintf("%y", info.change_map));
+
+        # an unrelated column is added, and the key is kept
+        Schema::DataSchema v2(ds, definition("2.0", {"note": {"type": "text"}}));
+        info = v2.alignWithInfo(True, -1, False);
+        # the one change is the new column
+        assertEq(("add", "unchanged"), sort(keys info.change_map), sprintf("%y", info.change_map));
+        assertEq(1, info.change_map.add, sprintf("%y", info.change_map));
+        ds.commit();
+        assertEq("2.0", get_version());
+        AbstractTable t = new SqlUtil::Table(ds, "inventory").getTable();
+        assertEq(("id", "order", "note"), t.describe().keys());
+        assertEq(("id",), t.getPrimaryKey().keys());
+        assertEq("first", t.selectRow({"where": {"id": 1}}).order);
+        # the key is enforced
+        try {
+            t.insert({"id": 1, "order": "again"});
+            fail("a row with a duplicate key was inserted");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(t.isDuplicateRowError(ex), get_exception_string(ex));
         }
     }
 
