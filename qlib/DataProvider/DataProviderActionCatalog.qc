@@ -3772,6 +3772,14 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     }
 
     #! Returns a data type for the action options
+    /** @param action the action
+
+        @return a hash type with a field for each option of the action, with the option's type, which is mandatory
+        if the option is required, and its description, default value and allowed values; other keys are accepted
+        as they are; no value is returned if the action has no options
+
+        @since DataProvider 3.11 the type has a field for each option; it had no fields
+    */
     static *AbstractDataProviderType getTypeForActionOptions(hash<DataProviderActionInfo> action) {
         if (!action.options) {
             return;
@@ -3830,7 +3838,12 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             }
             fields{i.key} = new QoreDataField(fh);
         }
-        return new HashDataType(mand ? AutoHashType : AutoHashOrNothingType, action.action);
+        HashDataType rv(mand ? AutoHashType : AutoHashOrNothingType, action.action);
+        # the type stays open: keys that are not options are accepted as they are, as by the type without fields;
+        # this is set before the fields are added, as adding a field otherwise refuses other keys
+        rv.setDefaultOtherFieldType(AbstractDataProviderType::get(AbstractDataProviderType::anyType));
+        map rv.addField($1), fields.iterator();
+        return rv;
     }
 
     #! Returns a normalized path to ensure that comparisons always work

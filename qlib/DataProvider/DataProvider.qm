@@ -1605,6 +1605,10 @@ fetch
       dropping the \c input_field_names marker, so the options of the registered processor actions that take field
       names of the input (such as \c group_by of \c group-by and \c fields of \c select-fields) did not have it, and
       host applications did not offer the field names of the input as their values
+    - fixed @ref DataProvider::DataProviderActionCatalog::getTypeForActionOptions() "getTypeForActionOptions()"
+      returning a hash type without fields: the type of the options of an action has a field for each option, with
+      its type (mandatory for a required option), description, default value and allowed values; other keys are
+      still accepted as they are
 
     @subsection dataprovider_v3_10_2 DataProvider v3.10.2
     - the editor token spans of @ref DataProvider::DpqlActionSession "DpqlActionSession" (\c dpql-get-tokens and

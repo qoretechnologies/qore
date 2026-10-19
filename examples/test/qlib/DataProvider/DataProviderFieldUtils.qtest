@@ -61,6 +61,7 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("input_field_names - action options from option info", \inputFieldNamesActionOptions());
         addTestCase("input_field_names - registered processor actions", \inputFieldNamesProcessorActions());
         addTestCase("getFieldValue - paths and escaped dots", \getFieldValueTest());
+        addTestCase("getTypeForActionOptions - a field for each option", \typeForActionOptions());
 
         # Processor backward compatibility tests
         addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
@@ -329,6 +330,63 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         assertEq(2, AbstractDataProvider::getFieldValue(rec, "a\\.b"));
         assertNothing(AbstractDataProvider::getFieldValue(rec, "a.c"));
         assertNothing(AbstractDataProvider::getFieldValue(rec, "x.y"));
+    }
+
+    #! The type of the options of an action has a field for each option, with its type and mandatory flag, and
+    #! accepts other keys as it did without fields
+    typeForActionOptions() {
+        hash<DataProviderActionInfo> action = <DataProviderActionInfo>{
+            "app": "test",
+            "action": "send",
+            "path": "/",
+            "display_name": "Send",
+            "short_desc": "Send a message",
+            "desc": "Send a message",
+            "action_code": DPAT_SEND_MESSAGE,
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "id": <DataProviderOptionInfo>{
+                    "display_name": "Id",
+                    "short_desc": "The id",
+                    "desc": "The id",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                },
+                "name": <DataProviderOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The name",
+                    "desc": "The name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "default_value": "none",
+                },
+                "tags": <DataProviderOptionInfo>{
+                    "display_name": "Tags",
+                    "short_desc": "The tags",
+                    "desc": "The tags",
+                    "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
+                },
+            }),
+        };
+        AbstractDataProviderType type = DataProviderActionCatalog::getTypeForActionOptions(action);
+        assertEq("send", type.getName());
+        *hash<string, AbstractDataField> fields = type.getFields();
+        assertEq(("id", "name", "tags"), keys fields);
+        assertTrue(fields.id.isMandatory());
+        assertEq("int", fields.id.getType().getName());
+        assertFalse(fields.name.isMandatory());
+        assertEq("*string", fields.name.getType().getName());
+        assertEq("The name", fields.name.getDescription());
+        assertEq("none", fields.name.getDefaultValue());
+        assertEq("*softlist<string>", fields.tags.getType().getName());
+
+        # the declared options are typed, and other keys are still accepted as they are
+        assertEq({"id": 1, "name": "none", "other": "x"}, type.acceptsValue({"id": 1, "other": "x"}));
+        assertEq({"id": 2, "name": "a", "tags": ("t",)}, type.acceptsValue({"id": 2, "name": "a", "tags": "t"}));
+        assertThrows("MISSING-VALUE-ERROR", "required field \"id\" is absent", \type.acceptsValue(),
+            {"name": "a"});
+        assertThrows("RUNTIME-TYPE-ERROR", "field \"id\"", \type.acceptsValue(), {"id": "x"});
+
+        # an action without options has no option type
+        assertNothing(DataProviderActionCatalog::getTypeForActionOptions(action - "options"));
     }
 
     # ===================== Processor Backward Compatibility Tests =====================
