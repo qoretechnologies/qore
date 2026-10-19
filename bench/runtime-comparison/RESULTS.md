@@ -18533,3 +18533,176 @@ Candidate Release and Debug each pass 71 core files / 114 cases / 18245 assertio
 See `results-aot-empty-cleanup-rejected-macos-arm64.json` for every measured window, all gains/losses, exact source/artifact provenance, commands/logs, inspection correction, independent replay and the 62-item audit. No production optimization from this experiment is retained.
 
 Next investigate finite literal-key selection in nonescaping temporary hashes. Existing fixed-hash scalar replacement handles a single constant key but rejects a key selected through a PHI. Any extension must prove every selected key exists, preserve duplicate-key and evaluation-order semantics, prove predecessor dominance and inline-value lifetime, and retain arbitrary/missing-key, mutable/reference/captured/reflective fallbacks. Actual IR feasibility and fresh validation/measurements remain required; this is a separate hypothesis, not a demonstrated speedup.
+
+
+## Rejected finite literal-key hash projection (post-6a4e2ef92)
+
+The temporary-hash target improves by about 88% in both optimized measurement phases, but the candidate is rejected: the reverse-layout `indirect_affine` workload is slower than the compile-disabled comparator in both phases with disjoint observed fork-mean ranges. The predeclared layout gate rejects independently of the three-layout aggregate. The compiler change and two new fixtures are archived and restored; no runtime optimization from this experiment is retained.
+
+Candidate base: `6a4e2ef92c642f1bfaffabd6abc32d3e323d2750`, including merged origin/develop `7a79146311e041a4cd24ac6c8a8e652f60dc5f32`. The baseline runtime was fully selected Release/Debug-qualified at `d7e14c3af2a12886a302b185c0add0cc8542ce43`; the intervening commit adds only the previous rejection evidence and documentation. Complete baseline/candidate source hashes and that lineage are preserved. All benchmark kernels and reference grids are unchanged.
+
+Both runtime builds use Release `-O3 -DNDEBUG`; every AOT executable uses qcc `-O3`. Modes are before, candidate and candidate compiled with `QORE_DISABLE_IR_FINITE_HASH_KEY_SCALAR_REPLACEMENT=1`; the control variable is absent during execution. Layouts are default, reverse and shuffle-487, with identical baseline-derived order files for every mode and no layout search.
+
+The fixed three-fork screen uses order seed 137029: 55 workloads / three modes / three layouts, 1485 processes and 4455 measured windows. The conditional five-fork confirmation uses seed 137033 and the exact same frozen binaries: 2475 processes and 7425 windows. Each process uses 4096 items / seed 7, three warmup and three measured 300 ms windows. All 11880 measured windows are retained, with no dropped outliers, rescue run, threshold change or epoch pooling.
+
+Values below are ns/item: median of the three layout medians of fork means. Negative percentages mean less elapsed time. These are whole-workload costs, including loop, dispatch, setup and cleanup work, not isolated call latency or a production-throughput score.
+
+### Three-fork screen
+
+|!Workload|!Before|!Compile-disabled|!Candidate|!Time change vs before|!Time change vs disabled
+|arithmetic|1.551684|1.544888|1.553446|+0.113548%|+0.553994%
+|direct_call|1.544454|1.549779|1.568539|+1.559462%|+1.210489%
+|method_call|1.631476|1.626065|1.627599|-0.237635%|+0.094334%
+|indirect_call|6.784044|6.832053|6.768041|-0.235899%|-0.936943%
+|polymorphic_call|23.161529|23.128141|22.849023|-1.349246%|-1.206833%
+|polymorphic_expression_call|10.762768|11.011796|10.937312|+1.621740%|-0.676402%
+|monomorphic_call|3.520452|3.557420|3.549340|+0.820576%|-0.227125%
+|optional_method_call|11.037824|10.938037|10.947553|-0.817835%|+0.086999%
+|polymorphic_float_call|23.114141|23.494834|23.285708|+0.742260%|-0.890092%
+|polymorphic_float_expression_call|11.075264|11.021868|11.016465|-0.530907%|-0.049024%
+|monomorphic_float_call|3.451704|3.551335|3.505741|+1.565535%|-1.283856%
+|optional_float_method_call|10.885522|10.884208|10.808654|-0.706156%|-0.694163%
+|boxed_float_method_call|19.795018|19.713992|19.905852|+0.559908%|+0.973217%
+|dynamic_int_result_call|10.808798|10.626065|10.822756|+0.129134%|+1.851022%
+|dynamic_int_result_fallback|22.087330|21.828049|21.945701|-0.641220%|+0.538997%
+|boxed_int_method_call|16.339573|16.271728|16.466408|+0.776245%|+1.196434%
+|boxed_int_method_fallback|32.297893|32.496770|32.557603|+0.804111%|+0.187197%
+|boxed_float_method_fallback|33.135911|33.228500|33.755983|+1.871300%|+1.587440%
+|boxed_int_method_effect|89.086999|89.149094|90.647680|+1.751861%|+1.680988%
+|dynamic_float_result_call|11.911858|11.823891|11.930162|+0.153657%|+0.898782%
+|indirect_wide|6.891896|6.870386|6.776626|-1.672545%|-1.364700%
+|indirect_float|6.766361|6.648156|6.575461|-2.821309%|-1.093466%
+|indirect_int_result|6.246564|6.351588|6.238838|-0.123678%|-1.775137%
+|indirect_float_result|7.523203|7.467677|7.592545|+0.921710%|+1.672110%
+|indirect_tagged_float|6.949508|6.783971|6.896578|-0.761640%|+1.659893%
+|indirect_branch_float|6.843715|6.816894|6.813999|-0.434197%|-0.042464%
+|indirect_affine|6.877491|6.850486|6.866695|-0.156983%|+0.236603%
+|indirect_affine_wide|6.787320|6.820959|6.963513|+2.595914%|+2.089943%
+|indirect_branch_int|6.836634|6.851394|6.897285|+0.887154%|+0.669807%
+|dispatch_control|1.632876|1.645665|1.642473|+0.587732%|-0.193940%
+|list_read|2.797534|2.715782|2.729201|-2.442636%|+0.494100%
+|list_build|26.663150|26.703505|26.791219|+0.480324%|+0.328473%
+|list_mutate|187.917478|189.645647|187.508471|-0.217652%|-1.126931%
+|temporary_list|1.629270|1.634685|1.652098|+1.401150%|+1.065215%
+|temporary_hash|339.732199|334.606981|40.988696|-87.934998%|-87.750197%
+|closure_call|18.294823|18.030902|18.065736|-1.252200%|+0.193187%
+|closure_capture|25.008769|25.037749|25.243354|+0.938011%|+0.821181%
+|csv_report|946.805089|958.657797|963.213545|+1.733034%|+0.475222%
+|object_orders|1900.234125|1892.989617|1898.072332|-0.113765%|+0.268502%
+|callback_pipeline|85.790715|85.768454|86.074207|+0.330446%|+0.356487%
+|text_index|1338.902699|1349.057935|1347.592242|+0.649005%|-0.108646%
+|object_loop|168.684522|171.561067|172.234024|+2.104225%|+0.392255%
+|object_short|1105.324659|1090.998792|1095.728114|-0.868210%|+0.433486%
+|float_loop|175.702037|178.097768|178.225541|+1.436240%|+0.071743%
+|float_short|1100.020737|1094.661991|1092.805357|-0.655931%|-0.169608%
+|string_loop|372.941321|373.813414|373.555325|+0.164638%|-0.069042%
+|string_short|1261.572827|1262.634913|1260.562661|-0.080072%|-0.164121%
+|effect_loop|361.956394|368.886950|366.265151|+1.190408%|-0.710732%
+|effect_short|1312.644022|1299.518704|1291.708665|-1.594900%|-0.600995%
+|two_read_loop|401.125387|393.196493|396.725746|-1.096824%|+0.897580%
+|two_read_short|1339.756530|1346.522687|1319.893973|-1.482550%|-1.977591%
+|default_loop|706.594887|722.111725|741.095986|+4.882727%|+2.628992%
+|default_short|1665.416946|1670.021299|1669.713122|+0.257964%|-0.018453%
+|string_result_loop|447.461869|447.323763|436.768037|-2.389887%|-2.359751%
+|string_result_short|1366.044588|1377.987950|1368.405189|+0.172806%|-0.695417%
+
+Against `before`: 30 aggregate losses and 81 adverse workload/layout comparisons. Largest layout loss: `default_loop` / `reverse`, +8.681383%. Every loss and observed fork-mean range is retained.
+
+Against `compile_disabled`: 30 aggregate losses and 89 adverse workload/layout comparisons. Largest layout loss: `default_loop` / `reverse`, +9.240677%. Every loss and observed fork-mean range is retained.
+
+### Five-fork confirmation
+
+|!Workload|!Before|!Compile-disabled|!Candidate|!Time change vs before|!Time change vs disabled
+|arithmetic|1.549982|1.549450|1.557975|+0.515649%|+0.550154%
+|direct_call|1.547941|1.546957|1.545205|-0.176739%|-0.113251%
+|method_call|1.618044|1.621077|1.639184|+1.306544%|+1.117014%
+|indirect_call|6.871633|6.887030|6.899249|+0.401891%|+0.177421%
+|polymorphic_call|22.974777|22.989747|22.996112|+0.092861%|+0.027687%
+|polymorphic_expression_call|10.927268|10.889795|10.932183|+0.044979%|+0.389249%
+|monomorphic_call|3.540128|3.509698|3.506632|-0.946183%|-0.087359%
+|optional_method_call|11.098107|10.957718|11.063158|-0.314904%|+0.962249%
+|polymorphic_float_call|23.633581|23.001735|23.339584|-1.243980%|+1.468796%
+|polymorphic_float_expression_call|10.994067|11.000438|10.890360|-0.943303%|-1.000672%
+|monomorphic_float_call|3.517598|3.510772|3.524678|+0.201276%|+0.396092%
+|optional_float_method_call|10.944027|11.054104|10.826280|-1.075896%|-2.060985%
+|boxed_float_method_call|19.858823|19.921569|19.743355|-0.581444%|-0.894580%
+|dynamic_int_result_call|10.856049|10.802986|10.828745|-0.251507%|+0.238445%
+|dynamic_int_result_fallback|22.017818|21.861840|21.861422|-0.710316%|-0.001911%
+|boxed_int_method_call|16.055862|16.142414|16.355716|+1.867569%|+1.321379%
+|boxed_int_method_fallback|32.339032|31.973766|32.401169|+0.192141%|+1.336728%
+|boxed_float_method_fallback|32.761867|32.907737|33.161426|+1.219583%|+0.770908%
+|boxed_int_method_effect|89.858258|89.580993|90.165254|+0.341644%|+0.652215%
+|dynamic_float_result_call|11.990833|11.847619|11.975224|-0.130173%|+1.077051%
+|indirect_wide|6.845374|6.904521|6.872068|+0.389958%|-0.470019%
+|indirect_float|6.768095|6.699449|6.667744|-1.482710%|-0.473249%
+|indirect_int_result|6.429623|6.415137|6.252520|-2.754482%|-2.534889%
+|indirect_float_result|7.470017|7.492315|7.432423|-0.503258%|-0.799376%
+|indirect_tagged_float|6.825152|6.836649|6.874068|+0.716706%|+0.547329%
+|indirect_branch_float|6.783502|6.785377|6.853305|+1.029017%|+1.001091%
+|indirect_affine|6.834700|6.872560|6.872100|+0.547203%|-0.006699%
+|indirect_affine_wide|6.876925|6.899045|6.955895|+1.148331%|+0.824027%
+|indirect_branch_int|6.815912|6.953037|6.883311|+0.988838%|-1.002812%
+|dispatch_control|1.633817|1.630114|1.631341|-0.151518%|+0.075325%
+|list_read|2.817951|2.806885|2.750238|-2.402912%|-2.018140%
+|list_build|26.559461|26.662748|26.577855|+0.069259%|-0.318392%
+|list_mutate|188.549935|189.125078|189.445803|+0.475136%|+0.169584%
+|temporary_list|1.627330|1.626889|1.636924|+0.589538%|+0.616829%
+|temporary_hash|338.724517|336.686512|40.685528|-87.988608%|-87.915902%
+|closure_call|17.972719|17.772001|17.737448|-1.309049%|-0.194425%
+|closure_capture|25.023481|25.044726|25.105083|+0.326102%|+0.240995%
+|csv_report|957.936571|970.770959|967.938514|+1.044113%|-0.291773%
+|object_orders|1867.378743|1877.456482|1859.268744|-0.434299%|-0.968744%
+|callback_pipeline|84.244600|84.627557|84.433618|+0.224367%|-0.229168%
+|text_index|1334.706730|1345.301880|1330.583264|-0.308942%|-1.094075%
+|object_loop|167.561783|169.889447|170.248080|+1.603168%|+0.211098%
+|object_short|1098.037930|1102.948393|1094.814906|-0.293526%|-0.737431%
+|float_loop|174.750675|177.363270|177.518230|+1.583717%|+0.087369%
+|float_short|1106.809729|1097.926184|1109.269612|+0.222250%|+1.033169%
+|string_loop|373.838361|373.788384|371.185377|-0.709661%|-0.696385%
+|string_short|1266.849270|1254.230694|1262.194047|-0.367465%|+0.634919%
+|effect_loop|364.942551|361.068760|353.116665|-3.240479%|-2.202377%
+|effect_short|1277.646821|1265.158859|1269.763250|-0.617038%|+0.363938%
+|two_read_loop|409.513642|389.781848|383.787800|-6.282048%|-1.537796%
+|two_read_short|1335.437091|1320.226179|1345.054872|+0.720197%|+1.880639%
+|default_loop|691.717644|711.313758|699.872287|+1.178898%|-1.608499%
+|default_short|1659.530527|1648.297427|1686.142215|+1.603567%|+2.295993%
+|string_result_loop|452.301337|431.420787|442.625344|-2.139280%|+2.597130%
+|string_result_short|1386.430194|1367.448480|1387.326703|+0.064663%|+1.453673%
+
+Against `before`: 29 aggregate losses and 82 adverse workload/layout comparisons. Largest layout loss: `indirect_affine` / `reverse`, +10.783831%. Every loss and observed fork-mean range is retained.
+
+Against `compile_disabled`: 30 aggregate losses and 86 adverse workload/layout comparisons. Largest layout loss: `indirect_affine` / `reverse`, +10.222115%. Every loss and observed fork-mean range is retained.
+
+### Decision and limitations
+
+The target must use at least 10% less aggregate time than both controls and improve in every fixed layout in both phases. Reject any non-target workload at least 3% slower in aggregate than the same control in both phases, regardless of range overlap. Also reject repeated same-workload/control/layout losses of at least 3% with disjoint observed fork-mean ranges. A failed screen ends the experiment; this screen passed, so the predeclared confirmation was run.
+
+Temporary hashes: 339.732199 -> 40.988696 ns/item in the screen (-87.934998% versus before / -87.750197% versus disabled), and 338.724517 -> 40.685528 in confirmation (-87.988608% / -87.915902%). Every target layout improves. This is a reproducible benefit for the rejected prototype, not a retained branch improvement.
+
+No non-target aggregate loss reaches 3% in both phases. The `default_loop` screen loss of +4.882727% versus before falls to +1.178898% in confirmation. Nevertheless, `indirect_affine` / `compile_disabled` / `reverse` loses +6.140863% in the screen and +10.222115% in confirmation. Comparator fork-mean ranges are 6.816923..6.893671 and 6.751688..7.033329 ns/item; candidate ranges are 7.141789..7.623612 and 7.175289..7.858892. Those disjoint repeated losses independently require rejection.
+
+The three-layout `indirect_affine` aggregate is +0.236603% versus disabled in the screen and -0.006699% in confirmation; this does not override the layout gate. Other confirmation-only disjoint losses include reverse-layout indirect-float-result and wide affine-indirect calls. All layouts and both controls remain in the evidence; no claim of general non-regression is made.
+
+Observed fork-mean ranges are not confidence intervals, and overlap does not establish non-regression. Host load, frequency and thermals are uncontrolled. No task-owned build, test, profile, source read, edit or analysis job overlapped either timed phase. No fresh Java/develop ratio, IR/JIT timing benefit, Java parity or global performance ceiling is established.
+
+### Generated code and qualification
+
+The rejected shared IR analysis projects an immutable private exact-integer hash read through a two-to-four-edge literal-string PHI into a native integer PHI. It proves actual predecessor identity, no backedge, initializer/read/edge dominance and inline-integer lifetime bounds; a native integer tag alone is not a lifetime proof. Existing duplicate-key-last-value behavior and private-local visibility/noescape restrictions remain. Arbitrary or missing keys, wide values, unsupported joins, mutations, references, captures, embedded-NUL keys and exceptional-flow functions retain existing paths. Selector strings and their ownership deliberately remain.
+
+The audit moved whole-key-set validation outside the per-read resolver, avoiding repeated scans, and conservatively excluded exceptional-flow functions because this pass receives a normal-flow CFG. The existing instruction scan checks both base exception targets and Throw/Rethrow targets. Unbounded new analysis checks cancellation; bounded selector/predecessor walks retain their explicit limits. No runtime helper ABI, TLS, RuntimeConfig, frame, lock, epoch or cancellation-poll contract changes.
+
+Actual prepared ordinary/fast temporary-hash bodies shrink from 436/432 to 169/159 static instructions. LLVM and assembly show the hash allocation, dynamic lookup and two runtime local reloads removed; two static branch-local string allocation sites (one selected per iteration), refself and decrefs remain. Stack/cancellation checks and body-local setup/teardown remain. These whole-function counts include cold paths and are not executed instruction counts or latency estimates.
+
+Compile-disabled target LLVM matches before after removing only debug attachments. Across all 150 microbenchmark LLVM definitions, removing debug attachments and substituting exact private/internal string declarations for renumbered references leaves only the two target bodies and startup `main` different; startup metadata differs separately. The normalization and raw code are preserved. This comparison does not prove the cause of the unrelated timing regression. Runtime helper API names match; runtime text names show six compiler-lambda renames and three additional compiler/STL implementations, not new runtime helper APIs. Actual before executables pass all three reference grids on the candidate runtime with loaded-library identity verified.
+
+All 27 object/executable byte sizes and single-build compile durations are retained as diagnostics. They are not statistically controlled compilation-throughput or application-memory measurements.
+
+The new semantic fixture passes on the qualified baseline in AST, IR, JIT, tiered and AOT modes. Candidate focused validation includes 254 finite-key assertions, with positive allocation removal and negative allocation retention; exact integer extremes, duplicate/empty/unicode keys, loop grids, observable keys, aliases, references, captures and thrown/nonthrown catch-rejoin paths are covered. Enabled/disabled IR/JIT/tiered and AOT `-O0`/`-O3`, stripped source, EH, no-debug-info and split-compilation variants are included.
+
+Candidate Release and Debug each pass 72 core files / 115 cases / 18401 assertions. Freshly restored Release and Debug each pass 69 / 112 / 17595. Each also runs 13 lvalue/DGC suites (82 cases; 1330 Release / 2663 Debug assertions), three thread-cancellation suites, 20 upstream AST/IR checks, eight DataProvider suites, DataFrame regressions and 555 IR + 555 AOT references. Debug runs 1985 native checks with the diagnostic control both unset and set; after restoration the removed control has no effect. All 64 owned qmods are rebuilt and their exact Release aliases restored, with unrelated links unchanged. Independent raw-log/source/artifact replay covers candidate and restored builds. This is selected macOS arm64 coverage, not full-suite/sanitizer/cross-platform certification.
+
+Initial attempts are preserved separately with actual nonzero terminal statuses: a wrong generated-header path during freezing, a one-entry-versus-two-entry disassembly collector assumption, an intentional duplicate-key warning rejected by a strict collector, an explicit C++ value-constructor compilation error, an interrupted launch before that correction, and a collector expecting a QUnit summary from a silent-success fixture. Two broad runs were intentionally stopped before Debug for the premeasurement audit corrections. Final focus, code inspection and complete qualification were repeated on the corrected source before timing. None of those failed/interrupted attempts is relabelled as successful qualification.
+
+See `results-aot-finite-hash-key-rejected-macos-arm64.json` for all 11880 windows, every gain/loss, commands and raw logs, exact source/artifact provenance, independent replay, archived/restored sources and the full 62-item audit. No compiler/test implementation from this experiment is retained.
+
+Next independently investigate elimination of the exclusive literal-selector graph after successful hash projection. The remaining string allocation/refself/decrefs are visible in actual generated code. Start with direct literal PHIs and private exact-string single-store locals whose every consumer is eliminated; retain observable strings, linked/shared/partially projected graphs, exceptional flows and all ownership/cancellation contracts. This is a materially different hypothesis requiring fresh validation and predeclared broad measurements, not an unchanged retry or a demonstrated benefit. A fresh optimized Java/develop checkpoint follows a meaningful retained improvement; the separate baseline IR reflective-frame discrepancy remains a correctness follow-up.
