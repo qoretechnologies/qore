@@ -28,7 +28,7 @@ class PgsqlBulkBindProtocolsTest inherits QUnit::Test {
     }
 
     globalTearDown() {
-        # drops the schema of the native PostgreSQL run with everything left in it
+        # drops the run's schema, in each database, with everything left in it
         PgsqlRunSchema::teardown();
     }
 
@@ -39,7 +39,9 @@ class PgsqlBulkBindProtocolsTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_JDBC_PGSQL) {
             testSkip("QORE_DB_CONNSTR_JDBC_PGSQL is not configured");
         }
-        runProtocol(ENV.QORE_DB_CONNSTR_JDBC_PGSQL, "jdbc");
+        # the run's own schema: a JDBC connection does not use libpq, so its URL names the schema
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_JDBC_PGSQL, "PgsqlBulkBindProtocols");
+        runProtocol(PgsqlRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_JDBC_PGSQL), "jdbc");
     }
 
     private native() {
@@ -49,7 +51,7 @@ class PgsqlBulkBindProtocolsTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_PGSQL) {
             testSkip("QORE_DB_CONNSTR_PGSQL is not configured");
         }
-        # the run's own schema; a JDBC connection does not use libpq, so the JDBC case is not isolated by it
+        # the run's own schema, which every PostgreSQL connection opened afterwards uses
         PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlBulkBindProtocols");
         runProtocol(ENV.QORE_DB_CONNSTR_PGSQL, "pgsql");
     }

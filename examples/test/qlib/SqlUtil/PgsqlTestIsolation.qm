@@ -47,6 +47,11 @@ module PgsqlTestIsolation {
     run's schema does not resolve to an object of another test in \c public, and listings of the \c search_path
     schemas are only of the run's objects.
 
+    A connection of the \c jdbc driver to a PostgreSQL database does not use libpq: after
+    @ref PgsqlTestIsolation::PgsqlRunSchema::setup() "setup()" with its datasource string, the test opens it with the
+    datasource string that @ref PgsqlTestIsolation::PgsqlRunSchema::getConnectionString() "getConnectionString()"
+    gives, whose JDBC URL has the \c currentSchema parameter of the PostgreSQL JDBC driver.
+
     When the environment variable \c PGSQL_TEST_ISOLATION_READY names a file, such as a FIFO that another process
     reads, @ref PgsqlTestIsolation::PgsqlRunSchema::setup() "setup()" writes the name of the schema to it once the
     schema is set up, so a test of concurrent runs can start a second run at that point without waiting for a time.
@@ -79,7 +84,7 @@ PgsqlRunSchema::teardown();
 
 #! Contains the definitions of the PgsqlTestIsolation module
 public namespace PgsqlTestIsolation {
-#! Holds the run's schema and the connection that created it, and drops the schema when it is destroyed
+#! Holds the run's schema in a database and the connection that created it, and drops the schema when it is destroyed
 /** It holds what it needs to drop the schema, as the program can end without PgsqlRunSchema::teardown() and the
     static members of PgsqlRunSchema can be destroyed before it
 */
@@ -138,8 +143,18 @@ public class PgsqlRunSchema {
         #! The name of the run's schema, once it is created
         static *string name;
 
-        #! Holds the schema and drops it, also when the program ends without teardown()
-        static *PgsqlRunSchemaGuard guard;
+        #! Hold the schema in each database it is created in and drop it, also when the program ends without teardown()
+        /** keyed by the datasource string of the database
+        */
+        static hash<string, PgsqlRunSchemaGuard> guards;
+
+        #! The search_path of the connections to each database: the run's schema and the extensions' schemas
+        /** keyed by the datasource string of the database
+        */
+        static hash<string, list<string>> search_paths;
+
+        #! True if setup() set PGOPTIONS
+        static bool pgoptions_set = False;
 
         #! The value of PGOPTIONS before setup(), restored by teardown()
         static *string pgoptions;
@@ -148,23 +163,34 @@ public class PgsqlRunSchema {
         static Mutex lck();
     }
 
-    #! Creates the schema of this run and makes it the first schema of every PostgreSQL connection opened afterwards
-    /** Call this before the test opens any PostgreSQL connection: a connection that is already open keeps its
-        \c search_path.  A second call returns the same schema.
+    #! Creates the schema of this run in the test's database and makes it the first schema of its connections
+    /** Call this before the test opens any connection to the database, with each datasource string the test uses:
+        - for the \c pgsql driver, every PostgreSQL connection that the process opens afterwards uses the run's
+          schema: a connection that is already open keeps its \c search_path
+        - for the \c jdbc driver with a PostgreSQL URL, which does not use libpq, a connection uses the run's
+          schema when it is opened with the datasource string that getConnectionString() gives
+
+        The run has one schema; a second call for the same database returns it, and a call for another database
+        creates it there too.
 
         @param connstr the datasource string of the test's database; nothing is done when it is not set or not for
-        the \c pgsql driver
+        a PostgreSQL database
         @param suite the name of the test, used in the name of the schema
 
         @return the name of the run's schema, or @ref nothing if the connection is not a PostgreSQL connection
     */
     static *string setup(*string connstr, string suite) {
-        if (!connstr || parse_datasource(connstr).type != "pgsql") {
+        if (!connstr) {
+            return;
+        }
+        hash<auto> config = parse_datasource(connstr);
+        bool pgsql = config.type == "pgsql";
+        if (!pgsql && !PgsqlRunSchema::isPgsqlJdbc(config)) {
             return;
         }
         lck.lock();
         on_exit lck.unlock();
-        if (name) {
+        if (guards{connstr}) {
             return name;
         }
 
@@ -173,12 +199,13 @@ public class PgsqlRunSchema {
         ds.open();
         PgsqlRunSchema::dropLeftovers(ds);
 
-        string schema = sprintf("%s%s_%s_%d_%d", Prefix, PgsqlRunSchema::getLabel(suite, 12),
+        bool first = !name;
+        string schema = name ?? sprintf("%s%s_%s_%d_%d", Prefix, PgsqlRunSchema::getLabel(suite, 12),
             PgsqlRunSchema::getHost(), getpid(), now_us().getEpochSeconds());
         {
             on_error ds.rollback();
             on_success ds.commit();
-            ds.exec("create schema " + schema);
+            ds.exec("create schema if not exists " + schema);
         }
 
         # the schemas of the installed extensions after the run's schema; pg_catalog is always searched
@@ -187,19 +214,23 @@ public class PgsqlRunSchema {
             "join pg_catalog.pg_namespace n on n.oid = e.extnamespace where n.nspname <> 'pg_catalog' order by 1")
             .nspname ?? ();
 
-        # libpq reads PGOPTIONS when a connection is opened; a space or a backslash in a value is escaped
-        pgoptions = getenv("PGOPTIONS");
-        string value = join(",", search_path);
-        value =~ s/\\/\\\\/g;
-        value =~ s/ /\\ /g;
-        setenv("PGOPTIONS", (pgoptions ? pgoptions + " " : "") + "-c search_path=" + value);
+        if (pgsql && !pgoptions_set) {
+            # libpq reads PGOPTIONS when a connection is opened; a space or a backslash in a value is escaped
+            pgoptions = getenv("PGOPTIONS");
+            string value = join(",", search_path);
+            value =~ s/\\/\\\\/g;
+            value =~ s/ /\\ /g;
+            setenv("PGOPTIONS", (pgoptions ? pgoptions + " " : "") + "-c search_path=" + value);
+            pgoptions_set = True;
+        }
 
         name = schema;
-        guard = new PgsqlRunSchemaGuard(ds, schema);
+        guards{connstr} = new PgsqlRunSchemaGuard(ds, schema);
+        search_paths{connstr} = search_path;
 
         # tells a process that waits for this run to be set up, as one that starts a concurrent run does, that it
         # is: the file, such as a FIFO the other process reads, gets the schema's name
-        *string ready = getenv("PGSQL_TEST_ISOLATION_READY");
+        *string ready = first ? getenv("PGSQL_TEST_ISOLATION_READY") : NOTHING;
         if (ready) {
             # not for the processes that this one starts
             unsetenv("PGSQL_TEST_ISOLATION_READY");
@@ -209,6 +240,62 @@ public class PgsqlRunSchema {
             f.close();
         }
         return name;
+    }
+
+    #! Returns the datasource string that a connection to the test's database is opened with to use the run's schema
+    /** For the \c jdbc driver with a PostgreSQL URL, set up with setup(), the URL gets the \c currentSchema parameter
+        of the PostgreSQL JDBC driver with the run's \c search_path; any other datasource string is returned as it is,
+        as a \c pgsql connection uses the run's schema by \c PGOPTIONS
+
+        @param connstr the datasource string of the test's database, as it was given to setup()
+
+        @return the datasource string to open connections to the database with; no value if none is given
+    */
+    static *string getConnectionString(*string connstr) {
+        if (!connstr) {
+            return;
+        }
+        lck.lock();
+        on_exit lck.unlock();
+        *list<string> search_path = search_paths{connstr};
+        if (!search_path || parse_datasource(connstr).type != "jdbc") {
+            return connstr;
+        }
+        return PgsqlRunSchema::getJdbcConnectionString(connstr, search_path);
+    }
+
+    #! Returns a jdbc datasource string whose PostgreSQL URL has the given search_path as its currentSchema
+    /** The URL is the \c url option, or else the database name, as the jni module's JDBC driver takes them.  The
+        schemas are separated by a comma in the database name, and by \c "%2C", an encoded comma, which the
+        PostgreSQL JDBC driver decodes, in the \c url option, where a comma separates the options of a datasource
+        string; a \c "%" in the database name would begin the host name.
+
+        @param connstr a datasource string for the \c jdbc driver with a PostgreSQL URL
+        @param search_path the schemas, the first of them the one that objects are created in
+
+        @return the datasource string with \c currentSchema in its URL
+
+        @throw PGSQL-TEST-ISOLATION-ERROR the datasource string is not for a PostgreSQL JDBC URL, or its URL already
+        has a \c currentSchema parameter
+    */
+    static string getJdbcConnectionString(string connstr, list<string> search_path) {
+        hash<auto> config = parse_datasource(connstr);
+        if (!PgsqlRunSchema::isPgsqlJdbc(config)) {
+            throw "PGSQL-TEST-ISOLATION-ERROR", sprintf("%y is not a datasource string for a PostgreSQL JDBC URL",
+                config.type);
+        }
+        string key = config.options.url ? "url" : "db";
+        string url = key == "url" ? config.options.url : config.db;
+        if (url =~ /[?&]currentSchema=/) {
+            throw "PGSQL-TEST-ISOLATION-ERROR", "the JDBC URL already has a currentSchema parameter";
+        }
+        url += (url.find("?") >= 0 ? "&" : "?") + "currentSchema=" + join(key == "url" ? "%2C" : ",", search_path);
+        if (key == "url") {
+            config.options.url = url;
+        } else {
+            config.db = url;
+        }
+        return make_datasource_string(config);
     }
 
     #! Returns the name of the run's schema, or @ref nothing if none was created
@@ -233,36 +320,48 @@ public class PgsqlRunSchema {
         return name + "_" + PgsqlRunSchema::getLabel(tag, 8);
     }
 
-    #! Drops the schema of this run with everything in it
+    #! Drops the schema of this run, in every database it was created in, with everything in it
     /** Call this at the end of the test, after its connections are closed or their transactions ended: dropping
-        the schema waits up to @ref DropLockTimeout for a lock held by an open transaction.  \c PGOPTIONS is restored,
-        so a connection opened afterwards uses the database's \c search_path.  Nothing is done if no schema was
-        created or it is already dropped.
+        the schema waits up to @ref DropLockTimeout for a lock held by an open transaction.  \c PGOPTIONS is
+        restored, if setup() set it, so a connection opened afterwards uses the database's \c search_path.  Nothing
+        is done if no schema was created or it is already dropped.
 
         @throw DBI:PGSQL:ERROR the schema could not be dropped; it is dropped by the setup of a later run once it is
         older than @ref LeftoverAge
     */
     static teardown() {
-        *PgsqlRunSchemaGuard old_guard;
+        hash<string, PgsqlRunSchemaGuard> old_guards;
         {
             lck.lock();
             on_exit lck.unlock();
             if (!name) {
                 return;
             }
-            old_guard = remove guard;
+            old_guards = remove guards;
+            remove search_paths;
             remove name;
-            # a connection opened afterwards uses the database's search_path again
-            *string old_pgoptions = remove pgoptions;
-            if (old_pgoptions) {
-                setenv("PGOPTIONS", old_pgoptions);
-            } else {
-                unsetenv("PGOPTIONS");
+            if (pgoptions_set) {
+                # a connection opened afterwards uses the database's search_path again
+                *string old_pgoptions = remove pgoptions;
+                if (old_pgoptions) {
+                    setenv("PGOPTIONS", old_pgoptions);
+                } else {
+                    unsetenv("PGOPTIONS");
+                }
+                pgoptions_set = False;
             }
         }
-        if (old_guard) {
-            old_guard.drop();
+        map $1.drop(), old_guards.iterator();
+    }
+
+    #! Returns True if a parsed datasource string is for the jdbc driver with a PostgreSQL URL
+    private static bool isPgsqlJdbc(hash<auto> config) {
+        if (config.type != "jdbc") {
+            return False;
         }
+        string url = config.options.url ?? config.db ?? "";
+        url =~ s/^jdbc://;
+        return url.lwr().startsWith("postgresql:");
     }
 
     #! Drops the schemas left by runs on this host whose process is gone and that are older than LeftoverAge

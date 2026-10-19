@@ -38,6 +38,7 @@ class PgsqlTestIsolationTest inherits QUnit::Test {
             skip_reason = "QORE_DB_CONNSTR_PGSQL is not configured";
         }
         addTestCase("a non-PostgreSQL connection has no run schema", \notPgsql());
+        addTestCase("a PostgreSQL JDBC URL gets the run's schema as its currentSchema", \jdbcConnectionString());
         addTestCase("the schema is dropped when the program ends without a teardown", \exitWithoutTeardown());
         addTestCase("a run writes its schema's name to the ready file", \readyFile());
         # the leftover schemas are made before the run's schema, whose setup drops the ones that may be dropped
@@ -68,6 +69,40 @@ class PgsqlTestIsolationTest inherits QUnit::Test {
         assertNothing(PgsqlRunSchema::setup(NOTHING, "x"));
         assertNothing(PgsqlRunSchema::setup("sqlite3:@:memory:", "x"));
         assertNothing(PgsqlRunSchema::getName());
+    }
+
+    #! The JDBC URL of a PostgreSQL datasource string gets the run's search_path as its currentSchema parameter
+    /** These need no database: a JDBC connection does not use libpq, so its datasource string carries the schema
+    */
+    private jdbcConnectionString() {
+        list<string> sp = ("qtest_x_h_1_2", "ext");
+        # the URL in the database name, as "jdbc:user/pass@postgresql:db{classpath=...}" gives it: the schemas are
+        # separated by a comma, as a "%" would begin the host name
+        string connstr = "jdbc:u/p@postgresql:db{classpath=/usr/share/java/postgresql.jar}";
+        hash<auto> config = parse_datasource(PgsqlRunSchema::getJdbcConnectionString(connstr, sp));
+        assertEq("postgresql:db?currentSchema=qtest_x_h_1_2,ext", config.db);
+        assertNothing(config.host);
+        assertEq({"classpath": "/usr/share/java/postgresql.jar"}, config.options);
+        assertEq(("u", "p"), (config.user, config.pass));
+        # a URL with parameters
+        config = parse_datasource(PgsqlRunSchema::getJdbcConnectionString("jdbc:u/p@postgresql:db?ssl=false",
+            ("qtest_x_h_1_2",)));
+        assertEq("postgresql:db?ssl=false&currentSchema=qtest_x_h_1_2", config.db);
+        # the URL in the url option: the schemas are separated by an encoded comma, as a comma separates the options
+        config = parse_datasource(PgsqlRunSchema::getJdbcConnectionString(
+            "jdbc:u/p@db{url=jdbc:postgresql://localhost:5432/db,classpath=/x.jar}", sp));
+        assertEq("jdbc:postgresql://localhost:5432/db?currentSchema=qtest_x_h_1_2%2Cext", config.options.url);
+        assertEq("/x.jar", config.options.classpath);
+        assertEq("db", config.db);
+
+        # another database's JDBC URL, or a URL that already sets the schema, is refused
+        assertThrows("PGSQL-TEST-ISOLATION-ERROR", \PgsqlRunSchema::getJdbcConnectionString(),
+            ("jdbc:u/p@mysql:db", sp));
+        assertThrows("PGSQL-TEST-ISOLATION-ERROR", "already has a currentSchema",
+            \PgsqlRunSchema::getJdbcConnectionString(), ("jdbc:u/p@postgresql:db?currentSchema=x", sp));
+        # a datasource string that was not set up is given as it is
+        assertEq(connstr, PgsqlRunSchema::getConnectionString(connstr));
+        assertEq("pgsql:u/p@db", PgsqlRunSchema::getConnectionString("pgsql:u/p@db"));
     }
 
     #! A program that sets up a run schema and ends without calling teardown() leaves no schema behind
