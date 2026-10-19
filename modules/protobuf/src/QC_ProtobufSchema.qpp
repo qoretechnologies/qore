@@ -28,6 +28,20 @@
 #include "QC_ProtobufSchema.h"
 #include "QoreProtobufSchema.h"
 
+// checks a message or enum type name, a symbol or a file name in the schema given as an argument: protobuf takes
+// names as NUL-terminated strings, so a name with a NUL character would be cut at the NUL character and name another
+// type, symbol or file than the string; returns 0 if the name has no NUL character, -1 if it has one and an exception
+// was raised
+static int protobuf_check_name(const QoreStringNode* name, const char* what, const char* what_plural,
+        const char* err, ExceptionSink* xsink) {
+    return q_check_no_nul(name->c_str(), name->size(), what, what_plural, err, xsink);
+}
+
+// checks a message type name given as an argument
+static int protobuf_check_message_type(const QoreStringNode* type, ExceptionSink* xsink) {
+    return protobuf_check_name(type, "message type name", "message type names", "PROTOBUF-TYPE-ERROR", xsink);
+}
+
 //! Information about a method in a protobuf service definition
 /** @since %protobuf 1.0
 */
@@ -188,7 +202,8 @@ ProtobufSchema::constructor(list<binary> serialized_descriptors) {
       \c {"methods": ({"name": "...", "input_type": "...", "output_type": "...",
       "client_streaming": bool, "server_streaming": bool}, ...)}
 
-    @throw PROTOBUF-SCHEMA-ERROR if the definition is invalid
+    @throw PROTOBUF-SCHEMA-ERROR if the definition is invalid, if \c syntax is not a string, or if a name, type, label,
+    \c syntax or \c package string contains a NUL character
 
     @note The programmatic constructor supports messages, scalar fields, repeated fields,
     nested messages, enums, oneofs, services, and packed options. \c map fields require
@@ -257,7 +272,7 @@ list<string> ProtobufSchema::messageTypes() {
 /** @param type the fully-qualified message type name
     @return a hash with all fields set to their default values
 
-    @throw PROTOBUF-TYPE-ERROR if the message type is not found
+    @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
 
     @par Example:
     @code{.py}
@@ -268,6 +283,9 @@ hash<auto> defaults = schema.defaultMessage("mypackage.Person");
     @since %protobuf 1.0
 */
 hash<auto> ProtobufSchema::defaultMessage(string type) {
+    if (protobuf_check_message_type(type, xsink)) {
+        return QoreValue();
+    }
     return schema->getDefaultMessage(type->c_str(), xsink);
 }
 
@@ -277,13 +295,16 @@ hash<auto> ProtobufSchema::defaultMessage(string type) {
 
     @return the protobuf-encoded binary data
 
-    @throw PROTOBUF-TYPE-ERROR if the message type is not found
+    @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-FIELD-ERROR if a hash key doesn't match a field
     @throw PROTOBUF-ENCODE-ERROR if serialization fails
 
     @since %protobuf 1.0
 */
 binary ProtobufSchema::encode(string type, hash<auto> data) {
+    if (protobuf_check_message_type(type, xsink)) {
+        return QoreValue();
+    }
     return schema->encode(type->c_str(), data, xsink);
 }
 
@@ -293,12 +314,16 @@ binary ProtobufSchema::encode(string type, hash<auto> data) {
 
     @return the decoded message as a hash
 
-    @throw PROTOBUF-TYPE-ERROR if the message type is not found
+    @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-DECODE-ERROR if parsing fails
+    @throw HASH-KEY-ERROR if a string map key in the message contains a NUL character
 
     @since %protobuf 1.0
 */
 hash<auto> ProtobufSchema::decode(string type, binary data) {
+    if (protobuf_check_message_type(type, xsink)) {
+        return QoreValue();
+    }
     return schema->decode(type->c_str(), data, xsink);
 }
 
@@ -308,12 +333,15 @@ hash<auto> ProtobufSchema::decode(string type, binary data) {
 
     @return the JSON string representation
 
-    @throw PROTOBUF-TYPE-ERROR if the message type is not found
+    @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-JSON-ERROR if JSON conversion fails
 
     @since %protobuf 1.0
 */
 string ProtobufSchema::toJson(string type, hash<auto> data) {
+    if (protobuf_check_message_type(type, xsink)) {
+        return QoreValue();
+    }
     return schema->toJson(type->c_str(), data, xsink);
 }
 
@@ -323,12 +351,16 @@ string ProtobufSchema::toJson(string type, hash<auto> data) {
 
     @return the parsed message as a hash
 
-    @throw PROTOBUF-TYPE-ERROR if the message type is not found
+    @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-JSON-ERROR if JSON parsing fails
+    @throw HASH-KEY-ERROR if a string map key in the message contains a NUL character
 
     @since %protobuf 1.0
 */
 hash<auto> ProtobufSchema::fromJson(string type, string json) {
+    if (protobuf_check_message_type(type, xsink)) {
+        return QoreValue();
+    }
     return schema->fromJson(type->c_str(), *json, xsink);
 }
 
@@ -347,7 +379,7 @@ hash<auto> ProtobufSchema::fromJson(string type, string json) {
       - \c value_type: (for map fields) the map value type name
       - \c oneof: (for oneof fields) the oneof group name
 
-    @throw PROTOBUF-TYPE-ERROR if the message type is not found
+    @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
 
     @par Example:
     @code{.py}
@@ -360,6 +392,9 @@ map printf("  %s: %s (#%d)%s\n", $1.key, $1.value.type, $1.value.number,
     @since %protobuf 1.0
 */
 hash<auto> ProtobufSchema::messageSchema(string type) {
+    if (protobuf_check_message_type(type, xsink)) {
+        return QoreValue();
+    }
     return schema->getMessageSchema(type->c_str(), xsink);
 }
 
@@ -367,7 +402,7 @@ hash<auto> ProtobufSchema::messageSchema(string type) {
 /** @param enum_type the fully-qualified or short enum type name
     @return a hash mapping enum value names to their integer numbers
 
-    @throw PROTOBUF-TYPE-ERROR if the enum type is not found
+    @throw PROTOBUF-TYPE-ERROR if the enum type is not found, or if \a enum_type contains a NUL character
 
     @par Example:
     @code{.py}
@@ -379,6 +414,9 @@ printf("ACTIVE = %d\n", values.ACTIVE);
     @since %protobuf 1.0
 */
 hash<string, int> ProtobufSchema::enumValues(string enum_type) {
+    if (protobuf_check_name(enum_type, "enum type name", "enum type names", "PROTOBUF-TYPE-ERROR", xsink)) {
+        return QoreValue();
+    }
     return schema->getEnumValues(enum_type->c_str(), xsink);
 }
 
@@ -407,11 +445,15 @@ list<binary> ProtobufSchema::serializeFileDescriptors() {
 
     @return a list of binary data, each containing one serialized \c FileDescriptorProto
 
-    @throw PROTOBUF-SYMBOL-NOT-FOUND if the symbol is not found in the schema
+    @throw PROTOBUF-SYMBOL-NOT-FOUND if the symbol is not found in the schema, or if \a symbol contains a NUL
+    character
 
     @since %protobuf 1.0
 */
 list<binary> ProtobufSchema::serializeFileDescriptorForSymbol(string symbol) {
+    if (protobuf_check_name(symbol, "symbol", "symbols", "PROTOBUF-SYMBOL-NOT-FOUND", xsink)) {
+        return QoreValue();
+    }
     return schema->serializeFileDescriptorForSymbol(symbol->c_str(), xsink);
 }
 
@@ -420,10 +462,14 @@ list<binary> ProtobufSchema::serializeFileDescriptorForSymbol(string symbol) {
 
     @return a list of binary data, each containing one serialized \c FileDescriptorProto
 
-    @throw PROTOBUF-FILE-NOT-FOUND if the file is not found in the schema
+    @throw PROTOBUF-FILE-NOT-FOUND if the file is not found in the schema, or if \a filename contains a NUL
+    character
 
     @since %protobuf 1.0
 */
 list<binary> ProtobufSchema::serializeFileDescriptorByName(string filename) {
+    if (protobuf_check_name(filename, "file name", "file names", "PROTOBUF-FILE-NOT-FOUND", xsink)) {
+        return QoreValue();
+    }
     return schema->serializeFileDescriptorByName(filename->c_str(), xsink);
 }

@@ -34,6 +34,17 @@
 #include <map>
 #include <set>
 
+//! checks a string from a schema definition hash that protobuf takes as a NUL-terminated string
+/** a name, type or label with a NUL character would be cut at the NUL character, and name something else than the
+    string
+
+    @return 0 if the string has no NUL character, -1 if it has one and an exception was raised
+*/
+static int check_definition_string(const QoreString& str, const char* what, const char* what_plural,
+        ExceptionSink* xsink) {
+    return q_check_no_nul(str.c_str(), str.size(), what, what_plural, "PROTOBUF-SCHEMA-ERROR", xsink);
+}
+
 // ErrorCollector implementation
 #ifdef QORE_PROTOBUF_V22_PLUS
 void QoreProtobufSchema::ErrorCollector::RecordError(absl::string_view filename, int line,
@@ -911,6 +922,9 @@ void QoreProtobufSchema::buildMessage(google::protobuf::DescriptorProto* msg,
                 return;
             }
             QoreStringValueHelper name_str(name_val);
+            if (check_definition_string(**name_str, "field name", "field names", xsink)) {
+                return;
+            }
             fdp->set_name(name_str->c_str());
 
             // number (required)
@@ -930,6 +944,9 @@ void QoreProtobufSchema::buildMessage(google::protobuf::DescriptorProto* msg,
                 return;
             }
             QoreStringValueHelper type_str(type_val);
+            if (check_definition_string(**type_str, "field type", "field types", xsink)) {
+                return;
+            }
             bool is_reference = false;
             auto ftype = resolveFieldType(type_str->c_str(), is_reference);
             if (is_reference && isEnumType(msg_def, type_str->c_str())) {
@@ -945,6 +962,9 @@ void QoreProtobufSchema::buildMessage(google::protobuf::DescriptorProto* msg,
             QoreValue label_val = field_def->getKeyValue("label");
             if (!label_val.isNullOrNothing()) {
                 QoreStringValueHelper label_str(label_val);
+                if (check_definition_string(**label_str, "field label", "field labels", xsink)) {
+                    return;
+                }
                 fdp->set_label(resolveFieldLabel(label_str->c_str()));
             } else {
                 fdp->set_label(google::protobuf::FieldDescriptorProto::LABEL_OPTIONAL);
@@ -957,6 +977,10 @@ void QoreProtobufSchema::buildMessage(google::protobuf::DescriptorProto* msg,
                 // Map fields are implemented as repeated fields of a synthetic MapEntry message
                 QoreStringValueHelper map_key_str(map_key_val);
                 QoreStringValueHelper map_val_str(map_val_val);
+                if (check_definition_string(**map_key_str, "map key type", "map key types", xsink)
+                        || check_definition_string(**map_val_str, "map value type", "map value types", xsink)) {
+                    return;
+                }
 
                 // Build the synthetic MapEntry nested message
                 std::string entry_name = std::string(name_str->c_str()) + "Entry";
@@ -1049,6 +1073,9 @@ void QoreProtobufSchema::buildMessage(google::protobuf::DescriptorProto* msg,
                 QoreValue oname = ofield_def->getKeyValue("name");
                 if (!oname.isNullOrNothing()) {
                     QoreStringValueHelper oname_str(oname);
+                    if (check_definition_string(**oname_str, "field name", "field names", xsink)) {
+                        return;
+                    }
                     ofdp->set_name(oname_str->c_str());
                 }
 
@@ -1060,6 +1087,9 @@ void QoreProtobufSchema::buildMessage(google::protobuf::DescriptorProto* msg,
                 QoreValue otype = ofield_def->getKeyValue("type");
                 if (!otype.isNullOrNothing()) {
                     QoreStringValueHelper otype_str(otype);
+                    if (check_definition_string(**otype_str, "field type", "field types", xsink)) {
+                        return;
+                    }
                     bool ois_ref = false;
                     auto oftype = resolveFieldType(otype_str->c_str(), ois_ref);
                     ofdp->set_type(oftype);
@@ -1136,14 +1166,30 @@ void QoreProtobufSchema::buildFromHash(const QoreHashNode* schema_def, Exception
 
     // Set syntax
     QoreValue syntax_val = schema_def->getKeyValue("syntax");
-    // note: the data helper reads an inline short string (ex: "proto3") without allocating
-    QoreStringDataHelper syntax_str(syntax_val);
-    fdp.set_syntax(syntax_val.isNullOrNothing() ? "proto3" : syntax_str.c_str());
+    if (syntax_val.isNullOrNothing()) {
+        fdp.set_syntax("proto3");
+    } else {
+        // note: the data helper reads an inline short string (ex: "proto3") without allocating
+        QoreStringDataHelper syntax_str(syntax_val);
+        if (!syntax_str) {
+            xsink->raiseException("PROTOBUF-SCHEMA-ERROR", "'syntax' must be a string; got type '%s' instead",
+                syntax_val.getFullTypeName());
+            return;
+        }
+        if (q_check_no_nul(syntax_str.c_str(), syntax_str.size(), "syntax", "syntax strings",
+                "PROTOBUF-SCHEMA-ERROR", xsink)) {
+            return;
+        }
+        fdp.set_syntax(syntax_str.c_str());
+    }
 
     // Set package
     QoreValue pkg_val = schema_def->getKeyValue("package");
     if (!pkg_val.isNullOrNothing()) {
         QoreStringValueHelper pkg_str(pkg_val);
+        if (check_definition_string(**pkg_str, "package name", "package names", xsink)) {
+            return;
+        }
         fdp.set_package(pkg_str->c_str());
     }
 
@@ -1236,16 +1282,26 @@ void QoreProtobufSchema::buildFromHash(const QoreHashNode* schema_def, Exception
                 QoreValue mname = method_def->getKeyValue("name");
                 if (!mname.isNullOrNothing()) {
                     QoreStringValueHelper mname_str(mname);
+                    if (check_definition_string(**mname_str, "method name", "method names", xsink)) {
+                        return;
+                    }
                     mdp->set_name(mname_str->c_str());
                 }
                 QoreValue input = method_def->getKeyValue("input_type");
                 if (!input.isNullOrNothing()) {
                     QoreStringValueHelper input_str(input);
+                    if (check_definition_string(**input_str, "method input type", "method input types", xsink)) {
+                        return;
+                    }
                     mdp->set_input_type(input_str->c_str());
                 }
                 QoreValue output = method_def->getKeyValue("output_type");
                 if (!output.isNullOrNothing()) {
                     QoreStringValueHelper output_str(output);
+                    if (check_definition_string(**output_str, "method output type", "method output types",
+                            xsink)) {
+                        return;
+                    }
                     mdp->set_output_type(output_str->c_str());
                 }
                 QoreValue cs = method_def->getKeyValue("client_streaming");

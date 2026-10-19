@@ -1,0 +1,215 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A message or enum type name, a symbol, a file name, or a name, type or label in a schema definition with a NUL
+# character is refused instead of being cut at the NUL character; string and bytes data is kept whole.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires protobuf
+
+%exec-class ProtobufNameNulTest
+
+class ProtobufNameNulTest inherits QUnit::Test {
+    public {
+        const Proto = "syntax = \"proto3\";\n"
+            "package test;\n"
+            "enum Color { RED = 0; GREEN = 1; }\n"
+            "message Point { double x = 1; }\n"
+            "message Text { string text = 1; bytes data = 2; }\n"
+            "message Counts { map<string, int32> counts = 1; }\n";
+    }
+
+    constructor() : QUnit::Test("protobuf name NUL characters", "1.0", \ARGV) {
+        addTestCase("message type names", \testMessageTypeNames());
+        addTestCase("enum type, symbol and file names", \testOtherNames());
+        addTestCase("schema definition strings", \testDefinitionStrings());
+        addTestCase("schema definition syntax type", \testSyntaxType());
+        addTestCase("string and bytes data", \testDataKeptWhole());
+        addTestCase("string map keys", \testMapKeys());
+        set_return_value(main());
+    }
+
+    #! asserts that the code raises the given error for a string with a NUL character at the given byte offset
+    /** @param what what the string is in the description, ex: \c "message type name"
+        @param what_plural the plural of \a what, ex: \c "message type names"
+    */
+    assertNul(string err, string what, string what_plural, int offset, code c, string label) {
+        try {
+            c();
+            assertTrue(False, label + ": an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(err, ex.err, label + ": error code");
+            assertEq(0, ex.desc.find(what + " \""), label + ": the description names the " + what);
+            assertTrue(ex.desc.find(sprintf("\" contains a NUL character at byte offset %d; ", offset)) > 0,
+                label + ": the description gives the offset of the NUL character");
+            assertEq(what_plural + " cannot contain NUL characters",
+                ex.desc.substr(ex.desc.size() - (what_plural + " cannot contain NUL characters").size()),
+                label + ": the description says why");
+            assertEq(EINVAL, ex.arg, label + ": the argument is EINVAL");
+        }
+    }
+
+    testMessageTypeNames() {
+        ProtobufSchema s(Proto);
+        binary point = s.encode("test.Point", {"x": 1.5});
+        # cut at the NUL character, each name would name test.Point
+        string type = "test.Point\x00.Other";
+        assertNul("PROTOBUF-TYPE-ERROR", "message type name", "message type names", 10,
+            sub () { s.defaultMessage(type); }, "defaultMessage()");
+        assertNul("PROTOBUF-TYPE-ERROR", "message type name", "message type names", 10,
+            sub () { s.encode(type, {"x": 1.5}); }, "encode()");
+        assertNul("PROTOBUF-TYPE-ERROR", "message type name", "message type names", 10,
+            sub () { s.decode(type, point); }, "decode()");
+        assertNul("PROTOBUF-TYPE-ERROR", "message type name", "message type names", 10,
+            sub () { s.toJson(type, {"x": 1.5}); }, "toJson()");
+        assertNul("PROTOBUF-TYPE-ERROR", "message type name", "message type names", 10,
+            sub () { s.fromJson(type, "{\"x\": 1.5}"); }, "fromJson()");
+        assertNul("PROTOBUF-TYPE-ERROR", "message type name", "message type names", 10,
+            sub () { s.messageSchema(type); }, "messageSchema()");
+
+        # the names without the NUL character are found
+        assertEq({"x": 1.5}, s.decode("test.Point", point), "decode() without the NUL character");
+        assertEq("test.Point", s.messageSchema("test.Point").name, "messageSchema() without the NUL character");
+    }
+
+    testOtherNames() {
+        ProtobufSchema s(Proto);
+        assertNul("PROTOBUF-TYPE-ERROR", "enum type name", "enum type names", 10,
+            sub () { s.enumValues("test.Color\x00.Other"); }, "enumValues()");
+        assertNul("PROTOBUF-SYMBOL-NOT-FOUND", "symbol", "symbols", 10,
+            sub () { s.serializeFileDescriptorForSymbol("test.Point\x00.Other"); },
+            "serializeFileDescriptorForSymbol()");
+        assertNul("PROTOBUF-FILE-NOT-FOUND", "file name", "file names", 11,
+            sub () { s.serializeFileDescriptorByName("input.proto\x00.txt"); }, "serializeFileDescriptorByName()");
+
+        # the names without the NUL character are found
+        assertEq({"RED": 0, "GREEN": 1}, s.enumValues("test.Color"), "enumValues() without the NUL character");
+        assertEq(1, s.serializeFileDescriptorForSymbol("test.Point").size(),
+            "serializeFileDescriptorForSymbol() without the NUL character");
+        assertEq(1, s.serializeFileDescriptorByName("input.proto").size(),
+            "serializeFileDescriptorByName() without the NUL character");
+    }
+
+    #! returns a valid schema definition
+    static hash<auto> getDefinition() {
+        return {
+            "syntax": "proto3",
+            "package": "test",
+            "messages": {
+                "Point": {
+                    "fields": (
+                        {"name": "x", "type": "double", "number": 1},
+                        {"name": "tags", "type": "string", "number": 2, "label": "repeated"},
+                    ),
+                    "oneofs": {
+                        "payload": {
+                            "fields": (
+                                {"name": "text", "type": "string", "number": 3},
+                            ),
+                        },
+                    },
+                },
+            },
+            "services": {
+                "Points": {
+                    "methods": (
+                        {"name": "Get", "input_type": ".test.Point", "output_type": ".test.Point"},
+                    ),
+                },
+            },
+        };
+    }
+
+    testDefinitionStrings() {
+        hash<auto> def = ProtobufNameNulTest::getDefinition();
+        {
+            # the definition without NUL characters is valid
+            ProtobufSchema s(def);
+            assertEq({"x": 1.5, "tags": ("a",), "text": "b"},
+                s.decode("test.Point", s.encode("test.Point", {"x": 1.5, "tags": ("a",), "text": "b"})),
+                "the valid definition");
+        }
+
+        # each string cut at the NUL character would be valid
+        list<hash<auto>> cases = (
+            {"what": "field name", "plural": "field names", "offset": 1,
+                "set": sub (reference<hash<auto>> d) { d.messages.Point.fields[0].name = "x\x00y"; }},
+            {"what": "field type", "plural": "field types", "offset": 6,
+                "set": sub (reference<hash<auto>> d) { d.messages.Point.fields[0].type = "double\x00.Other"; }},
+            {"what": "field label", "plural": "field labels", "offset": 8,
+                "set": sub (reference<hash<auto>> d) { d.messages.Point.fields[1].label = "repeated\x00x"; }},
+            {"what": "map key type", "plural": "map key types", "offset": 6,
+                "set": sub (reference<hash<auto>> d) {
+                    d.messages.Point.fields += {"name": "counts", "type": "Ignored", "number": 4,
+                        "map_key_type": "string\x00x", "map_value_type": "int32"};
+                }},
+            {"what": "map value type", "plural": "map value types", "offset": 5,
+                "set": sub (reference<hash<auto>> d) {
+                    d.messages.Point.fields += {"name": "counts", "type": "Ignored", "number": 4,
+                        "map_key_type": "string", "map_value_type": "int32\x00x"};
+                }},
+            {"what": "field name", "plural": "field names", "offset": 4,
+                "set": sub (reference<hash<auto>> d) {
+                    d.messages.Point.oneofs.payload.fields[0].name = "text\x00x";
+                }},
+            {"what": "field type", "plural": "field types", "offset": 6,
+                "set": sub (reference<hash<auto>> d) {
+                    d.messages.Point.oneofs.payload.fields[0].type = "string\x00x";
+                }},
+            {"what": "syntax", "plural": "syntax strings", "offset": 6,
+                "set": sub (reference<hash<auto>> d) { d.syntax = "proto3\x00x"; }},
+            {"what": "package name", "plural": "package names", "offset": 4,
+                "set": sub (reference<hash<auto>> d) { d."package" = "test\x00.other"; }},
+            {"what": "method name", "plural": "method names", "offset": 3,
+                "set": sub (reference<hash<auto>> d) { d.services.Points.methods[0].name = "Get\x00x"; }},
+            {"what": "method input type", "plural": "method input types", "offset": 11,
+                "set": sub (reference<hash<auto>> d) {
+                    d.services.Points.methods[0].input_type = ".test.Point\x00.Other";
+                }},
+            {"what": "method output type", "plural": "method output types", "offset": 11,
+                "set": sub (reference<hash<auto>> d) {
+                    d.services.Points.methods[0].output_type = ".test.Point\x00.Other";
+                }},
+        );
+        foreach hash<auto> c in (cases) {
+            hash<auto> d = ProtobufNameNulTest::getDefinition();
+            code set = c.set;
+            set(\d);
+            assertNul("PROTOBUF-SCHEMA-ERROR", c.what, c.plural, c.offset, sub () { ProtobufSchema s(d); },
+                sprintf("%s (case %d)", c.what, $#));
+        }
+    }
+
+    testSyntaxType() {
+        hash<auto> def = ProtobufNameNulTest::getDefinition();
+        def.syntax = 3;
+        assertThrows("PROTOBUF-SCHEMA-ERROR", "'syntax' must be a string; got type 'integer' instead",
+            sub () { ProtobufSchema s(def); });
+    }
+
+    testDataKeptWhole() {
+        ProtobufSchema s(Proto);
+        hash<auto> msg = {"text": "a\x00b", "data": <610062>};
+        binary bin = s.encode("test.Text", msg);
+        assertEq(msg, s.decode("test.Text", bin), "the string and bytes values are encoded and decoded whole");
+        string json = s.toJson("test.Text", msg);
+        assertTrue(json =~ /a\\u0000b/, "the JSON string value has the NUL character");
+        assertEq(msg, s.fromJson("test.Text", json), "the JSON string value is parsed whole");
+    }
+
+    testMapKeys() {
+        ProtobufSchema s(Proto);
+        # an entry of the counts map: key "a\0b", value 1
+        binary bin = <0a070a036100621001>;
+        # a hash key cannot have a NUL character; cut at the NUL character, two keys could be merged into one
+        assertThrows("HASH-KEY-ERROR", sub () { s.decode("test.Counts", bin); });
+        assertThrows("HASH-KEY-ERROR", sub () { s.fromJson("test.Counts", "{\"counts\": {\"a\\u0000b\": 1}}"); });
+        # a key without a NUL character is decoded
+        assertEq({"counts": {"ab": 1}}, s.decode("test.Counts", <0a060a0261621001>), "a key without NUL");
+    }
+}

@@ -40,24 +40,17 @@ QoreHashNode* ProtobufHelper::messageToHash(const Message& msg, ExceptionSink* x
     for (int i = 0; i < desc->field_count(); ++i) {
         const FieldDescriptor* field = desc->field(i);
 
+        // the holder releases a value returned with an exception
+        ValueHolder val(xsink);
         if (field->is_map()) {
-            QoreHashNode* map_hash = mapFieldToHash(msg, field, ref, xsink);
-            if (*xsink) {
-                return nullptr;
-            }
-            hash->setKeyValue(std::string(field->name()), map_hash, xsink);
+            val = mapFieldToHash(msg, field, ref, xsink);
         } else if (field->is_repeated()) {
-            QoreListNode* list = repeatedFieldToList(msg, field, ref, xsink);
-            if (*xsink) {
-                return nullptr;
-            }
-            hash->setKeyValue(std::string(field->name()), list, xsink);
+            val = repeatedFieldToList(msg, field, ref, xsink);
         } else {
-            QoreValue val = fieldToQore(msg, field, ref, xsink);
-            if (*xsink) {
-                return nullptr;
-            }
-            hash->setKeyValue(std::string(field->name()), val, xsink);
+            val = fieldToQore(msg, field, ref, xsink);
+        }
+        if (*xsink || hash->setKeyValue(std::string(field->name()), val.release(), xsink)) {
+            return nullptr;
         }
     }
 
@@ -170,11 +163,10 @@ QoreListNode* ProtobufHelper::repeatedFieldToList(const Message& msg,
     ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
 
     for (int i = 0; i < count; ++i) {
-        QoreValue val = repeatedElementToQore(msg, field, ref, i, xsink);
-        if (*xsink) {
+        ValueHolder val(repeatedElementToQore(msg, field, ref, i, xsink), xsink);
+        if (*xsink || list->push(val.release(), xsink)) {
             return nullptr;
         }
-        list->push(val, xsink);
     }
 
     return list.release();
@@ -395,12 +387,16 @@ QoreHashNode* ProtobufHelper::mapFieldToHash(const Message& msg, const FieldDesc
         }
 
         // Get value
-        QoreValue val = fieldToQore(entry, value_field, entry_ref, xsink);
+        ValueHolder val(fieldToQore(entry, value_field, entry_ref, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }
 
-        hash->setKeyValue(key_str, val, xsink);
+        // a string key with a NUL character raises HASH-KEY-ERROR; it cannot be a hash key, and cut at the NUL
+        // character, it would merge entries
+        if (hash->setKeyValue(key_str, val.release(), xsink)) {
+            return nullptr;
+        }
     }
 
     return hash.release();
