@@ -2005,9 +2005,9 @@ if (action.data_provider_info) {
                 }
                 try {
                     hash<string, string> dmap = p.callFunction(func);
-                    *string mod = dmap{name};
-                    if (mod) {
-                        return mod;
+                    *string prov_mod = dmap{name};
+                    if (prov_mod) {
+                        return prov_mod;
                     }
                 } catch (hash<ExceptionInfo> ex) {
                     # ignore NO-FUNCTION error

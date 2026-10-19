@@ -393,6 +393,24 @@ public class Main inherits QUnit::Test {
             assertEq("invalid credentials", ex.arg.body.error);
         }
 
+        # the info of a request that fails because its login fails describes the login request
+        EmpathicBuildingRestClient rest5({
+            "url": "http://localhost:" + port,
+            "username": "user@example.com",
+            "password": "wrong",
+            "skip_login": True,
+        }, True);
+        hash<auto> info;
+        try {
+            rest5.get("v1/organizations", NOTHING, \info);
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+            assertRegex("403", ex.desc);
+        }
+        assertEq(403, info."response-code");
+        assertRegex("v1/login", info."request-uri");
+
         # without credentials, a 401 response is raised
         EmpathicBuildingRestClientIo rest4({
             "url": "http://localhost:" + port,

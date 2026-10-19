@@ -158,6 +158,10 @@ public class SwaggerDataProviderTest inherits QUnit::Test {
         SwaggerDataProvider provider(opts);
         assertEq("Swagger Petstore", provider.getName());
 
+        # without a REST client, the description gives the URL of the schema
+        SwaggerDataProvider schema_provider(SwaggerLoader::fromFile(opts.schema));
+        assertRegex("for URL `https://petstore.swagger.io/v2` ", schema_provider.getDesc());
+
         {
             AbstractDataProvider p0 = provider.getChildProviderPath("pet/findByStatus/GET");
             object sp0 = cast<object>(p0);

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore RedisDataProvider module definition
 
-/** RedisClient.qc Copyright 2025 Qore Technologies, s.r.o.
+/** RedisClient.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -373,7 +373,7 @@ public class RedisClient inherits Qore::Serializable, Logger::LoggerWrapper {
 
         # Read all responses
         list<auto> results = ();
-        foreach list<auto> cmd in (commands) {
+        for (int i = 0; i < commands.size(); ++i) {
             results += decodeRESP();
         }
 

@@ -2538,7 +2538,7 @@ public class HttpAsyncSocketIoController {
             int timer_id = controller.addTimer(deadline, sub () {
                 bool dispatch;
                 {
-                    AutoWriteLock al(m);
+                    AutoWriteLock wl(m);
                     *hash<HttpDelayedResponseInfo> delayed =
                         remove delayed_responses{delay_key};
                     dispatch = exists delayed && !stopping

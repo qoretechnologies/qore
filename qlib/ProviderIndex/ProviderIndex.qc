@@ -1763,8 +1763,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                 continue;
             }
 
-            string factory = f.getName();
-            if (index.factorymap{factory}) {
+            string factory_name = f.getName();
+            if (index.factorymap{factory_name}) {
                 # already registered
                 continue;
             }
@@ -1773,14 +1773,14 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             *string mod = Class::getClass(f).getModuleName();
             if (!mod) {
                 DataProviderActionCatalog::reportDiscoveryFailure(discovery,
-                    "factory", "publication", factory,
+                    "factory", "publication", factory_name,
                     "DATA-PROVIDER-FACTORY-MODULE-MISSING", sprintf(
-                        "data provider factory %y has no module name", factory));
+                        "data provider factory %y has no module name", factory_name));
                 continue;
             }
 
-            index.factorymap{factory} = mod;
-            log(LoggerLevel::LevelDebug, "Registered factory %y -> %y", factory, mod);
+            index.factorymap{factory_name} = mod;
+            log(LoggerLevel::LevelDebug, "Registered factory %y -> %y", factory_name, mod);
         }
     }
 }

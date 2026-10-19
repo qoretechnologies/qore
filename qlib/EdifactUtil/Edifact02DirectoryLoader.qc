@@ -293,15 +293,16 @@ public namespace EdifactUtil {
 
             foreach string raw in (lines) {
                 string line = sanitizeLine(raw);
-                if (*list m = (line =~ x/^\s*Message\s+Type\s*:\s*([A-Z0-9]+)\s*$/)) {
+                *list<auto> m;
+                if (m = (line =~ x/^\s*Message\s+Type\s*:\s*([A-Z0-9]+)\s*$/)) {
                     msg_type = m[0];
-                } else if (*list m = (line =~ x/^\s*Version\s*:\s*([A-Z])\s*$/)) {
+                } else if (m = (line =~ x/^\s*Version\s*:\s*([A-Z])\s*$/)) {
                     version = m[0];
-                } else if (*list m = (line =~ x/^\s*Release\s*:\s*([0-9A-Z]+)\s*$/)) {
+                } else if (m = (line =~ x/^\s*Release\s*:\s*([0-9A-Z]+)\s*$/)) {
                     release = m[0];
-                } else if (*list m = (line =~ x/^\s*Function:\s*(.+)\s*$/)) {
+                } else if (m = (line =~ x/^\s*Function:\s*(.+)\s*$/)) {
                     function = m[0];
-                } else if (*list m = (line =~ x/^\s*Note:\s*(.+)\s*$/)) {
+                } else if (m = (line =~ x/^\s*Note:\s*(.+)\s*$/)) {
                     if (!notes) {
                         notes = ();
                     }

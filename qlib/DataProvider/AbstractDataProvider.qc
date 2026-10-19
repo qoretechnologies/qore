@@ -6042,7 +6042,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         key =~ s/:.*//g;
         hash<DataProviderExpression> rv;
         if (value.typeCode() == NT_HASH && value.op && value.hasKey("arg")) {
-            hash<DataProviderExpressionInfo> expinfo = getExpression(role, value.op, info.expressions);
+            hash<DataProviderExpressionInfo> op_info = getExpression(role, value.op, info.expressions);
             auto args;
             args[0] = <DataProviderFieldReference>{"field": key};
             if (value.arg.op && value.arg.arg) {
@@ -6067,7 +6067,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                 push args, value.arg;
             }
             rv = <DataProviderExpression>{
-                "exp": expinfo.name,
+                "exp": op_info.name,
                 "args": args,
             };
         } else {
@@ -7327,52 +7327,52 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                 continue;
             }
             # process value
-            bool ok;
-            string err;
+            bool accepted;
+            string type_error;
             foreach AbstractDataProviderType type in (i.value.type) {
                 try {
                     options{i.key} = type.acceptsValue(options{i.key});
-                    ok = True;
+                    accepted = True;
                     break;
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err == "RUNTIME-TYPE-ERROR") {
-                        err = sprintf("option %y of type %y cannot be assigned a value of type %y (value %y): %s: %s",
-                            i.key, type.getName(), options{i.key}.type(), options{i.key}, ex.err, ex.desc);
+                        type_error = sprintf("option %y of type %y cannot be assigned a value of type %y (value %y): "
+                            "%s: %s", i.key, type.getName(), options{i.key}.type(), options{i.key}, ex.err, ex.desc);
                         continue;
                     }
                     rethrow;
                 }
             }
-            if (!ok) {
-                if (err) {
-                    error("RUNTIME-TYPE-ERROR", err);
+            if (!accepted) {
+                if (type_error) {
+                    error("RUNTIME-TYPE-ERROR", type_error);
                 }
                 error("RUNTIME-TYPE-ERROR", "no type information available for option %y", i.key);
             }
             # check allowed values
             if (i.value.allowed_values && !i.value.allowed_values_creatable) {
-                bool ok = False;
+                bool allowed = False;
                 foreach auto v in (i.value.allowed_values) {
                     if (options{i.key} == v.value) {
-                        ok = True;
+                        allowed = True;
                         break;
                     }
                 }
-                if (!ok) {
+                if (!allowed) {
                     error("OPTION-VALUE-ERROR", sprintf("option %y does not accept value %y; possible values: %y",
                         i.key, options{i.key}, (map $1.value, i.value.allowed_values)));
                 }
             }
             if (i.value.element_allowed_values && !i.value.element_allowed_values_creatable) {
                 foreach auto opt in (options{i.key}) {
-                    bool ok = False;
+                    bool allowed = False;
                     foreach auto v in (i.value.element_allowed_values) {
                         if (opt == v.value) {
-                            ok = True;
+                            allowed = True;
                             break;
                         }
                     }
-                    if (!ok) {
+                    if (!allowed) {
                         error("OPTION-VALUE-ERROR", sprintf("Option %y does not accept element value %y; possible "
                             "element values: %y", i.key, opt, (map $1.value, i.value.element_allowed_values)));
                     }
