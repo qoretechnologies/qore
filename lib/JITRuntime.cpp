@@ -18714,13 +18714,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call(
 
     // Create SetSelfFunctionCallNode which captures current self/class context
     // do_op_background copies the expression via copy_value_and_resolve_lvar_refs;
-    // the original must be freed after. SetSelfFunctionCallNode::deref(ExceptionSink*)
-    // shadows AbstractQoreNode::deref and only handles self — so we must call both:
-    // the shadowing deref for self, then discard for the node itself.
+    // the original must be freed after; releasing it releases its reference to self as well
+    // (SetSelfFunctionCallNode::derefImpl())
     SetSelfFunctionCallNode* call_node = new SetSelfFunctionCallNode(*sfcn, arg_list);
     QoreValue result = doBackgroundWithLocation(sfcn->loc, QoreValue(call_node), xsink);
-    call_node->deref(xsink);           // derefs self (the shadowing override)
-    QoreValue(call_node).discard(xsink); // decrements refcount and frees the node
+    QoreValue(call_node).discard(xsink);
     return toBits(result);
 }
 
@@ -18771,12 +18769,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
         nullptr, method, method->getClass(), cls);
 
     // Create SetSelfFunctionCallNode which captures current self/class context and takes arg_list ownership
-    // do_op_background copies the expression; the original must be freed after.
-    // SetSelfFunctionCallNode::deref(xsink) shadows AbstractQoreNode::deref and only handles self.
+    // do_op_background copies the expression; the original must be freed after; releasing it releases its
+    // reference to self as well (SetSelfFunctionCallNode::derefImpl())
     SetSelfFunctionCallNode* call_node = new SetSelfFunctionCallNode(temp_sfcn, arg_list);
     QoreValue result = doBackgroundWithLocation(&loc_builtin, QoreValue(call_node), xsink);
-    call_node->deref(xsink);           // derefs self (the shadowing override)
-    QoreValue(call_node).discard(xsink); // decrements refcount and frees the node
+    QoreValue(call_node).discard(xsink);
     return toBits(result);
 }
 

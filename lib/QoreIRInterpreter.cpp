@@ -1192,7 +1192,7 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
         SetSelfFunctionCallNode* call_node =
             new SetSelfFunctionCallNode(*sfcn, arg_list);
         QoreValue result = do_op_background(QoreValue(call_node), xsink);
-        call_node->deref(xsink);
+        // do_op_background() runs a copy; releasing the node releases its reference to the object as well
         QoreValue(call_node).discard(xsink);
         return {true, result};
     }

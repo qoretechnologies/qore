@@ -58,6 +58,10 @@ new T();
     |<tt><b>background</b> c()</tt> where \c c is a @ref call_reference "call reference" to a method|no|call references do not prolong the lifetime of an object
     |<tt><b>background</b> T::sm()</tt>|not applicable|a static method call has no object
 
+    If the thread cannot be created, the @ref background "background" expression raises a
+    \c THREAD-CREATION-FAILURE exception and the reference taken on the object is released, so its lifetime is not
+    prolonged.
+
     A @ref call_reference "call reference" is the exception to the rule: <tt>\\</tt><em>method</em><tt>()</tt> and
     <tt>\\</tt><em>obj.method</em><tt>()</tt> bind their object weakly by design, so a background expression that
     reaches an object only through a call reference does not prolong that object's lifetime. If the object is

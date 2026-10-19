@@ -1,0 +1,193 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The background copy of a call of a method of the current object holds a reference to the object, which the call
+# released when it was made.  When the thread could not be created, the copy was released without the call, and the
+# reference was never released: the object was never destroyed, and with it the Program that it belongs to, so every
+# Program leaked at exit.  The program below makes thread creation fail with a stack too large to allocate, and must
+# give the same output in every execution mode and as an AOT binary: each object is destroyed.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires ../../ExecModeHarness.qm
+
+%exec-class BackgroundSelfCallFailureTest
+
+class BackgroundSelfCallFailureTest inherits QUnit::Test {
+    public {
+        const Code = "%modern
+
+our int destroyed = 0;
+
+class T {
+    private {
+        #! decremented when the object is destroyed
+        Counter destroyed_counter;
+    }
+
+    constructor(Counter c) {
+        destroyed_counter = c;
+    }
+
+    destructor() {
+        ++destroyed;
+        destroyed_counter.dec();
+    }
+
+    m() {
+    }
+
+    mArgs(int i, string s) {
+    }
+
+    mRun(Counter c) {
+        c.dec();
+    }
+
+    #! a call of a method of this object
+    startSelf() {
+        background m();
+    }
+
+    #! with arguments, which the copy holds too
+    startSelfArgs() {
+        background mArgs(1, \"a\");
+    }
+
+    #! a thread that is created
+    startSelfRun(Counter c) {
+        background mRun(c);
+    }
+}
+
+#! the label of the case, the object's method that starts the thread, and whether the thread can be created
+sub run(string label, string method, bool fail) {
+    Counter destroyed_counter(1);
+    int size = get_default_thread_stack_size();
+    if (fail) {
+        # no stack this large can be allocated, so the thread cannot be created
+        set_default_thread_stack_size(1 << 50);
+    }
+    {
+        on_exit set_default_thread_stack_size(size);
+        T t(destroyed_counter);
+        try {
+            if (method == \"startSelfRun\") {
+                Counter c(1);
+                t.startSelfRun(c);
+                c.waitForZero();
+                printf(\"%s ran\\n\", label);
+            } else {
+                call_object_method(t, method);
+                printf(\"%s started\\n\", label);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"%s %s\\n\", label, ex.err);
+        }
+    }
+    # the thread that was created holds the object until it ends; an object without a thread is destroyed when its
+    # variable goes out of scope
+    if (!fail) {
+        # the timeout only guards against a hang if the object is never destroyed; the counter reaches zero when the
+        # destructor runs
+        if (destroyed_counter.waitForZero(30s)) {
+            printf(\"%s destructor never ran\\n\", label);
+        }
+    }
+    printf(\"%s destroyed %d\\n\", label, destroyed);
+    destroyed = 0;
+}
+
+run(\"1\", \"startSelf\", True);
+run(\"2\", \"startSelfArgs\", True);
+run(\"3\", \"startSelfRun\", False);
+printf(\"done\\n\");
+";
+
+        const Expected = "1 THREAD-CREATION-FAILURE
+1 destroyed 1
+2 THREAD-CREATION-FAILURE
+2 destroyed 1
+3 ran
+3 destroyed 1
+done
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string src;
+    }
+
+    constructor() : QUnit::Test("BackgroundSelfCallFailureTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # a qore run from the PATH has no directory in its name; its library and qcc are found next to it
+        if (qore_bin !~ /\//) {
+            foreach string dir in ((ENV.PATH ?? "").split(":")) {
+                if (dir && is_executable(dir + "/" + qore_bin)) {
+                    qore_bin = dir + "/" + qore_bin;
+                    break;
+                }
+            }
+        }
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        src = tmp_location() + sprintf("/qore-background-self-call-failure-%d.qr", getpid());
+        File f();
+        f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Code);
+        f.close();
+
+        addTestCase("execution modes", \modeTest());
+        addTestCase("AOT", \aotTest());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        unlink(src);
+    }
+
+    private string run(string cmd) {
+        return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir,
+            cmd));
+    }
+
+    private checkStack() {
+        if (!HAVE_MANAGE_STACK) {
+            testSkip("this build cannot set the thread stack size");
+        }
+    }
+
+    private modeTest() {
+        checkStack();
+        foreach string mode in ("ast", "ir", "tiered", "jit") {
+            assertEq(Expected, run(sprintf("%s --exec-mode=%s %s", qore_bin, mode, src)), mode);
+        }
+        # tiered execution after promotion to IR and JIT
+        assertEq(Expected, run(sprintf("%s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 %s",
+            qore_bin, src)), "tiered, promoted");
+    }
+
+    private aotTest() {
+        checkStack();
+        if (!is_file(qcc_bin)) {
+            testSkip(sprintf("no qcc binary at %y", qcc_bin));
+        }
+        string bin = src + ".bin";
+        on_exit if (is_file(bin)) {
+            unlink(bin);
+        }
+        string compile = run(sprintf("%s -o %s %s", qcc_bin, bin, src));
+        assertTrue(is_file(bin), compile);
+        assertEq(Expected, run(bin), "AOT");
+    }
+}

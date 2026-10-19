@@ -4661,6 +4661,11 @@ while (*binary chunk = input.read(65536)) {
     - Fixed a crash of @ref Qore::encode_url() "encode_url()" and @ref Qore::encode_uri_request()
       "encode_uri_request()" with a UTF-8 string that ends in the middle of a character, which read past the end of
       the string; such a string raises an \c INVALID-ENCODING exception
+    - Fixed a memory leak when a @ref background "background" call of a method of the current object
+      (<tt><b>background</b> method()</tt>) could not create its thread, for example when the thread limit was
+      reached: the reference taken on the object was never released after the \c THREAD-CREATION-FAILURE exception,
+      so the object was never destroyed and its destructor never ran, and the @ref Qore::Program "Program" that it
+      belongs to was never freed
     - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
       @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
       thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in

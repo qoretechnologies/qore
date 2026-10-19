@@ -978,6 +978,16 @@ QoreValue SetSelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref
     return rv;
 }
 
+bool SetSelfFunctionCallNode::derefImpl(ExceptionSink* xsink) {
+    // a node that was not evaluated, such as the copy of a background call whose thread could not be created, still
+    // holds the reference to the object; otherwise the object, and the Program that it belongs to, are never freed
+    if (deref_self) {
+        deref_self = false;
+        self->deref(xsink);
+    }
+    return SelfFunctionCallNode::derefImpl(xsink);
+}
+
 /* get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
    the ExceptionSink is only needed for QoreObject where a method may be executed
    use the QoreNodeAsStringHelper class (defined in QoreStringNode.h) instead of using these functions directly
